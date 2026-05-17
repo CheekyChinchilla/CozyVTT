@@ -1,0 +1,48 @@
+# ============================================================================
+# CozyVTT Frontend — .dockerignore
+# Stage-specific exclusions on top of the root .dockerignore.
+# ============================================================================
+
+# ---- Dependencies (installed fresh inside the image) ------------------------
+node_modules/
+
+# ---- Build output (built inside the image) ----------------------------------
+dist/
+build/
+.vite/
+
+# ---- Environment files ------------------------------------------------------
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# ---- Test artifacts ---------------------------------------------------------
+coverage/
+src/**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+vitest.config.*
+src/setupTests.ts
+
+# ---- Documentation / typecheck reports --------------------------------------
+typecheck-output.txt
+
+# ---- Git --------------------------------------------------------------------
+.git/
+.gitignore
+
+# ---- IDE / Editor / OS ------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---- ESLint / Prettier caches -----------------------------------------------
+.eslintcache
+.prettiercache

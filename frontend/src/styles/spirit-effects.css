@@ -1,0 +1,333 @@
+/* ============================================
+   Spirit Layer Visual Effects
+   Per SOW Section 14: Spirit Layer Implementation
+   ============================================ */
+
+/* --------------------------------------------------
+   Keyframe Animations
+   -------------------------------------------------- */
+
+/* WISPY — particles rising from below, fading in and out */
+@keyframes spirit-wispy-base {
+  0%   { opacity: 0.50; }
+  50%  { opacity: 0.80; }
+  100% { opacity: 0.50; }
+}
+
+/* First wave of rising mote particles */
+@keyframes spirit-particles-rise {
+  0%   {
+    background-position: 15% 110%, 40% 115%, 62% 107%, 78% 112%, 28% 108%;
+    opacity: 0;
+  }
+  8%   { opacity: 1; }
+  92%  { opacity: 0.8; }
+  100% {
+    background-position: 15% -12%, 40% -18%, 62% -10%, 78% -14%, 28% -12%;
+    opacity: 0;
+  }
+}
+
+/* Second wave — staggered positions & timing */
+@keyframes spirit-particles-rise-2 {
+  0%   {
+    background-position: 52% 110%, 70% 114%, 8% 108%, 88% 116%, 35% 112%;
+    opacity: 0;
+  }
+  8%   { opacity: 0.85; }
+  92%  { opacity: 0.65; }
+  100% {
+    background-position: 52% -14%, 70% -10%, 8% -12%, 88% -16%, 35% -12%;
+    opacity: 0;
+  }
+}
+
+/* ETHEREAL — bright shimmer sweep across the overlay */
+@keyframes spirit-ethereal-shimmer {
+  0%   { background-position: -120% 50%; }
+  100% { background-position: 220% 50%; }
+}
+
+@keyframes spirit-ethereal-pulse {
+  0%   { opacity: 0.55; }
+  50%  { opacity: 0.90; }
+  100% { opacity: 0.55; }
+}
+
+/* SHADOW — ominous breathing darkness */
+@keyframes spirit-shadow-breathe {
+  0%   { opacity: 0.65; }
+  35%  { opacity: 0.90; }
+  65%  { opacity: 0.92; }
+  100% { opacity: 0.65; }
+}
+
+@keyframes spirit-shadow-fog {
+  0%   { opacity: 0.70; transform: scale(1.00); }
+  50%  { opacity: 0.95; transform: scale(1.02); }
+  100% { opacity: 0.70; transform: scale(1.00); }
+}
+
+/* DREAM — pastel hue rotation */
+@keyframes spirit-dream-hue {
+  0%   { filter: hue-rotate(0deg)   saturate(1.6) brightness(1.05); opacity: 0.65; }
+  25%  { filter: hue-rotate(40deg)  saturate(1.9) brightness(1.10); opacity: 0.80; }
+  50%  { filter: hue-rotate(80deg)  saturate(2.1) brightness(1.08); opacity: 0.70; }
+  75%  { filter: hue-rotate(120deg) saturate(1.8) brightness(1.06); opacity: 0.75; }
+  100% { filter: hue-rotate(0deg)   saturate(1.6) brightness(1.05); opacity: 0.65; }
+}
+
+@keyframes spirit-dream-glow {
+  0%   { opacity: 0.40; }
+  50%  { opacity: 0.70; }
+  100% { opacity: 0.40; }
+}
+
+/* CUSTOM — generic glow pulse */
+@keyframes spirit-custom-glow {
+  0%   { opacity: 0.45; }
+  50%  { opacity: 0.75; }
+  100% { opacity: 0.45; }
+}
+
+/* --------------------------------------------------
+   Spirit Layer Overlay — shared base
+   Absolutely-positioned div placed over the canvas.
+   pointer-events: none so it never blocks mouse events.
+   -------------------------------------------------- */
+
+.spirit-layer-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.spirit-layer-overlay::before,
+.spirit-layer-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------
+   WISPY — Purple/blue tint, floating mote particles
+   -------------------------------------------------- */
+
+.spirit-overlay-wispy {
+  /* Base purple-blue gradient */
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 60%,
+      rgba(100, 60, 210, 0.28) 0%,
+      rgba(80, 40, 170, 0.12) 60%,
+      transparent 100%);
+  animation: spirit-wispy-base 5s ease-in-out infinite;
+}
+
+/* First wave of rising particle motes */
+.spirit-overlay-wispy::before {
+  background-image:
+    radial-gradient(circle 6px at 50% 50%, rgba(190, 130, 255, 0.95) 0%, transparent 100%),
+    radial-gradient(circle 4px at 50% 50%, rgba(150, 90, 245, 0.90) 0%, transparent 100%),
+    radial-gradient(circle 7px at 50% 50%, rgba(210, 160, 255, 0.85) 0%, transparent 100%),
+    radial-gradient(circle 4px at 50% 50%, rgba(165, 100, 230, 0.92) 0%, transparent 100%),
+    radial-gradient(circle 5px at 50% 50%, rgba(200, 145, 255, 0.88) 0%, transparent 100%);
+  background-size: 14px 14px, 10px 10px, 16px 16px, 10px 10px, 12px 12px;
+  background-repeat: no-repeat;
+  animation: spirit-particles-rise 7s ease-in-out infinite;
+}
+
+/* Second staggered wave */
+.spirit-overlay-wispy::after {
+  background-image:
+    radial-gradient(circle 5px at 50% 50%, rgba(180, 115, 255, 0.90) 0%, transparent 100%),
+    radial-gradient(circle 6px at 50% 50%, rgba(155, 95, 240, 0.85) 0%, transparent 100%),
+    radial-gradient(circle 4px at 50% 50%, rgba(195, 140, 255, 0.88) 0%, transparent 100%),
+    radial-gradient(circle 7px at 50% 50%, rgba(170, 110, 235, 0.82) 0%, transparent 100%),
+    radial-gradient(circle 4px at 50% 50%, rgba(185, 125, 255, 0.86) 0%, transparent 100%);
+  background-size: 12px 12px, 14px 14px, 10px 10px, 16px 16px, 10px 10px;
+  background-repeat: no-repeat;
+  animation: spirit-particles-rise-2 9s ease-in-out infinite 3s;
+}
+
+/* --------------------------------------------------
+   ETHEREAL — White/silver shimmer sweep + radial glows
+   -------------------------------------------------- */
+
+.spirit-overlay-ethereal {
+  /* Silver-white base glow */
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(210, 235, 255, 0.35) 0%, rgba(190, 220, 255, 0.15) 60%, transparent 100%);
+  animation: spirit-ethereal-pulse 3.5s ease-in-out infinite;
+}
+
+/* Sweeping shimmer line — bright streak crosses the overlay */
+.spirit-overlay-ethereal::before {
+  background: linear-gradient(
+    108deg,
+    transparent 25%,
+    rgba(230, 245, 255, 0.40) 42%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(230, 245, 255, 0.40) 58%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: spirit-ethereal-shimmer 3.5s linear infinite;
+}
+
+/* Soft radial glow spots that pulse */
+.spirit-overlay-ethereal::after {
+  background:
+    radial-gradient(circle 100px at 22% 30%, rgba(210, 230, 255, 0.28) 0%, transparent 100%),
+    radial-gradient(circle 120px at 78% 70%, rgba(200, 225, 255, 0.24) 0%, transparent 100%),
+    radial-gradient(circle 80px  at 55% 18%, rgba(220, 240, 255, 0.30) 0%, transparent 100%),
+    radial-gradient(circle 90px  at 30% 75%, rgba(205, 228, 255, 0.22) 0%, transparent 100%);
+  animation: spirit-ethereal-pulse 6s ease-in-out infinite alternate;
+}
+
+/* --------------------------------------------------
+   SHADOW — Dark, desaturated, fog effect
+   Uses multiply blend so it genuinely darkens the map.
+   -------------------------------------------------- */
+
+.spirit-overlay-shadow {
+  /* Dark vignette — bright center, dark edges */
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      rgba(15, 5, 35, 0.15) 0%,
+      rgba(10, 3, 28, 0.55) 65%,
+      rgba(5, 0, 18, 0.80) 100%);
+  mix-blend-mode: multiply;
+  animation: spirit-shadow-breathe 6s ease-in-out infinite;
+}
+
+/* Dark fog blob patches */
+.spirit-overlay-shadow::before {
+  background:
+    radial-gradient(ellipse 55% 38% at 18% 82%, rgba(8, 2, 25, 0.60) 0%, transparent 100%),
+    radial-gradient(ellipse 48% 32% at 82% 18%, rgba(6, 1, 20, 0.55) 0%, transparent 100%),
+    radial-gradient(ellipse 65% 45% at 50% 50%, rgba(4, 1, 15, 0.35) 0%, transparent 100%),
+    radial-gradient(ellipse 40% 30% at 25% 30%, rgba(7, 2, 22, 0.45) 0%, transparent 100%);
+  mix-blend-mode: multiply;
+  animation: spirit-shadow-fog 9s ease-in-out infinite;
+}
+
+/* Hard edge vignette — extra darkness at the border */
+.spirit-overlay-shadow::after {
+  background: radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(3, 0, 12, 0.70) 100%);
+  mix-blend-mode: multiply;
+  animation: spirit-shadow-breathe 4s ease-in-out infinite reverse;
+}
+
+/* --------------------------------------------------
+   DREAM — Pastel rainbow, slowly shifting hues
+   -------------------------------------------------- */
+
+.spirit-overlay-dream {
+  background:
+    radial-gradient(ellipse at 20% 75%, rgba(255, 160, 210, 0.30) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 25%, rgba(160, 210, 255, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(210, 160, 255, 0.22) 0%, transparent 65%);
+  animation: spirit-dream-hue 8s ease-in-out infinite;
+}
+
+/* Diagonal rainbow shimmer bands */
+.spirit-overlay-dream::before {
+  background: linear-gradient(
+    55deg,
+    rgba(255, 180, 210, 0.20) 0%,
+    rgba(210, 180, 255, 0.20) 16%,
+    rgba(180, 220, 255, 0.20) 33%,
+    rgba(180, 255, 220, 0.20) 50%,
+    rgba(255, 230, 180, 0.20) 66%,
+    rgba(255, 180, 200, 0.20) 83%,
+    rgba(210, 180, 255, 0.20) 100%
+  );
+  animation: spirit-dream-hue 12s linear infinite;
+}
+
+/* Pastel glow spots that pulse */
+.spirit-overlay-dream::after {
+  background:
+    radial-gradient(circle 110px at 30% 40%, rgba(220, 170, 255, 0.32) 0%, transparent 100%),
+    radial-gradient(circle 90px  at 70% 65%, rgba(170, 220, 255, 0.28) 0%, transparent 100%),
+    radial-gradient(circle 100px at 55% 80%, rgba(255, 190, 225, 0.26) 0%, transparent 100%);
+  animation: spirit-dream-glow 5s ease-in-out infinite alternate;
+}
+
+/* --------------------------------------------------
+   CUSTOM — User-defined hue glow + white shimmer
+   The base background color is set via inline style.
+   -------------------------------------------------- */
+
+.spirit-overlay-custom {
+  animation: spirit-custom-glow 4s ease-in-out infinite;
+}
+
+/* White shimmer sweep over the custom color */
+.spirit-overlay-custom::before {
+  background: linear-gradient(
+    108deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.25) 45%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.25) 55%,
+    transparent 72%
+  );
+  background-size: 200% 100%;
+  animation: spirit-ethereal-shimmer 5s ease-in-out infinite;
+}
+
+/* Radial glow that pulses using the custom color (opacity only — color via inline) */
+.spirit-overlay-custom::after {
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+  animation: spirit-custom-glow 6s ease-in-out infinite reverse;
+}
+
+/* --------------------------------------------------
+   "Hidden from players" DM indicator
+   Subtle diagonal stripe + dashed border so DM knows
+   players cannot currently see the spirit layer.
+   -------------------------------------------------- */
+
+.spirit-layer-hidden-indicator {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 24px,
+    rgba(220, 50, 50, 0.08) 24px,
+    rgba(220, 50, 50, 0.08) 26px
+  );
+  border: 2px dashed rgba(220, 50, 50, 0.35);
+  border-radius: inherit;
+  z-index: 2;
+}
+
+/* --------------------------------------------------
+   Spirit Realm Toggle Fade
+   Applied programmatically via spiritLayerOpacity state
+   in MapCanvas — 1.5s ease transition on toggle.
+   -------------------------------------------------- */
+
+.spirit-layer-fade-enter {
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+
+.spirit-layer-fade-enter-active {
+  opacity: 1;
+}
+
+.spirit-layer-fade-exit {
+  opacity: 1;
+  transition: opacity 1.5s ease;
+}
+
+.spirit-layer-fade-exit-active {
+  opacity: 0;
+}

@@ -1,0 +1,84 @@
+# Development Docker Compose
+# Usage: docker compose -f docker-compose.dev.yml up
+#
+# Exposes all services directly to the host for easy debugging:
+#   Frontend: http://localhost:3000  (Vite hot-reload)
+#   Backend:  http://localhost:4000  (nodemon watch)
+#   Database: localhost:5432
+#
+# For production, use: docker compose up -d --build  (uses docker-compose.yml)
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: cozyvtt-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-cozyvtt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cozyvtt-backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@database:5432/${DATABASE_NAME}
+      NODE_ENV: ${NODE_ENV}
+      PORT: 4000
+      SESSION_SECRET: ${SESSION_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      MAX_MAP_SIZE_MB: ${MAX_MAP_SIZE_MB}
+      MAX_TOKEN_SIZE_MB: ${MAX_TOKEN_SIZE_MB}
+      MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB}
+      MAX_AVATAR_SIZE_MB: ${MAX_AVATAR_SIZE_MB}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/uploads:/app/uploads
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cozyvtt-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_PROXY_TARGET: http://backend:4000
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local

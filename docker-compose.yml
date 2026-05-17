@@ -1,0 +1,139 @@
+# CozyVTT Production Docker Compose
+# Usage: docker compose up -d --build
+# Requires: .env file with all required variables set (see .env.example)
+#
+# For development (hot-reload, exposed ports), use:
+#   docker compose -f docker-compose.dev.yml up
+#
+# If you already have a reverse proxy (Traefik, Caddy, Cloudflare Tunnel, etc.):
+#   - Remove the `nginx` service below entirely
+#   - Change `expose` to `ports` on the frontend service so your proxy can reach it
+#   - Point your proxy at frontend:80 for the SPA and backend:4000 for /api + /socket.io
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: cozyvtt-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
+      POSTGRES_USER: ${DATABASE_USER:-cozyvtt}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-cozyvtt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Database is NOT exposed externally — only reachable from within the internal network
+    expose:
+      - "5432"
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    image: cozyvtt-backend:latest
+    container_name: cozyvtt-backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DATABASE_USER:-cozyvtt}:${DATABASE_PASSWORD}@database:5432/${DATABASE_NAME:-cozyvtt}
+      NODE_ENV: production
+      PORT: 4000
+      SESSION_SECRET: ${SESSION_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      # SMTP
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      APP_URL: ${APP_URL:-${CORS_ORIGIN}}
+      # Upload limits
+      MAX_MAP_SIZE_MB: ${MAX_MAP_SIZE_MB:-50}
+      MAX_TOKEN_SIZE_MB: ${MAX_TOKEN_SIZE_MB:-5}
+      MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-20}
+      MAX_AVATAR_SIZE_MB: ${MAX_AVATAR_SIZE_MB:-2}
+      # Rate limiting
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
+    volumes:
+      # Uploads persist on the host — back this directory up regularly
+      - ./backend/uploads:/app/uploads
+      # Logs persist on the host
+      - ./backend/logs:/app/logs
+    # Backend is only accessible internally — Nginx terminates public traffic
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+    # Resource limits — adjust based on your server capacity
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ""        # Empty = use relative URLs; Nginx proxies /api/* to backend
+        VITE_SOCKET_URL: ""     # Empty = use relative URLs; Nginx proxies /socket.io/* to backend
+    image: cozyvtt-frontend:latest
+    container_name: cozyvtt-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  nginx:
+    image: nginx:alpine
+    container_name: cozyvtt-nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      # Change these if 80/443 are already in use on your host.
+      # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro  # Place your SSL certs here
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  internal:
+    driver: bridge

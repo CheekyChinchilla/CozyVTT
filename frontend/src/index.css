@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Theme Color Channels (R G B) ──
+       Stored as space-separated channels so Tailwind opacity modifiers work:
+       e.g. text-brand/50 → color: rgb(var(--color-brand) / 0.5)            */
+
+    /* Primary brand */
+    --color-brand: 74 93 78;
+    --color-brand-dark: 44 62 47;
+
+    /* Accent / CTA */
+    --color-accent: 212 165 116;
+    --color-accent-hover: 232 158 91;
+    --color-accent-text: 44 62 47;
+
+    /* Backgrounds */
+    --color-bg-base: 255 249 230;
+    --color-bg-surface: 244 236 216;
+    --color-bg-surface-light: 251 247 238;
+    --color-bg-surface-dark: 224 212 184;
+
+    /* Text */
+    --color-ink: 31 41 55;
+    --color-ink-secondary: 107 96 90;
+    --color-ink-muted: 107 114 128;
+
+    /* Utility */
+    --color-paper: 254 254 254;
+    --color-danger: 192 57 43;
+
+    /* Game-specific (not theme-dependent) */
+    --color-spirit: 147 112 219;
+
+    /* ── Font Families ── */
+    --font-heading: 'Quicksand', 'Comfortaa', sans-serif;
+    --font-body: 'Inter', 'Open Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* ── Google Fonts import URL (dynamically swapped by ThemeProvider) ── */
+    --font-import-url: '';
+  }
+
+  body {
+    @apply font-body bg-canvas text-ink;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Panel */
+  .glass-panel {
+    @apply bg-white/10 backdrop-blur-cozy border border-white/20 rounded-cozy shadow-lg;
+  }
+
+  /* Cozy Button */
+  .btn-primary {
+    @apply bg-accent text-accent-text px-4 py-2 rounded-cozy font-medium
+           hover:bg-accent-hover transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border border-brand text-brand px-4 py-2 rounded-cozy font-medium
+           hover:bg-brand hover:text-white transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2;
+  }
+
+  .btn-danger {
+    @apply bg-red-500 text-white px-4 py-2 rounded-cozy font-medium
+           hover:bg-red-600 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+  }
+
+  /* Cozy Input */
+  .input-cozy {
+    @apply w-full px-4 py-2 border border-ink-muted/30 rounded-cozy
+           bg-paper/80 backdrop-blur-sm text-ink placeholder:text-ink-muted
+           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
+           transition-all duration-200;
+  }
+
+  /* Card */
+  .card-cozy {
+    @apply glass-panel p-6 hover:shadow-xl transition-shadow duration-300;
+  }
+}
+
+@layer utilities {
+  .text-shadow-soft {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .transition-spring {
+    transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  /* Compact number input — hides native spinner arrows so values aren't
+     clipped by the browser-rendered up/down controls. Arrow keys still
+     increment/decrement when focused. */
+  .input-cozy-number {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .input-cozy-number::-webkit-outer-spin-button,
+  .input-cozy-number::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* Panel resize handle styles */
+[data-resize-handle] {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Only suppress tap-highlight; keep focus-visible outline for keyboard users */
+[data-resize-handle]:active {
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-resize-handle]:focus-visible {
+  outline: 2px solid rgb(var(--color-brand));
+  outline-offset: 2px;
+}

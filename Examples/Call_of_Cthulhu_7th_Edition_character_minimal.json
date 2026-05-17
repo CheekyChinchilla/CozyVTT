@@ -1,0 +1,23 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Minimal Investigator",
+    "gameSystem": "CALL_OF_CTHULHU_7E",
+    "data": {
+      "investigatorName": "Dr. Sarah Chen",
+      "occupation": "Professor of Archaeology",
+      "era": "1920s",
+      "characteristics": {
+        "STR": { "regular": 50, "half": 25, "fifth": 10 },
+        "CON": { "regular": 60, "half": 30, "fifth": 12 },
+        "SIZ": { "regular": 55, "half": 27, "fifth": 11 },
+        "DEX": { "regular": 50, "half": 25, "fifth": 10 },
+        "APP": { "regular": 65, "half": 32, "fifth": 13 },
+        "INT": { "regular": 80, "half": 40, "fifth": 16 },
+        "POW": { "regular": 70, "half": 35, "fifth": 14 },
+        "EDU": { "regular": 85, "half": 42, "fifth": 17 }
+      }
+    }
+  }
+}

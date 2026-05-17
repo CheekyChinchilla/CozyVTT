@@ -1,0 +1,338 @@
+// ============================================
+// Assign Character Modal
+// Assign or reassign character to a campaign
+// ============================================
+
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { X, Loader2, Link2, AlertCircle } from 'lucide-react';
+import type { Character, Campaign } from '@/types';
+import api from '@/services/api';
+import GameSystemBadge from '@/components/common/GameSystemBadge';
+
+interface AssignCharacterModalProps {
+  isOpen: boolean;
+  character: Character | null;
+  currentCampaign?: Campaign | null;
+  onClose: () => void;
+  onConfirm: (characterId: string, campaignId: string | null) => Promise<void>;
+}
+
+export default function AssignCharacterModal({
+  isOpen,
+  character,
+  currentCampaign,
+  onClose,
+  onConfirm,
+}: AssignCharacterModalProps) {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
+    currentCampaign?.id || null
+  );
+  const [loading, setLoading] = useState(false);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [error, setError] = useState('');
+
+  // Fetch campaigns when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchCampaigns();
+      setSelectedCampaignId(currentCampaign?.id || null);
+    }
+  }, [isOpen, currentCampaign]);
+
+  const fetchCampaigns = async () => {
+    setLoadingCampaigns(true);
+    setError('');
+
+    try {
+      const response = await api.listCampaigns();
+      setCampaigns(response.campaigns);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load campaigns');
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!character) return;
+
+    setError('');
+    setLoading(true);
+
+    try {
+      await onConfirm(character.id, selectedCampaignId);
+      onClose();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to assign character');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!loading) {
+      setError('');
+      setSelectedCampaignId(currentCampaign?.id || null);
+      onClose();
+    }
+  };
+
+  const modalRef = useFocusTrap(isOpen, handleClose);
+
+  if (!character) return null;
+
+  // Filter compatible campaigns — game systems must match exactly:
+  // flexible character → only flexible (null) campaigns
+  // typed character → only campaigns with the same game system
+  const compatibleCampaigns = campaigns.filter((campaign) => {
+    if (!character.gameSystem && !campaign.gameSystem) return true;  // both flexible
+    if (!character.gameSystem || !campaign.gameSystem) return false;  // one flexible, one not
+    return campaign.gameSystem === character.gameSystem;              // both typed, must match
+  });
+
+  // Check if selected campaign is compatible
+  const selectedCampaign = compatibleCampaigns.find((c) => c.id === selectedCampaignId);
+  const hasIncompatibleSelection = selectedCampaignId && !selectedCampaign;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            onClick={handleClose}
+            aria-hidden="true"
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              ref={modalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="assign-character-title"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-lg p-6 relative rounded-lg border border-moss-green/20 shadow-2xl"
+              style={{
+                background: 'rgba(254, 243, 199, 0.98)',
+                backdropFilter: 'blur(10px)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-moss-green/10">
+                    <Link2 className="w-6 h-6 text-moss-green" />
+                  </div>
+                  <h2 id="assign-character-title" className="text-2xl font-semibold text-moss-green font-heading">
+                    {currentCampaign ? 'Reassign Character' : 'Assign to Campaign'}
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={loading}
+                  className="p-2 rounded-lg hover:bg-warm-gray/10 transition-colors
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Close dialog"
+                >
+                  <X className="w-5 h-5 text-stone-gray" />
+                </button>
+              </div>
+
+              {/* Error Alert */}
+              {error && (
+                <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
+                  <p className="text-sm text-spirit-red font-medium">{error}</p>
+                </div>
+              )}
+
+              {/* Content */}
+              <div className="space-y-4">
+                {/* Character Info */}
+                <div className="glass-panel p-4">
+                  <h3 className="font-semibold text-moss-green mb-2">Character</h3>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-moss-green/10 border-2 border-moss-green/30
+                                  flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {character.tokenImageUrl ? (
+                        <img
+                          src={character.tokenImageUrl}
+                          alt={character.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-lg font-bold text-moss-green">
+                          {character.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-stone-gray truncate">{character.name}</p>
+                      <GameSystemBadge gameSystem={character.gameSystem} size="sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Assignment */}
+                {currentCampaign && (
+                  <div className="bg-spirit-purple/10 border border-spirit-purple/30 rounded-lg p-4">
+                    <p className="text-sm text-stone-gray">
+                      <strong className="text-spirit-purple">Currently assigned to:</strong>{' '}
+                      {currentCampaign.name}
+                    </p>
+                  </div>
+                )}
+
+                {/* Campaign Selection */}
+                <div>
+                  <label
+                    htmlFor="campaign"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Select Campaign
+                  </label>
+
+                  {loadingCampaigns ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 text-moss-green animate-spin" />
+                    </div>
+                  ) : compatibleCampaigns.length === 0 ? (
+                    <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-stone-gray">
+                            No compatible campaigns found. Create a campaign with a matching
+                            game system or use a flexible campaign.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {/* Unassign Option */}
+                      <label
+                        className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          selectedCampaignId === null
+                            ? 'border-moss-green bg-moss-green/5'
+                            : 'border-gray-200 hover:border-moss-green/50'
+                        } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="campaign"
+                          value=""
+                          checked={selectedCampaignId === null}
+                          onChange={() => setSelectedCampaignId(null)}
+                          disabled={loading}
+                          className="mt-1 mr-3"
+                        />
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-800">
+                            Unassigned
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Remove character from any campaign
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Campaign Options */}
+                      {compatibleCampaigns.map((campaign) => (
+                        <label
+                          key={campaign.id}
+                          className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                            selectedCampaignId === campaign.id
+                              ? 'border-moss-green bg-moss-green/5'
+                              : 'border-gray-200 hover:border-moss-green/50'
+                          } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="campaign"
+                            value={campaign.id}
+                            checked={selectedCampaignId === campaign.id}
+                            onChange={() => setSelectedCampaignId(campaign.id)}
+                            disabled={loading}
+                            className="mt-1 mr-3"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-gray-800 truncate">
+                                {campaign.name}
+                              </span>
+                              <GameSystemBadge gameSystem={campaign.gameSystem} size="sm" />
+                            </div>
+                            {campaign.description && (
+                              <p className="text-sm text-gray-600 line-clamp-2">
+                                {campaign.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Game System Compatibility Info */}
+                {character.gameSystem && (
+                  <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-3">
+                    <p className="text-xs text-stone-gray">
+                      <strong className="text-moss-green">Note:</strong> Only showing campaigns
+                      compatible with {character.gameSystem} or flexible campaigns.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-6">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={loading}
+                  className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={loading || loadingCampaigns || !!hasIncompatibleSelection}
+                  className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin inline-block mr-2" />
+                      Assigning...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-4 h-4 inline-block mr-2" />
+                      {selectedCampaignId === null ? 'Unassign' : 'Assign to Campaign'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}

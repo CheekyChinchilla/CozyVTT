@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Uploaded files (maps, tokens, audio, avatars, backups)
+uploads/
+
+# Prisma
+# NOTE: Migrations MUST be committed to version control for production deployments
+# prisma/migrations/  <-- REMOVED: Migrations should be tracked in git

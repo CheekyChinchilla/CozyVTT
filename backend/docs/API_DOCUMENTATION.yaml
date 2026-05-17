@@ -1,0 +1,6305 @@
+openapi: 3.0.3
+info:
+  title: CozyVTT API
+  description: |
+    RESTful API for CozyVTT — a self-hosted, browser-based Virtual Tabletop platform.
+
+    ## Authentication
+    All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
+    Login via `/api/auth/login` to obtain a session cookie.
+
+    ## MFA Flow
+    If a user has MFA enabled, `/api/auth/login` returns `{ mfaRequired: true }` instead of a full session.
+    The client must then call `/api/auth/mfa/verify-login` with a TOTP code or backup code to complete authentication.
+
+    ## Authorization
+    - **Platform roles**: `ADMIN` (full system access), `USER` (campaign access)
+    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (read-only)
+
+    ## Rate Limiting
+    - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
+    - Authentication endpoints: 5 requests per 15 minutes
+    - MFA setup verification: 5 attempts per 15 minutes
+    - MFA login verification: 5 attempts per 15 minutes (separate limit)
+    - Asset uploads: 30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
+    - Chat messages: 5 per minute (WebSocket)
+    - Dice rolls: 30 per minute (WebSocket)
+    - Token movement: 60 per second (WebSocket, throttled)
+
+    Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
+
+    ## Real-time Events
+    Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
+    See the WebSocket section at the bottom of this document for the full event reference.
+
+  version: 1.0.0
+  contact:
+    name: CozyVTT
+    url: https://cozyvtt.com
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+
+servers:
+  - url: https://cozyvtt.com/api
+    description: Production (replace with your self-hosted instance URL)
+  - url: http://localhost:4000
+    description: Local development
+
+# Default security — every endpoint requires the session cookie unless it
+# explicitly overrides with `security: []` (used for public endpoints like
+# /health, /api/setup/*, and the unauthenticated auth routes).
+security:
+  - cookieAuth: []
+
+tags:
+  - name: Health
+    description: System health checks
+  - name: Setup
+    description: Initial system setup wizard
+  - name: Authentication
+    description: User authentication, password reset, and session management
+  - name: MFA
+    description: Multi-Factor Authentication (TOTP + backup codes)
+  - name: Users
+    description: User management endpoints
+  - name: Campaigns
+    description: Campaign management
+  - name: Sessions
+    description: Game session lifecycle management
+  - name: Characters
+    description: Character creation and management
+  - name: Assets
+    description: File upload and asset management
+  - name: Maps
+    description: Map management and token manipulation
+  - name: Creatures
+    description: Creature template library — SRD and custom creatures, favorites, seeding
+  - name: Token Templates
+    description: Reusable token configurations savable per-campaign and copyable across campaigns the DM owns
+  - name: Walls & Lighting
+    description: Per-map wall segments, light sources, and fog-of-war state (DM-only writes)
+  - name: Invitations
+    description: Campaign invitation lifecycle (send, list, accept, decline)
+  - name: Campaign Export/Import
+    description: Export and import campaigns as portable `.cozyvtt` archives
+  - name: Messages
+    description: Chat message history
+  - name: Admin
+    description: Admin-only platform management endpoints (requires ADMIN platform role)
+  - name: WebSocket
+    description: Real-time events via Socket.io
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the API server is running. Accessible before setup.
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # ============================================
+  # SETUP
+  # ============================================
+
+  /api/setup/status:
+    get:
+      tags:
+        - Setup
+      summary: Check setup status
+      description: Check if the system setup wizard needs to be run. Accessible before setup.
+      operationId: getSetupStatus
+      security: []
+      responses:
+        '200':
+          description: Setup status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  setupCompleted:
+                    type: boolean
+                  hasUsers:
+                    type: boolean
+                  needsSetup:
+                    type: boolean
+
+  /api/setup/init:
+    post:
+      tags:
+        - Setup
+      summary: Initialize system
+      description: Create first admin account and complete setup wizard. Only works if setup is not yet complete.
+      operationId: initializeSystem
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - displayName
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 12
+                displayName:
+                  type: string
+      responses:
+        '201':
+          description: Setup completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ============================================
+  # AUTHENTICATION
+  # ============================================
+
+  /api/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: Create a new user account. First user automatically becomes ADMIN. Rate limited (5/15min).
+      operationId: registerUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - displayName
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 12
+                displayName:
+                  type: string
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      description: |
+        Authenticate user and create session. Rate limited (5/15min).
+        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`.
+        If `mustChangePassword` is true in response, frontend should redirect to password change.
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                rememberMe:
+                  type: boolean
+                  default: false
+                  description: Extends session to 30 days
+            example:
+              email: dm@example.com
+              password: hunter2-correct-horse-battery
+              rememberMe: true
+      responses:
+        '200':
+          description: Login successful (or MFA required)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                      user:
+                        $ref: '#/components/schemas/User'
+                      mustChangePassword:
+                        type: boolean
+                  - type: object
+                    properties:
+                      mfaRequired:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: Destroy session and clear cookie
+      operationId: logoutUser
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /api/auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Get currently authenticated user from session
+      operationId: getCurrentUser
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset
+      description: |
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration).
+        If SMTP is not configured, returns a message to contact the administrator.
+        Rate limited (5/15min).
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Response (always 200 to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password with token
+      description: Reset password using a valid token from a password reset email. Token must not be expired or used. Rate limited (5/15min).
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                  format: uuid
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change own password
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false.
+      operationId: changePassword
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================
+  # MFA
+  # ============================================
+
+  /api/auth/mfa/setup:
+    post:
+      tags:
+        - MFA
+      summary: Begin MFA setup
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled.
+      operationId: mfaSetup
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: MFA setup initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  qrCodeUrl:
+                    type: string
+                    description: Data URL of QR code image
+                  secret:
+                    type: string
+                    description: TOTP secret for manual entry
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/auth/mfa/verify:
+    post:
+      tags:
+        - MFA
+      summary: Complete MFA setup
+      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Rate limited (5/15min).
+      operationId: mfaVerifySetup
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: 6-digit TOTP code from authenticator app
+      responses:
+        '200':
+          description: MFA enabled, backup codes returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  backupCodes:
+                    type: array
+                    items:
+                      type: string
+                    description: 10 backup codes in XXXX-XXXX format (shown only once)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/mfa/verify-login:
+    post:
+      tags:
+        - MFA
+      summary: Verify MFA during login
+      description: |
+        Complete MFA verification during login flow. Requires a pending MFA session from `/api/auth/login`.
+        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use.
+        Rate limited (5/15min, separate from setup verification).
+      operationId: mfaVerifyLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: 6-digit TOTP code
+                backupCode:
+                  type: string
+                  description: Backup code in XXXX-XXXX format
+      responses:
+        '200':
+          description: MFA verified, fully authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  mustChangePassword:
+                    type: boolean
+                  backupCodeUsed:
+                    type: boolean
+                  remainingBackupCodes:
+                    type: integer
+                  warning:
+                    type: string
+                    description: Warning when backup codes are running low (<=3)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/auth/mfa/disable:
+    post:
+      tags:
+        - MFA
+      summary: Disable MFA
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code. Admin accounts cannot disable MFA.
+      operationId: mfaDisable
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+                - token
+              properties:
+                password:
+                  type: string
+                token:
+                  type: string
+                  description: 6-digit TOTP code
+      responses:
+        '200':
+          description: MFA disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Admin accounts cannot disable MFA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/mfa/backup-codes:
+    post:
+      tags:
+        - MFA
+      summary: Regenerate backup codes
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes.
+      operationId: mfaRegenerateBackupCodes
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: New backup codes generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  backupCodes:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/account:
+    delete:
+      tags:
+        - Authentication
+      summary: Delete own account
+      description: |
+        Self-service permanent account deletion. Requires the current
+        password as confirmation. Cascades to delete memberships, characters,
+        and messages owned by the user.
+      operationId: deleteOwnAccount
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  format: password
+                  description: Current password (for confirmation)
+              required: [password]
+            example:
+              password: hunter2-correct-horse-battery
+      responses:
+        '200':
+          description: Account deleted; session destroyed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Account deleted successfully }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: |
+            Either not authenticated, or password did not match. The error message
+            distinguishes the two cases.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/auth/registration-status:
+    get:
+      tags:
+        - Authentication
+      summary: Get registration availability
+      description: |
+        Public endpoint — returns whether public self-registration is currently
+        enabled on this instance. Used by the frontend to show/hide the register
+        link on the login page. No authentication required.
+      operationId: getRegistrationStatus
+      security: []
+      responses:
+        '200':
+          description: Registration status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowRegistration:
+                    type: boolean
+                    description: |
+                      `true` if anonymous users may register accounts via
+                      `/api/auth/register`. `false` means an admin must
+                      manually create accounts.
+              example:
+                allowRegistration: true
+
+  /api/auth/appearance:
+    get:
+      tags:
+        - Authentication
+      summary: Get instance appearance settings
+      description: |
+        Public endpoint — returns the instance's theme, font, and branding
+        URLs. The frontend calls this on every page load so the login and
+        setup pages can paint with the correct theme before authentication.
+        No authentication required.
+      operationId: getAppearanceSettings
+      security: []
+      responses:
+        '200':
+          description: Appearance settings. On internal error, safe defaults are returned (still 200) so the login page is always renderable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppearanceSettings'
+              example:
+                instanceName: CozyVTT
+                themeId: cozy-default
+                customThemeColors: null
+                fontId: default
+                customLogoUrl: null
+                customFaviconUrl: null
+                customMascotUrl: null
+
+  /api/auth/ping:
+    get:
+      tags:
+        - Authentication
+      summary: Session keepalive
+      description: |
+        Extends the rolling session cookie without fetching user data.
+        Called periodically by the frontend during active gameplay so a long
+        session doesn't expire mid-roll. Cheap — just touches the session.
+      operationId: pingSession
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Session is alive.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================
+  # USER MANAGEMENT
+  # ============================================
+
+  /api/users:
+    get:
+      tags:
+        - Users
+      summary: List all users
+      description: Get list of all users (Admin only)
+      operationId: listUsers
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Get specific user (own profile or admin)
+      operationId: getUserById
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Update user profile (own profile or admin). Admin can change platformRole.
+      operationId: updateUser
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                avatarUrl:
+                  type: string
+                platformRole:
+                  type: string
+                  enum: [ADMIN, USER]
+                  description: Admin only
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Delete user account (Admin only, cannot delete self)
+      operationId: deleteUser
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{id}/reset-password:
+    post:
+      tags:
+        - Users
+      summary: Admin reset user password
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login.
+      operationId: adminResetUserPassword
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Password reset with temporary password
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  temporaryPassword:
+                    type: string
+                  mustChangePassword:
+                    type: boolean
+                    example: true
+                  notice:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{id}/preferences:
+    get:
+      tags:
+        - Users
+      summary: Get user preferences
+      description: |
+        Returns the user's per-user preferences blob (theme, font, dice color, sound effects, notifications).
+        Returns an empty object if the user has not customized any preferences yet — the frontend layers
+        these on top of the system defaults from `GET /api/auth/appearance`.
+        Users can fetch their own preferences; admins can fetch any user's.
+      operationId: getUserPreferences
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    $ref: '#/components/schemas/UserPreferences'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Users
+      summary: Update user preferences (partial merge)
+      description: |
+        Partial-merge update of the user's preferences. Send any subset of fields and the server
+        merges them into the stored JSON blob.
+        Users can update their own preferences; admins can update any user's.
+        Unknown fields are stripped silently. Empty payloads are rejected with 400.
+      operationId: updateUserPreferences
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferences'
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  preferences:
+                    $ref: '#/components/schemas/UserPreferences'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{id}/send-reset-link:
+    post:
+      tags:
+        - Users
+      summary: Admin send password reset link
+      description: |
+        Send a password reset email to the user (Admin only).
+        Invalidates any existing unused reset tokens and creates a new one (expires in 1 hour).
+        Requires SMTP to be configured — returns 503 if SMTP is not set up.
+      operationId: adminSendUserResetLink
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reset email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset email sent successfully
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: SMTP not configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Service Unavailable
+                  message:
+                    type: string
+                    example: SMTP is not configured on this instance.
+
+  # ============================================
+  # CAMPAIGNS
+  # ============================================
+
+  /api/campaigns:
+    get:
+      tags:
+        - Campaigns
+      summary: List user campaigns
+      description: Get all campaigns the user is a member of
+      operationId: listCampaigns
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaigns:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Campaign'
+
+    post:
+      tags:
+        - Campaigns
+      summary: Create campaign
+      description: |
+        Create a new campaign (creator automatically becomes DM). The optional
+        `gameSystem` field is preferred but not required; it can be set later.
+      operationId: createCampaign
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                gameSystem:
+                  type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
+                  description: Optional game system for the campaign
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  campaign:
+                    $ref: '#/components/schemas/Campaign'
+
+  /api/campaigns/{campaignId}:
+    get:
+      tags:
+        - Campaigns
+      summary: Get campaign details
+      description: Get campaign with members, maps, and characters (requires campaign membership)
+      operationId: getCampaignById
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Campaign details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign:
+                    $ref: '#/components/schemas/Campaign'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Campaigns
+      summary: Update campaign
+      description: |
+        Update campaign settings (DM only). Supports name, description, status,
+        vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem.
+        Note: Changing `gameSystem` after characters have been created logs a
+        warning and returns it in the response, but the change is still allowed.
+      operationId: updateCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                  enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+                gameSystem:
+                  type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
+                  description: Game system for the campaign (warning logged if characters exist)
+                vibeSettings:
+                  type: object
+                  description: Custom vibe periods with hues, filters, and audio
+                spiritLayerEnabled:
+                  type: boolean
+                spiritLayerStyle:
+                  type: string
+                  enum: [wispy, ethereal, shadow, custom]
+      responses:
+        '200':
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  campaign:
+                    $ref: '#/components/schemas/Campaign'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags:
+        - Campaigns
+      summary: Delete campaign
+      description: Delete campaign (owner or admin only)
+      operationId: deleteCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Campaign deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/characters:
+    get:
+      tags:
+        - Campaigns
+      summary: List campaign roster
+      description: |
+        Returns all memberships for the campaign with each member's assigned
+        characters. The response includes summarized character info — name,
+        token image, game system, and extracted HP — but never raw character
+        `data`. Requires campaign membership.
+      operationId: listCampaignRoster
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Campaign roster.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roster:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: string, format: uuid }
+                        userName: { type: string }
+                        userAvatar: { type: string, nullable: true }
+                        role:
+                          type: string
+                          enum: [DM, PLAYER, SPECTATOR]
+                        joinedAt: { type: string, format: date-time }
+                        characters:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id: { type: string, format: uuid }
+                              name: { type: string }
+                              tokenImageUrl: { type: string, nullable: true }
+                              gameSystem: { type: string, nullable: true }
+                              userId: { type: string, format: uuid }
+                              hp:
+                                type: object
+                                nullable: true
+                                properties:
+                                  current: { type: integer }
+                                  max: { type: integer }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/invitable-users:
+    get:
+      tags:
+        - Campaigns
+      summary: List users eligible to invite
+      description: |
+        Returns all users on the instance who are *not* already a member of
+        the campaign and have no pending invitation to it. Used by the
+        DM-side invite picker. DM only.
+      operationId: listInvitableUsers
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Users available to invite.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/invite:
+    post:
+      tags:
+        - Campaigns
+      summary: Invite user to campaign
+      description: Add a user to the campaign as PLAYER (DM only)
+      operationId: inviteUserToCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: User invited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  membership:
+                    $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/members/{userId}:
+    delete:
+      tags:
+        - Campaigns
+      summary: Remove member
+      description: Remove a member from campaign (DM only, cannot remove DM)
+      operationId: removeMember
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/members/{userId}/role:
+    put:
+      tags:
+        - Campaigns
+      summary: Change member role
+      description: Change a member's role (DM only, one DM per campaign enforced)
+      operationId: changeMemberRole
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum: [DM, PLAYER, SPECTATOR]
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  membership:
+                    $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/vibe:
+    put:
+      tags:
+        - Campaigns
+      summary: Update vibe/atmosphere
+      description: Change the current vibe period for the campaign (DM only). Validates against campaign's vibeSettings.
+      operationId: updateVibe
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - period
+              properties:
+                period:
+                  type: string
+                  description: Time period name (e.g., dawn, day, dusk, night)
+      responses:
+        '200':
+          description: Vibe updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  currentVibe:
+                    type: string
+                  vibeData:
+                    type: object
+                    properties:
+                      hue:
+                        type: string
+                      filter:
+                        type: string
+                      audio:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/admin/all:
+    get:
+      tags:
+        - Campaigns
+      summary: List all campaigns (Admin)
+      description: Get all campaigns in the system (Admin only)
+      operationId: listAllCampaigns
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaigns:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Campaign'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================
+  # INVITATIONS
+  # ============================================
+
+  /api/invitations:
+    get:
+      tags:
+        - Invitations
+      summary: List my pending invitations
+      description: |
+        Returns the authenticated user's pending campaign invitations (status
+        `PENDING`), ordered newest first, with the inviting campaign's summary
+        info included so the UI can render an invitation card without
+        additional fetches.
+      operationId: listMyInvitations
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Pending invitations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    campaignId: { type: string, format: uuid }
+                    userId: { type: string, format: uuid }
+                    status:
+                      type: string
+                      enum: [PENDING, ACCEPTED, DECLINED, EXPIRED]
+                    createdAt: { type: string, format: date-time }
+                    expiresAt: { type: string, format: date-time, nullable: true }
+                    campaign:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        description: { type: string, nullable: true }
+                        gameSystem: { type: string, nullable: true }
+                        status:
+                          type: string
+                          enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+                        owner:
+                          type: object
+                          properties:
+                            displayName: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/invitations/{id}/accept:
+    post:
+      tags:
+        - Invitations
+      summary: Accept a campaign invitation
+      description: |
+        Accept the invitation and join the campaign as a `PLAYER`. Optionally
+        assigns one or more of the accepting user's characters to the campaign
+        in the same transaction.
+
+        Validation:
+        - The invitation must belong to the authenticated user and be `PENDING`.
+        - Expired invitations are rejected.
+        - All `characterIds` must belong to the user and not already be assigned
+          to a campaign.
+        - If the campaign has a `gameSystem` set, each character's `gameSystem`
+          must either be null or match the campaign's.
+
+        On success, also broadcasts a `roster.updated` event over the WebSocket
+        to all current campaign members.
+      operationId: acceptInvitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: false
+        description: |
+          Optional list of characters to bring into the campaign. Omit or send
+          `{ "characterIds": [] }` to join without assigning any characters.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                characterIds:
+                  type: array
+                  items: { type: string, format: uuid }
+            example:
+              characterIds:
+                - 4fbd7b27-c5cd-4d6f-9c80-0f7f30c75c2f
+      responses:
+        '200':
+          description: Invitation accepted; campaign membership created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Invitation accepted }
+                  membership:
+                    $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          description: |
+            Invitation already processed, expired, or character validation failed
+            (not owned by user, already assigned, or game-system mismatch).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/invitations/{id}/decline:
+    post:
+      tags:
+        - Invitations
+      summary: Decline a campaign invitation
+      description: |
+        Marks the invitation as `DECLINED`. The invitation must belong to
+        the authenticated user and currently be `PENDING`. Does not create
+        any campaign membership.
+      operationId: declineInvitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Invitation declined.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Invitation declined }
+        '400':
+          description: Invitation already processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ============================================
+  # MESSAGES
+  # ============================================
+
+  /api/campaigns/{campaignId}/messages:
+    get:
+      tags:
+        - Messages
+      summary: Get message history
+      description: Get paginated message history for a campaign (campaign member required). DICE_ROLL messages are excluded from chat history.
+      operationId: getMessages
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: date-time
+            description: Cursor-based pagination - get messages before this timestamp
+      responses:
+        '200':
+          description: Message history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================
+  # SESSIONS
+  # ============================================
+
+  /api/campaigns/{campaignId}/sessions:
+    post:
+      tags:
+        - Sessions
+      summary: Start new session
+      description: Start a new game session for the campaign (DM only). Auto-increments session number.
+      operationId: startSession
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '201':
+          description: Session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '400':
+          description: Active session already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/sessions/{sessionId}/pause:
+    put:
+      tags:
+        - Sessions
+      summary: Pause session
+      description: Pause an active game session (DM only)
+      operationId: pauseSession
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/sessions/{sessionId}/end:
+    put:
+      tags:
+        - Sessions
+      summary: End session
+      description: End a game session and save the current game state (token positions, map, vibe, spirit layer). DM only.
+      operationId: endSession
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session ended with state saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/resume:
+    put:
+      tags:
+        - Sessions
+      summary: Resume last session
+      description: Resume the most recently ended session, restoring saved game state (DM only)
+      operationId: resumeSession
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Session resumed with state restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '400':
+          description: No ended session to resume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================
+  # CHARACTERS
+  # ============================================
+
+  /api/characters:
+    get:
+      tags:
+        - Characters
+      summary: List user characters
+      description: Get all characters owned by authenticated user
+      operationId: listCharacters
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of characters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  characters:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Character'
+
+    post:
+      tags:
+        - Characters
+      summary: Create character
+      description: |
+        Create a new character.
+        - If `campaignId` is provided and `gameSystem` is not specified, the
+          character auto-inherits the campaign's `gameSystem`.
+        - If `gameSystem` is provided, character data is validated against that
+          system's Zod schema.
+        - If `gameSystem` is null, no validation occurs (flexible character).
+      operationId: createCharacter
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                gameSystem:
+                  type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
+                  description: Optional game system (auto-inherited from campaign if campaignId provided)
+                campaignId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Optional campaign to assign character to immediately
+                data:
+                  type: object
+                  description: Flexible JSON data for character stats (validated if gameSystem is set)
+                tokenImageUrl:
+                  type: string
+      responses:
+        '201':
+          description: Character created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  character:
+                    $ref: '#/components/schemas/Character'
+        '400':
+          description: Validation error (invalid gameSystem or character data doesn't match schema)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation Error
+                  message:
+                    type: string
+                  validationErrors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        message:
+                          type: string
+                        code:
+                          type: string
+
+  /api/characters/{id}:
+    get:
+      tags:
+        - Characters
+      summary: Get character
+      description: Get character details (owner or campaign DM)
+      operationId: getCharacterById
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Character details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  character:
+                    $ref: '#/components/schemas/Character'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Characters
+      summary: Update character
+      description: |
+        Update character (owner or campaign DM).
+        - `gameSystem` cannot be changed after character creation (returns 400 error).
+        - If the character has a `gameSystem`, data updates are validated against
+          that system's Zod schema.
+        - If the character has no `gameSystem`, no validation occurs.
+      operationId: updateCharacter
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                data:
+                  type: object
+                  description: Character data (validated if gameSystem is set)
+                tokenImageUrl:
+                  type: string
+                gameSystem:
+                  type: string
+                  deprecated: true
+                  description: DEPRECATED - Cannot change gameSystem after creation. Will return 400 error.
+      responses:
+        '200':
+          description: Character updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  character:
+                    $ref: '#/components/schemas/Character'
+        '400':
+          description: Validation error (trying to change gameSystem or data doesn't match schema)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation Error
+                  message:
+                    type: string
+                  validationErrors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        message:
+                          type: string
+                        code:
+                          type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Characters
+      summary: Delete character
+      description: Delete character (owner only)
+      operationId: deleteCharacter
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Character deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/characters/{id}/assign:
+    post:
+      tags:
+        - Characters
+      summary: Assign character to campaign
+      description: |
+        Assign character to a campaign (owner only, must be a campaign member).
+        If `character.gameSystem !== campaign.gameSystem`, a warning is logged
+        and returned in the response, but assignment is still allowed (DM decision).
+      operationId: assignCharacterToCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - campaignId
+              properties:
+                campaignId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Character assigned (may include warning if game system mismatch)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  character:
+                    $ref: '#/components/schemas/Character'
+                  warning:
+                    type: string
+                    nullable: true
+                    description: Warning message if character and campaign have different game systems
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/characters/{id}/validate:
+    get:
+      tags:
+        - Characters
+      summary: Validate character data against its game system schema
+      description: |
+        Re-runs the Zod schema for the character's `gameSystem` against its
+        current `data` blob. Useful after editing a character to surface fields
+        that no longer satisfy the schema (e.g. missing required ability
+        scores after a game-system update).
+
+        Returns `200 OK` with `isValid: false` and a list of field-level errors
+        even when validation fails — this is not an error condition for the
+        client. Only character owners can validate (prevents info leakage).
+      operationId: validateCharacter
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CharacterId'
+      responses:
+        '200':
+          description: "Validation result — note that an invalid character returns 200 with isValid=false (not an error)."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isValid:
+                    type: boolean
+                  errors:
+                    type: array
+                    nullable: true
+                    items:
+                      type: object
+                      properties:
+                        path: { type: string, example: 'stats.strength' }
+                        message: { type: string, example: 'Expected number, received string' }
+                        code: { type: string, example: 'invalid_type' }
+              examples:
+                valid:
+                  summary: All fields pass
+                  value:
+                    isValid: true
+                invalid:
+                  summary: Schema mismatch
+                  value:
+                    isValid: false
+                    errors:
+                      - path: 'stats.strength'
+                        message: 'Expected number, received string'
+                        code: 'invalid_type'
+        '400':
+          description: Character has no game system assigned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isValid: { type: boolean, example: false }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path: { type: string }
+                        message: { type: string }
+                        code: { type: string }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/characters/{id}/copy:
+    post:
+      tags:
+        - Characters
+      summary: Duplicate a character
+      description: |
+        Creates a copy of the character owned by the same user. The copy is
+        unassigned (`campaignId: null`) and its name is suffixed with `(Copy)`.
+        Only the character owner may copy it.
+      operationId: copyCharacter
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CharacterId'
+      responses:
+        '201':
+          description: Character copied successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Character copied successfully }
+                  character:
+                    $ref: '#/components/schemas/Character'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ============================================
+  # ASSETS
+  # ============================================
+
+  /api/assets:
+    get:
+      tags:
+        - Assets
+      summary: List assets
+      description: List assets with filtering and pagination
+      operationId: listAssets
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [MAP, TOKEN, AUDIO, AVATAR]
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [GLOBAL, CAMPAIGN]
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Asset'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /api/assets/upload:
+    post:
+      tags:
+        - Assets
+      summary: Upload asset
+      description: |
+        Upload a new asset file. The file is validated by **magic-byte**
+        inspection (not just MIME header or extension) and rejected if the
+        detected type doesn't match the declared `type`.
+
+        **File size limits** (admin-configurable per type, defaults shown):
+        | Type | Default limit |
+        |------|---------------|
+        | MAP    | 50 MB |
+        | TOKEN  | 5 MB |
+        | AUDIO  | 20 MB |
+        | AVATAR | 2 MB |
+
+        Image assets generate a 512×512 thumbnail server-side.
+
+        **Rate limit**: 30 uploads per minute per user (configurable via
+        `ASSET_UPLOAD_RATE_LIMIT`). Sized to allow legitimate bulk-upload
+        during campaign setup while blocking obvious abuse loops.
+      operationId: uploadAsset
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - type
+              properties:
+                file:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  enum: [MAP, TOKEN, AUDIO, AVATAR]
+                scope:
+                  type: string
+                  enum: [GLOBAL, USER, CAMPAIGN]
+                  default: USER
+                campaignId:
+                  type: string
+                  format: uuid
+                  description: Required if scope is CAMPAIGN
+                name:
+                  type: string
+                description:
+                  type: string
+                tags:
+                  type: string
+                  description: Comma-separated tags
+      responses:
+        '201':
+          description: Asset uploaded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Asset uploaded successfully
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+        '400':
+          description: |
+            Validation failure — missing required field, file too large for
+            its declared type, or magic-byte mismatch (file content does not
+            match declared type).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/assets/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Get asset metadata
+      operationId: getAssetById
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Assets
+      summary: Delete asset
+      description: Delete asset (owner, campaign DM, or admin)
+      operationId: deleteAsset
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/assets/{id}/scope:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    patch:
+      tags:
+        - Assets
+      summary: Change asset scope
+      description: |
+        Move an asset between the three scopes (`GLOBAL`, `USER`, `CAMPAIGN`).
+
+        **Permission matrix:**
+        | Move | Required role |
+        |------|---------------|
+        | Any move involving GLOBAL | Platform admin OR `globalAssetManager` |
+        | USER → CAMPAIGN (own campaign) | Asset owner |
+        | CAMPAIGN → USER | Asset owner OR DM of the source campaign |
+        | CAMPAIGN → CAMPAIGN | Asset owner OR DM of the source campaign |
+        | USER → USER on a different account | Disallowed |
+
+        When `scope: CAMPAIGN`, `campaignId` is required and the campaign must
+        exist. The asset's file does not move on disk — only the DB record's
+        scope, `campaignId`, and `uploadedById` are updated.
+      operationId: changeAssetScope
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  enum: [GLOBAL, USER, CAMPAIGN]
+                campaignId:
+                  type: string
+                  format: uuid
+                  description: Required when scope is CAMPAIGN
+              required: [scope]
+            examples:
+              userToCampaign:
+                summary: Move from personal library to a campaign
+                value:
+                  scope: CAMPAIGN
+                  campaignId: 7f4cda04-2b08-4f7d-9b6f-2c2d7d0d0a01
+              promoteToGlobal:
+                summary: Admin moves a campaign asset into the global library
+                value:
+                  scope: GLOBAL
+      responses:
+        '200':
+          description: Asset moved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/assets/{id}/download:
+    get:
+      tags:
+        - Assets
+      summary: Download asset file
+      operationId: downloadAsset
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: File download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/assets/maps/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Serve map image
+      operationId: serveMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Map image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/assets/tokens/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Serve token image
+      operationId: serveToken
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Token image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/assets/audio/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Stream audio file
+      description: Stream audio with HTTP range request support
+      operationId: streamAudio
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Audio stream
+          content:
+            audio/*:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial content (range request)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/assets/avatars/{userId}:
+    get:
+      tags:
+        - Assets
+      summary: Serve user avatar
+      operationId: serveAvatar
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Avatar image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # MAPS & TOKENS
+  # ============================================
+
+  /api/campaigns/{campaignId}/maps:
+    get:
+      tags:
+        - Maps
+      summary: List campaign maps
+      description: Get all maps for a campaign (campaign member)
+      operationId: listMaps
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: List of maps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maps:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Map'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Maps
+      summary: Create map
+      description: Create a new map for the campaign (DM only)
+      operationId: createMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - imageUrl
+                - width
+                - height
+              properties:
+                name:
+                  type: string
+                imageUrl:
+                  type: string
+                width:
+                  type: integer
+                  minimum: 1
+                height:
+                  type: integer
+                  minimum: 1
+                gridSize:
+                  type: integer
+                  minimum: 1
+                  default: 50
+                spiritLayerUrl:
+                  type: string
+      responses:
+        '201':
+          description: Map created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  map:
+                    $ref: '#/components/schemas/Map'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/maps/{id}:
+    get:
+      tags:
+        - Maps
+      summary: Get map
+      description: Get map with tokens. Spirit layer data filtered by role (DM sees all, players see filtered).
+      operationId: getMapById
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Map details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  map:
+                    $ref: '#/components/schemas/Map'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Maps
+      summary: Update map
+      description: Update map settings (DM only)
+      operationId: updateMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                width:
+                  type: integer
+                height:
+                  type: integer
+                gridSize:
+                  type: integer
+                imageUrl:
+                  type: string
+                spiritLayerUrl:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Map updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  map:
+                    $ref: '#/components/schemas/Map'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Maps
+      summary: Delete map
+      description: Delete map (DM only, cannot delete current map)
+      operationId: deleteMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Map deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/maps/{id}/set-current:
+    put:
+      tags:
+        - Maps
+      summary: Set current map
+      description: Set a map as the current map for the campaign (DM only)
+      operationId: setCurrentMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current map set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/maps/{id}/tokens:
+    post:
+      tags:
+        - Maps
+      summary: Add token to map
+      description: Add a new token to the map (DM only)
+      operationId: addToken
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenInput'
+      responses:
+        '201':
+          description: Token added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    $ref: '#/components/schemas/Token'
+                  map:
+                    $ref: '#/components/schemas/Map'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/maps/{id}/tokens/{tokenId}:
+    put:
+      tags:
+        - Maps
+      summary: Update token
+      description: Update token (DM can update any, players only tokens they control)
+      operationId: updateToken
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                imageUrl:
+                  type: string
+                position:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                    y:
+                      type: number
+                size:
+                  type: object
+                  properties:
+                    width:
+                      type: number
+                    height:
+                      type: number
+                layer:
+                  type: string
+                  enum: [token, spirit]
+                visible:
+                  type: boolean
+                controlledBy:
+                  type: string
+                  format: uuid
+                  nullable: true
+                rotation:
+                  type: number
+                conditions:
+                  type: array
+                  items:
+                    type: string
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Token updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    $ref: '#/components/schemas/Token'
+                  map:
+                    $ref: '#/components/schemas/Map'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Maps
+      summary: Delete token
+      description: Remove token from map (DM only)
+      operationId: deleteToken
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Token removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # WALLS, LIGHTS, & FOG
+  # Per-map dynamic lighting and fog-of-war state.
+  # ============================================
+
+  /api/campaigns/{campaignId}/maps/{id}/walls:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Walls & Lighting
+      summary: List wall segments
+      description: Returns all wall segments for the map. Available to any campaign member.
+      operationId: listWalls
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All wall segments on the map.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  segments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Wall'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+        - Walls & Lighting
+      summary: Replace all wall segments
+      description: |
+        Replaces the map's entire wall list atomically. Used by the wall editor
+        when committing a large batch of changes (e.g. after drawing a polygon
+        room, or after undo/redo). DM only.
+      operationId: replaceWalls
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Wall'
+              required: [segments]
+      responses:
+        '200':
+          description: Updated wall list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  segments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Wall'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+        - Walls & Lighting
+      summary: Add a wall segment
+      description: |
+        Append a single wall segment. The server assigns an `id` if the body
+        omits one. Maps are capped at 5000 wall segments. DM only.
+      operationId: addWall
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WallInput'
+            example:
+              x1: 240
+              y1: 180
+              x2: 400
+              y2: 180
+              type: wall
+      responses:
+        '201':
+          description: Wall segment created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  segment:
+                    $ref: '#/components/schemas/Wall'
+                  total:
+                    type: integer
+                    description: Total wall count after this addition
+                    example: 47
+        '400':
+          description: Validation failure or 5000-segment limit reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/walls/{sid}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+      - $ref: '#/components/parameters/WallId'
+    delete:
+      tags:
+        - Walls & Lighting
+      summary: Delete a wall segment
+      description: Remove a wall segment by id. DM only.
+      operationId: deleteWall
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Segment deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Wall segment deleted }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      tags:
+        - Walls & Lighting
+      summary: Update a wall segment's type
+      description: |
+        Change the `type` of a single wall segment — most commonly used to
+        toggle a door open/closed. Geometry (`x1/y1/x2/y2`) is immutable;
+        to move a wall, delete and re-add. DM only.
+      operationId: updateWallType
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [wall, door-closed, door-open, window]
+              required: [type]
+            example:
+              type: door-open
+      responses:
+        '200':
+          description: Updated segment.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  segment:
+                    $ref: '#/components/schemas/Wall'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/lights:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Walls & Lighting
+      summary: List light sources
+      description: Returns all placed lights on the map. Available to any campaign member.
+      operationId: listLights
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All lights on the map.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lights:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LightSource'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags:
+        - Walls & Lighting
+      summary: Replace all light sources
+      description: |
+        Replaces the map's entire light list atomically. Used when committing
+        a large batch of changes or restoring saved lighting state. DM only.
+      operationId: replaceLights
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lights:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/LightSource'
+              required: [lights]
+      responses:
+        '200':
+          description: Updated light list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lights:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LightSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags:
+        - Walls & Lighting
+      summary: Add a light source
+      description: Add a single light. Server assigns the `id`. DM only.
+      operationId: addLight
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LightSourceInput'
+            example:
+              x: 320
+              y: 240
+              brightRadius: 4
+              dimRadius: 8
+              color: '#ffcc66'
+              enabled: true
+      responses:
+        '201':
+          description: Light created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  light:
+                    $ref: '#/components/schemas/LightSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/lights/{lightId}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+      - $ref: '#/components/parameters/LightId'
+    patch:
+      tags:
+        - Walls & Lighting
+      summary: Update a light source
+      description: |
+        Partially update a light's position, radii, color, or enabled state.
+        Send only the fields you want to change. DM only.
+      operationId: updateLight
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                x: { type: number }
+                y: { type: number }
+                brightRadius: { type: number, minimum: 0 }
+                dimRadius: { type: number, minimum: 0 }
+                color:
+                  type: string
+                  pattern: '^#[0-9a-fA-F]{6}$'
+                enabled: { type: boolean }
+            example:
+              enabled: false
+      responses:
+        '200':
+          description: Updated light.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  light:
+                    $ref: '#/components/schemas/LightSource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags:
+        - Walls & Lighting
+      summary: Delete a light source
+      description: Remove a light. DM only.
+      operationId: deleteLight
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Light deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Light deleted }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/fog:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Walls & Lighting
+      summary: Get fog state (DM only)
+      description: |
+        Returns the full `FogState` for the map. Players do not see the raw
+        fog state — they receive computed visibility via WebSocket events
+        as the DM reveals areas. DM only.
+      operationId: getFogState
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current fog state.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fogState:
+                    $ref: '#/components/schemas/FogState'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/fog/operation:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    post:
+      tags:
+        - Walls & Lighting
+      summary: Apply a fog reveal/hide operation
+      description: |
+        Mutate the fog state by either revealing/hiding a list of cell indices
+        (`reveal` / `hide` with `cells: number[]`) or by revealing/hiding the
+        entire map (`reveal_all` / `hide_all`). Returns the updated fog state.
+        DM only.
+      operationId: applyFogOperation
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FogOperation'
+            examples:
+              revealCells:
+                summary: Reveal specific cells
+                value:
+                  op: reveal
+                  cells: [0, 1, 2, 50, 51]
+              hideAll:
+                summary: Re-fog the entire map
+                value:
+                  op: hide_all
+      responses:
+        '200':
+          description: Updated fog state.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fogState:
+                    $ref: '#/components/schemas/FogState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/lighting:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    put:
+      tags:
+        - Walls & Lighting
+      summary: Toggle dynamic lighting
+      description: |
+        Enable or disable dynamic lighting for the map. When enabled,
+        players see only what their tokens can — fog uses the wall and
+        light data to compute visibility. When disabled, fog is the
+        manual brush-controlled layer. DM only.
+
+        Also broadcasts `map:lighting:updated` to all connected campaign
+        clients so they refresh without a reload.
+      operationId: setLightingEnabled
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+              required: [enabled]
+            example:
+              enabled: true
+      responses:
+        '200':
+          description: Updated lighting flag.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lightingEnabled: { type: boolean }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ============================================
+  # CREATURE LIBRARY
+  # ============================================
+
+  /api/campaigns/{campaignId}/creatures:
+    get:
+      tags: [Creatures]
+      summary: List creature templates
+      description: |
+        Returns SRD (global) + campaign-specific custom creature templates.
+        Supports search, source filter, challenge rating filter, and pagination.
+        Any campaign member can list.
+      operationId: listCreatures
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Filter by name (case-insensitive partial match)
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [srd, custom]
+          description: Filter by source
+        - name: cr
+          in: query
+          schema:
+            type: string
+          description: Filter by challenge rating
+        - name: gameSystem
+          in: query
+          schema:
+            type: string
+          description: Filter by game system
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated creature list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  creatures:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreatureTemplate'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Creatures]
+      summary: Create custom creature
+      description: Create a new campaign-specific custom creature template (DM only).
+      operationId: createCreature
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - statBlock
+              properties:
+                name:
+                  type: string
+                statBlock:
+                  type: object
+                gameSystem:
+                  type: string
+                challengeRating:
+                  type: string
+                creatureType:
+                  type: string
+                alignment:
+                  type: string
+                imageUrl:
+                  type: string
+                size:
+                  type: object
+                  properties:
+                    width:
+                      type: integer
+                    height:
+                      type: integer
+                disposition:
+                  type: string
+                  enum: [hostile, friendly, neutral]
+                displayMode:
+                  type: string
+                  enum: [pog, top-down, full-art]
+      responses:
+        '201':
+          description: Creature template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatureTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/creatures/{creatureId}:
+    get:
+      tags: [Creatures]
+      summary: Get creature template
+      description: Get a single creature template by ID. Any campaign member can view.
+      operationId: getCreature
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: creatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Creature template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatureTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Creatures]
+      summary: Update custom creature
+      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403).
+      operationId: updateCreature
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: creatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                statBlock:
+                  type: object
+                challengeRating:
+                  type: string
+                creatureType:
+                  type: string
+                alignment:
+                  type: string
+                imageUrl:
+                  type: string
+                size:
+                  type: object
+                disposition:
+                  type: string
+                displayMode:
+                  type: string
+      responses:
+        '200':
+          description: Creature template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatureTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Creatures]
+      summary: Delete custom creature
+      description: Delete a campaign-specific custom creature template (DM only). Cannot delete SRD creatures (returns 403).
+      operationId: deleteCreature
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: creatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Creature deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/creatures/{creatureId}/duplicate:
+    post:
+      tags: [Creatures]
+      summary: Duplicate creature
+      description: Duplicate any creature (including SRD) as a new custom creature in this campaign (DM only).
+      operationId: duplicateCreature
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: creatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Duplicated creature template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatureTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/creatures/favorites/list:
+    get:
+      tags: [Creatures]
+      summary: List creature favorites
+      description: Returns creature IDs and full creature objects that the current user has favorited in this campaign.
+      operationId: listCreatureFavorites
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Favorite creature list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favoriteIds:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  creatures:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreatureTemplate'
+
+  /api/campaigns/{campaignId}/creatures/{creatureId}/favorite:
+    post:
+      tags: [Creatures]
+      summary: Toggle creature favorite
+      description: Toggle favorite for the current user in this campaign. If already favorited, removes it; otherwise adds it.
+      operationId: toggleCreatureFavorite
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: creatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Favorite toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favorited:
+                    type: boolean
+
+  /api/campaigns/{campaignId}/creatures/seed/status:
+    get:
+      tags: [Creatures]
+      summary: Check SRD seed status
+      description: Returns whether SRD creatures have been seeded. Any campaign member can check.
+      operationId: getSrdSeedStatus
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Seed status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  seeded:
+                    type: boolean
+                  count:
+                    type: integer
+                  seedInProgress:
+                    type: boolean
+
+  /api/campaigns/{campaignId}/creatures/seed:
+    post:
+      tags: [Creatures]
+      summary: Seed SRD creatures
+      description: |
+        Fetch SRD creatures from Open5e and populate the library (DM only).
+        Safe to call multiple times — existing SRD creatures are not duplicated.
+        Returns 409 if seeding is already in progress.
+      operationId: seedSrdCreatures
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Seeding complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  created:
+                    type: integer
+                  skipped:
+                    type: integer
+        '409':
+          description: Seeding already in progress
+
+  # ============================================
+  # TOKEN TEMPLATE ENDPOINTS
+  # ============================================
+
+  /api/campaigns/{campaignId}/token-templates:
+    get:
+      tags: [Token Templates]
+      summary: List token templates
+      description: Get all token templates for a campaign. Supports search and type filtering.
+      operationId: listTokenTemplates
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [npc, player, object]
+      responses:
+        '200':
+          description: List of token templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TokenTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Token Templates]
+      summary: Create token template
+      description: Create a new token template (DM only).
+      operationId: createTokenTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenTemplateInput'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/token-templates/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/TemplateId'
+    get:
+      tags: [Token Templates]
+      summary: Get token template
+      operationId: getTokenTemplate
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Token template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Token Templates]
+      summary: Update token template
+      operationId: updateTokenTemplate
+      security:
+        - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenTemplateInput'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Token Templates]
+      summary: Delete token template
+      operationId: deleteTokenTemplate
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Template deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/token-templates/from-token:
+    post:
+      tags: [Token Templates]
+      summary: Save token as template
+      description: Create a token template from an existing map token's properties.
+      operationId: saveTokenAsTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenTemplateInput'
+      responses:
+        '201':
+          description: Template created from token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/token-templates/{id}/copy-to/{targetCampaignId}:
+    post:
+      tags: [Token Templates]
+      summary: Copy template to another campaign
+      description: |
+        Copy a token template to another campaign. The authenticated user must
+        be the DM of **both** the source and target campaigns.
+      operationId: copyTokenTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - $ref: '#/components/parameters/TemplateId'
+        - name: targetCampaignId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Template copied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTemplate'
+        '400':
+          description: Cannot copy a template to the same campaign.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # CAMPAIGN EXPORT/IMPORT ENDPOINTS
+  # ============================================
+
+  /api/campaigns/{campaignId}/export:
+    get:
+      tags: [Campaign Export/Import]
+      summary: Export campaign
+      description: |
+        Export a campaign as a .cozyvtt ZIP archive (DM only).
+        Rate limited to 1 per 5 minutes per user.
+      operationId: exportCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: includeAudio
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: includeTokens
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: ZIP archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '429':
+          description: Rate limited
+
+  /api/campaigns/import/preview:
+    post:
+      tags: [Campaign Export/Import]
+      summary: Preview import archive
+      description: Upload a .cozyvtt archive and return its manifest without creating anything.
+      operationId: previewCampaignImport
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Archive preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview:
+                    $ref: '#/components/schemas/CampaignImportPreview'
+        '400':
+          description: Invalid archive
+
+  /api/campaigns/import:
+    post:
+      tags: [Campaign Export/Import]
+      summary: Import campaign
+      description: |
+        Upload a .cozyvtt archive and create a new campaign.
+        Rate limited to 1 per 5 minutes per user.
+      operationId: importCampaign
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                campaignName:
+                  type: string
+                importTokens:
+                  type: string
+                  enum: ['true', 'false']
+                  default: 'true'
+      responses:
+        '201':
+          description: Campaign imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  campaignId:
+                    type: string
+                  campaignName:
+                    type: string
+                  mapCount:
+                    type: integer
+                  tokenCount:
+                    type: integer
+                  creatureCount:
+                    type: integer
+                  tokenTemplateCount:
+                    type: integer
+        '400':
+          description: Import failed
+        '429':
+          description: Rate limited
+
+  # ============================================
+  # ADMIN ENDPOINTS
+  # ============================================
+
+  /api/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Get system statistics
+      description: Returns aggregate counts for users, campaigns, characters, maps, and asset storage broken down by type.
+      operationId: adminGetStats
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: System statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userCount:
+                    type: integer
+                  campaignCount:
+                    type: integer
+                  activeCampaignCount:
+                    type: integer
+                  totalStorageBytes:
+                    type: integer
+                  activeSessionCount:
+                    type: integer
+                  sessionCount:
+                    type: integer
+                  characterCount:
+                    type: integer
+                  mapCount:
+                    type: integer
+                  assetBreakdown:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [MAP, TOKEN, AUDIO, AVATAR, DOCUMENT, OTHER]
+                        count:
+                          type: integer
+                        sizeBytes:
+                          type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/settings:
+    get:
+      tags: [Admin]
+      summary: Get system settings
+      operationId: adminGetSettings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current system settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      instanceName:
+                        type: string
+                      timezone:
+                        type: string
+                      allowRegistration:
+                        type: boolean
+                      requireAdminApproval:
+                        type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [Admin]
+      summary: Update system settings
+      operationId: adminUpdateSettings
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instanceName:
+                  type: string
+                  maxLength: 100
+                timezone:
+                  type: string
+                  maxLength: 50
+                allowRegistration:
+                  type: boolean
+                requireAdminApproval:
+                  type: boolean
+      responses:
+        '200':
+          description: Settings updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/activity:
+    get:
+      tags: [Admin]
+      summary: Get system activity
+      description: Returns currently-online users (via session table), recent admin actions (SystemLog), 50 most recent registrations, and 20 most recent game sessions.
+      operationId: adminGetActivity
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: System activity data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onlineUsers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        email:
+                          type: string
+                        displayName:
+                          type: string
+                        platformRole:
+                          type: string
+                        lastLoginAt:
+                          type: string
+                          nullable: true
+                        sessionExpiry:
+                          type: string
+                          nullable: true
+                  recentLogs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        level:
+                          type: string
+                          enum: [INFO, WARNING, ERROR, CRITICAL]
+                        message:
+                          type: string
+                        userId:
+                          type: string
+                          nullable: true
+                        context:
+                          type: object
+                          nullable: true
+                        createdAt:
+                          type: string
+                  recentUsers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  recentSessions:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/config:
+    get:
+      tags: [Admin]
+      summary: Get server configuration
+      description: Returns read-only server configuration — upload size limits, session timeouts, and SMTP status (no credentials exposed).
+      operationId: adminGetConfig
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Server configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadLimits:
+                    type: object
+                    properties:
+                      MAP:
+                        type: integer
+                        description: Max file size in bytes
+                      TOKEN:
+                        type: integer
+                      AUDIO:
+                        type: integer
+                      AVATAR:
+                        type: integer
+                  sessionTimeoutMs:
+                    type: integer
+                  rememberMeTimeoutMs:
+                    type: integer
+                  smtp:
+                    type: object
+                    properties:
+                      configured:
+                        type: boolean
+                      host:
+                        type: string
+                        nullable: true
+                      port:
+                        type: integer
+                      user:
+                        type: string
+                        nullable: true
+                      secure:
+                        type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users:
+    post:
+      tags: [Admin]
+      summary: Create a new user
+      description: Creates a user with a generated temporary password. The user must change their password on first login (`mustChangePassword` is set to true).
+      operationId: adminCreateUser
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                  maxLength: 50
+                platformRole:
+                  type: string
+                  enum: [USER, ADMIN]
+                  default: USER
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  temporaryPassword:
+                    type: string
+                    description: One-time temporary password — store securely and share with user
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Email already in use
+
+  /api/admin/users/{id}/approve:
+    post:
+      tags: [Admin]
+      summary: Approve a pending user registration
+      description: Approves a user who registered while `requireAdminApproval` was enabled. Blocked users receive a 403 on login until approved.
+      operationId: adminApproveUser
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User approved
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/users/{id}/reset-mfa:
+    post:
+      tags: [Admin]
+      summary: Reset MFA for a locked-out user
+      description: Disables TOTP and clears backup codes for a user who is locked out. The user must re-enroll MFA on next login. Admin accounts will be forced to re-enroll on their next MFA-required action.
+      operationId: adminResetUserMfa
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MFA reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: MFA is not enabled for this user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/smtp/test:
+    post:
+      tags: [Admin]
+      summary: Send a test email to verify SMTP configuration
+      operationId: adminTestSmtp
+      description: Sends a test email to the calling admin's own email address. Returns 400 if SMTP is not configured via environment variables.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Test email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: SMTP is not configured (missing env vars)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Failed to send email (SMTP connection error)
+
+  /api/admin/backups:
+    post:
+      tags: [Admin]
+      summary: Trigger a database backup
+      operationId: adminCreateBackup
+      description: |
+        Runs `pg_dump` to create a `.sql` backup file in the server's backup directory.
+        **Requires `pg_dump` (postgresql-client) to be installed on the server.**
+        Returns 500 with a helpful message if `pg_dump` is not found.
+        Note: Full in-app backup (create → download as ZIP, restore via file upload) is planned for a future release.
+      security:
+        - cookieAuth: []
+      responses:
+        '201':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  filename:
+                    type: string
+                  sizeBytes:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: pg_dump not found or backup failed
+    get:
+      tags: [Admin]
+      summary: List database backups
+      operationId: adminListBackups
+      description: Returns all `.sql` backup files in the server's backup directory with filename, size, and creation time.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backups:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filename:
+                          type: string
+                        sizeBytes:
+                          type: integer
+                        createdAt:
+                          type: string
+                          format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/backups/{filename}/download:
+    get:
+      tags: [Admin]
+      summary: Download a backup file
+      operationId: adminDownloadBackup
+      description: Streams a backup `.sql` file as a download. Filename is strictly validated against `backup-YYYY-MM-DDTHH-MM-SS.sql` pattern to prevent path traversal.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          example: backup-2026-03-04T10-30-00.sql
+      responses:
+        '200':
+          description: Backup file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid filename format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/backups/{filename}:
+    delete:
+      tags: [Admin]
+      summary: Delete a backup file
+      operationId: adminDeleteBackup
+      description: Deletes a backup `.sql` file from the server. Filename is strictly validated. Action is logged to SystemLog.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup deleted
+        '400':
+          description: Invalid filename format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ============================================
+# WEBSOCKET EVENTS
+# ============================================
+#
+# Real-time events are delivered via Socket.io (WebSocket/polling transport).
+# Connect to the same server URL with a Socket.io client (withCredentials: true).
+#
+# ## Authentication Flow
+# 1. Client connects with session cookie (same credential as REST API)
+# 2. Server validates session and emits 'connected' event
+# 3. Client emits 'authenticate' with { campaignId }
+# 4. Server validates campaign membership and joins the campaign room
+# 5. Server emits 'authenticated' event — client may now send campaign events
+#
+# ## Security Model
+# - socket.campaignId is set server-side during authentication — never trust client-sent IDs
+# - Events are broadcast only to sockets in the same campaign room
+# - DM-only events are rejected with an error if called by a non-DM
+# - Spirit layer tokens are role-filtered before broadcast (non-DMs only see visible tokens)
+#
+# ─────────────────────────────────────────────
+# CLIENT → SERVER EVENTS
+# ─────────────────────────────────────────────
+#
+# authenticate:
+#   payload: { campaignId: string }
+#   response: 'authenticated' event with { userId, campaignId, role, timestamp }
+#   description: Join a campaign room. Must be called before any campaign events.
+#
+# ── Chat ────────────────────────────────────
+#
+# chat.message:
+#   payload: { content: string, type: 'PLAYER' | 'DM' }
+#   broadcast: 'chat.message' to all campaign members
+#   rate limit: 5 per minute
+#   description: Send a chat message. Message is saved to database.
+#
+# ── Dice ────────────────────────────────────
+#
+# dice.roll:
+#   payload: { expression: string, characterName?: string, purpose?: string, secret?: boolean }
+#   broadcast: 'dice.rolled' to all members (or only to roller + DM if secret: true)
+#   rate limit: 30 per minute
+#   description: Roll dice using standard notation (e.g. "1d20+5", "2d6", "4d6kh3").
+#                Supports keep-highest (kh), keep-lowest (kl), advantage (2d20kh1), disadvantage (2d20kl1).
+#                Roll is saved to database. Secret rolls are still saved for DM audit.
+#
+# dice.clearHistory:
+#   payload: none
+#   broadcast: 'dice.historyCleared' to all campaign members
+#   permission: DM only
+#   description: Clears the dice roll history in all connected clients' UI.
+#
+# ── Token Movement ───────────────────────────
+#
+# token.move.start:
+#   payload: { tokenId: string, mapId: string }
+#   broadcast: 'token.move.start' to campaign (role-filtered for spirit tokens)
+#   description: Begin dragging a token. Validates move permission (DM = any, Player = controlled tokens only).
+#
+# token.move:
+#   payload: { tokenId: string, mapId: string, x: number, y: number }
+#   broadcast: 'token.moved' to campaign (role-filtered for spirit tokens)
+#   rate limit: 60 per second (throttled via lodash)
+#   description: Live position update during drag. Not saved to database.
+#
+# token.move.end:
+#   payload: { tokenId: string, mapId: string, x: number, y: number }
+#   broadcast: 'token.move.end' to all campaign members
+#   description: Final token position. Saved to database.
+#
+# ── Map ─────────────────────────────────────
+#
+# map.change:
+#   payload: { mapId: string }
+#   broadcast: 'map.changed' to all campaign members with updated map data
+#   description: Notifies all clients that map data has changed (e.g. after token add/remove/update).
+#
+# ── Spirit Layer ─────────────────────────────
+#
+# spirit_layer.toggle:
+#   payload: { visible: boolean }
+#   broadcast: 'spirit_layer.toggled' to all campaign members
+#   permission: DM only
+#   description: Show or hide the spirit layer for all players. Saved to campaign.
+#
+# spirit_layer.token.toggle:
+#   payload: { mapId: string, tokenId: string, visible: boolean }
+#   broadcast: 'spirit_layer.token.toggled' to campaign
+#   permission: DM only
+#   description: Toggle visibility of an individual spirit layer token.
+#
+# spirit_layer.style_change:
+#   payload: { style: string }
+#   broadcast: 'spirit_layer.style_changed' to all campaign members
+#   permission: DM only
+#   description: Change the visual style of the spirit layer overlay.
+#                style is either "wispy" or "custom:#hexcolor" (e.g. "custom:#7c3aed").
+#
+# ── Vibe / Atmosphere ────────────────────────
+#
+# vibe.update:
+#   payload: { period: string }
+#   broadcast: 'vibe.updated' with { period, hue, filter, audio }
+#   permission: DM only
+#   description: Change the active time-of-day vibe. Validated against campaign.vibeSettings.periods.
+#
+# atmosphere.effect.set:
+#   payload: { effect: string | null }
+#   broadcast: 'atmosphere.effect.updated' with { effect }
+#   permission: DM only
+#   description: Set a visual overlay effect (e.g. "rain", "fog") or null to clear.
+#
+# atmosphere.audio.set:
+#   payload: { audioUrl: string | null, volume?: number }
+#   broadcast: 'atmosphere.audio.updated' with { audioUrl, volume }
+#   permission: DM only
+#   description: Set ambient background audio or null to stop. Volume is 0–1.
+#
+# ── Session ──────────────────────────────────
+#
+# session.start:
+#   payload: { mapId?: string }
+#   broadcast: 'session.started' with { sessionId, sessionNumber, startedAt }
+#   permission: DM only
+#   description: Start a new game session.
+#
+# session.pause:
+#   payload: none
+#   broadcast: 'session.paused' to all members
+#   permission: DM only
+#   description: Pause the active session. Saves current state to database.
+#
+# session.end:
+#   payload: { saveState?: boolean }
+#   broadcast: 'session.ended' to all members
+#   permission: DM only
+#   description: End the session. If saveState is true, token positions and map state are saved.
+#
+# session.resume:
+#   (Handled via REST: PUT /api/campaigns/:id/resume — triggers 'session.resumed' broadcast)
+#
+# ── Character HP ─────────────────────────────
+#
+# character.hp.update:
+#   payload: { characterId: string, delta: number }
+#   broadcast: 'character.hp.updated' with { characterId, hp: { current, max, temp } }
+#   description: Apply a HP delta to a character (positive = heal, negative = damage).
+#                Character must belong to the campaign. Saved to database.
+#
+# ── Initiative Tracker ───────────────────────
+#
+# initiative.add:
+#   payload: { tokenId: string, mapId: string }
+#   broadcast: 'initiative.state' with full CombatState to all members
+#   permission: DM only
+#   description: Add a token to the initiative order.
+#                Token's current initiative value (if set) is used automatically.
+#
+# initiative.remove:
+#   payload: { tokenId: string }
+#   broadcast: 'initiative.state' to all members
+#   permission: DM only
+#   description: Remove a token from the initiative order.
+#                If this token had the active turn, advances to the next combatant.
+#
+# initiative.set:
+#   payload: { tokenId: string, mapId: string, value: number | null }
+#   broadcast: 'initiative.state' to all members
+#   permission: DM only
+#   description: Manually set a token's initiative value. Persists to token.initiative in database.
+#                Combatants are re-sorted (descending, ties broken alphabetically).
+#
+# initiative.roll:
+#   payload: { tokenId: string, mapId: string, expression: string, characterName?: string }
+#   broadcast: 'dice.rolled' to all members + 'initiative.state' to all members
+#   permission: DM only
+#   description: Roll a dice expression for this token's initiative (e.g. "1d20+3").
+#                Result is broadcast to dice log and saved to token.initiative.
+#                Token is auto-added to initiative order if not already present.
+#
+# initiative.reorder:
+#   payload: { orderedTokenIds: string[] }
+#   broadcast: 'initiative.state' to all members
+#   permission: DM only
+#   description: Apply a custom turn order (overrides value-based sorting).
+#
+# initiative.start:
+#   payload: none
+#   broadcast: 'initiative.state' to all members
+#   permission: DM only
+#   description: Begin combat. Sets active=true, round=1, currentTokenId=first combatant.
+#                Requires at least one combatant to be added first.
+#
+# initiative.next:
+#   payload: none
+#   broadcast: 'initiative.state' to all members
+#   permission: DM only
+#   description: Advance to the next combatant. Wraps to the first combatant and increments
+#                the round counter when the last combatant's turn ends.
+#
+# initiative.end:
+#   payload: none
+#   broadcast: 'initiative.state' with empty/reset state to all members
+#   permission: DM only
+#   description: End combat and clear all initiative state.
+#                Token initiative values remain in the database; only the combat order is cleared.
+#
+# initiative.request_state:
+#   payload: none
+#   response: 'initiative.state' sent to requesting socket only
+#   description: Request the current CombatState. Called on mount and reconnect.
+#
+# ── Connection ───────────────────────────────
+#
+# sync.request:
+#   payload: { lastEventId?: string }
+#   response: 'sync.state' with full campaign state
+#   description: Request full state sync (used for reconnection recovery).
+#
+# ping:
+#   payload: none
+#   response: 'pong'
+#   description: Heartbeat to verify connection health.
+#
+# ─────────────────────────────────────────────
+# SERVER → CLIENT EVENTS
+# ─────────────────────────────────────────────
+#
+# connected:
+#   payload: { userId: string, timestamp: string }
+#   description: Initial connection established. Client should emit 'authenticate' next.
+#
+# authenticated:
+#   payload: { userId: string, campaignId: string, role: string, timestamp: string }
+#   description: Successfully joined campaign room. Client may now emit campaign events.
+#
+# user.joined:
+#   payload: { userId: string, timestamp: string }
+#   description: A campaign member connected.
+#
+# user.left:
+#   payload: { userId: string, timestamp: string }
+#   description: A campaign member disconnected.
+#
+# chat.message:
+#   payload: { id, userId, userName, content, type, timestamp }
+#   description: New chat or DM message.
+#
+# chat.system:
+#   payload: { content: string, metadata?: object, timestamp: string }
+#   description: System message (user joined/left, session started, etc.)
+#
+# dice.rolled:
+#   payload: { userId, userName, characterName, expression, result, breakdown, purpose, timestamp, secret }
+#   description: Dice roll result broadcast to all members.
+#                breakdown contains individual die results, modifiers, and total.
+#                secret rolls are still broadcast but only to the roller (and DM via dice.rolled.secret).
+#
+# dice.rolled.secret:
+#   payload: { ...dice.rolled fields, originalRoller: string, isAuditView: true }
+#   description: DM-only audit view of a secret roll made by another player.
+#
+# dice.historyCleared:
+#   payload: none
+#   description: DM cleared dice history. All clients should clear their local history.
+#
+# token.move.start:
+#   payload: { tokenId, mapId, movedBy }
+#   description: Another user began dragging a token.
+#
+# token.moved:
+#   payload: { tokenId, mapId, x, y, movedBy }
+#   description: Token position update during drag.
+#
+# token.move.end:
+#   payload: { tokenId, mapId, x, y, movedBy }
+#   description: Token drag complete. Position saved to database.
+#
+# map.changed:
+#   payload: { mapId: string, mapData: object }
+#   description: Map data updated (tokens added, removed, or modified).
+#
+# spirit_layer.toggled:
+#   payload: { visible: boolean, toggledBy: string, timestamp: string }
+#   description: Spirit layer visibility changed for this campaign.
+#
+# spirit_layer.token.toggled:
+#   payload: { tokenId: string, visible: boolean, token?: object, toggledBy: string, timestamp: string }
+#   description: Individual spirit token visibility changed.
+#
+# spirit_layer.style_changed:
+#   payload: { style: string }
+#   description: Spirit layer visual style changed.
+#
+# vibe.updated:
+#   payload: { period: string, hue: string, filter: string, audio?: string }
+#   description: Vibe/atmosphere period changed.
+#
+# atmosphere.effect.updated:
+#   payload: { effect: string | null }
+#   description: Visual atmosphere effect changed.
+#
+# atmosphere.audio.updated:
+#   payload: { audioUrl: string | null, volume: number }
+#   description: Ambient audio changed.
+#
+# session.started:
+#   payload: { sessionId: string, sessionNumber: number, startedAt: string }
+#   description: A new game session has started.
+#
+# session.paused:
+#   payload: { timestamp: string }
+#   description: Session paused by DM.
+#
+# session.ended:
+#   payload: { message: string }
+#   description: Session ended by DM.
+#
+# session.resumed:
+#   payload: { sessionId: string, sessionNumber: number, startedAt: string }
+#   description: Session resumed (state restored from saved snapshot).
+#
+# character.hp.updated:
+#   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
+#   description: A character's HP was updated. Broadcast to all campaign members.
+#
+# character.updated:
+#   payload: { characterId: string, character: object }
+#   description: Full character data was updated (e.g. after sheet save).
+#
+# initiative.state:
+#   payload:
+#     active: boolean                     — combat is running
+#     round: number                       — current round (0 if not started)
+#     currentTokenId: string | null       — tokenId of the active combatant
+#     combatants: array of:
+#       tokenId: string
+#       name: string
+#       imageUrl: string
+#       initiative: number | null
+#       hp: { current, max, temp } | null
+#       type: 'player' | 'npc' | 'object'
+#       disposition: 'friendly' | 'neutral' | 'hostile' | null
+#   description: Full initiative state broadcast after every DM mutation.
+#                Also sent to requesting client on initiative.request_state.
+#
+# sync.state:
+#   payload: { campaign, map, tokens, currentVibe, spiritLayerEnabled }
+#   description: Full campaign state for reconnection recovery.
+#
+# error:
+#   payload: { message: string }
+#   description: An error occurred processing an event (permission denied, validation failure, etc.)
+#
+# pong:
+#   payload: none
+#   description: Heartbeat response.
+
+# ============================================
+# COMPONENTS
+# ============================================
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: cozyvtt.sid
+      description: Session cookie obtained via /api/auth/login
+
+  parameters:
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Campaign UUID
+    MapId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Map UUID
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: User UUID
+    CharacterId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Character UUID
+    AssetId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Asset UUID
+    TemplateId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Token template UUID
+    WallId:
+      name: sid
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Wall segment UUID
+    LightId:
+      name: lightId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Light source UUID
+    InvitationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Invitation UUID
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number (1-indexed)
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+      description: Items per page (max 100)
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        platformRole:
+          type: string
+          enum: [ADMIN, USER]
+        mfaEnabled:
+          type: boolean
+        avatarUrl:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserPreferences:
+      type: object
+      description: Per-user appearance preferences (theme + font). All fields optional; partial updates are merged into existing preferences.
+      properties:
+        themeId:
+          type: string
+          enum:
+            - cozy-default
+            - autumn-hearth
+            - desert-sand
+            - rose-garden
+            - ocean-depths
+            - northern-frost
+            - enchanted-forest
+            - twilight-vale
+            - obsidian-night
+            - shadow-realm
+            - deep-dungeon
+            - midnight-court
+            - parchment-classic
+            - slate-modern
+            - dragonfire
+            - arcane-storm
+            - custom
+          description: Preset theme identifier, or "custom" to use customThemeColors.
+        customThemeColors:
+          type: object
+          nullable: true
+          description: Required when themeId is "custom". Set to null to clear.
+          properties:
+            primary:
+              type: string
+              pattern: '^#[0-9a-fA-F]{6}$'
+            accent:
+              type: string
+              pattern: '^#[0-9a-fA-F]{6}$'
+            background:
+              type: string
+              pattern: '^#[0-9a-fA-F]{6}$'
+            text:
+              type: string
+              pattern: '^#[0-9a-fA-F]{6}$'
+          required: [primary, accent, background, text]
+        fontId:
+          type: string
+          enum:
+            - default
+            - medieval
+            - elegant
+            - modern
+            - handwritten
+            - clean
+            - scholarly
+            - gothic
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        gameSystem:
+          type: string
+          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          nullable: true
+          description: Primary game system for this campaign (optional)
+        ownerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+          default: PREPARATION
+        currentMapId:
+          type: string
+          format: uuid
+          nullable: true
+        vibeSettings:
+          type: object
+          description: Vibe periods with hues, filters, and audio
+        currentVibe:
+          type: string
+          nullable: true
+          description: Current time period name
+        spiritLayerEnabled:
+          type: boolean
+          default: false
+        spiritLayerStyle:
+          type: string
+          default: wispy
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastPlayedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CampaignMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [DM, PLAYER, SPECTATOR]
+        characterIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        joinedAt:
+          type: string
+          format: date-time
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        sessionNumber:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        savedState:
+          type: object
+          nullable: true
+          description: Captured game state (token positions, map, vibe, spirit layer)
+        notes:
+          type: string
+          nullable: true
+
+    Character:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        gameSystem:
+          type: string
+          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          nullable: true
+          description: Game system for this character (determines data structure)
+        data:
+          type: object
+          description: Flexible JSON data for character stats (structure depends on gameSystem)
+        tokenImageUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [MAP, TOKEN, AUDIO, AVATAR]
+        scope:
+          type: string
+          enum: [GLOBAL, CAMPAIGN]
+        uploadedById:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+          nullable: true
+        filename:
+          type: string
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        filePath:
+          type: string
+        thumbnailPath:
+          type: string
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Map:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        imageUrl:
+          type: string
+        baseLayerUrl:
+          type: string
+        spiritLayerUrl:
+          type: string
+          nullable: true
+          description: Hidden from non-DM users when spirit layer is disabled
+        width:
+          type: integer
+        height:
+          type: integer
+        gridSize:
+          type: integer
+          default: 50
+        tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/Token'
+          description: Filtered by role (spirit layer tokens hidden from players)
+        annotations:
+          type: array
+          items:
+            type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TokenHp:
+      type: object
+      properties:
+        current:
+          type: integer
+        max:
+          type: integer
+        temp:
+          type: integer
+
+    Token:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        characterId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        imageUrl:
+          type: string
+        position:
+          type: object
+          required:
+            - x
+            - y
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+        size:
+          type: object
+          required:
+            - width
+            - height
+          properties:
+            width:
+              type: number
+            height:
+              type: number
+        layer:
+          type: string
+          enum: [token, spirit]
+          description: 'token = normal layer; spirit = spirit/astral layer (hidden from players by default)'
+        visible:
+          type: boolean
+          description: If false, hidden from players (DM can still see)
+        controlledBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: User ID of the player who controls this token (null = DM-only)
+        rotation:
+          type: number
+          default: 0
+          description: Rotation in degrees
+        conditions:
+          type: array
+          items:
+            type: string
+          description: Active status conditions (e.g. "Poisoned", "Prone")
+        metadata:
+          type: object
+          description: Arbitrary custom data
+        type:
+          type: string
+          enum: [player, npc, object]
+          description: Token classification; affects context menu options and initiative behavior
+        disposition:
+          type: string
+          enum: [friendly, neutral, hostile]
+          nullable: true
+          description: NPC attitude toward the party
+        hp:
+          $ref: '#/components/schemas/TokenHp'
+          nullable: true
+          description: Hit points / health for this token
+        showHpBar:
+          type: boolean
+          default: false
+          description: Whether to display the HP bar on the map canvas
+        notes:
+          type: string
+          description: DM-only notes for this token
+        initiative:
+          type: integer
+          nullable: true
+          description: Initiative roll result for combat turn ordering
+
+    TokenInput:
+      type: object
+      required:
+        - name
+        - imageUrl
+        - position
+      properties:
+        characterId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        imageUrl:
+          type: string
+        position:
+          type: object
+          required:
+            - x
+            - y
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+        size:
+          type: object
+          properties:
+            width:
+              type: number
+              default: 1
+            height:
+              type: number
+              default: 1
+        layer:
+          type: string
+          enum: [token, spirit]
+          default: token
+        visible:
+          type: boolean
+          default: true
+        controlledBy:
+          type: string
+          format: uuid
+          nullable: true
+        rotation:
+          type: number
+          default: 0
+        conditions:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+        type:
+          type: string
+          enum: [player, npc, object]
+          default: npc
+        disposition:
+          type: string
+          enum: [friendly, neutral, hostile]
+          nullable: true
+        hp:
+          $ref: '#/components/schemas/TokenHp'
+          nullable: true
+        showHpBar:
+          type: boolean
+          default: false
+        notes:
+          type: string
+          default: ''
+        initiative:
+          type: integer
+          nullable: true
+
+    CombatantEntry:
+      type: object
+      description: A single combatant in the initiative order
+      properties:
+        tokenId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        imageUrl:
+          type: string
+        initiative:
+          type: integer
+          nullable: true
+        hp:
+          $ref: '#/components/schemas/TokenHp'
+          nullable: true
+        type:
+          type: string
+          enum: [player, npc, object]
+        disposition:
+          type: string
+          enum: [friendly, neutral, hostile]
+          nullable: true
+
+    CombatState:
+      type: object
+      description: Current initiative tracker state for a campaign
+      properties:
+        active:
+          type: boolean
+          description: Whether combat is currently running
+        round:
+          type: integer
+          description: Current round number (0 if combat not started)
+        currentTokenId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Token ID of the combatant whose turn it is
+        combatants:
+          type: array
+          items:
+            $ref: '#/components/schemas/CombatantEntry'
+          description: Ordered list of combatants (descending by initiative, ties broken alphabetically)
+
+    CreatureTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        gameSystem:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [srd, custom]
+          description: "'srd' = imported from Open5e (global, read-only), 'custom' = campaign-specific"
+        challengeRating:
+          type: string
+          nullable: true
+        creatureType:
+          type: string
+          nullable: true
+        alignment:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        statBlock:
+          type: object
+          description: Game-system-agnostic stat block (AC, HP, attacks, abilities, etc.)
+        size:
+          type: object
+          properties:
+            width:
+              type: integer
+              default: 1
+            height:
+              type: integer
+              default: 1
+        disposition:
+          type: string
+          enum: [hostile, friendly, neutral]
+          default: hostile
+        displayMode:
+          type: string
+          enum: [pog, top-down, full-art]
+          default: pog
+        campaignId:
+          type: string
+          format: uuid
+          nullable: true
+          description: "null for SRD creatures (global), set for custom creatures"
+        createdById:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION]
+        content:
+          type: string
+        metadata:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    TokenTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [npc, player, object]
+        disposition:
+          type: string
+          nullable: true
+        displayMode:
+          type: string
+          enum: [pog, top-down, full-art]
+        size:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        notes:
+          type: string
+          nullable: true
+        hp:
+          type: object
+          nullable: true
+          properties:
+            current:
+              type: integer
+            max:
+              type: integer
+            temp:
+              type: integer
+        showHpBar:
+          type: boolean
+        statBlock:
+          type: object
+          nullable: true
+        sightRadius:
+          type: number
+          nullable: true
+        campaignId:
+          type: string
+        createdById:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TokenTemplateInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        imageUrl:
+          type: string
+        type:
+          type: string
+          enum: [npc, player, object]
+        disposition:
+          type: string
+        displayMode:
+          type: string
+          enum: [pog, top-down, full-art]
+        size:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        notes:
+          type: string
+        hp:
+          type: object
+          nullable: true
+          properties:
+            current:
+              type: integer
+            max:
+              type: integer
+            temp:
+              type: integer
+        showHpBar:
+          type: boolean
+        statBlock:
+          type: object
+          nullable: true
+        sightRadius:
+          type: number
+
+    CampaignImportPreview:
+      type: object
+      properties:
+        formatVersion:
+          type: integer
+        exportedAt:
+          type: string
+        exportedFrom:
+          type: string
+        campaignName:
+          type: string
+        gameSystem:
+          type: string
+        mapCount:
+          type: integer
+        tokenCount:
+          type: integer
+        creatureCount:
+          type: integer
+        tokenTemplateCount:
+          type: integer
+        assetCount:
+          type: integer
+        includesAudio:
+          type: boolean
+        totalSizeBytes:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: BadRequest
+          description: Short machine-readable error identifier
+        message:
+          type: string
+          example: One or more fields failed validation.
+          description: Human-readable error description
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional structured details (e.g. per-field Zod issues)
+
+    Wall:
+      type: object
+      description: A wall segment that blocks vision (or a door/window variant).
+      properties:
+        id:
+          type: string
+          format: uuid
+        x1:
+          type: number
+          description: Start X in map-space pixels (origin top-left)
+          example: 240
+        y1:
+          type: number
+          example: 180
+        x2:
+          type: number
+          example: 400
+        y2:
+          type: number
+          example: 180
+        type:
+          type: string
+          enum: [wall, door-closed, door-open, door-locked, window]
+          description: |
+            * `wall` — blocks vision.
+            * `door-closed` — blocks vision; clickable to open.
+            * `door-open` — does not block vision.
+            * `door-locked` — blocks vision; only DM can unlock.
+            * `window` — does not block vision.
+      required: [id, x1, y1, x2, y2, type]
+
+    WallInput:
+      type: object
+      description: Wall segment without `id` (assigned server-side).
+      properties:
+        x1: { type: number }
+        y1: { type: number }
+        x2: { type: number }
+        y2: { type: number }
+        type:
+          type: string
+          enum: [wall, door-closed, door-open, door-locked, window]
+      required: [x1, y1, x2, y2, type]
+
+    LightSource:
+      type: object
+      description: A point light placed by the DM with separate bright and dim radii.
+      properties:
+        id:
+          type: string
+          format: uuid
+        x:
+          type: number
+          description: X position in map-space pixels
+          example: 320
+        y:
+          type: number
+          example: 240
+        brightRadius:
+          type: number
+          minimum: 0
+          description: Full-visibility radius in grid squares
+          example: 4
+        dimRadius:
+          type: number
+          minimum: 0
+          description: Dim-light radius in grid squares (must be ≥ brightRadius)
+          example: 8
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          example: '#ffcc66'
+        enabled:
+          type: boolean
+          description: Toggle without deleting (e.g. extinguished torch)
+          example: true
+      required: [id, x, y, brightRadius, dimRadius, color, enabled]
+
+    LightSourceInput:
+      type: object
+      description: Light source without `id` (assigned server-side).
+      properties:
+        x: { type: number }
+        y: { type: number }
+        brightRadius: { type: number, minimum: 0 }
+        dimRadius: { type: number, minimum: 0 }
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+        enabled:
+          type: boolean
+          default: true
+      required: [x, y, brightRadius, dimRadius, color]
+
+    FogState:
+      type: object
+      description: |
+        Fog-of-war state for a map. `revealed` is a flat boolean array;
+        cell (col, row) maps to index `row * fogCols + col`.
+      properties:
+        fogCols:
+          type: integer
+          minimum: 1
+          description: Number of fog cells horizontally
+          example: 50
+        fogRows:
+          type: integer
+          minimum: 1
+          example: 30
+        cellPx:
+          type: integer
+          minimum: 1
+          description: Fog cell size in map pixels
+          example: 32
+        revealed:
+          type: array
+          items:
+            type: boolean
+          description: Length must equal `fogCols * fogRows`
+      required: [fogCols, fogRows, cellPx, revealed]
+
+    FogOperation:
+      type: object
+      description: A fog reveal/hide operation. The `op` field discriminates the variant.
+      oneOf:
+        - type: object
+          properties:
+            op: { type: string, enum: [reveal, hide] }
+            cells:
+              type: array
+              items: { type: integer, minimum: 0 }
+              description: Cell indices to flip
+          required: [op, cells]
+        - type: object
+          properties:
+            op: { type: string, enum: [reveal_all, hide_all] }
+          required: [op]
+
+    Invitation:
+      type: object
+      description: Pending campaign invitation.
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        campaignName:
+          type: string
+          example: The Lost Mines
+        gameSystem:
+          type: string
+          nullable: true
+          example: DND_5E
+        role:
+          type: string
+          enum: [DM, PLAYER, SPECTATOR]
+          example: PLAYER
+        invitedBy:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            displayName: { type: string }
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, DECLINED, EXPIRED]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AppearanceSettings:
+      type: object
+      description: |
+        Instance-wide appearance settings — used on public/unauthenticated pages
+        and as the default for users who have not picked their own theme.
+      properties:
+        instanceName:
+          type: string
+          example: CozyVTT
+        themeId:
+          type: string
+          example: cozy-default
+        customThemeColors:
+          type: object
+          nullable: true
+          properties:
+            primary:    { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+            accent:     { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+            background: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+            text:       { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+        fontId:
+          type: string
+          example: default
+        customLogoUrl:
+          type: string
+          nullable: true
+        customFaviconUrl:
+          type: string
+          nullable: true
+        customMascotUrl:
+          type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad Request - Invalid input or validation failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: BadRequest
+            message: Required field "name" is missing.
+
+    Unauthorized:
+      description: Unauthorized - Not authenticated or MFA pending.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Unauthorized
+            message: Authentication required.
+
+    Forbidden:
+      description: Forbidden - Authenticated but insufficient permissions.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Forbidden
+            message: You do not have permission to perform this action.
+
+    NotFound:
+      description: Not Found - Resource does not exist or you cannot see it.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: NotFound
+            message: Campaign not found.
+
+    Conflict:
+      description: Conflict - Request conflicts with current resource state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Conflict
+            message: A creature with this name already exists in this campaign.
+
+    UnprocessableEntity:
+      description: Unprocessable Entity - Schema-valid but semantically rejected.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: UnprocessableEntity
+            message: Character data does not match the campaign's game system schema.
+            details:
+              field: 'data.stats.strength'
+              issue: 'Expected number, received string'
+
+    RateLimited:
+      description: |
+        Too Many Requests - Rate limit exceeded. Response includes
+        `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
+      headers:
+        RateLimit-Limit:
+          schema: { type: integer }
+          description: Maximum requests permitted in the current window
+        RateLimit-Remaining:
+          schema: { type: integer }
+          description: Requests remaining in the current window
+        RateLimit-Reset:
+          schema: { type: integer }
+          description: Seconds until the window resets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: TooManyRequests
+            message: Upload rate limit reached. Please slow down and try again in a minute.
+
+    ServerError:
+      description: Internal Server Error - Something went wrong on the server.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: InternalServerError
+            message: An unexpected error occurred. Please try again later.

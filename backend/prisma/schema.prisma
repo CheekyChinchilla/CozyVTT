@@ -1,0 +1,581 @@
+// CozyVTT Database Schema
+// Source: docs/STATEMENT_OF_WORK.md Section 4.1
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum PlatformRole {
+  ADMIN
+  USER
+}
+
+enum CampaignStatus {
+  PREPARATION
+  ACTIVE
+  PAUSED
+  INACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum CampaignRole {
+  DM
+  PLAYER
+  SPECTATOR
+}
+
+enum AssetType {
+  MAP
+  TOKEN
+  AUDIO
+  AVATAR
+  DOCUMENT
+  OTHER
+}
+
+enum AssetScope {
+  GLOBAL
+  USER
+  CAMPAIGN
+}
+
+enum MessageType {
+  PLAYER
+  DM
+  SYSTEM
+  DICE_ROLL
+  CHARACTER_ACTION
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum GameSystem {
+  DND_5E
+  PATHFINDER_2E
+  SHADOWRUN_6E
+  CALL_OF_CTHULHU_7E
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  displayName  String
+  platformRole PlatformRole @default(USER)
+
+  // Permissions
+  globalAssetManager Boolean @default(false)
+
+  // MFA
+  mfaEnabled     Boolean  @default(false)
+  mfaSecret      String?
+  mfaBackupCodes String[] // Array of hashed backup codes
+
+  // Password Reset
+  mustChangePassword Boolean @default(false)
+
+  // Admin approval (when SystemSettings.requireAdminApproval is true)
+  isApproved Boolean @default(true)
+
+  // Profile
+  avatarUrl String?
+  bio       String? @db.Text
+
+  // Preferences
+  rememberMe  Boolean @default(false)
+  preferences Json?   // UserPreferences shape — see backend/src/validators/userPreferences.ts
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  ownedCampaigns      Campaign[]             @relation("CampaignOwner")
+  campaignMemberships CampaignMembership[]
+  campaignInvitations CampaignInvitation[]
+  characters          Character[]
+  messages            Message[]
+  diceRolls           DiceRoll[]
+  uploadedAssets      Asset[]
+  passwordResetTokens PasswordResetToken[]
+  creatureFavorites   CreatureFavorite[]
+  tokenTemplates      TokenTemplate[]
+
+  @@index([email])
+}
+
+// ============================================
+// PASSWORD RESET TOKENS
+// ============================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ============================================
+// CAMPAIGN MANAGEMENT
+// ============================================
+
+model Campaign {
+  id          String         @id @default(uuid())
+  name        String
+  description String?        @db.Text
+  status      CampaignStatus @default(PREPARATION)
+
+  // Game System
+  gameSystem GameSystem?
+
+  // Ownership
+  ownerId String
+  owner   User   @relation("CampaignOwner", fields: [ownerId], references: [id])
+
+  // Current Map
+  currentMapId String?
+  currentMap   Map?    @relation("CurrentMap", fields: [currentMapId], references: [id])
+
+  // Vibe Tracker Settings
+  vibeSettings Json    // {periods: ["dawn", "day", "dusk", "night"], hues: {...}}
+  currentVibe  String? // Current time period
+
+  // Spirit Layer Settings
+  spiritLayerEnabled Boolean @default(false)
+  spiritLayerStyle   String  @default("wispy") // "wispy", "ethereal", "shadow", "custom"
+
+  // Chat Settings
+  chatCooldownEnabled Boolean @default(false)
+  chatCooldownSeconds Int     @default(5)
+
+  // Metadata
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastPlayedAt DateTime?
+
+  // Relations
+  memberships        CampaignMembership[]
+  invitations        CampaignInvitation[]
+  maps               Map[]                @relation("CampaignMaps")
+  characters         Character[]
+  messages           Message[]
+  diceRolls          DiceRoll[]
+  assets             Asset[]
+  sessions           Session[]
+  creatureTemplates  CreatureTemplate[]
+  creatureFavorites  CreatureFavorite[]
+  tokenTemplates     TokenTemplate[]
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model CampaignMembership {
+  id String @id @default(uuid())
+
+  // Relationships
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Role
+  role CampaignRole
+
+  // Character Assignment
+  characterIds String[] // Array of character IDs this user controls
+
+  // Metadata
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, campaignId])
+  @@index([campaignId])
+  @@index([userId])
+}
+
+model CampaignInvitation {
+  id         String           @id @default(uuid())
+  campaignId String
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     InvitationStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  expiresAt  DateTime?
+
+  @@unique([userId, campaignId])
+  @@index([userId, status])
+}
+
+// ============================================
+// SESSION MANAGEMENT
+// ============================================
+
+model Session {
+  id            String   @id @default(uuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sessionNumber Int // Auto-incrementing per campaign
+
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  // Saved State
+  savedState Json? // Token positions, map state, etc.
+
+  notes String? @db.Text
+
+  @@index([campaignId])
+}
+
+// ============================================
+// CHARACTER MANAGEMENT
+// ============================================
+
+model Character {
+  id String @id @default(uuid())
+
+  // Ownership
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Campaign Assignment
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  // Game System
+  gameSystem GameSystem?
+
+  // Character Data
+  name          String
+  tokenImageUrl String?
+
+  // Flexible Schema (JSON)
+  data Json // {notes, stats, inventory, etc.}
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([gameSystem])
+}
+
+// ============================================
+// MAP & TOKEN MANAGEMENT
+// ============================================
+
+model Map {
+  id String @id @default(uuid())
+
+  // Ownership
+  campaignId String
+  campaign   Campaign @relation("CampaignMaps", fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Map Data
+  name     String
+  imageUrl String
+  width    Int // In grid units
+  height   Int // In grid units
+  gridSize      Int    @default(50) // Pixels per grid square
+  feetPerSquare Int    @default(5)  // Feet represented by one grid square
+  diagonalRule  String @default("flat") // "flat" (D&D 5e) or "alternating" (PF2e 5/10)
+
+  // Layers
+  baseLayerUrl   String // Main map image
+  spiritLayerUrl String? // Optional spirit realm overlay
+
+  // State
+  tokens      Json // Array of token objects with positions
+  annotations Json // Array of annotations (drawings, markers)
+
+  // Walls & Fog of War (Phase 1/2 feature)
+  wallSegments    Json    @default("[]") // Array of WallSegment objects
+  fogData         Json?                  // FogState object (null = not initialized)
+  lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting
+  lights          Json    @default("[]") // Array of LightSource objects
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  activeCampaigns Campaign[] @relation("CurrentMap")
+
+  @@index([campaignId])
+}
+
+// ============================================
+// ASSET LIBRARY
+// ============================================
+
+model Asset {
+  id String @id @default(uuid())
+
+  // Classification
+  type  AssetType
+  scope AssetScope
+
+  // Ownership
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+  campaignId   String? // Null for global assets
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  // File Data
+  filename     String
+  originalName String
+  mimeType     String
+  fileSize     Int    // In bytes
+  filePath     String // Relative path in storage
+
+  // Metadata
+  name        String
+  description String?
+  tags        String[]
+
+  // Thumbnail
+  thumbnailPath String?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([type])
+  @@index([scope])
+  @@index([uploadedById])
+}
+
+// ============================================
+// COMMUNICATION
+// ============================================
+
+model Message {
+  id String @id @default(uuid())
+
+  // Context
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userId String? // Null for system messages
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Content
+  type     MessageType
+  content  String      @db.Text
+  metadata Json? // For system messages, dice rolls, etc.
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt])
+}
+
+model DiceRoll {
+  id String @id @default(uuid())
+
+  // Context
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Roll Data
+  expression String // e.g., "2d6+3"
+  result     Int
+  breakdown  Json // Detailed roll breakdown
+
+  // Character Context
+  characterName String?
+  purpose       String? // e.g., "Attack roll", "Perception check"
+
+  // Visibility
+  secret Boolean @default(false) // Secret rolls visible only to roller and DM
+
+  // Metadata
+  rolledAt DateTime @default(now())
+
+  @@index([campaignId, rolledAt])
+}
+
+// ============================================
+// CREATURE LIBRARY
+// ============================================
+
+model CreatureTemplate {
+  id String @id @default(uuid())
+
+  // Classification
+  name         String
+  gameSystem   GameSystem?
+  source       String      @default("custom") // "srd", "custom", or a homebrew source name
+  challengeRating String?  // e.g. "1/4", "5", "20"
+
+  // Creature info
+  creatureType String?     // e.g. "Medium humanoid (goblinoid)"
+  alignment    String?     // e.g. "neutral evil"
+  imageUrl     String?     // Optional token image
+
+  // Full stat block (JSON — matches NpcStatBlock interface)
+  statBlock    Json
+
+  // Token placement defaults
+  size         Json        @default("{\"width\":1,\"height\":1}") // Size object
+  disposition  String      @default("hostile")                     // friendly/neutral/hostile
+  displayMode  String      @default("pog")                         // pog/top-down/full-art
+
+  // Ownership: null = global SRD, userId = homebrew by that user
+  createdById  String?
+  campaignId   String?    // null = available globally, set = campaign-specific
+  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  favorites CreatureFavorite[]
+
+  @@index([gameSystem])
+  @@index([source])
+  @@index([campaignId])
+  @@index([name])
+}
+
+// ============================================
+// CREATURE FAVORITES (per-campaign, per-user)
+// ============================================
+
+model CreatureFavorite {
+  id         String   @id @default(uuid())
+  campaignId String
+  userId     String
+  creatureId String
+  createdAt  DateTime @default(now())
+
+  campaign Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creature CreatureTemplate  @relation(fields: [creatureId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId, creatureId])
+  @@index([campaignId, userId])
+}
+
+// ============================================
+// TOKEN TEMPLATES (reusable token configurations)
+// ============================================
+
+model TokenTemplate {
+  id          String  @id @default(uuid())
+  name        String
+  imageUrl    String?
+  type        String  @default("object") // 'player' | 'npc' | 'object'
+  disposition String? // 'friendly' | 'neutral' | 'hostile' | null
+  displayMode String  @default("pog") // 'pog' | 'top-down' | 'full-art'
+  size        Json    @default("{\"width\":1,\"height\":1}")
+  notes       String? @db.Text
+  hp          Json? // { current, max, temp } or null
+  showHpBar   Boolean @default(false)
+  statBlock   Json? // NpcStatBlock or null
+  sightRadius Float? // For dynamic lighting (grid squares)
+
+  // Ownership
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([name])
+}
+
+// ============================================
+// SYSTEM LOGS
+// ============================================
+
+model SystemLog {
+  id String @id @default(uuid())
+
+  level   LogLevel
+  message String   @db.Text
+  context Json? // Additional context data
+
+  userId     String?
+  campaignId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSettings {
+  id String @id @default(uuid())
+
+  // Setup Wizard State
+  setupCompleted Boolean @default(false)
+
+  // Instance Configuration
+  instanceName String  @default("CozyVTT")
+  timezone     String  @default("UTC")
+
+  // User Registration Settings
+  allowRegistration Boolean @default(false)
+  requireAdminApproval Boolean @default(true)
+
+  // Appearance
+  themeId           String  @default("cozy-default")
+  customThemeColors Json?
+  fontId            String  @default("default")
+  customLogoUrl     String?
+  customFaviconUrl  String?
+  customMascotUrl   String?
+
+  // Campaign Export/Import
+  campaignExportSizeLimit Int @default(524288000) // 500 MB in bytes
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

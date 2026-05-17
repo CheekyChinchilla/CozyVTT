@@ -1,0 +1,380 @@
+/**
+ * Atmosphere Particle Effect Overlays
+ * Per SOW Section 18.2: Visual Atmosphere Effects
+ *
+ * Six CSS-only animated overlays rendered over the map canvas.
+ * All share the same base positioning — absolute inset-0, pointer-events-none.
+ * These classes are applied by <AtmosphereOverlay effect="rain" /> etc.
+ *
+ * Technique: tiling radial/linear-gradients with background-position animation.
+ * Each layer scrolls by exactly its background-size tile dimension → seamless loop.
+ * Mist pseudo-elements use large negative inset to prevent visible bounding box edges.
+ */
+
+/* ============================================
+   Shared base class
+   ============================================ */
+
+.atmosphere-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3; /* above vibe hue overlay (z-auto) and spirit overlay */
+  overflow: hidden;
+}
+
+/* ============================================
+   RAIN
+   Individual tiling raindrop ellipses.
+   Each layer uses background-position animation scrolling by exactly
+   one tile-height per cycle (Y delta = background-size height → seamless).
+   Slight X offset per cycle gives realistic diagonal angle (~5°).
+   Two pseudo-elements with different tile sizes + timing = depth parallax.
+   ============================================ */
+
+@keyframes atmo-rain-a {
+  from { background-position: 0px 0px, 0px 0px, 0px 0px; }
+  to   { background-position: -6px 90px, -4px 70px, -7px 115px; }
+}
+
+@keyframes atmo-rain-b {
+  from { background-position: 0px 0px, 0px 0px, 0px 0px; }
+  to   { background-position: -5px 80px, -3px 55px, -6px 135px; }
+}
+
+.atmosphere-rain::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  /* 3 independent drop layers with different tile sizes and drop positions */
+  background-image:
+    radial-gradient(ellipse 2px 12px at 35% 25%, rgba(174, 214, 241, 0.80), transparent 70%),
+    radial-gradient(ellipse 1.5px 8px at 65% 60%, rgba(174, 214, 241, 0.60), transparent 70%),
+    radial-gradient(ellipse 2.5px 14px at 20% 45%, rgba(174, 214, 241, 0.45), transparent 70%);
+  background-size: 60px 90px, 45px 70px, 80px 115px;
+  background-repeat: repeat;
+  animation: atmo-rain-a 0.70s linear infinite;
+}
+
+.atmosphere-rain::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background-image:
+    radial-gradient(ellipse 1.5px 9px at 55% 70%, rgba(174, 214, 241, 0.65), transparent 70%),
+    radial-gradient(ellipse 1px 6px   at 80% 30%, rgba(174, 214, 241, 0.50), transparent 70%),
+    radial-gradient(ellipse 2px 11px  at 10% 55%, rgba(174, 214, 241, 0.40), transparent 70%);
+  background-size: 50px 80px, 35px 55px, 90px 135px;
+  background-repeat: repeat;
+  animation: atmo-rain-b 0.90s linear infinite;
+  animation-delay: -0.45s;
+}
+
+/* ============================================
+   MIST
+   Large soft radial-gradient blobs that drift slowly.
+   Pseudo-elements use inset: -60% so they are 220% of the container size
+   in every direction — translate animations never reveal bounding edges.
+   Pixel-based gradient sizes keep blobs the right scale regardless of container.
+   ============================================ */
+
+@keyframes atmo-mist-drift-a {
+  0%   { transform: translate(0%,   0%);   opacity: 1.0; }
+  20%  { transform: translate(5%,  -3%);   opacity: 0.80; }
+  45%  { transform: translate(9%,   4%);   opacity: 1.0; }
+  70%  { transform: translate(4%,   7%);   opacity: 0.85; }
+  100% { transform: translate(0%,   0%);   opacity: 1.0; }
+}
+
+@keyframes atmo-mist-drift-b {
+  0%   { transform: translate(0%,   0%);  opacity: 0.9; }
+  30%  { transform: translate(-8%,  5%);  opacity: 1.0; }
+  65%  { transform: translate(-3%, -6%);  opacity: 0.75; }
+  100% { transform: translate(0%,   0%);  opacity: 0.9; }
+}
+
+.atmosphere-mist::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background:
+    radial-gradient(ellipse 600px 280px at 30% 55%, rgba(210, 228, 248, 0.58), transparent 65%),
+    radial-gradient(ellipse 450px 200px at 72% 32%, rgba(215, 232, 250, 0.48), transparent 65%),
+    radial-gradient(ellipse 500px 240px at 54% 78%, rgba(220, 236, 252, 0.42), transparent 65%);
+  animation: atmo-mist-drift-a 14s ease-in-out infinite;
+}
+
+.atmosphere-mist::after {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background:
+    radial-gradient(ellipse 700px 260px at 65% 42%, rgba(205, 224, 246, 0.52), transparent 65%),
+    radial-gradient(ellipse 400px 180px at 22% 68%, rgba(215, 230, 250, 0.44), transparent 65%),
+    radial-gradient(ellipse 550px 220px at 48% 20%, rgba(218, 234, 250, 0.38), transparent 65%);
+  animation: atmo-mist-drift-b 19s ease-in-out infinite;
+  animation-delay: -7s;
+}
+
+/* ============================================
+   LEAVES
+   Autumn leaves swept diagonally across the screen by wind.
+   Each pseudo-element holds 10 leaf shapes positioned at % coordinates
+   within the element (background-size: 100% 100%, no-repeat).
+   The WHOLE element translates from off-screen-left to off-screen-right
+   in a slow diagonal sweep with rotation — the "wiping around the screen"
+   look the user wanted.
+   ::before and ::after run at very different speeds (5.5s vs 8.0s) and
+   opposing sway phases so they appear completely independent most of the time.
+   ============================================ */
+
+@keyframes atmo-leaf-sweep {
+  0%   { transform: translate(-12vw, -15%) rotate(0deg);   opacity: 0; }
+  4%   { opacity: 0.95; }
+  96%  { opacity: 0.85; }
+  100% { transform: translate(112vw, 115%) rotate(600deg); opacity: 0; }
+}
+
+@keyframes atmo-leaf-sway-a {
+  0%, 100% { margin-top: 0; }
+  30%       { margin-top: 5vh; }
+  70%       { margin-top: -2vh; }
+}
+
+@keyframes atmo-leaf-sway-b {
+  0%, 100% { margin-top: 0; }
+  40%       { margin-top: -4vh; }
+  75%       { margin-top: 3vh; }
+}
+
+.atmosphere-leaves::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* 10 leaf shapes at varied positions — all swept together in one diagonal pass */
+  background-image:
+    radial-gradient(ellipse 24px 14px at  7%  14%, rgba(110, 165,  75, 0.90), transparent 80%),
+    radial-gradient(ellipse 19px 11px at 18%  72%, rgba(192, 112,  44, 0.85), transparent 80%),
+    radial-gradient(ellipse 27px 16px at 29%  38%, rgba(208, 150,  38, 0.82), transparent 80%),
+    radial-gradient(ellipse 17px 10px at 39%  82%, rgba(148,  74,  32, 0.88), transparent 80%),
+    radial-gradient(ellipse 25px 15px at 49%  22%, rgba(138, 190,  92, 0.85), transparent 80%),
+    radial-gradient(ellipse 21px 13px at 59%  63%, rgba(212, 132,  55, 0.82), transparent 80%),
+    radial-gradient(ellipse 29px 17px at 69%  42%, rgba(178, 102,  40, 0.80), transparent 80%),
+    radial-gradient(ellipse 20px 12px at 79%  87%, rgba(122, 172,  82, 0.86), transparent 80%),
+    radial-gradient(ellipse 23px 14px at 88%  28%, rgba(168, 122,  56, 0.82), transparent 80%),
+    radial-gradient(ellipse 18px 11px at 96%  62%, rgba(102, 152,  66, 0.84), transparent 80%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  animation: atmo-leaf-sweep 5.5s ease-in infinite, atmo-leaf-sway-a 3.8s ease-in-out infinite;
+}
+
+.atmosphere-leaves::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 25px 15px at  4%  48%, rgba(142, 188,  96, 0.88), transparent 80%),
+    radial-gradient(ellipse 21px 13px at 13%  10%, rgba(218, 142,  46, 0.83), transparent 80%),
+    radial-gradient(ellipse 17px 10px at 24%  77%, rgba( 98, 152,  66, 0.86), transparent 80%),
+    radial-gradient(ellipse 28px 17px at 34%  52%, rgba(202, 122,  50, 0.80), transparent 80%),
+    radial-gradient(ellipse 22px 13px at 44%  90%, rgba(128, 178,  88, 0.84), transparent 80%),
+    radial-gradient(ellipse 19px 12px at 54%  32%, rgba(194, 112,  42, 0.86), transparent 80%),
+    radial-gradient(ellipse 26px 16px at 64%  68%, rgba(112, 162,  74, 0.82), transparent 80%),
+    radial-gradient(ellipse 20px 12px at 74%  18%, rgba(188, 132,  55, 0.84), transparent 80%),
+    radial-gradient(ellipse 23px 14px at 83%  58%, rgba(148,  76,  35, 0.87), transparent 80%),
+    radial-gradient(ellipse 16px  9px at 93%  38%, rgba(122, 172,  82, 0.80), transparent 80%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  animation: atmo-leaf-sweep 8.0s ease-in infinite, atmo-leaf-sway-b 5.2s ease-in-out infinite;
+  animation-delay: -3.5s, -2.4s;
+}
+
+/* ============================================
+   SPARKLES
+   Twinkling magic particles.
+   20 sparkle points across two pseudo-elements, each running an
+   independent multi-step keyframe at different durations and delays.
+   Multi-step keyframes (0% → 15% → 25% → 60% → 75% → 100%) cause
+   each element's sparkles to flash at uneven intervals.
+   ============================================ */
+
+@keyframes atmo-sparkle-a {
+  0%   { opacity: 0.08; }
+  12%  { opacity: 1.00; }
+  22%  { opacity: 0.10; }
+  58%  { opacity: 0.85; }
+  72%  { opacity: 0.08; }
+  88%  { opacity: 0.70; }
+  100% { opacity: 0.08; }
+}
+
+@keyframes atmo-sparkle-b {
+  0%   { opacity: 0.55; }
+  18%  { opacity: 0.06; }
+  42%  { opacity: 0.95; }
+  60%  { opacity: 0.18; }
+  82%  { opacity: 0.90; }
+  100% { opacity: 0.55; }
+}
+
+.atmosphere-sparkles::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* 15 sparkle points — more density, varied sizes (2-5px) and warm/cool colors */
+  background-image:
+    radial-gradient(circle 3px  at  6%  10%, rgba(255, 245, 150, 0.95), transparent 80%),
+    radial-gradient(circle 2px  at 15%  65%, rgba(200, 215, 255, 0.92), transparent 80%),
+    radial-gradient(circle 4px  at 25%  28%, rgba(255, 252, 200, 0.88), transparent 75%),
+    radial-gradient(circle 2px  at 35%  80%, rgba(255, 230, 160, 0.92), transparent 80%),
+    radial-gradient(circle 3px  at 45%  18%, rgba(220, 242, 255, 0.90), transparent 80%),
+    radial-gradient(circle 2px  at 55%  52%, rgba(255, 245, 170, 0.88), transparent 80%),
+    radial-gradient(circle 3px  at 65%  40%, rgba(200, 255, 220, 0.84), transparent 80%),
+    radial-gradient(circle 5px  at 75%  22%, rgba(255, 255, 210, 0.72), transparent 68%),
+    radial-gradient(circle 2px  at 85%  72%, rgba(255, 220, 180, 0.88), transparent 80%),
+    radial-gradient(circle 3px  at  9%  88%, rgba(230, 210, 255, 0.84), transparent 80%),
+    radial-gradient(circle 2px  at 30%  44%, rgba(255, 242, 160, 0.90), transparent 80%),
+    radial-gradient(circle 4px  at 50%  92%, rgba(200, 248, 255, 0.85), transparent 72%),
+    radial-gradient(circle 2px  at 70%   6%, rgba(255, 232, 182, 0.88), transparent 80%),
+    radial-gradient(circle 3px  at 91%  50%, rgba(255, 248, 160, 0.88), transparent 80%),
+    radial-gradient(circle 2px  at 42%  34%, rgba(202, 222, 255, 0.84), transparent 80%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  animation: atmo-sparkle-a 3.4s ease-in-out infinite;
+}
+
+.atmosphere-sparkles::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* 15 more sparkles at offset positions — no position overlaps ::before */
+  background-image:
+    radial-gradient(circle 2px  at 11%  20%, rgba(255, 255, 215, 0.92), transparent 80%),
+    radial-gradient(circle 3px  at 22%  58%, rgba(232, 212, 255, 0.88), transparent 80%),
+    radial-gradient(circle 2px  at 33%  82%, rgba(255, 242, 170, 0.92), transparent 80%),
+    radial-gradient(circle 4px  at 47%  12%, rgba(200, 248, 255, 0.88), transparent 72%),
+    radial-gradient(circle 2px  at 57%  70%, rgba(255, 232, 182, 0.84), transparent 80%),
+    radial-gradient(circle 3px  at 67%  35%, rgba(255, 248, 160, 0.88), transparent 80%),
+    radial-gradient(circle 2px  at 77%  90%, rgba(202, 222, 255, 0.84), transparent 80%),
+    radial-gradient(circle 3px  at 87%  48%, rgba(255, 238, 192, 0.88), transparent 80%),
+    radial-gradient(circle 5px  at  3%  60%, rgba(255, 255, 200, 0.72), transparent 68%),
+    radial-gradient(circle 2px  at 19%   5%, rgba(210, 255, 230, 0.80), transparent 80%),
+    radial-gradient(circle 3px  at 39%  48%, rgba(255, 245, 160, 0.88), transparent 80%),
+    radial-gradient(circle 2px  at 59%  25%, rgba(225, 210, 255, 0.85), transparent 80%),
+    radial-gradient(circle 4px  at 79%  15%, rgba(200, 250, 245, 0.80), transparent 72%),
+    radial-gradient(circle 2px  at 95%  78%, rgba(255, 240, 175, 0.86), transparent 80%),
+    radial-gradient(circle 3px  at 24%  95%, rgba(195, 225, 255, 0.82), transparent 80%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  animation: atmo-sparkle-b 2.1s ease-in-out infinite;
+  animation-delay: -1.2s;
+}
+
+/* ============================================
+   SNOW
+   Gentle snowflakes falling with horizontal sway.
+   Tile-based background-position scroll (same technique as rain) but:
+   - Larger, rounder drops (circle rather than tall ellipse)
+   - Slower fall speeds
+   - X component oscillates ±10px over the cycle to simulate sway
+   Y values at each keyframe are exactly linear (proportional to keyframe %)
+   so each tile-height is covered uniformly. Total Y = 2 × tile-height
+   for a full seamless loop in 2 iterations.
+   ============================================ */
+
+@keyframes atmo-snow-fall-a {
+  /* Layer tile heights: 90px, 70px, 110px  —  total Y = 2× = 180, 140, 220 */
+  0%   { background-position:   0px   0px,   0px   0px,   0px   0px; }
+  25%  { background-position:  14px  45px,  10px  35px,  -7px  55px; }
+  50%  { background-position:   0px  90px,   0px  70px,   0px 110px; }
+  75%  { background-position: -14px 135px, -10px 105px,   7px 165px; }
+  100% { background-position:   0px 180px,   0px 140px,   0px 220px; }
+}
+
+@keyframes atmo-snow-fall-b {
+  /* Layer tile heights: 75px, 100px, 65px  —  total Y = 2× = 150, 200, 130 */
+  0%   { background-position:   0px   0px,   0px   0px,   0px   0px; }
+  25%  { background-position: -10px  37px,  12px  50px,  -8px  32px; }
+  50%  { background-position:   0px  75px,   0px 100px,   0px  65px; }
+  75%  { background-position:  10px 112px, -12px 150px,   8px  97px; }
+  100% { background-position:   0px 150px,   0px 200px,   0px 130px; }
+}
+
+.atmosphere-snow::before {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  background-image:
+    radial-gradient(circle 5px  at 50% 50%, rgba(255, 255, 255, 0.90), transparent 70%),
+    radial-gradient(circle 3px  at 50% 50%, rgba(240, 248, 255, 0.82), transparent 70%),
+    radial-gradient(circle 6px  at 50% 50%, rgba(255, 255, 255, 0.75), transparent 70%);
+  background-size: 55px 90px, 42px 70px, 70px 110px;
+  background-repeat: repeat;
+  animation: atmo-snow-fall-a 3.0s linear infinite;
+}
+
+.atmosphere-snow::after {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  background-image:
+    radial-gradient(circle 4px  at 50% 50%, rgba(255, 255, 255, 0.85), transparent 70%),
+    radial-gradient(circle 6px  at 50% 50%, rgba(240, 248, 255, 0.78), transparent 70%),
+    radial-gradient(circle 3px  at 50% 50%, rgba(255, 255, 255, 0.80), transparent 70%);
+  background-size: 48px 75px, 65px 100px, 38px 65px;
+  background-repeat: repeat;
+  animation: atmo-snow-fall-b 4.0s linear infinite;
+  animation-delay: -1.8s;
+}
+
+/* ============================================
+   WIND
+   Horizontal gusts sweeping left-to-right.
+   ::before: thin radial-gradient ellipses (streaks) tiling vertically,
+             background-position scrolling rightward by tile width → seamless.
+             3 layers at different tile widths/heights = different spacing/speeds.
+   ::after:  wide flat ellipses (gust clouds) that slowly drift right with
+             a fade-in/fade-out for a pulsing "burst of wind" feeling.
+   ============================================ */
+
+@keyframes atmo-wind-streak {
+  /* Layer tile widths: 380px, 280px, 220px */
+  from { background-position: 0px 0px,   0px 0px,   0px 0px; }
+  to   { background-position: 380px 0px, 280px 0px, 220px 0px; }
+}
+
+@keyframes atmo-wind-gust {
+  0%   { opacity: 0;    transform: translateX(-8%); }
+  15%  { opacity: 1;    transform: translateX(-4%); }
+  80%  { opacity: 0.65; transform: translateX(8%); }
+  100% { opacity: 0;    transform: translateX(12%); }
+}
+
+.atmosphere-wind::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  /* Thin horizontal ellipse in center of each tile — creates visible streaks */
+  background-image:
+    radial-gradient(ellipse 190px 2px  at 50% 50%, rgba(220, 234, 248, 0.60), transparent 100%),
+    radial-gradient(ellipse 140px 1.5px at 50% 50%, rgba(215, 230, 246, 0.50), transparent 100%),
+    radial-gradient(ellipse 110px 1px  at 50% 50%, rgba(210, 228, 244, 0.42), transparent 100%);
+  /* Tile widths match keyframe scroll distances; heights control streak spacing */
+  background-size: 380px 75px, 280px 115px, 220px 55px;
+  background-repeat: repeat;
+  animation: atmo-wind-streak 2.2s linear infinite;
+}
+
+.atmosphere-wind::after {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  /* Wide, flat gust clouds that pulse and drift rightward */
+  background:
+    radial-gradient(ellipse 55% 8%  at 35% 30%, rgba(218, 234, 250, 0.42), transparent 70%),
+    radial-gradient(ellipse 45% 6%  at 62% 60%, rgba(215, 230, 248, 0.35), transparent 70%),
+    radial-gradient(ellipse 50% 7%  at 25% 72%, rgba(210, 228, 246, 0.30), transparent 70%),
+    radial-gradient(ellipse 40% 5%  at 78% 45%, rgba(220, 234, 250, 0.28), transparent 70%);
+  animation: atmo-wind-gust 4.5s ease-in-out infinite;
+  animation-delay: -1.8s;
+}

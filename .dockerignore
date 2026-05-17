@@ -1,0 +1,92 @@
+# ============================================================================
+# CozyVTT — Root .dockerignore
+# Controls what's sent to the Docker daemon as build context.
+# A smaller context = faster builds and smaller images.
+#
+# Each sub-Dockerfile (backend/Dockerfile, frontend/Dockerfile) also has its
+# own .dockerignore for stage-specific exclusions.
+# ============================================================================
+
+# ---- Git ---------------------------------------------------------------------
+.git/
+.gitignore
+.gitattributes
+
+# ---- Environment / Secrets ---------------------------------------------------
+# Compose passes env vars via environment: blocks; the actual .env file should
+# never end up baked into an image.
+.env
+.env.local
+.env.production
+.env.*.local
+*.env.local
+
+# ---- Dependencies (re-installed inside images) ------------------------------
+**/node_modules/
+**/npm-debug.log*
+**/yarn-error.log*
+
+# ---- Build output ------------------------------------------------------------
+**/dist/
+**/build/
+**/.vite/
+
+# ---- Logs / runtime data -----------------------------------------------------
+**/logs/
+**/*.log
+**/uploads/
+**/backups/
+
+# ---- Test output -------------------------------------------------------------
+**/coverage/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/__tests__/
+
+# ---- IDE / Editor / OS -------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- SSL certificates --------------------------------------------------------
+# Compose mounts these as a volume; never bake them into an image.
+nginx/certs/
+
+# ---- Documentation that doesn't ship in the runtime image -------------------
+# (The container is the engine, not the docs site. Keep README/LICENSE etc.
+# for legal/discoverability, exclude the rest.)
+CHANGELOG.md
+CONTRIBUTING.md
+RELEASE_CHECKLIST.md
+SECURITY.md
+docs/
+backend/docs/
+
+# ---- Development-only directories -------------------------------------------
+Dev-Docs/
+Code&Tests/
+Examples/
+.VSCodeCounter/
+.claude/
+
+# ---- HTTP test scripts -------------------------------------------------------
+backend/tests/
+
+# ---- Dockerfiles themselves --------------------------------------------------
+# Excluded from context — each Dockerfile is named explicitly via `dockerfile:`
+# in compose, so they don't need to be inside the build context.
+Dockerfile.dev
+**/Dockerfile.dev
+
+# ---- Docker Compose files ----------------------------------------------------
+# Compose files orchestrate containers; they shouldn't ship inside one.
+docker-compose*.yml
+.docker/
+
+# ---- Lockfiles for sub-projects that aren't being built ---------------------
+# (Backend/frontend Dockerfiles handle their own package-lock.json copies.)

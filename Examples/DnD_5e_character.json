@@ -1,0 +1,201 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Elara the Wizard",
+    "gameSystem": "DND_5E",
+    "data": {
+      "characterName": "Elara Voss",
+      "playerName": "Jane Doe",
+      "class": "Wizard",
+      "level": 5,
+      "background": "Sage",
+      "race": "High Elf",
+      "alignment": "Neutral Good",
+      "experiencePoints": 6500,
+
+      "inspiration": false,
+      "proficiencyBonus": 3,
+
+      "stats": {
+        "strength":     { "score": 8,  "modifier": -1 },
+        "dexterity":    { "score": 14, "modifier": 2  },
+        "constitution": { "score": 12, "modifier": 1  },
+        "intelligence": { "score": 18, "modifier": 4  },
+        "wisdom":       { "score": 13, "modifier": 1  },
+        "charisma":     { "score": 10, "modifier": 0  }
+      },
+
+      "savingThrows": {
+        "strength":     { "proficient": false, "bonus": -1 },
+        "dexterity":    { "proficient": false, "bonus": 2  },
+        "constitution": { "proficient": false, "bonus": 1  },
+        "intelligence": { "proficient": true,  "bonus": 7  },
+        "wisdom":       { "proficient": true,  "bonus": 4  },
+        "charisma":     { "proficient": false, "bonus": 0  }
+      },
+
+      "skills": {
+        "acrobatics":     { "proficient": false, "expertise": false, "bonus": 2  },
+        "animalHandling": { "proficient": false, "expertise": false, "bonus": 1  },
+        "arcana":         { "proficient": true,  "expertise": false, "bonus": 7  },
+        "athletics":      { "proficient": false, "expertise": false, "bonus": -1 },
+        "deception":      { "proficient": false, "expertise": false, "bonus": 0  },
+        "history":        { "proficient": true,  "expertise": false, "bonus": 7  },
+        "insight":        { "proficient": false, "expertise": false, "bonus": 1  },
+        "intimidation":   { "proficient": false, "expertise": false, "bonus": 0  },
+        "investigation":  { "proficient": true,  "expertise": false, "bonus": 7  },
+        "medicine":       { "proficient": false, "expertise": false, "bonus": 1  },
+        "nature":         { "proficient": false, "expertise": false, "bonus": 4  },
+        "perception":     { "proficient": false, "expertise": false, "bonus": 1  },
+        "performance":    { "proficient": false, "expertise": false, "bonus": 0  },
+        "persuasion":     { "proficient": false, "expertise": false, "bonus": 0  },
+        "religion":       { "proficient": true,  "expertise": false, "bonus": 7  },
+        "sleightOfHand":  { "proficient": false, "expertise": false, "bonus": 2  },
+        "stealth":        { "proficient": false, "expertise": false, "bonus": 2  },
+        "survival":       { "proficient": false, "expertise": false, "bonus": 1  }
+      },
+
+      "passivePerception": 11,
+
+      "armorClass": 12,
+      "initiative": 2,
+      "speed": 30,
+
+      "hp": {
+        "maximum": 28,
+        "current": 28,
+        "temporary": 0
+      },
+
+      "conditions": ["poisoned", "prone"],
+
+      "hitDice": [
+        {
+          "class": "rogue",
+          "total": "5d8",
+          "remaining": 5
+        },
+        {
+          "class": "wizard",
+          "total": "5d6",
+          "remaining": 5
+        }
+      ],
+
+      "deathSaves": {
+        "successes": 0,
+        "failures": 0
+      },
+
+      "attacks": [
+        {
+          "name": "Dagger",
+          "attackBonus": 5,
+          "damageRoll": "1d4+2",
+          "damageType": "piercing",
+          "range": 5,
+          "properties": ["versatile", "finesse"],
+          "notes": "single handed weapon"
+        },
+        {
+          "name": "Fire Bolt (Cantrip)",
+          "attackBonus": 7,
+          "damageRoll": "2d10",
+          "damageType": "fire",
+          "range": 15,
+          "properties": ["versatile"],
+          "notes": "long range attack"
+        }
+      ],
+
+      "currency": {
+        "cp": 0,
+        "sp": 0,
+        "ep": 0,
+        "gp": 150,
+        "pp": 0
+      },
+
+      "inventory": [
+        { "name": "Spellbook",               "quantity": 1, "weight": 3, "notes": "contains a spell",        "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 },
+        { "name": "Wand of Magic Detection", "quantity": 1, "weight": 1, "notes": "a magic wand",            "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 },
+        { "name": "Robes",                   "quantity": 1, "weight": 4, "notes": "dark red robes",          "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 },
+        { "name": "Dagger",                  "quantity": 1, "weight": 1, "notes": "a dull dagger",           "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 },
+        { "name": "Arcane Focus (Crystal)",  "quantity": 1, "weight": 1, "notes": "glowing magic crystal",   "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 },
+        { "name": "Backpack",                "quantity": 1, "weight": 5, "notes": "a medium sized backpack", "equippable": false, "equipped": true,  "requiresAttunement": false, "attuned": false, "value": 100 }
+      ],
+
+      "proficienciesAndLanguages": [
+        "Daggers", "Darts", "Slings", "Quarterstaffs", "Light Crossbows",
+        "Common", "Elvish", "Draconic", "Dwarvish"
+      ],
+
+      "featuresAndTraits": [
+        "Arcane Recovery",
+        "Darkvision 60 ft.",
+        "Fey Ancestry",
+        "Trance",
+        "Keen Senses",
+        "Elf Weapon Training",
+        "Cantrip (High Elf)"
+      ],
+
+      "spellcasting": {
+        "class": "Wizard",
+        "ability": "Intelligence",
+        "spellSaveDC": 15,
+        "spellAttackBonus": 7,
+        "cantrips": ["Fire Bolt", "Mage Hand", "Prestidigitation", "Minor Illusion"],
+        "slots": {
+          "1": { "total": 4, "expended": 1 },
+          "2": { "total": 3, "expended": 0 },
+          "3": { "total": 2, "expended": 1 },
+          "4": { "total": 1, "expended": 0 },
+          "5": { "total": 0, "expended": 0 },
+          "6": { "total": 0, "expended": 0 },
+          "7": { "total": 0, "expended": 0 },
+          "8": { "total": 0, "expended": 0 },
+          "9": { "total": 0, "expended": 0 }
+        },
+        "spells": [
+          { "level": 1, "name": "Magic Missile", "prepared": true,  "ritual": false, "concentration": false },
+          { "level": 1, "name": "Shield",         "prepared": true,  "ritual": false, "concentration": true  },
+          { "level": 1, "name": "Mage Armor",     "prepared": true,  "ritual": false, "concentration": true  },
+          { "level": 1, "name": "Detect Magic",   "prepared": false, "ritual": true,  "concentration": false },
+          { "level": 2, "name": "Misty Step",     "prepared": true,  "ritual": false, "concentration": false },
+          { "level": 2, "name": "Shatter",        "prepared": false, "ritual": false, "concentration": false },
+          { "level": 3, "name": "Fireball",       "prepared": true,  "ritual": false, "concentration": false },
+          { "level": 3, "name": "Counterspell",   "prepared": true,  "ritual": false, "concentration": false }
+        ]
+      },
+
+      "appearance": {
+        "age": 128,
+        "height": "5'7\"",
+        "weight": "130 lbs",
+        "eyes": "Silver",
+        "skin": "Pale",
+        "hair": "White"
+      },
+
+      "personality": {
+        "traits": "I use polysyllabic words that convey the impression of great erudition.",
+        "ideals": "Knowledge. The path to power and self-improvement is through knowledge.",
+        "bonds": "I have an ancient tome I must protect at all costs.",
+        "flaws": "I overlook obvious solutions in favor of complicated ones."
+      },
+
+      "backstory": "Elara spent decades studying at the Arcane Academy before being expelled for conducting unsanctioned experiments. She now wanders in search of forbidden knowledge.",
+
+      "alliesAndOrganizations": {
+        "name": "The Arcane Brotherhood",
+        "description": "A secretive guild of wizards sharing rare arcane knowledge."
+      },
+
+      "treasure": "A mysterious encrypted scroll, a silver locket with a portrait inside.",
+
+      "additionalFeaturesAndTraits": "Elara has developed a sixth sense for magical auras after years of study, often sensing enchantments before identifying them formally."
+    }
+  }
+}

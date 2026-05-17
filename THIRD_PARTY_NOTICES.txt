@@ -1,0 +1,443 @@
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+=============================================
+
+CozyVTT incorporates third-party software components. The following notices
+are provided for informational purposes and to comply with license requirements.
+
+Generated: 2026-04-08
+
+
+================================================================================
+SECTION 1: GOOGLE FONTS (loaded via CDN)
+================================================================================
+
+The following fonts are loaded from Google Fonts (fonts.googleapis.com) and are
+NOT bundled in this distribution. They are subject to their own licenses:
+
+  Quicksand
+    Copyright (c) Andrew Paglinawan
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Quicksand
+
+  Inter
+    Copyright (c) Rasmus Andersson
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Inter
+
+  JetBrains Mono
+    Copyright (c) JetBrains s.r.o.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/JetBrains+Mono
+
+
+================================================================================
+SECTION 2: SRD / GAME CONTENT
+================================================================================
+
+This application includes creature data from the System Reference Document 5.2.1
+("SRD 5.2.1") by Wizards of the Coast LLC, available at
+https://www.dndbeyond.com/srd
+
+The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0
+International License (CC-BY 4.0), available at
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+SRD creature data is fetched via the Open5e API (https://open5e.com), a
+community project providing SRD content in a machine-readable format.
+
+See OGL_LICENSE.txt and OGL_ATTRIBUTION.md for full attribution details.
+
+
+================================================================================
+SECTION 3: FRONTEND DEPENDENCIES
+================================================================================
+
+The following packages are bundled in the frontend distribution:
+
+react 18.3.1
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  License: MIT
+  https://github.com/facebook/react
+
+react-dom 18.3.1
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  License: MIT
+  https://github.com/facebook/react
+
+react-router-dom 6.30.3
+  Copyright (c) Remix Software Inc.
+  License: MIT
+  https://github.com/remix-run/react-router
+
+axios 1.13.5
+  Copyright (c) Matt Zabriskie & Collaborators
+  License: MIT
+  https://github.com/axios/axios
+
+framer-motion 10.18.0
+  Copyright (c) Framer B.V.
+  License: MIT
+  https://github.com/framer/motion
+
+lucide-react 0.316.0
+  Copyright (c) Lucide Contributors
+  License: ISC
+  https://github.com/lucide-icons/lucide
+
+react-markdown 9.1.0
+  Copyright (c) Espen Hovlandsdal
+  License: MIT
+  https://github.com/remarkjs/react-markdown
+
+react-resizable-panels 4.6.4
+  Copyright (c) Brian Vaughn
+  License: MIT
+  https://github.com/bvaughn/react-resizable-panels
+
+socket.io-client 4.8.3
+  Copyright (c) Guillermo Rauch
+  License: MIT
+  https://github.com/socketio/socket.io
+
+tslib 2.8.1
+  Copyright (c) Microsoft Corporation
+  License: 0BSD
+  https://github.com/Microsoft/tslib
+
+unified 11.0.5 (and remark/rehype/micromark ecosystem)
+  Copyright (c) Titus Wormer
+  License: MIT
+  https://github.com/unifiedjs/unified
+
+ws 8.18.3
+  Copyright (c) Einar Otto Stangvik
+  License: MIT
+  https://github.com/websockets/ws
+
+
+================================================================================
+SECTION 4: BACKEND DEPENDENCIES
+================================================================================
+
+The following packages are used in the backend:
+
+express 4.22.1
+  Copyright (c) TJ Holowaychuk & Contributors
+  License: MIT
+  https://github.com/expressjs/express
+
+@prisma/client 5.8.1
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+prisma 5.8.1
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+socket.io 4.8.3
+  Copyright (c) Guillermo Rauch
+  License: MIT
+  https://github.com/socketio/socket.io
+
+sharp 0.34.5
+  Copyright (c) Lovell Fuller and contributors
+  License: Apache-2.0
+  https://github.com/lovell/sharp
+  Note: Sharp uses libvips (LGPL-3.0-or-later) as a dynamically linked
+  dependency. libvips source is available at https://github.com/libvips/libvips
+
+argon2 0.44.0
+  Copyright (c) Ranieri Althoff
+  License: MIT
+  https://github.com/ranisalt/node-argon2
+
+helmet 7.2.0
+  Copyright (c) Adam Baldwin & Contributors
+  License: MIT
+  https://github.com/helmetjs/helmet
+
+cors 2.8.6
+  Copyright (c) Troy Goode
+  License: MIT
+  https://github.com/expressjs/cors
+
+express-session 1.19.0
+  Copyright (c) TJ Holowaychuk & Contributors
+  License: MIT
+  https://github.com/expressjs/session
+
+express-rate-limit 7.5.1
+  Copyright (c) Nathan Friedly & Contributors
+  License: MIT
+  https://github.com/express-rate-limit/express-rate-limit
+
+connect-pg-simple 9.0.1
+  Copyright (c) Pelle Wessman
+  License: MIT
+  https://github.com/voxpelli/node-connect-pg-simple
+
+passport 0.7.0
+  Copyright (c) Jared Hanson
+  License: MIT
+  https://github.com/jaredhanson/passport
+
+passport-local 1.0.0
+  Copyright (c) Jared Hanson
+  License: MIT
+  https://github.com/jaredhanson/passport-local
+
+pg 8.18.0
+  Copyright (c) Brian Carlson
+  License: MIT
+  https://github.com/brianc/node-postgres
+
+multer 1.4.5-lts.2
+  Copyright (c) Hage Yaapa & Contributors
+  License: MIT
+  https://github.com/expressjs/multer
+
+archiver 7.0.1
+  Copyright (c) Chris Talkington
+  License: MIT
+  https://github.com/archiverjs/node-archiver
+
+unzipper 0.12.3
+  Copyright (c) Ziggy Jonsson
+  License: MIT
+  https://github.com/ZJONSSON/node-unzipper
+
+nodemailer 8.0.1
+  Copyright (c) Andris Reinman
+  License: MIT-0
+  https://github.com/nodemailer/nodemailer
+
+winston 3.19.0
+  Copyright (c) Charlie Robbins & Contributors
+  License: MIT
+  https://github.com/winstonjs/winston
+
+mathjs 12.4.3
+  Copyright (c) Jos de Jong
+  License: Apache-2.0
+  https://github.com/josdejong/mathjs
+
+qrcode 1.5.4
+  Copyright (c) Ryan Day
+  License: MIT
+  https://github.com/soldair/node-qrcode
+
+speakeasy 2.0.0
+  Copyright (c) Mark Bao
+  License: MIT
+  https://github.com/speakeasyjs/speakeasy
+
+zod 4.3.6
+  Copyright (c) Colin McDonnell
+  License: MIT
+  https://github.com/colinhacks/zod
+
+dotenv 16.6.1
+  Copyright (c) Scott Motte
+  License: BSD-2-Clause
+  https://github.com/motdotla/dotenv
+
+@anthropic-ai/sdk 0.85.0
+  Copyright (c) Anthropic
+  License: MIT
+  https://github.com/anthropics/anthropic-sdk-typescript
+
+openai 6.33.0
+  Copyright (c) OpenAI
+  License: Apache-2.0
+  https://github.com/openai/openai-node
+
+file-type 21.3.2
+  Copyright (c) Sindre Sorhus
+  License: MIT
+  https://github.com/sindresorhus/file-type
+
+fs-extra 11.3.4
+  Copyright (c) JP Richardson
+  License: MIT
+  https://github.com/jprichardson/node-fs-extra
+
+lodash 4.17.23
+  Copyright (c) JS Foundation and other contributors
+  License: MIT
+  https://github.com/lodash/lodash
+
+cross-env 10.1.0
+  Copyright (c) Kent C. Dodds
+  License: MIT
+  https://github.com/kentcdodds/cross-env
+
+archiver 7.0.1
+  Copyright (c) Chris Talkington
+  License: MIT
+  https://github.com/archiverjs/node-archiver
+
+unzipper 0.12.3
+  Copyright (c) Ziggy Jonsson
+  License: MIT
+  https://github.com/ZJONSSON/node-unzipper
+
+file-type 21.3.0
+  Copyright (c) Sindre Sorhus
+  License: MIT
+  https://github.com/sindresorhus/file-type
+
+
+================================================================================
+SECTION 5: ADDITIONAL TRANSITIVE DEPENDENCIES
+================================================================================
+
+The following is a summary of all transitive dependency licenses used in this
+project. All are permissive open-source licenses compatible with commercial use.
+
+  Frontend (130 packages):
+    MIT ............. 126
+    ISC ............... 2
+    0BSD .............. 1
+    UNLICENSED ........ 1 (cozyvtt-frontend itself)
+
+  Backend (292 packages):
+    MIT ............. 237
+    ISC .............. 23
+    Apache-2.0 ....... 22
+    BSD-3-Clause ...... 3
+    BlueOak-1.0.0 ..... 3
+    BSD-2-Clause ....... 1
+    MIT-0 .............. 1
+    MIT* ............... 1
+    Apache-2.0 AND
+      LGPL-3.0-or-later  1 (sharp native binary — dynamically linked)
+
+No copyleft (GPL/AGPL) licenses are present in the dependency tree, with the
+exception of the LGPL-3.0-or-later component in sharp's native image processing
+library (libvips), which is dynamically linked and does not impose copyleft
+requirements on the application code.
+
+For the complete machine-readable license listing, run:
+  cd frontend && npx license-checker --production --csv
+  cd backend && npx license-checker --production --csv
+
+
+================================================================================
+SECTION 6: LICENSE TEXTS
+================================================================================
+
+MIT License
+-----------
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+Apache License 2.0
+------------------
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License. You may obtain a copy of
+the License at:
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.
+
+
+ISC License
+-----------
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+
+BSD-2-Clause License
+--------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.
+
+
+BSD-3-Clause License
+--------------------
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.
+
+
+0BSD License
+------------
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+
+BlueOak-1.0.0 License
+----------------------
+Full text available at: https://blueoakcouncil.org/license/1.0.0
+
+
+SIL Open Font License 1.1
+--------------------------
+Full text available at: https://scripts.sil.org/OFL
+
+
+Creative Commons Attribution 4.0 International (CC-BY 4.0)
+-----------------------------------------------------------
+Full text available at: https://creativecommons.org/licenses/by/4.0/legalcode

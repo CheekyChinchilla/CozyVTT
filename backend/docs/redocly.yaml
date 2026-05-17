@@ -1,0 +1,27 @@
+# Redocly CLI configuration for CozyVTT's API spec.
+# Run lint:  npx @redocly/cli lint docs/API_DOCUMENTATION.yaml
+# Run docs:  npx @redocly/cli build-docs docs/API_DOCUMENTATION.yaml
+#
+# This config tunes off three lint rules that are intentionally-noisy for
+# CozyVTT's design:
+#   • operation-4xx-response  — turned off because several genuinely-public
+#       endpoints (/health, /api/setup/status, /api/auth/registration-status,
+#       /api/auth/appearance) never return 4xx by design; they always return
+#       safe defaults so the login page is renderable even mid-incident.
+#   • no-server-example.com   — cozyvtt.com is the real project URL, not a
+#       placeholder, but the rule's heuristic flags any "single-word" host.
+#   • no-unused-components    — a handful of response components (Conflict,
+#       UnprocessableEntity, ServerError) are pre-defined so future endpoints
+#       can $ref them consistently without us adding the schema later.
+#   • no-ambiguous-paths      — false positive: Express routes literal paths
+#       (e.g. /api/assets/maps/{id}) before parameterized ones (/api/assets/{id})
+#       so there is no actual conflict at runtime.
+
+extends:
+  - recommended
+
+rules:
+  operation-4xx-response: off
+  no-server-example.com: off
+  no-unused-components: off
+  no-ambiguous-paths: off

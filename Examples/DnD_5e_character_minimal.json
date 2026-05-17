@@ -1,0 +1,23 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Minimal Fighter",
+    "gameSystem": "DND_5E",
+    "data": {
+      "characterName": "Grunk the Fighter",
+      "class": "Fighter",
+      "level": 1,
+      "race": "Human",
+      "proficiencyBonus": 2,
+      "stats": {
+        "strength":     { "score": 16, "modifier": 3  },
+        "dexterity":    { "score": 14, "modifier": 2  },
+        "constitution": { "score": 14, "modifier": 2  },
+        "intelligence": { "score": 10, "modifier": 0  },
+        "wisdom":       { "score": 12, "modifier": 1  },
+        "charisma":     { "score": 8,  "modifier": -1 }
+      }
+    }
+  }
+}

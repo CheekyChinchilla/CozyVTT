@@ -1,0 +1,23 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Minimal Ranger",
+    "gameSystem": "PATHFINDER_2E",
+    "data": {
+      "characterName": "Aria the Ranger",
+      "class": "Ranger",
+      "level": 1,
+      "ancestry": "Elf",
+      "heritage": "Woodland Elf",
+      "attributes": {
+        "strength":     { "score": 14, "modifier": 2  },
+        "dexterity":    { "score": 16, "modifier": 3  },
+        "constitution": { "score": 12, "modifier": 1  },
+        "intelligence": { "score": 10, "modifier": 0  },
+        "wisdom":       { "score": 14, "modifier": 2  },
+        "charisma":     { "score": 10, "modifier": 0  }
+      }
+    }
+  }
+}

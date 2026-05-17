@@ -1,0 +1,49 @@
+# ============================================================================
+# CozyVTT Backend — .dockerignore
+# Stage-specific exclusions on top of the root .dockerignore.
+# ============================================================================
+
+# ---- Dependencies (installed fresh inside the image) ------------------------
+node_modules/
+
+# ---- TypeScript compiled output (built inside the image) --------------------
+dist/
+
+# ---- Environment files ------------------------------------------------------
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# ---- Runtime data (mounted as volumes in production) ------------------------
+uploads/
+logs/
+backups/
+
+# ---- Test artifacts ---------------------------------------------------------
+coverage/
+src/**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+tests/
+
+# ---- Documentation that doesn't need to ship inside the image ---------------
+# (The OpenAPI spec, test docs, and websocket docs are useful for developers
+# but bloat the runtime image. Host them externally — see docs/DEPLOYMENT.md.)
+docs/
+
+# ---- Git --------------------------------------------------------------------
+.git/
+.gitignore
+
+# ---- IDE / Editor / OS ------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---- Dev scripts ------------------------------------------------------------
+scripts/dev/

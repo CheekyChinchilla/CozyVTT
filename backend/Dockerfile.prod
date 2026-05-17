@@ -1,0 +1,50 @@
+# Production Dockerfile — multi-stage build
+# Stage 1: build TypeScript and generate Prisma client
+FROM node:20-alpine AS builder
+
+RUN apk add --no-cache bash postgresql-client openssl
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+RUN npx prisma generate
+RUN npm run build
+
+# Stage 2: production image — only compiled output + production deps
+FROM node:20-alpine AS production
+
+RUN apk add --no-cache bash postgresql-client openssl su-exec
+
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+# Install only production dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy compiled output
+COPY --from=builder /app/dist ./dist
+
+# Copy Prisma schema and generated client
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy startup script
+COPY scripts/start.sh /usr/local/bin/start.sh
+RUN sed -i 's/\r$//' /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+
+# Create directories; ownership will be set at container startup by start.sh
+# (bind mounts override Dockerfile chown, so we fix it at runtime via su-exec)
+RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appgroup /app
+
+# Run as root so start.sh can fix bind-mount permissions, then drops to appuser
+EXPOSE 4000
+
+ENTRYPOINT ["/usr/local/bin/start.sh"]
+CMD ["node", "dist/server.js"]

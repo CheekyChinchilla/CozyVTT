@@ -1,0 +1,214 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Dr. Eleanor Voss",
+    "gameSystem": "CALL_OF_CTHULHU_7E",
+    "data": {
+      "investigatorName": "Dr. Eleanor Voss",
+      "playerName": "Jane Doe",
+      "occupation": "Professor",
+      "era": "1920s",
+      "age": 38,
+      "sex": "Female",
+      "residence": "Arkham, Massachusetts",
+      "birthplace": "Boston, Massachusetts",
+
+      "characteristics": {
+        "STR": { "regular": 45, "half": 22, "fifth": 9  },
+        "CON": { "regular": 55, "half": 27, "fifth": 11 },
+        "SIZ": { "regular": 50, "half": 25, "fifth": 10 },
+        "DEX": { "regular": 50, "half": 25, "fifth": 10 },
+        "APP": { "regular": 65, "half": 32, "fifth": 13 },
+        "INT": { "regular": 80, "half": 40, "fifth": 16 },
+        "POW": { "regular": 60, "half": 30, "fifth": 12 },
+        "EDU": { "regular": 85, "half": 42, "fifth": 17 }
+      },
+
+      "derivedStats": {
+        "hp": {
+          "maximum": 10,
+          "current": 10,
+          "formula": "(CON + SIZ) / 10, rounded down",
+          "majorWoundThreshold": 5
+        },
+        "sanity": {
+          "starting": 60,
+          "maximum": 99,
+          "current": 58,
+          "formula": "Starts equal to POW; max is 99 minus Cthulhu Mythos skill"
+        },
+        "magicPoints": {
+          "maximum": 12,
+          "current": 12,
+          "formula": "POW / 5"
+        },
+        "luck": {
+          "score": 55,
+          "notes": "Rolled separately (3d6 x 5); spent to adjust rolls on 1-for-1 basis; cannot be spent on Sanity/Luck/damage rolls"
+        },
+        "damageBonus": "+0",
+        "build": 0,
+        "moveRate": 8,
+        "dodge": {
+          "value": 25,
+          "formula": "DEX / 2",
+          "improvementChecked": false
+        }
+      },
+
+      "skills": {
+        "accounting":         { "baseValue": 5,  "currentValue": 35, "improvementChecked": false },
+        "anthropology":       { "baseValue": 1,  "currentValue": 55, "improvementChecked": false },
+        "appraise":           { "baseValue": 5,  "currentValue": 30, "improvementChecked": true  },
+        "archaeology":        { "baseValue": 1,  "currentValue": 60, "improvementChecked": false },
+        "artCraft":           { "baseValue": 5,  "currentValue": 5,  "improvementChecked": false, "specialization": null },
+        "charm":              { "baseValue": 15, "currentValue": 40, "improvementChecked": false },
+        "climb":              { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+        "creditRating":       { "baseValue": 0,  "currentValue": 45, "improvementChecked": false, "notes": "Determines wealth tier: Pauper/Poor/Average/Wealthy/Rich/Super Rich" },
+        "cthulhuMythos":      { "baseValue": 0,  "currentValue": 3,  "improvementChecked": false, "notes": "Cannot be increased with occupation/interest points; reduces Sanity max by equal amount; no improvement check" },
+        "disguise":           { "baseValue": 5,  "currentValue": 5,  "improvementChecked": false },
+        "dodge":              { "baseValue": 25, "currentValue": 25, "improvementChecked": false, "notes": "Derived from DEX/2; listed separately for convenience" },
+        "driveAuto":          { "baseValue": 20, "currentValue": 40, "improvementChecked": false },
+        "electricalRepair":   { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+        "fastTalk":           { "baseValue": 5,  "currentValue": 20, "improvementChecked": false },
+        "fighting": {
+          "brawl":            { "baseValue": 25, "currentValue": 30, "improvementChecked": false },
+          "custom":           []
+        },
+        "firearms": {
+          "handgun":          { "baseValue": 20, "currentValue": 35, "improvementChecked": true  },
+          "rifle":            { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+          "shotgun":          { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+          "custom":           []
+        },
+        "firstAid":           { "baseValue": 30, "currentValue": 30, "improvementChecked": false },
+        "history":            { "baseValue": 5,  "currentValue": 70, "improvementChecked": true  },
+        "intimidate":         { "baseValue": 15, "currentValue": 15, "improvementChecked": false },
+        "jump":               { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+        "languageOwn":        { "baseValue": 85, "currentValue": 85, "improvementChecked": false, "language": "English", "notes": "Base = EDU score" },
+        "languageOther":      [
+          { "language": "Latin",  "baseValue": 1, "currentValue": 50, "improvementChecked": false },
+          { "language": "French", "baseValue": 1, "currentValue": 35, "improvementChecked": false }
+        ],
+        "law":                { "baseValue": 5,  "currentValue": 20, "improvementChecked": false },
+        "libraryUse":         { "baseValue": 20, "currentValue": 75, "improvementChecked": true  },
+        "listen":             { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+        "locksmith":          { "baseValue": 1,  "currentValue": 1,  "improvementChecked": false },
+        "mechanicalRepair":   { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+        "medicine":           { "baseValue": 1,  "currentValue": 30, "improvementChecked": false },
+        "naturalWorld":       { "baseValue": 10, "currentValue": 40, "improvementChecked": false },
+        "navigate":           { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+        "occult":             { "baseValue": 5,  "currentValue": 50, "improvementChecked": true  },
+        "operateHeavyMachinery": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+        "persuade":           { "baseValue": 10, "currentValue": 55, "improvementChecked": false },
+        "pilot":              { "baseValue": 1,  "currentValue": 1,  "improvementChecked": false, "specialization": null },
+        "psychoanalysis":     { "baseValue": 1,  "currentValue": 1,  "improvementChecked": false },
+        "psychology":         { "baseValue": 10, "currentValue": 50, "improvementChecked": false },
+        "ride":               { "baseValue": 5,  "currentValue": 5,  "improvementChecked": false },
+        "science":            [
+          { "specialization": "Biology", "baseValue": 1, "currentValue": 40, "improvementChecked": false },
+          { "specialization": "Geology", "baseValue": 1, "currentValue": 20, "improvementChecked": false }
+        ],
+        "sleightOfHand":      { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+        "spotHidden":         { "baseValue": 25, "currentValue": 55, "improvementChecked": true  },
+        "stealth":            { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+        "survival":           { "baseValue": 10, "currentValue": 10, "improvementChecked": false, "specialization": null },
+        "swim":               { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+        "throw":              { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+        "track":              { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+        "customSkills":       []
+      },
+
+      "combat": {
+        "weapons": [
+          {
+            "name": "Fist",
+            "skill": "Fighting (Brawl)",
+            "skillValue": 30,
+            "damage": "1d3 + damageBonus",
+            "range": "Touch",
+            "attacks": 1,
+            "ammo": null,
+            "malfunction": null,
+            "notes": ""
+          },
+          {
+            "name": ".38 Revolver",
+            "skill": "Firearms (Handgun)",
+            "skillValue": 35,
+            "damage": "1d10",
+            "range": "15 yards",
+            "attacks": 1,
+            "ammo": 18,
+            "malfunction": 100,
+            "notes": "6-round cylinder; spare ammo in purse"
+          }
+        ]
+      },
+
+      "conditions": {
+        "unconscious": false,
+        "dying": false,
+        "majorWound": false,
+        "temporaryInsanity": false,
+        "indefiniteInsanity": false
+      },
+
+      "pulpTalents": [],
+
+      "spellsAndMythos": {
+        "cthulhuMythos": 3,
+        "spells": []
+      },
+
+      "possessions": [
+        { "name": "Leather satchel",          "notes": "Well-worn, always carries it" },
+        { "name": ".38 Revolver",             "notes": "Registered; kept in purse" },
+        { "name": "Notebook and pencils",     "notes": "For field notes and sketches" },
+        { "name": "Miskatonic University ID", "notes": "Faculty identification" },
+        { "name": "Flask of brandy",          "notes": "For emergencies — both kinds" },
+        { "name": "Electric torch",           "notes": "Extra batteries in satchel" },
+        { "name": "First aid kit",            "notes": "Basic supplies" }
+      ],
+
+      "wealth": {
+        "spendingLevel": "Average",
+        "cash": 45,
+        "assets": "University salary; small inheritance from father; apartment in Arkham",
+        "notes": "Credit Rating 45 = Average lifestyle"
+      },
+
+      "backstory": {
+        "description": "Dr. Voss is a professor of ancient history and Near Eastern archaeology at Miskatonic University. She has led three expeditions to the Middle East and one ill-fated trip to a dig site in rural England that she refuses to discuss.",
+        "personalDescription": "Sharp-eyed woman with ink-stained fingers and an air of perpetual mild impatience.",
+        "ideology": "Knowledge is its own justification. The universe is vast and strange — hiding from that fact helps no one.",
+        "significantPeople": "Professor Harold Crane, her mentor; now deceased under unexplained circumstances.",
+        "meaningfulLocations": "The Orne Library at Miskatonic — where she first encountered a text she wishes she had never read.",
+        "treasuredPossessions": "A scarab amulet of uncertain origin, found at the English dig site. She keeps it in a locked box.",
+        "traits": "Methodical; slow to trust; rarely panics in the field — though she's been having bad dreams lately.",
+        "injuriesAndScars": "A faint scar across the left palm from broken glass at the English dig site.",
+        "phobiasAndManias": "Mild irrational dread of deep water following a childhood incident.",
+        "arcaneTomesAndSpells": "Has read portions of a text she believes to be a corrupt Latin translation of something older; this accounts for her 3% Cthulhu Mythos.",
+        "encountersWithStrangeEntities": "Witnessed what she described in her journal only as 'the outline of something that should not have been there' at the England dig site."
+      },
+
+      "contacts": [
+        { "name": "Dr. Armitage",  "role": "Head Librarian, Miskatonic",   "notes": "Trusts her; occasionally sets aside restricted volumes for her review." },
+        { "name": "Frank Daltrey", "role": "Private Investigator, Arkham", "notes": "Has helped her on sensitive matters before. Pragmatic." },
+        { "name": "Sister Agnes",  "role": "Nurse, St. Mary's Hospital",   "notes": "Patches her up without asking too many questions." }
+      ],
+
+      "appearance": {
+        "age": 38,
+        "height": "5'6\"",
+        "weight": "128 lbs",
+        "eyes": "Gray",
+        "hair": "Dark brown, often pinned up",
+        "skin": "Fair"
+      },
+
+      "notes": "Has been having recurring nightmares involving a black coastline and a city beneath the water. Started two weeks ago. Has not told anyone."
+    }
+  }
+}

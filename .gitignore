@@ -1,0 +1,76 @@
+# ============================================================================
+# CozyVTT — Root .gitignore
+# Sub-directories (backend/, frontend/) have their own .gitignore for
+# project-specific patterns. This file covers anything at the repo root or
+# common to both projects.
+# ============================================================================
+
+# ---- Environment / Secrets --------------------------------------------------
+# Never commit env files. The .example versions are committed; real values are not.
+.env
+.env.local
+.env.production
+.env.*.local
+*.env.local
+
+# ---- Dependencies -----------------------------------------------------------
+node_modules/
+
+# ---- Build output -----------------------------------------------------------
+dist/
+build/
+
+# ---- Logs -------------------------------------------------------------------
+logs/
+*.log
+
+# ---- IDE / Editor -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- OS metadata ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Docker -----------------------------------------------------------------
+.docker/
+
+# ---- SSL certificates — never commit private keys --------------------------
+nginx/certs/*.crt
+nginx/certs/*.key
+nginx/certs/*.pem
+nginx/certs/*.csr
+
+# ---- Runtime / user data ----------------------------------------------------
+uploads/
+backups/
+
+# ---- Test artifacts ---------------------------------------------------------
+coverage/
+cookies.txt
+*.tmp
+*.tmp.*
+
+# ---- Generated API docs HTML (rebuild with `npx @redocly/cli build-docs`) ---
+# The HTML is a build artifact derived from API_DOCUMENTATION.yaml. Keeping
+# it out of git avoids 1.6 MB churn on every spec edit. Self-hosters who
+# want to serve it can regenerate it locally — see backend/docs/README.md.
+backend/docs/api-docs.html
+
+# ---- Development-only directories -------------------------------------------
+# These contain session notes, internal planning docs, and command-output dumps
+# that are useful for development but should NOT ship with a public release.
+Dev-Docs/
+Code&Tests/
+
+# ---- HTTP test request files (developer convenience scripts) ----------------
+backend/tests/
+
+# ---- VSCode extension data --------------------------------------------------
+.VSCodeCounter/
+
+# ---- Claude Code local settings ---------------------------------------------
+.claude/

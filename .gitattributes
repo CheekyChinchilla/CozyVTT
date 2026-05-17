@@ -1,0 +1,15 @@
+# Default behaviour: normalize line endings to LF in the repository
+* text=auto eol=lf
+
+# Shell scripts must always use LF - CRLF breaks bash in Linux Docker containers
+*.sh text eol=lf
+
+# Docker-related files
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+
+# Windows-specific files that should use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
