@@ -39,8 +39,8 @@ This is the recommended path. `docker-compose.yml` is the production stack: Post
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/cozyvtt.git
-cd cozyvtt
+git clone https://github.com/CheekyChinchilla/CozyVTT.git
+cd CozyVTT
 ```
 
 ### 2. Configure environment
