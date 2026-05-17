@@ -5,10 +5,17 @@
 # For development (hot-reload, exposed ports), use:
 #   docker compose -f docker-compose.dev.yml up
 #
-# If you already have a reverse proxy (Traefik, Caddy, Cloudflare Tunnel, etc.):
-#   - Remove the `nginx` service below entirely
+# If you have a reverse proxy that handles INTERNAL routing too
+# (Traefik, Caddy, an existing host-level Nginx): you can remove the bundled
+# nginx service below. Then:
 #   - Change `expose` to `ports` on the frontend service so your proxy can reach it
 #   - Point your proxy at frontend:80 for the SPA and backend:4000 for /api + /socket.io
+#
+# Cloudflare Tunnel users: KEEP the bundled nginx. CF Tunnel only handles
+# public-facing TLS and origin hiding; you still need the bundled nginx to
+# route between the frontend SPA and the backend API/WebSocket. Just point
+# your `cloudflared` ingress at http://localhost:80 and you're done.
+# See docs/DEPLOYMENT.md for details.
 
 services:
   database:
