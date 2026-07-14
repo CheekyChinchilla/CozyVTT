@@ -23,6 +23,7 @@ import { Asset, AssetType, AssetScope, PlatformRole, Campaign } from '../../type
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import campaignService from '../../services/campaign.service';
+import Button from '@/components/ui/Button';
 
 interface AssetDetailPanelProps {
   asset: Asset;
@@ -250,21 +251,21 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
               {/* Action Buttons */}
               <div className="flex items-center gap-3 mt-4">
-                <button
+                <Button
                   onClick={handleDownload}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                  className="flex-1 flex items-center justify-center gap-2"
                 >
                   <Download className="w-5 h-5" />
                   Download
-                </button>
+                </Button>
                 {canDelete && (
-                  <button
+                  <Button
                     onClick={handleDelete}
-                    className="btn-danger flex items-center justify-center gap-2"
+                    variant="danger" className="flex items-center justify-center gap-2"
                   >
                     <Trash2 className="w-5 h-5" />
                     Delete
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -396,10 +397,10 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
                     {/* Confirm button */}
                     {moveScope && !moveSuccess && (
-                      <button
+                      <Button
                         onClick={handleMove}
                         disabled={moving || (moveScope === AssetScope.CAMPAIGN && !moveCampaignId)}
-                        className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {moving ? (
                           <Loader className="w-4 h-4 animate-spin" />
@@ -407,7 +408,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                           <ArrowRightLeft className="w-4 h-4" />
                         )}
                         {moving ? 'Moving…' : `Move to ${scopeLabel(moveScope)}`}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

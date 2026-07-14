@@ -1,6 +1,6 @@
 /**
  * Session Controls
- * Per SOW Section 15: Session State Management
+ * Session State Management
  *
  * DM-only panel for starting, pausing, ending, and resuming sessions.
  * Shows session timer and session number.
@@ -14,6 +14,7 @@ import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
 import { CampaignStatus } from '@/types';
 import EndSessionModal from '@/components/campaign/EndSessionModal';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Session timer hook
@@ -197,38 +198,38 @@ export default function SessionControls() {
         <div className="space-y-2">
           {/* Start Session — PREPARATION or INACTIVE (new session, no resume) */}
           {(isPrep || isInactive) && (
-            <button
+            <Button
               onClick={handleStart}
               disabled={isLoading}
-              className="w-full btn-primary flex items-center justify-center gap-2"
+              className="w-full flex items-center justify-center gap-2"
             >
               <Play className="w-4 h-4" />
               {isLoading ? 'Starting...' : 'Start Session'}
-            </button>
+            </Button>
           )}
 
           {/* Resume Session — PAUSED only (same session, restores saved state) */}
           {isPaused && (
-            <button
+            <Button
               onClick={handleResume}
               disabled={isLoading}
-              className="w-full btn-primary flex items-center justify-center gap-2"
+              className="w-full flex items-center justify-center gap-2"
             >
               <RotateCcw className="w-4 h-4" />
               {isLoading ? 'Resuming...' : 'Resume Session'}
-            </button>
+            </Button>
           )}
 
           {/* Pause Session — ACTIVE only */}
           {isActive && (
-            <button
+            <Button
               onClick={handlePause}
               disabled={isLoading}
-              className="w-full btn-secondary flex items-center justify-center gap-2"
+              variant="secondary" className="w-full flex items-center justify-center gap-2"
             >
               <Pause className="w-4 h-4" />
               {isLoading ? 'Pausing...' : 'Pause Session'}
-            </button>
+            </Button>
           )}
 
           {/* End Session — ACTIVE or PAUSED */}

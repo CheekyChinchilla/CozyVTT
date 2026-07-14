@@ -15,7 +15,7 @@ export function extractCharacterHp(
   data: Record<string, unknown> | null | undefined
 ): CharacterHpInfo | null {
   if (!data || !gameSystem) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const d = data as any;
 
   switch (gameSystem) {

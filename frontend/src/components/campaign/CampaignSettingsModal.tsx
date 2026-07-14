@@ -29,6 +29,7 @@ import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { CampaignMembership } from '@/types';
+import Button from '@/components/ui/Button';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -303,11 +304,11 @@ export default function CampaignSettingsModal({
                     </div>
 
                     <div className="flex justify-end">
-                      <button
+                      <Button
                         type="button"
                         onClick={handleSaveGeneral}
                         disabled={savingGeneral || !name.trim()}
-                        className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {savingGeneral ? (
                           <>
@@ -320,7 +321,7 @@ export default function CampaignSettingsModal({
                             Save Changes
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
 
                     {/* ── Export ── */}
@@ -356,11 +357,11 @@ export default function CampaignSettingsModal({
                         </button>
                       </div>
 
-                      <button
+                      <Button
                         type="button"
                         onClick={handleExport}
                         disabled={exporting}
-                        className="btn-secondary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        variant="secondary" className="w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {exporting ? (
                           <>
@@ -373,7 +374,7 @@ export default function CampaignSettingsModal({
                             Export Campaign
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -446,11 +447,11 @@ export default function CampaignSettingsModal({
                     )}
 
                     <div className="flex justify-end">
-                      <button
+                      <Button
                         type="button"
                         onClick={handleSaveChat}
                         disabled={savingChat}
-                        className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {savingChat ? (
                           <>
@@ -463,7 +464,7 @@ export default function CampaignSettingsModal({
                             Save Changes
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -477,14 +478,14 @@ export default function CampaignSettingsModal({
                         <Users className="w-4 h-4" />
                         <span>{memberships.length} member{memberships.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <button
+                      <Button
                         type="button"
                         onClick={() => setShowInviteModal(true)}
-                        className="btn-secondary flex items-center gap-2 text-sm"
+                        variant="secondary" className="flex items-center gap-2 text-sm"
                       >
                         <UserPlus className="w-4 h-4" />
                         Invite Player
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Member list */}
@@ -601,11 +602,11 @@ export default function CampaignSettingsModal({
                           />
                         </div>
 
-                        <button
+                        <Button
                           type="button"
                           onClick={() => setShowDeleteConfirm(true)}
                           disabled={!deleteNameMatches || deletingCampaign}
-                          className="btn-danger w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          variant="danger" className="w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {deletingCampaign ? (
                             <>
@@ -618,7 +619,7 @@ export default function CampaignSettingsModal({
                               Delete Campaign
                             </>
                           )}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>

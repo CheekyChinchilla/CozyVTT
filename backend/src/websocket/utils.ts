@@ -1,9 +1,10 @@
 import { Server } from 'socket.io';
 import { prisma } from '../config/database';
+import logger from '../utils/logger';
 
 /**
  * WebSocket Utility Functions
- * Per SOW Section 6: WebSocket Event Specification
+ * WebSocket Event Specification
  */
 
 let ioInstance: Server | null = null;
@@ -48,29 +49,6 @@ export function broadcastToUser(userId: string, event: string, data: any): void 
 }
 
 /**
- * Filter campaign data based on user role
- * Used to hide Spirit Layer tokens from non-DM players
- *
- * @param data - Campaign data to filter
- * @param userRole - User's role in the campaign
- * @returns Filtered data
- */
-export function filterDataByRole(data: any, userRole: string): any {
-  // Stub implementation for now - will be enhanced in future sessions
-  // For now, just return the data as-is
-  // TODO: Implement Spirit Layer filtering for WebSocket broadcasts
-
-  if (userRole === 'DM') {
-    // DMs see everything
-    return data;
-  }
-
-  // For non-DMs, filter out spirit layer content
-  // This will be implemented when we add token movement events
-  return data;
-}
-
-/**
  * Get all sockets in a campaign room
  * @param campaignId - Campaign ID
  * @returns Array of socket IDs
@@ -106,13 +84,13 @@ export async function disconnectUser(userId: string, reason: string): Promise<vo
     socket.disconnect(true);
   });
 
-  console.log(`❌ Disconnected user ${userId}: ${reason}`);
+  logger.info(`❌ Disconnected user ${userId}: ${reason}`);
 }
 
 /**
  * Send a system message to a campaign
  * Creates a database record and broadcasts to all campaign members
- * Per SOW Section 6.4: System Messages
+ * System Messages
  *
  * @param campaignId - Campaign ID
  * @param content - Message content
@@ -144,10 +122,10 @@ export async function sendSystemMessage(
       timestamp: message.createdAt.toISOString(),
     });
 
-    console.log(`📢 System message to campaign ${campaignId}: ${content}`);
+    logger.info(`📢 System message to campaign ${campaignId}: ${content}`);
   } catch (error) {
     // Log but never re-throw — a failed system message must not crash the server
     // (e.g. when the campaign was deleted just before the disconnect fires).
-    console.error('❌ Error sending system message:', error);
+    logger.error('❌ Error sending system message', { err: error });
   }
 }

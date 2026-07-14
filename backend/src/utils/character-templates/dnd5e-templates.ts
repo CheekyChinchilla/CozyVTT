@@ -1,7 +1,7 @@
 /**
  * D&D 5e Character Templates
  * Provides blank and example character templates for quick character creation
- * Per SOW Section 5.4: Character Management
+ * Character Management
  */
 
 import { GameSystem } from '@prisma/client';

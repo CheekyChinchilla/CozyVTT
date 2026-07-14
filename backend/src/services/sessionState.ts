@@ -1,6 +1,6 @@
 /**
  * Session State Management Service
- * Per SOW Section 15: Session State Management
+ * Session State Management
  *
  * Handles capture and restoration of campaign game state including:
  * - Token positions
@@ -11,10 +11,11 @@
  */
 
 import { prisma } from '../config/database';
+import logger from '../utils/logger';
 
 /**
  * Game State Interface
- * Matches SOW Section 15.3: Saved State JSON Structure
+ * Saved State JSON Structure
  */
 export interface GameState {
   sessionId?: string;
@@ -28,7 +29,7 @@ export interface GameState {
 
 /**
  * Capture the current game state for a campaign
- * Per SOW Section 15.3: State Persistence
+ * State Persistence
  *
  * @param campaignId - Campaign ID
  * @param sessionId - Optional session ID to include in state
@@ -68,17 +69,17 @@ export async function captureGameState(
       annotations: campaign.currentMap?.annotations ? (Array.isArray(campaign.currentMap.annotations) ? campaign.currentMap.annotations : []) : [],
     };
 
-    console.log(`📸 Captured game state for campaign ${campaignId}`);
+    logger.info(`📸 Captured game state for campaign ${campaignId}`);
     return state;
   } catch (error) {
-    console.error('❌ Error capturing game state:', error);
+    logger.error('❌ Error capturing game state', { err: error });
     throw error;
   }
 }
 
 /**
  * Restore saved game state to a campaign
- * Per SOW Section 15.2: Resuming a Session
+ * Resuming a Session
  *
  * @param campaignId - Campaign ID
  * @param state - GameState object to restore
@@ -126,15 +127,15 @@ export async function restoreGameState(
           },
         });
 
-        console.log(`✅ Restored game state for campaign ${campaignId} (map: ${state.mapId})`);
+        logger.info(`✅ Restored game state for campaign ${campaignId} (map: ${state.mapId})`);
       } else {
-        console.warn(`⚠️ Map ${state.mapId} not found or doesn't belong to campaign ${campaignId}`);
+        logger.warn(`⚠️ Map ${state.mapId} not found or doesn't belong to campaign ${campaignId}`);
       }
     }
 
-    console.log(`✅ Restored game state for campaign ${campaignId}`);
+    logger.info(`✅ Restored game state for campaign ${campaignId}`);
   } catch (error) {
-    console.error('❌ Error restoring game state:', error);
+    logger.error('❌ Error restoring game state', { err: error });
     throw error;
   }
 }

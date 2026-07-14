@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import logger from '../utils/logger';
 
 /**
  * Campaign-Level RBAC Middleware
- * Per SOW Section 3.5: Role & Permission Model
+ * Role & Permission Model
  *
  * All permission checks are enforced server-side. Never trust role information
  * from the client — always re-verify against the database.
@@ -75,7 +76,7 @@ export async function loadCampaignMembership(
 
     return next();
   } catch (error) {
-    console.error('Error loading campaign membership:', error);
+    logger.error('Error loading campaign membership', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to verify campaign membership',
@@ -85,7 +86,7 @@ export async function loadCampaignMembership(
 
 /**
  * Require user to be DM of the campaign
- * Per SOW Section 3.5: Only ONE DM allowed per campaign
+ * Only ONE DM allowed per campaign
  */
 export function requireDM(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.campaignMembership) {

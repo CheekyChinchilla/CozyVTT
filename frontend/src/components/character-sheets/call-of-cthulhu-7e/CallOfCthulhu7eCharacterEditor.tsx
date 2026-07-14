@@ -852,7 +852,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         </div>
       </div>
 
-      {/* Possessions (simplified - just text area for now) */}
+      {/* Possessions — free-text field */}
       <div>
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions & Equipment</h3>
         <textarea

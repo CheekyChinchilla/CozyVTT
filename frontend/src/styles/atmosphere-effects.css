@@ -1,6 +1,6 @@
 /**
  * Atmosphere Particle Effect Overlays
- * Per SOW Section 18.2: Visual Atmosphere Effects
+ * Visual Atmosphere Effects
  *
  * Six CSS-only animated overlays rendered over the map canvas.
  * All share the same base positioning — absolute inset-0, pointer-events-none.

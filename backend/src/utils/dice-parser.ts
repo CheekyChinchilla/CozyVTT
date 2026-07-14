@@ -1,6 +1,6 @@
 /**
  * Dice Roller Parser
- * Per SOW Section 7: Dice Roller Parser Specification
+ * Dice Roller Parser Specification
  *
  * Supports:
  * - Basic notation: 1d20, 2d6+3, 3d10-2

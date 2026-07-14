@@ -1,6 +1,6 @@
 /**
  * Password validation utilities
- * Per SOW Section 3.4: Strong password requirements
+ * Strong password requirements
  */
 
 export interface PasswordValidationResult {

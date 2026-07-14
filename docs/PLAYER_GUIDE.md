@@ -129,11 +129,13 @@ The page has three main areas:
 This is the battle map. During a session, you'll see your token here and can drag it to move around.
 
 ### Right Sidebar — Your Tools
-From top to bottom:
-- **Chat** — Talk to everyone
-- **Dice Roller** — Roll your dice
-- **Vibe Tracker** — Read the room
-- **Initiative Tracker** — See the turn order during combat
+A tabbed panel — click a tab to switch between:
+- **Chat** — Talk to everyone (an unread badge shows on the tab when messages arrive while you're on another tab)
+- **Dice** — Roll your dice
+- **Initiative** — See the turn order during combat
+- **Session** — The vibe/scene tone and session status
+
+You can also drag the divider to resize the sidebar, or collapse it to give the map more room.
 
 ### The Header Bar
 The top bar shows:
@@ -153,7 +155,7 @@ If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to re
 
 ## Chat and Dice
 
-Chat and dice are your two most-used tools. They live in the right sidebar and are always accessible during a session.
+Chat and dice are your two most-used tools. They each have their own tab in the right sidebar, one click apart during a session.
 
 ### The Chat Panel
 

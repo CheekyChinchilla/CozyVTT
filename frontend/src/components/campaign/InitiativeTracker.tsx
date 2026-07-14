@@ -28,7 +28,9 @@ import {
   GripVertical,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useTokenListIgnoringMovement } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 import type { CombatState, CombatantEntry, Token } from '@/types';
 
@@ -282,7 +284,9 @@ function CombatantRow({
 // ---------------------------------------------------------------------------
 
 export default function InitiativeTracker() {
-  const { userRole, tokens, currentMap } = useCampaign();
+  const { userRole, currentMap } = useCampaign();
+  // Initiative reads token names/ids, not coordinates — skip move re-renders.
+  const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
   const [combatState, setCombatState] = useState<CombatState>({
     active: false,
@@ -292,6 +296,7 @@ export default function InitiativeTracker() {
   });
   const [collapsed, setCollapsed] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Drag-to-reorder state (DM only)
   const dragTokenId = useRef<string | null>(null);
@@ -367,7 +372,12 @@ export default function InitiativeTracker() {
 
   const handleEnd = useCallback(() => {
     if (!socket) return;
-    if (!window.confirm('End combat and clear initiative order?')) return;
+    setShowEndConfirm(true);
+  }, [socket]);
+
+  const handleEndConfirmed = useCallback(() => {
+    setShowEndConfirm(false);
+    if (!socket) return;
     socket.emitInitiativeEnd();
   }, [socket]);
 
@@ -554,6 +564,17 @@ export default function InitiativeTracker() {
           onClose={() => setShowAddModal(false)}
         />
       )}
+
+      {/* End combat confirmation */}
+      <ConfirmDialog
+        isOpen={showEndConfirm}
+        title="End Combat"
+        message="End combat and clear initiative order?"
+        confirmLabel="End Combat"
+        variant="danger"
+        onConfirm={handleEndConfirmed}
+        onCancel={() => setShowEndConfirm(false)}
+      />
     </>
   );
 }

@@ -31,7 +31,7 @@ export function ThemeSyncBridge() {
     }
     // We intentionally key on the serialized preferences identity so that
     // partial updates (savePref) re-trigger the effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [authenticated, user?.id, JSON.stringify(user?.preferences ?? null)]);
 
   return null;

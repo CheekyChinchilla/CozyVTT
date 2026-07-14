@@ -4,12 +4,11 @@
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { X, Loader2, Link2, AlertCircle } from 'lucide-react';
+import { Loader2, Link2, AlertCircle } from 'lucide-react';
 import type { Character, Campaign } from '@/types';
 import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
+import { Button, Modal } from '@/components/ui';
 
 interface AssignCharacterModalProps {
   isOpen: boolean;
@@ -80,8 +79,6 @@ export default function AssignCharacterModal({
     }
   };
 
-  const modalRef = useFocusTrap(isOpen, handleClose);
-
   if (!character) return null;
 
   // Filter compatible campaigns — game systems must match exactly:
@@ -98,69 +95,22 @@ export default function AssignCharacterModal({
   const hasIncompatibleSelection = selectedCampaignId && !selectedCampaign;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            onClick={handleClose}
-            aria-hidden="true"
-          />
+    <Modal
+      open={isOpen}
+      onClose={handleClose}
+      title={currentCampaign ? 'Reassign Character' : 'Assign to Campaign'}
+      icon={Link2}
+      closeDisabled={loading}
+    >
+      {/* Error Alert */}
+      {error && (
+        <div role="alert" className="mb-4 bg-danger/10 border border-danger/30 rounded-lg p-4">
+          <p className="text-sm text-danger font-medium">{error}</p>
+        </div>
+      )}
 
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              ref={modalRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="assign-character-title"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-lg p-6 relative rounded-lg border border-moss-green/20 shadow-2xl"
-              style={{
-                background: 'rgba(254, 243, 199, 0.98)',
-                backdropFilter: 'blur(10px)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-moss-green/10">
-                    <Link2 className="w-6 h-6 text-moss-green" />
-                  </div>
-                  <h2 id="assign-character-title" className="text-2xl font-semibold text-moss-green font-heading">
-                    {currentCampaign ? 'Reassign Character' : 'Assign to Campaign'}
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="p-2 rounded-lg hover:bg-warm-gray/10 transition-colors
-                           disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Close dialog"
-                >
-                  <X className="w-5 h-5 text-stone-gray" />
-                </button>
-              </div>
-
-              {/* Error Alert */}
-              {error && (
-                <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-                  <p className="text-sm text-spirit-red font-medium">{error}</p>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="space-y-4">
+      {/* Content */}
+      <div className="space-y-4">
                 {/* Character Info */}
                 <div className="glass-panel p-4">
                   <h3 className="font-semibold text-moss-green mb-2">Character</h3>
@@ -200,7 +150,7 @@ export default function AssignCharacterModal({
                 <div>
                   <label
                     htmlFor="campaign"
-                    className="block text-sm font-semibold text-gray-700 mb-2"
+                    className="block text-sm font-semibold text-ink mb-2"
                   >
                     Select Campaign
                   </label>
@@ -228,7 +178,7 @@ export default function AssignCharacterModal({
                         className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${
                           selectedCampaignId === null
                             ? 'border-moss-green bg-moss-green/5'
-                            : 'border-gray-200 hover:border-moss-green/50'
+                            : 'border-ink/10 hover:border-moss-green/50'
                         } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <input
@@ -241,10 +191,10 @@ export default function AssignCharacterModal({
                           className="mt-1 mr-3"
                         />
                         <div className="flex-1">
-                          <div className="font-semibold text-gray-800">
+                          <div className="font-semibold text-ink">
                             Unassigned
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-sm text-ink-muted mt-1">
                             Remove character from any campaign
                           </p>
                         </div>
@@ -257,7 +207,7 @@ export default function AssignCharacterModal({
                           className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${
                             selectedCampaignId === campaign.id
                               ? 'border-moss-green bg-moss-green/5'
-                              : 'border-gray-200 hover:border-moss-green/50'
+                              : 'border-ink/10 hover:border-moss-green/50'
                           } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <input
@@ -271,13 +221,13 @@ export default function AssignCharacterModal({
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-gray-800 truncate">
+                              <span className="font-semibold text-ink truncate">
                                 {campaign.name}
                               </span>
                               <GameSystemBadge gameSystem={campaign.gameSystem} size="sm" />
                             </div>
                             {campaign.description && (
-                              <p className="text-sm text-gray-600 line-clamp-2">
+                              <p className="text-sm text-ink-muted line-clamp-2">
                                 {campaign.description}
                               </p>
                             )}
@@ -299,40 +249,33 @@ export default function AssignCharacterModal({
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-6">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
+      {/* Actions */}
+      <div className="flex gap-3 pt-6">
+        <Button
+          type="button"
+          onClick={handleClose}
+          disabled={loading}
+          variant="secondary"
+          className="flex-1"
+        >
+          Cancel
+        </Button>
 
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={loading || loadingCampaigns || !!hasIncompatibleSelection}
-                  className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin inline-block mr-2" />
-                      Assigning...
-                    </>
-                  ) : (
-                    <>
-                      <Link2 className="w-4 h-4 inline-block mr-2" />
-                      {selectedCampaignId === null ? 'Unassign' : 'Assign to Campaign'}
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+        <Button
+          type="button"
+          onClick={handleConfirm}
+          disabled={loadingCampaigns || !!hasIncompatibleSelection}
+          loading={loading}
+          icon={Link2}
+          className="flex-1"
+        >
+          {loading
+            ? 'Assigning...'
+            : selectedCampaignId === null
+              ? 'Unassign'
+              : 'Assign to Campaign'}
+        </Button>
+      </div>
+    </Modal>
   );
 }

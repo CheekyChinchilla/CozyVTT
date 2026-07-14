@@ -6,28 +6,37 @@
 // Right: Chat, dice roller, controls
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
+import { useGameStore } from '@/stores/gameStore';
 import {
   ArrowLeft,
   Loader2,
-  Settings,
-  Map as MapIcon,
-  Ghost,
-  Swords,
-  BookOpen,
-  Package,
   Sun,
   PauseCircle,
-  Cloud,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
+import {
+  Group,
+  Panel,
+  Separator,
+  useDefaultLayout,
+  usePanelRef,
+  type PanelImperativeHandle,
+} from 'react-resizable-panels';
 
 // Campaign components
 import CampaignInfo from '@/components/campaign/CampaignInfo';
 import CampaignRoster from '@/components/campaign/CampaignRoster';
-import MapCanvas from '@/components/campaign/MapCanvas';
+// Lazy-loaded — MapCanvas is by far the largest component in the app; splitting
+// it into its own chunk keeps the CampaignPage shell fast to load and paints
+// the sidebars while the canvas code downloads.
+const MapCanvas = lazy(() => import('@/components/campaign/MapCanvas'));
 import MapManager from '@/components/campaign/MapManager';
 import TokenManager from '@/components/campaign/TokenManager';
 import SpiritLayerControls from '@/components/campaign/SpiritLayerControls';
@@ -38,14 +47,13 @@ import CreatureLibrary from '@/components/campaign/CreatureLibrary';
 import TokenTemplateLibrary from '@/components/campaign/TokenTemplateLibrary';
 import TokenRoster from '@/components/campaign/TokenRoster';
 import CampaignSettingsModal from '@/components/campaign/CampaignSettingsModal';
-import VibeTracker from '@/components/campaign/VibeTracker';
-import SessionControls from '@/components/campaign/SessionControls';
-import ChatPanel from '@/components/campaign/ChatPanel';
-import DiceRoller from '@/components/campaign/DiceRoller';
-import InitiativeTracker from '@/components/campaign/InitiativeTracker';
+import SessionSidebar from '@/components/campaign/SessionSidebar';
+import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import { CampaignStatus, TokenType } from '@/types';
 import type { Token } from '@/types';
+import Button from '@/components/ui/Button';
+import Tooltip from '@/components/ui/Tooltip';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -53,8 +61,8 @@ import type { Token } from '@/types';
 
 function CampaignPageContent() {
   const navigate = useNavigate();
-  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, tokens, updateTokens, refreshCurrentMap } = useCampaign();
-  const { socket, reconnectCount } = useWebSocket();
+  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap } = useCampaign();
+  const { socket, reconnectCount, status } = useWebSocket();
 
   // After a WebSocket reconnect, refetch the current map's state via REST.
   // The real-time stream only pushes deltas; any moves/wall edits/fog ops
@@ -68,7 +76,6 @@ function CampaignPageContent() {
       refreshCurrentMap();
     }
     // refreshCurrentMap is stable enough for this trigger pattern
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reconnectCount]);
   const [isMapManagerOpen, setIsMapManagerOpen] = useState(false);
   const [isTokenManagerOpen, setIsTokenManagerOpen] = useState(false);
@@ -79,12 +86,58 @@ function CampaignPageContent() {
   const [isTokenTemplateLibraryOpen, setIsTokenTemplateLibraryOpen] = useState(false);
   const [quickEditToken, setQuickEditToken] = useState<Token | null>(null);
 
+  // Resizable panel layout — persisted to localStorage so each user's
+  // column sizes survive reloads.
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: 'cozyvtt-session-layout',
+    storage: localStorage,
+  });
+  const leftPanelRef = usePanelRef();
+  const rightPanelRef = usePanelRef();
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  const togglePanel = (
+    panelRef: React.RefObject<PanelImperativeHandle | null>,
+    fallbackSize: string
+  ) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+      // A panel restored from a collapsed saved layout has no previous
+      // size to expand back to — fall back to its default share.
+      if (panel.getSize().asPercentage === 0) {
+        panel.resize(fallbackSize);
+      }
+    } else {
+      panel.collapse();
+    }
+  };
+
+  // SessionToolbar reports which tool was clicked; the open/close state
+  // for each slide-over stays here.
+  const sessionPanelOpeners: Record<SessionToolKey, () => void> = {
+    maps: () => setIsMapManagerOpen(true),
+    tokens: () => setIsTokenManagerOpen(true),
+    creatures: () => setIsCreatureLibraryOpen(true),
+    templates: () => setIsTokenTemplateLibraryOpen(true),
+    spirit: () => setIsSpiritLayerOpen(true),
+    atmosphere: () => setIsAtmospherePanelOpen(true),
+    settings: () => setIsSettingsOpen(true),
+  };
+
   // ============================================
   // Session WebSocket listeners
   // All clients (DM + Players) listen so campaign status stays in sync
   // ============================================
   useEffect(() => {
-    if (!socket) return;
+    // Register on the live socket only once it is actually connected. The socket
+    // wrapper is a stable singleton whose underlying connection is created
+    // asynchronously, so registering before the connection exists would silently
+    // no-op. Re-running when `status` flips to 'connected' — including after a
+    // reconnect that recreates the socket — (re)registers on the live socket.
+    if (!socket || status !== 'connected') return;
 
     const handleStarted = (data: { sessionId: string; sessionNumber: number; startedAt: string }) => {
       updateCampaignStatus(CampaignStatus.ACTIVE);
@@ -115,7 +168,7 @@ function CampaignPageContent() {
       socketInstance.off('session.ended', handleEnded);
       socketInstance.off('session.resumed', handleResumed);
     };
-  }, [socket, updateCampaignStatus, setActiveSession]);
+  }, [socket, status, updateCampaignStatus, setActiveSession]);
 
   // Loading state
   if (loading) {
@@ -135,10 +188,10 @@ function CampaignPageContent() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
           <p className="text-spirit-red font-medium">{error}</p>
-          <button onClick={() => navigate('/dashboard')} className="btn-primary">
+          <Button onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="w-4 h-4 inline mr-2" />
             Back to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -150,10 +203,10 @@ function CampaignPageContent() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
           <p className="text-stone-gray">Campaign not found</p>
-          <button onClick={() => navigate('/dashboard')} className="btn-primary">
+          <Button onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="w-4 h-4 inline mr-2" />
             Back to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -164,13 +217,13 @@ function CampaignPageContent() {
       {/* Header Bar */}
       <header className="flex items-center justify-between px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-sm">
         <div className="flex items-center gap-3">
-          <button
+          <Button
             onClick={() => navigate('/dashboard')}
-            className="btn-secondary flex items-center gap-2"
+            variant="secondary" className="flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Dashboard</span>
-          </button>
+          </Button>
 
           <div className="h-6 w-px bg-moss-green/20" />
 
@@ -182,82 +235,6 @@ function CampaignPageContent() {
         <div className="flex items-center gap-3">
           {/* Connection Status */}
           <ConnectionStatus />
-
-          <div className="h-6 w-px bg-moss-green/20 hidden sm:block" />
-
-          {/* Maps button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsMapManagerOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Map Library"
-            >
-              <MapIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Maps</span>
-            </button>
-          )}
-
-          {/* Tokens button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsTokenManagerOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Token Manager"
-            >
-              <Swords className="w-4 h-4" />
-              <span className="hidden sm:inline">Tokens</span>
-            </button>
-          )}
-
-          {/* Creature Library button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsCreatureLibraryOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Creature Library"
-            >
-              <BookOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Creatures</span>
-            </button>
-          )}
-
-          {/* Token Templates button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsTokenTemplateLibraryOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Token Templates"
-            >
-              <Package className="w-4 h-4" />
-              <span className="hidden sm:inline">Templates</span>
-            </button>
-          )}
-
-          {/* Spirit Layer button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsSpiritLayerOpen(true)}
-              className={`btn-secondary flex items-center gap-2 ${
-                campaign?.spiritLayerEnabled ? 'ring-2 ring-spirit-purple/50' : ''
-              }`}
-              title="Spirit Layer Controls"
-            >
-              <Ghost className="w-4 h-4 text-spirit-purple" />
-              <span className="hidden sm:inline">Spirit</span>
-            </button>
-          )}
-
-          {/* Atmosphere button (DM only) */}
-          {userRole === 'DM' && (
-            <button
-              onClick={() => setIsAtmospherePanelOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Atmosphere Controls"
-            >
-              <Cloud className="w-4 h-4 text-moss-green" />
-              <span className="hidden sm:inline">Atmosphere</span>
-            </button>
-          )}
 
           {/* Session status indicator (visible to all) */}
           {campaign.status === CampaignStatus.ACTIVE && (
@@ -289,17 +266,48 @@ function CampaignPageContent() {
             </div>
           )}
 
-          {/* Settings button (DM only) */}
+          {/* DM tools — grouped icon toolbar */}
           {userRole === 'DM' && (
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="btn-secondary flex items-center gap-2"
-              title="Campaign Settings"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
-            </button>
+            <>
+              <div className="h-6 w-px bg-moss-green/20" />
+              <SessionToolbar
+                openPanels={{
+                  maps: isMapManagerOpen,
+                  tokens: isTokenManagerOpen,
+                  creatures: isCreatureLibraryOpen,
+                  templates: isTokenTemplateLibraryOpen,
+                  spirit: isSpiritLayerOpen,
+                  atmosphere: isAtmospherePanelOpen,
+                  settings: isSettingsOpen,
+                }}
+                onOpen={(key) => sessionPanelOpeners[key]()}
+                spiritLayerEnabled={campaign?.spiritLayerEnabled}
+              />
+            </>
           )}
+
+          {/* Sidebar collapse toggles (all roles) */}
+          <div className="h-6 w-px bg-moss-green/20" />
+          <div className="flex items-center gap-1">
+            <Tooltip content={leftCollapsed ? 'Show party panel' : 'Hide party panel'} side="bottom">
+              <Button
+                variant="ghost"
+                iconOnly
+                icon={leftCollapsed ? PanelLeftOpen : PanelLeftClose}
+                aria-label={leftCollapsed ? 'Show party panel' : 'Hide party panel'}
+                onClick={() => togglePanel(leftPanelRef, '20%')}
+              />
+            </Tooltip>
+            <Tooltip content={rightCollapsed ? 'Show session panel' : 'Hide session panel'} side="bottom">
+              <Button
+                variant="ghost"
+                iconOnly
+                icon={rightCollapsed ? PanelRightOpen : PanelRightClose}
+                aria-label={rightCollapsed ? 'Show session panel' : 'Hide session panel'}
+                onClick={() => togglePanel(rightPanelRef, '25%')}
+              />
+            </Tooltip>
+          </div>
         </div>
       </header>
 
@@ -313,58 +321,80 @@ function CampaignPageContent() {
         </div>
       )}
 
-      {/* Main Content - Three Panel Layout */}
-      <main className="flex-1 overflow-hidden hidden lg:flex">
-        {/* Left Sidebar */}
-        <aside className="w-80 flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-parchment/30 border-r border-moss-green/20">
-          <CampaignInfo />
-          <CampaignRoster />
-          {/* Token Roster — DM only */}
-          {userRole === 'DM' && (
-            <TokenRoster
-              onEditToken={(token) => {
-                const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-                if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                  setQuickEditToken(token);
+      {/* Main Content - Three Resizable Panels */}
+      <main className="flex-1 min-h-0 overflow-hidden hidden lg:block">
+        <Group
+          orientation="horizontal"
+          className="h-full w-full"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+        >
+          {/* Left Panel — party & campaign info */}
+          <Panel
+            id="party"
+            defaultSize={20}
+            minSize="260px"
+            collapsible
+            panelRef={leftPanelRef}
+            onResize={(size) => setLeftCollapsed(size.asPercentage === 0)}
+            className="h-full"
+          >
+            <aside className="h-full overflow-y-auto p-4 space-y-4 bg-parchment/30 border-r border-moss-green/20">
+              <CampaignInfo />
+              <CampaignRoster />
+              {/* Token Roster — DM only */}
+              {userRole === 'DM' && (
+                <TokenRoster
+                  onEditToken={(token) => {
+                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
+                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
+                      setQuickEditToken(token);
+                    }
+                  }}
+                />
+              )}
+            </aside>
+          </Panel>
+
+          <Separator className="w-1.5 bg-moss-green/10 transition-colors data-[separator=hover]:bg-brand/30 data-[separator=active]:bg-brand/50" />
+
+          {/* Center Panel — map canvas */}
+          <Panel id="map" defaultSize={55} minSize={30} className="h-full">
+            <section className="h-full min-w-0 p-4">
+              <Suspense
+                fallback={
+                  <div className="w-full h-full flex items-center justify-center" aria-live="polite" aria-label="Loading map">
+                    <Loader2 className="w-8 h-8 text-moss-green animate-spin" aria-hidden="true" />
+                  </div>
                 }
-              }}
-            />
-          )}
-        </aside>
+              >
+                <MapCanvas
+                  onEditToken={(token) => {
+                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
+                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
+                      setQuickEditToken(token);
+                    }
+                  }}
+                />
+              </Suspense>
+            </section>
+          </Panel>
 
-        {/* Center - Map Canvas */}
-        <section className="flex-1 min-w-0 p-4">
-          <MapCanvas
-            onEditToken={(token) => {
-              const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-              if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                setQuickEditToken(token);
-              }
-            }}
-          />
-        </section>
+          <Separator className="w-1.5 bg-moss-green/10 transition-colors data-[separator=hover]:bg-brand/30 data-[separator=active]:bg-brand/50" />
 
-        {/* Right Sidebar */}
-        <aside className="w-96 flex-shrink-0 overflow-y-auto p-4 space-y-4 bg-parchment/30 border-l border-moss-green/20">
-          {/* Chat */}
-          <div className="h-[480px]">
-            <ChatPanel />
-          </div>
-
-          {/* Dice Roller */}
-          <div className="h-[580px]">
-            <DiceRoller />
-          </div>
-
-          {/* Vibe Tracker */}
-          <VibeTracker />
-
-          {/* Initiative Tracker — visible to all, DM-controlled */}
-          <InitiativeTracker />
-
-          {/* Session Controls — DM only */}
-          <SessionControls />
-        </aside>
+          {/* Right Panel — tabbed session rail (Chat / Dice / Initiative / Session) */}
+          <Panel
+            id="rail"
+            defaultSize={25}
+            minSize="300px"
+            collapsible
+            panelRef={rightPanelRef}
+            onResize={(size) => setRightCollapsed(size.asPercentage === 0)}
+            className="h-full"
+          >
+            <SessionSidebar />
+          </Panel>
+        </Group>
       </main>
 
       {/* Map Manager slide-over panel (DM only) */}
@@ -424,7 +454,7 @@ function CampaignPageContent() {
           onClose={() => setQuickEditToken(null)}
           onTokenUpdate={(updated) => {
             setQuickEditToken(updated);
-            updateTokens(tokens.map((t) => t.id === updated.id ? updated : t));
+            useGameStore.getState().replaceToken(updated);
           }}
         />
       )}
@@ -450,9 +480,9 @@ function CampaignPageContent() {
             The campaign view is optimized for desktop screens (1024px+). Mobile
             support will be added in future updates.
           </p>
-          <button onClick={() => navigate('/dashboard')} className="btn-primary">
+          <Button onClick={() => navigate('/dashboard')}>
             Back to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     </div>

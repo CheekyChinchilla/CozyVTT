@@ -1,7 +1,10 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { MotionConfig } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/services/api';
+import { queryClient } from '@/lib/queryClient';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
@@ -10,6 +13,7 @@ import { PlatformRole } from '@/types/user.types';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import ToastContainer from '@/components/common/ToastContainer';
+import Button from '@/components/ui/Button';
 
 // Lazy-loaded pages — each becomes its own JS chunk so the browser only downloads
 // code for the page the user actually visits.
@@ -49,6 +53,11 @@ function PageLoader() {
 function App() {
   return (
     <ErrorBoundary>
+      {/* reducedMotion="user" makes every framer-motion animation (toasts, dice
+          pops, modals, error slides) respect the OS "reduce motion" setting —
+          transform/layout animations are suppressed, opacity/color kept. */}
+      <MotionConfig reducedMotion="user">
+      <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
@@ -146,6 +155,8 @@ function App() {
         </AuthProvider>
       </ToastProvider>
       </ThemeProvider>
+      </QueryClientProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }
@@ -154,6 +165,20 @@ function WelcomePage() {
   const { authenticated } = useAuth();
   const navigate = useNavigate();
   const [registrationAllowed, setRegistrationAllowed] = useState(false);
+  // null = still checking. On a brand-new install (no admin account yet) the
+  // root URL must send the visitor straight to the setup wizard instead of a
+  // login prompt they can't use.
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.checkSetupStatus()
+      .then((data) => { if (!cancelled) setNeedsSetup(data.needsSetup); })
+      // If the status check fails (backend unreachable), don't trap the visitor
+      // on a spinner — fall through to the normal welcome screen.
+      .catch(() => { if (!cancelled) setNeedsSetup(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     api.getRegistrationStatus()
@@ -163,6 +188,16 @@ function WelcomePage() {
 
   if (authenticated) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Wait for the setup check before deciding welcome-vs-wizard, so a fresh
+  // install never flashes the login screen first.
+  if (needsSetup === null) {
+    return <PageLoader />;
+  }
+
+  if (needsSetup) {
+    return <Navigate to="/setup" replace />;
   }
 
   return (
@@ -180,13 +215,13 @@ function WelcomePage() {
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <button className="btn-primary w-full" onClick={() => navigate('/auth/login')}>
+          <Button className="w-full" onClick={() => navigate('/auth/login')}>
             Sign In
-          </button>
+          </Button>
           {registrationAllowed && (
-            <button className="btn-secondary w-full" onClick={() => navigate('/auth/register')}>
+            <Button variant="secondary" className="w-full" onClick={() => navigate('/auth/register')}>
               Create Account
-            </button>
+            </Button>
           )}
         </div>
       </div>

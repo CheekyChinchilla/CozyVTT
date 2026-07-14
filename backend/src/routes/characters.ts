@@ -5,13 +5,15 @@ import { prisma } from '../config/database';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
+import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
+import logger from '../utils/logger';
 
 const router = Router();
 
 /**
  * Character Management Routes
- * Per SOW Section 5.4: Character Management
+ * Character Management
  */
 
 /**
@@ -22,14 +24,15 @@ const router = Router();
 router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { name, data, tokenImageUrl, gameSystem, campaignId } = req.body;
 
-    if (!name) {
+    const parsed = CreateCharacterSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Character name is required',
+        message: parsed.error.issues[0]?.message ?? 'Invalid character data',
       });
     }
+    const { name, data, tokenImageUrl, gameSystem, campaignId } = parsed.data;
 
     // Determine final gameSystem value
     let finalGameSystem = gameSystem;
@@ -42,7 +45,9 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       });
 
       if (campaign) {
-        finalGameSystem = campaign.gameSystem;
+        // Prisma's GameSystem is a string-literal union; cast to the local enum
+        // type finalGameSystem was inferred from (identical string values).
+        finalGameSystem = campaign.gameSystem as GameSystem | null;
       }
     }
 
@@ -96,7 +101,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       character,
     });
   } catch (error) {
-    console.error('Error creating character:', error);
+    logger.error('Error creating character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to create character',
@@ -130,7 +135,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     return res.status(200).json({ characters });
   } catch (error) {
-    console.error('Error fetching characters:', error);
+    logger.error('Error fetching characters', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch characters',
@@ -190,7 +195,7 @@ router.get(
         ...template,
       });
     } catch (error) {
-      console.error('Error fetching character template:', error);
+      logger.error('Error fetching character template', { err: error });
       return res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to fetch character template',
@@ -267,7 +272,7 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       message: 'You do not have permission to view this character',
     });
   } catch (error) {
-    console.error('Error fetching character:', error);
+    logger.error('Error fetching character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch character',
@@ -356,7 +361,7 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       });
     }
   } catch (error) {
-    console.error('Error validating character:', error);
+    logger.error('Error validating character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to validate character',
@@ -374,7 +379,15 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
   try {
     const userId = req.session.userId!;
     const { id } = req.params;
-    const { name, data, tokenImageUrl, gameSystem } = req.body;
+
+    const parsed = UpdateCharacterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid character data',
+      });
+    }
+    const { name, data, tokenImageUrl, gameSystem } = parsed.data;
 
     // Find character first to check authorization
     const character = await prisma.character.findUnique({
@@ -474,7 +487,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           userId,
         });
       } catch (error) {
-        console.error('Failed to broadcast character update:', error);
+        logger.error('Failed to broadcast character update', { err: error });
         // Don't fail the request if broadcast fails
       }
     }
@@ -484,7 +497,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       character: updatedCharacter,
     });
   } catch (error) {
-    console.error('Error updating character:', error);
+    logger.error('Error updating character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update character',
@@ -530,7 +543,7 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       message: 'Character deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting character:', error);
+    logger.error('Error deleting character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete character',
@@ -621,7 +634,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
             userId,
           });
         } catch (error) {
-          console.error('Failed to broadcast roster update:', error);
+          logger.error('Failed to broadcast roster update', { err: error });
           // Don't fail the request if broadcast fails
         }
       }
@@ -749,7 +762,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
         campaignId,
       });
     } catch (error) {
-      console.error('Failed to broadcast roster update:', error);
+      logger.error('Failed to broadcast roster update', { err: error });
       // Don't fail the request if broadcast fails
     }
 
@@ -758,7 +771,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       character: updatedCharacter,
     });
   } catch (error) {
-    console.error('Error assigning character to campaign:', error);
+    logger.error('Error assigning character to campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to assign character to campaign',
@@ -814,7 +827,7 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       character: copiedCharacter,
     });
   } catch (error) {
-    console.error('Error copying character:', error);
+    logger.error('Error copying character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to copy character',

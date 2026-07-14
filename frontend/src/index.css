@@ -68,7 +68,12 @@
     @apply bg-white/10 backdrop-blur-cozy border border-white/20 rounded-cozy shadow-lg;
   }
 
-  /* Cozy Button */
+  /* Cozy Button — canonical button styles.
+     Do NOT use these classes on <button> elements directly; render
+     <Button variant="…"> from '@/components/ui' instead (it emits these
+     classes and adds loading/icon/disabled handling). Direct use is only
+     for link-as-button cases (<a>, <Link>, <label>) where a real <button>
+     is semantically wrong. */
   .btn-primary {
     @apply bg-accent text-accent-text px-4 py-2 rounded-cozy font-medium
            hover:bg-accent-hover transition-colors duration-200
@@ -124,8 +129,10 @@
   }
 }
 
-/* Panel resize handle styles */
-[data-resize-handle] {
+/* Panel resize separator styles (react-resizable-panels v4 renders
+   [data-separator] elements; the attribute value tracks interaction
+   state: inactive | hover | active | disabled) */
+[data-separator] {
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -133,11 +140,28 @@
 }
 
 /* Only suppress tap-highlight; keep focus-visible outline for keyboard users */
-[data-resize-handle]:active {
+[data-separator]:active {
   -webkit-tap-highlight-color: transparent;
 }
 
-[data-resize-handle]:focus-visible {
+[data-separator]:focus-visible {
   outline: 2px solid rgb(var(--color-brand));
   outline-offset: 2px;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────
+   Honor the OS "reduce motion" preference for all CSS-driven animation
+   and transitions (tailwind animate-* utilities, ambient atmosphere/spirit
+   loops, hover transitions). Framer-motion is handled separately via
+   <MotionConfig reducedMotion="user"> in App.tsx. Durations are collapsed
+   rather than removed so animation/transition-end events still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

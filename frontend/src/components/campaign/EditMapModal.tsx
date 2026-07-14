@@ -5,13 +5,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { X, MapPin, Check, Search, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
+import { MapPin, Check, Search, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
 import type { Asset, Map, UpdateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
+import { Button, Modal } from '@/components/ui';
 
 interface EditMapModalProps {
   isOpen: boolean;
@@ -85,13 +85,13 @@ function AssetPicker({
               Clear
             </button>
           )}
-          <button
+          <Button
             type="button"
             onClick={handleBrowse}
-            className="text-xs btn-secondary py-1 px-2"
+            variant="secondary" className="text-xs py-1 px-2"
           >
             {expanded ? 'Hide' : 'Browse Assets'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -456,7 +456,6 @@ export default function EditMapModal({
   const canSubmit = !!mapAssetId && name.trim().length > 0 && !isSubmitting;
 
   const handleClose = useCallback(() => onClose(), [onClose]);
-  const modalRef = useFocusTrap(isOpen, handleClose);
 
   const handleSubmit = async () => {
     if (!canSubmit || !mapAssetId) return;
@@ -494,48 +493,10 @@ export default function EditMapModal({
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={onClose}
-          aria-hidden="true"
-        >
-          <motion.div
-            ref={modalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-map-title"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="bg-paper-white rounded-cozy shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-6 h-6 text-moss-green" />
-                <div>
-                  <h2 id="edit-map-title" className="text-xl font-bold text-moss-green">Edit Map</h2>
-                  <p className="text-xs text-stone-gray truncate max-w-xs">{map.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-stone-gray" />
-              </button>
-            </div>
-
+    <Modal open={isOpen} onClose={handleClose} title="Edit Map" icon={MapPin} size="xl" closeDisabled={isSubmitting}>
             {/* Body */}
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
+              <p className="text-xs text-ink-muted -mt-4 truncate">{map.name}</p>
               {error && (
                 <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-700 text-sm">
                   {error}
@@ -797,27 +758,24 @@ export default function EditMapModal({
 
             {/* Footer */}
             <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-sm border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={onClose}
-                className="btn-secondary"
+                variant="secondary"
                 disabled={isSubmitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Changes
-              </button>
+              </Button>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

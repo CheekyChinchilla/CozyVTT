@@ -8,6 +8,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { KeyRound, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import authService from '@/services/auth.service';
+import Button from '@/components/ui/Button';
 
 const PASSWORD_REQUIREMENTS = [
   { test: (p: string) => p.length >= 8,           label: 'At least 8 characters' },
@@ -184,10 +185,10 @@ export default function ResetPasswordPage() {
                 )}
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading || !allRequirementsMet || password !== confirmPassword}
-                className="btn-primary w-full"
+                className="w-full"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -200,7 +201,7 @@ export default function ResetPasswordPage() {
                 ) : (
                   'Set New Password'
                 )}
-              </button>
+              </Button>
             </form>
 
             <div className="text-center">

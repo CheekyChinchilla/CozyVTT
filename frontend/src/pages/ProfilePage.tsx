@@ -25,6 +25,7 @@ import {
   ZoomOut,
   Move,
 } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -227,10 +228,10 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
 
         {/* Footer */}
         <div className="flex gap-3 px-5 pb-5">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={handleConfirm} disabled={!imgLoaded} className="btn-primary flex-1">
+          <Button onClick={onClose} variant="secondary" className="flex-1">Cancel</Button>
+          <Button onClick={handleConfirm} disabled={!imgLoaded} className="flex-1">
             Apply & Upload
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -263,13 +264,13 @@ function SaveBar({
         </p>
       )}
       {!error && !success && <span className="flex-1" />}
-      <button type="button" onClick={onCancel} disabled={saving} className="btn-secondary text-sm py-1.5 px-3">
+      <Button type="button" onClick={onCancel} disabled={saving} variant="secondary" className="text-sm py-1.5 px-3">
         Cancel
-      </button>
-      <button type="button" onClick={onSave} disabled={saving} className="btn-primary text-sm py-1.5 px-3 flex items-center gap-2">
+      </Button>
+      <Button type="button" onClick={onSave} disabled={saving} className="text-sm py-1.5 px-3 flex items-center gap-2">
         {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
         Save Changes
-      </button>
+      </Button>
     </div>
   );
 }
@@ -590,9 +591,9 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-semibold text-moss-green">Profile Information</h2>
             {!editingProfile && (
-              <button onClick={startEditProfile} className="btn-secondary text-sm py-1.5 px-3">
+              <Button onClick={startEditProfile} variant="secondary" className="text-sm py-1.5 px-3">
                 Edit
-              </button>
+              </Button>
             )}
           </div>
 
@@ -792,14 +793,14 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={pwSaving || !pwCurrent || !pwNew || !pwConfirm}
-                className="btn-primary text-sm py-2 px-4 flex items-center gap-2"
+                className="text-sm py-2 px-4 flex items-center gap-2"
               >
                 {pwSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {pwSaving ? 'Changing...' : 'Change Password'}
-              </button>
+              </Button>
             </form>
           </div>
         </section>
@@ -867,9 +868,9 @@ export default function ProfilePage() {
                 <h3 className="text-sm font-medium text-moss-green">Sign Out</h3>
                 <p className="text-xs text-warm-gray">End your current session.</p>
               </div>
-              <button onClick={handleLogout} className="btn-secondary text-sm py-1.5 px-3">
+              <Button onClick={handleLogout} variant="secondary" className="text-sm py-1.5 px-3">
                 Sign Out
-              </button>
+              </Button>
             </div>
 
             {/* Delete account */}
@@ -935,14 +936,14 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="flex gap-2 pt-1">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => { setDeleteConfirmOpen(false); setDeletePassword(''); setDeleteConfirmText(''); setDeleteError(''); }}
                     disabled={deleting}
-                    className="btn-secondary flex-1 text-sm"
+                    variant="secondary" className="flex-1 text-sm"
                   >
                     Cancel
-                  </button>
+                  </Button>
                   <button
                     type="submit"
                     disabled={deleting || deleteConfirmText !== 'DELETE' || !deletePassword}

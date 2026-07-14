@@ -257,7 +257,7 @@ Create a new campaign. The authenticated user becomes the DM.
 
 ### `GET /api/campaigns/:id`
 
-Get a single campaign's details.
+Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/maps/:id` and `GET /api/characters/:id`.
 
 ---
 
@@ -401,7 +401,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.0.0",
+    "exportedFrom": "CozyVTT v1.1.0",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,

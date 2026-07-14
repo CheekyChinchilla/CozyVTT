@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Swords, Plus, Trash2, Dices } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 interface Weapon {
   name: string;
@@ -80,13 +81,13 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
           <h3 className="text-lg font-bold text-sepia-900">Weapons</h3>
         </div>
         {editable && (
-          <button
+          <Button
             onClick={handleAddWeapon}
-            className="btn-secondary text-sm py-1 px-3 flex items-center space-x-1"
+            variant="secondary" className="text-sm py-1 px-3 flex items-center space-x-1"
           >
             <Plus className="w-4 h-4" />
             <span>Add Weapon</span>
-          </button>
+          </Button>
         )}
       </div>
 

@@ -1,6 +1,6 @@
 /**
  * AtmospherePlayer
- * Per SOW Section 18.3: Ambient Audio
+ * Ambient Audio
  *
  * Invisible component — manages a hidden HTML5 <audio> element for ambient music.
  * Mounts once at the CampaignPage level so audio persists regardless of panel open state.

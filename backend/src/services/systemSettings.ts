@@ -3,7 +3,7 @@ import { prisma } from '../config/database';
 /**
  * System Settings Service
  * Manages system-wide configuration including setup wizard state
- * Per SOW Section 12.1: Initial Setup & Onboarding
+ * Initial Setup & Onboarding
  */
 
 /**

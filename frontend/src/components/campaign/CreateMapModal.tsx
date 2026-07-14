@@ -5,14 +5,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { X, MapPin, Check, Search, Loader2, Upload, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
+import { MapPin, Check, Search, Loader2, Upload, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
 import type { Asset, Map, CreateMapRequest } from '@/types';
 import { AssetType, AssetScope } from '@/types';
 import AssetUploadModal from '@/components/assets/AssetUploadModal';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
+import { Button, Modal } from '@/components/ui';
 
 interface CreateMapModalProps {
   isOpen: boolean;
@@ -92,21 +92,21 @@ function AssetPicker({
               Clear
             </button>
           )}
-          <button
+          <Button
             type="button"
             onClick={() => setUploadModalOpen(true)}
-            className="text-xs btn-secondary py-1 px-2 flex items-center gap-1"
+            variant="secondary" className="text-xs py-1 px-2 flex items-center gap-1"
           >
             <Upload className="w-3 h-3" />
             Upload New
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleBrowse}
-            className="text-xs btn-secondary py-1 px-2"
+            variant="secondary" className="text-xs py-1 px-2"
           >
             {expanded ? 'Hide' : 'Browse Assets'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -477,7 +477,6 @@ export default function CreateMapModal({
   const canSubmit = !!mapAssetId && name.trim().length > 0 && !isSubmitting;
 
   const handleClose = useCallback(() => onClose(), [onClose]);
-  const modalRef = useFocusTrap(isOpen, handleClose);
 
   const handleSubmit = async () => {
     if (!canSubmit || !mapAssetId) return;
@@ -514,45 +513,9 @@ export default function CreateMapModal({
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={onClose}
-          aria-hidden="true"
-        >
-          <motion.div
-            ref={modalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-map-title"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="bg-paper-white rounded-cozy shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-6 h-6 text-moss-green" />
-                <h2 id="create-map-title" className="text-xl font-bold text-moss-green">Create Map</h2>
-              </div>
-              <button
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-stone-gray" />
-              </button>
-            </div>
-
+    <Modal open={isOpen} onClose={handleClose} title="Create Map" icon={MapPin} size="xl" closeDisabled={isSubmitting}>
             {/* Body */}
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               {/* Error */}
               {error && (
                 <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-700 text-sm">
@@ -809,27 +772,24 @@ export default function CreateMapModal({
 
             {/* Footer */}
             <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-sm border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={onClose}
-                className="btn-secondary"
+                variant="secondary"
                 disabled={isSubmitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create Map
-              </button>
+              </Button>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

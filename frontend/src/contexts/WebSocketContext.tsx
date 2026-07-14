@@ -11,6 +11,7 @@ import {
   useRef,
   ReactNode,
   useCallback,
+  useMemo,
 } from 'react';
 import { useParams } from 'react-router-dom';
 import socketClient from '@/services/socket';
@@ -311,8 +312,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return () => clearInterval(intervalId);
   }, [status]);
 
-  // Context value
-  const value: WebSocketContextState = {
+  // Context value — memoized so consumers only re-render on actual state
+  // changes, not on every provider render.
+  const value: WebSocketContextState = useMemo(() => ({
     status,
     error,
     reconnectCount,
@@ -320,7 +322,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     connect,
     disconnect,
     reconnect,
-  };
+  }), [status, error, reconnectCount, connect, disconnect, reconnect]);
 
   return (
     <WebSocketContext.Provider value={value}>

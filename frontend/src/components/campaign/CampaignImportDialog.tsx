@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import type { CampaignImportPreview, CampaignImportResult } from '@/types';
+import Button from '@/components/ui/Button';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -258,20 +259,20 @@ export default function CampaignImportDialog({
 
                 {/* Actions */}
                 <div className="flex items-center gap-3 pt-2">
-                  <button
+                  <Button
                     onClick={handleClose}
-                    className="btn-secondary flex-1"
+                    variant="secondary" className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleImport}
                     disabled={!campaignName.trim()}
-                    className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-4 h-4" />
                     Import Campaign
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -308,18 +309,18 @@ export default function CampaignImportDialog({
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
-                  <button onClick={handleClose} className="btn-secondary flex-1">
+                  <Button onClick={handleClose} variant="secondary" className="flex-1">
                     Close
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => {
-                      handleClose();
-                      navigate(`/campaign/${result.campaignId}`);
+                    handleClose();
+                    navigate(`/campaign/${result.campaignId}`);
                     }}
-                    className="btn-primary flex-1"
+                    className="flex-1"
                   >
                     Open Campaign
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -333,12 +334,12 @@ export default function CampaignImportDialog({
                   <p className="text-sm text-stone-gray">{errorMessage}</p>
                 </div>
                 <div className="flex items-center gap-3 pt-2">
-                  <button onClick={handleClose} className="btn-secondary flex-1">
+                  <Button onClick={handleClose} variant="secondary" className="flex-1">
                     Close
-                  </button>
-                  <button onClick={resetState} className="btn-primary flex-1">
+                  </Button>
+                  <Button onClick={resetState} className="flex-1">
                     Try Again
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

@@ -58,7 +58,7 @@ export default function GameSystemBadge({
     return (
       <span
         className={`inline-flex items-center rounded-full px-2.5 py-0.5 border
-                   bg-gray-100 text-gray-600 border-gray-300
+                   bg-surface text-ink-muted border-ink/20
                    ${size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-sm font-medium' : 'text-xs font-medium'}`}
       >
         Flexible

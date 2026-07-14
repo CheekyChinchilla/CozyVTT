@@ -8,6 +8,7 @@ import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGameStore, useTokenList } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import type {
   Token,
@@ -21,9 +22,31 @@ import type {
   VibeUpdatedBroadcast,
   Character,
 } from '@/types';
-import { TokenLayer, TokenType, TokenDisposition } from '@/types';
+import { TokenLayer, TokenType } from '@/types';
 import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
-import { computeVisibility, isPointVisible, type VisibilityPolygon } from '@/utils/raycasting';
+import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';
+import {
+  drawMapImage,
+  drawSpiritLayer,
+  drawGrid,
+  drawFog,
+  drawTokens,
+  drawDynamicLighting,
+  drawLightIcons,
+  drawWalls,
+  drawWallDrawOverlay,
+  drawSplitPreview,
+  drawEraseOverlay,
+  drawBrushOverlay,
+  drawPolygonOverlay,
+  drawRuler,
+  drawAoEOverlay,
+  drawFogBrushCursor,
+  type Viewport,
+} from './map/layers';
+import { createVisionCache, type VisionSource } from './map/vision';
+import { useTokenAnimation, useFogRevealAnimation } from './map/useMapAnimations';
+import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
@@ -35,6 +58,7 @@ import DmLightControls, { type LightToolMode, type LightPlacementDefaults } from
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
+import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
@@ -51,132 +75,6 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   return '#9370DB'; // wispy default = spirit-purple
 }
 
-/**
- * Calculate grid distance in feet between two positions.
- * flat: Chebyshev — every diagonal costs the same as a straight move (D&D 5e)
- * alternating: every second diagonal costs 10 ft instead of 5 ft (PF2e)
- */
-function calcGridDistance(
-  dx: number,
-  dy: number,
-  feetPerSquare: number,
-  diagonalRule: 'flat' | 'alternating'
-): number {
-  if (diagonalRule === 'alternating') {
-    const diag = Math.min(dx, dy);
-    const straight = Math.max(dx, dy) - diag;
-    const diagCost = diag * 5 + Math.floor(diag / 2) * 5;
-    return diagCost + straight * feetPerSquare;
-  }
-  return Math.max(dx, dy) * feetPerSquare;
-}
-
-function douglasPeucker(points: Array<{ x: number; y: number }>, epsilon: number): Array<{ x: number; y: number }> {
-  if (points.length <= 2) return points;
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
-  let maxDist = 0;
-  let maxIdx = 0;
-  const dx = last.x - first.x;
-  const dy = last.y - first.y;
-  const lenSq = dx * dx + dy * dy;
-  for (let i = 1; i < points.length - 1; i++) {
-    const p = points[i]!;
-    let d: number;
-    if (lenSq === 0) {
-      d = Math.hypot(p.x - first.x, p.y - first.y);
-    } else {
-      const t = Math.max(0, Math.min(1, ((p.x - first.x) * dx + (p.y - first.y) * dy) / lenSq));
-      d = Math.hypot(p.x - (first.x + t * dx), p.y - (first.y + t * dy));
-    }
-    if (d > maxDist) { maxDist = d; maxIdx = i; }
-  }
-  if (maxDist <= epsilon) return [first, last];
-  const left = douglasPeucker(points.slice(0, maxIdx + 1), epsilon);
-  const right = douglasPeucker(points.slice(maxIdx), epsilon);
-  return [...left.slice(0, -1), ...right];
-}
-
-/**
- * Refine DP-simplified points by snapping each toward the nearest strong edge
- * in the map image. Uses Sobel gradient magnitude in a local search window.
- * Only the interior points are refined; first and last are kept as-is to preserve
- * the overall trace start/end.
- */
-function edgeSnapPoints(
-  points: Array<{ x: number; y: number }>,
-  mapImage: HTMLImageElement,
-  searchRadius: number,
-): Array<{ x: number; y: number }> {
-  if (points.length < 2) return points;
-  const imgW = mapImage.naturalWidth;
-  const imgH = mapImage.naturalHeight;
-  if (imgW === 0 || imgH === 0) return points;
-
-  const r = Math.ceil(searchRadius);
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const pt of points) {
-    minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y);
-    maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y);
-  }
-  const roiX = Math.max(0, Math.floor(minX) - r - 1);
-  const roiY = Math.max(0, Math.floor(minY) - r - 1);
-  const roiW = Math.min(imgW, Math.ceil(maxX) + r + 2) - roiX;
-  const roiH = Math.min(imgH, Math.ceil(maxY) + r + 2) - roiY;
-  if (roiW <= 0 || roiH <= 0) return points;
-
-  const offscreen = document.createElement('canvas');
-  offscreen.width = roiW;
-  offscreen.height = roiH;
-  const octx = offscreen.getContext('2d', { willReadFrequently: true });
-  if (!octx) return points;
-  octx.drawImage(mapImage, roiX, roiY, roiW, roiH, 0, 0, roiW, roiH);
-  const imgData = octx.getImageData(0, 0, roiW, roiH).data;
-
-  const gray = (px: number, py: number) => {
-    const lx = px - roiX;
-    const ly = py - roiY;
-    if (lx < 0 || lx >= roiW || ly < 0 || ly >= roiH) return 128;
-    const i = (ly * roiW + lx) * 4;
-    return imgData[i]! * 0.299 + imgData[i + 1]! * 0.587 + imgData[i + 2]! * 0.114;
-  };
-
-  const result = [...points];
-  for (let pi = 0; pi < points.length; pi++) {
-    const pt = points[pi]!;
-    const cx = Math.round(pt.x);
-    const cy = Math.round(pt.y);
-    const x0 = Math.max(roiX + 1, cx - r);
-    const y0 = Math.max(roiY + 1, cy - r);
-    const x1 = Math.min(roiX + roiW - 2, cx + r);
-    const y1 = Math.min(roiY + roiH - 2, cy + r);
-    if (x1 <= x0 || y1 <= y0) continue;
-
-    let bestGrad = 0;
-    let bestX = cx;
-    let bestY = cy;
-    for (let py = y0; py <= y1; py++) {
-      for (let px = x0; px <= x1; px++) {
-        const dist = Math.hypot(px - cx, py - cy);
-        if (dist > r) continue;
-        const gx = gray(px + 1, py) - gray(px - 1, py);
-        const gy = gray(px, py + 1) - gray(px, py - 1);
-        const mag = Math.sqrt(gx * gx + gy * gy);
-        const score = mag * (1 - dist / (r + 1) * 0.3);
-        if (score > bestGrad) {
-          bestGrad = score;
-          bestX = px;
-          bestY = py;
-        }
-      }
-    }
-    if (bestGrad > 30) {
-      result[pi] = { x: bestX, y: bestY };
-    }
-  }
-  return result;
-}
-
 type AoEShape = 'sphere' | 'cylinder' | 'cone' | 'line' | 'cube';
 
 interface AoEConfig {
@@ -190,12 +88,25 @@ interface MapCanvasProps {
 }
 
 export default function MapCanvas({ onEditToken }: MapCanvasProps) {
-  const { currentMap, tokens, updateTokens, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect, characterHpCache } = useCampaign();
+  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect, characterHpCache } = useCampaign();
+  // Live token state comes from the game store, not the campaign context —
+  // socket handlers write there directly (outside React), and this
+  // subscription is what re-renders the canvas per token change.
+  const tokens = useTokenList();
   const { socket } = useWebSocket();
   const { user } = useAuth();
   const isDM = userRole === 'DM';
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Three stacked canvases. `canvasRef` is the TOP canvas — it
+  // receives all pointer input and holds the overlay draw layer; terrain and
+  // tokens sit beneath it. All three are the same size and share one world
+  // transform, so their composite is pixel-identical to the old single canvas.
+  const canvasRef = useRef<HTMLCanvasElement>(null);        // overlay layer + input
+  const terrainCanvasRef = useRef<HTMLCanvasElement>(null); // map image, grid, fog, spirit
+  const tokenCanvasRef = useRef<HTMLCanvasElement>(null);   // tokens + drag ghost
   const containerRef = useRef<HTMLDivElement>(null);
+  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; CSS-transformed during pan
+  // One vision-polygon cache for this map instance.
+  const visionCacheRef = useRef(createVisionCache());
   // Lazily-created AudioContext for spirit layer transition sound
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -258,6 +169,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [aoeConfig, setAoEConfig] = useState<AoEConfig>({ shape: 'sphere', sizeFt: 20 });
   const [aoeOrigin, setAoEOrigin] = useState<{ x: number; y: number } | null>(null);
 
+  // Latest-ref to the per-layer draw dispatcher — assigned right after the
+  // draw callbacks are defined below. The render loop and the animation hooks
+  // call the newest closure through it.
+  const drawLayerRef = useRef<(layer: MapLayer) => void>(() => {});
+  const { markDirty } = useRenderLoop(drawLayerRef);
+
   // Walls & Fog of War state — wall segments use undo/redo history hook
   const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
   const [fogState, setFogState] = useState<FogState | null>(null);
@@ -265,8 +182,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  const revealOpacityRef = useRef<Map<number, number>>(new Map());
-  // Cache invalidation flag for wall layer (unused in Phase 1; used in Phase 3 perf optimization)
+  const revealOpacityRef = useFogRevealAnimation(() => markDirty('terrain'), fogState, revealedCells);
+  // Cache invalidation flag for the wall layer.
   const wallCacheValidRef = useRef(false);
 
   // Wall tool state (DM only)
@@ -325,9 +242,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const fogPendingCellsRef = useRef<Set<number>>(new Set());
   const fogFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Always-current tokens ref — used by socket handlers that have stale deps
-  const tokensRef = useRef<Token[]>(tokens);
-  useEffect(() => { tokensRef.current = tokens; }, [tokens]);
+  // Token socket handlers read/write live token state synchronously via
+  // useGameStore.getState() — no stale-closure ref bookkeeping needed.
 
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
@@ -352,15 +268,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Track which map we've already auto-fitted, to avoid re-fitting on window resize
   const lastFittedMapIdRef = useRef<string | null>(null);
 
-  // Animation state for smooth token movement
-  const [animatingTokens, setAnimatingTokens] = useState<Map<string, {
-    fromX: number;
-    fromY: number;
-    toX: number;
-    toY: number;
-    startTime: number;
-    duration: number;
-  }>>(new Map());
+  // Animation state for smooth token movement (rAF tween loop in the hook).
+  // A tween moves tokens → repaint the tokens layer, plus the overlay when
+  // dynamic lighting is on (the viewer's vision follows the moving token).
+  const { animatingTokens, setAnimatingTokens } = useTokenAnimation(() => {
+    markDirty('tokens');
+    if (currentMap?.lightingEnabled) markDirty('overlay');
+  });
 
   // Map controls (only initialize if we have a map)
   const mapControls = useMapControls({
@@ -671,7 +585,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, []);
 
   /**
-   * Handle window resize
+   * Handle container/window resize.
+   * The container also changes size WITHOUT a window resize when the
+   * session layout panels are dragged or collapsed, so observe the
+   * element directly; the window listener stays as a fallback.
    */
   useEffect(() => {
     updateCanvasSize();
@@ -681,7 +598,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    const container = containerRef.current;
+    const observer = new ResizeObserver(handleResize);
+    if (container) observer.observe(container);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
   }, [updateCanvasSize]);
 
   // ============================================
@@ -760,7 +685,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
-  }, [imageLoaded, currentMap?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imageLoaded, currentMap?.id]);  
   // ^ Intentionally not including canvasSize/mapControls — we only want to fire once
   //   per map load, not on every resize. Users can use the Reset View button to re-fit.
 
@@ -825,11 +750,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (!socket) return;
 
     const handleTokenMoved = (event: TokenMovedEvent) => {
-      // Use tokensRef (not the stale tokens closure) so rapid events that arrive before
-      // React re-renders all see the most recently mutated list, not the version from
-      // the last render cycle.
-      const curr = tokensRef.current;
-      const token = curr.find((t) => t.id === event.tokenId);
+      // Read from the store (not a render closure) so rapid events that arrive
+      // in the same macro-task all see the most recently mutated state.
+      const store = useGameStore.getState();
+      const token = store.tokens[event.tokenId];
       if (!token) return;
 
       // Start animation from current position to new position
@@ -846,13 +770,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         return newMap;
       });
 
-      // Update token position — sync ref immediately so subsequent handlers in the
-      // same macro-task (e.g. token:appeared for NPCs) see the correct list.
-      const next = curr.map((t) =>
-        t.id === event.tokenId ? { ...t, position: { x: event.x, y: event.y } } : t
-      );
-      tokensRef.current = next;
-      updateTokens(next);
+      // Store writes are synchronous — subsequent handlers in the same
+      // macro-task (e.g. token:appeared for NPCs) see the correct state.
+      store.applyTokenMove(event.tokenId, { x: event.x, y: event.y });
     };
 
     // Listen for token moved events
@@ -867,7 +787,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         socketInstance.off('token.moved', handleTokenMoved);
       }
     };
-  }, [socket, updateTokens]); // tokensRef is stable — no need for tokens in deps
+  }, [socket]); // handler reads/writes via the store, no reactive deps needed
 
   // ============================================
   // Map Change
@@ -883,7 +803,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     prevPlayerSpiritVisibleRef.current = playerSpiritVisible;
     const t = setTimeout(() => setIsFading(false), 300);
     return () => clearTimeout(t);
-  }, [currentMap?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentMap?.id]);  
 
   // Listen for map.changed events broadcast by the DM
   useEffect(() => {
@@ -893,7 +813,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
       setCurrentMap(mapData);
-      updateTokens(mapData.tokens || []);
+      useGameStore.getState().setTokens(mapData.tokens || []);
 
       // For non-DMs: track whether this player is personally in the spirit realm.
       // Play the ethereal audio cue if they are crossing in or out.
@@ -915,7 +835,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socketInstance.off('map.changed', handleMapChanged);
     };
-  }, [socket, setCurrentMap, updateTokens]);
+  }, [socket, setCurrentMap]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -938,12 +858,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const handleSpiritTokenToggled = (data: SpiritLayerTokenToggledBroadcast) => {
-      // Update the token's visible flag in the local token list
-      updateTokens(
-        tokens.map((t) =>
-          t.id === data.tokenId ? { ...t, visible: data.visible } : t
-        )
-      );
+      // Update the token's visible flag in the live token store
+      useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
     };
 
     const handleSpiritStyleChanged = (data: { style: string }) => {
@@ -960,7 +876,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('spirit_layer.token.toggled', handleSpiritTokenToggled);
       socketInstance.off('spirit_layer.style_changed', handleSpiritStyleChanged);
     };
-  }, [socket, tokens, updateTokens, updateCampaignSpiritLayer, campaign?.spiritLayerEnabled, playEtherealTransition]);
+  }, [socket, updateCampaignSpiritLayer, campaign?.spiritLayerEnabled, playEtherealTransition]);
 
   // ============================================
   // Vibe Tracker WebSocket Listener
@@ -1008,7 +924,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     wallCacheValidRef.current = false;
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
-  }, [currentMap?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentMap?.id]);  
 
   // ============================================
   // Wall & Fog WebSocket Listeners
@@ -1082,27 +998,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       // Could show a transient indicator — handled by toolbar; canvas ignores for now
     };
 
-    // Dynamic lighting: token entered this player's view (or moved while visible).
-    // Sync tokensRef immediately so if token:appeared fires for multiple tokens in the
-    // same macro-task (server re-sync after player move), each call builds on the
-    // previous result rather than all reading the same pre-render snapshot.
+    // Dynamic lighting: token entered this player's view (or moved while
+    // visible). Store writes are synchronous, so if token:appeared fires for
+    // multiple tokens in the same macro-task (server re-sync after player
+    // move), each call builds on the previous result.
     const handleTokenAppeared = (data: { token: Token; mapId: string }) => {
       if (!currentMap || data.mapId !== currentMap.id) return;
-      const curr = tokensRef.current;
-      const exists = curr.find((t) => t.id === data.token.id);
-      const next = exists
-        ? curr.map((t) => t.id === data.token.id ? { ...t, position: data.token.position } : t)
-        : [...curr, data.token];
-      tokensRef.current = next;
-      updateTokens(next);
+      useGameStore.getState().revealToken(data.token);
     };
 
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
       if (!currentMap || data.mapId !== currentMap.id) return;
-      const next = tokensRef.current.filter((t) => t.id !== data.tokenId);
-      tokensRef.current = next;
-      updateTokens(next);
+      useGameStore.getState().removeToken(data.tokenId);
     };
 
     // Dynamic lighting toggle broadcast from DM
@@ -1165,7 +1073,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, currentMap?.id]);  
 
   // ============================================
   // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
@@ -1227,7 +1135,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [wallMode, wallInProgress, polygonPoints, isDM, currentMap, undoWalls, redoWalls, socket]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wallMode, wallInProgress, polygonPoints, isDM, currentMap, undoWalls, redoWalls, socket]);  
 
   // ============================================
   // Close Polygon — commits all polygon edges as one wall history entry
@@ -1296,19 +1204,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
 
   /**
-   * Render the canvas
+   * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
+   * spirit imagery. Static during a token drag. The three layers stack
+   * terrain → tokens → overlay, which reproduces the old single-canvas draw
+   * order exactly (fog under spirit/tokens, darkness over tokens, overlays
+   * on top) — do not change the split without a screenshot comparison.
    */
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const drawTerrain = useCallback(() => {
+    const canvas = terrainCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas — leave it transparent so the themed container background
-    // (bg-parchment, which tracks --color-bg-surface) shows through wherever
-    // the map image and its overlays aren't drawn. Painting a hardcoded fill
-    // here would clobber the theme on every frame.
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // If no map, show empty state
@@ -1321,1347 +1227,315 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
-    // Save context state
     ctx.save();
-
-    // Apply pan offset
     ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-
-    // Apply zoom
     ctx.scale(mapControls.zoom, mapControls.zoom);
 
-    // Calculate map dimensions in pixels
-    const mapWidthPx = currentMap.width * currentMap.gridSize;
-    const mapHeightPx = currentMap.height * currentMap.gridSize;
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
 
-    // Draw map image (Material Plane)
-    // Skip when DM is in single-plane mode and the spirit realm is currently active —
-    // in that case only the spirit layer image will be drawn below.
-    // isInSpiritRealm is true if the campaign-wide toggle is on OR this specific
-    // non-DM player has personally crossed into the spirit realm.
+    const renderIsDM = userRole === 'DM';
+    // isInSpiritRealm is true if the campaign-wide toggle is on OR this
+    // specific non-DM player has personally crossed into the spirit realm.
     const spiritActive = campaign?.spiritLayerEnabled ?? false;
     const isInSpiritRealm = spiritActive || (userRole !== 'DM' && playerSpiritVisible);
-    const dmSinglePlaneSpirit = userRole === 'DM' && !dmViewBothPlanes && spiritActive;
-    if (!dmSinglePlaneSpirit) {
-      ctx.drawImage(mapImage, 0, 0, mapWidthPx, mapHeightPx);
-    }
 
-    // Draw grid overlay if enabled
+    // 1. Map image (Material Plane)
+    drawMapImage(ctx, {
+      mapImage,
+      spiritActive,
+      isDM: renderIsDM,
+      dmViewBothPlanes,
+    }, viewport);
+
+    // 2. Grid overlay
     if (showGrid) {
-      // Use selected grid color (black or white)
-      ctx.strokeStyle = gridColor === 'black' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 2 / mapControls.zoom; // Thicker lines, constant width regardless of zoom
-
-      // Vertical lines
-      for (let x = 0; x <= currentMap.width; x++) {
-        const xPos = x * currentMap.gridSize;
-        ctx.beginPath();
-        ctx.moveTo(xPos, 0);
-        ctx.lineTo(xPos, mapHeightPx);
-        ctx.stroke();
-      }
-
-      // Horizontal lines
-      for (let y = 0; y <= currentMap.height; y++) {
-        const yPos = y * currentMap.gridSize;
-        ctx.beginPath();
-        ctx.moveTo(0, yPos);
-        ctx.lineTo(mapWidthPx, yPos);
-        ctx.stroke();
-      }
+      drawGrid(ctx, { gridColor }, viewport);
     }
 
-    // ============================================
-    // Draw Fog of War (Phase 1)
-    // Rendered before spirit layer and tokens so they appear above fog.
-    // DM sees semi-transparent fog; players see fully opaque fog on hidden cells.
-    // ============================================
-    const renderIsDM = userRole === 'DM'; // use userRole directly to avoid block-scope shadow issues
+    // 3. Manual fog of war (rendered before spirit layer and tokens so they
+    //    appear above fog)
+    drawFog(ctx, {
+      isDM: renderIsDM,
+      fogState,
+      revealedCells,
+      revealOpacity: revealOpacityRef.current,
+    }, viewport);
 
-    // Draw fog for DM (using full fogState)
-    if (renderIsDM && fogState) {
-      const { fogCols, fogRows, cellPx, revealed } = fogState;
-      ctx.save();
-      ctx.fillStyle = 'rgba(15, 12, 25, 0.55)'; // deep dark purple, semi-transparent for DM
-      for (let row = 0; row < fogRows; row++) {
-        for (let col = 0; col < fogCols; col++) {
-          const idx = row * fogCols + col;
-          if (!revealed[idx]) {
-            const fadeOpacity = revealOpacityRef.current.get(idx);
-            if (fadeOpacity !== undefined) {
-              ctx.fillStyle = `rgba(15, 12, 25, ${0.55 * fadeOpacity})`;
-              ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-              ctx.fillStyle = 'rgba(15, 12, 25, 0.55)';
-            } else {
-              ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-            }
-          }
-        }
-      }
-      ctx.restore();
-    }
-
-    // Draw fog for players (using revealedCells index set)
-    // Fog cells are one-per-grid-square so they align with the visible grid.
-    // When revealedCells is null, fog data hasn't been received yet — skip fog rendering.
-    if (!renderIsDM && revealedCells) {
-      const cellPx = currentMap.gridSize;
-      const fogCols = currentMap.width;
-      const fogRows = currentMap.height;
-      ctx.save();
-      for (let row = 0; row < fogRows; row++) {
-        for (let col = 0; col < fogCols; col++) {
-          const idx = row * fogCols + col;
-          if (!revealedCells.has(idx)) {
-            const fadeOpacity = revealOpacityRef.current.get(idx);
-            ctx.fillStyle = fadeOpacity !== undefined
-              ? `rgba(15, 12, 25, ${0.95 * fadeOpacity})`
-              : 'rgba(15, 12, 25, 0.95)';
-            ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-          }
-        }
-      }
-      ctx.restore();
-    }
-
-    // ============================================
-    // Draw Spirit Layer image (the Ethereal Plane)
-    //
-    // Rendering model:
-    //   Base map always shown first (the Material Plane).
-    //   Spirit layer image overlaid on top:
-    //     - DM (spirit hidden from players): ghostly overlay at low alpha
-    //       so DM can see the spirit realm but it's clearly non-active
-    //     - DM (spirit visible to players): spirit realm at medium-high
-    //       alpha — DM sees both planes simultaneously
-    //     - Players (spiritLayerEnabled = true): near-full alpha —
-    //       the spirit realm is their primary reality; the material
-    //       world shows through as a ghostly echo beneath
-    // ============================================
+    // 4. Spirit layer image (the Ethereal Plane)
     if (spiritLayerImage) {
-      const isDM = userRole === 'DM';
-      // spiritActive already computed above for the base map skip
-
-      let alpha = 0;
-      if (isDM && !dmViewBothPlanes) {
-        // Single-plane mode: DM sees only the active plane at full fidelity
-        // When spirit is active the base map was skipped, so draw spirit at full opacity
-        alpha = spiritActive ? 1.0 : 0;
-      } else if (isDM && !spiritActive) {
-        // Dual-plane mode, spirit realm hidden from players:
-        // Show as a ghostly hint so DM can still manage spirit tokens
-        alpha = 0.32;
-      } else if (isDM && spiritActive) {
-        // Dual-plane mode, spirit realm active:
-        // Medium-high so DM sees both planes simultaneously
-        alpha = 0.72;
-      } else if (!isDM && isInSpiritRealm) {
-        // Player in spirit realm (global toggle OR personal token crossing) —
-        // this is their primary visual reality; near-full alpha so spirit dominates
-        alpha = 0.88;
-      }
-
-      if (alpha > 0) {
-        ctx.save();
-        ctx.globalAlpha = alpha * spiritLayerOpacity;
-        ctx.drawImage(spiritLayerImage, 0, 0, mapWidthPx, mapHeightPx);
-        ctx.restore();
-      }
+      drawSpiritLayer(ctx, {
+        spiritLayerImage,
+        spiritLayerOpacity,
+        spiritActive,
+        isInSpiritRealm,
+        isDM: renderIsDM,
+        dmViewBothPlanes,
+      }, viewport);
     }
 
-    // Draw tokens
-    const isDM = userRole === 'DM';
-    const spiritAccentColor = getSpiritAccentColor(campaign?.spiritLayerStyle);
+    ctx.restore();
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
 
-    for (const token of tokens) {
-      // Non-DM clients: skip hidden tokens (server already filters, this is a safeguard)
-      if (!token.visible && !isDM) continue;
+  /**
+   * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
+   * The hot path — repaints each frame of a token drag. No raycasting here.
+   */
+  const drawTokensLayer = useCallback(() => {
+    const canvas = tokenCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
 
-      // Non-DM clients: skip tokens whose center is in a fogged (unrevealed) cell.
-      // This prevents players from seeing NPC tokens through the fog overlay.
-      // Exception: players always see their OWN tokens (you know where you are).
-      // revealedCells === null means fog data hasn't been received yet — show everything.
-      if (!isDM && revealedCells) {
-        const isMyToken = token.controlledBy === user?.id ||
-          (token.characterId && campaign?.characters?.find((c) => c.id === token.characterId && c.userId === user?.id));
-        if (!isMyToken) {
-          const fogCols = currentMap.width;
-          // Token grid Y is bottom-left origin; fog grid is top-left origin
-          const fogRow = currentMap.height - 1 - Math.floor(token.position.y + (token.size.height - 1) / 2);
-          const fogCol = Math.floor(token.position.x + (token.size.width - 1) / 2);
-          const fogIdx = fogRow * fogCols + fogCol;
-          if (!revealedCells.has(fogIdx)) continue;
-        }
-      }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!currentMap || !imageLoaded || !mapImage) return;
 
-      // DM: skip spirit tokens if the DM has hidden them from view
-      if (isDM && !dmShowSpiritTokens && token.layer === TokenLayer.SPIRIT) continue;
+    ctx.save();
+    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
+    ctx.scale(mapControls.zoom, mapControls.zoom);
 
-      const tokenImg = tokenImages.get(token.id);
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
 
-      // Skip dragged token (will be drawn separately as ghost)
-      if (draggedToken?.id === token.id) continue;
+    const renderIsDM = userRole === 'DM';
+    // Ownership predicate — fog exemption
+    const isOwnToken = (t: Token): boolean =>
+      t.controlledBy === user?.id ||
+      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id));
 
-      // Check if token is animating
-      const animation = animatingTokens.get(token.id);
-      let posX = token.position.x;
-      let posY = token.position.y;
+    // 5. Tokens (+ drag ghost)
+    drawTokens(ctx, {
+      tokens,
+      tokenImages,
+      animatingTokens,
+      now: Date.now(),
+      draggedToken,
+      dragOffset,
+      hoverCoords,
+      hoverTokenId: hoverToken?.id ?? null,
+      revealedCells,
+      isDM: renderIsDM,
+      dmShowSpiritTokens,
+      dmViewBothPlanes,
+      spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
+      characterHpCache,
+      isOwnToken,
+    }, viewport);
 
-      if (animation) {
-        const elapsed = Date.now() - animation.startTime;
-        const progress = Math.min(elapsed / animation.duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        posX = animation.fromX + (animation.toX - animation.fromX) * eased;
-        posY = animation.fromY + (animation.toY - animation.fromY) * eased;
-      }
+    ctx.restore();
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, revealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache]);
 
-      // Convert grid coordinates to world coordinates.
-      // position is the bottom-left grid cell; the token extends upward in grid-Y,
-      // so its top-left pixel corresponds to grid row (posY + height - 1).
-      const tokenX = posX * currentMap.gridSize;
-      const tokenY = (currentMap.height - posY - token.size.height) * currentMap.gridSize;
+  /**
+   * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
+   * icons, walls, DM tool previews, ruler/AoE, fog brush cursor. This is also
+   * the pointer-input surface. Memoized vision raycasting lives here.
+   */
+  const drawOverlay = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
 
-      const tokenWidth = token.size.width * currentMap.gridSize;
-      const tokenHeight = token.size.height * currentMap.gridSize;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!currentMap || !imageLoaded || !mapImage) return;
 
-      // Token display mode (default: pog)
-      const displayMode = token.displayMode || 'pog';
-      const centerX = tokenX + tokenWidth / 2;
-      const centerY = tokenY + tokenHeight / 2;
-      const radius = Math.min(tokenWidth, tokenHeight) / 2;
+    ctx.save();
+    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
+    ctx.scale(mapControls.zoom, mapControls.zoom);
 
-      // Hidden tokens shown to DM at 50% opacity
-      const isHiddenFromPlayers = !token.visible;
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
 
-      ctx.save();
-      if (isHiddenFromPlayers && isDM) {
-        ctx.globalAlpha = 0.5;
-      }
-      // Spirit tokens seen by DM get a reduced alpha so they don't overwhelm material tokens
-      if (isDM && token.layer === TokenLayer.SPIRIT) {
-        ctx.globalAlpha = dmViewBothPlanes ? 0.80 : 1.0;
-      }
+    const renderIsDM = userRole === 'DM';
+    // Ownership predicate — lighting vision sources
+    const isOwnToken = (t: Token): boolean =>
+      t.controlledBy === user?.id ||
+      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id));
 
-      if (tokenImg) {
-        // === DRAW TOKEN IMAGE ===
-        if (displayMode === 'full-art') {
-          // Full-art: rectangular, no clipping — shows full image with alpha transparency
-          const cornerRadius = Math.max(3, 3 / mapControls.zoom);
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(tokenX, tokenY, tokenWidth, tokenHeight, cornerRadius);
-          } else {
-            ctx.rect(tokenX, tokenY, tokenWidth, tokenHeight);
-          }
-          ctx.clip();
-          ctx.drawImage(tokenImg, tokenX, tokenY, tokenWidth, tokenHeight);
-        } else {
-          // Pog and Top-down: circular clip
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(tokenImg, tokenX, tokenY, tokenWidth, tokenHeight);
-        }
-      } else {
-        // === PLACEHOLDER ICON (colored-letter circle) ===
-        const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-        const placeholderBg =
-          effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
-          token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-          token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-          token.disposition === TokenDisposition.NEUTRAL  ? '#fbbf24' :
-                                                            '#78716c'; // object / default stone
-
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.fillStyle = placeholderBg;
-        ctx.fill();
-
-        // Draw initial letter
-        const initial = (token.name || '?').charAt(0).toUpperCase();
-        const fontSize = Math.max(12, radius * 1.0);
-        ctx.font = `bold ${fontSize}px 'Inter', system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(initial, centerX, centerY + fontSize * 0.04);
-      }
-      ctx.restore();
-
-      // Draw spirit-layer ring for DM (dashed accent-colored outline)
-      if (isDM && token.layer === TokenLayer.SPIRIT) {
-        ctx.strokeStyle = spiritAccentColor;
-        ctx.lineWidth = 3 / mapControls.zoom;
-        ctx.setLineDash([5 / mapControls.zoom, 3 / mapControls.zoom]);
-        ctx.beginPath();
-        if (displayMode === 'full-art') {
-          const cornerRadius = Math.max(3, 3 / mapControls.zoom);
-          if (ctx.roundRect) {
-            ctx.roundRect(tokenX - 3 / mapControls.zoom, tokenY - 3 / mapControls.zoom, tokenWidth + 6 / mapControls.zoom, tokenHeight + 6 / mapControls.zoom, cornerRadius);
-          } else {
-            ctx.rect(tokenX - 3 / mapControls.zoom, tokenY - 3 / mapControls.zoom, tokenWidth + 6 / mapControls.zoom, tokenHeight + 6 / mapControls.zoom);
-          }
-        } else {
-          ctx.arc(centerX, centerY, radius + 3 / mapControls.zoom, 0, Math.PI * 2);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // Disposition ring (NPC tokens) — pog mode gets a solid ring, top-down gets a subtle ring, full-art gets a bottom border stripe
-      const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-      if (effectiveType === TokenType.NPC && token.disposition) {
-        const ringColor =
-          token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-          token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-                                                            '#fbbf24'; // neutral = amber
-        if (displayMode === 'full-art') {
-          // Bottom border stripe for full-art tokens
-          const stripeH = Math.max(3, 3 / mapControls.zoom);
-          ctx.fillStyle = ringColor;
-          ctx.fillRect(tokenX, tokenY + tokenHeight - stripeH, tokenWidth, stripeH);
-        } else if (displayMode === 'pog') {
-          // Thick solid ring for pog
-          const ringWidth = Math.max(3, 3 / mapControls.zoom);
-          ctx.strokeStyle = ringColor;
-          ctx.lineWidth = ringWidth;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius + ringWidth / 2, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          // Top-down: subtle thin ring
-          const ringWidth = Math.max(1.5, 1.5 / mapControls.zoom);
-          ctx.strokeStyle = ringColor;
-          ctx.lineWidth = ringWidth;
-          ctx.globalAlpha = 0.6;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius + ringWidth / 2, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.globalAlpha = 1.0;
-        }
-      }
-
-      // HP bar — NPC tokens use token.hp (DM-controlled visibility);
-      // player tokens always show HP sourced from the character HP cache.
-      const playerHp = token.characterId ? (characterHpCache[token.characterId] ?? null) : null;
-      const hpSource = playerHp ?? (token.hp && token.hp.max > 0 && (isDM || token.showHpBar) ? token.hp : null);
-      if (hpSource) {
-        const pct = Math.max(0, Math.min(1, hpSource.current / hpSource.max));
-        const barW = displayMode === 'full-art' ? tokenWidth : radius * 2;
-        const barH = Math.max(4, Math.round(5 / mapControls.zoom));
-        const barX = displayMode === 'full-art' ? tokenX : centerX - radius;
-        const barY = (displayMode === 'full-art' ? tokenY + tokenHeight : centerY + radius) + Math.round(3 / mapControls.zoom);
-
-        // Background track
-        ctx.fillStyle = 'rgba(15, 15, 15, 0.8)';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(barX, barY, barW, barH, 2 / mapControls.zoom);
-        } else {
-          ctx.rect(barX, barY, barW, barH);
-        }
-        ctx.fill();
-
-        // HP fill
-        const hpColor = pct >= 0.75 ? '#22c55e'
-                      : pct >= 0.50 ? '#84cc16'
-                      : pct >= 0.25 ? '#f59e0b'
-                      :               '#ef4444';
-        if (pct > 0) {
-          ctx.fillStyle = hpColor;
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(barX, barY, Math.max(2 / mapControls.zoom, barW * pct), barH, 2 / mapControls.zoom);
-          } else {
-            ctx.rect(barX, barY, Math.max(2 / mapControls.zoom, barW * pct), barH);
-          }
-          ctx.fill();
-        }
-
-        // Temp HP overlay (light blue)
-        if (hpSource.temp > 0) {
-          const tempPct = Math.min(1, hpSource.temp / hpSource.max);
-          ctx.fillStyle = 'rgba(147, 197, 253, 0.75)';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(barX + barW * (1 - tempPct), barY, barW * tempPct, barH, 2 / mapControls.zoom);
-          } else {
-            ctx.rect(barX + barW * (1 - tempPct), barY, barW * tempPct, barH);
-          }
-          ctx.fill();
-        }
-      }
-
-      // Hidden token indicator (DM-only small red dot)
-      if (isHiddenFromPlayers && isDM) {
-        const dotRadius = Math.max(4, 4 / mapControls.zoom);
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-        ctx.beginPath();
-        if (displayMode === 'full-art') {
-          ctx.arc(tokenX + tokenWidth - dotRadius * 2, tokenY + dotRadius * 2, dotRadius, 0, Math.PI * 2);
-        } else {
-          ctx.arc(centerX + radius * 0.6, centerY - radius * 0.6, dotRadius, 0, Math.PI * 2);
-        }
-        ctx.fill();
-      }
-
-      // Draw hover border
-      if (hoverToken?.id === token.id) {
-        ctx.strokeStyle = '#4a90e2';
-        ctx.lineWidth = 3 / mapControls.zoom;
-        ctx.beginPath();
-        if (displayMode === 'full-art') {
-          const cornerRadius = Math.max(3, 3 / mapControls.zoom);
-          if (ctx.roundRect) {
-            ctx.roundRect(tokenX - 2 / mapControls.zoom, tokenY - 2 / mapControls.zoom, tokenWidth + 4 / mapControls.zoom, tokenHeight + 4 / mapControls.zoom, cornerRadius);
-          } else {
-            ctx.rect(tokenX - 2 / mapControls.zoom, tokenY - 2 / mapControls.zoom, tokenWidth + 4 / mapControls.zoom, tokenHeight + 4 / mapControls.zoom);
-          }
-        } else {
-          ctx.arc(centerX, centerY, radius + 2 / mapControls.zoom, 0, Math.PI * 2);
-        }
-        ctx.stroke();
-      }
-
-      // Condition indicator badges — small colored dots along the top of the token
-      if (token.conditions && token.conditions.length > 0) {
-        const condCount = token.conditions.length;
-        const badgeR = Math.max(5, 5 / mapControls.zoom);
-        const gap = badgeR * 2.4;
-        const totalW = condCount * gap - (gap - badgeR * 2);
-        const startX = centerX - totalW / 2 + badgeR;
-        const badgeY = displayMode === 'full-art'
-          ? tokenY - badgeR - 2 / mapControls.zoom
-          : centerY - radius - badgeR - 2 / mapControls.zoom;
-
-        for (let ci = 0; ci < condCount; ci++) {
-          const bx = startX + ci * gap;
-          // Condition badge: amber circle with white first letter
-          ctx.beginPath();
-          ctx.arc(bx, badgeY, badgeR, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-          ctx.lineWidth = 0.5 / mapControls.zoom;
-          ctx.stroke();
-
-          // First letter
-          const condLetter = token.conditions[ci].charAt(0).toUpperCase();
-          const condFontSize = Math.max(7, badgeR * 1.2);
-          ctx.font = `bold ${condFontSize}px 'Inter', system-ui, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(condLetter, bx, badgeY + condFontSize * 0.03);
-        }
-      }
-    }
-
-    // Draw dragged token as ghost
-    if (draggedToken && dragOffset && hoverCoords) {
-      const tokenImg = tokenImages.get(draggedToken.id);
-      // Ghost position = cursor cell minus the pickup offset, so whichever cell of
-      // the token was clicked stays anchored under the cursor during drag.
-      const maxPosX = currentMap.width - draggedToken.size.width;
-      const maxPosY = currentMap.height - draggedToken.size.height;
-      const ghostPosX = Math.max(0, Math.min(maxPosX, hoverCoords.x - dragOffset.x));
-      const ghostPosY = Math.max(0, Math.min(maxPosY, hoverCoords.y - dragOffset.y));
-      const ghostX = ghostPosX * currentMap.gridSize;
-      const ghostY = (currentMap.height - ghostPosY - draggedToken.size.height) * currentMap.gridSize;
-
-      const ghostW = draggedToken.size.width * currentMap.gridSize;
-      const ghostH = draggedToken.size.height * currentMap.gridSize;
-      const ghostCX = ghostX + ghostW / 2;
-      const ghostCY = ghostY + ghostH / 2;
-      const ghostR = Math.min(ghostW, ghostH) / 2;
-      const ghostDisplayMode = draggedToken.displayMode || 'pog';
-
-      ctx.save();
-      ctx.globalAlpha = 0.6;
-
-      if (tokenImg) {
-        if (ghostDisplayMode === 'full-art') {
-          const cr = Math.max(3, 3 / mapControls.zoom);
-          ctx.beginPath();
-          if (ctx.roundRect) { ctx.roundRect(ghostX, ghostY, ghostW, ghostH, cr); } else { ctx.rect(ghostX, ghostY, ghostW, ghostH); }
-          ctx.clip();
-          ctx.drawImage(tokenImg, ghostX, ghostY, ghostW, ghostH);
-        } else {
-          ctx.beginPath();
-          ctx.arc(ghostCX, ghostCY, ghostR, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(tokenImg, ghostX, ghostY, ghostW, ghostH);
-        }
-      } else {
-        // Ghost placeholder
-        const effectiveTypeForColor = draggedToken.type ?? (draggedToken.characterId ? TokenType.PLAYER : TokenType.NPC);
-        const placeholderBg =
-          effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
-          draggedToken.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-          draggedToken.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-          draggedToken.disposition === TokenDisposition.NEUTRAL  ? '#fbbf24' : '#78716c';
-        ctx.beginPath();
-        ctx.arc(ghostCX, ghostCY, ghostR, 0, Math.PI * 2);
-        ctx.fillStyle = placeholderBg;
-        ctx.fill();
-        const initial = (draggedToken.name || '?').charAt(0).toUpperCase();
-        const fontSize = Math.max(12, ghostR * 1.0);
-        ctx.font = `bold ${fontSize}px 'Inter', system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(initial, ghostCX, ghostCY + fontSize * 0.04);
-      }
-
-      ctx.restore();
-    }
-
-
-    // Pre-compute player visibility polygons — shared by the fog overlay (below) and door
-    // filtering (in the wall segment block). Avoids computing each polygon twice per frame.
-    // Each entry stores the token center so door checks can nudge the test point toward
-    // the viewer: closed doors lie ON the polygon boundary, making a raw midpoint test
-    // unreliable — shifting 2px inward places it safely inside the visible area.
+    // 6. Dynamic lighting — raycast visibility darkness over tokens.
+    //    DM always sees all; "Preview player view" simulates player vision.
+    //    The vision polygons also feed the walls layer's door LOS filter.
     const lightingEnabled = currentMap.lightingEnabled ?? false;
-    const playerVisPolygons: Array<{ poly: VisibilityPolygon; cx: number; cy: number }> = [];
-
-    // ============================================
-    // Dynamic Lighting (Phase 3) — raycasting visibility polygon
-    // Replaces the manual fog layer when currentMap.lightingEnabled = true.
-    // DM always sees all; "Preview player view" simulates player vision for DM.
-    // ============================================
+    let visPolygons: VisionSource[] = [];
     if (lightingEnabled) {
-      // Determine whether to render as player: actual player, or DM in preview mode
       const renderAsPlayer = !renderIsDM || dmPreviewPlayerView;
       if (renderAsPlayer) {
-        // Collect tokens this viewer controls
         const myTokens = tokens.filter((t) => {
           if (renderIsDM && dmPreviewPlayerView) return true; // DM preview: use all tokens
-          return t.controlledBy === user?.id || (t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id));
+          return isOwnToken(t);
         });
-
-        const mapWidthPxLighting = currentMap.width * currentMap.gridSize;
-        const mapHeightPxLighting = currentMap.height * currentMap.gridSize;
-
         const enabledLights = lightSources.filter((l) => l.enabled);
-        if (myTokens.length === 0 && enabledLights.length === 0) {
-          // No tokens and no lights → full darkness
-          ctx.save();
-          ctx.fillStyle = 'rgba(15, 12, 25, 1)';
-          ctx.fillRect(0, 0, mapWidthPxLighting, mapHeightPxLighting);
-          ctx.restore();
-        } else {
-          // Reuse or recreate the offscreen canvas only when map dimensions change.
-          // Allocating a new canvas every frame (~5 MB for a 20×20 map) causes GC jank.
-          if (
-            !lightingOffscreenRef.current ||
-            lightingOffscreenRef.current.width !== mapWidthPxLighting ||
-            lightingOffscreenRef.current.height !== mapHeightPxLighting
-          ) {
-            lightingOffscreenRef.current = document.createElement('canvas');
-            lightingOffscreenRef.current.width = mapWidthPxLighting;
-            lightingOffscreenRef.current.height = mapHeightPxLighting;
-          }
-          const offscreen = lightingOffscreenRef.current;
-          const offCtx = offscreen.getContext('2d')!;
-          // Must clear before reuse — persists between frames
-          offCtx.clearRect(0, 0, mapWidthPxLighting, mapHeightPxLighting);
-
-          // ── Light coverage offscreen ────────────────────────────────────
-          // Builds a per-pixel "light intensity" map where:
-          //   alpha 1.0 → fully bright (no fog)
-          //   alpha 0.5 → dim (half-fog tint)
-          //   alpha 0.0 → dark
-          // Token vision and bright zones contribute alpha 1.0; dim zones
-          // contribute alpha 0.5. Alphas sum via 'lighter' compositing and
-          // are clamped at 1.0 by the canvas — so two overlapping dim zones
-          // (0.5 + 0.5) automatically become bright. This is the
-          // "dim overlap → bright" house rule.
-          if (
-            !lightCoverageOffscreenRef.current ||
-            lightCoverageOffscreenRef.current.width !== mapWidthPxLighting ||
-            lightCoverageOffscreenRef.current.height !== mapHeightPxLighting
-          ) {
-            lightCoverageOffscreenRef.current = document.createElement('canvas');
-            lightCoverageOffscreenRef.current.width = mapWidthPxLighting;
-            lightCoverageOffscreenRef.current.height = mapHeightPxLighting;
-          }
-          const coverage = lightCoverageOffscreenRef.current;
-          const covCtx = coverage.getContext('2d')!;
-          covCtx.clearRect(0, 0, mapWidthPxLighting, mapHeightPxLighting);
-          covCtx.globalCompositeOperation = 'lighter';
-          covCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-
-          // Token vision → bright (alpha 1.0) within the visibility polygon.
-          // Token grid coords use Y=0 at bottom; canvas pixel coords use Y=0 at top.
-          for (const token of myTokens) {
-            const tokenCenterX = (token.position.x + token.size.width / 2) * currentMap.gridSize;
-            const tokenCenterY = (currentMap.height - token.position.y - token.size.height / 2) * currentMap.gridSize;
-            const radiusPx = (token.sightRadius ?? 0) * currentMap.gridSize;
-            const poly = computeVisibility(
-              { x: tokenCenterX, y: tokenCenterY },
-              wallSegments,
-              mapWidthPxLighting,
-              mapHeightPxLighting,
-              radiusPx
-            );
-            playerVisPolygons.push({ poly, cx: tokenCenterX, cy: tokenCenterY });
-            if (poly.points.length >= 3) {
-              covCtx.beginPath();
-              covCtx.moveTo(poly.points[0].x, poly.points[0].y);
-              for (let i = 1; i < poly.points.length; i++) {
-                covCtx.lineTo(poly.points[i].x, poly.points[i].y);
-              }
-              covCtx.closePath();
-              covCtx.fill();
-            }
-          }
-
-          // Light sources → clipped to visibility polygon for wall shadows.
-          // Within the polygon: dim circle at α 0.5, bright circle adds another α 0.5
-          // on top (via 'lighter') so bright = 1.0. Two dim zones from different
-          // lights also sum to 1.0, naturally implementing dim-overlap-bright.
-          for (const light of enabledLights) {
-            const dimRadiusPx    = light.dimRadius    * currentMap.gridSize;
-            const brightRadiusPx = light.brightRadius * currentMap.gridSize;
-            const poly = computeVisibility(
-              { x: light.x, y: light.y },
-              wallSegments,
-              mapWidthPxLighting,
-              mapHeightPxLighting,
-              dimRadiusPx
-            );
-            playerVisPolygons.push({ poly, cx: light.x, cy: light.y });
-            if (poly.points.length < 3) continue;
-
-            covCtx.save();
-            // Clip to the (wall-shadowed) visibility polygon
-            covCtx.beginPath();
-            covCtx.moveTo(poly.points[0].x, poly.points[0].y);
-            for (let i = 1; i < poly.points.length; i++) {
-              covCtx.lineTo(poly.points[i].x, poly.points[i].y);
-            }
-            covCtx.closePath();
-            covCtx.clip();
-
-            // Dim disc — alpha 0.5
-            if (dimRadiusPx > 0) {
-              covCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-              covCtx.beginPath();
-              covCtx.arc(light.x, light.y, dimRadiusPx, 0, Math.PI * 2);
-              covCtx.fill();
-            }
-            // Bright disc — adds another alpha 0.5 (becoming 1.0 inside)
-            if (brightRadiusPx > 0) {
-              covCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-              covCtx.beginPath();
-              covCtx.arc(light.x, light.y, brightRadiusPx, 0, Math.PI * 2);
-              covCtx.fill();
-            }
-            covCtx.restore();
-          }
-          covCtx.globalCompositeOperation = 'source-over';
-
-          // ── Build fog with coverage subtracted ──────────────────────────
-          // Fill fog at full opacity, then erase by the coverage alpha.
-          offCtx.fillStyle = 'rgba(15, 12, 25, 0.95)';
-          offCtx.fillRect(0, 0, mapWidthPxLighting, mapHeightPxLighting);
-          offCtx.globalCompositeOperation = 'destination-out';
-          offCtx.drawImage(coverage, 0, 0);
-          offCtx.globalCompositeOperation = 'source-over';
-
-          // Composite onto main canvas with soft blur edge
-          ctx.save();
-          ctx.filter = 'blur(4px)';
-          ctx.drawImage(offscreen, 0, 0);
-          ctx.filter = 'none';
-          ctx.restore();
-
-          // Cozy torch-glow: warm radial gradient around each controlled token
-          ctx.save();
-          for (const token of myTokens) {
-            const cx = (token.position.x + token.size.width / 2) * currentMap.gridSize;
-            const cy = (currentMap.height - token.position.y - token.size.height / 2) * currentMap.gridSize;
-            const glowR = Math.max(
-              currentMap.gridSize * 2,
-              (token.sightRadius ?? 3) * currentMap.gridSize * 0.25
-            );
-            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-            glow.addColorStop(0, 'rgba(255, 200, 100, 0.10)');
-            glow.addColorStop(1, 'rgba(255, 200, 100, 0)');
-            ctx.fillStyle = glow;
-            ctx.beginPath();
-            ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // Two-zone light source glow: bright inner ring + dim outer ring.
-          // Bright zone: strong warm glow. Dim zone: faint half-opacity glow.
-          // Where two dim zones overlap the additive compositing naturally
-          // produces bright-equivalent intensity.
-          ctx.globalCompositeOperation = 'lighter';
-          for (const light of enabledLights) {
-            const brightPx = light.brightRadius * currentMap.gridSize;
-            const dimPx = light.dimRadius * currentMap.gridSize;
-            const r = parseInt(light.color.slice(1, 3), 16);
-            const g = parseInt(light.color.slice(3, 5), 16);
-            const b = parseInt(light.color.slice(5, 7), 16);
-
-            // Bright zone glow (inner)
-            if (brightPx > 0) {
-              const brightGlow = ctx.createRadialGradient(
-                light.x, light.y, 0, light.x, light.y, brightPx
-              );
-              brightGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.12)`);
-              brightGlow.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.06)`);
-              brightGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-              ctx.fillStyle = brightGlow;
-              ctx.beginPath();
-              ctx.arc(light.x, light.y, brightPx, 0, Math.PI * 2);
-              ctx.fill();
-            }
-
-            // Dim zone glow (outer ring, half intensity)
-            if (dimPx > brightPx) {
-              const dimGlow = ctx.createRadialGradient(
-                light.x, light.y, brightPx * 0.8, light.x, light.y, dimPx
-              );
-              dimGlow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.05)`);
-              dimGlow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-              ctx.fillStyle = dimGlow;
-              ctx.beginPath();
-              ctx.arc(light.x, light.y, dimPx, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.restore();
-        }
+        // Memoized: only sources whose position/radius changed —
+        // or all sources when a wall was edited — actually recompute.
+        const vision = visionCacheRef.current.compute(myTokens, enabledLights, wallSegments, viewport);
+        visPolygons = vision.all;
+        drawDynamicLighting(ctx, {
+          myTokens,
+          enabledLights,
+          tokenVision: vision.tokenVision,
+          lightVision: vision.lightVision,
+          lightingCanvas: lightingOffscreenRef,
+          coverageCanvas: lightCoverageOffscreenRef,
+        }, viewport);
       }
       // DM (not in preview) sees everything — skip fog entirely
     }
 
-    // DM light source icons — visible to DM always (including player preview, so DM can still edit)
+    // 7. DM light source icons (visible in player preview too, so DM can edit)
     if (renderIsDM) {
-      ctx.save();
-      for (const light of lightSources) {
-        const isSelected = selectedLightId === light.id;
-
-        // Draw bright + dim radius circles when in select mode or selected
-        if (isSelected || lightMode === 'light-select') {
-          const enabledColor = light.enabled;
-          ctx.save();
-          ctx.lineWidth = 1 / mapControls.zoom;
-          // Dim radius (outer, dashed)
-          ctx.setLineDash([4 / mapControls.zoom, 4 / mapControls.zoom]);
-          ctx.beginPath();
-          ctx.arc(light.x, light.y, light.dimRadius * currentMap.gridSize, 0, Math.PI * 2);
-          ctx.strokeStyle = enabledColor ? light.color + '33' : 'rgba(100, 100, 100, 0.2)';
-          ctx.stroke();
-          // Bright radius (inner, solid)
-          ctx.setLineDash([]);
-          ctx.beginPath();
-          ctx.arc(light.x, light.y, light.brightRadius * currentMap.gridSize, 0, Math.PI * 2);
-          ctx.strokeStyle = enabledColor ? light.color + '55' : 'rgba(100, 100, 100, 0.3)';
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Light icon circle
-        const iconR = 8 / mapControls.zoom;
-        ctx.beginPath();
-        ctx.arc(light.x, light.y, iconR, 0, Math.PI * 2);
-        ctx.fillStyle = light.enabled ? light.color : '#666666';
-        ctx.globalAlpha = light.enabled ? 0.85 : 0.5;
-        ctx.fill();
-        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(0,0,0,0.6)';
-        ctx.lineWidth = (isSelected ? 2 : 1) / mapControls.zoom;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-
-        // Small "disabled" X indicator
-        if (!light.enabled) {
-          const xLen = 4 / mapControls.zoom;
-          ctx.beginPath();
-          ctx.moveTo(light.x - xLen, light.y - xLen);
-          ctx.lineTo(light.x + xLen, light.y + xLen);
-          ctx.moveTo(light.x + xLen, light.y - xLen);
-          ctx.lineTo(light.x - xLen, light.y + xLen);
-          ctx.strokeStyle = 'rgba(255,100,100,0.8)';
-          ctx.lineWidth = 1.5 / mapControls.zoom;
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
+      drawLightIcons(ctx, {
+        lights: lightSources,
+        selectedLightId,
+        lightMode,
+      }, viewport);
     }
 
-    // Draw wall segments — DM sees all; players see only doors (interactive)
-    {
-      // Convert hex wall color to rgba helper
-      const hexToRgba = (hex: string, alpha: number) => {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r},${g},${b},${alpha})`;
-      };
+    // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
+    //    active); players see doors (LOS-filtered under dynamic lighting)
+    drawWalls(ctx, {
+      wallSegments,
+      isDM: renderIsDM,
+      wallColor,
+      hoveredWallId,
+      selectedWallId,
+      hoveredDoorId,
+      showEndpoints: wallMode !== null,
+      dragEndpoint: wallDragEndpointRef.current?.point ?? null,
+      selectedEndpoint,
+      lightingEnabled,
+      visPolygons,
+    }, viewport);
 
-      const drawWallSeg = (seg: WallSegment, isHovered = false, isPending = false) => {
-        // Thicker lines (4px base) — walls need to be clearly visible over map imagery
-        ctx.lineWidth = (isHovered ? 7 : 4) / mapControls.zoom;
-        if (isPending) {
-          ctx.strokeStyle = 'rgba(253, 230, 138, 0.85)'; // amber-100 dashed = pending
-          ctx.setLineDash([5 / mapControls.zoom, 5 / mapControls.zoom]);
-        } else {
-          ctx.setLineDash([]);
-          // Use DM-selected color for walls; fixed colors for doors/windows (functional indicators)
-          switch (seg.type) {
-            case 'wall':        ctx.strokeStyle = hexToRgba(wallColor, isHovered ? 1 : 0.9); break;
-            case 'door-closed': ctx.strokeStyle = isHovered ? 'rgba(196, 181, 253, 1)' : 'rgba(167, 139, 250, 0.9)'; break;
-            case 'door-open':   ctx.strokeStyle = isHovered ? 'rgba(187, 247, 208, 1)' : 'rgba(134, 239, 172, 0.9)'; break;
-            case 'door-locked': ctx.strokeStyle = isHovered ? 'rgba(252, 165, 165, 1)' : 'rgba(239, 68, 68, 0.9)'; break;
-            case 'window':      ctx.strokeStyle = 'rgba(147, 197, 253, 0.9)'; break;
-          }
-          if (seg.type === 'door-open')  ctx.setLineDash([6 / mapControls.zoom, 4 / mapControls.zoom]);
-          if (seg.type === 'window')     ctx.setLineDash([2 / mapControls.zoom, 3 / mapControls.zoom]);
-        }
-        ctx.beginPath();
-        ctx.moveTo(seg.x1, seg.y1);
-        ctx.lineTo(seg.x2, seg.y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Door center indicator (filled circle = closed, arc = open, lock symbol = locked)
-        if ((seg.type === 'door-closed' || seg.type === 'door-open' || seg.type === 'door-locked') && !isPending) {
-          const mx = (seg.x1 + seg.x2) / 2;
-          const my = (seg.y1 + seg.y2) / 2;
-          if (seg.type === 'door-closed') {
-            ctx.fillStyle = isHovered ? 'rgba(196, 181, 253, 1)' : 'rgba(167, 139, 250, 0.9)';
-            ctx.beginPath();
-            ctx.arc(mx, my, 5 / mapControls.zoom, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (seg.type === 'door-locked') {
-            // locked: filled red circle with a small cross
-            ctx.fillStyle = isHovered ? 'rgba(252, 165, 165, 1)' : 'rgba(239, 68, 68, 0.9)';
-            ctx.beginPath();
-            ctx.arc(mx, my, 5 / mapControls.zoom, 0, Math.PI * 2);
-            ctx.fill();
-            const sz = 2.5 / mapControls.zoom;
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.5 / mapControls.zoom;
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.moveTo(mx - sz, my - sz); ctx.lineTo(mx + sz, my + sz);
-            ctx.moveTo(mx + sz, my - sz); ctx.lineTo(mx - sz, my + sz);
-            ctx.stroke();
-          } else {
-            // open door: small arc showing swing
-            ctx.strokeStyle = isHovered ? 'rgba(187, 247, 208, 1)' : 'rgba(134, 239, 172, 0.9)';
-            ctx.lineWidth = 2 / mapControls.zoom;
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.arc(mx, my, 6 / mapControls.zoom, 0, Math.PI);
-            ctx.stroke();
-          }
-        }
-      };
-
-      ctx.save();
-      ctx.lineCap = 'round';
-
-      if (renderIsDM) {
-        // DM sees all walls
-        for (const seg of wallSegments) {
-          drawWallSeg(seg, seg.id === hoveredWallId || seg.id === selectedWallId);
-        }
-        // Endpoint/junction nodes — shown whenever a wall tool is active.
-        // White dot = dangling endpoint; larger yellow dot = junction (≥2 segments share the point).
-        if (wallMode !== null) {
-          const endpointMap = new Map<string, { x: number; y: number; count: number }>();
-          for (const seg of wallSegments) {
-            for (const pt of [{ x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 }]) {
-              const key = `${Math.round(pt.x)},${Math.round(pt.y)}`;
-              const existing = endpointMap.get(key);
-              if (existing) {
-                existing.count++;
-              } else {
-                endpointMap.set(key, { x: pt.x, y: pt.y, count: 1 });
-              }
-            }
-          }
-          ctx.save();
-          const dragPt = wallDragEndpointRef.current?.point;
-          const selEp = selectedEndpoint;
-          for (const { x, y, count } of endpointMap.values()) {
-            const isJunction = count >= 2;
-            const isDragging = dragPt && Math.abs(x - Math.round(dragPt.x)) < 1 && Math.abs(y - Math.round(dragPt.y)) < 1;
-            const isSelected = selEp && Math.abs(x - selEp.x) < 1 && Math.abs(y - selEp.y) < 1;
-            const radius = (isDragging || isSelected ? 6 : isJunction ? 4.5 : 3) / mapControls.zoom;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = isDragging ? 'rgba(56, 189, 248, 0.95)' : isSelected ? 'rgba(56, 189, 248, 0.9)' : isJunction ? 'rgba(253, 224, 71, 0.9)' : 'rgba(255,255,255,0.6)';
-            ctx.strokeStyle = isDragging || isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.5)';
-            ctx.lineWidth = (isDragging || isSelected ? 2 : 1) / mapControls.zoom;
-            ctx.fill();
-            ctx.stroke();
-          }
-          ctx.restore();
-        }
-      } else {
-        // Players see door segments within line-of-sight only.
-        // When dynamic lighting is off, all doors are always visible.
-        for (const seg of wallSegments) {
-          if (seg.type === 'door-closed' || seg.type === 'door-open' || seg.type === 'door-locked') {
-            if (lightingEnabled && playerVisPolygons.length > 0) {
-              const midX = (seg.x1 + seg.x2) / 2;
-              const midY = (seg.y1 + seg.y2) / 2;
-              // Closed doors lie exactly ON the visibility polygon boundary — a raw midpoint
-              // test is unreliable. Nudge 2px toward the token so the test point is safely
-              // inside the visible area (between the viewer and the door face).
-              const inSight = playerVisPolygons.some(({ poly, cx, cy }) => {
-                const dx = cx - midX;
-                const dy = cy - midY;
-                const dist = Math.hypot(dx, dy) || 1;
-                return isPointVisible(
-                  { x: midX + (dx / dist) * 2, y: midY + (dy / dist) * 2 },
-                  { x: 0, y: 0 },
-                  poly
-                );
-              });
-              if (!inSight) continue;
-            }
-            drawWallSeg(seg, seg.id === hoveredDoorId);
-          }
-        }
-        // When dynamic lighting is OFF, also render wall/window segments so players
-        // can understand the terrain. When lighting is ON, the darkness is the wall indicator.
-        if (!currentMap.lightingEnabled) {
-          for (const seg of wallSegments) {
-            if (seg.type === 'wall' || seg.type === 'window') {
-              drawWallSeg(seg, false);
-            }
-          }
-        }
-      }
-
-      ctx.restore();
-    }
-
-    // Draw in-progress polyline (wall-draw mode, DM only)
+    // 9. DM wall-tool overlays
     if (renderIsDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineWidth = 2 / mapControls.zoom;
-      ctx.strokeStyle = 'rgba(249, 115, 22, 0.7)';
-
-      // Draw the placed line segments
-      if (wallInProgress.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(wallInProgress[0].x, wallInProgress[0].y);
-        for (let i = 1; i < wallInProgress.length; i++) {
-          ctx.lineTo(wallInProgress[i].x, wallInProgress[i].y);
-        }
-        ctx.stroke();
-      }
-
-      // Draw vertex dots
-      ctx.fillStyle = 'rgba(249, 115, 22, 0.9)';
-      for (const pt of wallInProgress) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 4 / mapControls.zoom, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Ghost line: last placed point to current cursor (map-space).
-      // Use hoverMapPxRef (raw map-px) rather than hoverCoords (grid-quantised) so that
-      // when snap-to-grid is disabled the ghost line truly tracks the cursor freely.
-      if (hoverCoords && wallInProgress.length > 0) {
-        const lastPt = wallInProgress[wallInProgress.length - 1];
-        const rawPx = hoverMapPxRef.current;
-        if (rawPx) {
-          const endpoint = snapPoint(rawPx);
-          ctx.setLineDash([5 / mapControls.zoom, 5 / mapControls.zoom]);
-          ctx.strokeStyle = 'rgba(249, 115, 22, 0.5)';
-          ctx.beginPath();
-          ctx.moveTo(lastPt.x, lastPt.y);
-          ctx.lineTo(endpoint.x, endpoint.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Snap-to-wall indicator: when drawing a door/window, show a green dot
-          // if the cursor is near an existing wall segment
-          if (wallType !== 'wall') {
-            const snapThreshold = 14 / mapControls.zoom;
-            const cursorHit = findWallAtPoint(endpoint.x, endpoint.y, snapThreshold);
-            if (cursorHit) {
-              ctx.fillStyle = 'rgba(74, 222, 128, 0.9)';
-              ctx.beginPath();
-              ctx.arc(cursorHit.point.x, cursorHit.point.y, 5 / mapControls.zoom, 0, Math.PI * 2);
-              ctx.fill();
-              // Also highlight the starting point if it's on the same wall
-              const startHit = findWallAtPoint(lastPt.x, lastPt.y, snapThreshold);
-              if (startHit && startHit.seg.id === cursorHit.seg.id) {
-                ctx.fillStyle = 'rgba(74, 222, 128, 0.9)';
-                ctx.beginPath();
-                ctx.arc(startHit.point.x, startHit.point.y, 5 / mapControls.zoom, 0, Math.PI * 2);
-                ctx.fill();
-                // Draw the replacement preview as a colored line
-                ctx.strokeStyle = wallType === 'window' ? 'rgba(96, 165, 250, 0.7)' : 'rgba(167, 139, 250, 0.7)';
-                ctx.lineWidth = 3 / mapControls.zoom;
-                ctx.setLineDash([]);
-                ctx.beginPath();
-                ctx.moveTo(startHit.point.x, startHit.point.y);
-                ctx.lineTo(cursorHit.point.x, cursorHit.point.y);
-                ctx.stroke();
-              }
-            }
-          }
-        }
-      }
-
-      ctx.restore();
+      drawWallDrawOverlay(ctx, {
+        wallInProgress,
+        hoverMapPx: hoverMapPxRef.current,
+        hoverCoords,
+        wallType,
+        snapPoint,
+        findWallAtPoint,
+      }, viewport);
     }
-
-    // Split mode: draw the preview dot at the split hover point
     if (renderIsDM && wallMode === 'wall-split' && splitHoverPoint) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(253, 224, 71, 0.9)'; // yellow
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5 / mapControls.zoom;
-      ctx.beginPath();
-      ctx.arc(splitHoverPoint.x, splitHoverPoint.y, 5 / mapControls.zoom, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      drawSplitPreview(ctx, splitHoverPoint, viewport);
     }
-
-    // Erase mode: draw brush circle at hover position
-    if (renderIsDM && wallMode === 'wall-erase' && hoverMapPxRef.current) {
-      const mapPx = hoverMapPxRef.current;
-      const r = WALL_ERASE_RADIUS / mapControls.zoom;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
-      ctx.lineWidth = 1.5 / mapControls.zoom;
-      ctx.setLineDash([3 / mapControls.zoom, 3 / mapControls.zoom]);
-      ctx.beginPath();
-      ctx.arc(mapPx.x, mapPx.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+    if (renderIsDM && wallMode === 'wall-erase') {
+      drawEraseOverlay(ctx, {
+        hoverMapPx: hoverMapPxRef.current,
+        eraseRadius: WALL_ERASE_RADIUS,
+        erasedIds: wallErasedIdsRef.current,
+        wallSegments,
+      }, viewport);
     }
-
-    // Erase mode: highlight walls marked for deletion
-    if (renderIsDM && wallMode === 'wall-erase' && wallErasedIdsRef.current.size > 0) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';
-      ctx.lineWidth = 5 / mapControls.zoom;
-      ctx.setLineDash([4 / mapControls.zoom, 3 / mapControls.zoom]);
-      for (const seg of wallSegments) {
-        if (wallErasedIdsRef.current.has(seg.id)) {
-          ctx.beginPath();
-          ctx.moveTo(seg.x1, seg.y1);
-          ctx.lineTo(seg.x2, seg.y2);
-          ctx.stroke();
-        }
-      }
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-
-    // ── Brush mode: stroke preview + cursor ─────────────────────────────────
     if (renderIsDM && wallMode === 'wall-brush') {
-      const pts = wallBrushPointsRef.current;
-      // Draw the painted stroke trail
-      if (pts.length >= 2) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(45, 212, 191, 0.6)';
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(pts[0]!.x, pts[0]!.y);
-        for (let i = 1; i < pts.length; i++) {
-          ctx.lineTo(pts[i]!.x, pts[i]!.y);
-        }
-        ctx.stroke();
-        ctx.restore();
-      }
-      // Draw brush cursor circle at hover position
-      if (hoverMapPxRef.current) {
-        const mapPx = hoverMapPxRef.current;
-        ctx.save();
-        ctx.strokeStyle = 'rgba(45, 212, 191, 0.7)';
-        ctx.fillStyle = 'rgba(45, 212, 191, 0.1)';
-        ctx.lineWidth = 1.5 / mapControls.zoom;
-        ctx.setLineDash([3 / mapControls.zoom, 3 / mapControls.zoom]);
-        ctx.beginPath();
-        ctx.arc(mapPx.x, mapPx.y, brushSize / 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-      }
+      drawBrushOverlay(ctx, {
+        points: wallBrushPointsRef.current,
+        brushSize,
+        hoverMapPx: hoverMapPxRef.current,
+      }, viewport);
     }
-
-    // ── Polygon in progress (DM wall-polygon mode) ─────────────────────────
     if (renderIsDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
-      ctx.save();
-
-      // Draw placed edges (dashed amber)
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2 / mapControls.zoom;
-      ctx.setLineDash([6 / mapControls.zoom, 3 / mapControls.zoom]);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(polygonPoints[0].x, polygonPoints[0].y);
-      for (let i = 1; i < polygonPoints.length; i++) {
-        ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Draw placed point dots (white)
-      ctx.fillStyle = '#ffffff';
-      for (const pt of polygonPoints) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 4 / mapControls.zoom, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // First point: green "close target" circle when 3+ points placed
-      if (polygonPoints.length >= 3) {
-        const first = polygonPoints[0];
-        ctx.strokeStyle = '#22c55e';
-        ctx.lineWidth = 2 / mapControls.zoom;
-        ctx.beginPath();
-        ctx.arc(first.x, first.y, POLYGON_CLOSE_RADIUS / mapControls.zoom, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Ghost line from last placed point to cursor
-      if (hoverMapPxRef.current) {
-        const last = polygonPoints[polygonPoints.length - 1];
-        const endpoint = snapPoint(hoverMapPxRef.current);
-        ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
-        ctx.lineWidth = 1.5 / mapControls.zoom;
-        ctx.setLineDash([4 / mapControls.zoom, 4 / mapControls.zoom]);
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(endpoint.x, endpoint.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      ctx.restore();
+      drawPolygonOverlay(ctx, {
+        points: polygonPoints,
+        hoverMapPx: hoverMapPxRef.current,
+        closeRadius: POLYGON_CLOSE_RADIUS,
+        snapPoint,
+      }, viewport);
     }
 
-    // ── Ruler overlay ────────────────────────────────────────────────────────
-    if (showRuler && effectiveRulerOrigin && hoverCoords && currentMap) {
-      const gs = currentMap.gridSize;
-      const mh = currentMap.height;
-
-      // Convert grid coords to world pixel coords (token-center convention)
-      const x0 = effectiveRulerOrigin.x * gs + gs / 2;
-      const y0 = (mh - 1 - effectiveRulerOrigin.y) * gs + gs / 2;
-      const x1 = hoverCoords.x * gs + gs / 2;
-      const y1 = (mh - 1 - hoverCoords.y) * gs + gs / 2;
-
-      const dx = Math.abs(hoverCoords.x - effectiveRulerOrigin.x);
-      const dy = Math.abs(hoverCoords.y - effectiveRulerOrigin.y);
-      const squares = Math.max(dx, dy);
-      const feet = calcGridDistance(
-        dx, dy,
-        currentMap.feetPerSquare ?? 5,
-        (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating'
-      );
-
-      const rulerLineColor = rulerColor === 'purple' ? 'rgba(168, 85, 247, 0.9)' : rulerColor === 'black' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(251, 191, 36, 0.9)';
-      const rulerPillColor = rulerColor === 'black' ? 'rgba(255, 255, 255, 0.88)' : 'rgba(0, 0, 0, 0.65)';
-      const rulerTextColor = rulerColor === 'purple' ? 'rgba(216, 180, 254, 1)' : rulerColor === 'black' ? 'rgba(0, 0, 0, 1)' : 'rgba(251, 220, 100, 1)';
-
-      ctx.save();
-
-      // Dashed line
-      ctx.setLineDash([8 / mapControls.zoom, 4 / mapControls.zoom]);
-      ctx.strokeStyle = rulerLineColor;
-      ctx.lineWidth = 2 / mapControls.zoom;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-
-      // Dot at origin
-      ctx.setLineDash([]);
-      ctx.fillStyle = rulerLineColor;
-      ctx.beginPath();
-      ctx.arc(x0, y0, 5 / mapControls.zoom, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Distance label near cursor
-      if (feet > 0) {
-        const label = `${feet} ft  (${squares} sq)`;
-        const fontSize = Math.max(11, 13 / mapControls.zoom);
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.textBaseline = 'bottom';
-
-        const pad = 4 / mapControls.zoom;
-        const textW = ctx.measureText(label).width;
-        const boxX = x1 + 10 / mapControls.zoom;
-        const boxY = y1 - 4 / mapControls.zoom;
-
-        // Background pill
-        ctx.fillStyle = rulerPillColor;
-        try {
-          ctx.beginPath();
-          ctx.roundRect(boxX - pad, boxY - fontSize - pad, textW + pad * 2, fontSize + pad * 2, 4 / mapControls.zoom);
-          ctx.fill();
-        } catch {
-          ctx.fillRect(boxX - pad, boxY - fontSize - pad, textW + pad * 2, fontSize + pad * 2);
-        }
-
-        // Text
-        ctx.fillStyle = rulerTextColor;
-        ctx.fillText(label, boxX, boxY);
-      }
-
-      ctx.restore();
+    // 10. Measurement overlays
+    if (showRuler && effectiveRulerOrigin && hoverCoords) {
+      drawRuler(ctx, {
+        origin: effectiveRulerOrigin,
+        target: hoverCoords,
+        color: rulerColor,
+        feetPerSquare: currentMap.feetPerSquare ?? 5,
+        diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
+      }, viewport);
     }
-
-    // ── AoE Shape Overlay ────────────────────────────────────────────────────
-    if (showAoE && currentMap) {
-      const gs = currentMap.gridSize;
-      const fps = currentMap.feetPerSquare ?? 5;
-      const mh = currentMap.height;
-
-      const origin = aoeOrigin ?? hoverCoords;
-      if (origin) {
-        const ox = origin.x * gs + gs / 2;
-        const oy = (mh - 1 - origin.y) * gs + gs / 2;
-
-        let angle = 0;
-        if (hoverCoords && aoeOrigin) {
-          const mx = hoverCoords.x * gs + gs / 2;
-          const my = (mh - 1 - hoverCoords.y) * gs + gs / 2;
-          angle = Math.atan2(my - oy, mx - ox);
-        }
-
-        const sizeInPx = (aoeConfig.sizeFt / fps) * gs;
-        const widthInPx = ((aoeConfig.widthFt ?? 5) / fps) * gs;
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(147, 51, 234, 0.25)';
-        ctx.strokeStyle = 'rgba(147, 51, 234, 0.8)';
-        ctx.lineWidth = 2 / mapControls.zoom;
-
-        ctx.beginPath();
-
-        switch (aoeConfig.shape) {
-          case 'sphere':
-          case 'cylinder':
-            ctx.arc(ox, oy, sizeInPx, 0, Math.PI * 2);
-            break;
-
-          case 'cone': {
-            const halfAngle = Math.atan2(1, 2);
-            const left = angle - halfAngle;
-            const right = angle + halfAngle;
-            ctx.moveTo(ox, oy);
-            ctx.lineTo(ox + Math.cos(left) * sizeInPx, oy + Math.sin(left) * sizeInPx);
-            ctx.lineTo(ox + Math.cos(angle) * sizeInPx, oy + Math.sin(angle) * sizeInPx);
-            ctx.lineTo(ox + Math.cos(right) * sizeInPx, oy + Math.sin(right) * sizeInPx);
-            ctx.closePath();
-            break;
-          }
-
-          case 'line': {
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const perpCos = Math.cos(angle + Math.PI / 2);
-            const perpSin = Math.sin(angle + Math.PI / 2);
-            const hw = widthInPx / 2;
-            ctx.moveTo(ox + perpCos * hw,                        oy + perpSin * hw);
-            ctx.lineTo(ox + cos * sizeInPx + perpCos * hw,       oy + sin * sizeInPx + perpSin * hw);
-            ctx.lineTo(ox + cos * sizeInPx - perpCos * hw,       oy + sin * sizeInPx - perpSin * hw);
-            ctx.lineTo(ox - perpCos * hw,                        oy - perpSin * hw);
-            ctx.closePath();
-            break;
-          }
-
-          case 'cube': {
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const perpCos = Math.cos(angle + Math.PI / 2);
-            const perpSin = Math.sin(angle + Math.PI / 2);
-            const hs = sizeInPx / 2;
-            ctx.moveTo(ox + perpCos * hs,                      oy + perpSin * hs);
-            ctx.lineTo(ox + cos * sizeInPx + perpCos * hs,     oy + sin * sizeInPx + perpSin * hs);
-            ctx.lineTo(ox + cos * sizeInPx - perpCos * hs,     oy + sin * sizeInPx - perpSin * hs);
-            ctx.lineTo(ox - perpCos * hs,                      oy - perpSin * hs);
-            ctx.closePath();
-            break;
-          }
-        }
-
-        ctx.fill();
-        ctx.stroke();
-
-        // Size label
-        const label = aoeConfig.shape === 'line'
-          ? `${aoeConfig.sizeFt} ft × ${aoeConfig.widthFt ?? 5} ft`
-          : `${aoeConfig.sizeFt} ft`;
-        const fontSize = Math.max(10, 12 / mapControls.zoom);
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        const tw = ctx.measureText(label).width;
-        const pad = 4 / mapControls.zoom;
-        ctx.fillRect(ox - tw / 2 - pad, oy - fontSize * 2 - pad, tw + pad * 2, fontSize + pad * 2);
-        ctx.fillStyle = 'rgba(216, 180, 254, 1)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(label, ox, oy - fontSize - 2 / mapControls.zoom);
-        ctx.textAlign = 'start';
-
-        ctx.restore();
-      }
+    if (showAoE) {
+      drawAoEOverlay(ctx, {
+        config: aoeConfig,
+        origin: aoeOrigin,
+        hoverCoords,
+        feetPerSquare: currentMap.feetPerSquare ?? 5,
+      }, viewport);
     }
 
     // Restore context state (back to screen-space)
     ctx.restore();
 
-    // Draw fog brush cursor in screen-space (zoom-invariant)
+    // 11. Fog brush cursor (screen-space, zoom-invariant)
     if (fogMode && hoverCoords) {
-      const screenX = hoverCoords.x * mapControls.zoom * currentMap.gridSize + mapControls.panOffset.x;
-      const screenY = (currentMap.height - 1 - hoverCoords.y) * mapControls.zoom * currentMap.gridSize + mapControls.panOffset.y;
-      const screenRadius = brushRadius * mapControls.zoom;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset to screen-space
-      ctx.strokeStyle = fogMode === 'fog-reveal' ? 'rgba(163, 230, 53, 0.8)' : 'rgba(249, 115, 22, 0.8)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
+      drawFogBrushCursor(ctx, {
+        mode: fogMode,
+        hoverCoords,
+        brushRadius,
+      }, viewport);
     }
-  }, [currentMap, mapImage, imageLoaded, showGrid, gridColor, mapControls.zoom, mapControls.panOffset, tokens, tokenImages, draggedToken, dragOffset, hoverCoords, hoverToken, animatingTokens, spiritLayerImage, spiritLayerOpacity, userRole, campaign?.spiritLayerEnabled, campaign?.spiritLayerStyle, dmViewBothPlanes, dmShowSpiritTokens, playerSpiritVisible, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogState, revealedCells, wallSegments, fogMode, brushRadius, wallMode, wallInProgress, hoveredWallId, hoveredDoorId, snapToGrid, dmPreviewPlayerView, splitHoverPoint, selectedWallId, selectedEndpoint, polygonPoints]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallId, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, hoverCoords, fogMode, brushRadius]);
 
-  /**
-   * Render on every relevant state change
-   */
-  useEffect(() => {
-    render();
-  }, [render]);
+  // ── Layer draw dispatch + dirty-flag scheduling ──────────
+  // A single rAF coalesces every repaint request; only the dirty layers
+  // redraw, at most once each per frame. Replaces the old
+  // `useEffect(() => render())` + ~25 imperative `render()` calls.
+  const drawLayer = useCallback((layer: MapLayer) => {
+    if (layer === 'terrain') drawTerrain();
+    else if (layer === 'tokens') drawTokensLayer();
+    else drawOverlay();
+  }, [drawTerrain, drawTokensLayer, drawOverlay]);
+  drawLayerRef.current = drawLayer;
 
-  /**
-   * Re-render when canvas size changes (window resize)
-   */
+  // Structural changes (world transform, canvas size, map identity) repaint
+  // every layer.
   useEffect(() => {
-    if (canvasSize.width > 0 && canvasSize.height > 0) {
-      render();
-    }
-  }, [canvasSize, render]);
+    markDirty('terrain', 'tokens', 'overlay');
+  }, [markDirty, mapControls.zoom, mapControls.panOffset, canvasSize, currentMap, imageLoaded, mapImage]);
+
+  // Terrain-only content.
+  useEffect(() => {
+    markDirty('terrain');
+  }, [markDirty, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
+
+  // Spirit flags affect the base/spirit images (terrain) and spirit-token
+  // alpha (tokens).
+  useEffect(() => {
+    markDirty('terrain', 'tokens');
+  }, [markDirty, campaign?.spiritLayerEnabled, campaign?.spiritLayerStyle, playerSpiritVisible, dmViewBothPlanes]);
+
+  // Token visuals — the hot path. Under dynamic lighting a token move also
+  // shifts the viewer's vision, so repaint the overlay (darkness) too.
+  useEffect(() => {
+    markDirty('tokens');
+    if (currentMap?.lightingEnabled) markDirty('overlay');
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled]);
+
+  // Cursor position drives the token drag ghost (tokens) and, only when a
+  // cursor-tracking overlay tool is active, its preview (overlay). Gating the
+  // overlay keeps it static during a plain token drag — the win of layering.
+  useEffect(() => {
+    markDirty('tokens');
+    if (wallMode || showRuler || showAoE || fogMode) markDirty('overlay');
+  }, [markDirty, hoverCoords, draggedToken, dragOffset, wallMode, showRuler, showAoE, fogMode]);
+
+  // Overlay content — walls, lights, DM tools, measurement, fog cursor.
+  useEffect(() => {
+    markDirty('overlay');
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallId, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogMode, brushRadius]);
 
   // ============================================
   // Token Hit Testing
@@ -2960,7 +1834,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       wallSegments.forEach((s) => {
         if (distToSegment(mapPx.x, mapPx.y, s) <= r) wallErasedIdsRef.current.add(s.id);
       });
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -2970,7 +1844,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const mapPx = screenToMapPx(screenX, screenY);
       const snapped = snapPoint(mapPx);
       wallBrushPointsRef.current = [{ x: snapped.x, y: snapped.y }];
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3082,12 +1956,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
 
       // Update local token position
-      const updatedTokens = tokens.map((t) =>
-        t.id === draggedToken.id
-          ? { ...t, position: { x: Math.floor(finalX), y: Math.floor(finalY) } }
-          : t
-      );
-      updateTokens(updatedTokens);
+      useGameStore.getState().applyTokenMove(draggedToken.id, {
+        x: Math.floor(finalX),
+        y: Math.floor(finalY),
+      });
 
       // Clear drag state
       setDraggedToken(null);
@@ -3156,7 +2028,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Wall-select mode: drag endpoint or update hover
     if (wallMode === 'wall-select' && isDM) {
-      if (rightPanActiveRef.current) { mapControls.handleDrag(e); render(); return; }
+      if (rightPanActiveRef.current) { mapControls.handleDrag(e); markDirty('terrain', 'tokens', 'overlay'); return; }
       const mapPx = screenToMapPx(screenX, screenY);
       // Drag endpoint in progress
       if (wallDragEndpointRef.current && (e.buttons & 1)) {
@@ -3167,7 +2039,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             wallDragEndpointRef.current.hasDragged = true;
           }
         }
-        if (!wallDragEndpointRef.current.hasDragged) { render(); return; }
+        if (!wallDragEndpointRef.current.hasDragged) { markDirty('overlay'); return; }
         wallDragEndpointRef.current.point = { x: snapped.x, y: snapped.y };
         const { targets, point } = wallDragEndpointRef.current;
         const targetSet = new Map(targets.map((t) => [`${t.segId}:${t.end}`, t]));
@@ -3181,7 +2053,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         });
         replaceWallHistory(updated);
         wallCacheValidRef.current = false;
-        render();
+        markDirty('overlay');
         return;
       }
       // Check endpoint proximity for cursor
@@ -3198,7 +2070,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const hitThreshold = 12 / mapControls.zoom;
       const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
       setHoveredWallId(hit?.id ?? null);
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3214,7 +2086,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       } else {
         setSplitHoverPoint(null);
       }
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3229,7 +2101,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           if (distToSegment(mapPx.x, mapPx.y, s) <= r) wallErasedIdsRef.current.add(s.id);
         });
       }
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3246,21 +2118,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           pts.push({ x: snapped.x, y: snapped.y });
         }
       }
-      render();
+      markDirty('overlay');
       return;
     }
 
     // Wall-polygon mode: handle right-pan; re-render for ghost line update
     if (wallMode === 'wall-polygon' && isDM) {
       if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      render();
+      markDirty('overlay');
       return;
     }
 
     // Wall-draw mode: just re-render for ghost line update (cursor moves)
     if (wallMode === 'wall-draw' && isDM) {
       if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3274,7 +2146,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         setLightSources((prev) => prev.map((l) =>
           l.id === dragId ? { ...l, x: Math.round(mapPx.x), y: Math.round(mapPx.y) } : l
         ));
-        render();
+        markDirty('overlay');
       }
       return;
     }
@@ -3290,7 +2162,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const newHoveredDoorId = door?.id ?? null;
       if (newHoveredDoorId !== hoveredDoorId) {
         setHoveredDoorId(newHoveredDoorId);
-        render();
+        markDirty('overlay');
       }
     }
 
@@ -3299,7 +2171,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const mapPx = screenToMapPx(screenX, screenY);
       const cells = getCellsUnderBrush(mapPx.x, mapPx.y, fogState);
       cells.forEach((c) => fogPendingCellsRef.current.add(c));
-      render();
+      markDirty('overlay');
       return;
     }
 
@@ -3322,8 +2194,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         lastMoveEmitRef.current = now;
       }
 
-      // Trigger re-render for ghost image
-      render();
+      // Ghost follows the cursor — tokens layer only.
+      markDirty('tokens');
     } else {
       // Handle map panning
       mapControls.handleDrag(e);
@@ -3332,9 +2204,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
       setHoverToken(token);
 
-      // Trigger re-render if panning
+      // Pan moves the whole scene → repaint every layer.
       if (mapControls.isDragging) {
-        render();
+        markDirty('terrain', 'tokens', 'overlay');
       }
     }
   };
@@ -3399,7 +2271,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: newSegs });
         }
         wallErasedIdsRef.current = new Set();
-        render();
+        markDirty('overlay');
       }
     }
     // Commit wall brush stroke → simplify to wall segments
@@ -3436,7 +2308,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           }
         }
       }
-      render();
+      markDirty('overlay');
     }
     // Stop map panning
     mapControls.stopDrag();
@@ -3515,7 +2387,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         // Without this, the backend defaults to 'npc'.
         type: TokenType.PLAYER,
       });
-      updateTokens([...tokens, result.token]);
+      useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
     } catch (err) {
       console.error('[MapCanvas] Failed to place token from roster drag:', err);
@@ -3630,81 +2502,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setContextMenuPos({ x: adjustedX, y: adjustedY });
   }, [contextMenu]);
 
-  /**
-   * Animation loop for smooth token movement
-   */
-  useEffect(() => {
-    if (animatingTokens.size === 0) return;
-
-    let animationFrameId: number;
-
-    const animate = () => {
-      const now = Date.now();
-      const updatedAnimations = new Map(animatingTokens);
-      let needsUpdate = false;
-
-      for (const [tokenId, animation] of updatedAnimations.entries()) {
-        const elapsed = now - animation.startTime;
-        if (elapsed >= animation.duration) {
-          // Animation complete
-          updatedAnimations.delete(tokenId);
-          needsUpdate = true;
-        }
-      }
-
-      if (needsUpdate) {
-        setAnimatingTokens(updatedAnimations);
-      }
-
-      // Trigger render for animation
-      render();
-
-      // Continue animation loop if there are still animating tokens
-      if (updatedAnimations.size > 0) {
-        animationFrameId = requestAnimationFrame(animate);
-      }
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [animatingTokens, render]);
-
-  // ============================================
-  // Fog Reveal Animation Loop
-  // Decays per-cell reveal opacity over ~400ms and triggers re-renders
-  // ============================================
-  useEffect(() => {
-    if (revealOpacityRef.current.size === 0) return;
-
-    let animationFrameId: number;
-
-    const animateFog = () => {
-      let hasActive = false;
-      revealOpacityRef.current.forEach((opacity, idx) => {
-        const next = opacity - 0.042; // ~400ms to fully fade at 60fps
-        if (next <= 0) {
-          revealOpacityRef.current.delete(idx);
-        } else {
-          revealOpacityRef.current.set(idx, next);
-          hasActive = true;
-        }
-      });
-
-      render();
-
-      if (hasActive) {
-        animationFrameId = requestAnimationFrame(animateFog);
-      }
-    };
-
-    animationFrameId = requestAnimationFrame(animateFog);
-    return () => { cancelAnimationFrame(animationFrameId); };
-  }, [fogState, revealedCells, render]); // re-subscribe when fog changes
+  // (Token tween + fog reveal rAF loops live in ./map/useMapAnimations)
 
   // ============================================
   // Render
@@ -3718,34 +2516,54 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Canvas — vibe CSS filter applied directly so it affects the rendered map */}
-      <canvas
-        ref={canvasRef}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        className={
-          draggedToken ? 'cursor-grabbing' :
-          wallMode === 'wall-draw' ? 'cursor-crosshair' :
-          wallMode === 'wall-polygon' ? 'cursor-crosshair' :
-          wallMode === 'wall-split' ? (splitHoverPoint ? 'cursor-pointer' : 'cursor-crosshair') :
-          wallMode === 'wall-erase' ? 'cursor-cell' :
-          wallMode === 'wall-brush' ? 'cursor-crosshair' :
-          wallMode === 'wall-select' ? (wallDragEndpointRef.current ? 'cursor-grabbing' : nearEndpoint ? 'cursor-grab' : hoveredWallId ? 'cursor-pointer' : 'cursor-default') :
-          lightMode === 'light-place' ? 'cursor-crosshair' :
-          lightMode === 'light-select' ? (draggingLightRef.current ? 'cursor-grabbing' : 'cursor-pointer') :
-          (hoverToken || hoveredDoorId) ? 'cursor-pointer' :
-          'cursor-move'
-        }
+      {/* Three stacked canvases. The vibe CSS filter is applied to
+          the wrapper so it tints the composite of all three, matching the old
+          single-canvas behaviour. The wrapper is also the CSS-transform target
+          for pan gestures. Only the top canvas takes input. */}
+      <div
+        ref={layersRef}
+        className="absolute inset-0"
         style={{
           filter: activeVibeEffect?.filter ?? undefined,
           transition: 'filter 3s ease',
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onContextMenu={handleContextMenu}
-      />
+      >
+        <canvas
+          ref={terrainCanvasRef}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          className="absolute inset-0 pointer-events-none"
+        />
+        <canvas
+          ref={tokenCanvasRef}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          className="absolute inset-0 pointer-events-none"
+        />
+        <canvas
+          ref={canvasRef}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          className={`absolute inset-0 ${
+            draggedToken ? 'cursor-grabbing' :
+            wallMode === 'wall-draw' ? 'cursor-crosshair' :
+            wallMode === 'wall-polygon' ? 'cursor-crosshair' :
+            wallMode === 'wall-split' ? (splitHoverPoint ? 'cursor-pointer' : 'cursor-crosshair') :
+            wallMode === 'wall-erase' ? 'cursor-cell' :
+            wallMode === 'wall-brush' ? 'cursor-crosshair' :
+            wallMode === 'wall-select' ? (wallDragEndpointRef.current ? 'cursor-grabbing' : nearEndpoint ? 'cursor-grab' : hoveredWallId ? 'cursor-pointer' : 'cursor-default') :
+            lightMode === 'light-place' ? 'cursor-crosshair' :
+            lightMode === 'light-select' ? (draggingLightRef.current ? 'cursor-grabbing' : 'cursor-pointer') :
+            (hoverToken || hoveredDoorId) ? 'cursor-pointer' :
+            'cursor-move'
+          }`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onContextMenu={handleContextMenu}
+        />
+      </div>
 
       {/* Vibe hue tint overlay — color tint layered on top of canvas */}
       {activeVibeEffect && (
@@ -3835,14 +2653,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {/* Toolbar - Glassmorphism */}
       <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-sm">
         {/* Zoom Out */}
-        <button
+        <Button
           onClick={mapControls.zoomOut}
           disabled={mapControls.zoom <= mapControls.minZoom}
-          className="btn-secondary p-2"
+          variant="secondary" className="p-2"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
-        </button>
+        </Button>
 
         {/* Zoom Level Display */}
         <span className="text-xs text-stone-gray font-mono min-w-[4rem] text-center">
@@ -3850,86 +2668,86 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </span>
 
         {/* Zoom In */}
-        <button
+        <Button
           onClick={mapControls.zoomIn}
           disabled={mapControls.zoom >= mapControls.maxZoom}
-          className="btn-secondary p-2"
+          variant="secondary" className="p-2"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
-        </button>
+        </Button>
 
         {/* Divider */}
         <div className="w-px h-6 bg-moss-green/20" />
 
         {/* Reset View — fit and center the map in the canvas */}
-        <button
+        <Button
           onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
-          className="btn-secondary p-2"
+          variant="secondary" className="p-2"
           title="Fit to Screen"
         >
           <Maximize2 className="w-4 h-4" />
-        </button>
+        </Button>
 
         {/* Toggle Grid */}
-        <button
+        <Button
           onClick={() => setShowGrid((prev) => !prev)}
-          className={`btn-secondary p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
+          variant="secondary" className={`p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
           title="Toggle Grid"
         >
           <Grid3x3 className="w-4 h-4" />
-        </button>
+        </Button>
 
         {/* Grid Color Toggle (only show if grid is enabled) */}
         {showGrid && (
-          <button
+          <Button
             onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
-            className="btn-secondary p-2"
+            variant="secondary" className="p-2"
             title={`Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`}
           >
             <Palette className="w-4 h-4" />
-          </button>
+          </Button>
         )}
 
         {/* Toggle Ruler */}
         {currentMap && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
-            <button
+            <Button
               onClick={handleToggleRuler}
-              className={`btn-secondary p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
+              variant="secondary" className={`p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
               title="Ruler — measure distance"
             >
               <Ruler className={`w-4 h-4 ${showRuler ? 'text-moss-green' : ''}`} />
-            </button>
+            </Button>
             {showRuler && (
-              <button
+              <Button
                 onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
-                className="btn-secondary p-2"
+                variant="secondary" className="p-2"
                 title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
               >
                 <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-purple' : rulerColor === 'black' ? 'text-stone-gray' : 'text-warm-amber'}`} />
-              </button>
+              </Button>
             )}
 
             {/* Toggle AoE tool */}
-            <button
+            <Button
               onClick={() => {
-                setShowAoE((prev) => {
-                  if (!prev) {
-                    setShowRuler(false);
-                    setRulerOrigin(null);
-                  } else {
-                    setAoEOrigin(null);
-                  }
-                  return !prev;
-                });
+              setShowAoE((prev) => {
+              if (!prev) {
+              setShowRuler(false);
+              setRulerOrigin(null);
+              } else {
+              setAoEOrigin(null);
+              }
+              return !prev;
+              });
               }}
-              className={`btn-secondary p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
+              variant="secondary" className={`p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
               title="AoE Shape — area of effect overlay"
             >
               <Zap className={`w-4 h-4 ${showAoE ? 'text-moss-green' : ''}`} />
-            </button>
+            </Button>
           </>
         )}
 
@@ -3937,13 +2755,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         {userRole === 'DM' && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
-            <button
+            <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
-              className={`btn-secondary p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
+              variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
               title={dmShowSpiritTokens ? 'Hiding spirit tokens (click to show)' : 'Spirit tokens hidden — click to show'}
             >
               <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-purple' : 'text-stone-gray/40'}`} />
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -4453,7 +3271,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       initiative: token.initiative,
                       conditions: [],
                     });
-                    updateTokens([...tokens, result.token]);
+                    useGameStore.getState().addToken(result.token);
                     socket?.emitMapChange(currentMap.id);
                   } catch (err) {
                     console.error('Failed to duplicate token:', err);
@@ -4502,7 +3320,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     setContextMenu(null);
                     try {
                       await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-                      updateTokens(tokens.map((t) => t.id === token.id ? { ...t, visible: !token.visible } : t));
+                      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
                       socket?.emitMapChange(currentMap.id);
                     } catch (err) {
                       console.error('Failed to toggle object visibility:', err);
@@ -4526,7 +3344,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       setContextMenu(null);
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
-                        updateTokens(tokens.map((t) => t.id === token.id ? { ...t, layer: TokenLayer.SPIRIT } : t));
+                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
                         socket?.emitMapChange(currentMap.id);
                       } catch (err) {
                         console.error('Failed to move token to spirit realm:', err);
@@ -4548,7 +3366,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       setContextMenu(null);
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
-                        updateTokens(tokens.map((t) => t.id === token.id ? { ...t, layer: TokenLayer.TOKEN } : t));
+                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
                         socket?.emitMapChange(currentMap.id);
                       } catch (err) {
                         console.error('Failed to return token to material plane:', err);
@@ -4609,7 +3427,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                                     controlledBy: token.controlledBy,
                                   });
                                   await api.deleteToken(campaign.id, currentMap.id, token.id);
-                                  updateTokens(tokens.filter((t) => t.id !== token.id));
+                                  useGameStore.getState().removeToken(token.id);
                                   socket?.emitMapChange(currentMap.id);
                                   socket?.emitMapChange(targetMap.id);
                                 } catch (err) {
@@ -4638,7 +3456,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   setContextMenu(null);
                   try {
                     await api.deleteToken(campaign.id, currentMap.id, token.id);
-                    updateTokens(tokens.filter((t) => t.id !== token.id));
+                    useGameStore.getState().removeToken(token.id);
                     socket?.emitMapChange(currentMap.id);
                   } catch (err) {
                     console.error('Failed to remove token:', err);

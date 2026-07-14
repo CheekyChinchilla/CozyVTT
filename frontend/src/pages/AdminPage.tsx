@@ -1,6 +1,5 @@
 // ============================================
 // AdminPage
-// SOW Reference: Section 2.3 (Platform Roles - Admin)
 //
 // Platform administration — Admin role only.
 // Protected by ProtectedRoute requireRole={PlatformRole.ADMIN} in App.tsx.
@@ -74,6 +73,8 @@ import {
 } from '@/themes';
 import ThemePicker from '@/components/appearance/ThemePicker';
 import TableSkeleton from '@/components/skeletons/TableSkeleton';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Helpers
@@ -238,6 +239,7 @@ export default function AdminPage() {
   const [deletingBackupFile, setDeletingBackupFile] = useState<string | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [restoreError, setRestoreError] = useState('');
   const [restoreSuccess, setRestoreSuccess] = useState(false);
   const restoreInputRef = useRef<HTMLInputElement>(null);
@@ -417,13 +419,13 @@ export default function AdminPage() {
       loadAdminAssets(1, '', '', '');
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
-  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab]);  
 
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
     loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]);  
 
   // Reset page when filters change
   useEffect(() => {
@@ -702,11 +704,14 @@ export default function AdminPage() {
     }
   };
 
-  const handleRestoreBackup = async () => {
+  const handleRestoreBackup = () => {
     if (!restoreFile) return;
-    if (!window.confirm(
-      'WARNING: This will permanently overwrite the entire database and all uploaded files with the contents of the backup. This cannot be undone.\n\nAre you sure you want to continue?'
-    )) return;
+    setShowRestoreConfirm(true);
+  };
+
+  const handleRestoreBackupConfirmed = async () => {
+    setShowRestoreConfirm(false);
+    if (!restoreFile) return;
     setRestoring(true);
     setRestoreError('');
     try {
@@ -835,14 +840,14 @@ export default function AdminPage() {
           <div role="tabpanel" id="tabpanel-dashboard" aria-labelledby="tab-dashboard">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-moss-green">System Overview</h2>
-              <button
+              <Button
                 onClick={loadStats}
                 disabled={statsLoading}
-                className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${statsLoading ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
+              </Button>
             </div>
 
             {statsError && (
@@ -979,21 +984,21 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-moss-green">User Management</h2>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   onClick={() => setCreateUserOpen(true)}
-                  className="btn-primary flex items-center gap-2 text-sm py-1.5 px-3"
+                  className="flex items-center gap-2 text-sm py-1.5 px-3"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   Create User
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={loadUsers}
                   disabled={usersLoading}
-                  className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                  variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${usersLoading ? 'animate-spin' : ''}`} />
                   Refresh
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1160,25 +1165,25 @@ export default function AdminPage() {
                                       </button>
                                     )}
                                     {/* Reset Password */}
-                                    <button
+                                    <Button
                                       onClick={() => {
-                                        if (isResetExpanded) {
-                                          closeResetModal();
-                                        } else {
-                                          closeDeleteModal();
-                                          setResetMfaConfirmId(null);
-                                          setResetTarget(u);
-                                          setTempPassword('');
-                                          setResetError('');
-                                        }
+                                      if (isResetExpanded) {
+                                      closeResetModal();
+                                      } else {
+                                      closeDeleteModal();
+                                      setResetMfaConfirmId(null);
+                                      setResetTarget(u);
+                                      setTempPassword('');
+                                      setResetError('');
+                                      }
                                       }}
                                       disabled={isSelf}
                                       title={isSelf ? 'Cannot reset your own password here' : 'Reset password'}
-                                      className={`btn-secondary text-xs py-1 px-2 flex items-center gap-1 ${isSelf ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                      variant="secondary" className={`text-xs py-1 px-2 flex items-center gap-1 ${isSelf ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     >
                                       <RefreshCw className="w-3 h-3" />
                                       Pwd
-                                    </button>
+                                    </Button>
                                     {/* Delete */}
                                     <button
                                       onClick={() => {
@@ -1228,12 +1233,12 @@ export default function AdminPage() {
                                           {isResettingMfa && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Confirm Reset
                                         </button>
-                                        <button
+                                        <Button
                                           onClick={() => { setResetMfaConfirmId(null); setResetMfaError(''); }}
-                                          className="btn-secondary text-sm py-1.5 px-4"
+                                          variant="secondary" className="text-sm py-1.5 px-4"
                                         >
                                           Cancel
-                                        </button>
+                                        </Button>
                                       </div>
                                     </div>
                                   </td>
@@ -1257,13 +1262,13 @@ export default function AdminPage() {
                                             <code className="flex-1 bg-paper border border-warm-gray/30 rounded px-3 py-2 text-sm font-mono text-ink-secondary select-all">
                                               {tempPassword}
                                             </code>
-                                            <button
+                                            <Button
                                               onClick={() => handleCopyToClipboard(tempPassword, setCopied)}
-                                              className="btn-secondary flex items-center gap-1 text-xs py-2 px-3"
+                                              variant="secondary" className="flex items-center gap-1 text-xs py-2 px-3"
                                             >
                                               {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                                               {copied ? 'Copied' : 'Copy'}
-                                            </button>
+                                            </Button>
                                           </div>
                                           <button
                                             onClick={closeResetModal}
@@ -1280,14 +1285,14 @@ export default function AdminPage() {
                                             {resetError && (
                                               <p className="text-xs text-red-600 mb-1.5">{resetError}</p>
                                             )}
-                                            <button
+                                            <Button
                                               onClick={handleResetPassword}
                                               disabled={isResetting || isSendingResetLink}
-                                              className="btn-primary flex items-center gap-2 text-sm py-1.5 px-4"
+                                              className="flex items-center gap-2 text-sm py-1.5 px-4"
                                             >
                                               {isResetting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                               Generate Temporary Password
-                                            </button>
+                                            </Button>
                                           </div>
 
                                           {/* Option 2: Send reset link via email */}
@@ -1302,14 +1307,14 @@ export default function AdminPage() {
                                                 {resetLinkError && (
                                                   <p className="text-xs text-red-600 mb-1.5">{resetLinkError}</p>
                                                 )}
-                                                <button
+                                                <Button
                                                   onClick={handleSendPasswordResetLink}
                                                   disabled={isSendingResetLink || isResetting}
-                                                  className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-4"
+                                                  variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-4"
                                                 >
                                                   {isSendingResetLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                                                   Send Reset Link
-                                                </button>
+                                                </Button>
                                               </>
                                             )}
                                           </div>
@@ -1366,12 +1371,12 @@ export default function AdminPage() {
                                           {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Delete
                                         </button>
-                                        <button
+                                        <Button
                                           onClick={closeDeleteModal}
-                                          className="btn-secondary text-sm py-2 px-4"
+                                          variant="secondary" className="text-sm py-2 px-4"
                                         >
                                           Cancel
-                                        </button>
+                                        </Button>
                                       </div>
                                     </div>
                                   </td>
@@ -1399,14 +1404,14 @@ export default function AdminPage() {
           <div role="tabpanel" id="tabpanel-assets" aria-labelledby="tab-assets">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-moss-green">Asset Management</h2>
-              <button
+              <Button
                 onClick={() => loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch)}
                 disabled={adminAssetsLoading}
-                className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${adminAssetsLoading ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
+              </Button>
             </div>
 
             {/* Filter Bar */}
@@ -1626,24 +1631,24 @@ export default function AdminPage() {
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                       ))}
                                     </select>
-                                    <button
+                                    <Button
                                       onClick={() => {
-                                        if (assetScopePicker?.campaignId) {
-                                          handleAdminAssetScopeChange(asset, AssetScope.CAMPAIGN, assetScopePicker.campaignId);
-                                        }
+                                      if (assetScopePicker?.campaignId) {
+                                      handleAdminAssetScopeChange(asset, AssetScope.CAMPAIGN, assetScopePicker.campaignId);
+                                      }
                                       }}
                                       disabled={!assetScopePicker?.campaignId || isChangingScope}
-                                      className="btn-primary text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {isChangingScope && <Loader2 className="w-3 h-3 animate-spin" />}
                                       Move
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                       onClick={() => setAssetScopePicker(null)}
-                                      className="btn-secondary text-xs py-1 px-3"
+                                      variant="secondary" className="text-xs py-1 px-3"
                                     >
                                       Cancel
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -1787,14 +1792,14 @@ export default function AdminPage() {
                   {settingsError && (
                     <p className="text-sm text-red-600 flex-1">{settingsError}</p>
                   )}
-                  <button
+                  <Button
                     onClick={handleSaveSettings}
                     disabled={settingsSaving}
-                    className="btn-primary flex items-center gap-2 ml-auto"
+                    className="flex items-center gap-2 ml-auto"
                   >
                     {settingsSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                     Save Settings
-                  </button>
+                  </Button>
                 </div>
 
               </section>
@@ -1981,44 +1986,44 @@ export default function AdminPage() {
                   {appearanceError && (
                     <p className="text-sm text-red-600 flex-1">{appearanceError}</p>
                   )}
-                  <button
+                  <Button
                     onClick={async () => {
-                      setAppearanceSaving(true);
-                      setAppearanceError('');
-                      try {
-                        const updateData: Record<string, any> = {
-                          themeId: appearanceForm.themeId,
-                          fontId: appearanceForm.fontId,
-                        };
-                        if (appearanceForm.themeId === 'custom') {
-                          updateData.customThemeColors = appearanceForm.customColors;
-                        }
-                        await adminService.updateSettings(updateData);
-                        await refreshAppearance();
-                        showToast('Appearance saved!', 'success');
-                      } catch (err: any) {
-                        setAppearanceError(err.response?.data?.message || 'Failed to save appearance');
-                      } finally {
-                        setAppearanceSaving(false);
-                      }
+                    setAppearanceSaving(true);
+                    setAppearanceError('');
+                    try {
+                    const updateData: Record<string, any> = {
+                    themeId: appearanceForm.themeId,
+                    fontId: appearanceForm.fontId,
+                    };
+                    if (appearanceForm.themeId === 'custom') {
+                    updateData.customThemeColors = appearanceForm.customColors;
+                    }
+                    await adminService.updateSettings(updateData);
+                    await refreshAppearance();
+                    showToast('Appearance saved!', 'success');
+                    } catch (err: any) {
+                    setAppearanceError(err.response?.data?.message || 'Failed to save appearance');
+                    } finally {
+                    setAppearanceSaving(false);
+                    }
                     }}
                     disabled={appearanceSaving}
-                    className="btn-primary flex items-center gap-2 ml-auto"
+                    className="flex items-center gap-2 ml-auto"
                   >
                     {appearanceSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                     Save Default Theme
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => {
-                      const defaultTheme = PRESET_THEMES[0];
-                      setAppearanceForm(f => ({ ...f, themeId: 'cozy-default', fontId: 'default' }));
-                      applyThemeColors(defaultTheme.colors);
-                      applyFont(FONT_OPTIONS[0]);
+                    const defaultTheme = PRESET_THEMES[0];
+                    setAppearanceForm(f => ({ ...f, themeId: 'cozy-default', fontId: 'default' }));
+                    applyThemeColors(defaultTheme.colors);
+                    applyFont(FONT_OPTIONS[0]);
                     }}
-                    className="btn-secondary text-sm"
+                    variant="secondary" className="text-sm"
                   >
                     Reset to Default
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -2031,25 +2036,25 @@ export default function AdminPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-moss-green">Instance Backups</h2>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   onClick={handleCreateBackup}
                   disabled={creatingBackup}
-                  className="btn-primary flex items-center gap-2 text-sm py-1.5 px-3"
+                  className="flex items-center gap-2 text-sm py-1.5 px-3"
                 >
                   {creatingBackup
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     : <HardDrive className="w-3.5 h-3.5" />
                   }
                   Create Backup
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={loadBackups}
                   disabled={backupsLoading}
-                  className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                  variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${backupsLoading ? 'animate-spin' : ''}`} />
                   Refresh
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -2144,12 +2149,12 @@ export default function AdminPage() {
                     <p className="text-xs text-warm-gray">
                       The database and files have been restored. Your current session is no longer valid.
                     </p>
-                    <button
+                    <Button
                       onClick={() => window.location.href = '/login'}
-                      className="btn-primary text-xs py-1.5 px-4 mt-1"
+                      className="text-xs py-1.5 px-4 mt-1"
                     >
                       Go to Login
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <>
@@ -2172,13 +2177,13 @@ export default function AdminPage() {
                           setRestoreError('');
                         }}
                       />
-                      <button
+                      <Button
                         onClick={() => restoreInputRef.current?.click()}
-                        className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                        variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         {restoreFile ? 'Change file' : 'Select backup file (.zip)'}
-                      </button>
+                      </Button>
                       {restoreFile && (
                         <p className="text-xs text-warm-gray mt-1.5 font-mono">
                           {restoreFile.name} ({formatBytes(restoreFile.size)})
@@ -2217,14 +2222,14 @@ export default function AdminPage() {
           <div role="tabpanel" id="tabpanel-activity" aria-labelledby="tab-activity">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-moss-green">Platform Activity</h2>
-              <button
+              <Button
                 onClick={loadActivity}
                 disabled={activityLoading}
-                className="btn-secondary flex items-center gap-2 text-sm py-1.5 px-3"
+                variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${activityLoading ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
+              </Button>
             </div>
 
             {activityError && (
@@ -2468,17 +2473,17 @@ export default function AdminPage() {
                     <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded px-3 py-2 text-sm font-mono text-stone-gray select-all">
                       {newUserPassword}
                     </code>
-                    <button
+                    <Button
                       onClick={() => handleCopyToClipboard(newUserPassword, setNewUserPasswordCopied)}
-                      className="btn-secondary flex items-center gap-1 text-xs py-2 px-3"
+                      variant="secondary" className="flex items-center gap-1 text-xs py-2 px-3"
                     >
                       {newUserPasswordCopied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       {newUserPasswordCopied ? 'Copied' : 'Copy'}
-                    </button>
+                    </Button>
                   </div>
-                  <button onClick={closeCreateUserModal} className="btn-primary w-full">
+                  <Button onClick={closeCreateUserModal} className="w-full">
                     Done
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 /* Form */
@@ -2540,21 +2545,21 @@ export default function AdminPage() {
                   </div>
 
                   <div className="pt-2 flex gap-2">
-                    <button
+                    <Button
                       onClick={handleCreateUser}
                       disabled={creatingUser || !createUserForm.email.trim()}
-                      className="btn-primary flex-1 flex items-center justify-center gap-2"
+                      className="flex-1 flex items-center justify-center gap-2"
                     >
                       {creatingUser && <Loader2 className="w-4 h-4 animate-spin" />}
                       Create User
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={closeCreateUserModal}
                       disabled={creatingUser}
-                      className="btn-secondary flex-1"
+                      variant="secondary" className="flex-1"
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -2563,6 +2568,17 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Restore backup confirmation */}
+      <ConfirmDialog
+        isOpen={showRestoreConfirm}
+        title="Restore Backup"
+        message="WARNING: This will permanently overwrite the entire database and all uploaded files with the contents of the backup. This cannot be undone. Are you sure you want to continue?"
+        confirmLabel="Restore Backup"
+        variant="danger"
+        isLoading={restoring}
+        onConfirm={handleRestoreBackupConfirmed}
+        onCancel={() => setShowRestoreConfirm(false)}
+      />
     </div>
   );
 }

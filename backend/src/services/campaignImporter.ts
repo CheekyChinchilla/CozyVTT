@@ -28,6 +28,7 @@ import {
   IMPORT_LIMITS,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
+import { isSafeArchivePath } from '../utils/archive';
 import logger from '../utils/logger';
 
 const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
@@ -65,17 +66,6 @@ export interface ImportResult {
 
 // ── Security helpers ────────────────────────────────────────────────────────
 
-/** Reject filenames with path traversal attempts. */
-function isSafePath(name: string): boolean {
-  if (!name) return false;
-  if (name.includes('..')) return false;
-  if (name.includes('\\')) return false;
-  // Must be a simple relative path under expected directories
-  const normalized = path.posix.normalize(name);
-  if (normalized.startsWith('/') || normalized.startsWith('..')) return false;
-  return true;
-}
-
 /** Parse JSON with a size limit. Throws if too large. */
 function safeJsonParse(buffer: Buffer, maxBytes: number = IMPORT_LIMITS.MAX_JSON_SIZE_BYTES): unknown {
   if (buffer.length > maxBytes) {
@@ -103,7 +93,7 @@ async function getMaxImportSize(): Promise<number> {
   return settings?.campaignExportSizeLimit ?? 524288000; // 500 MB default
 }
 
-// ── Preview (Phase 1) ───────────────────────────────────────────────────────
+// ── Preview ───────────────────────────────────────────────────────
 
 export async function previewCampaignImport(
   zipBuffer: Buffer
@@ -130,7 +120,7 @@ export async function previewCampaignImport(
   return parsed.data;
 }
 
-// ── Import (Phase 2) ────────────────────────────────────────────────────────
+// ── Import ────────────────────────────────────────────────────────
 
 export async function importCampaign(
   zipBuffer: Buffer,
@@ -154,7 +144,7 @@ export async function importCampaign(
 
   // Validate all paths are safe
   for (const file of directory.files) {
-    if (!isSafePath(file.path)) {
+    if (!isSafeArchivePath(file.path)) {
       throw new Error(`Unsafe file path detected: ${file.path}`);
     }
   }

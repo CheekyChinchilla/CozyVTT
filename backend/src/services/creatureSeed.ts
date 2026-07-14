@@ -9,6 +9,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import logger from '../utils/logger';
 
 // ─── Open5e API Types ───────────────────────────────────────────
 
@@ -225,7 +226,7 @@ export async function seedSrdCreatures(prisma: PrismaClient): Promise<SeedResult
       created++;
     } catch (err) {
       // Log but don't abort — skip problematic entries
-      console.error(`Failed to insert "${monster.name}":`, err);
+      logger.error(`Failed to insert "${monster.name}"`, { err: err });
     }
   }
 

@@ -28,6 +28,7 @@ import api from '@/services/api';
 import type { Token, TokenHp, NpcStatBlock, Asset } from '@/types';
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Constants
@@ -476,9 +477,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </span>
 
             {/* Close */}
-            <button onClick={onClose} className="btn-secondary p-1.5 flex-shrink-0" title="Close">
+            <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
 
           {/* ── Body ── */}
@@ -721,26 +722,26 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                           placeholder="Max HP"
                           className="input-cozy input-cozy-number text-sm w-24"
                         />
-                        <button
+                        <Button
                           onClick={enableHpTracking}
-                          className="btn-primary text-xs py-1 px-3"
+                          className="text-xs py-1 px-3"
                         >
                           Enable
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => { setEnableHpPrompt(false); setNewHpMax(''); }}
-                          className="btn-secondary text-xs py-1 px-2"
+                          variant="secondary" className="text-xs py-1 px-2"
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     ) : (
-                      <button
+                      <Button
                         onClick={() => setEnableHpPrompt(true)}
-                        className="btn-secondary text-xs"
+                        variant="secondary" className="text-xs"
                       >
                         Enable HP tracking
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -794,28 +795,28 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   <div className="glass-panel p-3">
                     {showCreateStatBlock ? (
                       <div className="flex gap-2 items-center">
-                        <button
+                        <Button
                           onClick={handleCreateStatBlock}
-                          className="btn-primary text-xs py-1 px-3"
+                          className="text-xs py-1 px-3"
                         >
                           Create Blank
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => setShowCreateStatBlock(false)}
-                          className="btn-secondary text-xs py-1 px-2"
+                          variant="secondary" className="text-xs py-1 px-2"
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <>
                         <p className="text-sm text-stone-gray/70 italic mb-2">No stat block</p>
-                        <button
+                        <Button
                           onClick={() => setShowCreateStatBlock(true)}
-                          className="btn-secondary text-xs"
+                          variant="secondary" className="text-xs"
                         >
                           Add Stat Block
-                        </button>
+                        </Button>
                       </>
                     )}
                   </div>

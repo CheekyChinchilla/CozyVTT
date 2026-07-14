@@ -3,31 +3,29 @@
 // Character library management for players
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, LogOut, Loader2, RefreshCw, User as UserIcon, Upload } from 'lucide-react';
+import { Plus, LogOut, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import characterService from '@/services/character.service';
-import campaignService from '@/services/campaign.service';
+import { useCampaignsQuery, useCharactersQuery, queryKeys } from '@/hooks/queries';
 import CharacterCard from '@/components/character/CharacterCard';
 import NewCharacterModal from '@/components/character/NewCharacterModal';
 import DeleteCharacterModal from '@/components/character/DeleteCharacterModal';
 import AssignCharacterModal from '@/components/character/AssignCharacterModal';
 import ImportCharacterModal from '@/components/character/ImportCharacterModal';
+import EmptyState from '@/components/common/EmptyState';
 import type { Character, Campaign } from '@/types';
+import Button from '@/components/ui/Button';
 
 export default function CharactersPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { mascotUrl } = useTheme();
-
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -36,32 +34,31 @@ export default function CharactersPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
 
-  // Load characters and campaigns on mount
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Server resources via react-query (shared cache with DashboardPage)
+  const queryClient = useQueryClient();
+  const charactersQuery = useCharactersQuery();
+  const campaignsQuery = useCampaignsQuery();
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
+  const characters = charactersQuery.data ?? [];
+  const campaigns = campaignsQuery.data ?? [];
+  const loading = charactersQuery.isPending || campaignsQuery.isPending;
+  const queryError = charactersQuery.error || campaignsQuery.error;
+  const error = queryError
+    ? ((queryError as any).response?.data?.message || 'Failed to load characters')
+    : '';
 
-    try {
-      const [charactersData, campaignsData] = await Promise.all([
-        characterService.getCharacters(),
-        campaignService.getCampaigns(),
-      ]);
+  const loadData = () => {
+    charactersQuery.refetch();
+    campaignsQuery.refetch();
+  };
 
-      setCharacters(charactersData);
-      setCampaigns(campaignsData);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load characters');
-    } finally {
-      setLoading(false);
-    }
+  // Local cache mutations mirror the previous setState behavior
+  const setCharactersData = (updater: (prev: Character[]) => Character[]) => {
+    queryClient.setQueryData<Character[]>(queryKeys.characters, (prev) => updater(prev ?? []));
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
-    setCharacters([newCharacter, ...characters]);
+    setCharactersData((prev) => [newCharacter, ...prev]);
     showSuccess('Character created successfully!');
     // Note: For now we just close the modal.
   };
@@ -73,10 +70,10 @@ export default function CharactersPage() {
   const handleCopy = async (character: Character) => {
     try {
       const copiedCharacter = await characterService.copyCharacter(character.id);
-      setCharacters([copiedCharacter, ...characters]);
+      setCharactersData((prev) => [copiedCharacter, ...prev]);
       showSuccess(`${character.name} copied successfully`);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to copy character');
+      showToast(err.response?.data?.message || 'Failed to copy character', 'error');
     }
   };
 
@@ -86,15 +83,12 @@ export default function CharactersPage() {
   };
 
   const handleDeleteConfirm = async (characterId: string) => {
-    try {
-      await characterService.deleteCharacter(characterId);
-      setCharacters(characters.filter((c) => c.id !== characterId));
-      showSuccess('Character deleted successfully');
-      setShowDeleteModal(false);
-      setSelectedCharacter(null);
-    } catch (err: any) {
-      throw err; // Let modal handle the error display
-    }
+    // Errors propagate to the modal, which handles the display
+    await characterService.deleteCharacter(characterId);
+    setCharactersData((prev) => prev.filter((c) => c.id !== characterId));
+    showSuccess('Character deleted successfully');
+    setShowDeleteModal(false);
+    setSelectedCharacter(null);
   };
 
   const handleAssignClick = (character: Character) => {
@@ -103,28 +97,25 @@ export default function CharactersPage() {
   };
 
   const handleAssignConfirm = async (characterId: string, campaignId: string | null) => {
-    try {
-      let updatedCharacter: Character;
+    // Errors propagate to the modal, which handles the display
+    let updatedCharacter: Character;
 
-      if (campaignId) {
-        updatedCharacter = await characterService.assignCharacter(characterId, campaignId);
-        const campaign = campaigns.find((c) => c.id === campaignId);
-        showSuccess(`Assigned to ${campaign?.name || 'campaign'}`);
-      } else {
-        updatedCharacter = await characterService.unassignCharacter(characterId);
-        showSuccess('Character unassigned');
-      }
-
-      // Update character in list
-      setCharacters(
-        characters.map((c) => (c.id === characterId ? updatedCharacter : c))
-      );
-
-      setShowAssignModal(false);
-      setSelectedCharacter(null);
-    } catch (err: any) {
-      throw err; // Let modal handle the error display
+    if (campaignId) {
+      updatedCharacter = await characterService.assignCharacter(characterId, campaignId);
+      const campaign = campaigns.find((c) => c.id === campaignId);
+      showSuccess(`Assigned to ${campaign?.name || 'campaign'}`);
+    } else {
+      updatedCharacter = await characterService.unassignCharacter(characterId);
+      showSuccess('Character unassigned');
     }
+
+    // Update character in list
+    setCharactersData((prev) =>
+      prev.map((c) => (c.id === characterId ? updatedCharacter : c))
+    );
+
+    setShowAssignModal(false);
+    setSelectedCharacter(null);
   };
 
   const handleExport = (character: Character) => {
@@ -133,18 +124,15 @@ export default function CharactersPage() {
   };
 
   const handleImport = async (data: { name: string; gameSystem: string | null; data: any }) => {
-    try {
-      const importedCharacter = await characterService.createCharacter({
-        name: data.name,
-        data: data.data,
-        gameSystem: data.gameSystem as import('@/types').GameSystem | null,
-      });
+    // Errors propagate to the modal, which handles the display
+    const importedCharacter = await characterService.createCharacter({
+      name: data.name,
+      data: data.data,
+      gameSystem: data.gameSystem as import('@/types').GameSystem | null,
+    });
 
-      setCharacters([importedCharacter, ...characters]);
-      showSuccess(`${data.name} imported successfully`);
-    } catch (err: any) {
-      throw err; // Let modal handle the error display
-    }
+    setCharactersData((prev) => [importedCharacter, ...prev]);
+    showSuccess(`${data.name} imported successfully`);
   };
 
   const handleLogout = async () => {
@@ -187,33 +175,33 @@ export default function CharactersPage() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 onClick={() => navigate('/dashboard')}
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary" className="flex items-center gap-2"
               >
                 <span className="hidden sm:inline">Back to Dashboard</span>
                 <span className="sm:hidden">Dashboard</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={loadData}
                 disabled={loading}
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary" className="flex items-center gap-2"
                 aria-label={loading ? 'Refreshing characters' : 'Refresh characters'}
                 aria-busy={loading}
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                 <span className="hidden sm:inline">Refresh</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleLogout}
-                className="btn-danger flex items-center gap-2"
+                variant="danger" className="flex items-center gap-2"
                 aria-label="Log out of CozyVTT"
               >
                 <LogOut className="w-4 h-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Logout</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -236,20 +224,20 @@ export default function CharactersPage() {
                 )}
               </h2>
               <div className="flex items-center gap-3">
-                <button
+                <Button
                   onClick={() => setShowImportModal(true)}
-                  className="btn-secondary flex items-center gap-2"
+                  variant="secondary" className="flex items-center gap-2"
                 >
                   <Upload className="w-5 h-5" />
                   Import
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => setShowCreateModal(true)}
-                  className="btn-primary flex items-center gap-2"
+                  className="flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Create Character
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -270,27 +258,19 @@ export default function CharactersPage() {
 
             {/* Empty State */}
             {!loading && characters.length === 0 && (
-              <div className="glass-panel p-12 text-center">
-                <div className="max-w-md mx-auto">
-                  <div className="mb-4 inline-block p-4 rounded-full bg-moss-green/10">
-                    <UserIcon className="w-12 h-12 text-moss-green" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-moss-green mb-2">
-                    No characters yet
-                  </h3>
-                  <p className="text-warm-gray mb-6">
-                    Create your first character to get started! You can create characters
-                    for any of your campaigns or prepare them for future adventures.
-                  </p>
-                  <button
+              <EmptyState
+                title="No characters yet"
+                description="Create your first character to get started! You can create characters for any of your campaigns or prepare them for future adventures."
+                action={
+                  <Button
                     onClick={() => setShowCreateModal(true)}
-                    className="btn-primary inline-flex items-center gap-2"
+                    className="inline-flex items-center gap-2"
                   >
                     <Plus className="w-5 h-5" />
                     Create Your First Character
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                }
+              />
             )}
 
             {/* Character Grid */}

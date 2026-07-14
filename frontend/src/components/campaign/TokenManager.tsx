@@ -21,9 +21,11 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Asset, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Constants
@@ -49,7 +51,9 @@ interface TokenManagerProps {
 // ============================================
 
 export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
-  const { campaign, currentMap, tokens, updateTokens } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
+  // Manager lists tokens by name/flags — no need to re-render on moves.
+  const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
 
   // ── Asset picker state ──
@@ -213,7 +217,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       const result = await api.addToken(campaign.id, currentMap.id, tokenPayload as Parameters<typeof api.addToken>[2]);
 
       // Optimistic local update then broadcast so other clients get the new token
-      updateTokens([...tokens, result.token]);
+      useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
 
       // Reset form (keep asset selected in case DM wants to place another)
@@ -232,7 +236,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, objectHidden, tokens, updateTokens, socket]);
+  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, objectHidden, socket]);
 
   // ============================================
   // Token List Actions
@@ -243,7 +247,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     setTogglingVisibilityId(token.id);
     try {
       await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-      updateTokens(tokens.map((t) => (t.id === token.id ? { ...t, visible: !token.visible } : t)));
+      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
       socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to toggle token visibility');
@@ -258,7 +262,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     const newLayer = token.layer === TokenLayer.TOKEN ? TokenLayer.SPIRIT : TokenLayer.TOKEN;
     try {
       await api.updateToken(campaign.id, currentMap.id, token.id, { layer: newLayer });
-      updateTokens(tokens.map((t) => (t.id === token.id ? { ...t, layer: newLayer } : t)));
+      useGameStore.getState().patchToken(token.id, { layer: newLayer });
       socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to move token between layers');
@@ -275,10 +279,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     const targetMap = campaign.maps?.find((m) => m.id === targetMapId);
     if (!targetMap) return;
 
-    // Clamp position so it fits within the target map grid
+    // Read the live position (this list ignores movement, so the row's
+    // token prop can be stale), clamped to fit the target map grid.
+    const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
     const position = {
-      x: Math.min(token.position.x, targetMap.width - token.size.width),
-      y: Math.min(token.position.y, targetMap.height - token.size.height),
+      x: Math.min(livePosition.x, targetMap.width - token.size.width),
+      y: Math.min(livePosition.y, targetMap.height - token.size.height),
     };
 
     try {
@@ -293,7 +299,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       });
       await api.deleteToken(campaign.id, currentMap.id, token.id);
 
-      updateTokens(tokens.filter((t) => t.id !== token.id));
+      useGameStore.getState().removeToken(token.id);
       setMovingTokenId(null);
 
       // Broadcast to both maps
@@ -311,7 +317,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     setDeletingId(token.id);
     try {
       await api.deleteToken(campaign.id, currentMap.id, token.id);
-      updateTokens(tokens.filter((t) => t.id !== token.id));
+      useGameStore.getState().removeToken(token.id);
       socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to remove token from map');
@@ -353,9 +359,9 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                 <Swords className="w-5 h-5 text-moss-green" />
                 <h2 className="text-lg font-bold text-moss-green">Token Manager</h2>
               </div>
-              <button onClick={onClose} className="btn-secondary p-1.5" title="Close">
+              <Button onClick={onClose} variant="secondary" className="p-1.5" title="Close">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {/* Body */}
@@ -744,10 +750,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   </p>
                 )}
 
-                <button
+                <Button
                   onClick={handleAddToken}
                   disabled={!canAdd || isAdding}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
+                  className="w-full flex items-center justify-center gap-2"
                 >
                   {isAdding ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -755,7 +761,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                     <Plus className="w-4 h-4" />
                   )}
                   {isAdding ? 'Placing…' : 'Place on Map'}
-                </button>
+                </Button>
                 <p className="text-[10px] text-stone-gray/50 mt-1.5 text-center">
                   Token is placed at the map center — drag it into position afterwards.
                 </p>

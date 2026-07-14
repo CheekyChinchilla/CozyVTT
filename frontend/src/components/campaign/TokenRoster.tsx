@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
@@ -58,7 +59,7 @@ interface TokenRowProps {
 }
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
-  const { tokens, updateTokens, currentMap } = useCampaign();
+  const { currentMap } = useCampaign();
   const { socket } = useWebSocket();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
@@ -70,8 +71,11 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     if (!currentMap) return;
     setIsDuplicating(true);
     try {
-      const newX = Math.min(token.position.x + 1, currentMap.width - token.size.width);
-      const newY = Math.min(token.position.y + 1, currentMap.height - token.size.height);
+      // The roster subscribes ignoring movement, so this row's `token` prop
+      // can hold a stale position — read the live one at action time.
+      const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
+      const newX = Math.min(livePosition.x + 1, currentMap.width - token.size.width);
+      const newY = Math.min(livePosition.y + 1, currentMap.height - token.size.height);
       const freshHp = token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null;
       const result = await api.addToken(campaignId, mapId, {
         name: token.name,
@@ -89,37 +93,37 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         initiative: token.initiative,
         conditions: [],
       });
-      updateTokens([...tokens, result.token]);
+      useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
       console.error('TokenRoster: failed to duplicate token', err);
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, tokens, updateTokens, socket]);
+  }, [token, campaignId, mapId, currentMap, socket]);
 
   const handleToggleVisible = useCallback(async () => {
     try {
       await api.updateToken(campaignId, mapId, token.id, { visible: !token.visible });
-      updateTokens(tokens.map((t) => t.id === token.id ? { ...t, visible: !token.visible } : t));
+      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
       socket?.emitMapChange(mapId);
     } catch (err) {
       console.error('TokenRoster: failed to toggle visibility', err);
     }
-  }, [token, campaignId, mapId, tokens, updateTokens, socket]);
+  }, [token, campaignId, mapId, socket]);
 
   const handleDelete = useCallback(async () => {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
-      updateTokens(tokens.filter((t) => t.id !== token.id));
+      useGameStore.getState().removeToken(token.id);
       socket?.emitMapChange(mapId);
     } catch (err) {
       console.error('TokenRoster: failed to remove token', err);
       setIsDeleting(false);
     }
-  }, [token, campaignId, mapId, tokens, updateTokens, socket, isDeleting]);
+  }, [token, campaignId, mapId, socket, isDeleting]);
 
   const hp = hpLabel(token);
 
@@ -251,7 +255,10 @@ function TokenGroup({ label, tokens, campaignId, mapId, onEditToken, defaultOpen
 // ============================================
 
 export default function TokenRoster({ onEditToken }: TokenRosterProps) {
-  const { campaign, currentMap, tokens } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
+  // Movement-ignoring subscription: the roster renders names/flags/HP, not
+  // coordinates, so it stays static while tokens are dragged around the map.
+  const tokens = useTokenListIgnoringMovement();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   if (!currentMap || !campaign) return null;

@@ -4,7 +4,7 @@
 // Provides user data and auth functions to entire app
 // ============================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { authService } from '@/services/auth.service';
 import type {
   User,
@@ -150,15 +150,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw new Error('No MFA verification pending');
     }
 
-    try {
-      const response = await authService.verifyMFALogin(token);
-      setUser(response.user);
-      setAuthenticated(true);
-      setMfaPending(false);
-      setMustChangePassword(response.mustChangePassword || false);
-    } catch (error) {
-      throw error;
-    }
+    const response = await authService.verifyMFALogin(token);
+    setUser(response.user);
+    setAuthenticated(true);
+    setMfaPending(false);
+    setMustChangePassword(response.mustChangePassword || false);
   }, [mfaPending]);
 
   const verifyMFAWithBackupCode = useCallback(async (backupCode: string): Promise<void> => {
@@ -166,19 +162,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw new Error('No MFA verification pending');
     }
 
-    try {
-      const response = await authService.verifyMFALoginWithBackupCode(backupCode);
-      setUser(response.user);
-      setAuthenticated(true);
-      setMfaPending(false);
-      setMustChangePassword(response.mustChangePassword || false);
+    const response = await authService.verifyMFALoginWithBackupCode(backupCode);
+    setUser(response.user);
+    setAuthenticated(true);
+    setMfaPending(false);
+    setMustChangePassword(response.mustChangePassword || false);
 
-      // Show warning if backup codes are running low
-      if (response.warning) {
-        console.warn('MFA Warning:', response.warning);
-      }
-    } catch (error) {
-      throw error;
+    // Show warning if backup codes are running low
+    if (response.warning) {
+      console.warn('MFA Warning:', response.warning);
     }
   }, [mfaPending]);
 
@@ -267,7 +259,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Context Value
   // ============================================
 
-  const value: AuthContextType = {
+  // Memoized so consumers only re-render on actual auth-state changes,
+  // not on every provider render.
+  const value: AuthContextType = useMemo(() => ({
     // State
     user,
     loading,
@@ -286,7 +280,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     disableMFA,
     changePassword,
     refreshUser,
-  };
+  }), [
+    user,
+    loading,
+    authenticated,
+    mfaPending,
+    mustChangePassword,
+    login,
+    logout,
+    register,
+    verifyMFA,
+    verifyMFAWithBackupCode,
+    setupMFA,
+    completeMFASetup,
+    disableMFA,
+    changePassword,
+    refreshUser,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

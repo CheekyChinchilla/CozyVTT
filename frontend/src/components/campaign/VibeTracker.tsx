@@ -1,6 +1,6 @@
 /**
  * Vibe Tracker
- * Per SOW Section 18.3: Vibe Tracker Details
+ * Vibe Tracker Details
  *
  * Displays the current time-of-day period and lets the DM switch between periods.
  * All users see the current period indicator; only the DM can change it or configure periods.

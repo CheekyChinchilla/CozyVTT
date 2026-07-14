@@ -5,6 +5,7 @@
 
 import React, { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw, ExternalLink } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 interface Props {
   children: ReactNode;
@@ -84,21 +85,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
+            <Button
               onClick={this.handleReset}
-              className="btn-secondary flex items-center justify-center gap-2"
+              variant="secondary" className="flex items-center justify-center gap-2"
             >
               <RefreshCcw className="w-4 h-4" aria-hidden="true" />
               Try Again
-            </button>
+            </Button>
 
-            <button
+            <Button
               onClick={this.handleReload}
-              className="btn-primary flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2"
             >
               <RefreshCcw className="w-4 h-4" aria-hidden="true" />
               Reload Page
-            </button>
+            </Button>
 
             <a
               href="https://github.com/CheekyChinchilla/CozyVTT/issues"

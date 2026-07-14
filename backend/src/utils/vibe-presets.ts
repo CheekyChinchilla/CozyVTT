@@ -1,6 +1,6 @@
 /**
  * Vibe Tracker Presets & Validation
- * Per SOW Section 18.3: Vibe Tracker Details
+ * Vibe Tracker Details
  *
  * Default time periods with visual effects (hue, CSS filter, ambient audio).
  * DMs can customize periods or create their own.
@@ -19,7 +19,7 @@ export interface VibeSettings {
 }
 
 /**
- * Default vibe periods per SOW Section 18.3
+ * Default vibe periods
  * Dawn, Day, Dusk, Night with appropriate colors and CSS filters
  */
 export const DEFAULT_VIBE_PERIODS: VibePeriod[] = [

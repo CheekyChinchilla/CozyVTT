@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { AssetType, isAllowedMimeType, deleteFile } from '../utils/fileUtils';
 import { UploadRequest } from './upload';
+import logger from '../utils/logger';
 
 /**
  * Validate uploaded file by checking actual MIME type from file content (magic bytes)
@@ -83,14 +84,14 @@ export async function validateFileType(
     // File is valid, proceed
     next();
   } catch (error: any) {
-    console.error('Error validating file type:', error);
+    logger.error('Error validating file type', { err: error });
 
     // Attempt to delete the file if it exists
     if (req.file?.path) {
       try {
         await deleteFile(req.file.path);
       } catch (deleteError) {
-        console.error('Error deleting invalid file:', deleteError);
+        logger.error('Error deleting invalid file', { err: deleteError });
       }
     }
 
@@ -161,14 +162,14 @@ export async function validateFileSize(
 
     next();
   } catch (error: any) {
-    console.error('Error validating file size:', error);
+    logger.error('Error validating file size', { err: error });
 
     // Attempt to delete the file if it exists
     if (req.file?.path) {
       try {
         await deleteFile(req.file.path);
       } catch (deleteError) {
-        console.error('Error deleting oversized file:', deleteError);
+        logger.error('Error deleting oversized file', { err: deleteError });
       }
     }
 

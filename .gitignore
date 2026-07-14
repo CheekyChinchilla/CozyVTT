@@ -38,11 +38,21 @@ desktop.ini
 # ---- Docker -----------------------------------------------------------------
 .docker/
 
-# ---- SSL certificates — never commit private keys --------------------------
-nginx/certs/*.crt
-nginx/certs/*.key
-nginx/certs/*.pem
-nginx/certs/*.csr
+# ---- Secrets / keys / certs — never commit private key material ------------
+# Broad, repo-wide patterns so a key or alternately-named env file dropped
+# anywhere is caught. The committed *.env.example templates are NOT matched
+# (they end in .example), so they stay tracked.
+*.env
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+# Ignore anything dropped into the certs mount, but keep the placeholder so the
+# directory (and its README/.gitkeep) stays in the repo.
+nginx/certs/*
+!nginx/certs/.gitkeep
 
 # ---- Runtime / user data ----------------------------------------------------
 uploads/

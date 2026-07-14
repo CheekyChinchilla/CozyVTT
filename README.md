@@ -56,6 +56,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Vibe tracker** — time-of-day atmosphere presets with custom color filters and ambient audio
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)
+- **Resizable session workspace** — drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, and Initiative full-height, with an unread-message badge; layout persists per browser
 
 ### Character Sheets
 - **D&D 5th Edition** — full sheet with stats, skills, saving throws, attacks, spells, inventory
@@ -124,9 +125,11 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - React 18 + TypeScript (strict mode)
 - Vite build tooling
 - Tailwind CSS with custom design tokens
+- Zustand for live session state; TanStack Query (React Query) for REST data
 - Socket.io client
 - Axios for REST API calls
-- Framer Motion for animations
+- react-resizable-panels for the session workspace
+- Framer Motion for animations (reduced-motion aware)
 - Vitest + Testing Library
 
 ---

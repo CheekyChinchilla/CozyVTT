@@ -76,17 +76,26 @@ src/
 │   ├── setup.ts       First-run setup wizard
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
 ├── services/          Business logic (called by routes and WebSocket handlers)
-├── validators/        Zod validation schemas (one per domain)
+├── validators/        Zod validation schemas (one per domain, incl. game-systems/)
 ├── websocket/
-│   ├── events.ts      Socket.io event handler registration
-│   ├── utils.ts       broadcastToCampaign, broadcastToUser helpers
-│   └── spirit-layer.ts Spirit layer token filtering logic
+│   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
+│   │                  registration of every per-domain handler module
+│   ├── shared.ts      Rate limiters, the Token shape, fog helpers
+│   ├── auth.ts        Socket session + campaign-membership authentication
+│   ├── utils.ts       System-message / broadcast helpers
+│   └── handlers/      One module per domain — tokens, dice, chat, spirit,
+│                      vibe, maps, atmosphere, characters, initiative,
+│                      walls, fog, lights
 ├── utils/
-│   ├── dice-parser.ts  mathjs-based dice expression evaluator
-│   ├── asset-urls.ts   Asset URL normalization
-│   └── logger.ts       Winston logger configuration
+│   ├── dice-parser.ts    mathjs-based dice expression evaluator
+│   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
+│   ├── serverRaycasting.ts  Server-side vision raycasting for lighting
+│   ├── asset-urls.ts     Asset URL normalization
+│   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```
+
+Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules; each exports a `registerXxxHandlers(io, socket)` called once per connection so per-connection state (throttles, rate-limit buckets) is preserved. `events.ts` is a thin orchestrator that wires them together.
 
 ### Request Flow
 
@@ -123,18 +132,25 @@ src/
 ├── contexts/
 │   ├── AuthContext.tsx    User auth state, login/logout/register actions
 │   ├── WebSocketContext.tsx  Socket.io connection lifecycle and event subscriptions
-│   └── CampaignContext.tsx   Per-campaign state (map, tokens, vibe, session status)
-├── pages/             One file per route (thin; delegates to components and contexts)
+│   └── CampaignContext.tsx   Per-campaign metadata (campaign, current map, vibe, session status, roster)
+├── stores/
+│   └── gameStore.ts   Zustand store for live socket-fed session state (token positions, walls, fog, lights, initiative)
+├── lib/
+│   └── queryClient.ts  React Query client configuration
+├── pages/             One file per route (thin; delegates to components, contexts, and query hooks)
 ├── components/
-│   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, MapCanvas, etc.)
+│   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
+│   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
+│   │   └── map/       MapCanvas render layers, vision cache, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
-│   ├── common/        Reusable primitives (Toast, ConfirmDialog, etc.)
+│   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Admin panel tabs
 ├── services/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
 │   └── auth.service.ts  Auth-specific API calls
-├── hooks/             Custom hooks (useFocusTrap, useWebSocketEvent, etc.)
+├── hooks/
+│   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
 ├── types/             TypeScript type definitions mirroring backend types
 ├── utils/             Client-side helpers (validation, formatting)
 └── styles/            Global CSS, Tailwind directives, effect stylesheets
@@ -142,15 +158,15 @@ src/
 
 ### State Management
 
-CozyVTT uses **React Context** rather than an external state management library:
+CozyVTT uses three complementary state layers, each with a clear boundary. The rule of thumb: **React Query owns server resources, Zustand owns live socket-fed session state, and React Context owns app/session wiring — never two layers for the same datum.**
 
-| Context | Scope | Holds |
-|---------|-------|-------|
-| `AuthContext` | App-wide | Current user, auth status, login/logout functions |
-| `WebSocketContext` | App-wide | Socket connection, event subscription helpers |
-| `CampaignContext` | Campaign page | Map data, tokens, vibe state, session status, roster |
+| Layer | Owns | Examples |
+|-------|------|----------|
+| **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
+| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions, walls, fog, lights, initiative |
+| **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
 
-The `CampaignContext` is the most complex — it is the single source of truth for all campaign data during a session and is updated both via REST API responses (initial load) and real-time WebSocket events (live updates).
+The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.
 
 ### Data Flow (Campaign Page)
 
@@ -158,18 +174,20 @@ The `CampaignContext` is the most complex — it is the single source of truth f
 graph LR
     WS["WebSocket\nevent"]
     API["REST API\nresponse"]
-    CC["CampaignContext\n(React state)"]
+    RQ["React Query\ncache"]
+    GS["Zustand\ngameStore"]
+    CC["CampaignContext\n(metadata)"]
     Canvas["MapCanvas"]
-    Chat["ChatPanel"]
-    Dice["DiceRoller"]
-    Initiative["InitiativeTracker"]
+    Roster["Roster / Sidebar"]
 
+    API --> RQ
+    RQ --> CC
+    WS --> GS
     WS --> CC
-    API --> CC
+    GS --> Canvas
     CC --> Canvas
-    CC --> Chat
-    CC --> Dice
-    CC --> Initiative
+    CC --> Roster
+    GS -. "token subscribers only" .-> Roster
 ```
 
 ---
@@ -357,15 +375,15 @@ MFA uses the `speakeasy` library for TOTP generation and verification. The `wind
 ```mermaid
 sequenceDiagram
     participant C as Client (socket.ts)
-    participant S as Server (events.ts)
+    participant S as Server (websocket/)
 
     C->>S: socket.connect()
     S-->>C: emit('connected')
     C->>S: emit('authenticate', { campaignId })
     S->>S: Verify session + campaign membership
     S-->>C: emit('authenticated')
-    S->>S: socket.join(`campaign:${campaignId}`)
-    S->>S: socket.join(`user:${userId}`)
+    S->>S: socket.join(campaignId)
+    S->>S: socket.join(userId)
 
     Note over C,S: Session active
 
@@ -380,17 +398,19 @@ sequenceDiagram
 
 ### Room Structure
 
-- `campaign:<id>` — all connected members of a campaign
-- `user:<id>` — per-user room for targeted broadcasts (e.g., secret dice results)
+Sockets join two rooms, keyed by raw id (no prefix):
+
+- `<campaignId>` — all connected members of a campaign
+- `<userId>` — per-user room for targeted broadcasts (e.g., secret dice results)
 
 ### Spirit Layer Security
 
 Token data is filtered **per-client** before being broadcast. The server maintains two views of the token list:
 
 - **DM view** — all tokens, both layers, all metadata including DM notes
-- **Player view** — material-layer tokens only, plus tokens that belong to the player's own character if they have spirit crossover
+- **Player view** — material-layer tokens only, plus tokens that belong to the player's own character if they have spirit crossover (and, when dynamic lighting is on, only tokens within line of sight)
 
-This filtering happens in `src/websocket/spirit-layer.ts` and is applied in the `map.change` handler before sending `map.changed` to each individual client.
+This filtering lives in `src/utils/spirit-layer.ts` and is applied in the token, spirit, and `map.change` handlers before each client receives its payload. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
 
 ### WebSocket Event Reference
 
@@ -441,33 +461,32 @@ See [GAME_SYSTEMS.md](GAME_SYSTEMS.md) for the step-by-step guide.
 
 ### How It Works
 
-Each game system consists of three parts that must be kept in sync:
+Each game system is a set of coordinated files that must be kept in sync, wired in through `switch`/enum registration points (see [GAME_SYSTEMS.md](GAME_SYSTEMS.md) for the exact list):
 
 ```
-Backend                          Frontend
-─────────────────────────────    ────────────────────────────────────
-src/game-systems/{system}.ts     src/types/game-systems/{system}.ts
-  TypeScript types                 Mirrored TypeScript types
+Backend                              Frontend
+─────────────────────────────────   ────────────────────────────────────
+game-systems/{system}.ts            types/game-systems/{system}.ts
+  TypeScript character type           Mirrored TypeScript type
 
-src/validators/game-systems/     src/components/character-sheets/
-  {system}.schema.ts               {system}/
-  Zod validation schema              {System}CharacterSheet.tsx
-                                     {System}SheetWrapper.tsx
-
-src/utils/character-templates/
-  {system}.ts
-  Default template data
+validators/game-systems/            components/character-sheets/{system}/
+  {system}.schema.ts                  {System}CharacterSheet.tsx  ← the sheet
+  Zod validation schema               (optionally split into a
+                                       …View / …Editor / components/ set)
+utils/character-templates/
+  {system}-templates.ts             constants/game-systems.ts
+  Named starting templates            Labels + the creation-dropdown options
 ```
 
 Character data round-trips as JSON:
 
 ```
-User fills sheet → SheetWrapper calls onSave(data)
+User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
 → CharacterEditorPage sends PUT /api/characters/:id { data }
-→ Backend validates data against Zod schema (partial allowed)
+→ Backend validates data against the game-system Zod schema (mostly optional fields)
 → Stored as character.data in PostgreSQL
 → On load: GET /api/characters/:id returns character.data
-→ CharacterSheet hydrates from character.data
+→ CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```
 
 ---
@@ -478,9 +497,9 @@ User fills sheet → SheetWrapper calls onSave(data)
 
 JWTs are stateless, which makes revocation difficult — a compromised token stays valid until expiry. For a self-hosted platform where admins need to be able to force-logout users, session-based auth with a server-side store is simpler and more secure.
 
-### Why React Context instead of Redux/Zustand?
+### Why Zustand + React Query alongside React Context?
 
-The app has three isolated state domains (auth, websocket, campaign) that don't need complex cross-cutting updates. Context with `useReducer` or `useState` is sufficient and avoids the added dependency and abstraction overhead. If state complexity grows significantly, Zustand would be a natural next step.
+Each tool owns what it's good at. React Query handles server resources — caching, deduping, and refetch-on-reconnect for campaigns, characters, and assets — so pages don't hand-roll `useEffect` + loading/error state. Zustand holds live, high-frequency socket state (token positions, fog, lights, initiative) because it can be written from **outside** React, so a token move updates only its subscribers instead of re-rendering the whole campaign tree through a context provider. React Context is kept for genuinely app-wide wiring (auth, the socket connection) and slow-changing campaign metadata. The boundary rule — one layer per datum — keeps the three from fighting over the same state.
 
 ### Why store tokens in `Map.tokens` JSON instead of a separate table?
 
@@ -492,4 +511,4 @@ Early in development, the client passed `campaignId` in every WebSocket event pa
 
 ### Why HTML Canvas instead of a SVG or DOM-based map renderer?
 
-Canvas provides the best performance for the use case: pan, zoom, token rendering, and real-time movement at 60fps with potentially hundreds of tokens. SVG struggles at scale, and DOM-based approaches add layout overhead that compounds with zoom transforms.
+Canvas provides the best performance for the use case: pan, zoom, token rendering, and real-time movement at 60fps with potentially hundreds of tokens. SVG struggles at scale, and DOM-based approaches add layout overhead that compounds with zoom transforms. The map draws on three stacked canvases (terrain / tokens / overlay) coordinated by a single animation-frame loop, so dragging a token repaints only the token layer, and vision polygons are memoized so panning re-raycasts nothing.

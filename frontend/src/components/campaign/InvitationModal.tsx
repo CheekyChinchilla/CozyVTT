@@ -3,11 +3,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Check, XCircle, Users } from 'lucide-react';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Check, XCircle, Users } from 'lucide-react';
 import { api } from '@/services/api';
 import Toast, { useToast } from '@/components/Toast';
 import type { CampaignInvitation, Character } from '@/types';
+import { Modal } from '@/components/ui';
 
 interface InvitationModalProps {
   invitation: CampaignInvitation;
@@ -27,7 +27,6 @@ export default function InvitationModal({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const { toast, showToast, hideToast } = useToast();
-  const modalRef = useFocusTrap(true, onClose);
 
   // Fetch user's characters
   useEffect(() => {
@@ -118,37 +117,10 @@ export default function InvitationModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" aria-hidden="true">
-        <div
-          ref={modalRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invitation-title"
-          className="glass-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-full bg-moss-green/10">
-                <Users className="w-6 h-6 text-moss-green" />
-              </div>
-              <div>
-                <h2 id="invitation-title" className="text-2xl font-bold text-moss-green">
-                  Campaign Invitation
-                </h2>
-                <p className="text-sm text-warm-gray">
-                  You've been invited to join a campaign
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close dialog"
-              className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
-            >
-              <X className="w-5 h-5 text-stone-gray" />
-            </button>
-          </div>
+      <Modal open onClose={onClose} title="Campaign Invitation" icon={Users} size="lg" closeDisabled={processing}>
+          <p className="text-sm text-ink-muted -mt-4 mb-4">
+            You've been invited to join a campaign
+          </p>
 
           {/* Campaign Details */}
           <div className="mb-6 p-4 rounded-lg bg-parchment/50 border border-moss-green/20">
@@ -247,7 +219,7 @@ export default function InvitationModal({
             <button
               onClick={handleDecline}
               disabled={processing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircle className="w-4 h-4" />
               Decline
@@ -261,8 +233,7 @@ export default function InvitationModal({
               {processing ? 'Processing...' : 'Accept Invitation'}
             </button>
           </div>
-        </div>
-      </div>
+      </Modal>
 
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
     </>

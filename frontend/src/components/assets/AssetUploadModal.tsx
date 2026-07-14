@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X, Upload, FileImage, FileAudio, User, MapPin, Loader, Tag as TagIcon, Globe, Users } from 'lucide-react';
 import { api } from '../../services/api';
 import { Asset, AssetType, AssetScope, PlatformRole, Campaign, CampaignRole } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import campaignService from '../../services/campaign.service';
+import { Button, Modal } from '@/components/ui';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -264,8 +264,6 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     }
   };
 
-  const modalRef = useFocusTrap(isOpen, handleClose);
-
   if (!isOpen) return null;
 
   // Scope descriptions shown below the selector
@@ -288,43 +286,9 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
   const isAvatarType = assetType === AssetType.AVATAR;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-        onClick={handleClose}
-        aria-hidden="true"
-      >
-        <motion.div
-          ref={modalRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="asset-upload-title"
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-paper-white backdrop-blur-xl rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-moss-green/20"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-moss-green/20">
-            <h2 id="asset-upload-title" className="text-2xl font-bold text-moss-green">
-              Upload Asset
-            </h2>
-            <button
-              onClick={handleClose}
-              disabled={uploading}
-              aria-label="Close dialog"
-              className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <X className="w-6 h-6 text-stone-gray" />
-            </button>
-          </div>
-
+    <Modal open={isOpen} onClose={handleClose} title="Upload Asset" icon={Upload} size="lg" closeDisabled={uploading}>
           {/* Content */}
-          <div className="p-6 space-y-6">
+          <div className="space-y-6">
             {/* Locked context banner */}
             {lockedLabel && (
               <div className="flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/20 rounded-lg text-sm text-moss-green">
@@ -602,17 +566,17 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 p-6 border-t border-moss-green/20">
-            <button
+            <Button
               onClick={handleClose}
               disabled={uploading}
-              className="btn-secondary disabled:opacity-50"
+              variant="secondary" className="disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleUpload}
               disabled={!selectedFile || !name.trim() || uploading}
-              className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {uploading ? (
                 <>
@@ -625,10 +589,8 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                   Upload
                 </>
               )}
-            </button>
+            </Button>
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </Modal>
   );
 }

@@ -8,13 +8,16 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Campaign, CampaignRole, CampaignStatus, Map, Token, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast } from '@/types';
+import { useGameStore } from '@/stores/gameStore';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 
@@ -22,11 +25,15 @@ import socketClient from '@/services/socket';
 // Types
 // ============================================
 
+// NOTE: live token state moved out of this context into the
+// zustand game store (`@/stores/gameStore`). Context value changes
+// re-render EVERY useCampaign() consumer, so the high-frequency token
+// stream must not flow through here — subscribe with useTokenList() /
+// useTokenListIgnoringMovement() and mutate via store actions instead.
 interface CampaignContextState {
   // Campaign Data
   campaign: Campaign | null;
   currentMap: Map | null;
-  tokens: Token[];
 
   // User Role
   userRole: CampaignRole | null;
@@ -46,7 +53,6 @@ interface CampaignContextState {
    */
   refreshCurrentMap: () => Promise<void>;
   setCurrentMap: (map: Map | null) => void;
-  updateTokens: (tokens: Token[]) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
   /** DM-only local preference: show both planes simultaneously or only the active one */
@@ -106,7 +112,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [currentMap, setCurrentMap] = useState<Map | null>(null);
-  const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -133,7 +138,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       : null;
 
   // Load campaign data
-  const loadCampaign = async (campaignId: string) => {
+  const loadCampaign = useCallback(async (campaignId: string) => {
     setLoading(true);
     setError(null);
 
@@ -177,14 +182,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
           setCurrentMap(map);
-          setTokens(map.tokens || []);
+          useGameStore.getState().setTokens(map.tokens || []);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
             setCurrentMap(mapMeta);
-            setTokens([]);
+            useGameStore.getState().setTokens([]);
           }
         }
       }
@@ -204,65 +209,60 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   // Refresh campaign data
-  const refreshCampaign = async () => {
+  const refreshCampaign = useCallback(async () => {
     if (campaign?.id) {
       await loadCampaign(campaign.id);
     }
-  };
+  }, [campaign?.id, loadCampaign]);
 
   // Re-fetch the current map only — used after a WebSocket reconnect so the
   // local token/wall/light/fog state catches up with anything that broadcast
   // while we were disconnected. Cheaper than a full campaign reload and
   // doesn't blip atmosphere/audio state.
-  const refreshCurrentMap = async () => {
+  const refreshCurrentMap = useCallback(async () => {
     if (!campaign?.id || !currentMap?.id) return;
     try {
       const { map, spiritVisible } = await api.getMap(campaign.id, currentMap.id);
       setCurrentMap(map);
-      setTokens(map.tokens || []);
+      useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh current map after reconnect:', err);
       // Non-fatal — user will receive future real-time updates normally
     }
-  };
-
-  // Update tokens
-  const updateTokens = (newTokens: Token[]) => {
-    setTokens(newTokens);
-  };
+  }, [campaign?.id, currentMap?.id]);
 
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
-  const updateVibe = (period: string, hue: string, filter: string) => {
+  const updateVibe = useCallback((period: string, hue: string, filter: string) => {
     setCampaign((prev) => (prev ? { ...prev, currentVibe: period } : null));
     setActiveVibeEffect({ hue, filter });
-  };
+  }, []);
 
   // Patch campaign.vibeSettings after ConfigureVibeModal saves
-  const updateVibeSettings = (settings: VibeSettings) => {
+  const updateVibeSettings = useCallback((settings: VibeSettings) => {
     setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings } : null));
-  };
+  }, []);
 
   // Update campaign.status in local state (called by session WebSocket listeners)
-  const updateCampaignStatus = (status: CampaignStatus) => {
+  const updateCampaignStatus = useCallback((status: CampaignStatus) => {
     setCampaign((prev) => (prev ? { ...prev, status } : null));
-  };
+  }, []);
 
   // Update atmosphere effect (called by AtmospherePlayer on WS broadcast)
-  const updateAtmosphereEffect = (effect: string | null) => {
+  const updateAtmosphereEffect = useCallback((effect: string | null) => {
     setActiveAtmosphereEffect(effect);
-  };
+  }, []);
 
   // Update atmosphere audio (called by AtmospherePlayer on WS broadcast)
-  const updateAtmosphereAudio = (audio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null) => {
+  const updateAtmosphereAudio = useCallback((audio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null) => {
     setActiveAtmosphereAudio(audio);
-  };
+  }, []);
 
   // Seed HP cache from roster API response (called by CampaignRoster after fetchRoster)
-  const seedCharacterHpCache = (entries: { id: string; hp: CharacterHpInfo | null }[]) => {
+  const seedCharacterHpCache = useCallback((entries: { id: string; hp: CharacterHpInfo | null }[]) => {
     setCharacterHpCache((prev) => {
       const next = { ...prev };
       for (const { id, hp } of entries) {
@@ -270,7 +270,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       }
       return next;
     });
-  };
+  }, []);
 
   // Listen for real-time character HP updates
   useEffect(() => {
@@ -288,7 +288,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   // Update spirit layer enabled/style in local campaign state
-  const updateCampaignSpiritLayer = (enabled: boolean, style?: string) => {
+  const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
     setCampaign((prev) =>
       prev
         ? {
@@ -298,20 +298,28 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
           }
         : null
     );
-  };
+  }, []);
 
-  // Load campaign on mount or when ID changes
+  // Load campaign on mount or when ID changes.
+  // The game store is a module singleton (it outlives this provider), so
+  // clear it before loading a different campaign and on unmount — otherwise
+  // the previous campaign's tokens would flash on the next session screen.
   useEffect(() => {
+    useGameStore.getState().clearGameState();
     if (id) {
       loadCampaign(id);
     }
-  }, [id]);
+    return () => {
+      useGameStore.getState().clearGameState();
+    };
+  }, [id, loadCampaign]);
 
-  // Context value
-  const value: CampaignContextState = {
+  // Context value — memoized so consumers only re-render when a field they
+  // read actually changes, not on every provider render (e.g. token moves
+  // no longer force the whole campaign subtree to reconcile).
+  const value: CampaignContextState = useMemo(() => ({
     campaign,
     currentMap,
-    tokens,
     userRole,
     loading,
     error,
@@ -319,7 +327,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     refreshCampaign,
     refreshCurrentMap,
     setCurrentMap,
-    updateTokens,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     setDmViewBothPlanes,
@@ -338,7 +345,31 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     updateAtmosphereAudio,
     characterHpCache,
     seedCharacterHpCache,
-  };
+  }), [
+    campaign,
+    currentMap,
+    userRole,
+    loading,
+    error,
+    loadCampaign,
+    refreshCampaign,
+    refreshCurrentMap,
+    updateCampaignSpiritLayer,
+    dmViewBothPlanes,
+    playerSpiritVisible,
+    currentVibe,
+    activeVibeEffect,
+    updateVibe,
+    updateVibeSettings,
+    activeSession,
+    updateCampaignStatus,
+    activeAtmosphereEffect,
+    updateAtmosphereEffect,
+    activeAtmosphereAudio,
+    updateAtmosphereAudio,
+    characterHpCache,
+    seedCharacterHpCache,
+  ]);
 
   return (
     <CampaignContext.Provider value={value}>

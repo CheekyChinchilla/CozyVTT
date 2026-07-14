@@ -366,6 +366,14 @@ export interface Campaign {
   updatedAt: string;
   lastPlayedAt: string | null;
   memberships?: CampaignMembership[];
+  /**
+   * NOTE: from `GET /campaigns/:id` these are METADATA ONLY — the
+   * `tokens`/`wallSegments`/`fogData`/`lights`/`annotations` map blobs and the
+   * character `data` sheet are NOT included. Fetch the active map via
+   * `GET /maps/:id` and a full sheet via `GET /characters/:id`. The types stay
+   * full because those endpoints return full objects; do not read the omitted
+   * fields off these embedded arrays.
+   */
   maps?: Map[];
   characters?: Character[];
   /** Most recent open (non-ended) session, if any — populated by GET /campaigns/:id */

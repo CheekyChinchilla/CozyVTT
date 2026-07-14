@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { isSetupCompleted } from '../services/systemSettings';
+import logger from '../utils/logger';
 
 /**
  * Setup Wizard Middleware
- * Per SOW Section 12.1: Setup must run BEFORE any other routes
+ * Setup must run BEFORE any other routes
  * CRITICAL: Ensures system is properly initialized before use
  */
 
@@ -40,7 +41,7 @@ export async function requireSetupComplete(
 
     next();
   } catch (error) {
-    console.error('Error checking setup status:', error);
+    logger.error('Error checking setup status', { err: error });
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to verify setup status',

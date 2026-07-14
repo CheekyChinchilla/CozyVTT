@@ -1,6 +1,5 @@
 // ============================================
 // Admin Service
-// SOW Reference: Section 2.3 (Platform Roles - Admin)
 //
 // Thin domain wrapper over the api client for admin operations.
 // All methods require ADMIN platform role (enforced server-side).
