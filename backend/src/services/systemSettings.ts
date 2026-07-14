@@ -10,7 +10,11 @@ import { prisma } from '../config/database';
  * Get system settings (creates default if not exists)
  */
 export async function getSystemSettings() {
-  let settings = await prisma.systemSettings.findFirst();
+  // Read the canonical (lowest-id) row deterministically. Without an explicit
+  // order, findFirst can return different rows across calls if more than one
+  // settings row was ever created by a create race on a fresh install — which
+  // desynced the setup-complete flag between the wizard and the route guard.
+  let settings = await prisma.systemSettings.findFirst({ orderBy: { id: 'asc' } });
 
   // Create default settings if none exist
   if (!settings) {
@@ -40,12 +44,11 @@ export async function isSetupCompleted(): Promise<boolean> {
  * Mark setup as completed
  */
 export async function markSetupCompleted(): Promise<void> {
-  const settings = await getSystemSettings();
-
-  await prisma.systemSettings.update({
-    where: { id: settings.id },
-    data: { setupCompleted: true },
-  });
+  // Ensure a settings row exists, then mark every row complete. updateMany makes
+  // this idempotent and self-healing even if a create race left more than one
+  // settings row behind — all of them read as complete afterward.
+  await getSystemSettings();
+  await prisma.systemSettings.updateMany({ data: { setupCompleted: true } });
 }
 
 /**

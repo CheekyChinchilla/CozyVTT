@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.1.0] — 2026-07-13
+## [1.1.0] — 2026-07-12
 
 A modernization release: faster and smoother real-time play, a redesigned resizable session workspace, a shared UI component layer, a hardened and restructured backend, and accessibility + polish throughout — with no breaking changes for existing installs.
 
@@ -28,6 +28,7 @@ A modernization release: faster and smoother real-time play, a redesigned resiza
 ### Fixed
 
 - **The setup wizard now appears automatically on a brand-new install** — visiting the root URL of a fresh instance redirects to `/setup` instead of showing a login prompt you can't yet use. The redirect fires only when no admin account exists; existing installs and container updates are unaffected, and the wizard route now bounces already-configured instances back to the landing page
+- **Completing the setup wizard now reliably marks the instance as configured** — the setup-complete flag is written to, and read from, a single canonical settings row, fixing a race on brand-new installs where the wizard created the admin account but the app still reported "Setup Required" (and then refused to re-run setup because a user already existed)
 - **Session status now updates live for players** — when the DM starts, pauses, resumes, or ends a session, players see it change to live / paused / inactive immediately instead of having to reload the page
 - **Uploading a token image from a character sheet inside a campaign now saves** — previously the image uploaded but the character's token was never updated (the character-library path was unaffected)
 - Ending combat and restoring a backup now use the themed in-app confirmation dialog instead of the native browser popup
