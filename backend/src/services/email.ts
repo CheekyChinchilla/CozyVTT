@@ -3,7 +3,7 @@ import logger from '../utils/logger';
 
 /**
  * Email Service
- * Per SOW Section 19.2: SMTP-based email notifications
+ * SMTP-based email notifications
  * Gracefully degrades when SMTP is not configured
  */
 

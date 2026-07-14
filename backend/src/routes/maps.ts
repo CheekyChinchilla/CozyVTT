@@ -33,7 +33,7 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-// Token type definition (SOW Section 4.2)
+// Token type definition
 interface Token {
   id: string;
   characterId?: string | null;
@@ -65,7 +65,7 @@ const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
 
 /**
  * Map CRUD Routes
- * Per SOW Section 5.4: Map Endpoints
+ * Map Endpoints
  *
  * All routes are prefixed with /api/campaigns/:campaignId/maps
  */
@@ -151,7 +151,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
     return res.status(201).json({ map });
   } catch (error) {
-    console.error('Error creating map:', error);
+    logger.error('Error creating map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to create map',
@@ -188,7 +188,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
 
     return res.status(200).json({ maps });
   } catch (error) {
-    console.error('Error fetching maps:', error);
+    logger.error('Error fetching maps', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch maps',
@@ -382,7 +382,7 @@ router.get(
  * Get a specific map with full data including tokens
  * Requires: Campaign membership
  *
- * Per SOW Section 14: Spirit Layer tokens filtered server-side
+ * Spirit Layer tokens filtered server-side
  * - DM always sees all tokens on both layers
  * - Players see spirit tokens only when spiritLayerEnabled is true
  * - Hidden tokens (visible: false) only visible to DM
@@ -439,7 +439,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 
     return res.status(200).json({ map: responseMap, spiritVisible });
   } catch (error) {
-    console.error('Error fetching map:', error);
+    logger.error('Error fetching map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch map',
@@ -595,7 +595,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     return res.status(200).json({ map: updatedMap });
   } catch (error) {
-    console.error('Error updating map:', error);
+    logger.error('Error updating map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update map',
@@ -654,7 +654,7 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       message: 'Map deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting map:', error);
+    logger.error('Error deleting map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete map',
@@ -710,7 +710,7 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
       campaign: updatedCampaign,
     });
   } catch (error) {
-    console.error('Error setting current map:', error);
+    logger.error('Error setting current map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to set current map',
@@ -727,7 +727,7 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
  * Add a new token to the map
  * Requires: DM role
  *
- * Token Schema (SOW Section 4.2):
+ * Token Schema:
  * {
  *   id: string (UUID),
  *   characterId?: string,
@@ -875,7 +875,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       map: updatedMap,
     });
   } catch (error) {
-    console.error('Error adding token:', error);
+    logger.error('Error adding token', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to add token',
@@ -1056,7 +1056,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       map: updatedMap,
     });
   } catch (error) {
-    console.error('Error updating token:', error);
+    logger.error('Error updating token', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update token',
@@ -1118,7 +1118,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
       message: 'Token removed successfully',
     });
   } catch (error) {
-    console.error('Error removing token:', error);
+    logger.error('Error removing token', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to remove token',
@@ -1127,9 +1127,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 });
 
 // ============================================================
-// WALL SEGMENT ENDPOINTS
-// Per WALLS_DYNAMIC_LIGHTING_PLAN.md Session 81
-// All write endpoints require DM role.
+// WALL SEGMENT ENDPOINTS// All write endpoints require DM role.
 // ============================================================
 
 /**
@@ -1218,7 +1216,7 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
     const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
     return res.status(200).json({ segments });
   } catch (error) {
-    console.error('Error fetching wall segments:', error);
+    logger.error('Error fetching wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch wall segments' });
   }
 });
@@ -1246,7 +1244,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 
     return res.status(200).json({ segments: updated.wallSegments });
   } catch (error) {
-    console.error('Error replacing wall segments:', error);
+    logger.error('Error replacing wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segments' });
   }
 });
@@ -1280,7 +1278,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
   } catch (error) {
-    console.error('Error adding wall segment:', error);
+    logger.error('Error adding wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add wall segment' });
   }
 });
@@ -1305,7 +1303,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
     await prisma.map.update({ where: { id }, data: { wallSegments: filtered as any } });
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
-    console.error('Error deleting wall segment:', error);
+    logger.error('Error deleting wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete wall segment' });
   }
 });
@@ -1338,7 +1336,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
 
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
-    console.error('Error updating wall segment:', error);
+    logger.error('Error updating wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segment' });
   }
 });
@@ -1489,9 +1487,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 });
 
 // ============================================================
-// FOG OF WAR ENDPOINTS
-// Per WALLS_DYNAMIC_LIGHTING_PLAN.md Session 81
-// ============================================================
+// FOG OF WAR ENDPOINTS// ============================================================
 
 /**
  * GET /api/campaigns/:campaignId/maps/:id/fog
@@ -1506,7 +1502,7 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
     const fog = loadFogState(map, map.fogData as FogState | null);
     return res.status(200).json({ fogState: fog });
   } catch (error) {
-    console.error('Error fetching fog state:', error);
+    logger.error('Error fetching fog state', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch fog state' });
   }
 });
@@ -1539,7 +1535,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
     return res.status(200).json({ fogState: updated.fogData });
   } catch (error) {
-    console.error('Error applying fog operation:', error);
+    logger.error('Error applying fog operation', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to apply fog operation' });
   }
 });
@@ -1576,7 +1572,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });
   } catch (error) {
-    console.error('Error updating lighting setting:', error);
+    logger.error('Error updating lighting setting', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update lighting setting' });
   }
 });

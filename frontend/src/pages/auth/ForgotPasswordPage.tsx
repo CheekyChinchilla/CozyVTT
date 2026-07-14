@@ -9,6 +9,7 @@ import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import authService from '@/services/auth.service';
+import Button from '@/components/ui/Button';
 
 export default function ForgotPasswordPage() {
   const { authenticated } = useAuth();
@@ -121,10 +122,10 @@ export default function ForgotPasswordPage() {
                 )}
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className="btn-primary w-full"
+                className="w-full"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -137,7 +138,7 @@ export default function ForgotPasswordPage() {
                 ) : (
                   'Send Reset Link'
                 )}
-              </button>
+              </Button>
             </form>
 
             <div className="text-center">

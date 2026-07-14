@@ -396,7 +396,7 @@ Players assign their own characters to your campaign when they accept an invitat
 
 ### Starting a Session
 
-When your players are ready, click **Start Session** in the right sidebar (in the Session Controls section). This:
+When your players are ready, click **Start Session** in the right sidebar's **Session** tab. This:
 
 - Changes the campaign status to **Live** (green indicator in the header)
 - Enables token movement for players
@@ -432,7 +432,7 @@ This is perfect for behind-the-screen perception checks, wandering monster rolls
 
 ### The Vibe Tracker
 
-The **Vibe Tracker** is your tool for wordlessly communicating the current scene's tone. Set it from the Vibe section in the right sidebar. Options range from relaxed and cozy to tense and terrifying.
+The **Vibe Tracker** is your tool for wordlessly communicating the current scene's tone. Set it from the **Session** tab in the right sidebar. Options range from relaxed and cozy to tense and terrifying.
 
 Players can see the current vibe — use it to prime the atmosphere before describing a scene. Switching the vibe as the scene shifts is a subtle but powerful storytelling tool.
 
@@ -444,7 +444,7 @@ Players can see the current vibe — use it to prime the atmosphere before descr
 
 ### Starting the Initiative Tracker
 
-When combat begins, click **Start Initiative** in the Initiative Tracker section of the right sidebar. The tracker becomes visible to all players.
+When combat begins, click **Start Initiative** in the right sidebar's **Initiative** tab. The tracker becomes visible to all players.
 
 *Screenshot pending — Initiative tracker with active combat.*
 

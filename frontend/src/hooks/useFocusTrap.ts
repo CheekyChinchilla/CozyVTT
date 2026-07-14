@@ -104,7 +104,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
       previousFocusRef.current?.focus();
     };
   // onCloseRef is stable (created by useRef) — no need to include it.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [isOpen]);
 
   return containerRef;

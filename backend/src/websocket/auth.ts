@@ -1,9 +1,10 @@
 import { Socket } from 'socket.io';
 import { prisma } from '../config/database';
+import logger from '../utils/logger';
 
 /**
  * WebSocket Authentication Middleware
- * Per SOW Section 6.1: Connection & Authentication
+ * Connection & Authentication
  *
  * Every WebSocket connection is authenticated against the Express session store
  * before any campaign events are processed.
@@ -39,7 +40,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     socket.userId = user.id;
     return true;
   } catch (error) {
-    console.error('WebSocket authentication error:', error);
+    logger.error('WebSocket authentication error', { err: error });
     return false;
   }
 }
@@ -90,7 +91,7 @@ export async function authenticateCampaign(
       role: membership.role,
     };
   } catch (error) {
-    console.error('WebSocket campaign authentication error:', error);
+    logger.error('WebSocket campaign authentication error', { err: error });
     return { success: false, error: 'Internal server error' };
   }
 }

@@ -90,4 +90,58 @@ describe('computeVisibility', () => {
       expect(dist).toBeLessThanOrEqual(radius + 1);
     }
   });
+
+  it('a locked door blocks vision like a wall', () => {
+    const viewer = { x: 400, y: 300 };
+    const lockedDoor: WallSegment = { id: 'door', x1: 200, y1: 0, x2: 200, y2: MAP_H, type: 'door-locked' };
+    const result = computeVisibility(viewer, [lockedDoor], MAP_W, MAP_H);
+    expect(isPointVisible({ x: 50, y: 300 }, viewer, result)).toBe(false);
+  });
+
+  it('a closed room clips visibility to the room interior', () => {
+    // 4-wall room from (300,200) to (500,400); viewer at its center.
+    const viewer = { x: 400, y: 300 };
+    const room: WallSegment[] = [
+      wall(300, 200, 500, 200), // top
+      wall(500, 200, 500, 400), // right
+      wall(500, 400, 300, 400), // bottom
+      wall(300, 400, 300, 200), // left
+    ];
+    const result = computeVisibility(viewer, room, MAP_W, MAP_H);
+
+    // Inside the room: visible
+    expect(isPointVisible({ x: 350, y: 250 }, viewer, result)).toBe(true);
+    expect(isPointVisible({ x: 450, y: 350 }, viewer, result)).toBe(true);
+    // Outside the room in every direction: not visible
+    expect(isPointVisible({ x: 400, y: 100 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 400, y: 500 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 200, y: 300 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 600, y: 300 }, viewer, result)).toBe(false);
+    // Every polygon point stays within the room bounds (small tolerance)
+    for (const pt of result.points) {
+      expect(pt.x).toBeGreaterThanOrEqual(299);
+      expect(pt.x).toBeLessThanOrEqual(501);
+      expect(pt.y).toBeGreaterThanOrEqual(199);
+      expect(pt.y).toBeLessThanOrEqual(401);
+    }
+  });
+
+  it('vision leaks through a doorway gap in a room wall', () => {
+    // Same room, but the top wall has a 40px gap (doorway) between x=380 and x=420.
+    const viewer = { x: 400, y: 300 };
+    const roomWithGap: WallSegment[] = [
+      wall(300, 200, 380, 200), // top-left piece
+      wall(420, 200, 500, 200), // top-right piece (gap 380..420)
+      wall(500, 200, 500, 400),
+      wall(500, 400, 300, 400),
+      wall(300, 400, 300, 200),
+    ];
+    const result = computeVisibility(viewer, roomWithGap, MAP_W, MAP_H);
+
+    // Straight through the gap: visible well beyond the wall line
+    expect(isPointVisible({ x: 400, y: 100 }, viewer, result)).toBe(true);
+    // Behind the remaining solid wall pieces: still hidden
+    expect(isPointVisible({ x: 320, y: 100 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 480, y: 100 }, viewer, result)).toBe(false);
+  });
 });

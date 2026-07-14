@@ -4,10 +4,10 @@
 // Multi-step wizard with form validation
 // ============================================
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Settings, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Shield, Settings, CheckCircle, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { setupService } from '@/services/setup.service';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,6 +16,7 @@ import {
   isStrongPassword,
   getPasswordStrength,
 } from '@/utils/validation';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Types
@@ -65,6 +66,29 @@ export default function SetupWizardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Guard: the wizard is only for a brand-new install. If setup is already
+  // complete (an existing install or a container update), never show the form —
+  // bounce to the landing page. POST /api/setup/init also rejects
+  // re-initialization server-side; this keeps the URL from exposing the wizard.
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setupService.checkSetupStatus()
+      .then((status) => {
+        if (cancelled) return;
+        if (!status.needsSetup) {
+          navigate('/', { replace: true });
+        } else {
+          setCheckingStatus(false);
+        }
+      })
+      // On a failed check, allow the wizard through — the backend still guards
+      // against double-initialization, so this can't corrupt an existing install.
+      .catch(() => { if (!cancelled) setCheckingStatus(false); });
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   // Password strength
   const passwordStrength = adminData.password
@@ -226,6 +250,19 @@ export default function SetupWizardPage() {
   // Main Render
   // ============================================
 
+  // Don't flash the wizard while we confirm this is actually a fresh install.
+  if (checkingStatus) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20"
+        aria-live="polite"
+        aria-label="Checking setup status"
+      >
+        <Loader2 className="w-8 h-8 text-moss-green animate-spin" aria-hidden="true" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
       <div className="glass-panel max-w-3xl w-full p-8 space-y-6">
@@ -280,34 +317,34 @@ export default function SetupWizardPage() {
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-between pt-6 border-t border-warm-gray/20">
-          <button
+          <Button
             type="button"
             onClick={handleBack}
             disabled={currentStep === 1 || loading}
-            className={`btn-secondary flex items-center gap-2 ${
-              currentStep === 1 ? 'invisible' : ''
+            variant="secondary" className={`flex items-center gap-2 ${
+            currentStep === 1 ? 'invisible' : ''
             }`}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
-          </button>
+          </Button>
 
           {currentStep < totalSteps ? (
-            <button
+            <Button
               type="button"
               onClick={handleNext}
               disabled={loading}
-              className="btn-primary flex items-center gap-2"
+              className="flex items-center gap-2"
             >
               Next
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Button>
           ) : (
             <form onSubmit={handleSubmit} className="inline">
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className="btn-primary flex items-center gap-2"
+                className="flex items-center gap-2"
               >
                 {loading ? (
                   <>
@@ -339,7 +376,7 @@ export default function SetupWizardPage() {
                     <CheckCircle className="w-4 h-4" />
                   </>
                 )}
-              </button>
+              </Button>
             </form>
           )}
         </div>

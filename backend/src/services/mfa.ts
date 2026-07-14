@@ -1,6 +1,6 @@
 /**
  * MFA (Multi-Factor Authentication) Service
- * Per SOW Section 19.3: Multi-Factor Authentication Flow
+ * Multi-Factor Authentication Flow
  *
  * TOTP-based MFA with single-use backup codes.
  * Uses speakeasy for TOTP generation/verification and qrcode for QR code generation.
@@ -42,7 +42,7 @@ export async function generateQrCode(otpauthUrl: string): Promise<string> {
 
 /**
  * Verify a 6-digit TOTP token against a base32 secret.
- * Per SOW Section 19.3: 30-second window, allow 1 window before/after for clock drift.
+ * 30-second window, allow 1 window before/after for clock drift.
  */
 export function verifyTotpToken(secret: string, token: string): boolean {
   return speakeasy.totp.verify({
@@ -55,7 +55,7 @@ export function verifyTotpToken(secret: string, token: string): boolean {
 
 /**
  * Generate random backup codes.
- * Per SOW Section 19.3: 10 single-use codes generated during MFA setup.
+ * 10 single-use codes generated during MFA setup.
  * Each code is 8 alphanumeric characters, formatted as XXXX-XXXX for readability.
  */
 export function generateBackupCodes(count: number = 10): string[] {

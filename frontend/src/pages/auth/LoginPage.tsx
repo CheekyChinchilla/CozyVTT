@@ -9,6 +9,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
+import Button from '@/components/ui/Button';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
@@ -214,10 +215,10 @@ export default function LoginPage() {
           </div>
 
           {/* Submit Button */}
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full"
+            className="w-full"
           >
             {loading ? (
               <span className="flex items-center justify-center">
@@ -246,7 +247,7 @@ export default function LoginPage() {
             ) : (
               'Sign In'
             )}
-          </button>
+          </Button>
         </form>
 
         {/* Register Link — only shown when public registration is enabled */}

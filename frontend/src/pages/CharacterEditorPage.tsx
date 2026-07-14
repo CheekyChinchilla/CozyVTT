@@ -14,6 +14,7 @@ import characterService from '@/services/character.service';
 import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
+import Button from '@/components/ui/Button';
 
 export default function CharacterEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -257,9 +258,9 @@ export default function CharacterEditorPage() {
             Failed to Load Character
           </h2>
           <p className="text-stone-gray mb-6">{error || 'Character not found'}</p>
-          <button onClick={() => navigate('/characters')} className="btn-primary">
+          <Button onClick={() => navigate('/characters')}>
             Back to Characters
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -275,9 +276,9 @@ export default function CharacterEditorPage() {
             Permission Denied
           </h2>
           <p className="text-stone-gray mb-6">{permissionError}</p>
-          <button onClick={() => navigate('/characters')} className="btn-primary">
+          <Button onClick={() => navigate('/characters')}>
             Back to Characters
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -338,24 +339,24 @@ export default function CharacterEditorPage() {
             )}
 
             {/* Manual Save Button */}
-            <button
+            <Button
               onClick={handleManualSave}
               disabled={!hasUnsavedChanges || saving}
-              className="btn-primary flex items-center gap-2"
+              className="flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               Save
-            </button>
+            </Button>
 
             {/* Export Button */}
-            <button
+            <Button
               onClick={() => characterService.exportCharacterJSON(character)}
-              className="btn-secondary flex items-center gap-2"
+              variant="secondary" className="flex items-center gap-2"
               title="Export character as JSON"
             >
               <Download className="w-4 h-4" />
               Export
-            </button>
+            </Button>
           </div>
         </div>
       </div>

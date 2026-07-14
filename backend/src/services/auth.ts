@@ -6,10 +6,10 @@ import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils
 /**
  * Authentication Service
  * Handles user registration, login, and password management
- * Per SOW Section 3.4 and Section 19: Uses Argon2 with specific parameters
+ * Uses Argon2 with specific parameters
  */
 
-// Argon2 configuration per SOW Section 3.4
+// Argon2 configuration
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
   memoryCost: 65536, // 64 MB

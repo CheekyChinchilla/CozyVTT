@@ -1,6 +1,6 @@
 /**
  * AtmospherePanel
- * Per SOW Section 18: Atmosphere & Immersion
+ * Atmosphere & Immersion
  *
  * DM-only slide-over panel. Provides:
  *   1. Particle overlay selector (rain, mist, leaves, sparkles, snow)

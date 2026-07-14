@@ -3,12 +3,13 @@ import { Router, Request, Response } from 'express';
 import { isSetupCompleted, markSetupCompleted, hasUsers } from '../services/systemSettings';
 import { registerUser, sanitizeUser } from '../services/auth';
 import { validateEmail, validatePasswordStrength } from '../utils/validation';
+import logger from '../utils/logger';
 
 const router = Router();
 
 /**
  * Setup Wizard Routes
- * Per SOW Section 12.1: Initial Setup & Onboarding
+ * Initial Setup & Onboarding
  * CRITICAL: These routes must be accessible even when setup is not complete
  */
 
@@ -28,7 +29,7 @@ router.get('/status', async (_req: Request, res: Response) => {
       needsSetup: !setupComplete || !usersExist,
     });
   } catch (error) {
-    console.error('Error checking setup status:', error);
+    logger.error('Error checking setup status', { err: error });
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to check setup status',
@@ -40,7 +41,7 @@ router.get('/status', async (_req: Request, res: Response) => {
  * POST /api/setup/init
  * Initialize the system with first admin account
  * Public endpoint - no authentication required
- * Per SOW Section 12.1: Create admin account and complete setup
+ * Create admin account and complete setup
  */
 router.post('/init', async (req: Request, res: Response) => {
   try {
@@ -112,7 +113,7 @@ router.post('/init', async (req: Request, res: Response) => {
       user: sanitizeUser(user),
     });
   } catch (error) {
-    console.error('Error during setup:', error);
+    logger.error('Error during setup', { err: error });
 
     if (error instanceof Error) {
       return res.status(400).json({

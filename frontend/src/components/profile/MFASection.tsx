@@ -1,6 +1,5 @@
 // ============================================
 // MFA Section
-// Per SOW Section 19.3
 //
 // Embedded in ProfilePage > Security section.
 // Shows MFA status and provides enable/disable/regenerate actions.
@@ -21,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Inline Disable Form
@@ -112,9 +112,9 @@ function DisableForm({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={onClose} disabled={submitting} className="btn-secondary flex-1 text-sm">
+        <Button type="button" onClick={onClose} disabled={submitting} variant="secondary" className="flex-1 text-sm">
           Cancel
-        </button>
+        </Button>
         <button
           type="submit"
           disabled={submitting || !password || token.length !== 6}
@@ -190,7 +190,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
-        <button onClick={onClose} className="btn-secondary w-full text-sm">Done</button>
+        <Button onClick={onClose} variant="secondary" className="w-full text-sm">Done</Button>
       </div>
     );
   }
@@ -213,17 +213,17 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={onClose} disabled={submitting} className="btn-secondary flex-1 text-sm">
+        <Button type="button" onClick={onClose} disabled={submitting} variant="secondary" className="flex-1 text-sm">
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           disabled={submitting || !password}
-          className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm"
+          className="flex-1 flex items-center justify-center gap-2 text-sm"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           {submitting ? 'Regenerating...' : 'Regenerate'}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -271,23 +271,23 @@ export default function MFASection() {
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           {!isEnabled && (
-            <button
+            <Button
               onClick={() => navigate('/auth/mfa-setup')}
-              className="btn-primary text-sm py-1.5 px-3"
+              className="text-sm py-1.5 px-3"
             >
               Enable
-            </button>
+            </Button>
           )}
           {isEnabled && (
             <>
-              <button
+              <Button
                 onClick={() => setActiveForm(activeForm === 'regenerate' ? null : 'regenerate')}
-                className="btn-secondary text-sm py-1.5 px-3 flex items-center gap-1.5"
+                variant="secondary" className="text-sm py-1.5 px-3 flex items-center gap-1.5"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Backup Codes
                 {activeForm === 'regenerate' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </button>
+              </Button>
               {!isAdmin && (
                 <button
                   onClick={() => setActiveForm(activeForm === 'disable' ? null : 'disable')}

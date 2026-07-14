@@ -11,6 +11,7 @@ import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
+import logger from '../utils/logger';
 
 // ============================================
 // MFA Helpers
@@ -34,7 +35,7 @@ const router = Router();
 
 /**
  * Rate limiting for authentication endpoints
- * Per SOW Section 3.4: 5 attempts per 15 minutes
+ * 5 attempts per 15 minutes
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -262,7 +263,7 @@ router.get('/me', async (req: Request, res: Response) => {
       user: sanitizeUser(user),
     });
   } catch (error) {
-    console.error('Error in GET /me:', error);
+    logger.error('Error in GET /me', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'An unexpected error occurred',
@@ -305,7 +306,7 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
         try {
           await sendPasswordResetEmail(user.email, token, user.displayName);
         } catch (emailError) {
-          console.error('Failed to send password reset email:', emailError);
+          logger.error('Failed to send password reset email', { err: emailError });
         }
       }
     }
@@ -321,7 +322,7 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
       });
     }
   } catch (error) {
-    console.error('Error in forgot-password:', error);
+    logger.error('Error in forgot-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'An unexpected error occurred',
@@ -386,7 +387,7 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
       message: 'Password has been reset successfully',
     });
   } catch (error) {
-    console.error('Error in reset-password:', error);
+    logger.error('Error in reset-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'An unexpected error occurred',
@@ -453,7 +454,7 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
       message: 'Password changed successfully',
     });
   } catch (error) {
-    console.error('Error in change-password:', error);
+    logger.error('Error in change-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'An unexpected error occurred',
@@ -500,14 +501,14 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
     return res.status(200).json({ message: 'Account deleted successfully' });
   } catch (error) {
-    console.error('Error deleting account:', error);
+    logger.error('Error deleting account', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete account' });
   }
 });
 
 // ============================================
 // MFA Endpoints
-// Per SOW Section 19.3: Multi-Factor Authentication
+// Multi-Factor Authentication
 // ============================================
 
 /**
@@ -559,7 +560,7 @@ router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
       secret: secret.base32,
     });
   } catch (error) {
-    console.error('Error in MFA setup:', error);
+    logger.error('Error in MFA setup', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to setup MFA' });
   }
 });
@@ -627,7 +628,7 @@ router.post('/mfa/verify', requireAuth, async (req: Request, res: Response) => {
       backupCodes: plainCodes,
     });
   } catch (error) {
-    console.error('Error in MFA verify:', error);
+    logger.error('Error in MFA verify', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA token' });
   }
 });
@@ -735,7 +736,7 @@ router.post('/mfa/verify-login', authLimiter, async (req: Request, res: Response
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error('Error in MFA verify-login:', error);
+    logger.error('Error in MFA verify-login', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA' });
   }
 });
@@ -743,7 +744,7 @@ router.post('/mfa/verify-login', authLimiter, async (req: Request, res: Response
 /**
  * POST /api/auth/mfa/disable
  * Disable MFA. Requires current password and valid TOTP token.
- * Admins cannot disable MFA per SOW Section 19.3.
+ * Admins cannot disable MFA
  * Requires: Authentication
  */
 router.post('/mfa/disable', requireAuth, async (req: Request, res: Response) => {
@@ -805,7 +806,7 @@ router.post('/mfa/disable', requireAuth, async (req: Request, res: Response) => 
 
     return res.status(200).json({ message: 'MFA disabled successfully' });
   } catch (error) {
-    console.error('Error disabling MFA:', error);
+    logger.error('Error disabling MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to disable MFA' });
   }
 });
@@ -853,7 +854,7 @@ router.post('/mfa/backup-codes', requireAuth, async (req: Request, res: Response
       backupCodes: plainCodes,
     });
   } catch (error) {
-    console.error('Error regenerating backup codes:', error);
+    logger.error('Error regenerating backup codes', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to regenerate backup codes' });
   }
 });

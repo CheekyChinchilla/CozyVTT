@@ -1,6 +1,6 @@
 /**
  * Campaign Invitation Routes
- * Per SOW Section 6.3: Campaign Invitations
+ * Campaign Invitations
  */
 
 import { Router, Response } from 'express';
@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { broadcastToCampaign } from '../websocket/utils';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     return res.json(invitations);
   } catch (error) {
-    console.error('Error fetching invitations:', error);
+    logger.error('Error fetching invitations', { err: error });
     return res.status(500).json({ message: 'Failed to fetch invitations' });
   }
 });
@@ -163,7 +164,7 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
         characterIds,
       });
     } catch (error) {
-      console.error('Failed to broadcast roster update:', error);
+      logger.error('Failed to broadcast roster update', { err: error });
       // Don't fail the request if broadcast fails
     }
 
@@ -172,7 +173,7 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
       membership: result,
     });
   } catch (error) {
-    console.error('Error accepting invitation:', error);
+    logger.error('Error accepting invitation', { err: error });
     return res.status(500).json({ message: 'Failed to accept invitation' });
   }
 });
@@ -211,7 +212,7 @@ router.post('/:id/decline', authenticated, async (req: AuthenticatedRequest, res
 
     return res.json({ message: 'Invitation declined' });
   } catch (error) {
-    console.error('Error declining invitation:', error);
+    logger.error('Error declining invitation', { err: error });
     return res.status(500).json({ message: 'Failed to decline invitation' });
   }
 });

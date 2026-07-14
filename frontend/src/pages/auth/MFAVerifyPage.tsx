@@ -7,6 +7,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import Button from '@/components/ui/Button';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
@@ -197,10 +198,10 @@ export default function MFAVerifyPage() {
               </p>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={loading || token.length !== 6}
-              className="btn-primary w-full"
+              className="w-full"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -229,7 +230,7 @@ export default function MFAVerifyPage() {
               ) : (
                 'Verify Code'
               )}
-            </button>
+            </Button>
           </form>
         )}
 
@@ -270,12 +271,12 @@ export default function MFAVerifyPage() {
               </p>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={
-                loading || backupCode.replace(/[-\s]/g, '').length !== 8
+              loading || backupCode.replace(/[-\s]/g, '').length !== 8
               }
-              className="btn-primary w-full"
+              className="w-full"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -304,7 +305,7 @@ export default function MFAVerifyPage() {
               ) : (
                 'Verify Backup Code'
               )}
-            </button>
+            </Button>
           </form>
         )}
 

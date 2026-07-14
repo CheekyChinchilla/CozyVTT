@@ -54,9 +54,9 @@ const handleTestLogin = async () => {
   }
 };
 
-<button onClick={handleTestLogin} className="btn-primary">
+<Button onClick={handleTestLogin}>
   Test Login
-</button>
+</Button>
 ```
 
 2. Click the "Test Login" button
@@ -90,9 +90,9 @@ const handleTestRegister = async () => {
   }
 };
 
-<button onClick={handleTestRegister} className="btn-primary">
+<Button onClick={handleTestRegister}>
   Test Register
-</button>
+</Button>
 ```
 
 2. Click the "Test Register" button
@@ -128,9 +128,9 @@ const handleTestLogout = async () => {
   }
 };
 
-<button onClick={handleTestLogout} className="btn-danger">
+<Button onClick={handleTestLogout} variant="danger">
   Test Logout
-</button>
+</Button>
 ```
 
 2. Click the "Test Logout" button
@@ -185,14 +185,14 @@ const handleMFAVerify = async () => {
       onChange={(e) => setMfaToken(e.target.value)}
       className="input-cozy"
     />
-    <button onClick={handleMFAVerify} className="btn-primary">
+    <Button onClick={handleMFAVerify}>
       Verify MFA
-    </button>
+    </Button>
   </div>
 ) : (
-  <button onClick={handleMFALogin} className="btn-primary">
+  <Button onClick={handleMFALogin}>
     Test MFA Login
-  </button>
+  </Button>
 )}
 ```
 
@@ -248,9 +248,9 @@ const handleTestBadLogin = async () => {
   }
 };
 
-<button onClick={handleTestBadLogin} className="btn-secondary">
+<Button onClick={handleTestBadLogin} variant="secondary">
   Test Bad Login
-</button>
+</Button>
 ```
 
 2. Click button
@@ -285,9 +285,9 @@ const handlePasswordChange = async () => {
   }
 };
 
-<button onClick={handlePasswordChange} className="btn-primary">
+<Button onClick={handlePasswordChange}>
   Test Change Password
-</button>
+</Button>
 ```
 
 2. Click button
@@ -319,9 +319,9 @@ const handleRefresh = async () => {
   console.log('After refresh:', user);
 };
 
-<button onClick={handleRefresh} className="btn-secondary">
+<Button onClick={handleRefresh} variant="secondary">
   Refresh User
-</button>
+</Button>
 ```
 
 2. Click button
@@ -357,9 +357,9 @@ const handleConcurrentLogins = async () => {
   }
 };
 
-<button onClick={handleConcurrentLogins} className="btn-secondary">
+<Button onClick={handleConcurrentLogins} variant="secondary">
   Test Concurrent Logins
-</button>
+</Button>
 ```
 
 2. Click button

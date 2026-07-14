@@ -12,6 +12,7 @@ import {
   isStrongPassword,
   getPasswordStrength,
 } from '@/utils/validation';
+import Button from '@/components/ui/Button';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -347,10 +348,10 @@ export default function RegisterPage() {
           </div>
 
           {/* Submit Button */}
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full mt-6"
+            className="w-full mt-6"
           >
             {loading ? (
               <span className="flex items-center justify-center">
@@ -379,7 +380,7 @@ export default function RegisterPage() {
             ) : (
               'Create Account'
             )}
-          </button>
+          </Button>
         </form>
 
         {/* Login Link */}

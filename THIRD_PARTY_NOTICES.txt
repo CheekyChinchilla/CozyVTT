@@ -4,7 +4,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 CozyVTT incorporates third-party software components. The following notices
 are provided for informational purposes and to comply with license requirements.
 
-Generated: 2026-04-08
+Generated: 2026-07-12
 
 
 ================================================================================
@@ -64,7 +64,7 @@ react-dom 18.3.1
   License: MIT
   https://github.com/facebook/react
 
-react-router-dom 6.30.3
+react-router-dom 6.30.4
   Copyright (c) Remix Software Inc.
   License: MIT
   https://github.com/remix-run/react-router
@@ -94,6 +94,21 @@ react-resizable-panels 4.6.4
   License: MIT
   https://github.com/bvaughn/react-resizable-panels
 
+zustand 5.0.14
+  Copyright (c) 2019 Paul Henschel
+  License: MIT
+  https://github.com/pmndrs/zustand
+
+@tanstack/react-query 5.101.2
+  Copyright (c) 2021-present Tanner Linsley
+  License: MIT
+  https://github.com/TanStack/query
+
+use-sync-external-store 1.6.0
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  License: MIT
+  https://github.com/facebook/react
+
 socket.io-client 4.8.3
   Copyright (c) Guillermo Rauch
   License: MIT
@@ -109,7 +124,7 @@ unified 11.0.5 (and remark/rehype/micromark ecosystem)
   License: MIT
   https://github.com/unifiedjs/unified
 
-ws 8.18.3
+ws 8.21.0
   Copyright (c) Einar Otto Stangvik
   License: MIT
   https://github.com/websockets/ws
@@ -121,7 +136,7 @@ SECTION 4: BACKEND DEPENDENCIES
 
 The following packages are used in the backend:
 
-express 4.22.1
+express 4.22.2
   Copyright (c) TJ Holowaychuk & Contributors
   License: MIT
   https://github.com/expressjs/express
@@ -208,7 +223,7 @@ unzipper 0.12.3
   License: MIT
   https://github.com/ZJONSSON/node-unzipper
 
-nodemailer 8.0.1
+nodemailer 9.0.3
   Copyright (c) Andris Reinman
   License: MIT-0
   https://github.com/nodemailer/nodemailer

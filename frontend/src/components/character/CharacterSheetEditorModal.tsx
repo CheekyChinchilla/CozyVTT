@@ -31,13 +31,16 @@ export default function CharacterSheetEditorModal({
   const [confirmClose, setConfirmClose] = useState(false);
   const { showToast } = useToast();
 
-  // Handle save
-  const handleSave = async (data: any) => {
+  // Handle save. The editors pass a freshly-uploaded token image URL as the
+  // third argument — forward it so the character's token actually updates.
+  // (Omit it when undefined so an edit that didn't touch the token keeps the
+  // existing image.)
+  const handleSave = async (data: any, _showToast?: boolean, tokenImageUrl?: string) => {
     try {
       setSaving(true);
-      // Only send the data field - name and tokenImageUrl are managed by the editor
       await api.updateCharacter(character.id, {
         data,
+        ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
       });
 
       // Call optional callback

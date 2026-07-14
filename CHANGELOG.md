@@ -6,6 +6,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.0] — 2026-07-12
+
+A modernization release: faster and smoother real-time play, a redesigned resizable session workspace, a shared UI component layer, a hardened and restructured backend, and accessibility + polish throughout — with no breaking changes for existing installs.
+
+### Performance
+
+- **The map now draws on three stacked canvases** (terrain / tokens / overlay) coordinated by a single animation-frame loop — dragging a token repaints only the token layer, leaving the map image, grid, and fog untouched, instead of repainting the entire scene several times per mouse move
+- **Dynamic-lighting vision is memoized** — moving one token or light now re-raycasts only that source against the walls, and panning re-raycasts nothing, so lit maps with many walls stay smooth
+- **Spirit-layer and lighting broadcasts no longer scale their database work with the player count** — map switches, spirit-layer toggles, and spirit-token moves now resolve every viewer's visibility in a fixed number of queries per event instead of repeating the visibility lookup once per connected socket, so large groups stay responsive
+- The throttled token-drag handler now reads the map a single time per frame instead of twice, halving its per-frame database work during a drag
+- Added per-connection flood ceilings on token movement and wall/light edits — a misbehaving or malicious client can no longer overwhelm the server with rapid map mutations (legitimate play stays far below the limits)
+- **The campaign-load API response is now bounded** — opening a campaign no longer downloads every map's full token/wall/fog/light data and every character's full sheet; it fetches only the metadata it uses and loads the active map and character sheets on demand, so large campaigns open quickly
+- **Live token state moved into a dedicated game store** (zustand) — socket events now write outside the React tree, so dragging a token re-renders only the map canvas, while the roster, initiative tracker, and side panels skip position updates entirely (previously every token move re-rendered every campaign component)
+- **Dashboard, Characters, and Asset Library now cache server data** (react-query) — navigating back to a page is instant, duplicate requests are deduped, and data refetches automatically after a network reconnect
+- Memoized all React context provider values (Campaign, WebSocket, Auth) — token movement no longer re-renders the entire campaign UI on every socket event
+- Asset serving now sends `Cache-Control`/`ETag` headers with 304 conditional-request support; token and map images are cached by the browser instead of re-downloaded on every map load
+- The map canvas is code-split into its own chunk, so the campaign page shell paints while canvas code loads
+- Default logo and mascot images optimized (1.4 MB → 64 KB combined)
+
+### Fixed
+
+- **The setup wizard now appears automatically on a brand-new install** — visiting the root URL of a fresh instance redirects to `/setup` instead of showing a login prompt you can't yet use. The redirect fires only when no admin account exists; existing installs and container updates are unaffected, and the wizard route now bounces already-configured instances back to the landing page
+- **Completing the setup wizard now reliably marks the instance as configured** — the setup-complete flag is written to, and read from, a single canonical settings row, fixing a race on brand-new installs where the wizard created the admin account but the app still reported "Setup Required" (and then refused to re-run setup because a user already existed)
+- **Session status now updates live for players** — when the DM starts, pauses, resumes, or ends a session, players see it change to live / paused / inactive immediately instead of having to reload the page
+- **Uploading a token image from a character sheet inside a campaign now saves** — previously the image uploaded but the character's token was never updated (the character-library path was unaffected)
+- Ending combat and restoring a backup now use the themed in-app confirmation dialog instead of the native browser popup
+- The `character.hp.update` WebSocket handler now rejects sockets that have not completed campaign authentication, matching all other handlers
+
+### UI
+
+- **Session screen redesigned as a resizable workspace** — the three campaign columns can now be resized by dragging the dividers and collapsed entirely (header toggle buttons or drag-to-collapse); layout persists per browser between sessions
+- **Tabbed session sidebar** — Chat, Dice, Initiative, and Session (vibe + session controls) are now full-height tabs instead of a stacked scrolling column with fixed heights; chat shows an unread-message badge while another tab is active, and all tabs keep their state when switching
+- **Grouped DM toolbar** — the seven header pill buttons are now compact icon buttons with tooltips, grouped by purpose (content / ambience / settings), with an active-state highlight while a panel is open
+- The map canvas now resizes live as panels are dragged or collapsed
+- New shared UI primitive components (Button, Modal, Input/Textarea/Select, Field, Tooltip) — buttons and dialogs now share one implementation instead of per-screen copies
+- All ~180 buttons migrated to the shared Button component; 12 dialogs plus the confirmation dialog now render on the shared Modal (portal-based, so dialogs no longer risk clipping inside blurred panels)
+- Dialogs, form hints, and status badges now use theme tokens throughout — hardcoded parchment backgrounds and raw gray/slate colors no longer break non-default themes
+- The secret dice-roll popup follows the active theme instead of a hardcoded dark style
+- Session sidebar tabs now cross-fade when switching instead of snapping
+- Proper favicon set — crisp browser-tab and home-screen icons rendered from the logo replace the single oversized mascot image
+- New shared empty-state component brings the mascot and consistent framing to "nothing here yet" screens (adopted on the Characters page)
+
+### Accessibility
+
+- **All animation now respects the operating system's "reduce motion" setting** — dice pops, toast slides, modal transitions, tab fades, and ambient effects are suppressed when a user has motion sensitivity enabled, via a single global motion configuration plus a CSS guard
+
+### Security
+
+- **Updated dependencies to clear every known vulnerability in shipped code** — `nodemailer` (email delivery) moved to 9.x and `express`/`ws`/`qs`/`body-parser` to patched releases, resolving reported CRLF-injection/SSRF and denial-of-service advisories; `react-router` updated to close a protocol-relative open-redirect. Production dependency audits (`npm audit --omit=dev`) now report zero vulnerabilities for both the backend and the frontend bundle
+- **The admin backup restore now validates a ZIP before extracting it** — restore archives are checked for path-traversal ("zip-slip") entries and capped on file count and total decompressed size (zip-bomb protection), and are streamed to disk entry-by-entry so a malformed or hostile backup can neither write outside the temporary restore directory nor exhaust memory or disk. Campaign import and backup restore now share this single hardened extraction path
+
+### Internal
+
+- The 2,300-line WebSocket handler monolith was split into one focused module per domain (tokens, dice, chat, spirit layer, vibe, maps, atmosphere, characters, initiative, walls, fog, lights) behind a thin connection orchestrator — wire behaviour is unchanged, verified by the full 28-test integration suite passing without modification
+- WebSocket handlers now use the structured winston logger instead of `console` calls, so real-time gameplay logs reach the configured file/JSON transports in production
+- The rest of the backend (REST routes, services, middleware, config) was likewise swept from `console.*` to the winston logger — production errors now land in `backend/logs/error.log` as structured JSON instead of only the console
+- Campaign and character create/update endpoints now validate request bodies with Zod schemas instead of hand-rolled type checks, rejecting malformed input with the same error shape as before
+- Map rendering decomposed into pure, unit-tested draw layers (background, grid, fog, tokens, dynamic lighting, walls, tool overlays) with vision polygons computed in a separate module — the canvas render function is now a thin orchestrator, and each layer can be exercised with a mock context (17 new tests)
+- Per-layer dirty-flag render scheduler (single requestAnimationFrame) replaces the previous scatter of imperative full-scene repaints; a per-source vision-polygon cache backs the lighting layer (5 new tests)
+- Token-tween and fog-reveal animation loops extracted into dedicated hooks
+- New state-layer architecture with a documented boundary rule: zustand owns live socket-fed session state, react-query owns REST resources, CampaignContext keeps campaign metadata — never both for the same data
+- Game-store unit tests covering the token actions and the movement-ignoring subscription that keeps sidebars static during drags
+- New WebSocket integration test suite (28 tests) covering connection auth, token movement permissions, walls/doors, fog of war, lights, initiative, chat, dice, and spirit-layer visibility filtering — run against a real Socket.io server and database
+- Map-canvas geometry (Douglas-Peucker simplification, Sobel edge-snapping, grid distance rules) extracted to a pure, unit-tested `utils/geometry` module
+- Added visibility-polygon test fixtures (closed rooms, doorway gaps, locked doors) and context-memoization regression tests
+- Restored the missing ESLint configuration — `npm run lint` now runs clean (rule strictness documented for future ratcheting)
+- The example frontend environment file no longer hardcodes an absolute backend URL — `VITE_API_URL`/`VITE_SOCKET_URL` are left empty so the Vite dev server proxies on a single origin like Docker and production; this fixes asset thumbnail previews not loading under local `npm run dev` (absolute URLs made the images cross-origin, which Cross-Origin-Resource-Policy blocks)
+
+---
+
 ## [1.0.0] — 2026-05-17
 
 Initial public release.

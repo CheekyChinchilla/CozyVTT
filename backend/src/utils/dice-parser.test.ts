@@ -1,6 +1,6 @@
 /**
  * Dice Parser Unit Tests
- * Tests for SOW Section 7 compliance
+ * Tests for the dice expression parser
  */
 
 import { rollDice, parseDiceExpression, DiceParserError } from './dice-parser';

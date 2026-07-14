@@ -1,7 +1,7 @@
 /**
  * Character Templates Index
  * Unified interface for getting character templates for all game systems
- * Per SOW Section 5.4: Character Management
+ * Character Management
  */
 
 import { GameSystem } from '@prisma/client';

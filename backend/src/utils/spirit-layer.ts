@@ -1,16 +1,17 @@
 import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible } from './serverRaycasting';
 import type { WallSegment, LightSource } from '../types/walls';
+import logger from './logger';
 
 /**
  * Spirit Layer Utility Functions
- * Per SOW Section 14: Spirit Layer Implementation
+ * Spirit Layer Implementation
  *
  * All spirit layer filtering happens server-side.
  * Spirit layer tokens and data are never sent to players — only DMs see them.
  */
 
-// Token interface matching SOW Section 4.2
+// Token interface
 interface Token {
   id: string;
   characterId?: string | null;
@@ -62,7 +63,7 @@ interface MapData {
 /**
  * Check if a user can see the spirit layer for a given campaign.
  *
- * Visibility rules (per SOW Section 14.2):
+ * Visibility rules:
  * - DM always sees the spirit layer
  * - Players see it when the DM has globally enabled it (campaign.spiritLayerEnabled), OR
  *   when the player's own token (identified by controlledBy) is currently on the spirit
@@ -129,9 +130,83 @@ export async function getSpiritVisibility(
 }
 
 /**
+ * Batch variant of {@link getSpiritVisibility} for fan-out broadcasts.
+ *
+ * The per-socket loops in the token/spirit/map handlers previously called
+ * getSpiritVisibility() once per connected socket — each doing 2–3 DB round
+ * trips — turning an O(players) event into an O(players) burst of queries.
+ * This computes the same visibility for every requested user in a fixed
+ * number of queries (membership roles in one query, campaign once, current-map
+ * tokens at most once), then resolves each user in memory. The result is
+ * behaviourally identical to calling getSpiritVisibility() per user.
+ *
+ * @param campaignId - The campaign ID
+ * @param userIds - The user IDs to resolve (duplicates are de-duped)
+ * @returns Map of userId → whether that user can see the spirit layer
+ */
+export async function getSpiritVisibilityBatch(
+  campaignId: string,
+  userIds: string[]
+): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+  const uniqueIds = [...new Set(userIds)];
+  if (uniqueIds.length === 0) return result;
+
+  const [memberships, campaign] = await Promise.all([
+    prisma.campaignMembership.findMany({
+      where: { campaignId, userId: { in: uniqueIds } },
+      select: { userId: true, role: true },
+    }),
+    prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { spiritLayerEnabled: true, currentMapId: true },
+    }),
+  ]);
+
+  const roleByUser = new Map(memberships.map((m) => [m.userId, m.role]));
+
+  // The current-map crossover check is only needed when the spirit layer is
+  // globally off AND at least one requested user is a non-DM member. Fetch the
+  // current map's spirit tokens at most once (not once per user).
+  let spiritTokens: Token[] | null = null;
+  const needsCrossover =
+    campaign != null &&
+    !campaign.spiritLayerEnabled &&
+    campaign.currentMapId != null &&
+    uniqueIds.some((id) => {
+      const role = roleByUser.get(id);
+      return role != null && role !== 'DM';
+    });
+
+  if (needsCrossover && campaign?.currentMapId) {
+    const currentMap = await prisma.map.findUnique({
+      where: { id: campaign.currentMapId },
+      select: { tokens: true },
+    });
+    const tokens = (Array.isArray(currentMap?.tokens) ? currentMap!.tokens : []) as unknown as Token[];
+    spiritTokens = tokens.filter((t) => t.layer === 'spirit' && t.visible);
+  }
+
+  for (const userId of uniqueIds) {
+    const role = roleByUser.get(userId);
+    if (!role || !campaign) {
+      result.set(userId, false);
+      continue;
+    }
+    if (role === 'DM' || campaign.spiritLayerEnabled) {
+      result.set(userId, true);
+      continue;
+    }
+    result.set(userId, spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
+  }
+
+  return result;
+}
+
+/**
  * Filter tokens based on user role and spirit layer visibility.
  *
- * Per SOW Section 14.2:
+ * 
  * - DM always sees all tokens on both layers
  * - Players/spectators only see spirit layer tokens when spirit visibility is enabled
  * - Hidden tokens (visible: false) are only visible to the DM
@@ -178,7 +253,7 @@ export function filterTokensByRole(
 /**
  * Filter tokens by dynamic lighting visibility for a non-DM player.
  *
- * Per Session 91: When lightingEnabled is true on a map, players should only
+ * When lightingEnabled is true on a map, players should only
  * receive tokens that are within their character's line of sight.
  *
  * @param tokens         Tokens already filtered by role/spirit rules
@@ -240,7 +315,7 @@ export function filterTokensByLighting(
 
   const elapsed = Date.now() - startMs;
   if (elapsed > 50) {
-    console.warn(`[lighting] filterTokensByLighting took ${elapsed}ms for userId=${playerUserId} (${myTokens.length} tokens, ${enabledLights.length} lights)`);
+    logger.warn(`[lighting] filterTokensByLighting took ${elapsed}ms for userId=${playerUserId} (${myTokens.length} tokens, ${enabledLights.length} lights)`);
   }
 
   // Keep tokens that are inside any of the visibility polygons (token or light)
@@ -261,7 +336,7 @@ export function filterTokensByLighting(
  * - Tokens (via filterTokensByRole)
  * - Spirit layer URL (hidden from non-DMs when spirit layer is not visible)
  *
- * Per SOW Section 14.2:
+ * 
  * - CRITICAL: Never send spirit layer data to non-privileged users
  *
  * @param mapData - Raw map data from Prisma

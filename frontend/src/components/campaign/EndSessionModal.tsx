@@ -1,6 +1,6 @@
 /**
  * End Session Modal
- * Per SOW Section 15: Session State Management
+ * Session State Management
  *
  * Confirmation modal for ending a session.
  * Allows DM to choose whether to save game state and add session notes.
@@ -8,8 +8,8 @@
  */
 
 import { useState } from 'react';
-import { X, Square, Save, Clock, Hash } from 'lucide-react';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Square, Save, Clock, Hash } from 'lucide-react';
+import { Button, Modal } from '@/components/ui';
 
 // ============================================
 // Duration formatter
@@ -54,7 +54,6 @@ export default function EndSessionModal({
 }: EndSessionModalProps) {
   const [saveState, setSaveState] = useState(true);
   const [notes, setNotes] = useState('');
-  const modalRef = useFocusTrap(true, onClose);
 
   const duration = formatDuration(session.startedAt);
 
@@ -64,34 +63,9 @@ export default function EndSessionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" aria-hidden="true">
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="end-session-title"
-        className="glass-panel max-w-md w-full p-6 bg-soft-cream/95 backdrop-blur-md space-y-5"
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <Square className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h2 id="end-session-title" className="text-lg font-bold text-moss-green">End Session</h2>
-              <p className="text-xs text-warm-gray">Campaign will become inactive until the next session.</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            aria-label="Close dialog"
-            className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
-          >
-            <X className="w-4 h-4 text-stone-gray" />
-          </button>
-        </div>
+    <Modal open onClose={onClose} title="End Session" icon={Square} size="sm" closeDisabled={isSubmitting}>
+      <div className="space-y-5">
+        <p className="text-xs text-ink-muted -mt-4">Campaign will become inactive until the next session.</p>
 
         {/* Session Summary */}
         <div className="rounded-lg bg-parchment border border-moss-green/20 p-4 space-y-3">
@@ -161,25 +135,26 @@ export default function EndSessionModal({
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="btn-secondary"
+              variant="secondary"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="danger"
+              loading={isSubmitting}
+              icon={Square}
+              className="text-sm"
             >
-              <Square className="w-3.5 h-3.5" />
               {isSubmitting ? 'Ending...' : 'End Session'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

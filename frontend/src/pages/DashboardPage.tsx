@@ -4,22 +4,22 @@
 // Protected route - requires authentication
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Plus, LogOut, RefreshCw, User, ArrowRight, Mail, FolderOpen, Shield, AlertCircle, Upload } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import campaignService from '@/services/campaign.service';
-import characterService from '@/services/character.service';
-import { api } from '@/services/api';
+import { useCampaignsQuery, useCharactersQuery, usePendingInvitationsQuery, queryKeys } from '@/hooks/queries';
 import CampaignCard from '@/components/CampaignCard';
 import CreateCampaignModal from '@/components/CreateCampaignModal';
 import CampaignImportDialog from '@/components/campaign/CampaignImportDialog';
 import InvitationModal from '@/components/campaign/InvitationModal';
 import CampaignCardSkeleton from '@/components/skeletons/CampaignCardSkeleton';
-import type { Campaign, Character, CampaignInvitation } from '@/types';
+import type { Campaign, CampaignInvitation } from '@/types';
 import { CampaignRole, PlatformRole } from '@/types';
+import Button from '@/components/ui/Button';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
@@ -27,42 +27,35 @@ export default function DashboardPage() {
   const { showToast } = useToast();
   const { mascotUrl } = useTheme();
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [invitations, setInvitations] = useState<CampaignInvitation[]>([]);
   const [selectedInvitation, setSelectedInvitation] = useState<CampaignInvitation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
-  // Fetch campaigns and characters on mount
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Server resources via react-query — cached, deduped, refetched on
+  // network reconnect (client defaults in lib/queryClient.ts).
+  const queryClient = useQueryClient();
+  const campaignsQuery = useCampaignsQuery();
+  const charactersQuery = useCharactersQuery();
+  const invitationsQuery = usePendingInvitationsQuery();
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
+  const campaigns = campaignsQuery.data ?? [];
+  const characters = charactersQuery.data ?? [];
+  const invitations = invitationsQuery.data ?? [];
+  const loading = campaignsQuery.isPending || charactersQuery.isPending || invitationsQuery.isPending;
+  const queryError = campaignsQuery.error || charactersQuery.error || invitationsQuery.error;
+  const error = queryError
+    ? ((queryError as any).response?.data?.message || 'Failed to load data')
+    : '';
 
-    try {
-      const [campaignsData, charactersData, invitationsData] = await Promise.all([
-        campaignService.getCampaigns(),
-        characterService.getCharacters(),
-        api.getPendingInvitations(),
-      ]);
-      setCampaigns(campaignsData);
-      setCharacters(charactersData);
-      setInvitations(invitationsData);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
+  // Refresh button + post-invitation-response resync
+  const loadData = () => {
+    campaignsQuery.refetch();
+    charactersQuery.refetch();
+    invitationsQuery.refetch();
   };
 
   const handleCampaignCreated = (newCampaign: Campaign) => {
-    setCampaigns([newCampaign, ...campaigns]);
+    queryClient.setQueryData<Campaign[]>(queryKeys.campaigns, (prev) => [newCampaign, ...(prev ?? [])]);
     showToast(`Campaign "${newCampaign.name}" created!`, 'success');
   };
 
@@ -99,36 +92,36 @@ export default function DashboardPage() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 onClick={loadData}
                 disabled={loading}
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary" className="flex items-center gap-2"
                 aria-label={loading ? 'Refreshing data' : 'Refresh data'}
                 aria-busy={loading}
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                 <span className="hidden sm:inline">Refresh</span>
-              </button>
+              </Button>
 
               {user?.platformRole === PlatformRole.ADMIN && (
-                <button
+                <Button
                   onClick={() => navigate('/admin')}
-                  className="btn-secondary flex items-center gap-2"
+                  variant="secondary" className="flex items-center gap-2"
                   aria-label="Go to Admin Panel"
                 >
                   <Shield className="w-4 h-4 text-moss-green" aria-hidden="true" />
                   <span className="hidden sm:inline">Admin</span>
-                </button>
+                </Button>
               )}
 
-              <button
+              <Button
                 onClick={handleLogout}
-                className="btn-danger flex items-center gap-2"
+                variant="danger" className="flex items-center gap-2"
                 aria-label="Log out of CozyVTT"
               >
                 <LogOut className="w-4 h-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Logout</span>
-              </button>
+              </Button>
 
               {/* Profile Avatar Button */}
               <button
@@ -172,13 +165,13 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={() => navigate('/characters')}
-                  className="btn-primary flex items-center gap-2"
+                  className="flex items-center gap-2"
                 >
                   <span className="hidden sm:inline">Manage</span>
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
 
               {/* Characters loading skeleton */}
@@ -243,13 +236,13 @@ export default function DashboardPage() {
               {!loading && characters.length === 0 && (
                 <div className="text-center py-6">
                   <p className="text-warm-gray mb-3 text-sm">No characters yet</p>
-                  <button
+                  <Button
                     onClick={() => navigate('/characters')}
-                    className="btn-secondary inline-flex items-center gap-2 text-sm"
+                    variant="secondary" className="inline-flex items-center gap-2 text-sm"
                   >
                     <Plus className="w-4 h-4" />
                     Create Character
-                  </button>
+                  </Button>
                 </div>
               )}
             </section>
@@ -270,13 +263,13 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={() => navigate('/assets')}
-                  className="btn-primary flex items-center gap-2"
+                  className="flex items-center gap-2"
                 >
                   <span className="hidden sm:inline">View Library</span>
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
 
               <div className="space-y-3 mt-4">
@@ -350,20 +343,20 @@ export default function DashboardPage() {
                 Your Campaigns
               </h2>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   onClick={() => setShowImportDialog(true)}
-                  className="btn-secondary flex items-center gap-2"
+                  variant="secondary" className="flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
                   <span className="hidden sm:inline">Import</span>
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => setShowCreateModal(true)}
-                  className="btn-primary flex items-center gap-2"
+                  className="flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Create Campaign
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -374,12 +367,12 @@ export default function DashboardPage() {
                 <div className="flex-1">
                   <p className="text-sm text-red-700 font-medium">{error}</p>
                 </div>
-                <button
+                <Button
                   onClick={loadData}
-                  className="btn-secondary text-xs py-1 px-3 flex-shrink-0"
+                  variant="secondary" className="text-xs py-1 px-3 flex-shrink-0"
                 >
                   Try Again
-                </button>
+                </Button>
               </div>
             )}
 
@@ -406,13 +399,13 @@ export default function DashboardPage() {
                     Create your first campaign to begin your adventure! As a DM, you'll be able
                     to invite players, create maps, and manage game sessions.
                   </p>
-                  <button
+                  <Button
                     onClick={() => setShowCreateModal(true)}
-                    className="btn-primary inline-flex items-center gap-2"
+                    className="inline-flex items-center gap-2"
                   >
                     <Plus className="w-5 h-5" />
                     Create Your First Campaign
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

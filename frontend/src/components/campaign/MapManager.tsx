@@ -20,12 +20,14 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGameStore } from '@/stores/gameStore';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
 import type { Map, Token } from '@/types';
 import CreateMapModal from './CreateMapModal';
 import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Button from '@/components/ui/Button';
 
 interface MapManagerProps {
   isOpen: boolean;
@@ -119,19 +121,19 @@ function TokenTransferConfirmation({
       </div>
 
       <div className="flex gap-2 pt-1">
-        <button
+        <Button
           type="button"
           onClick={onCancel}
           disabled={isSwitching}
-          className="btn-secondary text-xs py-1 px-3"
+          variant="secondary" className="text-xs py-1 px-3"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => onConfirm(Array.from(selected))}
           disabled={isSwitching}
-          className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5"
+          className="text-xs py-1 px-3 flex items-center gap-1.5"
         >
           {isSwitching ? (
             <>
@@ -144,7 +146,7 @@ function TokenTransferConfirmation({
               Switch Map
             </>
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -290,7 +292,7 @@ function MapCard({
 // ============================================
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
-  const { campaign, currentMap, setCurrentMap, updateTokens } = useCampaign();
+  const { campaign, currentMap, setCurrentMap } = useCampaign();
   const { socket } = useWebSocket();
 
   const [maps, setMaps] = useState<Map[]>([]);
@@ -500,9 +502,9 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       // 3. Fetch full map (with filtered tokens)
       const fullMap = await mapService.getMap(campaign.id, targetMap.id);
 
-      // 4. Update context
+      // 4. Update context + live token store
       setCurrentMap(fullMap);
-      updateTokens(fullMap.tokens || []);
+      useGameStore.getState().setTokens(fullMap.tokens || []);
 
       // 5. Update local active map tracking so the badge updates immediately
       setActiveMapId(targetMap.id);
@@ -551,11 +553,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
                       type="button"
                       onClick={() => uvttInputRef.current?.click()}
                       disabled={isImportingUVTT}
-                      className="btn-secondary flex items-center gap-2 text-sm"
+                      variant="secondary" className="flex items-center gap-2 text-sm"
                       title="Import a .uvtt or .dd2vtt file (Dungeondraft, DunGen, Dungeon Alchemist, etc.)"
                     >
                       {isImportingUVTT ? (
@@ -564,7 +566,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
                         <Upload className="w-4 h-4" />
                       )}
                       Import UVTT
-                    </button>
+                    </Button>
                     <input
                       ref={uvttInputRef}
                       type="file"
@@ -572,14 +574,14 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
                       onChange={handleUVTTImport}
                       className="hidden"
                     />
-                    <button
+                    <Button
                       type="button"
                       onClick={() => setCreateModalOpen(true)}
-                      className="btn-primary flex items-center gap-2 text-sm"
+                      className="flex items-center gap-2 text-sm"
                     >
                       <Plus className="w-4 h-4" />
                       Create Map
-                    </button>
+                    </Button>
                     <button
                       onClick={onClose}
                       className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
@@ -617,14 +619,14 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
                     <p className="text-sm text-stone-gray/60">
                       Create your first map to start your adventure.
                     </p>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => setCreateModalOpen(true)}
-                      className="btn-primary inline-flex items-center gap-2"
+                      className="inline-flex items-center gap-2"
                     >
                       <Plus className="w-4 h-4" />
                       Create Map
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">

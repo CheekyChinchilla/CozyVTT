@@ -13,10 +13,11 @@ import {
   verifyBackupCode,
 } from '../services/mfa';
 import { rememberMeMaxAge } from '../config/session';
+import logger from '../utils/logger';
 
 /**
  * MFA Routes
- * Per SOW Section 19.3: Multi-Factor Authentication Flow
+ * Multi-Factor Authentication Flow
  *
  * Endpoints:
  *   POST /api/auth/mfa/setup        - Begin MFA setup (generate secret + QR)
@@ -92,7 +93,7 @@ router.post('/setup', authenticated, async (req: AuthenticatedRequest, res: Resp
       secret,
     });
   } catch (error) {
-    console.error('Error setting up MFA:', error);
+    logger.error('Error setting up MFA', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to set up MFA',
@@ -171,7 +172,7 @@ router.post('/verify', authenticated, mfaSetupLimiter, async (req: Authenticated
       backupCodes,
     });
   } catch (error) {
-    console.error('Error verifying MFA setup:', error);
+    logger.error('Error verifying MFA setup', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to verify MFA setup',
@@ -183,7 +184,7 @@ router.post('/verify', authenticated, mfaSetupLimiter, async (req: Authenticated
  * POST /api/auth/mfa/verify-login
  * Verify MFA during login flow (TOTP token or backup code)
  * No auth middleware - uses mfaPending session state
- * Per SOW Section 19.3: 5 attempts then temporary lockout
+ * 5 attempts then temporary lockout
  */
 router.post('/verify-login', mfaLoginLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -295,7 +296,7 @@ router.post('/verify-login', mfaLoginLimiter, async (req: AuthenticatedRequest, 
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error('Error verifying MFA login:', error);
+    logger.error('Error verifying MFA login', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to verify MFA',
@@ -306,7 +307,7 @@ router.post('/verify-login', mfaLoginLimiter, async (req: AuthenticatedRequest, 
 /**
  * POST /api/auth/mfa/disable
  * Disable MFA (requires current password + TOTP code)
- * Per SOW Section 19.3: Admin accounts cannot disable MFA
+ * Admin accounts cannot disable MFA
  */
 router.post('/disable', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -338,7 +339,7 @@ router.post('/disable', authenticated, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // Admin accounts cannot disable MFA (per SOW Section 19.3)
+    // Admin accounts cannot disable MFA
     if (user.platformRole === 'ADMIN') {
       return res.status(403).json({
         error: 'Forbidden',
@@ -377,7 +378,7 @@ router.post('/disable', authenticated, async (req: AuthenticatedRequest, res: Re
       message: 'MFA has been disabled successfully',
     });
   } catch (error) {
-    console.error('Error disabling MFA:', error);
+    logger.error('Error disabling MFA', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to disable MFA',
@@ -388,7 +389,7 @@ router.post('/disable', authenticated, async (req: AuthenticatedRequest, res: Re
 /**
  * POST /api/auth/mfa/backup-codes
  * Regenerate backup codes (requires password for re-authentication)
- * Per SOW Section 5.1: POST /api/auth/mfa/backup-codes
+ * POST /api/auth/mfa/backup-codes
  */
 router.post('/backup-codes', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -445,7 +446,7 @@ router.post('/backup-codes', authenticated, async (req: AuthenticatedRequest, re
       backupCodes,
     });
   } catch (error) {
-    console.error('Error regenerating backup codes:', error);
+    logger.error('Error regenerating backup codes', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to regenerate backup codes',

@@ -4,12 +4,12 @@
  */
 
 import { useState, FormEvent, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { X, Loader2, User, Sparkles } from 'lucide-react';
+import { Loader2, User, Sparkles } from 'lucide-react';
+import { Modal } from '@/components/ui';
 import { Character, GameSystem, Campaign } from '@/types';
 import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
 import api from '@/services/api';
+import Button from '@/components/ui/Button';
 
 interface NewCharacterModalProps {
   isOpen: boolean;
@@ -250,67 +250,12 @@ export default function NewCharacterModal({
     }
   };
 
-  const modalRef = useFocusTrap(isOpen, handleClose);
-
   const isFormValid = name.trim().length >= 2;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            onClick={handleClose}
-            aria-hidden="true"
-          />
-
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              ref={modalRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="new-character-title"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-2xl p-6 relative rounded-lg border border-moss-green/20 shadow-2xl"
-              style={{
-                background: 'rgba(254, 243, 199, 0.98)',
-                backdropFilter: 'blur(10px)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-moss-green/10">
-                    <User className="w-6 h-6 text-moss-green" />
-                  </div>
-                  <h2 id="new-character-title" className="text-2xl font-semibold text-moss-green font-heading">
-                    Create New Character
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="p-2 rounded-lg hover:bg-warm-gray/10 transition-colors
-                           disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Close dialog"
-                >
-                  <X className="w-5 h-5 text-stone-gray" />
-                </button>
-              </div>
-
-              {/* Error Alert */}
-              {error && (
+    <Modal open={isOpen} onClose={handleClose} title="Create New Character" icon={User} size="lg" closeDisabled={loading}>
+      {/* Error Alert */}
+      {error && (
                 <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 max-h-60 overflow-y-auto">
                   <p className="text-sm text-spirit-red font-medium whitespace-pre-wrap font-mono">
                     {error}
@@ -324,7 +269,7 @@ export default function NewCharacterModal({
                 <div>
                   <label
                     htmlFor="characterName"
-                    className="block text-sm font-semibold text-gray-700 mb-2"
+                    className="block text-sm font-semibold text-ink mb-2"
                   >
                     Character Name <span className="text-spirit-red">*</span>
                   </label>
@@ -339,7 +284,7 @@ export default function NewCharacterModal({
                     autoFocus
                     required
                   />
-                  <p className="mt-1 text-xs text-gray-600">
+                  <p className="mt-1 text-xs text-ink-muted">
                     Give your character a memorable name (2-100 characters)
                   </p>
                 </div>
@@ -349,9 +294,9 @@ export default function NewCharacterModal({
                   <div>
                     <label
                       htmlFor="campaign"
-                      className="block text-sm font-semibold text-gray-700 mb-2"
+                      className="block text-sm font-semibold text-ink mb-2"
                     >
-                      Campaign <span className="text-gray-500">(optional)</span>
+                      Campaign <span className="text-ink-muted">(optional)</span>
                     </label>
                     <select
                       id="campaign"
@@ -370,7 +315,7 @@ export default function NewCharacterModal({
                         </option>
                       ))}
                     </select>
-                    <p className="mt-1 text-xs text-gray-600">
+                    <p className="mt-1 text-xs text-ink-muted">
                       Assign to a campaign now, or leave unassigned for later
                     </p>
                   </div>
@@ -380,13 +325,13 @@ export default function NewCharacterModal({
                 <div>
                   <label
                     htmlFor="gameSystem"
-                    className="block text-sm font-semibold text-gray-700 mb-2"
+                    className="block text-sm font-semibold text-ink mb-2"
                   >
                     Game System{' '}
                     {isGameSystemLocked() ? (
-                      <span className="text-gray-500">(from campaign)</span>
+                      <span className="text-ink-muted">(from campaign)</span>
                     ) : (
-                      <span className="text-gray-500">(optional)</span>
+                      <span className="text-ink-muted">(optional)</span>
                     )}
                   </label>
                   <select
@@ -406,7 +351,7 @@ export default function NewCharacterModal({
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-gray-600">
+                  <p className="mt-1 text-xs text-ink-muted">
                     {isGameSystemLocked()
                       ? 'Game system is inherited from the selected campaign'
                       : 'Select a game system to use pre-built templates'}
@@ -418,7 +363,7 @@ export default function NewCharacterModal({
                   <div>
                     <label
                       htmlFor="template"
-                      className="block text-sm font-semibold text-gray-700 mb-2"
+                      className="block text-sm font-semibold text-ink mb-2"
                     >
                       Character Template
                     </label>
@@ -429,7 +374,7 @@ export default function NewCharacterModal({
                           className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${
                             selectedTemplate === template.value
                               ? 'border-moss-green bg-moss-green/5'
-                              : 'border-gray-200 hover:border-moss-green/50'
+                              : 'border-ink/10 hover:border-moss-green/50'
                           } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <input
@@ -443,21 +388,21 @@ export default function NewCharacterModal({
                           />
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-gray-800">
+                              <span className="font-semibold text-ink">
                                 {template.label}
                               </span>
                               {template.value !== 'blank' && (
                                 <Sparkles className="w-4 h-4 text-warm-amber" />
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-sm text-ink-muted mt-1">
                               {template.description}
                             </p>
                           </div>
                         </label>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs text-gray-600">
+                    <p className="mt-2 text-xs text-ink-muted">
                       Templates pre-fill the character sheet with example data
                     </p>
                   </div>
@@ -465,7 +410,7 @@ export default function NewCharacterModal({
 
                 {/* Info Box */}
                 <div className="rounded-lg p-4 bg-moss-green/10 border border-moss-green/30">
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-ink">
                     <strong className="text-moss-green">Note:</strong> After
                     creation, you'll be redirected to the character editor where
                     you can customize all details and save when ready.
@@ -474,19 +419,19 @@ export default function NewCharacterModal({
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  <button
+                  <Button
                     type="button"
                     onClick={handleClose}
                     disabled={loading}
-                    className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="secondary" className="flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
                     type="submit"
                     disabled={loading || !isFormValid}
-                    className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>
@@ -499,13 +444,9 @@ export default function NewCharacterModal({
                         Create Character
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

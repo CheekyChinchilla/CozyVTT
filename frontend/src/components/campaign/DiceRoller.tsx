@@ -307,18 +307,18 @@ export default function DiceRoller() {
       return 'Expression cannot be empty';
     }
 
-    // Check length limit (200 characters per SOW)
+    // Check length limit (200 characters)
     if (expr.length > 200) {
       return 'Expression too long (max 200 characters)';
     }
 
     // Basic validation for dice notation
-    const dicePattern = /^[\dd\+\-\*\/khldisavw\s]+$/i;
+    const dicePattern = /^[\dd+\-*/khldisavw\s]+$/i;
     if (!dicePattern.test(expr)) {
       return 'Invalid characters in expression';
     }
 
-    // Check for maximum dice count (100 per SOW)
+    // Check for maximum dice count (100)
     const diceMatches = expr.match(/(\d+)d/gi);
     if (diceMatches) {
       const totalDice = diceMatches.reduce((sum, match) => {
@@ -723,73 +723,45 @@ export default function DiceRoller() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-amber-50 dark:bg-slate-800 rounded-lg border-2 border-green-600/50 shadow-2xl max-w-md w-full relative"
+              className="bg-surface-light rounded-lg border-2 border-brand/50 shadow-2xl max-w-md w-full relative"
             >
               {/* Close Button */}
               <button
                 onClick={() => setSecretRollResult(null)}
-                className="absolute top-2 right-2 p-1 rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 transition-all"
+                className="absolute top-2 right-2 p-1 rounded-md bg-surface hover:bg-surface-dark transition-all"
                 title="Close"
               >
-                <X className="w-4 h-4 text-slate-700 dark:text-slate-200" />
+                <X className="w-4 h-4 text-ink" />
               </button>
 
               {/* Header */}
-              <div className="p-4 border-b border-slate-200 dark:border-slate-600">
+              <div className="p-4 border-b border-ink/10">
                 <div className="flex items-center gap-2">
-                  <EyeOff className="w-5 h-5 text-green-700 dark:text-green-400" />
-                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  <EyeOff className="w-5 h-5 text-brand" />
+                  <h3 className="text-lg font-semibold text-ink">
                     Secret Roll
                   </h3>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                <p className="text-xs text-ink-muted mt-1">
                   Only you can see this result
                 </p>
               </div>
 
               {/* Roll Result */}
-              <div className="p-4 bg-white dark:bg-slate-900">
-                <div className="bg-white dark:bg-slate-700 rounded-lg p-3 shadow-inner">
-                  <style>{`
-                    /* Force white text for ALL elements in dark mode */
-                    .secret-roll-content,
-                    .secret-roll-content *,
-                    .secret-roll-content span,
-                    .secret-roll-content div,
-                    .secret-roll-content p {
-                      color: #ffffff !important;
-                    }
-
-                    /* Preserve critical success green (bright green on dark) */
-                    .secret-roll-content .text-green-700,
-                    .secret-roll-content .text-green-800,
-                    .secret-roll-content .text-green-600,
-                    .secret-roll-content [class*="green"] {
-                      color: #4ade80 !important;
-                    }
-
-                    /* Preserve critical fail red */
-                    .secret-roll-content .text-red-600,
-                    .secret-roll-content .text-red-700,
-                    .secret-roll-content .text-red-400,
-                    .secret-roll-content [class*="red"] {
-                      color: #f87171 !important;
-                    }
-                  `}</style>
-                  <div className="secret-roll-content">
-                    <DiceResult
-                      roll={secretRollResult}
-                      isCurrentUser={true}
-                    />
-                  </div>
+              <div className="p-4 bg-paper">
+                <div className="bg-paper rounded-lg p-3 shadow-inner">
+                  <DiceResult
+                    roll={secretRollResult}
+                    isCurrentUser={true}
+                  />
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="p-3 border-t border-slate-200 dark:border-slate-600 bg-amber-100 dark:bg-slate-700 rounded-b-lg">
+              <div className="p-3 border-t border-ink/10 bg-surface rounded-b-lg">
                 <button
                   onClick={() => setSecretRollResult(null)}
-                  className="w-full px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 text-white font-semibold text-sm shadow-sm transition-all"
+                  className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-sm transition-all"
                 >
                   Close
                 </button>

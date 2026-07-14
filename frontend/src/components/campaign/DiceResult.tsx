@@ -72,7 +72,7 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
               {userName}
               {isCurrentUser && <span className="ml-1 text-xs opacity-60">(You)</span>}
               {secret && !isCurrentUser && (
-                <span className="ml-2 text-xs bg-gray-500/20 text-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
+                <span className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded">
                   🔒 Secret (DM View)
                 </span>
               )}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,12 +19,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
+import { useAssetsQuery, type AssetListParams } from '@/hooks/queries';
 import { Asset, AssetType, AssetScope, PlatformRole } from '../types';
 import AssetCard from '../components/assets/AssetCard';
 import AssetUploadModal from '../components/assets/AssetUploadModal';
 import AssetDetailPanel from '../components/assets/AssetDetailPanel';
 import Toast from '../components/Toast';
 import AssetCardSkeleton from '../components/skeletons/AssetCardSkeleton';
+import Button from '@/components/ui/Button';
 
 type ViewMode = 'grid' | 'list';
 type FolderScope = 'all' | 'global' | 'user' | 'campaign';
@@ -35,8 +38,6 @@ type FolderScope = 'all' | 'global' | 'user' | 'campaign';
 export default function AssetLibraryPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [folderScope, setFolderScope] = useState<FolderScope>('all');
   const [selectedType, setSelectedType] = useState<AssetType | 'all'>('all');
@@ -50,46 +51,36 @@ export default function AssetLibraryPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
   const isAdmin = user?.platformRole === PlatformRole.ADMIN;
   const canUploadGlobal = isAdmin || user?.globalAssetManager === true;
 
-  // Fetch assets
-  const fetchAssets = async () => {
-    try {
-      setLoading(true);
-      const params: any = {
-        page: currentPage,
-        limit: 24,
-      };
-
-      if (selectedType !== 'all') {
-        params.type = selectedType;
-      }
-      if (folderScope === 'global') {
-        params.scope = AssetScope.GLOBAL;
-      } else if (folderScope === 'user') {
-        params.scope = AssetScope.USER;
-      } else if (folderScope === 'campaign') {
-        params.scope = AssetScope.CAMPAIGN;
-      }
-
-      const response = await api.listAssets(params);
-      setAssets(response.assets);
-      setTotalPages(response.pagination.totalPages);
-      setTotalCount(response.pagination.total);
-    } catch (error) {
-      setToast({ message: 'Failed to load assets', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+  // Server-side page of assets via react-query — one cache entry per
+  // (page, scope, type) combination.
+  const queryClient = useQueryClient();
+  const scopeParam =
+    folderScope === 'global' ? AssetScope.GLOBAL
+    : folderScope === 'user' ? AssetScope.USER
+    : folderScope === 'campaign' ? AssetScope.CAMPAIGN
+    : undefined;
+  const assetParams: AssetListParams = {
+    page: currentPage,
+    limit: 24,
+    ...(selectedType !== 'all' ? { type: selectedType } : {}),
+    ...(scopeParam ? { scope: scopeParam } : {}),
   };
+  const assetsQuery = useAssetsQuery(assetParams);
+
+  const assets = assetsQuery.data?.assets ?? [];
+  const totalPages = assetsQuery.data?.pagination.totalPages ?? 1;
+  const totalCount = assetsQuery.data?.pagination.total ?? 0;
+  const loading = assetsQuery.isPending;
 
   useEffect(() => {
-    fetchAssets();
-  }, [currentPage, folderScope, selectedType]);
+    if (assetsQuery.isError) {
+      setToast({ message: 'Failed to load assets', type: 'error' });
+    }
+  }, [assetsQuery.isError]);
 
   // Reset page and tags when scope/type changes
   useEffect(() => {
@@ -138,8 +129,10 @@ export default function AssetLibraryPage() {
     return filtered;
   }, [assets, debouncedSearch, selectedTags, sortBy]);
 
-  const handleUploadSuccess = (newAsset: Asset) => {
-    setAssets((prev) => [newAsset, ...prev]);
+  // Uploads/deletes change page counts, so invalidate every cached asset
+  // page rather than splicing one page's array locally.
+  const handleUploadSuccess = (_newAsset: Asset) => {
+    queryClient.invalidateQueries({ queryKey: ['assets'] });
     setIsUploadModalOpen(false);
     setToast({ message: 'Asset uploaded successfully!', type: 'success' });
   };
@@ -147,7 +140,7 @@ export default function AssetLibraryPage() {
   const handleDeleteAsset = async (assetId: string) => {
     try {
       await api.deleteAsset(assetId);
-      setAssets((prev) => prev.filter((a) => a.id !== assetId));
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
       setSelectedAsset(null);
       setToast({ message: 'Asset deleted successfully', type: 'success' });
     } catch (error) {
@@ -178,14 +171,14 @@ export default function AssetLibraryPage() {
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <Button
                 onClick={() => navigate('/dashboard')}
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary" className="flex items-center gap-2"
                 title="Back to Dashboard"
               >
                 <Home className="w-5 h-5" />
                 <span className="hidden sm:inline">Dashboard</span>
-              </button>
+              </Button>
               <div>
                 <h1 className="text-3xl font-bold text-moss-green mb-2">Asset Library</h1>
                 <p className="text-stone-gray">Manage your maps, tokens, audio, and avatars</p>
@@ -194,13 +187,13 @@ export default function AssetLibraryPage() {
 
             {/* Upload button — hidden when viewing Global as non-manager */}
             {showUploadButton ? (
-              <button
+              <Button
                 onClick={() => setIsUploadModalOpen(true)}
-                className="btn-primary flex items-center gap-2"
+                className="flex items-center gap-2"
               >
                 <Upload className="w-5 h-5" />
                 <span className="hidden sm:inline">Upload Asset</span>
-              </button>
+              </Button>
             ) : (
               <div className="px-4 py-2 text-sm text-stone-gray/60 italic hidden sm:block">
                 Managed by administrators
@@ -238,16 +231,15 @@ export default function AssetLibraryPage() {
             {/* Folder Scope */}
             <div className="flex gap-2 flex-wrap">
               {folderButtons.map(({ key, label, icon }) => (
-                <button
+                <Button
                   key={key}
                   onClick={() => setFolderScope(key)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    folderScope === key ? 'btn-primary' : 'btn-secondary'
-                  }`}
+                  variant={folderScope === key ? 'primary' : 'secondary'}
+                  className="flex items-center gap-2 !rounded-lg"
                 >
                   {icon}
                   <span className="hidden sm:inline">{label}</span>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -365,9 +357,9 @@ export default function AssetLibraryPage() {
             <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
             <h2 className="text-lg font-semibold text-moss-green mb-2">Failed to load assets</h2>
             <p className="text-stone-gray mb-6 text-sm">Check your connection and try again.</p>
-            <button onClick={fetchAssets} className="btn-primary">
+            <Button onClick={() => assetsQuery.refetch()}>
               Try Again
-            </button>
+            </Button>
           </div>
         ) : filteredAssets.length === 0 ? (
           <div className="bg-parchment/50 border border-moss-green/20 rounded-xl p-12 text-center">
@@ -381,9 +373,9 @@ export default function AssetLibraryPage() {
                 : 'Upload your first asset to get started'}
             </p>
             {!searchQuery && selectedTags.length === 0 && showUploadButton && (
-              <button onClick={() => setIsUploadModalOpen(true)} className="btn-primary">
+              <Button onClick={() => setIsUploadModalOpen(true)}>
                 Upload Asset
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -412,23 +404,23 @@ export default function AssetLibraryPage() {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 mt-8">
-                <button
+                <Button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="secondary" className="disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
-                </button>
+                </Button>
                 <span className="px-4 py-2 text-stone-gray">
                   Page {currentPage} of {totalPages}
                 </span>
-                <button
+                <Button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="secondary" className="disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
-                </button>
+                </Button>
               </div>
             )}
           </>

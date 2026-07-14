@@ -68,13 +68,13 @@ interface DmLightControlsProps {
  * Debounce helper: returns a stable callback that only fires `fn` after
  * `delay` ms of inactivity. Used to throttle socket emissions during slider drags.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function useDebouncedCallback<T extends (...args: any[]) => any>(
   fn: T,
   delay: number
 ): T {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const fnRef = useRef<any>(fn);
   fnRef.current = fn;
 
@@ -82,7 +82,7 @@ function useDebouncedCallback<T extends (...args: any[]) => any>(
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   return useCallback((...args: any[]) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => fnRef.current(...args), delay);

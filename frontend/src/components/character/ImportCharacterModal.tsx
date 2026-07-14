@@ -6,11 +6,11 @@
  */
 
 import { useState, useCallback } from 'react';
-import { X, Upload, AlertCircle, CheckCircle, FileText } from 'lucide-react';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Upload, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import { readJSONFile, validateImportedCharacter } from '@/utils/character-export';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import type { GameSystem } from '@/types';
+import { Button, Modal } from '@/components/ui';
 
 interface ImportCharacterModalProps {
   onClose: () => void;
@@ -23,8 +23,6 @@ export default function ImportCharacterModal({
   onImport,
   existingCharacterNames,
 }: ImportCharacterModalProps) {
-  const modalRef = useFocusTrap(true, onClose);
-
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -125,26 +123,7 @@ export default function ImportCharacterModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" aria-hidden="true">
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-character-title"
-        className="bg-parchment border border-moss-green/30 rounded-cozy shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-moss-green/20">
-          <h2 id="import-character-title" className="text-2xl font-bold text-moss-green">Import Character</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-            aria-label="Close dialog"
-          >
-            <X className="w-5 h-5 text-stone-700 hover:text-stone-900" />
-          </button>
-        </div>
-
+    <Modal open onClose={onClose} title="Import Character" icon={Upload} size="lg" closeDisabled={isLoading}>
         {/* File Upload Area */}
         {!previewData && (
           <div
@@ -157,10 +136,10 @@ export default function ImportCharacterModal({
             `}
           >
             <Upload className="w-16 h-16 text-moss-green mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-stone-800 mb-2">
+            <h3 className="text-lg font-semibold text-ink mb-2">
               {isDragging ? 'Drop file here' : 'Upload Character JSON'}
             </h3>
-            <p className="text-sm text-stone-700 mb-4">
+            <p className="text-sm text-ink mb-4">
               Drag and drop a JSON file, or click to browse
             </p>
             <input
@@ -176,7 +155,7 @@ export default function ImportCharacterModal({
             >
               Choose File
             </label>
-            <p className="text-xs text-stone-600 mt-4">
+            <p className="text-xs text-ink-muted mt-4">
               Maximum file size: 5MB
             </p>
           </div>
@@ -186,7 +165,7 @@ export default function ImportCharacterModal({
         {isLoading && !previewData && (
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-moss-green mb-4"></div>
-            <p className="text-stone-700">Reading file...</p>
+            <p className="text-ink">Reading file...</p>
           </div>
         )}
 
@@ -196,7 +175,7 @@ export default function ImportCharacterModal({
             <AlertCircle className="w-5 h-5 text-spirit-red flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-spirit-red mb-1">Import Error</h4>
-              <p className="text-sm text-stone-700">{error}</p>
+              <p className="text-sm text-ink">{error}</p>
             </div>
           </div>
         )}
@@ -209,7 +188,7 @@ export default function ImportCharacterModal({
                 <CheckCircle className="w-5 h-5 text-moss-green flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-semibold text-moss-green mb-1">Character Loaded Successfully</h4>
-                  <p className="text-sm text-stone-700">Review the character details below before importing.</p>
+                  <p className="text-sm text-ink">Review the character details below before importing.</p>
                 </div>
               </div>
             </div>
@@ -221,7 +200,7 @@ export default function ImportCharacterModal({
                   <AlertCircle className="w-5 h-5 text-sunset-orange flex-shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-semibold text-sunset-orange mb-1">Name Conflict</h4>
-                    <p className="text-sm text-stone-700">
+                    <p className="text-sm text-ink">
                       A character named "{previewData.name}" already exists. The imported character will be
                       renamed to "{importName}".
                     </p>
@@ -240,7 +219,7 @@ export default function ImportCharacterModal({
               <div className="space-y-4">
                 {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">
+                  <label className="block text-sm font-medium text-ink mb-1">
                     Character Name
                   </label>
                   <input
@@ -254,23 +233,23 @@ export default function ImportCharacterModal({
 
                 {/* Game System */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-ink mb-2">
                     Game System
                   </label>
                   {previewData.gameSystem ? (
                     <GameSystemBadge gameSystem={previewData.gameSystem as GameSystem} size="lg" />
                   ) : (
-                    <span className="text-sm text-stone-600 italic">Flexible (No specific system)</span>
+                    <span className="text-sm text-ink-muted italic">Flexible (No specific system)</span>
                   )}
                 </div>
 
                 {/* Data Preview */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
+                  <label className="block text-sm font-medium text-ink mb-2">
                     Character Data
                   </label>
                   <div className="bg-paper rounded border border-moss-green/20 p-3 max-h-48 overflow-y-auto">
-                    <pre className="text-xs text-stone-600 whitespace-pre-wrap">
+                    <pre className="text-xs text-ink-muted whitespace-pre-wrap">
                       {JSON.stringify(previewData.data, null, 2)}
                     </pre>
                   </div>
@@ -280,17 +259,17 @@ export default function ImportCharacterModal({
 
             {/* Actions */}
             <div className="flex justify-end gap-3">
-              <button
+              <Button
                 onClick={onClose}
                 disabled={isLoading}
-                className="btn-secondary"
+                variant="secondary"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleImport}
                 disabled={isLoading || !importName.trim()}
-                className="btn-primary flex items-center gap-2"
+                className="flex items-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -303,18 +282,17 @@ export default function ImportCharacterModal({
                     Import Character
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {/* File Info */}
         {file && !previewData && !error && !isLoading && (
-          <div className="mt-4 text-sm text-stone-700">
-            Selected file: <span className="font-medium text-stone-800">{file.name}</span>
+          <div className="mt-4 text-sm text-ink">
+            Selected file: <span className="font-medium text-ink">{file.name}</span>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

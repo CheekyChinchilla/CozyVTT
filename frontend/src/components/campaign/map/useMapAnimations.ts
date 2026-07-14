@@ -1,0 +1,115 @@
+// ============================================
+// Map animation hooks — the rAF loops that advance canvas animations
+// outside React's render cycle.
+//
+// Each hook takes an `onTick` callback invoked once per animation
+// frame; MapCanvas passes a `markDirty(...)` call so the loop only
+// repaints the layer(s) the animation touches (token tweens → the
+// tokens layer; fog reveal fade → the terrain layer). The callback is
+// stored in a latest-ref so the loop always calls the newest closure
+// without re-subscribing the frame on every render.
+// ============================================
+
+import { useEffect, useRef, useState } from 'react';
+import type { FogState } from '@/types/walls';
+import type { TokenAnimation } from './layers/types';
+
+/**
+ * Smooth token-movement tweens. `token.moved` handlers seed a tween via
+ * `setAnimatingTokens`; the loop advances the interpolation each frame
+ * (the draw layer reads startTime/duration at frame time) and prunes
+ * finished tweens.
+ */
+export function useTokenAnimation(onTick: () => void) {
+  const [animatingTokens, setAnimatingTokens] = useState<Map<string, TokenAnimation>>(new Map());
+  const tickRef = useRef(onTick);
+  tickRef.current = onTick;
+
+  useEffect(() => {
+    if (animatingTokens.size === 0) return;
+
+    let animationFrameId: number;
+
+    const animate = () => {
+      const now = Date.now();
+      const updatedAnimations = new Map(animatingTokens);
+      let needsUpdate = false;
+
+      for (const [tokenId, animation] of updatedAnimations.entries()) {
+        const elapsed = now - animation.startTime;
+        if (elapsed >= animation.duration) {
+          updatedAnimations.delete(tokenId);
+          needsUpdate = true;
+        }
+      }
+
+      if (needsUpdate) {
+        setAnimatingTokens(updatedAnimations);
+      }
+
+      // Advance the on-canvas interpolation for this frame.
+      tickRef.current();
+
+      if (updatedAnimations.size > 0) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [animatingTokens]);
+
+  return { animatingTokens, setAnimatingTokens };
+}
+
+/**
+ * Fog reveal fade — decays per-cell reveal opacity over ~400ms and
+ * repaints while any cell is still fading. Socket handlers seed the
+ * returned map with 1.0 for newly-revealed cells; the fog draw layer
+ * reads it for the fade alpha. Re-subscribes when fog state changes so
+ * newly-seeded cells restart the loop.
+ */
+export function useFogRevealAnimation(
+  onTick: () => void,
+  fogState: FogState | null,
+  revealedCells: Set<number> | null
+) {
+  const revealOpacityRef = useRef<Map<number, number>>(new Map());
+  const tickRef = useRef(onTick);
+  tickRef.current = onTick;
+
+  useEffect(() => {
+    if (revealOpacityRef.current.size === 0) return;
+
+    let animationFrameId: number;
+
+    const animateFog = () => {
+      let hasActive = false;
+      revealOpacityRef.current.forEach((opacity, idx) => {
+        const next = opacity - 0.042; // ~400ms to fully fade at 60fps
+        if (next <= 0) {
+          revealOpacityRef.current.delete(idx);
+        } else {
+          revealOpacityRef.current.set(idx, next);
+          hasActive = true;
+        }
+      });
+
+      tickRef.current();
+
+      if (hasActive) {
+        animationFrameId = requestAnimationFrame(animateFog);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animateFog);
+    return () => { cancelAnimationFrame(animationFrameId); };
+  }, [fogState, revealedCells]); // re-subscribe when fog changes
+
+  return revealOpacityRef;
+}

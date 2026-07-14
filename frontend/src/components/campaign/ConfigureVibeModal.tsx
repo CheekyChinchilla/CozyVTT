@@ -1,6 +1,6 @@
 /**
  * Configure Vibe Modal
- * Per SOW Section 18.3: Vibe Tracker Details
+ * Vibe Tracker Details
  *
  * DM-only modal for adding, editing, and removing time-of-day periods.
  * Each period has a name, hue color, CSS filter (built via sliders), and audio track (stub).
@@ -8,12 +8,12 @@
  */
 
 import { useState, useCallback } from 'react';
-import { X, Plus, Trash2, RotateCcw, Music } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Music } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
 import type { VibePeriod, VibeSettings } from '@/types';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Button, Modal } from '@/components/ui';
 
 // ============================================
 // Default presets (mirrors backend vibe-presets.ts)
@@ -265,7 +265,6 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
   const [isSaving, setIsSaving] = useState(false);
 
   const handleClose = useCallback(() => onClose(), [onClose]);
-  const modalRef = useFocusTrap(true, handleClose);
 
   // ============================================
   // Period CRUD
@@ -357,30 +356,10 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" aria-hidden="true">
-        <div
-          ref={modalRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="configure-vibe-title"
-          className="glass-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 bg-soft-cream/95 backdrop-blur-md"
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h2 id="configure-vibe-title" className="text-2xl font-bold text-moss-green">Configure Vibe Periods</h2>
-              <p className="text-sm text-warm-gray mt-1">
-                Define the time-of-day periods and their visual effects.
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close dialog"
-              className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
-            >
-              <X className="w-5 h-5 text-stone-gray" />
-            </button>
-          </div>
+      <Modal open onClose={handleClose} title="Configure Vibe Periods" icon={Music} size="lg" closeDisabled={isSaving}>
+          <p className="text-sm text-ink-muted -mt-4 mb-6">
+            Define the time-of-day periods and their visual effects.
+          </p>
 
           {/* Period Editors */}
           <div className="space-y-4 mb-6">
@@ -418,24 +397,23 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
             </button>
 
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 onClick={onClose}
                 disabled={isSaving}
-                className="btn-secondary"
+                variant="secondary"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSave}
                 disabled={isSaving || periods.length === 0}
-                className="btn-primary"
+                
               >
                 {isSaving ? 'Saving...' : 'Save Periods'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      </div>
+      </Modal>
 
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
     </>

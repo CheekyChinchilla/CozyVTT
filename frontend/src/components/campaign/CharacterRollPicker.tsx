@@ -130,7 +130,7 @@ export default function CharacterRollPicker({
       })
       .catch(() => setError('Failed to load character data'))
       .finally(() => setLoading(false));
-  }, [initialCharacter, characterId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialCharacter, characterId]);  
 
   // Position picker, flipping if needed
   useEffect(() => {

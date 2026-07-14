@@ -1,6 +1,5 @@
 // ============================================
 // Admin Routes
-// SOW Reference: Section 2.3 (Platform Roles - Admin), Section 5.8
 //
 // All routes require platform ADMIN role.
 // ============================================
@@ -27,11 +26,21 @@ import { sanitizeInput, validateEmail } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail } from '../services/email';
 import { FILE_SIZE_LIMITS } from '../utils/fileUtils';
+import { extractArchiveSafely } from '../utils/archive';
+import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
 const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
 const BACKUP_DIR = path.join(UPLOADS_DIR, 'backups');
 const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip$/;
+
+// Guards for restoring an uploaded backup archive (see utils/archive.ts).
+// A full-instance backup legitimately bundles every uploaded file, but the
+// upload itself is capped at 4 GB by multer and media compresses poorly, so a
+// 10 GB decompressed ceiling comfortably fits real backups while stopping a
+// zip bomb long before it can exhaust the disk.
+const RESTORE_MAX_FILES = 100_000;
+const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
@@ -81,7 +90,7 @@ async function writeAdminLog(
       },
     });
   } catch (e) {
-    console.error('Failed to write system log:', e);
+    logger.error('Failed to write system log', { err: e });
   }
 }
 
@@ -143,7 +152,7 @@ router.get('/stats', async (_req, res) => {
       assetBreakdown,
     });
   } catch (error) {
-    console.error('Error fetching admin stats:', error);
+    logger.error('Error fetching admin stats', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch stats' });
   }
 });
@@ -157,7 +166,7 @@ router.get('/settings', async (_req, res) => {
     const settings = await getSystemSettings();
     return res.json({ settings });
   } catch (error) {
-    console.error('Error fetching system settings:', error);
+    logger.error('Error fetching system settings', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch settings' });
   }
 });
@@ -218,7 +227,7 @@ router.put('/settings', async (req, res) => {
 
     return res.json({ message: 'Settings updated successfully', settings });
   } catch (error) {
-    console.error('Error updating system settings:', error);
+    logger.error('Error updating system settings', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update settings' });
   }
 });
@@ -271,7 +280,7 @@ router.post('/users', async (req, res) => {
     // Send welcome email if SMTP is configured
     if (isSmtpConfigured()) {
       sendWelcomeEmail(user.email, user.displayName, temporaryPassword).catch((err) => {
-        console.error(`[admin] Failed to send welcome email to ${user.email}:`, err);
+        logger.error(`[admin] Failed to send welcome email to ${user.email}`, { err: err });
       });
     }
 
@@ -281,7 +290,7 @@ router.post('/users', async (req, res) => {
       temporaryPassword,
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    logger.error('Error creating user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create user' });
   }
 });
@@ -320,7 +329,7 @@ router.post('/users/:id/approve', async (req, res) => {
 
     return res.json({ message: 'User account approved.' });
   } catch (error) {
-    console.error('Error approving user:', error);
+    logger.error('Error approving user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to approve user' });
   }
 });
@@ -363,7 +372,7 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
 
     return res.json({ message: 'MFA has been reset. The user must re-enroll on next login.' });
   } catch (error) {
-    console.error('Error resetting MFA:', error);
+    logger.error('Error resetting MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to reset MFA' });
   }
 });
@@ -443,7 +452,7 @@ router.get('/activity', async (_req, res) => {
 
     return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs });
   } catch (error) {
-    console.error('Error fetching admin activity:', error);
+    logger.error('Error fetching admin activity', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch activity' });
   }
 });
@@ -496,7 +505,7 @@ router.post('/smtp/test', async (req, res) => {
 
     return res.json({ message: `Test email sent to ${admin.email}` });
   } catch (error: any) {
-    console.error('SMTP test error:', error);
+    logger.error('SMTP test error', { err: error });
     return res.status(500).json({ error: 'SMTP Error', message: error.message || 'Failed to send test email' });
   }
 });
@@ -532,7 +541,7 @@ router.post('/backups', async (req, res) => {
           message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      console.error('pg_dump error:', execError.stderr || execError.message);
+      logger.error('pg_dump error:', execError.stderr || execError.message);
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
 
@@ -565,7 +574,7 @@ router.post('/backups', async (req, res) => {
     // Clean up partial output on failure
     await fs.unlink(zipPath).catch(() => {});
     await fs.unlink(sqlPath).catch(() => {});
-    console.error('Backup error:', error);
+    logger.error('Backup error', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create backup' });
   }
 });
@@ -652,9 +661,14 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
   const tempDir = path.join(os.tmpdir(), `cozyvtt-restore-${Date.now()}`);
 
   try {
-    // 1. Extract ZIP to temp directory
+    // 1. Extract ZIP to temp directory.
+    // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
+    // the entry count and total decompressed size (zip-bomb protection).
     const directory = await unzipper.Open.file(uploadedZip);
-    await directory.extract({ path: tempDir });
+    await extractArchiveSafely(directory, tempDir, {
+      maxFiles: RESTORE_MAX_FILES,
+      maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
+    });
 
     // 2. Validate the backup contains database.sql
     const sqlPath = path.join(tempDir, 'database.sql');
@@ -682,7 +696,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
           message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      console.error('psql restore error:', execError.stderr || execError.message);
+      logger.error('psql restore error:', execError.stderr || execError.message);
       return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
     }
 
@@ -702,7 +716,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       message: 'Restore complete. Your session is no longer valid — please refresh and log in again.',
     });
   } catch (error) {
-    console.error('Restore error:', error);
+    logger.error('Restore error', { err: error });
     return res.status(500).json({ error: 'Restore Failed', message: 'An unexpected error occurred during restore' });
   } finally {
     // Always clean up temp files

@@ -60,7 +60,7 @@ export function useWebSocketEvent<T = any>(
       console.log(`[useWebSocketEvent] Unsubscribing from: ${eventName}`);
       socket.off(eventName, eventHandler);
     };
-  }, [eventName, socket, status, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [eventName, socket, status, ...deps]);  
 }
 
 // ============================================
@@ -118,5 +118,5 @@ export function useWebSocketEvents(
         socket.off(eventName, handlers[eventName]);
       });
     };
-  }, [socket, status, Object.keys(events).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, status, Object.keys(events).join(',')]);  
 }

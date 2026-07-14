@@ -1,6 +1,6 @@
 {
   "name": "cozyvtt-backend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CozyVTT Backend - Self-hosted Virtual Tabletop",
   "main": "dist/server.js",
   "scripts": {
@@ -46,7 +46,7 @@
     "lodash": "^4.17.23",
     "mathjs": "^12.4.3",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^9.0.3",
     "openai": "^6.33.0",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
@@ -79,6 +79,7 @@
     "@types/unzipper": "^0.10.10",
     "jest": "^30.2.0",
     "nodemon": "^3.0.2",
+    "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",

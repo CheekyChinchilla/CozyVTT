@@ -55,10 +55,12 @@ cozyvtt/
 │
 ├── frontend/              React + Vite client
 │   ├── src/
-│   │   ├── components/    Reusable UI components
+│   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
 │   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign)
-│   │   ├── hooks/         Custom React hooks
+│   │   ├── stores/        Zustand store for live session state
+│   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
+│   │   ├── lib/           React Query client setup
 │   │   ├── pages/         Top-level page components
 │   │   ├── services/      API and Socket.io client wrappers
 │   │   ├── styles/        Global CSS and effect stylesheets

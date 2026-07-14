@@ -14,6 +14,7 @@ import ChatMessage from './ChatMessage';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
 import { MessageType, PlatformRole } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
+import Button from '@/components/ui/Button';
 
 export default function ChatPanel() {
   const { id: campaignId } = useParams<{ id: string }>();
@@ -454,10 +455,10 @@ export default function ChatPanel() {
         {/* Load More Button */}
         {hasMore && messages.length > 0 && (
           <div className="text-center pb-2">
-            <button
+            <Button
               onClick={loadMoreMessages}
               disabled={isLoadingMore}
-              className="btn-secondary text-sm px-4 py-2"
+              variant="secondary" className="text-sm px-4 py-2"
             >
               {isLoadingMore ? (
                 <>
@@ -467,7 +468,7 @@ export default function ChatPanel() {
               ) : (
                 'Load More'
               )}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -510,9 +511,9 @@ export default function ChatPanel() {
               rows={2}
               disabled={!canSend}
             />
-            <button
+            <Button
               type="submit"
-              className="btn-primary px-4 py-2 flex items-center gap-2"
+              className="px-4 py-2 flex items-center gap-2"
               disabled={!messageInput.trim() || !canSend}
               aria-label={!canSend ? `Rate limited — wait ${cooldownSeconds} seconds` : 'Send message'}
             >
@@ -521,7 +522,7 @@ export default function ChatPanel() {
               ) : (
                 <Send className="w-4 h-4" aria-hidden="true" />
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Rate Limiting Feedback */}

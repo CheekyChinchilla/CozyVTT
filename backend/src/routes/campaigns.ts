@@ -11,6 +11,7 @@ import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, VibeSettin
 import { GameSystem } from '../game-systems';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
+import { CreateCampaignSchema } from '../validators/campaigns';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -37,7 +38,7 @@ const importUpload = multer({
 
 /**
  * Campaign Routes
- * Per SOW Section 5.3: Campaign Endpoints
+ * Campaign Endpoints
  */
 
 /**
@@ -91,7 +92,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     return res.status(200).json({ campaigns });
   } catch (error) {
-    console.error('Error fetching campaigns:', error);
+    logger.error('Error fetching campaigns', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch campaigns',
@@ -108,30 +109,15 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { name, description, gameSystem } = req.body;
 
-    if (!name) {
+    const parsed = CreateCampaignSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Campaign name is required',
+        message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
       });
     }
-
-    // Validate gameSystem if provided
-    if (gameSystem !== undefined && gameSystem !== null) {
-      const validSystems: string[] = [
-        GameSystem.DND_5E,
-        GameSystem.PATHFINDER_2E,
-        GameSystem.SHADOWRUN_6E,
-        GameSystem.CALL_OF_CTHULHU_7E,
-      ];
-      if (!validSystems.includes(gameSystem as string)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Invalid game system. Must be one of: ${validSystems.join(', ')}`,
-        });
-      }
-    }
+    const { name, description, gameSystem } = parsed.data;
 
     // Create campaign with default vibe settings and optional gameSystem
     const campaign = await prisma.campaign.create({
@@ -179,7 +165,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       campaign: campaignWithMemberships,
     });
   } catch (error) {
-    console.error('Error creating campaign:', error);
+    logger.error('Error creating campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to create campaign',
@@ -219,8 +205,42 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
             },
           },
         },
-        maps: true,
-        characters: true,
+        // PERFORMANCE: return map/character METADATA only. The full
+        // token/wall/fog/light blobs and full character sheets are unbounded and
+        // were never used from this payload — the active map's full data loads via
+        // GET /api/maps/:id (spirit-filtered) and character sheets via
+        // GET /api/characters/:id. Frontend only reads ids + a few metadata fields
+        // from these arrays (map move-to-map, token ownership).
+        maps: {
+          select: {
+            id: true,
+            campaignId: true,
+            name: true,
+            imageUrl: true,
+            width: true,
+            height: true,
+            gridSize: true,
+            feetPerSquare: true,
+            diagonalRule: true,
+            baseLayerUrl: true,
+            spiritLayerUrl: true,
+            lightingEnabled: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        characters: {
+          select: {
+            id: true,
+            userId: true,
+            campaignId: true,
+            gameSystem: true,
+            name: true,
+            tokenImageUrl: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
         // Include the most recent open session for session controls UI
         sessions: {
           where: { endedAt: null },
@@ -248,7 +268,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
       },
     });
   } catch (error) {
-    console.error('Error fetching campaign:', error);
+    logger.error('Error fetching campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch campaign',
@@ -357,7 +377,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 
     return res.status(200).json({ roster });
   } catch (error) {
-    console.error('Error fetching campaign characters:', error);
+    logger.error('Error fetching campaign characters', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch campaign characters',
@@ -415,10 +435,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       });
 
       if (characterCount > 0) {
-        console.warn(
-          `[Campaign ${campaignId}] Changing game system with ${characterCount} existing character(s). ` +
-          'Character data may become incompatible with new system.'
-        );
+        logger.warn('campaign game system changed with existing characters', { campaignId, characterCount });
       }
 
       updateData.gameSystem = gameSystem;
@@ -434,7 +451,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       campaign,
     });
   } catch (error) {
-    console.error('Error updating campaign:', error);
+    logger.error('Error updating campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update campaign',
@@ -446,7 +463,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
  * PUT /api/campaigns/:campaignId/vibe
  * Update vibe tracker settings for a campaign
  * Requires: Campaign DM role
- * Per SOW Section 18.3: Vibe Tracker Details
+ * Vibe Tracker Details
  */
 router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -501,7 +518,7 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
       currentVibe: updatedCampaign.currentVibe,
     });
   } catch (error) {
-    console.error('Error updating vibe settings:', error);
+    logger.error('Error updating vibe settings', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update vibe settings',
@@ -545,7 +562,7 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
       message: 'Campaign deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting campaign:', error);
+    logger.error('Error deleting campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete campaign',
@@ -596,7 +613,7 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
 
     return res.status(200).json({ users });
   } catch (error) {
-    console.error('Error fetching invitable users:', error);
+    logger.error('Error fetching invitable users', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch invitable users',
@@ -609,7 +626,7 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
  * Invite a user to join the campaign.
  * Creates a pending invitation that the user must accept.
  * Requires: Campaign DM role
- * Per SOW Section 5.3: Campaign membership management
+ * Campaign membership management
  */
 router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -727,7 +744,7 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error('Failed to broadcast invitation:', error);
+      logger.error('Failed to broadcast invitation', { err: error });
       // Don't fail the request if broadcast fails
     }
 
@@ -740,7 +757,7 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
         dmUser?.displayName ?? 'Your Dungeon Master',
         campaign!.description ?? null
       ).catch((err) => {
-        console.error(`[campaigns] Failed to send invitation email to ${user.email}:`, err);
+        logger.error(`[campaigns] Failed to send invitation email to ${user.email}`, { err: err });
       });
     }
 
@@ -749,7 +766,7 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
       invitation,
     });
   } catch (error) {
-    console.error('Error inviting user to campaign:', error);
+    logger.error('Error inviting user to campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to invite user',
@@ -761,7 +778,7 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
  * DELETE /api/campaigns/:campaignId/members/:userId
  * Remove a member from the campaign
  * Requires: Campaign DM role
- * Per SOW Section 5.3: Cannot remove the DM
+ * Cannot remove the DM
  */
 router.delete('/:campaignId/members/:userId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -806,7 +823,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
       message: 'Member removed successfully',
     });
   } catch (error) {
-    console.error('Error removing member from campaign:', error);
+    logger.error('Error removing member from campaign', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to remove member',
@@ -818,7 +835,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
  * PUT /api/campaigns/:campaignId/members/:userId/role
  * Change a member's role in the campaign
  * Requires: Campaign DM role
- * Per SOW Section 3.5: Only ONE DM per campaign, cannot change DM's role
+ * Only ONE DM per campaign, cannot change DM's role
  */
 router.put('/:campaignId/members/:userId/role', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -903,7 +920,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       membership: updatedMembership,
     });
   } catch (error) {
-    console.error('Error updating member role:', error);
+    logger.error('Error updating member role', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update member role',
@@ -939,7 +956,7 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
 
     return res.status(200).json({ campaigns });
   } catch (error) {
-    console.error('Error fetching all campaigns:', error);
+    logger.error('Error fetching all campaigns', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch campaigns',
@@ -951,7 +968,7 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
  * GET /api/campaigns/:campaignId/messages
  * Get chat messages for a campaign
  * Requires: Campaign member
- * Per SOW Section 6.4: Chat Messages - Load last 50 messages with pagination
+ * Chat Messages - Load last 50 messages with pagination
  */
 router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1026,7 +1043,7 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
       },
     });
   } catch (error) {
-    console.error('Error fetching messages:', error);
+    logger.error('Error fetching messages', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch messages',
@@ -1038,7 +1055,7 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
  * POST /api/campaigns/:campaignId/sessions
  * Start a new session
  * Requires: Campaign DM role
- * Per SOW Section 15.2: Starting a Session
+ * Starting a Session
  */
 router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1107,7 +1124,7 @@ router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedReques
       },
     });
   } catch (error) {
-    console.error('Error starting session:', error);
+    logger.error('Error starting session', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to start session',
@@ -1119,7 +1136,7 @@ router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedReques
  * PUT /api/campaigns/:campaignId/sessions/:sessionId/pause
  * Pause the current session
  * Requires: Campaign DM role
- * Per SOW Section 15.2: Pausing a Session
+ * Pausing a Session
  */
 router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1178,7 +1195,7 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
       stateSaved: true,
     });
   } catch (error) {
-    console.error('Error pausing session:', error);
+    logger.error('Error pausing session', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to pause session',
@@ -1190,7 +1207,7 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
  * PUT /api/campaigns/:campaignId/sessions/:sessionId/end
  * End the current session and save state
  * Requires: Campaign DM role
- * Per SOW Section 15.2: Ending a Session
+ * Ending a Session
  */
 router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1265,7 +1282,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
       stateSaved: saveState,
     });
   } catch (error) {
-    console.error('Error ending session:', error);
+    logger.error('Error ending session', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to end session',
@@ -1277,7 +1294,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
  * PUT /api/campaigns/:campaignId/resume
  * Resume the last session by restoring saved state
  * Requires: Campaign DM role
- * Per SOW Section 15.2: Resuming a Session
+ * Resuming a Session
  */
 router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1345,7 +1362,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
       },
     });
   } catch (error) {
-    console.error('Error resuming session:', error);
+    logger.error('Error resuming session', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to resume session',

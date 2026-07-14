@@ -7,7 +7,7 @@
  * surface attack rolls and damage rolls in the same RollOption format used
  * by player characters (see characterRolls.ts).
  *
- * Phase 1 supports D&D 5e. For other systems or tokens without stat blocks,
+ * D&D 5e is fully supported. For other systems or tokens without stat blocks,
  * callers should fall back to a free-form custom roll input.
  */
 

@@ -1,6 +1,7 @@
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
+import logger from '../utils/logger';
 
 const PgSession = connectPgSimple(session);
 
@@ -19,13 +20,13 @@ const INSECURE_PLACEHOLDERS = [
 
 if (!SESSION_SECRET || INSECURE_PLACEHOLDERS.includes(SESSION_SECRET)) {
   if (process.env.NODE_ENV === 'production') {
-    console.error(
+    logger.error(
       '[FATAL] SESSION_SECRET is not set or is using a placeholder value. ' +
         'Generate a strong secret with: openssl rand -hex 32'
     );
     process.exit(1);
   } else {
-    console.warn(
+    logger.warn(
       '[WARN] SESSION_SECRET is not configured — using an insecure development default. ' +
         'Set a real secret in backend/.env before deploying.'
     );

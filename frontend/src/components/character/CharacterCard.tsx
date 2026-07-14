@@ -118,12 +118,8 @@ function CharacterCardInner({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-2 w-48 rounded-lg shadow-xl z-50"
-                style={{
-                  background: 'rgba(254, 243, 199, 0.98)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(92, 107, 60, 0.2)',
-                }}
+                className="absolute right-0 mt-2 w-48 rounded-lg shadow-xl z-50
+                           bg-surface-light/95 backdrop-blur-cozy border border-brand/20"
               >
                 <div className="py-1">
                   <button

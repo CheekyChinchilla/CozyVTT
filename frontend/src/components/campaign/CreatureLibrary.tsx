@@ -24,11 +24,13 @@ import {
   Upload,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer } from './npc-stat-blocks';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Constants
@@ -61,7 +63,7 @@ interface CreatureLibraryProps {
 // ============================================
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
-  const { campaign, currentMap, tokens, updateTokens } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
   const { socket } = useWebSocket();
 
   // ── Search & filter state ──
@@ -214,14 +216,14 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         currentMap.id,
         tokenPayload as Parameters<typeof api.addToken>[2]
       );
-      updateTokens([...tokens, result.token]);
+      useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap, tokens, updateTokens, socket]);
+  }, [campaign, currentMap, socket]);
 
   // ── Duplicate creature ──
   const handleDuplicate = useCallback(async (creatureId: string) => {
@@ -341,9 +343,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
               <span className="text-xs text-stone-gray/60">
                 {total} creature{total !== 1 ? 's' : ''}
               </span>
-              <button onClick={onClose} className="btn-secondary p-1.5 flex-shrink-0" title="Close">
+              <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {/* ── Search & Filters ── */}
@@ -501,17 +503,17 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       <p className="text-xs text-stone-gray/60">
                         Import ~320 official D&D 5e SRD creatures with full stat blocks.
                       </p>
-                      <button
+                      <Button
                         onClick={handleSeedSrd}
                         disabled={isSeeding}
-                        className="btn-primary text-xs py-2 px-4"
+                        className="text-xs py-2 px-4"
                       >
                         {isSeeding ? (
                           <><Loader2 className="w-3 h-3 animate-spin inline mr-1" /> Importing from Open5e...</>
                         ) : (
                           'Import SRD Creatures'
                         )}
-                      </button>
+                      </Button>
                       <p className="text-[10px] text-stone-gray/40">
                         SRD content used under the Open Game License v1.0a.
                       </p>
@@ -545,10 +547,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   {/* Load more */}
                   {hasMore && (
                     <div className="p-4 text-center">
-                      <button
+                      <Button
                         onClick={handleLoadMore}
                         disabled={isLoading}
-                        className="btn-secondary text-xs"
+                        variant="secondary" className="text-xs"
                       >
                         {isLoading ? (
                           <>
@@ -558,7 +560,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                         ) : (
                           `Load More (${creatures.length} of ${total})`
                         )}
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1195,10 +1197,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
 
       {/* Submit */}
       <div className="flex gap-2 pt-1">
-        <button
+        <Button
           onClick={handleSubmit}
           disabled={isSubmitting || !name.trim()}
-          className="btn-primary flex-1 text-xs py-2"
+          className="flex-1 text-xs py-2"
         >
           {isSubmitting ? (
             <>
@@ -1208,10 +1210,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
           ) : (
             isEdit ? 'Save Changes' : 'Create Creature'
           )}
-        </button>
-        <button onClick={onCancel} className="btn-secondary text-xs py-2 px-4">
+        </Button>
+        <Button onClick={onCancel} variant="secondary" className="text-xs py-2 px-4">
           Cancel
-        </button>
+        </Button>
       </div>
 
       {!isEdit && (

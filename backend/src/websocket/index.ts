@@ -4,10 +4,11 @@ import session from 'express-session';
 import { sessionConfig } from '../config/session';
 import { registerEventHandlers } from './events';
 import { setSocketInstance } from './utils';
+import logger from '../utils/logger';
 
 /**
  * WebSocket Infrastructure Setup
- * Per SOW Section 6: WebSocket Event Specification
+ * WebSocket Event Specification
  *
  * Initializes Socket.io with CORS configuration, session sharing with Express,
  * event handlers, and heartbeat/ping-pong for connection health.
@@ -19,7 +20,7 @@ import { setSocketInstance } from './utils';
  * @returns Socket.io server instance
  */
 export function initializeWebSocket(httpServer: HTTPServer): Server {
-  console.log('Initializing WebSocket server...');
+  logger.info('Initializing WebSocket server...');
 
   // Create Socket.io server with configuration
   const io = new Server(httpServer, {
@@ -47,8 +48,8 @@ export function initializeWebSocket(httpServer: HTTPServer): Server {
   // Register event handlers
   registerEventHandlers(io);
 
-  console.log('WebSocket server initialized');
-  console.log(`WebSocket CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+  logger.info('WebSocket server initialized');
+  logger.info(`WebSocket CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
 
   return io;
 }

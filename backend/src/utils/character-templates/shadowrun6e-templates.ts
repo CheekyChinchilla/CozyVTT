@@ -1,8 +1,8 @@
 /**
  * Shadowrun 6e Character Templates
  * Provides blank and example character templates for quick character creation
- * Per SOW Section 5.4: Character Management
- * NOTE: Shadowrun support is currently ON HOLD - templates provided for future implementation
+ * Character Management
+ * Note: the Shadowrun 6e backend is complete; the character sheet UI is not yet built.
  */
 
 import { GameSystem } from '@prisma/client';

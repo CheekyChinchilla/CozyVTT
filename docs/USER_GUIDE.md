@@ -119,15 +119,15 @@ Click **Create Campaign** and you're in. You'll be taken straight to the campaig
 
 ### Campaign Page Overview
 
-The campaign page is your command center during play. It's a three-panel layout designed for a desktop screen:
+The campaign page is your command center during play. It's a three-column workspace designed for a desktop screen:
 
 *Screenshot pending — Full campaign page layout with labeled panels.*
 
 - **Left Sidebar** — Campaign info, party roster, and (for DMs) the token roster
 - **Center Canvas** — The battle map where tokens live and adventures happen
-- **Right Sidebar** — Chat, dice roller, vibe tracker, and initiative tracker
+- **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, and **Session** (vibe + session controls); a badge on the Chat tab shows unread messages while you're on another tab
 
-The **header bar** across the top contains navigation, connection status, and DM controls.
+You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
 
 ---
 

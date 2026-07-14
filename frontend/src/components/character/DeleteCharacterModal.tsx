@@ -4,10 +4,9 @@
 // ============================================
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { X, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { Character, Campaign } from '@/types';
+import { Button, Modal } from '@/components/ui';
 
 interface DeleteCharacterModalProps {
   isOpen: boolean;
@@ -27,18 +26,12 @@ export default function DeleteCharacterModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // handleClose must be defined before useFocusTrap (and before the early return)
-  // so the hook is always called unconditionally — Rules of Hooks.
   const handleClose = () => {
     if (!loading) {
       setError('');
       onClose();
     }
   };
-
-  // useFocusTrap must be called unconditionally. Pass isOpen && !!character so
-  // the trap only activates when there is actually a character to display.
-  const modalRef = useFocusTrap(isOpen && !!character, handleClose);
 
   if (!character) return null;
 
@@ -75,69 +68,16 @@ export default function DeleteCharacterModal({
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            onClick={handleClose}
-            aria-hidden="true"
-          />
+    <Modal open={isOpen} onClose={handleClose} title="Delete Character" icon={Trash2} size="sm" closeDisabled={loading}>
+      {/* Error Alert */}
+      {error && (
+        <div role="alert" className="mb-4 bg-danger/10 border border-danger/30 rounded-lg p-4">
+          <p className="text-sm text-danger font-medium">{error}</p>
+        </div>
+      )}
 
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              ref={modalRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-character-title"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-md p-6 relative rounded-lg border border-spirit-red/30 shadow-2xl"
-              style={{
-                background: 'rgba(254, 243, 199, 0.98)',
-                backdropFilter: 'blur(10px)',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-spirit-red/10">
-                    <Trash2 className="w-6 h-6 text-spirit-red" />
-                  </div>
-                  <h2 id="delete-character-title" className="text-2xl font-semibold text-spirit-red font-heading">
-                    Delete Character
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="p-2 rounded-lg hover:bg-warm-gray/10 transition-colors
-                           disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Close dialog"
-                >
-                  <X className="w-5 h-5 text-stone-gray" />
-                </button>
-              </div>
-
-              {/* Error Alert */}
-              {error && (
-                <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-                  <p className="text-sm text-spirit-red font-medium">{error}</p>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="space-y-4">
+      {/* Content */}
+      <div className="space-y-4">
                 {/* Active Campaign Warning */}
                 {isInActiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
@@ -214,40 +154,30 @@ export default function DeleteCharacterModal({
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-6">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={loading}
-                  className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
+      {/* Actions */}
+      <div className="flex gap-3 pt-6">
+        <Button
+          type="button"
+          onClick={handleClose}
+          disabled={loading}
+          variant="secondary"
+          className="flex-1"
+        >
+          Cancel
+        </Button>
 
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={loading || !!isInActiveCampaign}
-                  className="btn-danger flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin inline-block mr-2" />
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 inline-block mr-2" />
-                      Delete Character
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+        <Button
+          type="button"
+          onClick={handleConfirm}
+          disabled={!!isInActiveCampaign}
+          loading={loading}
+          icon={Trash2}
+          variant="danger"
+          className="flex-1"
+        >
+          {loading ? 'Deleting...' : 'Delete Character'}
+        </Button>
+      </div>
+    </Modal>
   );
 }

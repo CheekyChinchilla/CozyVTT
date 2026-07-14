@@ -1,16 +1,18 @@
 // ============================================
 // SpiritLayerControls
 // DM slide-over panel for spirit layer management
-// Per SOW Section 14: Spirit Layer Implementation
+// Spirit Layer Implementation
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Ghost, Layers, X, Loader2 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useTokenListIgnoringMovement } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import campaignService from '@/services/campaign.service';
 import type { Token } from '@/types';
+import Button from '@/components/ui/Button';
 
 // ============================================
 // Spirit Layer Style Options
@@ -114,7 +116,9 @@ interface SpiritLayerControlsProps {
 }
 
 export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerControlsProps) {
-  const { campaign, currentMap, tokens, updateCampaignSpiritLayer, dmViewBothPlanes, setDmViewBothPlanes } = useCampaign();
+  const { campaign, currentMap, updateCampaignSpiritLayer, dmViewBothPlanes, setDmViewBothPlanes } = useCampaign();
+  // Lists spirit tokens by name — no need to re-render on token movement.
+  const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
 
   // Derived state from campaign
@@ -282,13 +286,13 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                 <Ghost className="w-5 h-5 text-spirit-purple" />
                 <h2 className="text-lg font-bold text-moss-green">Spirit Layer</h2>
               </div>
-              <button
+              <Button
                 onClick={onClose}
-                className="btn-secondary p-1.5"
+                variant="secondary" className="p-1.5"
                 title="Close"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             {/* Body */}
@@ -323,7 +327,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`relative flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       enabled
                         ? 'bg-spirit-purple text-white hover:bg-spirit-purple/80'
-                        : 'btn-secondary'
+                        : 'bg-transparent border border-brand text-brand hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={enabled ? 'Close the veil' : 'Open the veil'}
                   >
@@ -353,7 +357,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       dmViewBothPlanes
                         ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
-                        : 'btn-secondary'
+                        : 'bg-transparent border border-brand text-brand hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={dmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
                   >

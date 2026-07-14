@@ -6,10 +6,11 @@ import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import crypto from 'crypto';
+import logger from '../utils/logger';
 
 /**
  * User Management Routes
- * Per SOW Section 5.2: User Management Endpoints
+ * User Management Endpoints
  */
 
 const router = Router();
@@ -30,7 +31,7 @@ router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) 
 
     return res.status(200).json({ users: sanitizedUsers });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch users',
@@ -70,7 +71,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {
-    console.error('Error fetching user:', error);
+    logger.error('Error fetching user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch user',
@@ -205,7 +206,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    logger.error('Error updating user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update user',
@@ -249,7 +250,7 @@ router.get('/:id/preferences', requireAuth, async (req: Request, res: Response) 
     const preferences = (user.preferences as UserPreferences | null) ?? {};
     return res.status(200).json({ preferences });
   } catch (error) {
-    console.error('Error fetching user preferences:', error);
+    logger.error('Error fetching user preferences', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch user preferences',
@@ -313,7 +314,7 @@ router.put('/:id/preferences', requireAuth, async (req: Request, res: Response) 
       preferences: (updated.preferences as UserPreferences | null) ?? {},
     });
   } catch (error) {
-    console.error('Error updating user preferences:', error);
+    logger.error('Error updating user preferences', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update user preferences',
@@ -368,7 +369,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
       deletedUserAssetCount: userAssetCount,
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    logger.error('Error deleting user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete user',
@@ -420,7 +421,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       notice: 'This temporary password will only be displayed once. The user will be required to change it on next login.',
     });
   } catch (error) {
-    console.error('Error resetting password:', error);
+    logger.error('Error resetting password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to reset password',
@@ -472,7 +473,7 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
       message: `Password reset link sent to ${user.email}.`,
     });
   } catch (error) {
-    console.error('Error sending password reset link:', error);
+    logger.error('Error sending password reset link', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to send password reset link',

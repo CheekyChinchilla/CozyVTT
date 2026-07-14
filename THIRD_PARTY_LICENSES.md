@@ -47,3 +47,20 @@ UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC L
 | [archiver](https://github.com/archiverjs/node-archiver) | ZIP archive creation for campaign export | MIT |
 | [unzipper](https://github.com/ZJONSSON/node-unzipper) | ZIP archive extraction for campaign import | MIT |
 | [file-type](https://github.com/sindresorhus/file-type) | Magic byte detection for asset file validation | MIT |
+
+## Core Application Libraries
+
+CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). This is not an exhaustive list — the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
+
+| Package | Purpose | License |
+|---------|---------|---------|
+| [React](https://react.dev/) | Frontend UI library | MIT |
+| [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
+| [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
+| [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
+| [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |
+| [Framer Motion](https://www.framer.com/motion/) | Animations | MIT |
+| [Express](https://expressjs.com/) | Backend HTTP framework | MIT |
+| [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
+| [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
+| [Zod](https://zod.dev/) | Runtime validation | MIT |

@@ -1,6 +1,6 @@
 /**
  * AtmosphereOverlay
- * Per SOW Section 18.2: Visual Atmosphere Effects
+ * Visual Atmosphere Effects
  *
  * Renders a CSS particle-effect overlay over the map canvas.
  * Effect names map to classes defined in atmosphere-effects.css.

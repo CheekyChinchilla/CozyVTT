@@ -39,7 +39,7 @@ export default function CharacterContextMenu({
     const adjustedX = x + rect.width > vw ? Math.max(0, x - rect.width) : x;
     const adjustedY = y + rect.height > vh ? Math.max(0, y - rect.height) : y;
     setPos({ x: adjustedX, y: adjustedY });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   // Close on click outside
   useEffect(() => {

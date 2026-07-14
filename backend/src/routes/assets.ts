@@ -9,6 +9,7 @@ import { AssetType, AssetScope, deleteFile } from '../utils/fileUtils';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -44,8 +45,39 @@ function normalizePath(filePath: string): string {
 }
 
 /**
+ * Set cache headers for a served asset and answer conditional requests.
+ * Asset files are stored under UUID filenames and never mutated in place
+ * (re-upload creates a new asset row), so asset-id URLs can be cached as
+ * immutable. Avatar URLs are keyed by USER id and resolve to the newest
+ * AVATAR asset, so they get a short max-age instead — the ETag still
+ * changes when a new avatar is uploaded, keeping 304 revalidation correct.
+ *
+ * Must be called AFTER permission checks (a 304 must not leak asset
+ * existence to non-members). Returns true if a 304 was sent and the
+ * caller should stop.
+ */
+function handleAssetCaching(
+  req: AuthenticatedRequest,
+  res: Response,
+  assetId: string,
+  { immutable = true }: { immutable?: boolean } = {}
+): boolean {
+  const etag = `"${assetId}"`;
+  res.set(
+    'Cache-Control',
+    immutable ? 'private, max-age=31536000, immutable' : 'private, max-age=300'
+  );
+  res.set('ETag', etag);
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return true;
+  }
+  return false;
+}
+
+/**
  * Asset Management Routes
- * Per SOW Section 5.6: Asset Endpoints
+ * Asset Endpoints
  */
 
 /**
@@ -168,7 +200,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       },
     });
   } catch (error) {
-    console.error('Error listing assets:', error);
+    logger.error('Error listing assets', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to list assets',
@@ -326,13 +358,13 @@ router.post(
 
       return next();
     } catch (error) {
-      console.error('Error in upload validation:', error);
+      logger.error('Error in upload validation', { err: error });
       // Clean up uploaded file
       if (req.file?.path) {
         try {
           await deleteFile(req.file.path);
         } catch (deleteError) {
-          console.error('Error deleting file after validation error:', deleteError);
+          logger.error('Error deleting file after validation error', { err: deleteError });
         }
       }
       return res.status(500).json({
@@ -369,7 +401,7 @@ router.post(
             })
             .toFile(thumbnailPath);
         } catch (thumbnailError) {
-          console.error('Error generating thumbnail:', thumbnailError);
+          logger.error('Error generating thumbnail', { err: thumbnailError });
           // Don't fail the upload if thumbnail generation fails
           thumbnailPath = null;
         }
@@ -415,14 +447,14 @@ router.post(
         asset,
       });
     } catch (error) {
-      console.error('Error creating asset record:', error);
+      logger.error('Error creating asset record', { err: error });
 
       // Clean up uploaded file if database insert fails
       if (req.file?.path) {
         try {
           await deleteFile(req.file.path);
         } catch (deleteError) {
-          console.error('Error deleting file after database failure:', deleteError);
+          logger.error('Error deleting file after database failure', { err: deleteError });
         }
       }
 
@@ -501,7 +533,7 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     return res.json({ asset });
   } catch (error) {
-    console.error('Error fetching asset:', error);
+    logger.error('Error fetching asset', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch asset',
@@ -583,7 +615,7 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     try {
       await deleteFile(asset.filePath);
     } catch (fileError) {
-      console.error('Error deleting file:', fileError);
+      logger.error('Error deleting file', { err: fileError });
       // Continue with database deletion even if file deletion fails
     }
 
@@ -592,7 +624,7 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       try {
         await deleteFile(asset.thumbnailPath);
       } catch (thumbError) {
-        console.error('Error deleting thumbnail:', thumbError);
+        logger.error('Error deleting thumbnail', { err: thumbError });
       }
     }
 
@@ -605,7 +637,7 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       message: 'Asset deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting asset:', error);
+    logger.error('Error deleting asset', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to delete asset',
@@ -660,7 +692,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     // Send file with original name
     return res.download(downloadPath, asset.originalName);
   } catch (error) {
-    console.error('Error downloading asset:', error);
+    logger.error('Error downloading asset', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to download asset',
@@ -713,9 +745,10 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Send file with appropriate content type
+    if (handleAssetCaching(req, res, asset.id)) return;
     return res.sendFile(mapPath);
   } catch (error) {
-    console.error('Error serving map:', error);
+    logger.error('Error serving map', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to serve map',
@@ -768,9 +801,10 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
     }
 
     // Send file with appropriate content type
+    if (handleAssetCaching(req, res, asset.id)) return;
     return res.sendFile(tokenPath);
   } catch (error) {
-    console.error('Error serving token:', error);
+    logger.error('Error serving token', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to serve token',
@@ -852,7 +886,7 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
       return fs.createReadStream(audioPath).pipe(res);
     }
   } catch (error) {
-    console.error('Error streaming audio:', error);
+    logger.error('Error streaming audio', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to stream audio',
@@ -897,10 +931,13 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
       });
     }
 
-    // Send file with appropriate content type
+    // Send file with appropriate content type. Avatar URLs are per-USER and
+    // resolve to the newest upload, so they are not immutable — short max-age
+    // plus ETag revalidation keeps them fresh without a full re-download.
+    if (handleAssetCaching(req, res, asset.id, { immutable: false })) return;
     return res.sendFile(avatarPath);
   } catch (error) {
-    console.error('Error serving avatar:', error);
+    logger.error('Error serving avatar', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to serve avatar',
@@ -1024,7 +1061,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
 
     return res.json({ message: 'Asset scope updated successfully', asset: updated });
   } catch (error) {
-    console.error('Error updating asset scope:', error);
+    logger.error('Error updating asset scope', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update asset scope',
