@@ -31,6 +31,12 @@ export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
       {/* ── Core stats ── */}
       <div className="border-b border-amber-700/20 pb-1.5 space-y-0.5">
         <div><span className="font-semibold text-amber-900">Armor Class</span> {statBlock.ac}</div>
+        {statBlock.hpMax != null && (
+          <div>
+            <span className="font-semibold text-amber-900">Hit Points</span> {statBlock.hpMax}
+            {statBlock.hitDice && ` (${statBlock.hitDice})`}
+          </div>
+        )}
         <div><span className="font-semibold text-amber-900">Speed</span> {statBlock.speed}</div>
         {statBlock.challengeRating && (
           <div>

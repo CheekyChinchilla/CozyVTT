@@ -53,6 +53,12 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
           <div><span className="font-semibold text-red-800">Level</span> {statBlock.challengeRating}</div>
         )}
         <div><span className="font-semibold text-red-800">AC</span> {statBlock.ac}</div>
+        {statBlock.hpMax != null && (
+          <div>
+            <span className="font-semibold text-red-800">HP</span> {statBlock.hpMax}
+            {statBlock.hitDice && ` (${statBlock.hitDice})`}
+          </div>
+        )}
         <div><span className="font-semibold text-red-800">Speed</span> {statBlock.speed}</div>
       </div>
 
@@ -105,6 +111,9 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
       {/* Combat stats */}
       <div className="flex gap-4 flex-wrap text-stone-700">
         <div><span className="font-semibold text-emerald-800">Armor</span> {statBlock.ac}</div>
+        {statBlock.hpMax != null && (
+          <div><span className="font-semibold text-emerald-800">HP</span> {statBlock.hpMax}</div>
+        )}
         <div><span className="font-semibold text-emerald-800">Move</span> {statBlock.speed}</div>
       </div>
 

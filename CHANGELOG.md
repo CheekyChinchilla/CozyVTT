@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.1] — 2026-08-17
+
+A bug-fix release for two settings that looked configurable but weren't: upload size limits set in
+`.env`, and a creature's HP Max. No breaking changes, no database migration — update and restart.
+
+### Fixed
+
+- **Creature HP Max now saves.** Editing a custom creature's HP Max appeared to work but the value was never sent to the server, so reopening the creature always showed 10 again — hit points were not part of a creature stat block at all. HP is now stored with the creature, loaded back into the edit form, and used when placing the creature on a map (previously every creature placed as a 10 HP token regardless of its stat block)
+- **SRD monsters now carry their real hit points.** The SRD importer fetched each monster's HP and hit dice from Open5e and then discarded them. New imports include them, and re-running **Seed SRD** from the creature library backfills hit points onto SRD creatures already in your library — it only fills in the missing HP fields and never touches custom creatures. Stat blocks now display hit points alongside armor class
+- **Upload size limits set in `.env` are now actually applied.** `MAX_MAP_SIZE_MB`, `MAX_TOKEN_SIZE_MB`, `MAX_AUDIO_SIZE_MB`, and `MAX_AVATAR_SIZE_MB` were documented, passed into the container, and displayed in the admin panel — but never read: every limit was a hardcoded constant, so raising a limit had no effect and the admin panel reported values that didn't match `.env`. The backend now resolves all four at startup, the upload dialog and admin panel read the live values from the server, and the generic upload cap follows the largest configured limit (it previously capped *every* upload at 25 MB, below the documented 50 MB for maps)
+- Oversize uploads no longer produce the error "FILE files must be smaller than NaNMB"; the message now names the asset type and its real limit
+- Files dropped onto the upload dialog are validated against the asset type currently selected, not the one selected when the dialog opened
+- Avatars are checked against the server's avatar limit after cropping, instead of being rejected by the server after a 10 MB client-side check that never matched it
+
+### Changed
+
+- Default upload limits in code now match the documented defaults — MAP 50 MB and AUDIO 20 MB (previously 25 MB and 10 MB in code, while `.env.example`, the README, and the docs all advertised 50/20). Docker installs already passed these values, so only installs running without the environment variables see a change, and only as an increase
+- The bundled Nginx reads its `client_max_body_size` from the new **`NGINX_MAX_BODY_SIZE`** variable (default `55M`, i.e. today's behaviour), so a limit increase no longer requires editing `nginx/nginx.conf`. `docker-compose.yml` now mounts `nginx/nginx.conf` as an Nginx template; custom configs keep working unchanged
+- The backend logs its effective upload limits at startup, and warns when they exceed the proxy's body cap — including a note about Cloudflare's 100 MB cap on proxied requests (Tunnels included), which no application setting can raise
+- The upload dialog now shows the maximum size for the selected asset type up front, and the admin panel shows the body limit your reverse proxy needs
+
+### Added
+
+- `GET /api/config` — public endpoint returning the server's upload limits, so limit changes take effect on restart without rebuilding the frontend image
+- **`NGINX_MAX_BODY_SIZE`** environment variable (optional, defaults to `55M`) — sets the bundled Nginx request body cap without editing `nginx/nginx.conf`
+
+### Upgrading from 1.1.0
+
+`docker compose up -d --build` is all that is required — no migration, no configuration changes.
+
+Two optional follow-ups:
+- To give SRD monsters their hit points, open a campaign's creature library and click **Seed SRD**. It backfills HP onto the SRD creatures already in your library and leaves custom creatures alone.
+- If you raise a `MAX_*_SIZE_MB` above ~50 MB, also raise `NGINX_MAX_BODY_SIZE` (bundled Nginx) or your own proxy's body limit — the backend logs a warning at startup telling you the value it needs.
+
+---
+
 ## [1.1.0] — 2026-07-12
 
 A modernization release: faster and smoother real-time play, a redesigned resizable session workspace, a shared UI component layer, a hardened and restructured backend, and accessibility + polish throughout — with no breaking changes for existing installs.

@@ -15,6 +15,9 @@ import { ListEditor } from './components/sections/ListEditor';
 import { TextEditor } from './components/sections/TextEditor';
 import { TableEditor } from './components/sections/TableEditor';
 import { api } from '../../../services/api';
+import { AssetType } from '../../../types';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -36,6 +39,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
     character.tokenImageUrl
   );
   const [tokenError, setTokenError] = useState<string>('');
+  const { data: serverConfig } = useServerConfigQuery();
 
   // Handle token image upload
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,8 +49,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         setTokenError('Please select an image file');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        setTokenError('Image must be smaller than 5MB');
+      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
+      if (file.size > tokenLimit) {
+        setTokenError(`Image must be smaller than ${formatUploadLimit(tokenLimit)}`);
         return;
       }
       setTokenImageFile(file);
@@ -67,7 +72,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       if (tokenImageFile) {
         try {
           const assetFormData = new FormData();
-          assetFormData.append('file', tokenImageFile);
+          // File last so the server can name the type if it rejects the upload
           assetFormData.append('type', 'TOKEN');
           if (character.campaignId) {
             assetFormData.append('scope', 'CAMPAIGN');
@@ -76,6 +81,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
             assetFormData.append('scope', 'USER');
           }
           assetFormData.append('name', `${character.name} Token`);
+          assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);
           const assetId = uploadResponse.asset.id;

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
+import logger from './logger';
 
 /**
  * Asset types supported by the application
@@ -13,14 +14,71 @@ export type AssetType = 'MAP' | 'TOKEN' | 'AUDIO' | 'AVATAR';
 export type AssetScope = 'GLOBAL' | 'USER' | 'CAMPAIGN';
 
 /**
- * File size limits in bytes
+ * Default upload limits in MB, used when the matching env var is unset or invalid.
+ * These match .env.example, docker-compose.yml, README.md and docs/DEPLOYMENT.md.
  */
-export const FILE_SIZE_LIMITS = {
-  MAP: 25 * 1024 * 1024,      // 25 MB
-  TOKEN: 5 * 1024 * 1024,     // 5 MB
-  AUDIO: 10 * 1024 * 1024,    // 10 MB
-  AVATAR: 2 * 1024 * 1024,    // 2 MB
-} as const;
+export const DEFAULT_FILE_SIZE_LIMITS_MB: Record<AssetType, number> = {
+  MAP: 50,
+  TOKEN: 5,
+  AUDIO: 20,
+  AVATAR: 2,
+};
+
+const ASSET_TYPES: AssetType[] = ['MAP', 'TOKEN', 'AUDIO', 'AVATAR'];
+
+/**
+ * Resolve per-type upload limits (in bytes) from MAX_<TYPE>_SIZE_MB environment
+ * variables, falling back to DEFAULT_FILE_SIZE_LIMITS_MB.
+ *
+ * Invalid values (non-numeric, zero, negative) are ignored with a warning rather
+ * than crashing the server — a typo in .env must never prevent startup.
+ *
+ * Exported (with an injectable env) so it can be unit tested without mutating
+ * the real process environment.
+ */
+export function resolveFileSizeLimits(
+  env: NodeJS.ProcessEnv = process.env
+): Record<AssetType, number> {
+  const limits = {} as Record<AssetType, number>;
+
+  for (const assetType of ASSET_TYPES) {
+    const varName = `MAX_${assetType}_SIZE_MB`;
+    const raw = env[varName];
+    const fallbackMB = DEFAULT_FILE_SIZE_LIMITS_MB[assetType];
+    let sizeMB = fallbackMB;
+
+    if (raw !== undefined && raw.trim() !== '') {
+      const parsed = Number(raw.trim());
+
+      if (Number.isFinite(parsed) && parsed > 0) {
+        sizeMB = parsed;
+      } else {
+        logger.warn(
+          `Invalid ${varName}="${raw}" — expected a positive number of megabytes. Using default ${fallbackMB} MB.`
+        );
+      }
+    }
+
+    limits[assetType] = Math.round(sizeMB * 1024 * 1024);
+  }
+
+  return limits;
+}
+
+/**
+ * File size limits in bytes, resolved once at startup from the environment.
+ *
+ * NOTE: this reads process.env at module load, which is safe because
+ * src/server.ts calls dotenv.config() on its first lines, before any import
+ * that reaches this module. Keep that ordering intact.
+ */
+export const FILE_SIZE_LIMITS: Record<AssetType, number> = resolveFileSizeLimits();
+
+/**
+ * The largest configured limit — the cap for the generic multer instance that
+ * parses uploads before the asset type is known (see middleware/upload.ts).
+ */
+export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(FILE_SIZE_LIMITS));
 
 /**
  * Allowed MIME types for each asset type
@@ -160,10 +218,11 @@ export async function ensureDirectory(dirPath: string): Promise<void> {
 /**
  * Get file size limit for an asset type
  * @param assetType Type of asset
- * @returns Size limit in bytes
+ * @returns Size limit in bytes (falls back to the largest configured limit for
+ *          unknown types, so callers never end up formatting `undefined`)
  */
 export function getFileSizeLimit(assetType: AssetType): number {
-  return FILE_SIZE_LIMITS[assetType];
+  return FILE_SIZE_LIMITS[assetType] ?? MAX_UPLOAD_BYTES;
 }
 
 /**

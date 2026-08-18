@@ -68,6 +68,9 @@ services:
       MAX_TOKEN_SIZE_MB: ${MAX_TOKEN_SIZE_MB:-5}
       MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-20}
       MAX_AVATAR_SIZE_MB: ${MAX_AVATAR_SIZE_MB:-2}
+      # Read-only here: lets the backend warn at startup when the Nginx body
+      # cap is smaller than the limits above (it is applied by the nginx service)
+      NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
     volumes:
@@ -122,13 +125,22 @@ services:
     depends_on:
       - frontend
       - backend
+    environment:
+      # Request body cap. Must be >= the largest MAX_*_SIZE_MB above plus a few
+      # MB of multipart overhead, or large uploads fail with HTTP 413.
+      NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
+      # Only substitute this one variable — without the filter, envsubst would
+      # also blank Nginx's own $host / $scheme / $proxy_add_x_forwarded_for.
+      NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Mounted as a template: the nginx image renders it to
+      # /etc/nginx/conf.d/default.conf at start, filling in NGINX_MAX_BODY_SIZE.
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
       - ./nginx/certs:/etc/nginx/certs:ro  # Place your SSL certs here
     networks:
       - internal

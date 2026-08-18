@@ -74,6 +74,7 @@ src/
 │   ├── invitations.ts Campaign invitation lifecycle
 │   ├── mfa.ts         TOTP setup, verify, disable, backup codes
 │   ├── setup.ts       First-run setup wizard
+│   ├── config.ts      Public client config (upload limits)
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
 ├── services/          Business logic (called by routes and WebSocket handlers)
 ├── validators/        Zod validation schemas (one per domain, incl. game-systems/)
@@ -91,6 +92,8 @@ src/
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
 │   ├── serverRaycasting.ts  Server-side vision raycasting for lighting
 │   ├── asset-urls.ts     Asset URL normalization
+│   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
+│   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```

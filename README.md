@@ -190,12 +190,14 @@ All runtime configuration is managed through the Admin dashboard after setup:
 
 ### Default Upload Limits
 
-| Type | Default |
-|------|---------|
-| Map images | 50 MB |
-| Token images | 5 MB |
-| Audio files | 20 MB |
-| Avatar images | 2 MB |
+| Type | Default | Environment variable |
+|------|---------|----------------------|
+| Map images | 50 MB | `MAX_MAP_SIZE_MB` |
+| Token images | 5 MB | `MAX_TOKEN_SIZE_MB` |
+| Audio files | 20 MB | `MAX_AUDIO_SIZE_MB` |
+| Avatar images | 2 MB | `MAX_AVATAR_SIZE_MB` |
+
+Set these in `.env` and restart — no rebuild needed. If you raise one, raise your reverse proxy's body limit to match (`NGINX_MAX_BODY_SIZE` for the bundled Nginx). See [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
 
 ---
 

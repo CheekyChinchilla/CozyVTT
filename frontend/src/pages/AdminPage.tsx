@@ -87,6 +87,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+/**
+ * Body size a reverse proxy must accept: the largest upload limit plus a few MB
+ * of multipart overhead (mirrors UPLOAD_OVERHEAD_BYTES in the backend).
+ */
+function requiredProxyBodyMB(uploadLimits: Record<string, number>): number {
+  const largest = Math.max(...Object.values(uploadLimits));
+  return Math.ceil((largest + 5 * 1024 * 1024) / (1024 * 1024));
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '\u2014';
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -1901,6 +1910,17 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  <p className="text-xs text-warm-gray/70 mt-3">
+                    Your reverse proxy must allow request bodies of at least{' '}
+                    <strong>{requiredProxyBodyMB(serverConfig.uploadLimits)} MB</strong>, or larger
+                    uploads fail with HTTP 413 before reaching the API. For the bundled Nginx, set{' '}
+                    <code className="font-mono bg-warm-gray/10 px-1 rounded">
+                      NGINX_MAX_BODY_SIZE={requiredProxyBodyMB(serverConfig.uploadLimits)}M
+                    </code>{' '}
+                    in your <code className="font-mono bg-warm-gray/10 px-1 rounded">.env</code> and
+                    restart. Cloudflare-proxied setups (including Tunnels) also cap request bodies at
+                    100 MB on Free/Pro plans.
+                  </p>
                 </div>
               ) : (
                 <p className="text-xs text-warm-gray">Could not load upload limits.</p>

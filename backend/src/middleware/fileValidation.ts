@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { fileTypeFromFile } from 'file-type';
 import fs from 'fs/promises';
 import path from 'path';
-import { AssetType, isAllowedMimeType, deleteFile } from '../utils/fileUtils';
+import { AssetType, isAllowedMimeType, deleteFile, getFileSizeLimit } from '../utils/fileUtils';
 import { UploadRequest } from './upload';
 import logger from '../utils/logger';
 
@@ -137,16 +137,9 @@ export async function validateFileSize(
     const stats = await fs.stat(filePath);
     const fileSizeInBytes = stats.size;
 
-    // Get size limit for asset type
+    // Get size limit for asset type (resolved from MAX_<TYPE>_SIZE_MB at startup)
     const assetType = req.assetType || 'MAP';
-    const limits = {
-      MAP: 25 * 1024 * 1024,      // 25 MB
-      TOKEN: 5 * 1024 * 1024,     // 5 MB
-      AUDIO: 10 * 1024 * 1024,    // 10 MB
-      AVATAR: 2 * 1024 * 1024,    // 2 MB
-    };
-
-    const limit = limits[assetType];
+    const limit = getFileSizeLimit(assetType);
 
     if (fileSizeInBytes > limit) {
       // Delete the file

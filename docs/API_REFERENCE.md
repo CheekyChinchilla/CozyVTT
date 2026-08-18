@@ -20,10 +20,11 @@ The backend also ships a full **OpenAPI 3.0 specification** at `backend/docs/API
 10. [Asset Endpoints](#asset-endpoints)
 11. [Invitation Endpoints](#invitation-endpoints)
 12. [User & Admin Endpoints](#user--admin-endpoints)
-13. [Setup Endpoint](#setup-endpoint)
-14. [WebSocket Events](#websocket-events)
-15. [Error Responses](#error-responses)
-16. [Rate Limits](#rate-limits)
+13. [Config Endpoint](#config-endpoint)
+14. [Setup Endpoint](#setup-endpoint)
+15. [WebSocket Events](#websocket-events)
+16. [Error Responses](#error-responses)
+17. [Rate Limits](#rate-limits)
 
 ---
 
@@ -401,7 +402,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.1.0",
+    "exportedFrom": "CozyVTT v1.1.1",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,
@@ -723,6 +724,20 @@ Check whether SRD creatures have been seeded. Any campaign member can check.
 
 Seed SRD creatures from Open5e (DM only). Safe to call multiple times — existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress.
 
+SRD creatures stored before hit points were tracked are updated in place with `hpMax` and `hitDice`; only those missing keys are added, and custom creatures are never modified.
+
+**Response:**
+```json
+{
+  "message": "SRD creature seeding complete",
+  "fetched": 322,
+  "created": 0,
+  "updated": 322,
+  "skipped": 0,
+  "alreadyExisted": 322
+}
+```
+
 ---
 
 ## Asset Endpoints
@@ -986,6 +1001,29 @@ Delete a database backup file.
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
 Restore a database backup. **Destructive — overwrites all current data.**
+
+---
+
+## Config Endpoint
+
+### `GET /api/config`
+
+Public. Returns the upload limits the server enforces, derived from the `MAX_<TYPE>_SIZE_MB` environment variables. The SPA reads these at runtime, so changing a limit takes a restart rather than a frontend rebuild.
+
+**Response:**
+```json
+{
+  "uploadLimits": {
+    "MAP": 52428800,
+    "TOKEN": 5242880,
+    "AUDIO": 20971520,
+    "AVATAR": 2097152
+  },
+  "maxUploadBytes": 52428800
+}
+```
+
+Sizes are in bytes. `maxUploadBytes` is the largest configured limit — the cap applied while parsing an upload, before the asset type is known. See [Upload Size Limits](DEPLOYMENT.md#upload-size-limits) for the environment variables and the matching reverse-proxy setting.
 
 ---
 

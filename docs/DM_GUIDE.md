@@ -236,6 +236,7 @@ The first time you open the Creature Library in a new campaign, it may be empty.
 - Seeding takes a few seconds — a progress indicator shows while it runs
 - SRD creatures are **global** (shared across all campaigns on the instance) and **read-only**
 - You can duplicate any SRD creature to create an editable custom version
+- Running it again is safe: existing creatures are not duplicated. If your library was seeded before CozyVTT 1.1.1, re-running it fills in each SRD creature's hit points; custom creatures are never modified
 
 ### Browsing and Searching
 
@@ -260,6 +261,7 @@ Click any creature in the library to expand its details, then click **Place on M
 
 - The creature's name
 - Its stat block (viewable and editable in the Quick Editor)
+- Its hit points, taken from the stat block's **HP Max** (creatures with no HP recorded start at 10 — adjust in the Quick Editor)
 - Its image (if one has been associated)
 - Default disposition from the template (hostile, friendly, or neutral)
 - Display mode from the template (pog, top-down, or full-art)
@@ -269,7 +271,8 @@ Click any creature in the library to expand its details, then click **Place on M
 Click **+ New Creature** at the top of the Creature Library to create a custom creature template. Fill in:
 
 - **Name** — Required
-- **Stat Block** — The creature's combat stats (HP, AC, attacks, etc.)
+- **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
+- **HP Max** — Hit points given to tokens placed from this creature
 - **Challenge Rating** — Optional, used for filtering
 - **Creature Type** — Optional (e.g., beast, undead, fiend)
 - **Image** — Optional; choose from your TOKEN assets

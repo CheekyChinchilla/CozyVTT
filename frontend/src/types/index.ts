@@ -89,6 +89,13 @@ export type TokenDisplayMode = 'pog' | 'top-down' | 'full-art';
 export interface NpcStatBlock {
   /** Armor Class / Defense rating */
   ac: number;
+  /**
+   * Maximum hit points. Optional: stat blocks saved before HP was tracked have
+   * none, and callers fall back to a default (see CreatureLibrary placement).
+   */
+  hpMax?: number;
+  /** Hit dice expression, e.g. "7d8+14" (informational) */
+  hitDice?: string;
   /** Speed (e.g. "30 ft." or "30 ft., fly 60 ft.") */
   speed: string;
   /** Ability scores */
@@ -282,6 +289,23 @@ export interface AdminActivityData {
   recentSessions: AdminActivitySession[];
   onlineUsers: AdminOnlineUser[];
   recentLogs: AdminSystemLog[];
+}
+
+// ============================================
+// Public Server Config
+// ============================================
+
+/** Upload limits in bytes, keyed by asset type — served by GET /api/config. */
+export interface ServerUploadLimits {
+  MAP: number;
+  TOKEN: number;
+  AUDIO: number;
+  AVATAR: number;
+}
+
+export interface ServerConfig {
+  uploadLimits: ServerUploadLimits;
+  maxUploadBytes: number;
 }
 
 // ============================================

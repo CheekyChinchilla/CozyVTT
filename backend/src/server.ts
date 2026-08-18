@@ -21,9 +21,12 @@ import mapRoutes from './routes/maps';
 import creatureRoutes from './routes/creatures';
 import tokenTemplateRoutes from './routes/tokenTemplates';
 import adminRoutes from './routes/admin';
+import configRoutes from './routes/config';
 import { initializeWebSocket } from './websocket';
 import logger from './utils/logger';
 import { prisma } from './config/database';
+import { FILE_SIZE_LIMITS } from './utils/fileUtils';
+import { getProxyLimitWarnings } from './utils/proxyLimits';
 
 const app = express();
 const httpServer = createServer(app);
@@ -130,6 +133,9 @@ app.use('/api', generalApiLimiter);
 // Setup wizard (accessible before setup is complete)
 app.use('/api/setup', setupRoutes);
 
+// Public client configuration (upload limits)
+app.use('/api/config', configRoutes);
+
 // Authentication: login, register, password reset, MFA
 app.use('/api/auth', authRoutes);
 
@@ -195,6 +201,18 @@ httpServer.listen(PORT, () => {
   logger.info(`CozyVTT Backend running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+
+  const uploadLimits = Object.entries(FILE_SIZE_LIMITS)
+    .map(([type, bytes]) => `${type} ${Math.round(bytes / (1024 * 1024))}MB`)
+    .join(', ');
+  logger.info(`Upload limits: ${uploadLimits}`);
+
+  // A proxy body-size cap below the configured limits turns uploads into 413s
+  // that never reach this process — surface it at startup rather than in a
+  // bug report.
+  for (const warning of getProxyLimitWarnings()) {
+    logger.warn(warning);
+  }
 });
 
 export default app;
