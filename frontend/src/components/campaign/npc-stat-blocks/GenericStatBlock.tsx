@@ -31,6 +31,12 @@ export default function GenericStatBlock({ statBlock, tokenName }: Props) {
       {/* Core stats */}
       <div className="flex gap-4 flex-wrap">
         <div><span className="font-semibold text-moss-green">AC</span> {statBlock.ac}</div>
+        {statBlock.hpMax != null && (
+          <div>
+            <span className="font-semibold text-moss-green">HP</span> {statBlock.hpMax}
+            {statBlock.hitDice && ` (${statBlock.hitDice})`}
+          </div>
+        )}
         <div><span className="font-semibold text-moss-green">Speed</span> {statBlock.speed}</div>
         {statBlock.challengeRating && (
           <div>

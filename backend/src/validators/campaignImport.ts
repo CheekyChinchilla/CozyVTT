@@ -45,6 +45,9 @@ const NameDescPairSchema = z.object({
 
 const StatBlockSchema = z.object({
   ac: z.number().int().min(0).max(99),
+  // Optional: archives exported before HP tracking have neither field
+  hpMax: z.number().int().min(1).max(99999).optional(),
+  hitDice: z.string().max(50).optional(),
   speed: z.string().max(500),
   abilities: z.object({
     str: z.number().int().min(0).max(30),

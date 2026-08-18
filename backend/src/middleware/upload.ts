@@ -4,6 +4,8 @@ import { Request } from 'express';
 import {
   AssetType,
   AssetScope,
+  FILE_SIZE_LIMITS,
+  MAX_UPLOAD_BYTES,
   generateUniqueFilename,
   getFilePath,
   getFileSizeLimit,
@@ -143,11 +145,15 @@ export function setAssetMetadata(assetType: AssetType, scope: AssetScope = 'GLOB
  * Generic upload middleware that accepts all file types
  * Used when asset type is determined from request body
  * File type validation happens in subsequent middleware
+ *
+ * The cap is the largest configured per-type limit — multer runs before the
+ * asset type is known, so the exact per-type limit is enforced afterwards by
+ * validateFileSize() in middleware/fileValidation.ts.
  */
 export const uploadGeneric = multer({
   storage,
   limits: {
-    fileSize: 25 * 1024 * 1024, // Max 25MB (largest allowed size)
+    fileSize: MAX_UPLOAD_BYTES, // Largest MAX_<TYPE>_SIZE_MB configured
     files: 1, // Only allow one file per request
   },
   // No fileFilter - accept all files, validate in middleware
@@ -167,13 +173,20 @@ export const uploadAvatar = createUploadMiddleware('AVATAR');
 export function handleUploadError(err: any, req: any, res: any, next: any) {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      const assetType = (req as UploadRequest).assetType || 'FILE';
-      const limit = getFileSizeLimit(assetType as AssetType);
+      // On the generic upload route multer aborts mid-stream, so req.assetType
+      // is not set yet. The client sends `type` before the file part, so fall
+      // back to the parsed body, then to a type-agnostic message.
+      const bodyType = typeof req.body?.type === 'string' ? req.body.type.toUpperCase() : undefined;
+      const assetType = (req as UploadRequest).assetType || bodyType;
+      const isKnownType = !!assetType && assetType in FILE_SIZE_LIMITS;
+      const limit = isKnownType ? getFileSizeLimit(assetType as AssetType) : MAX_UPLOAD_BYTES;
       const limitMB = (limit / (1024 * 1024)).toFixed(0);
 
       return res.status(400).json({
         error: 'File Too Large',
-        message: `${assetType} files must be smaller than ${limitMB}MB`,
+        message: isKnownType
+          ? `${assetType} files must be smaller than ${limitMB}MB`
+          : `File exceeds the maximum upload size of ${limitMB}MB`,
       });
     }
 

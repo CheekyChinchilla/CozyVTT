@@ -166,7 +166,9 @@ Whatever proxy you use, it must:
 - Forward `/api/*` and `/socket.io/*` to the backend
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
 - Pass `X-Forwarded-For` and `X-Forwarded-Proto` headers to the backend
-- Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead)
+- Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
+
+> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured.
 
 ---
 
@@ -305,6 +307,7 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
+    # Must be >= the largest MAX_*_SIZE_MB in .env, plus a few MB of overhead
     client_max_body_size 55M;
 
     # API → backend
@@ -379,9 +382,32 @@ MAX_MAP_SIZE_MB=50
 MAX_TOKEN_SIZE_MB=5
 MAX_AUDIO_SIZE_MB=20
 MAX_AVATAR_SIZE_MB=2
+
+# Request body cap for the bundled Nginx — must be >= the largest limit above
+# plus ~5 MB of multipart overhead
+NGINX_MAX_BODY_SIZE=55M
 ```
 
-If you increase any of these, also update `client_max_body_size` in your Nginx config to match or exceed the largest value.
+These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
+
+**If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
+
+| Setup | What to change |
+|---|---|
+| Bundled Nginx (default `docker-compose.yml`) | Set `NGINX_MAX_BODY_SIZE` in `.env`, then `docker compose up -d` |
+| Your own Nginx | `client_max_body_size` in your server block |
+| Traefik | `buffering.maxRequestBodyBytes` middleware (defaults to unlimited) |
+| Caddy | `request_body { max_size ... }` |
+| Cloudflare proxy / Tunnel | Hard 100 MB cap on Free/Pro — not configurable |
+
+The backend logs its effective limits at startup and warns when they exceed the configured proxy cap:
+
+```
+Upload limits: MAP 50MB, TOKEN 5MB, AUDIO 250MB, AVATAR 2MB
+NGINX_MAX_BODY_SIZE=55M is smaller than the largest upload limit AUDIO (250 MB). ...
+```
+
+The admin panel shows the same numbers under **Settings → Upload Size Limits**, along with the body size your proxy needs.
 
 ---
 

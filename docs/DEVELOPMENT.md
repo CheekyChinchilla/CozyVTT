@@ -100,7 +100,10 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | `MAX_TOKEN_SIZE_MB` | No | `5` | Upload size limit for token images |
 | `MAX_AUDIO_SIZE_MB` | No | `20` | Upload size limit for audio files |
 | `MAX_AVATAR_SIZE_MB` | No | `2` | Upload size limit for avatar images |
+| `NGINX_MAX_BODY_SIZE` | No | `55M` | Request body cap for the bundled Nginx (`client_max_body_size`); must cover the largest limit above |
 | `ASSET_UPLOAD_RATE_LIMIT` | No | `30` | Asset uploads per minute per user |
+
+The `MAX_*_SIZE_MB` values are read at startup by `backend/src/utils/fileUtils.ts` and served to the SPA by `GET /api/config`, so a restart is enough to change them — no rebuild. Non-numeric or non-positive values are ignored with a startup warning.
 
 **Example `backend/.env` for local development:**
 

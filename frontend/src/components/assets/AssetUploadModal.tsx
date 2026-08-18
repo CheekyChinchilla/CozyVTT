@@ -6,6 +6,8 @@ import { Asset, AssetType, AssetScope, PlatformRole, Campaign, CampaignRole } fr
 import { useAuth } from '../../contexts/AuthContext';
 import campaignService from '../../services/campaign.service';
 import { Button, Modal } from '@/components/ui';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ interface AssetUploadModalProps {
  */
 export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultType, defaultScope, defaultCampaignId }: AssetUploadModalProps) {
   const { user } = useAuth();
+  const { data: serverConfig } = useServerConfigQuery();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -120,27 +123,10 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFileSelection(files[0]);
-    }
-  }, []);
-
   // Validate file based on asset type
   const validateFile = (file: File, type: AssetType): string | null => {
-    const maxSizes: Record<AssetType, number> = {
-      [AssetType.MAP]: 25 * 1024 * 1024,
-      [AssetType.TOKEN]: 5 * 1024 * 1024,
-      [AssetType.AUDIO]: 10 * 1024 * 1024,
-      [AssetType.AVATAR]: 2 * 1024 * 1024,
-      [AssetType.DOCUMENT]: 10 * 1024 * 1024,
-      [AssetType.OTHER]: 10 * 1024 * 1024,
-    };
+    // Server-configured limit (MAX_<TYPE>_SIZE_MB), with a local fallback
+    const maxSize = getUploadLimit(serverConfig, type);
 
     const allowedTypes: Record<AssetType, string[]> = {
       [AssetType.MAP]: ['image/jpeg', 'image/png', 'image/webp'],
@@ -151,8 +137,8 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
       [AssetType.OTHER]: [],
     };
 
-    if (file.size > maxSizes[type]) {
-      return `File size exceeds maximum of ${maxSizes[type] / (1024 * 1024)}MB`;
+    if (file.size > maxSize) {
+      return `File size exceeds maximum of ${formatUploadLimit(maxSize)}`;
     }
 
     const allowed = allowedTypes[type];
@@ -175,6 +161,19 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
     if (!name) {
       setName(file.name.replace(/\.[^/.]+$/, ''));
+    }
+  };
+
+  // Not memoized: it must see the current asset type and limits, otherwise
+  // dropped files are validated against whatever type was selected on mount.
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleFileSelection(files[0]);
     }
   };
 
@@ -220,8 +219,10 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     setUploadProgress(0);
 
     try {
+      // Metadata first, file last: multer parses parts in order, so the server
+      // knows the asset type even when it aborts an oversize file mid-stream
+      // and can name the type and its limit in the error.
       const formData = new FormData();
-      formData.append('file', selectedFile);
       formData.append('type', assetType);
       formData.append('scope', assetScope);
       formData.append('name', name.trim());
@@ -234,6 +235,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
       if (assetScope === AssetScope.CAMPAIGN && selectedCampaignId) {
         formData.append('campaignId', selectedCampaignId);
       }
+      formData.append('file', selectedFile);
 
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 10, 90));
@@ -428,6 +430,9 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             <div>
               <label className="block text-sm font-medium text-moss-green mb-2">
                 File
+                <span className="ml-2 font-normal text-xs text-stone-gray/70">
+                  max {formatUploadLimit(getUploadLimit(serverConfig, assetType))}
+                </span>
               </label>
               <div
                 onDragOver={handleDragOver}

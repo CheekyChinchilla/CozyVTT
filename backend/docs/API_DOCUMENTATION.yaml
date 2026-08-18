@@ -32,7 +32,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     See the WebSocket section at the bottom of this document for the full event reference.
 
-  version: 1.1.0
+  version: 1.1.1
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
@@ -113,6 +113,53 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+
+  # ============================================
+  # CLIENT CONFIG
+  # ============================================
+
+  /api/config:
+    get:
+      tags:
+        - Health
+      summary: Get public client configuration
+      description: |
+        Public endpoint — returns the upload size limits the server enforces,
+        derived from the `MAX_<TYPE>_SIZE_MB` environment variables. The SPA is
+        built ahead of time, so it reads the limits from here at runtime rather
+        than baking them into the bundle. No authentication required.
+      operationId: getClientConfig
+      security: []
+      responses:
+        '200':
+          description: Client configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadLimits:
+                    type: object
+                    description: Maximum upload size in bytes, per asset type
+                    properties:
+                      MAP:
+                        type: integer
+                      TOKEN:
+                        type: integer
+                      AUDIO:
+                        type: integer
+                      AVATAR:
+                        type: integer
+                  maxUploadBytes:
+                    type: integer
+                    description: Largest configured limit — the cap enforced before the asset type is known
+              example:
+                uploadLimits:
+                  MAP: 52428800
+                  TOKEN: 5242880
+                  AUDIO: 20971520
+                  AVATAR: 2097152
+                maxUploadBytes: 52428800
 
   # ============================================
   # SETUP
@@ -2350,13 +2397,15 @@ paths:
         inspection (not just MIME header or extension) and rejected if the
         detected type doesn't match the declared `type`.
 
-        **File size limits** (admin-configurable per type, defaults shown):
-        | Type | Default limit |
-        |------|---------------|
-        | MAP    | 50 MB |
-        | TOKEN  | 5 MB |
-        | AUDIO  | 20 MB |
-        | AVATAR | 2 MB |
+        **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
+        environment variables (defaults shown). The effective values are
+        available from `GET /api/config`.
+        | Type | Env var | Default limit |
+        |------|---------|---------------|
+        | MAP    | `MAX_MAP_SIZE_MB`    | 50 MB |
+        | TOKEN  | `MAX_TOKEN_SIZE_MB`  | 5 MB |
+        | AUDIO  | `MAX_AUDIO_SIZE_MB`  | 20 MB |
+        | AVATAR | `MAX_AVATAR_SIZE_MB` | 2 MB |
 
         Image assets generate a 512×512 thumbnail server-side.
 
@@ -3952,6 +4001,11 @@ paths:
       description: |
         Fetch SRD creatures from Open5e and populate the library (DM only).
         Safe to call multiple times — existing SRD creatures are not duplicated.
+
+        Existing SRD creatures stored before hit points were tracked are updated
+        in place with `hpMax` / `hitDice`; only those missing keys are added, and
+        custom creatures are never modified.
+
         Returns 409 if seeding is already in progress.
       operationId: seedSrdCreatures
       security:
@@ -3968,9 +4022,19 @@ paths:
                 properties:
                   message:
                     type: string
+                  fetched:
+                    type: integer
+                    description: Monsters returned by Open5e
                   created:
                     type: integer
+                    description: New SRD creatures inserted
+                  updated:
+                    type: integer
+                    description: Existing SRD creatures backfilled with hit points
                   skipped:
+                    type: integer
+                    description: Existing SRD creatures left unchanged
+                  alreadyExisted:
                     type: integer
         '409':
           description: Seeding already in progress
@@ -5795,7 +5859,11 @@ components:
           nullable: true
         statBlock:
           type: object
-          description: Game-system-agnostic stat block (AC, HP, attacks, abilities, etc.)
+          description: |
+            Game-system-agnostic stat block. Common keys: `ac`, `hpMax`, `hitDice`,
+            `speed`, `abilities`, `traits`, `actions`. `hpMax` seeds the hit points
+            of tokens placed from this creature (defaults to 10 when absent, as on
+            stat blocks saved before hit points were tracked).
         size:
           type: object
           properties:

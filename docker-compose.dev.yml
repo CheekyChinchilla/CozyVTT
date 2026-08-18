@@ -52,6 +52,9 @@ services:
       MAX_TOKEN_SIZE_MB: ${MAX_TOKEN_SIZE_MB}
       MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB}
       MAX_AVATAR_SIZE_MB: ${MAX_AVATAR_SIZE_MB}
+      # No bundled Nginx in dev — Vite proxies directly to the backend, so this
+      # only affects the startup warning about proxy body caps.
+      NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-}
     ports:
       - "4000:4000"
     volumes:

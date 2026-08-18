@@ -11,7 +11,10 @@ import { profileService } from '@/services/profile.service';
 import { api } from '@/services/api';
 import MFASection from '@/components/profile/MFASection';
 import ThemePicker, { DEFAULT_CUSTOM_COLORS, type ThemePickerColors } from '@/components/appearance/ThemePicker';
+import { AssetType } from '@/types';
 import type { UserPreferences } from '@/types';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import {
   Upload,
   Loader2,
@@ -281,6 +284,7 @@ function SaveBar({
 
 export default function ProfilePage() {
   const { user, logout, refreshUser, changePassword } = useAuth();
+  const { data: serverConfig } = useServerConfigQuery();
   const { appearance: systemAppearance, applyUserPreferences } = useTheme();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -400,8 +404,10 @@ export default function ProfilePage() {
       setAvatarError('Please select an image file (JPEG, PNG, or WebP)');
       return;
     }
+    // Generous bound on the source image — it is cropped and re-encoded below,
+    // and the result is checked against the server's AVATAR limit before upload.
     if (file.size > 10 * 1024 * 1024) {
-      setAvatarError('File must be smaller than 10MB');
+      setAvatarError('Image must be smaller than 10MB');
       return;
     }
     setAvatarError('');
@@ -416,6 +422,17 @@ export default function ProfilePage() {
 
   const handleCropConfirm = async (blob: Blob) => {
     setCropSrc(null);
+
+    // The server enforces MAX_AVATAR_SIZE_MB — catch it here so the user gets a
+    // clear message instead of a rejected upload.
+    const avatarLimit = getUploadLimit(serverConfig, AssetType.AVATAR);
+    if (blob.size > avatarLimit) {
+      setAvatarError(
+        `Cropped avatar is ${formatUploadLimit(blob.size)}, above the ${formatUploadLimit(avatarLimit)} limit. Try a smaller crop or a lower-resolution image.`
+      );
+      return;
+    }
+
     setAvatarUploading(true);
     try {
       const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });

@@ -38,6 +38,14 @@ desktop.ini
 # ---- Docker -----------------------------------------------------------------
 .docker/
 
+# Local-only Compose overrides: test stacks, machine-specific ports, container
+# renames. `docker-compose.override.yml` is picked up automatically by Compose,
+# so it is the usual home for local tweaks that must never ship.
+# The committed docker-compose.yml and docker-compose.dev.yml are NOT matched.
+docker-compose.override.yml
+docker-compose.*.local.yml
+*.local.yml
+
 # ---- Secrets / keys / certs — never commit private key material ------------
 # Broad, repo-wide patterns so a key or alternately-named env file dropped
 # anywhere is caught. The committed *.env.example templates are NOT matched

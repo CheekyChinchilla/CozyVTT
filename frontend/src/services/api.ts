@@ -42,6 +42,7 @@ import type {
   AdminBackup,
   AppearanceSettings,
   UserPreferences,
+  ServerConfig,
 } from '@/types';
 
 // ============================================
@@ -159,6 +160,15 @@ class ApiClient {
 
   async getAppearance(): Promise<AppearanceSettings> {
     const response = await this.client.get<AppearanceSettings>('/api/auth/appearance');
+    return response.data;
+  }
+
+  /**
+   * Server-enforced upload limits (from the MAX_*_SIZE_MB environment variables).
+   * Fetched at runtime so limit changes don't require rebuilding the SPA.
+   */
+  async getServerConfig(): Promise<ServerConfig> {
+    const response = await this.client.get<ServerConfig>('/api/config');
     return response.data;
   }
 
@@ -684,7 +694,7 @@ class ApiClient {
     return response.data;
   }
 
-  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; skipped: number; alreadyExisted: number }> {
+  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/seed`);
     return response.data;
   }

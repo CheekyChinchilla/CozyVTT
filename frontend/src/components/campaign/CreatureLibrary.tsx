@@ -31,6 +31,8 @@ import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
 // ============================================
 // Constants
@@ -167,7 +169,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
     try {
       const result = await api.seedSrdCreatures(campaign.id);
-      setSeedResult(`Seeded ${result.created} SRD creatures (${result.skipped} already existed).`);
+      const updatedNote = result.updated ? `, ${result.updated} updated with hit points` : '';
+      setSeedResult(
+        `Seeded ${result.created} SRD creatures${updatedNote} (${result.skipped} already existed).`
+      );
       setSrdCount((result.alreadyExisted || 0) + result.created);
       // Refresh the list
       fetchCreatures(true);
@@ -188,8 +193,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       y: Math.floor(currentMap.height / 2),
     };
 
-    // Default HP — DM can adjust after placement via NpcQuickEditor
-    const hpMax = 10;
+    // HP from the creature's stat block; creatures saved before HP was tracked
+    // fall back to 10, which the DM can adjust via NpcQuickEditor
+    const hpMax = creature.statBlock?.hpMax ?? 10;
 
     try {
       const tokenPayload = {
@@ -824,6 +830,7 @@ interface CreatureFormProps {
 function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEdited, onCancel }: CreatureFormProps) {
   const isEdit = !!editingCreature;
   const sb = editingCreature?.statBlock;
+  const { data: serverConfig } = useServerConfigQuery();
 
   // ── Basic fields ──
   const [name, setName] = useState(editingCreature?.name ?? '');
@@ -832,7 +839,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   const [cr, setCr] = useState(editingCreature?.challengeRating ?? sb?.challengeRating ?? '');
   const [ac, setAc] = useState(sb?.ac ?? 10);
   const [speed, setSpeed] = useState(sb?.speed ?? '30 ft.');
-  const [hpMax, setHpMax] = useState(10);
+  const [hpMax, setHpMax] = useState(sb?.hpMax ?? 10);
   const [str, setStr] = useState(sb?.abilities?.str ?? 10);
   const [dex, setDex] = useState(sb?.abilities?.dex ?? 10);
   const [con, setCon] = useState(sb?.abilities?.con ?? 10);
@@ -870,21 +877,24 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Client-side size check
-    if (file.size > 5 * 1024 * 1024) {
-      setFormError('Image must be under 5 MB');
+    // Client-side size check against the server's token limit
+    const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
+    if (file.size > tokenLimit) {
+      setFormError(`Image must be under ${formatUploadLimit(tokenLimit)}`);
       return;
     }
 
     setIsUploading(true);
     setFormError(null);
     try {
+      // Fields before the file: multer parses in order, so the server knows the
+      // asset type even when it aborts a too-large file mid-stream.
       const formData = new FormData();
-      formData.append('file', file);
       formData.append('type', AssetType.TOKEN);
       formData.append('scope', AssetScope.CAMPAIGN);
       formData.append('campaignId', campaignId);
       formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+      formData.append('file', file);
 
       const { asset } = await api.uploadAsset(formData);
       setImageUrl(asset.id);
@@ -911,6 +921,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
 
     const statBlock: NpcStatBlock = {
       ac,
+      hpMax,
+      // Preserve hit dice from the source stat block (e.g. an SRD duplicate) —
+      // the form has no field for it, so it would otherwise be lost on save.
+      ...(sb?.hitDice && { hitDice: sb.hitDice }),
       speed,
       abilities: { str, dex, con, int, wis, cha },
       creatureType: creatureType || undefined,
@@ -1077,7 +1091,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
           <input
             type="number"
             value={hpMax}
-            onChange={(e) => setHpMax(parseInt(e.target.value, 10) || 1)}
+            onChange={(e) => setHpMax(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            min={1}
             className="input-cozy w-full text-xs"
           />
         </div>

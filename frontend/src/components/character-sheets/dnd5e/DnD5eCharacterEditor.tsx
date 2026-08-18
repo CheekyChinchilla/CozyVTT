@@ -18,8 +18,10 @@ import {
   Upload,
   Palette,
 } from 'lucide-react';
-import { Character } from '../../../types';
+import { Character, AssetType } from '../../../types';
 import { api } from '../../../services/api';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
 interface DnD5eCharacterEditorProps {
   character: Character;
@@ -106,6 +108,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { data: serverConfig } = useServerConfigQuery();
 
   // Type assertion for D&D 5e character data
   const data = character.data as any;
@@ -342,9 +345,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         setErrors({ ...errors, tokenImage: 'Please select an image file' });
         return;
       }
-      // Validate file size (5MB max for tokens)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors({ ...errors, tokenImage: 'Image must be smaller than 5MB' });
+      // Validate file size against the server's token limit
+      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
+      if (file.size > tokenLimit) {
+        setErrors({ ...errors, tokenImage: `Image must be smaller than ${formatUploadLimit(tokenLimit)}` });
         return;
       }
       setTokenImageFile(file);
@@ -435,8 +439,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
+          // File last: multer parses parts in order, so the server knows the
+          // asset type even if it aborts an oversize file mid-stream.
           const assetFormData = new FormData();
-          assetFormData.append('file', tokenImageFile);
           assetFormData.append('type', 'TOKEN');
           if (character.campaignId) {
             assetFormData.append('scope', 'CAMPAIGN');
@@ -445,6 +450,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             assetFormData.append('scope', 'USER');
           }
           assetFormData.append('name', `${formData.characterName || 'Character'} Token`);
+          assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);
           const assetId = uploadResponse.asset.id;

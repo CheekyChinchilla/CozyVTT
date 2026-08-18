@@ -29,6 +29,8 @@ import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
 import StatBlockEditor from './npc-stat-blocks/StatBlockEditor';
 import Button from '@/components/ui/Button';
+import { useServerConfigQuery } from '@/hooks/queries';
+import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
 function defaultStatBlockForNpc(): NpcStatBlock {
   return {
@@ -500,6 +502,7 @@ interface TemplateFormProps {
 
 function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCancel }: TemplateFormProps) {
   const isEdit = !!editingTemplate;
+  const { data: serverConfig } = useServerConfigQuery();
 
   const [name, setName] = useState(editingTemplate?.name ?? '');
   const [type, setType] = useState<string>(editingTemplate?.type ?? 'object');
@@ -524,17 +527,20 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { setFormError('Image must be under 5 MB'); return; }
+    const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
+    if (file.size > tokenLimit) { setFormError(`Image must be under ${formatUploadLimit(tokenLimit)}`); return; }
 
     setIsUploading(true);
     setFormError(null);
     try {
+      // Fields before the file so the server can name the type if it rejects an
+      // oversize upload mid-stream.
       const formData = new FormData();
-      formData.append('file', file);
       formData.append('type', AssetType.TOKEN);
       formData.append('scope', AssetScope.CAMPAIGN);
       formData.append('campaignId', campaignId);
       formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+      formData.append('file', file);
       const { asset } = await api.uploadAsset(formData);
       setImageUrl(asset.id);
     } catch {
