@@ -65,7 +65,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                 type="text"
                 value={field.name}
                 onChange={(e) => updateField(field.id, { name: e.target.value })}
-                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-moss-green"
+                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
                 placeholder="Stat name"
               />
 
@@ -76,7 +76,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                   onChange={(e) =>
                     updateField(field.id, { value: parseInt(e.target.value) || 0 })
                   }
-                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-moss-green"
+                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
                 />
                 <span className="text-lg text-stone-gray">
                   ({formatModifier(field.modifier || 0)})
@@ -89,7 +89,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
 
       <button
         onClick={addField}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-moss-green rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
       >
         <Plus className="w-4 h-4" />
         Add Stat

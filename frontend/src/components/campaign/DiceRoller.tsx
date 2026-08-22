@@ -101,13 +101,13 @@ function evaluateLocalRoll(
 
 // Quick roll button configurations with whimsical forest colors
 const QUICK_ROLLS = [
-  { label: 'd4', expression: '1d4', color: 'bg-amber-100/80 dark:bg-amber-900/30 border-amber-300/50 hover:bg-amber-200/80 dark:hover:bg-amber-900/40' },
-  { label: 'd6', expression: '1d6', color: 'bg-green-100/80 dark:bg-green-900/30 border-green-300/50 hover:bg-green-200/80 dark:hover:bg-green-900/40' },
-  { label: 'd8', expression: '1d8', color: 'bg-purple-100/80 dark:bg-purple-900/30 border-purple-300/50 hover:bg-purple-200/80 dark:hover:bg-purple-900/40' },
-  { label: 'd10', expression: '1d10', color: 'bg-orange-100/80 dark:bg-orange-900/30 border-orange-300/50 hover:bg-orange-200/80 dark:hover:bg-orange-900/40' },
+  { label: 'd4', expression: '1d4', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
+  { label: 'd6', expression: '1d6', color: 'bg-success/15 dark:bg-success/30 border-success/50 hover:bg-success/80 dark:hover:bg-success/40' },
+  { label: 'd8', expression: '1d8', color: 'bg-spirit/15 dark:bg-spirit/30 border-spirit/50 hover:bg-spirit/80 dark:hover:bg-spirit/40' },
+  { label: 'd10', expression: '1d10', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
   { label: 'd12', expression: '1d12', color: 'bg-teal-100/80 dark:bg-teal-900/30 border-teal-300/50 hover:bg-teal-200/80 dark:hover:bg-teal-900/40' },
-  { label: 'd20', expression: '1d20', color: 'bg-rose-100/80 dark:bg-rose-900/30 border-rose-300/50 hover:bg-rose-200/80 dark:hover:bg-rose-900/40' },
-  { label: 'd100', expression: '1d100', color: 'bg-indigo-100/80 dark:bg-indigo-900/30 border-indigo-300/50 hover:bg-indigo-200/80 dark:hover:bg-indigo-900/40' },
+  { label: 'd20', expression: '1d20', color: 'bg-danger/15 dark:bg-danger/30 border-danger/50 hover:bg-danger/80 dark:hover:bg-danger/40' },
+  { label: 'd100', expression: '1d100', color: 'bg-info/15 dark:bg-info/30 border-info/50 hover:bg-info/80 dark:hover:bg-info/40' },
 ];
 
 const SPECIAL_ROLLS = [
@@ -457,7 +457,7 @@ export default function DiceRoller() {
       <div className="flex-shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Dices className="w-4 h-4 text-moss-green dark:text-moss-green" />
+            <Dices className="w-4 h-4 text-brand-ink dark:text-brand-ink" />
             <h2 className="text-base font-semibold text-ink">
               Dice Roller
             </h2>
@@ -466,7 +466,7 @@ export default function DiceRoller() {
           {userRole === 'DM' && rolls.length > 0 && (
             <button
               onClick={handleClearHistory}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-red-500/30 bg-red-50/50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100/50 dark:hover:bg-red-900/30 transition-all"
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/20 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
               title="Clear all roll history"
             >
               <Trash2 className="w-3 h-3" />
@@ -541,7 +541,7 @@ export default function DiceRoller() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-2 flex items-center gap-2 text-red-600 dark:text-red-400 text-xs"
+              className="mb-2 flex items-center gap-2 text-danger-ink dark:text-danger-ink text-xs"
             >
               <AlertCircle className="w-3 h-3 flex-shrink-0" />
               <span>{error}</span>
@@ -635,7 +635,7 @@ export default function DiceRoller() {
               checked={isSecret}
               onChange={(e) => setIsSecret(e.target.checked)}
               disabled={isRolling}
-              className="w-3 h-3 rounded border-ink-muted/30 text-moss-green focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-3 h-3 rounded border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <label
               htmlFor="secretRoll"
@@ -653,10 +653,10 @@ export default function DiceRoller() {
               disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
               className="
                 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-green-700 hover:bg-green-600 text-white font-semibold text-xs shadow-sm
+                bg-success hover:bg-success text-white font-semibold text-xs shadow-sm
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
-                focus:outline-none focus:ring-2 focus:ring-green-500/50
+                focus:outline-none focus:ring-2 focus:ring-success/50
               "
             >
               {isRolling ? (
@@ -698,7 +698,7 @@ export default function DiceRoller() {
 
         {/* Hint / Rate Limit Countdown */}
         {rateLimitCooldown > 0 ? (
-          <div className="mt-1.5 text-xs text-red-600 dark:text-red-400 text-center font-medium">
+          <div className="mt-1.5 text-xs text-danger-ink dark:text-danger-ink text-center font-medium">
             You may roll again in: {rateLimitCooldown} second{rateLimitCooldown !== 1 ? 's' : ''}
           </div>
         ) : (
@@ -737,7 +737,7 @@ export default function DiceRoller() {
               {/* Header */}
               <div className="p-4 border-b border-ink/10">
                 <div className="flex items-center gap-2">
-                  <EyeOff className="w-5 h-5 text-brand" />
+                  <EyeOff className="w-5 h-5 text-brand-ink" />
                   <h3 className="text-lg font-semibold text-ink">
                     Secret Roll
                   </h3>

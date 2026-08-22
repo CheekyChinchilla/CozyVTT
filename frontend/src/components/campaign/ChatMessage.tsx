@@ -54,27 +54,27 @@ function getMessageStyle(type: MessageType): { bg: string; textColor: string; bo
   switch (type) {
     case 'DM':
       return {
-        bg: 'bg-amber-50/30',
-        textColor: 'text-amber-900',
-        borderColor: 'border-amber-200',
+        bg: 'bg-warning/10',
+        textColor: 'text-warning-ink',
+        borderColor: 'border-warning/30',
       };
     case 'SYSTEM':
       return {
         bg: 'bg-moss-green/10',
-        textColor: 'text-moss-green',
+        textColor: 'text-brand-ink',
         borderColor: 'border-moss-green/20',
       };
     case 'DICE_ROLL':
       return {
-        bg: 'bg-blue-50/30',
-        textColor: 'text-blue-900',
-        borderColor: 'border-blue-200',
+        bg: 'bg-info/10',
+        textColor: 'text-info-ink',
+        borderColor: 'border-info/30',
       };
     case 'CHARACTER_ACTION':
       return {
-        bg: 'bg-purple-50/30',
-        textColor: 'text-purple-900',
-        borderColor: 'border-purple-200',
+        bg: 'bg-spirit/10',
+        textColor: 'text-spirit-ink',
+        borderColor: 'border-spirit/30',
       };
     default: // PLAYER
       return {
@@ -104,18 +104,18 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
       {/* Message Header */}
       <div className="flex items-center gap-2 mb-1">
         {/* Icon for special message types */}
-        {isSystem && <Bot className="w-3.5 h-3.5 text-moss-green" />}
-        {isDM && <Shield className="w-3.5 h-3.5 text-amber-600" />}
+        {isSystem && <Bot className="w-3.5 h-3.5 text-brand-ink" />}
+        {isDM && <Shield className="w-3.5 h-3.5 text-warning-ink" />}
 
         {/* Username */}
         <span
           className={`text-xs font-semibold ${
             isDM
-              ? 'text-amber-700'
+              ? 'text-warning-ink'
               : isSystem
-              ? 'text-moss-green'
+              ? 'text-brand-ink'
               : isCurrentUser
-              ? 'text-moss-green'
+              ? 'text-brand-ink'
               : 'text-stone-gray'
           }`}
         >

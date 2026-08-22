@@ -98,7 +98,7 @@ function PeriodEditor({ period, index, canDelete, onChange, onDelete }: PeriodEd
           onClick={() => onDelete(index)}
           disabled={!canDelete}
           title={canDelete ? 'Remove this period' : 'Cannot remove the only period'}
-          className="mt-5 p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="mt-5 p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -211,7 +211,7 @@ function PeriodEditor({ period, index, canDelete, onChange, onDelete }: PeriodEd
         <div className="relative h-16 rounded-lg overflow-hidden ring-1 ring-moss-green/20">
           {/* Simulated map background */}
           <div
-            className="absolute inset-0 bg-gradient-to-br from-green-800 via-green-600 to-yellow-700"
+            className="absolute inset-0 bg-gradient-to-br from-success via-success to-warning"
             style={{ filter: period.filter || undefined }}
           />
           {/* Hue overlay */}
@@ -379,7 +379,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
           {periods.length < 20 && (
             <button
               onClick={handleAddPeriod}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-moss-green/30 text-moss-green hover:border-moss-green/60 hover:bg-moss-green/5 transition-colors mb-6"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-moss-green/30 text-brand-ink hover:border-moss-green/60 hover:bg-moss-green/5 transition-colors mb-6"
             >
               <Plus className="w-4 h-4" />
               Add Period

@@ -39,9 +39,9 @@ import type { CombatState, CombatantEntry, Token } from '@/types';
 // ---------------------------------------------------------------------------
 
 function dispositionColor(entry: CombatantEntry): string {
-  if (entry.type === 'player') return 'text-moss-green';
-  if (entry.disposition === 'friendly') return 'text-moss-green';
-  if (entry.disposition === 'hostile') return 'text-red-600';
+  if (entry.type === 'player') return 'text-brand-ink';
+  if (entry.disposition === 'friendly') return 'text-brand-ink';
+  if (entry.disposition === 'hostile') return 'text-danger-ink';
   return 'text-stone-gray';
 }
 
@@ -83,7 +83,7 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
         className="bg-soft-cream border-2 border-moss-green/30 rounded-xl shadow-2xl w-full max-w-sm mx-4"
       >
         <div className="flex items-center justify-between p-4 border-b border-moss-green/20">
-          <h3 className="font-bold text-moss-green">Add Combatant</h3>
+          <h3 className="font-bold text-brand-ink">Add Combatant</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-stone-gray/10 transition-colors">
             <XCircle className="w-4 h-4 text-stone-gray" />
           </button>
@@ -112,7 +112,7 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm text-moss-green truncate">{token.name}</div>
+                  <div className="font-medium text-sm text-brand-ink truncate">{token.name}</div>
                   <div className="text-xs text-stone-gray capitalize">
                     {token.type ?? 'npc'}{token.disposition ? ` · ${token.disposition}` : ''}
                   </div>
@@ -218,7 +218,7 @@ function CombatantRow({
 
       {/* Name + disposition */}
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium truncate ${isActive ? 'text-warm-amber' : 'text-moss-green'}`}>
+        <div className={`text-sm font-medium truncate ${isActive ? 'text-warm-amber' : 'text-brand-ink'}`}>
           {entry.name}
         </div>
         {entry.hp && (
@@ -262,14 +262,14 @@ function CombatantRow({
           <button
             onClick={() => onRoll(entry.tokenId)}
             title="Roll initiative for this token"
-            className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-moss-green transition-colors"
+            className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
           >
             <Dices className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => onRemove(entry.tokenId)}
             title="Remove from initiative"
-            className="p-1 rounded hover:bg-red-100 text-stone-gray hover:text-red-600 transition-colors"
+            className="p-1 rounded hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -433,8 +433,8 @@ export default function InitiativeTracker() {
           className="w-full flex items-center justify-between px-4 py-3 bg-parchment/40 hover:bg-parchment/60 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <Swords className="w-4 h-4 text-moss-green" />
-            <span className="font-semibold text-moss-green text-sm">Initiative Tracker</span>
+            <Swords className="w-4 h-4 text-brand-ink" />
+            <span className="font-semibold text-brand-ink text-sm">Initiative Tracker</span>
             {combatState.active && (
               <span className="text-xs font-bold text-warm-amber bg-warm-amber/10 border border-warm-amber/20 rounded px-1.5 py-0.5">
                 Round {combatState.round}
@@ -503,7 +503,7 @@ export default function InitiativeTracker() {
                 {mapId && (
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="w-full flex items-center justify-center gap-2 py-1.5 px-3 text-xs font-medium text-moss-green border border-dashed border-moss-green/30 rounded-lg hover:bg-moss-green/5 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-1.5 px-3 text-xs font-medium text-brand-ink border border-dashed border-moss-green/30 rounded-lg hover:bg-moss-green/5 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Add Combatant
@@ -532,7 +532,7 @@ export default function InitiativeTracker() {
                         </button>
                         <button
                           onClick={handleEnd}
-                          className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                          className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold border border-danger/30 text-danger-ink rounded-lg hover:bg-danger/10 transition-colors"
                           title="End combat"
                         >
                           <XCircle className="w-3.5 h-3.5" />

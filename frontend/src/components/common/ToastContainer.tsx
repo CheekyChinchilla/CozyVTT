@@ -63,23 +63,23 @@ function getToastAppearance(type: ToastItem['type']) {
   switch (type) {
     case 'success':
       return {
-        icon: <CheckCircle className="w-5 h-5 text-green-600" />,
-        styles: 'bg-green-50 border-green-200 text-green-800',
+        icon: <CheckCircle className="w-5 h-5 text-success-ink" />,
+        styles: 'bg-success/10 border-success/30 text-success-ink',
       };
     case 'error':
       return {
-        icon: <AlertCircle className="w-5 h-5 text-red-600" />,
-        styles: 'bg-red-50 border-red-200 text-red-800',
+        icon: <AlertCircle className="w-5 h-5 text-danger-ink" />,
+        styles: 'bg-danger/10 border-danger/30 text-danger-ink',
       };
     case 'warning':
       return {
-        icon: <AlertTriangle className="w-5 h-5 text-yellow-600" />,
-        styles: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+        icon: <AlertTriangle className="w-5 h-5 text-warning-ink" />,
+        styles: 'bg-warning/10 border-warning/30 text-warning-ink',
       };
     default:
       return {
-        icon: <Info className="w-5 h-5 text-blue-600" />,
-        styles: 'bg-blue-50 border-blue-200 text-blue-800',
+        icon: <Info className="w-5 h-5 text-info-ink" />,
+        styles: 'bg-info/10 border-info/30 text-info-ink',
       };
   }
 }

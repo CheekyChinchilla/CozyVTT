@@ -356,8 +356,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
               <div className="flex items-center gap-2">
-                <Swords className="w-5 h-5 text-moss-green" />
-                <h2 className="text-lg font-bold text-moss-green">Token Manager</h2>
+                <Swords className="w-5 h-5 text-brand-ink" />
+                <h2 className="text-lg font-bold text-brand-ink">Token Manager</h2>
               </div>
               <Button onClick={onClose} variant="secondary" className="p-1.5" title="Close">
                 <X className="w-4 h-4" />
@@ -368,7 +368,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               {/* Error */}
               {error && (
-                <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-700 text-sm rounded-cozy">
+                <div className="px-4 py-3 bg-danger/10 border border-danger/20 text-danger-ink text-sm rounded-cozy">
                   {error}
                 </div>
               )}
@@ -395,7 +395,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         onClick={() => setTokenType(type)}
                         className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                           tokenType === type
-                            ? 'border-moss-green bg-moss-green/10 text-moss-green font-semibold'
+                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
                             : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                         }`}
                       >
@@ -427,7 +427,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading}
                       title="Upload a new token image"
-                      className="flex items-center gap-1 text-xs text-moss-green hover:text-moss-green/80 disabled:opacity-40 transition-colors"
+                      className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
                     >
                       {isUploading ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -438,7 +438,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                     </button>
                   </div>
                   {uploadError && (
-                    <p className="text-[11px] text-red-600 mb-1.5">{uploadError}</p>
+                    <p className="text-[11px] text-danger-ink mb-1.5">{uploadError}</p>
                   )}
                   {isLoadingAssets ? (
                     <div className="flex items-center gap-2 text-stone-gray text-sm py-4">
@@ -462,12 +462,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         title="Use colored-letter placeholder"
                         className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
                           !selectedAsset
-                            ? 'border-moss-green ring-2 ring-moss-green/30 bg-stone-700/60'
-                            : 'border-transparent hover:border-moss-green/40 bg-stone-700/40'
+                            ? 'border-moss-green ring-2 ring-moss-green/30 bg-ink-muted/25'
+                            : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
                         }`}
                       >
-                        <span className="text-lg font-bold text-stone-400">?</span>
-                        <span className="absolute bottom-0.5 text-[8px] text-stone-500">None</span>
+                        <span className="text-lg font-bold text-ink-secondary">?</span>
+                        <span className="absolute bottom-0.5 text-[8px] text-ink-muted">None</span>
                       </button>
                       {assets.map((asset) => {
                         const isSelected = selectedAsset?.id === asset.id;
@@ -489,7 +489,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             />
                             {isSelected && (
                               <div className="absolute inset-0 bg-moss-green/25 flex items-center justify-center">
-                                <Check className="w-4 h-4 text-moss-green drop-shadow" />
+                                <Check className="w-4 h-4 text-brand-ink drop-shadow" />
                               </div>
                             )}
                           </button>
@@ -530,7 +530,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         title={desc}
                         className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                           displayMode === mode
-                            ? 'border-moss-green bg-moss-green/10 text-moss-green font-semibold'
+                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
                             : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                         }`}
                       >
@@ -565,8 +565,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                               disposition === d
                                 ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                                : color === 'amber' ? 'border-amber-500 bg-amber-500/10 text-amber-700 font-semibold'
-                                :                    'border-red-500 bg-red-500/10 text-red-700 font-semibold'
+                                : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
+                                :                    'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
                                 : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                             }`}
                           >
@@ -680,7 +680,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                           onClick={() => setTokenSize(opt.value)}
                           className={`flex-1 py-1.5 text-center text-xs rounded-cozy border transition-all ${
                             isSelected
-                              ? 'border-moss-green bg-moss-green/10 text-moss-green font-semibold'
+                              ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
                               : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                           }`}
                         >
@@ -703,7 +703,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         onClick={() => setTokenLayer(TokenLayer.TOKEN)}
                         className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                           tokenLayer === TokenLayer.TOKEN
-                            ? 'border-moss-green bg-moss-green/10 text-moss-green font-semibold'
+                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
                             : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                         }`}
                       >
@@ -745,7 +745,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                 )}
 
                 {!currentMap && (
-                  <p className="text-xs text-amber-700 mb-2">
+                  <p className="text-xs text-warning-ink mb-2">
                     No map is currently loaded — load a map first.
                   </p>
                 )}
@@ -819,7 +819,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                   className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                                     isSpirit
                                       ? 'bg-spirit-purple/15 text-spirit-purple'
-                                      : 'bg-moss-green/10 text-moss-green'
+                                      : 'bg-moss-green/10 text-brand-ink'
                                   }`}
                                 >
                                   {isSpirit ? 'Spirit' : 'Material'}
@@ -849,7 +849,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                 {isTogglingVis ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
                                 ) : token.visible ? (
-                                  <Eye className="w-3.5 h-3.5 text-moss-green" />
+                                  <Eye className="w-3.5 h-3.5 text-brand-ink" />
                                 ) : (
                                   <EyeOff className="w-3.5 h-3.5 text-stone-gray/40" />
                                 )}
@@ -894,13 +894,13 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                               <button
                                 onClick={() => handleDelete(token)}
                                 disabled={isDeleting}
-                                className="p-1.5 rounded hover:bg-red-500/10 transition-colors"
+                                className="p-1.5 rounded hover:bg-danger/10 transition-colors"
                                 title="Remove from map"
                               >
                                 {isDeleting ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
                                 ) : (
-                                  <Trash2 className="w-3.5 h-3.5 text-red-400/60 hover:text-red-500 transition-colors" />
+                                  <Trash2 className="w-3.5 h-3.5 text-danger-ink/60 hover:text-danger-ink transition-colors" />
                                 )}
                               </button>
                             </div>

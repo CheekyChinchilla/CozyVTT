@@ -67,13 +67,13 @@ export default function VibeTracker() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sun className="w-4 h-4 text-warm-amber" />
-            <h3 className="text-sm font-semibold text-moss-green">Vibe Tracker</h3>
+            <h3 className="text-sm font-semibold text-brand-ink">Vibe Tracker</h3>
           </div>
 
           {userRole === 'DM' && (
             <button
               onClick={() => setIsConfigureOpen(true)}
-              className="p-1.5 rounded-lg hover:bg-moss-green/10 transition-colors text-stone-gray hover:text-moss-green"
+              className="p-1.5 rounded-lg hover:bg-moss-green/10 transition-colors text-stone-gray hover:text-brand-ink"
               title="Configure periods"
             >
               <Settings className="w-3.5 h-3.5" />
@@ -117,7 +117,7 @@ export default function VibeTracker() {
                     flex items-center gap-2 px-3 py-2 rounded-lg border text-left
                     transition-all duration-200 text-sm
                     ${isActive
-                      ? 'border-moss-green bg-moss-green/10 text-moss-green font-semibold ring-1 ring-moss-green/30'
+                      ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold ring-1 ring-moss-green/30'
                       : 'border-moss-green/20 bg-parchment/40 text-stone-gray hover:bg-parchment/80 hover:border-moss-green/40'
                     }
                     disabled:opacity-50 disabled:cursor-not-allowed

@@ -160,7 +160,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"
-            className="p-1 rounded hover:bg-moss-green/10 text-moss-green transition-colors"
+            className="p-1 rounded hover:bg-moss-green/10 text-brand-ink transition-colors"
           >
             <Edit2 className="w-3 h-3" />
           </button>
@@ -194,7 +194,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleDelete}
           disabled={isDeleting}
           title="Remove from map"
-          className="p-1 rounded hover:bg-red-500/10 text-red-500/60 hover:text-red-600 transition-colors disabled:opacity-40"
+          className="p-1 rounded hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
         >
           {isDeleting ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -277,7 +277,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-moss-green/5 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-moss-green">Token Roster</span>
+          <span className="text-sm font-semibold text-brand-ink">Token Roster</span>
           <span className="text-xs text-stone-gray/60">({tokens.length})</span>
         </div>
         {isCollapsed ? (

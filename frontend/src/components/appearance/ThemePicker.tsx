@@ -8,7 +8,7 @@
  * User.preferences).
  */
 
-import { Palette, Settings } from 'lucide-react';
+import { Palette, Settings, AlertTriangle, Check } from 'lucide-react';
 import {
   PRESET_THEMES,
   FONT_OPTIONS,
@@ -18,6 +18,7 @@ import {
   hexToRgbChannels,
   type FontOption,
 } from '../../themes';
+import { contrastRatioChannels, AA_TEXT } from '../../utils/color';
 
 export interface ThemePickerColors {
   primary: string;
@@ -95,7 +96,7 @@ export default function ThemePicker({
       <section className="glass-panel p-6 space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
           <Palette className="w-4 h-4 text-warm-amber" />
-          <h3 className="font-semibold text-moss-green text-sm">Color Theme</h3>
+          <h3 className="font-semibold text-brand-ink text-sm">Color Theme</h3>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -215,6 +216,7 @@ export default function ThemePicker({
                 </div>
               </div>
             ))}
+            <ContrastReport colors={customColors} />
           </div>
         )}
       </section>
@@ -223,7 +225,7 @@ export default function ThemePicker({
       <section className="glass-panel p-6 space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
           <Settings className="w-4 h-4 text-warm-amber" />
-          <h3 className="font-semibold text-moss-green text-sm">Font Family</h3>
+          <h3 className="font-semibold text-brand-ink text-sm">Font Family</h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -260,5 +262,59 @@ export default function ThemePicker({
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * Live readability check for custom colors.
+ *
+ * Preset themes are verified by themes.contrast.test.ts, but custom colors are
+ * whatever the user picks — this gives them the same feedback before they save
+ * a combination nobody can read. Uses the same contrast helper as the test, so
+ * the two can never disagree.
+ */
+function ContrastReport({ colors }: { colors: ThemePickerColors }) {
+  const derived = buildCustomThemeColors({
+    primary: hexToRgbChannels(colors.primary),
+    accent: hexToRgbChannels(colors.accent),
+    background: hexToRgbChannels(colors.background),
+    text: hexToRgbChannels(colors.text),
+  });
+
+  const checks = [
+    { label: 'Body text on background', fg: derived.ink, bg: derived.bgBase },
+    { label: 'Muted text on background', fg: derived.inkMuted, bg: derived.bgBase },
+    { label: 'Primary text on background', fg: derived.brand, bg: derived.bgBase },
+    { label: 'Button label on accent', fg: derived.accentText, bg: derived.accent },
+  ].map((check) => ({ ...check, ratio: contrastRatioChannels(check.fg, check.bg) }));
+
+  const failing = checks.filter((c) => c.ratio < AA_TEXT);
+
+  return (
+    <div className="col-span-2 sm:col-span-4 pt-3 border-t border-warm-gray/20">
+      <p className="text-xs font-medium text-charcoal mb-2">Readability</p>
+      <ul className="space-y-1">
+        {checks.map((check) => (
+          <li key={check.label} className="flex items-center gap-2 text-[11px]">
+            {check.ratio >= AA_TEXT ? (
+              <Check className="w-3 h-3 text-success-ink flex-shrink-0" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="w-3 h-3 text-warning-ink flex-shrink-0" aria-hidden="true" />
+            )}
+            <span className="text-warm-gray">{check.label}</span>
+            <span className={`font-mono ml-auto ${check.ratio >= AA_TEXT ? 'text-warm-gray' : 'text-warning-ink'}`}>
+              {check.ratio.toFixed(1)}:1
+            </span>
+          </li>
+        ))}
+      </ul>
+      {failing.length > 0 && (
+        <p className="text-[11px] text-warning-ink mt-2">
+          {failing.length === 1 ? 'One combination falls' : `${failing.length} combinations fall`} below the
+          4.5:1 minimum for readable text. CozyVTT adjusts these automatically where it can, but picking a
+          darker text color or a lighter background gives a better result.
+        </p>
+      )}
+    </div>
   );
 }

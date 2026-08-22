@@ -34,7 +34,7 @@ export default function EmptyState({ title, description, action, icon, className
             <img src={mascotUrl} alt="" className="w-12 h-12 object-contain animate-pulse-soft" />
           )}
         </div>
-        <h3 className="text-xl font-semibold text-moss-green mb-2">{title}</h3>
+        <h3 className="text-xl font-semibold text-brand-ink mb-2">{title}</h3>
         {description && <p className="text-warm-gray mb-6">{description}</p>}
         {action}
       </div>

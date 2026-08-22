@@ -25,7 +25,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
       }`}
       onClick={showToggle && onToggle ? onToggle : undefined}
     >
-      <h3 className="text-lg font-semibold text-moss-green">{title}</h3>
+      <h3 className="text-lg font-semibold text-brand-ink">{title}</h3>
       {showToggle && onToggle && (
         <button
           type="button"
@@ -33,9 +33,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
           aria-label={isCollapsed ? 'Expand section' : 'Collapse section'}
         >
           {isCollapsed ? (
-            <ChevronDown className="w-5 h-5 text-moss-green" />
+            <ChevronDown className="w-5 h-5 text-brand-ink" />
           ) : (
-            <ChevronUp className="w-5 h-5 text-moss-green" />
+            <ChevronUp className="w-5 h-5 text-brand-ink" />
           )}
         </button>
       )}

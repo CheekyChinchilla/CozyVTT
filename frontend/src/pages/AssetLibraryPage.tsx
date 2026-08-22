@@ -180,7 +180,7 @@ export default function AssetLibraryPage() {
                 <span className="hidden sm:inline">Dashboard</span>
               </Button>
               <div>
-                <h1 className="text-3xl font-bold text-moss-green mb-2">Asset Library</h1>
+                <h1 className="text-3xl font-bold text-brand-ink mb-2">Asset Library</h1>
                 <p className="text-stone-gray">Manage your maps, tokens, audio, and avatars</p>
               </div>
             </div>
@@ -353,9 +353,9 @@ export default function AssetLibraryPage() {
             ))}
           </div>
         ) : toast?.type === 'error' && filteredAssets.length === 0 ? (
-          <div className="bg-parchment/50 border border-red-500/20 rounded-xl p-12 text-center">
-            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-            <h2 className="text-lg font-semibold text-moss-green mb-2">Failed to load assets</h2>
+          <div className="bg-parchment/50 border border-danger/20 rounded-xl p-12 text-center">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-danger-ink" />
+            <h2 className="text-lg font-semibold text-brand-ink mb-2">Failed to load assets</h2>
             <p className="text-stone-gray mb-6 text-sm">Check your connection and try again.</p>
             <Button onClick={() => assetsQuery.refetch()}>
               Try Again
@@ -364,7 +364,7 @@ export default function AssetLibraryPage() {
         ) : filteredAssets.length === 0 ? (
           <div className="bg-parchment/50 border border-moss-green/20 rounded-xl p-12 text-center">
             <FolderOpen className="w-16 h-16 mx-auto mb-4 text-stone-gray/30" />
-            <h2 className="text-xl font-semibold text-moss-green mb-2">No assets found</h2>
+            <h2 className="text-xl font-semibold text-brand-ink mb-2">No assets found</h2>
             <p className="text-stone-gray mb-6">
               {searchQuery || selectedTags.length > 0
                 ? 'Try adjusting your search or filters'

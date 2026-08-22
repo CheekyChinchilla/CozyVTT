@@ -26,7 +26,7 @@ export default function ProtectedRoute({
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
         <div className="glass-panel p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-moss-green mx-auto mb-4"></div>
-          <p className="text-moss-green">Loading...</p>
+          <p className="text-brand-ink">Loading...</p>
         </div>
       </div>
     );
@@ -65,7 +65,7 @@ export default function ProtectedRoute({
               </svg>
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-moss-green font-heading">
+          <h1 className="text-2xl font-bold text-brand-ink font-heading">
             Access Denied
           </h1>
           <p className="text-stone-gray">

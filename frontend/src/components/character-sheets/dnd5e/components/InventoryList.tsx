@@ -71,7 +71,7 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
     <div className="flex items-center justify-between p-2 hover:bg-stone-50 rounded border-b border-stone-100 last:border-0">
       <div className="flex-1">
         <div className="flex items-center space-x-2">
-          <Package className="w-4 h-4 text-stone-400" />
+          <Package className="w-4 h-4 text-stone-500" />
           <div>
             <div className="flex items-center flex-wrap gap-2">
               <span className="font-medium text-stone-800">{item.name}</span>
@@ -100,11 +100,11 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
       </div>
       <div className="flex items-center space-x-4 text-sm text-stone-600">
         <div className="text-right">
-          <div className="text-xs text-stone-400">Qty</div>
+          <div className="text-xs text-stone-500">Qty</div>
           <div>{item.quantity}</div>
         </div>
         <div className="text-right">
-          <div className="text-xs text-stone-400">Wt</div>
+          <div className="text-xs text-stone-500">Wt</div>
           <div>{item.weight} lb</div>
         </div>
       </div>

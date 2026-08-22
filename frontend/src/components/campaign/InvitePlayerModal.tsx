@@ -96,7 +96,7 @@ export default function InvitePlayerModal({
         {/* User list */}
         {loading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="w-7 h-7 text-brand animate-spin" />
+            <Loader2 className="w-7 h-7 text-brand-ink animate-spin" />
           </div>
         ) : users.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">

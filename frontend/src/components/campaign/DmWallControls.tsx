@@ -266,7 +266,7 @@ export default function DmWallControls({
               >
                 Merge point
               </button>
-              <span className="text-[10px] text-stone-500 px-1">Remove this point and join the two segments into one straight wall</span>
+              <span className="text-[10px] text-stone-300 px-1">Remove this point and join the two segments into one straight wall</span>
             </div>
           )}
 

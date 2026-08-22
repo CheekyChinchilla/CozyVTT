@@ -112,7 +112,7 @@ export default function SessionSidebar() {
                 'text-xs font-medium transition-colors duration-150',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand',
                 active
-                  ? 'text-brand bg-surface-light/70 border-b-2 border-brand -mb-px'
+                  ? 'text-brand-ink bg-surface-light/70 border-b-2 border-brand -mb-px'
                   : 'text-ink-muted hover:text-ink hover:bg-surface/60'
               )}
             >

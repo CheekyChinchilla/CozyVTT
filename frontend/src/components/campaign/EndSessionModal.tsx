@@ -98,12 +98,12 @@ export default function EndSessionModal({
                 checked={saveState}
                 onChange={(e) => setSaveState(e.target.checked)}
                 disabled={isSubmitting}
-                className="w-4 h-4 rounded border-moss-green/30 text-moss-green focus:ring-moss-green/50 cursor-pointer"
+                className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50 cursor-pointer"
               />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <Save className="w-3.5 h-3.5 text-moss-green" />
+                <Save className="w-3.5 h-3.5 text-brand-ink" />
                 <span className="text-sm font-medium text-stone-gray">Save game state</span>
               </div>
               <p className="text-xs text-warm-gray mt-0.5">

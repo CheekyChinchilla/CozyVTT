@@ -23,20 +23,20 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
 
   // Color scheme based on result type
   const getResultColor = () => {
-    if (isCriticalSuccess) return 'text-green-700 dark:text-green-600';
-    if (isCriticalFail) return 'text-red-600 dark:text-red-400';
+    if (isCriticalSuccess) return 'text-success-ink dark:text-success-ink';
+    if (isCriticalFail) return 'text-danger-ink dark:text-danger-ink';
     return 'text-ink';
   };
 
   const getBorderColor = () => {
-    if (isCriticalSuccess) return 'border-green-500/30';
-    if (isCriticalFail) return 'border-red-500/30';
+    if (isCriticalSuccess) return 'border-success/30';
+    if (isCriticalFail) return 'border-danger/30';
     return 'border-ink-muted/20';
   };
 
   const getBgColor = () => {
-    if (isCriticalSuccess) return 'bg-green-50/50 dark:bg-green-900/20';
-    if (isCriticalFail) return 'bg-red-50/50 dark:bg-red-900/20';
+    if (isCriticalSuccess) return 'bg-success/10 dark:bg-success/20';
+    if (isCriticalFail) return 'bg-danger/10 dark:bg-danger/20';
     return isCurrentUser
       ? 'bg-moss-green/10'
       : 'bg-surface/30';
@@ -100,7 +100,7 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
       {/* Expression and Result */}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-2">
-          <Dices className="w-5 h-5 text-moss-green" />
+          <Dices className="w-5 h-5 text-brand-ink" />
           <span className="text-sm font-mono text-ink/90">
             {expression}
           </span>
@@ -146,8 +146,8 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
                             className={`
                               font-mono text-xs px-1 rounded
                               ${!isKept ? 'line-through opacity-40' : ''}
-                              ${isCrit20 ? 'bg-green-500/20 text-green-800 dark:text-green-500 font-bold' : ''}
-                              ${isCrit1 ? 'bg-red-500/20 text-red-700 dark:text-red-300 font-bold' : ''}
+                              ${isCrit20 ? 'bg-success/20 text-success-ink dark:text-success-ink font-bold' : ''}
+                              ${isCrit1 ? 'bg-danger/20 text-danger-ink dark:text-danger-ink font-bold' : ''}
                             `}
                           >
                             {r}
@@ -184,8 +184,8 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
           transition={{ duration: 0.3, delay: 0.2 }}
           className={`
             mt-2 pt-2 border-t text-center text-sm font-bold
-            ${isCriticalSuccess ? 'text-green-700 dark:text-green-600 border-green-500/20' : ''}
-            ${isCriticalFail ? 'text-red-600 dark:text-red-400 border-red-500/20' : ''}
+            ${isCriticalSuccess ? 'text-success-ink dark:text-success-ink border-success/20' : ''}
+            ${isCriticalFail ? 'text-danger-ink dark:text-danger-ink border-danger/20' : ''}
           `}
         >
           {isCriticalSuccess && '🎉 CRITICAL SUCCESS!'}

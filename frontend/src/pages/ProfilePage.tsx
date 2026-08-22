@@ -180,7 +180,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
       <div className="bg-soft-cream border border-moss-green/30 rounded-xl shadow-2xl w-full max-w-sm">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-moss-green/15">
-          <h3 className="text-base font-semibold text-moss-green">Crop Avatar</h3>
+          <h3 className="text-base font-semibold text-brand-ink">Crop Avatar</h3>
           <p className="text-xs text-warm-gray flex items-center gap-1">
             <Move className="w-3 h-3" /> Drag to reposition
           </p>
@@ -202,7 +202,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
               />
               {!imgLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center bg-moss-green/10">
-                  <Loader2 className="w-8 h-8 text-moss-green animate-spin" />
+                  <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
                 </div>
               )}
             </div>
@@ -260,9 +260,9 @@ function SaveBar({
 }) {
   return (
     <div className="flex items-center gap-3 pt-4 border-t border-moss-green/10 mt-4">
-      {error && <p className="text-xs text-red-600 flex-1">{error}</p>}
+      {error && <p className="text-xs text-danger-ink flex-1">{error}</p>}
       {success && (
-        <p className="text-xs text-moss-green flex items-center gap-1 flex-1">
+        <p className="text-xs text-brand-ink flex items-center gap-1 flex-1">
           <CheckCircle className="w-3.5 h-3.5" /> {success}
         </p>
       )}
@@ -589,13 +589,13 @@ export default function ProfilePage() {
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-4">
           <button
             onClick={() => navigate('/dashboard')}
-            className="p-2 rounded-lg hover:bg-moss-green/10 transition-colors text-moss-green"
+            className="p-2 rounded-lg hover:bg-moss-green/10 transition-colors text-brand-ink"
             aria-label="Back to dashboard"
           >
             <ChevronLeft className="w-5 h-5" aria-hidden="true" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-moss-green font-heading">Profile & Settings</h1>
+            <h1 className="text-2xl font-bold text-brand-ink font-heading">Profile & Settings</h1>
             <p className="text-sm text-warm-gray">Manage your account and preferences</p>
           </div>
         </div>
@@ -606,7 +606,7 @@ export default function ProfilePage() {
         {/* ── Profile Information ── */}
         <section className="glass-panel p-6">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xl font-semibold text-moss-green">Profile Information</h2>
+            <h2 className="text-xl font-semibold text-brand-ink">Profile Information</h2>
             {!editingProfile && (
               <Button onClick={startEditProfile} variant="secondary" className="text-sm py-1.5 px-3">
                 Edit
@@ -629,7 +629,7 @@ export default function ProfilePage() {
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-moss-green/20 flex items-center justify-center border-2 border-moss-green/30">
-                    <User className="w-9 h-9 text-moss-green/60" />
+                    <User className="w-9 h-9 text-brand-ink/60" />
                   </div>
                 )}
                 <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -647,9 +647,9 @@ export default function ProfilePage() {
                 onChange={handleAvatarFileChange}
                 className="hidden"
               />
-              {avatarError && <p className="mt-1 text-xs text-red-600 max-w-[5rem]">{avatarError}</p>}
+              {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-[5rem]">{avatarError}</p>}
               {avatarSuccess && (
-                <p className="mt-1 text-xs text-moss-green flex items-center gap-1">
+                <p className="mt-1 text-xs text-brand-ink flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> {avatarSuccess}
                 </p>
               )}
@@ -673,21 +673,21 @@ export default function ProfilePage() {
                     <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/50</p>
                   </>
                 ) : (
-                  <p className="text-moss-green font-medium">{user?.displayName}</p>
+                  <p className="text-brand-ink font-medium">{user?.displayName}</p>
                 )}
               </div>
 
               {/* Email (read-only) */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Email</label>
-                <p className="text-moss-green">{user?.email}</p>
+                <p className="text-brand-ink">{user?.email}</p>
                 <p className="text-xs text-warm-gray/70">Email cannot be changed.</p>
               </div>
 
               {/* Role (read-only) */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Platform Role</label>
-                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-moss-green/10 text-moss-green border border-moss-green/20">
+                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-moss-green/10 text-brand-ink border border-moss-green/20">
                   {user?.platformRole}
                 </span>
               </div>
@@ -732,7 +732,7 @@ export default function ProfilePage() {
 
         {/* ── Security ── */}
         <section className="glass-panel p-6 space-y-6">
-          <h2 className="text-xl font-semibold text-moss-green">Security</h2>
+          <h2 className="text-xl font-semibold text-brand-ink">Security</h2>
 
           {/* MFA */}
           <div>
@@ -740,13 +740,13 @@ export default function ProfilePage() {
           </div>
 
           <div className="border-t border-moss-green/10 pt-6">
-            <h3 className="text-sm font-semibold text-moss-green mb-4">Change Password</h3>
+            <h3 className="text-sm font-semibold text-brand-ink mb-4">Change Password</h3>
             <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
               {pwError && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{pwError}</div>
+                <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger-ink">{pwError}</div>
               )}
               {pwSuccess && (
-                <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700 flex items-center gap-2">
+                <div className="p-3 rounded-lg bg-success/10 border border-success/30 text-sm text-success-ink flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" /> {pwSuccess}
                 </div>
               )}
@@ -801,12 +801,12 @@ export default function ProfilePage() {
                   type="password"
                   value={pwConfirm}
                   onChange={(e) => setPwConfirm(e.target.value)}
-                  className={`input-cozy w-full ${pwConfirm && pwNew !== pwConfirm ? 'border-red-400' : ''}`}
+                  className={`input-cozy w-full ${pwConfirm && pwNew !== pwConfirm ? 'border-danger/60' : ''}`}
                   placeholder="Repeat new password"
                   autoComplete="new-password"
                 />
                 {pwConfirm && pwNew !== pwConfirm && (
-                  <p className="text-xs text-red-600 mt-0.5">Passwords do not match</p>
+                  <p className="text-xs text-danger-ink mt-0.5">Passwords do not match</p>
                 )}
               </div>
 
@@ -826,7 +826,7 @@ export default function ProfilePage() {
         <section className="glass-panel p-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-moss-green">Appearance</h2>
+              <h2 className="text-xl font-semibold text-brand-ink">Appearance</h2>
               <p className="text-xs text-warm-gray mt-0.5">
                 Pick your theme and font — saved automatically to your account.
               </p>
@@ -834,7 +834,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-2">
               {prefsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-warm-gray" />}
               {prefsSaved && !prefsSaving && (
-                <p className="text-xs text-moss-green flex items-center gap-1">
+                <p className="text-xs text-brand-ink flex items-center gap-1">
                   <CheckCircle className="w-3.5 h-3.5" /> Saved
                 </p>
               )}
@@ -842,7 +842,7 @@ export default function ProfilePage() {
           </div>
 
           {prefsError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+            <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-3 text-sm">
               {prefsError}
             </div>
           )}
@@ -876,13 +876,13 @@ export default function ProfilePage() {
         </section>
 
         {/* ── Danger Zone ── */}
-        <section className="glass-panel p-6 border-2 border-red-200/60">
-          <h2 className="text-xl font-semibold text-red-600 mb-5">Danger Zone</h2>
+        <section className="glass-panel p-6 border-2 border-danger/60">
+          <h2 className="text-xl font-semibold text-danger-ink mb-5">Danger Zone</h2>
           <div className="space-y-4">
             {/* Logout */}
-            <div className="flex items-center justify-between py-3 border-b border-red-100">
+            <div className="flex items-center justify-between py-3 border-b border-danger/30">
               <div>
-                <h3 className="text-sm font-medium text-moss-green">Sign Out</h3>
+                <h3 className="text-sm font-medium text-brand-ink">Sign Out</h3>
                 <p className="text-xs text-warm-gray">End your current session.</p>
               </div>
               <Button onClick={handleLogout} variant="secondary" className="text-sm py-1.5 px-3">
@@ -893,7 +893,7 @@ export default function ProfilePage() {
             {/* Delete account */}
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-medium text-red-700">Delete Account</h3>
+                <h3 className="text-sm font-medium text-danger-ink">Delete Account</h3>
                 <p className="text-xs text-warm-gray">
                   Permanently delete your account and all data. This cannot be undone.
                 </p>
@@ -901,7 +901,7 @@ export default function ProfilePage() {
               {!deleteConfirmOpen && (
                 <button
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="ml-4 flex-shrink-0 text-sm py-1.5 px-3 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors font-medium"
+                  className="ml-4 flex-shrink-0 text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium"
                 >
                   Delete Account
                 </button>
@@ -909,10 +909,10 @@ export default function ProfilePage() {
             </div>
 
             {deleteConfirmOpen && (
-              <form onSubmit={handleDeleteAccount} className="space-y-3 p-4 rounded-lg bg-red-50 border border-red-200">
+              <form onSubmit={handleDeleteAccount} className="space-y-3 p-4 rounded-lg bg-danger/10 border border-danger/30">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-red-800 space-y-1">
+                  <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-danger-ink space-y-1">
                     <p className="font-semibold">This will permanently delete:</p>
                     <ul className="list-disc list-inside text-xs space-y-0.5">
                       <li>Your account and profile</li>
@@ -923,30 +923,30 @@ export default function ProfilePage() {
                 </div>
 
                 {deleteError && (
-                  <p className="text-sm text-red-700 bg-red-100 border border-red-300 rounded p-2">{deleteError}</p>
+                  <p className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded p-2">{deleteError}</p>
                 )}
 
                 <div>
-                  <label className="block text-xs font-medium text-red-800 mb-1">
+                  <label className="block text-xs font-medium text-danger-ink mb-1">
                     Type <strong>DELETE</strong> to confirm
                   </label>
                   <input
                     type="text"
                     value={deleteConfirmText}
                     onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    className="input-cozy w-full border-red-300 focus:ring-red-400"
+                    className="input-cozy w-full border-danger/30 focus:ring-danger"
                     placeholder="DELETE"
                     autoComplete="off"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-red-800 mb-1">Your Password</label>
+                  <label className="block text-xs font-medium text-danger-ink mb-1">Your Password</label>
                   <input
                     type="password"
                     value={deletePassword}
                     onChange={(e) => setDeletePassword(e.target.value)}
-                    className="input-cozy w-full border-red-300 focus:ring-red-400"
+                    className="input-cozy w-full border-danger/30 focus:ring-danger"
                     placeholder="Enter your password"
                     autoComplete="current-password"
                   />
@@ -964,7 +964,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={deleting || deleteConfirmText !== 'DELETE' || !deletePassword}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-danger hover:bg-danger text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {deleting ? 'Deleting...' : 'Delete My Account'}

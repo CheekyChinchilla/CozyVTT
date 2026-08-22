@@ -68,7 +68,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
 
   if (success) {
     return (
-      <div className="mt-4 flex items-center gap-2 text-sm text-moss-green">
+      <div className="mt-4 flex items-center gap-2 text-sm text-brand-ink">
         <CheckCircle className="w-4 h-4" />
         MFA disabled successfully.
       </div>
@@ -78,7 +78,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3 border-t border-moss-green/10 pt-4">
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger-ink">
           {error}
         </div>
       )}
@@ -118,7 +118,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
         <button
           type="submit"
           disabled={submitting || !password || token.length !== 6}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-danger hover:bg-danger text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
           {submitting ? 'Disabling...' : 'Disable MFA'}
@@ -177,14 +177,14 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-stone-gray uppercase tracking-wide">New Backup Codes</p>
-            <button onClick={copyAll} className="flex items-center gap-1 text-xs text-moss-green hover:text-moss-green/80">
+            <button onClick={copyAll} className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80">
               {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? 'Copied!' : 'Copy all'}
             </button>
           </div>
           <div className="grid grid-cols-2 gap-1.5 p-3 rounded-lg bg-parchment/60 border border-moss-green/15">
             {newCodes.map((code, i) => (
-              <code key={i} className="text-xs font-mono text-moss-green text-center py-1 px-1.5 rounded bg-paper/60 border border-moss-green/10">
+              <code key={i} className="text-xs font-mono text-brand-ink text-center py-1 px-1.5 rounded bg-paper/60 border border-moss-green/10">
                 {code.slice(0, 4)}-{code.slice(4)}
               </code>
             ))}
@@ -198,7 +198,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3 border-t border-moss-green/10 pt-4">
       {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+        <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger-ink">{error}</div>
       )}
       <div>
         <label className="block text-xs font-medium text-stone-gray mb-1">Current Password</label>
@@ -249,15 +249,15 @@ export default function MFASection() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {isEnabled ? (
-            <ShieldCheck className="w-5 h-5 text-moss-green" />
+            <ShieldCheck className="w-5 h-5 text-brand-ink" />
           ) : (
             <Shield className="w-5 h-5 text-stone-gray/50" />
           )}
           <div>
-            <h3 className="text-sm font-semibold text-moss-green">Two-Factor Authentication</h3>
+            <h3 className="text-sm font-semibold text-brand-ink">Two-Factor Authentication</h3>
             <p className="text-xs text-warm-gray">
               {isEnabled ? (
-                <span className="text-moss-green font-medium">Enabled</span>
+                <span className="text-brand-ink font-medium">Enabled</span>
               ) : (
                 'Not enabled'
               )}
@@ -291,7 +291,7 @@ export default function MFASection() {
               {!isAdmin && (
                 <button
                   onClick={() => setActiveForm(activeForm === 'disable' ? null : 'disable')}
-                  className="text-sm py-1.5 px-3 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-1.5"
+                  className="text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium flex items-center gap-1.5"
                 >
                   <ShieldOff className="w-3.5 h-3.5" />
                   Disable
@@ -305,7 +305,7 @@ export default function MFASection() {
       {/* Admin MFA notice */}
       {isEnabled && isAdmin && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-moss-green/5 border border-moss-green/15">
-          <ShieldCheck className="w-4 h-4 text-moss-green flex-shrink-0 mt-0.5" />
+          <ShieldCheck className="w-4 h-4 text-brand-ink flex-shrink-0 mt-0.5" />
           <p className="text-xs text-stone-gray">
             MFA is required for admin accounts and cannot be disabled.
           </p>

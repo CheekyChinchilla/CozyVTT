@@ -30,7 +30,7 @@ export const ListDisplay: React.FC<ListDisplayProps> = ({ section }) => {
             {item.checked !== undefined && (
               <div className="flex-shrink-0 mt-0.5">
                 {item.checked ? (
-                  <CheckCircle2 className="w-5 h-5 text-moss-green" />
+                  <CheckCircle2 className="w-5 h-5 text-brand-ink" />
                 ) : (
                   <Circle className="w-5 h-5 text-stone-gray" />
                 )}

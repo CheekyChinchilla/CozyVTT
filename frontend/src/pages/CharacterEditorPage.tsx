@@ -254,7 +254,7 @@ export default function CharacterEditorPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <AlertCircle className="w-12 h-12 text-spirit-red mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-moss-green mb-2">
+          <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Failed to Load Character
           </h2>
           <p className="text-stone-gray mb-6">{error || 'Character not found'}</p>
@@ -272,7 +272,7 @@ export default function CharacterEditorPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <Lock className="w-12 h-12 text-sunset-orange mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-moss-green mb-2">
+          <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Permission Denied
           </h2>
           <p className="text-stone-gray mb-6">{permissionError}</p>
@@ -307,10 +307,10 @@ export default function CharacterEditorPage() {
               className="p-2 rounded-lg hover:bg-moss-green/10 transition-colors"
               aria-label="Back to characters"
             >
-              <ArrowLeft className="w-5 h-5 text-moss-green" />
+              <ArrowLeft className="w-5 h-5 text-brand-ink" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-moss-green">
+              <h1 className="text-2xl font-bold text-brand-ink">
                 Editing: {character.name}
               </h1>
               {campaign && (
@@ -327,7 +327,7 @@ export default function CharacterEditorPage() {
               <span className="text-sm text-sunset-orange">Unsaved changes</span>
             )}
             {saving && (
-              <span className="text-sm text-moss-green flex items-center gap-2">
+              <span className="text-sm text-brand-ink flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Saving...
               </span>

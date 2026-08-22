@@ -444,7 +444,7 @@ CozyVTT theming works in two layers:
 
 - **Default theme** — 16 built-in themes spanning warm, cool, dark, neutral, and vibrant palettes
 - **Default font** — 8 open-source font families (Quicksand + Inter default, plus medieval, elegant, handwritten, etc.)
-- **Custom theme builder** — primary, accent, background, and text colors; complementary shades derived automatically
+- **Custom theme builder** — primary, accent, background, and text colors; complementary shades derived automatically. The picker shows a live **Readability** check with the contrast ratio of each key text/background pair, flagging anything below the 4.5:1 minimum, and CozyVTT adjusts text shades automatically where it can
 - **Custom branding** — logo, mascot, and favicon shown on the login page and across the instance (always system-wide regardless of user theme)
 
 Changes preview live as you configure them.

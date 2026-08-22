@@ -64,10 +64,10 @@ export const AddSectionMenu: React.FC<AddSectionMenuProps> = ({ onSelect, onClos
       >
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 p-2 rounded bg-moss-green/10 group-hover:bg-moss-green/20 transition-colors">
-            <Icon className="w-5 h-5 text-moss-green" />
+            <Icon className="w-5 h-5 text-brand-ink" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-moss-green">{template.name}</div>
+            <div className="font-semibold text-brand-ink">{template.name}</div>
             <div className="text-sm text-stone-gray">{template.description}</div>
           </div>
         </div>

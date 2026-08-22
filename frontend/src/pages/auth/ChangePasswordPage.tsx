@@ -79,9 +79,9 @@ export default function ChangePasswordPage() {
       <main id="main-content" className="glass-panel max-w-md w-full p-8 space-y-6">
         <div className="text-center">
           <div className="flex justify-center mb-3">
-            <KeyRound className="w-10 h-10 text-moss-green/70" aria-hidden="true" />
+            <KeyRound className="w-10 h-10 text-brand-ink/70" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold text-moss-green font-heading">Choose your password</h1>
+          <h1 className="text-2xl font-bold text-brand-ink font-heading">Choose your password</h1>
           <p className="mt-2 text-sm text-warm-gray">
             {user?.displayName ? `Welcome, ${user.displayName}. ` : ''}
             Your account was set up with a temporary password. Pick your own to continue — whoever
@@ -90,16 +90,16 @@ export default function ChangePasswordPage() {
         </div>
 
         {error && (
-          <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div role="alert" className="flex items-start gap-2 bg-danger/10 border border-danger/30 rounded-lg p-3">
+            <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-danger-ink">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* Current (temporary) password */}
           <div>
-            <label htmlFor="current-password" className="block text-sm font-medium text-moss-green mb-1">
+            <label htmlFor="current-password" className="block text-sm font-medium text-brand-ink mb-1">
               Temporary password
             </label>
             <input
@@ -112,19 +112,19 @@ export default function ChangePasswordPage() {
                 setCurrentPassword(e.target.value);
                 setFieldErrors((prev) => ({ ...prev, current: undefined }));
               }}
-              className={`input-cozy w-full ${fieldErrors.current ? 'border-red-400 focus:ring-red-400' : ''}`}
+              className={`input-cozy w-full ${fieldErrors.current ? 'border-danger/60 focus:ring-danger' : ''}`}
               disabled={loading}
               aria-required="true"
               aria-invalid={!!fieldErrors.current}
             />
             {fieldErrors.current && (
-              <p role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.current}</p>
+              <p role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.current}</p>
             )}
           </div>
 
           {/* New password */}
           <div>
-            <label htmlFor="new-password" className="block text-sm font-medium text-moss-green mb-1">
+            <label htmlFor="new-password" className="block text-sm font-medium text-brand-ink mb-1">
               New password
             </label>
             <input
@@ -136,14 +136,14 @@ export default function ChangePasswordPage() {
                 setPassword(e.target.value);
                 setFieldErrors((prev) => ({ ...prev, password: undefined }));
               }}
-              className={`input-cozy w-full ${fieldErrors.password ? 'border-red-400 focus:ring-red-400' : ''}`}
+              className={`input-cozy w-full ${fieldErrors.password ? 'border-danger/60 focus:ring-danger' : ''}`}
               disabled={loading}
               aria-required="true"
               aria-invalid={!!fieldErrors.password}
               aria-describedby="password-requirements"
             />
             {fieldErrors.password && (
-              <p role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+              <p role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
             )}
           </div>
 
@@ -153,7 +153,7 @@ export default function ChangePasswordPage() {
               {PASSWORD_REQUIREMENTS.map((req, i) => (
                 <li
                   key={req.label}
-                  className={`flex items-center gap-2 text-xs ${requirementsMet[i] ? 'text-moss-green' : 'text-warm-gray'}`}
+                  className={`flex items-center gap-2 text-xs ${requirementsMet[i] ? 'text-brand-ink' : 'text-warm-gray'}`}
                 >
                   <span aria-hidden="true">{requirementsMet[i] ? '✓' : '○'}</span>
                   {req.label}
@@ -164,7 +164,7 @@ export default function ChangePasswordPage() {
 
           {/* Confirm */}
           <div>
-            <label htmlFor="confirm-password" className="block text-sm font-medium text-moss-green mb-1">
+            <label htmlFor="confirm-password" className="block text-sm font-medium text-brand-ink mb-1">
               Confirm new password
             </label>
             <input
@@ -176,14 +176,14 @@ export default function ChangePasswordPage() {
                 setConfirmPassword(e.target.value);
                 setFieldErrors((prev) => ({ ...prev, confirm: undefined }));
               }}
-              className={`input-cozy w-full ${fieldErrors.confirm ? 'border-red-400 focus:ring-red-400' : ''}`}
+              className={`input-cozy w-full ${fieldErrors.confirm ? 'border-danger/60 focus:ring-danger' : ''}`}
               disabled={loading}
               aria-required="true"
               aria-invalid={!!fieldErrors.confirm}
               aria-describedby={fieldErrors.confirm ? 'confirm-error' : undefined}
             />
             {fieldErrors.confirm && (
-              <p id="confirm-error" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.confirm}</p>
+              <p id="confirm-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.confirm}</p>
             )}
           </div>
 
@@ -199,7 +199,7 @@ export default function ChangePasswordPage() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-warm-gray hover:text-moss-green transition-colors"
+          className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-warm-gray hover:text-brand-ink transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
           Sign out instead

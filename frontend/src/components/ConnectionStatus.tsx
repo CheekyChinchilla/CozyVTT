@@ -16,7 +16,7 @@ export default function ConnectionStatus() {
   // Don't show anything when fully connected
   if (status === 'connected') {
     return (
-      <div className="flex items-center gap-2 text-sm text-moss-green">
+      <div className="flex items-center gap-2 text-sm text-brand-ink">
         <div className="relative">
           <Wifi className="w-4 h-4" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-moss-green" />
@@ -42,14 +42,14 @@ export default function ConnectionStatus() {
   // Disconnected or error state
   return (
     <div className="flex items-center gap-2">
-      <div className="flex items-center gap-2 text-sm text-red-500">
+      <div className="flex items-center gap-2 text-sm text-danger-ink">
         <div className="relative">
           {status === 'error' ? (
             <AlertCircle className="w-4 h-4" />
           ) : (
             <WifiOff className="w-4 h-4" />
           )}
-          <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+          <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-danger" />
         </div>
         <span className="hidden sm:inline">
           {status === 'error' ? 'Connection Error' : 'Disconnected'}
@@ -59,7 +59,7 @@ export default function ConnectionStatus() {
       {/* Retry button */}
       <button
         onClick={reconnect}
-        className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors"
+        className="text-xs px-2 py-1 rounded bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors"
         title={error || 'Reconnect to server'}
       >
         Retry
@@ -84,7 +84,7 @@ export function ConnectionStatusCompact() {
         return 'bg-warm-amber animate-pulse';
       case 'disconnected':
       case 'error':
-        return 'bg-red-500';
+        return 'bg-danger';
       default:
         return 'bg-stone-gray';
     }

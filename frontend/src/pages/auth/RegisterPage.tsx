@@ -136,10 +136,10 @@ export default function RegisterPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 space-y-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+          <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto">
             <span className="text-3xl">&#9203;</span>
           </div>
-          <h1 className="text-2xl font-bold text-moss-green font-heading">Registration Submitted</h1>
+          <h1 className="text-2xl font-bold text-brand-ink font-heading">Registration Submitted</h1>
           <p className="text-warm-gray text-sm">
             Your account has been created and is <strong>pending admin approval</strong>. You will be able to log in once an administrator approves your account.
           </p>
@@ -156,7 +156,7 @@ export default function RegisterPage() {
       <div className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-moss-green font-heading">
+          <h1 className="text-3xl font-bold text-brand-ink font-heading">
             Create Account
           </h1>
           <p className="mt-2 text-sm text-warm-gray">
@@ -177,7 +177,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="displayName"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Display Name
             </label>
@@ -213,7 +213,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Email
             </label>
@@ -244,7 +244,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Password
             </label>
@@ -287,10 +287,10 @@ export default function RegisterPage() {
                   <span
                     className={`text-xs font-medium ${
                       passwordStrength.color === 'green'
-                        ? 'text-green-600'
+                        ? 'text-success-ink'
                         : passwordStrength.color === 'yellow'
-                        ? 'text-yellow-600'
-                        : 'text-red-600'
+                        ? 'text-warning-ink'
+                        : 'text-danger-ink'
                     }`}
                   >
                     {passwordStrength.label}
@@ -300,10 +300,10 @@ export default function RegisterPage() {
                   <div
                     className={`h-1.5 rounded-full transition-all ${
                       passwordStrength.color === 'green'
-                        ? 'bg-green-600'
+                        ? 'bg-success'
                         : passwordStrength.color === 'yellow'
-                        ? 'bg-yellow-600'
-                        : 'bg-red-600'
+                        ? 'bg-warning'
+                        : 'bg-danger'
                     }`}
                     style={{ width: `${(passwordStrength.score / 10) * 100}%` }}
                   ></div>
@@ -316,7 +316,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="confirmPassword"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Confirm Password
             </label>
@@ -389,7 +389,7 @@ export default function RegisterPage() {
             Already have an account?{' '}
             <Link
               to="/auth/login"
-              className="text-moss-green hover:text-moss-green/80 font-medium transition-colors"
+              className="text-brand-ink hover:text-brand-ink/80 font-medium transition-colors"
             >
               Sign in
             </Link>

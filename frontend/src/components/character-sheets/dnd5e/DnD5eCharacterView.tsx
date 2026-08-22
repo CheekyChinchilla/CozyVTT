@@ -460,7 +460,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
         <SpellcastingBlock spellcasting={data.spellcasting} />
       ) : (
         <div className="text-center py-12 text-stone-500">
-          <Sparkles className="w-12 h-12 mx-auto mb-3 text-stone-400" />
+          <Sparkles className="w-12 h-12 mx-auto mb-3 text-stone-500" />
           <p>This character is not a spellcaster</p>
         </div>
       )}

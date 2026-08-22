@@ -90,8 +90,8 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
         {success ? (
           /* Success state */
           <div className="text-center space-y-4">
-            <CheckCircle className="w-14 h-14 text-moss-green mx-auto" aria-hidden="true" />
-            <h1 className="text-2xl font-bold text-moss-green font-heading">
+            <CheckCircle className="w-14 h-14 text-brand-ink mx-auto" aria-hidden="true" />
+            <h1 className="text-2xl font-bold text-brand-ink font-heading">
               {invite ? "You're all set!" : 'Password updated!'}
             </h1>
             <p className="text-sm text-warm-gray">
@@ -106,13 +106,13 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
         ) : !token ? (
           /* Invalid / missing token */
           <div className="text-center space-y-4">
-            <AlertCircle className="w-14 h-14 text-red-500 mx-auto" aria-hidden="true" />
-            <h1 className="text-2xl font-bold text-moss-green font-heading">Invalid link</h1>
+            <AlertCircle className="w-14 h-14 text-danger-ink mx-auto" aria-hidden="true" />
+            <h1 className="text-2xl font-bold text-brand-ink font-heading">Invalid link</h1>
             <p className="text-sm text-warm-gray">{error}</p>
             {!invite && (
               <Link
                 to="/auth/forgot-password"
-                className="inline-flex items-center gap-1.5 text-sm text-moss-green hover:text-moss-green/80 font-medium transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm text-brand-ink hover:text-brand-ink/80 font-medium transition-colors"
               >
                 Request a new reset link
               </Link>
@@ -123,9 +123,9 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
           <>
             <div className="text-center">
               <div className="flex justify-center mb-3">
-                <KeyRound className="w-10 h-10 text-moss-green/70" aria-hidden="true" />
+                <KeyRound className="w-10 h-10 text-brand-ink/70" aria-hidden="true" />
               </div>
-              <h1 className="text-2xl font-bold text-moss-green font-heading">
+              <h1 className="text-2xl font-bold text-brand-ink font-heading">
                 {invite ? 'Welcome to CozyVTT' : 'Set new password'}
               </h1>
               <p className="mt-2 text-sm text-warm-gray">
@@ -136,16 +136,16 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
             </div>
 
             {error && (
-              <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-700">{error}</p>
+              <div role="alert" className="flex items-start gap-2 bg-danger/10 border border-danger/30 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-danger-ink">{error}</p>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               {/* New password */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-moss-green mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-brand-ink mb-1">
                   New password
                 </label>
                 <input
@@ -158,14 +158,14 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
                     setPassword(e.target.value);
                     setFieldErrors((prev) => ({ ...prev, password: undefined }));
                   }}
-                  className={`input-cozy w-full ${fieldErrors.password ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  className={`input-cozy w-full ${fieldErrors.password ? 'border-danger/60 focus:ring-danger' : ''}`}
                   disabled={loading}
                   aria-required="true"
                   aria-invalid={!!fieldErrors.password}
                   aria-describedby="password-requirements"
                 />
                 {fieldErrors.password && (
-                  <p role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+                  <p role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
                 )}
               </div>
 
@@ -173,7 +173,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
               {password.length > 0 && (
                 <ul id="password-requirements" className="space-y-1" aria-label="Password requirements">
                   {PASSWORD_REQUIREMENTS.map((req, i) => (
-                    <li key={i} className={`flex items-center gap-2 text-xs ${requirementsMet[i] ? 'text-moss-green' : 'text-warm-gray'}`}>
+                    <li key={i} className={`flex items-center gap-2 text-xs ${requirementsMet[i] ? 'text-brand-ink' : 'text-warm-gray'}`}>
                       <span aria-hidden="true">{requirementsMet[i] ? '✓' : '○'}</span>
                       {req.label}
                     </li>
@@ -183,7 +183,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
 
               {/* Confirm password */}
               <div>
-                <label htmlFor="confirm-password" className="block text-sm font-medium text-moss-green mb-1">
+                <label htmlFor="confirm-password" className="block text-sm font-medium text-brand-ink mb-1">
                   Confirm new password
                 </label>
                 <input
@@ -195,14 +195,14 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
                     setConfirmPassword(e.target.value);
                     setFieldErrors((prev) => ({ ...prev, confirm: undefined }));
                   }}
-                  className={`input-cozy w-full ${fieldErrors.confirm ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  className={`input-cozy w-full ${fieldErrors.confirm ? 'border-danger/60 focus:ring-danger' : ''}`}
                   disabled={loading}
                   aria-required="true"
                   aria-invalid={!!fieldErrors.confirm}
                   aria-describedby={fieldErrors.confirm ? 'confirm-error' : undefined}
                 />
                 {fieldErrors.confirm && (
-                  <p id="confirm-error" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.confirm}</p>
+                  <p id="confirm-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.confirm}</p>
                 )}
               </div>
 
@@ -228,7 +228,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
             <div className="text-center">
               <Link
                 to="/auth/login"
-                className="inline-flex items-center gap-1.5 text-sm text-moss-green hover:text-moss-green/80 transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm text-brand-ink hover:text-brand-ink/80 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                 Back to Sign In

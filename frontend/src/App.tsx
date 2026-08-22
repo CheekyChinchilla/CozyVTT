@@ -46,7 +46,7 @@ function PageLoader() {
       aria-live="polite"
       aria-label="Loading page"
     >
-      <Loader2 className="w-8 h-8 text-moss-green animate-spin" aria-hidden="true" />
+      <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
     </div>
   );
 }
@@ -212,7 +212,7 @@ function WelcomePage() {
           <MascotImage className="w-16 h-16 animate-pulse-soft" />
         </div>
         <div>
-          <h1 className="text-4xl font-bold text-moss-green font-heading text-shadow-soft">
+          <h1 className="text-4xl font-bold text-brand-ink font-heading text-shadow-soft">
             CozyVTT
           </h1>
           <p className="mt-2 text-warm-gray">

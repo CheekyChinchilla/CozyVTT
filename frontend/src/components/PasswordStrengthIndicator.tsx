@@ -30,10 +30,10 @@ export default function PasswordStrengthIndicator({
         <span
           className={`text-xs font-medium ${
             strength.color === 'green'
-              ? 'text-green-600'
+              ? 'text-success-ink'
               : strength.color === 'yellow'
-              ? 'text-yellow-600'
-              : 'text-red-600'
+              ? 'text-warning-ink'
+              : 'text-danger-ink'
           }`}
         >
           {strength.label}
@@ -43,10 +43,10 @@ export default function PasswordStrengthIndicator({
         <div
           className={`h-1.5 rounded-full transition-all ${
             strength.color === 'green'
-              ? 'bg-green-600'
+              ? 'bg-success'
               : strength.color === 'yellow'
-              ? 'bg-yellow-600'
-              : 'bg-red-600'
+              ? 'bg-warning'
+              : 'bg-danger'
           }`}
           style={{ width: `${(strength.score / 10) * 100}%` }}
         ></div>

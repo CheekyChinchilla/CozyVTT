@@ -172,6 +172,39 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 
 The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.
 
+### Theming
+
+Every color in the themed UI comes from a CSS variable, so switching themes repaints the app without
+re-rendering anything. Tailwind maps each token with `rgb(var(--color-x) / <alpha-value>)`
+([tailwind.config.js](../frontend/tailwind.config.js)), which is why opacity modifiers such as
+`bg-danger/10` still follow the theme.
+
+| Group | Tokens | Use for |
+|---|---|---|
+| Brand / accent | `brand`, `brand-dark`, `accent`, `accent-hover`, `accent-text` | Fills: buttons, borders, highlights |
+| Text | `ink`, `ink-secondary`, `ink-muted` | Body, secondary and muted text |
+| Surfaces | `canvas`, `surface`, `surface-light`, `surface-dark`, `paper` | Page and panel backgrounds |
+| **Ink variants** | `brand-ink`, `accent-ink`, `spirit-ink`, `danger-ink`, `success-ink`, `warning-ink`, `info-ink` | **Text** in that color |
+| States | `danger`, `success`, `warning`, `info`, `spirit` | Status fills, borders, tints |
+
+**Two rules keep themes readable:**
+
+1. **Use `-ink` when the color is text.** `accent` is a fill — as text it measured as low as 1.84:1.
+   The `-ink` variants are derived per theme by `deriveReadableTokens`
+   ([themes.ts](../frontend/src/themes.ts)) via `ensureReadable`
+   ([utils/color.ts](../frontend/src/utils/color.ts)), which walks the color's lightness until it
+   clears WCAG AA against that theme's surfaces. Authored values that already pass are left alone.
+   Custom themes get the same treatment, so a user-picked palette cannot produce unreadable text.
+2. **Never use a raw Tailwind palette color on a themed surface.** `bg-red-50` stays pale pink on a
+   dark theme. Use the state tokens, or the `.alert-*` / `.badge-*` classes in
+   [index.css](../frontend/src/index.css).
+
+Both rules are enforced by tests rather than review:
+`utils/__tests__/themes.contrast.test.ts` checks every preset theme against every text/background
+pair the UI renders, and `utils/__tests__/themeTokens.test.ts` fails if raw palette colors appear
+outside the two exempt areas (character sheets, which are deliberately styled as light "paper" cards,
+and the dark DM map overlays).
+
 ### Data Flow (Campaign Page)
 
 ```mermaid

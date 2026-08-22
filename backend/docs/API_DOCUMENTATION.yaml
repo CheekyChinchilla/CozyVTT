@@ -40,7 +40,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     See the WebSocket section at the bottom of this document for the full event reference.
 
-  version: 1.1.1
+  version: 1.1.2
   contact:
     name: CozyVTT
     url: https://cozyvtt.com

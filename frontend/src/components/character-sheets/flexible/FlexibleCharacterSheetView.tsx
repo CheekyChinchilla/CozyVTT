@@ -78,11 +78,11 @@ export const FlexibleCharacterSheetView: React.FC<FlexibleCharacterSheetViewProp
             />
           ) : (
             <div className="p-2 rounded-lg bg-moss-green/10">
-              <User className="w-6 h-6 text-moss-green" />
+              <User className="w-6 h-6 text-brand-ink" />
             </div>
           )}
           <div>
-            <h2 className="text-2xl font-bold text-moss-green">{character.name}</h2>
+            <h2 className="text-2xl font-bold text-brand-ink">{character.name}</h2>
             <p className="text-sm text-stone-gray">Flexible Character Sheet</p>
           </div>
         </div>

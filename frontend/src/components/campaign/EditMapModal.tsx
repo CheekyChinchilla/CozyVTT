@@ -73,14 +73,14 @@ function AssetPicker({
       <div className="flex items-center justify-between">
         <label className="block text-sm font-medium text-stone-gray">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-danger-ink ml-1">*</span>}
         </label>
         <div className="flex gap-2">
           {selectedAssetId && (
             <button
               type="button"
               onClick={() => onSelect(null)}
-              className="text-xs text-red-500 hover:text-red-700"
+              className="text-xs text-danger-ink hover:text-danger-ink"
             >
               Clear
             </button>
@@ -104,10 +104,10 @@ function AssetPicker({
             className="w-12 h-12 object-cover rounded"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <span className="text-sm text-moss-green font-medium truncate flex-1">
+          <span className="text-sm text-brand-ink font-medium truncate flex-1">
             {selectedAsset?.name ?? 'Current image'}
           </span>
-          <Check className="w-4 h-4 text-moss-green flex-shrink-0" />
+          <Check className="w-4 h-4 text-brand-ink flex-shrink-0" />
         </div>
       )}
 
@@ -133,7 +133,7 @@ function AssetPicker({
 
               {loading ? (
                 <div className="flex justify-center py-4">
-                  <Loader2 className="w-6 h-6 text-moss-green animate-spin" />
+                  <Loader2 className="w-6 h-6 text-brand-ink animate-spin" />
                 </div>
               ) : filtered.length === 0 ? (
                 <p className="text-center text-sm text-stone-gray/60 py-4">
@@ -180,7 +180,7 @@ function AssetPicker({
                         />
                         {isSelected && (
                           <div className="absolute inset-0 bg-moss-green/20 flex items-center justify-center">
-                            <Check className="w-6 h-6 text-moss-green drop-shadow" />
+                            <Check className="w-6 h-6 text-brand-ink drop-shadow" />
                           </div>
                         )}
                         <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5">
@@ -498,7 +498,7 @@ export default function EditMapModal({
             <div className="space-y-6">
               <p className="text-xs text-ink-muted -mt-4 truncate">{map.name}</p>
               {error && (
-                <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-700 text-sm">
+                <div role="alert" className="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm">
                   {error}
                 </div>
               )}
@@ -518,7 +518,7 @@ export default function EditMapModal({
 
               <div>
                 <label className="block text-sm font-medium text-stone-gray mb-1">
-                  Map Name <span className="text-red-500">*</span>
+                  Map Name <span className="text-danger-ink">*</span>
                 </label>
                 <input
                   type="text"
@@ -571,7 +571,7 @@ export default function EditMapModal({
 
                   {/* Grid Settings */}
                   <div className="border border-moss-green/20 rounded-lg p-4 space-y-4 bg-moss-green/5">
-                    <h3 className="text-sm font-medium text-moss-green">Grid Settings</h3>
+                    <h3 className="text-sm font-medium text-brand-ink">Grid Settings</h3>
 
                     {/* Grid Scale */}
                     <div>
@@ -631,7 +631,7 @@ export default function EditMapModal({
                             className="mt-0.5 accent-moss-green"
                           />
                           <div>
-                            <span className="text-sm text-stone-gray group-hover:text-moss-green transition-colors">
+                            <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Flat — every square costs the same
                             </span>
                             <p className="text-xs text-stone-gray/50">D&D 5e default</p>
@@ -647,7 +647,7 @@ export default function EditMapModal({
                             className="mt-0.5 accent-moss-green"
                           />
                           <div>
-                            <span className="text-sm text-stone-gray group-hover:text-moss-green transition-colors">
+                            <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Alternating — 5/10/5/10 ft diagonals
                             </span>
                             <p className="text-xs text-stone-gray/50">Pathfinder 2e default</p>
@@ -669,7 +669,7 @@ export default function EditMapModal({
                       aria-label="Enable dynamic lighting"
                     />
                     <div>
-                      <span className="text-sm text-stone-gray group-hover:text-moss-green transition-colors">
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                         Enable Dynamic Lighting
                       </span>
                       <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
@@ -718,13 +718,13 @@ export default function EditMapModal({
 
                   {/* Auto-detect suggestion banner — only shown when image is changed */}
                   {detectedGrid && (
-                    <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-                      <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2 p-2.5 bg-warning/10 border border-warning/30 rounded-lg">
+                      <Sparkles className="w-4 h-4 text-warning-ink flex-shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-amber-800">Grid detected</p>
-                        <p className="text-xs text-amber-700 mt-0.5">
+                        <p className="text-xs font-medium text-warning-ink">Grid detected</p>
+                        <p className="text-xs text-warning-ink mt-0.5">
                           {detectedGrid.width}×{detectedGrid.height} squares · {detectedGrid.gridSize}px/sq
-                          <span className="text-amber-500 ml-1">
+                          <span className="text-warning-ink ml-1">
                             ({Math.round(detectedGrid.confidence * 100)}% confidence)
                           </span>
                         </p>
@@ -733,14 +733,14 @@ export default function EditMapModal({
                         <button
                           type="button"
                           onClick={applyDetectedGrid}
-                          className="text-xs px-2 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+                          className="text-xs px-2 py-1 bg-warning text-white rounded hover:bg-warning transition-colors"
                         >
                           Apply
                         </button>
                         <button
                           type="button"
                           onClick={() => setDetectedGrid(null)}
-                          className="text-xs px-2 py-1 text-amber-600 hover:text-amber-800 transition-colors"
+                          className="text-xs px-2 py-1 text-warning-ink hover:text-warning-ink transition-colors"
                           aria-label="Dismiss suggestion"
                         >
                           ✕

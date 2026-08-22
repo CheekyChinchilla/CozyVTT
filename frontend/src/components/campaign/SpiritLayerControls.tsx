@@ -284,7 +284,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
             <div className="flex items-center justify-between px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
               <div className="flex items-center gap-2">
                 <Ghost className="w-5 h-5 text-spirit-purple" />
-                <h2 className="text-lg font-bold text-moss-green">Spirit Layer</h2>
+                <h2 className="text-lg font-bold text-brand-ink">Spirit Layer</h2>
               </div>
               <Button
                 onClick={onClose}
@@ -299,7 +299,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
               {/* Error */}
               {errorMsg && (
-                <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-700 text-sm rounded-cozy">
+                <div className="px-4 py-3 bg-danger/10 border border-danger/20 text-danger-ink text-sm rounded-cozy">
                   {errorMsg}
                 </div>
               )}
@@ -327,7 +327,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`relative flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       enabled
                         ? 'bg-spirit-purple text-white hover:bg-spirit-purple/80'
-                        : 'bg-transparent border border-brand text-brand hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={enabled ? 'Close the veil' : 'Open the veil'}
                   >
@@ -357,7 +357,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       dmViewBothPlanes
                         ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
-                        : 'bg-transparent border border-brand text-brand hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={dmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
                   >
@@ -512,7 +512,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                             disabled={isToggling}
                             className={`flex-shrink-0 p-2 rounded-cozy transition-colors ${
                               token.visible
-                                ? 'text-moss-green hover:bg-moss-green/10'
+                                ? 'text-brand-ink hover:bg-moss-green/10'
                                 : 'text-stone-gray/50 hover:bg-stone-gray/10'
                             }`}
                             title={token.visible ? 'Hide token' : 'Show token'}

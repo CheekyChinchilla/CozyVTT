@@ -725,7 +725,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                     {formatSpellRank(rank)}
                   </div>
                   <div className="text-center">
-                    <span className={`text-lg font-bold ${remaining > 0 ? 'text-purple-700' : 'text-stone-400'}`}>
+                    <span className={`text-lg font-bold ${remaining > 0 ? 'text-purple-700' : 'text-stone-500'}`}>
                       {remaining}
                     </span>
                     <span className="text-xs text-stone-500"> / {slot.total}</span>

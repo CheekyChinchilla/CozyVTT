@@ -29,6 +29,25 @@ export default {
         'danger':       themeColor('--color-danger'),
         'spirit':       themeColor('--color-spirit'),
 
+        // ── Readable text variants ──
+        // The tokens above are fills; these are their text counterparts,
+        // derived per theme so they always clear WCAG AA (see themes.ts
+        // deriveReadableTokens). Use `-ink` whenever the color is TEXT.
+        'brand-ink':    themeColor('--color-brand-ink'),
+        'accent-ink':   themeColor('--color-accent-ink'),
+        'spirit-ink':   themeColor('--color-spirit-ink'),
+        'danger-ink':   themeColor('--color-danger-ink'),
+
+        // ── Semantic states ──
+        // Use these instead of raw Tailwind red/green/amber/blue, which do not
+        // follow the theme (a red-50 panel stays pale pink on a dark theme).
+        'success':      themeColor('--color-success'),
+        'success-ink':  themeColor('--color-success-ink'),
+        'warning':      themeColor('--color-warning'),
+        'warning-ink':  themeColor('--color-warning-ink'),
+        'info':         themeColor('--color-info'),
+        'info-ink':     themeColor('--color-info-ink'),
+
         // ── Legacy aliases (resolve to the same CSS variables) ──
         'moss-green':     themeColor('--color-brand'),
         'forest-shadow':  themeColor('--color-brand-dark'),
