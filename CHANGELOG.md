@@ -8,8 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **The acting combatant's token is highlighted on the map.** During initiative, the token whose turn it is gets a pulsing gold ring, visible to everyone at the table — so it's obvious which of five identical goblins is up, without counting rows in the tracker. The ring is a gold band edged in black rather than a single colour, so it stays legible over any map image, light or dark. It respects the same visibility rules as the token itself: a creature hidden from players, or standing in unexplored fog, shows no ring on their screens, so an ambusher's position is never given away by their turn coming around. The operating system's *reduce motion* setting turns off the pulse and keeps the ring
+- **Hovering an initiative row highlights that token on the map, and vice versa.** Pointing at a name in the turn order draws a thin white outline around its token and lifts it slightly — quieter than the turn ring, and both can show at once. Hovering a token on the map tints its row in the tracker the same way. Works for players as well as the DM, is purely a pointer (it never selects or moves anything), and respects the same visibility rules, so hovering a hidden creature's row doesn't give its position away to players
+
+### Fixed
+
+- **The initiative tracker no longer freezes after a WebSocket reconnect.** Its listener was attached to a socket instance that gets rebuilt on reconnect, so after a dropped connection the tracker silently kept showing whatever turn was current when the link went down. Combat state is now mirrored into the shared session store by a reconnect-aware subscription, and re-synced from the server each time the socket comes back
+
 ### Documentation
 
+- Corrected the socket API reference for initiative, which still described the original name-based combatants (`{ name, initiative, hp? }`) years after they became token-based. Documented the `CombatState` payload while there
+- Corrected the DM guide's "Adding Combatants", which described typing a name, initiative and HP by hand rather than picking a token from the map
 - Corrected the README and user guide, which described admin logo/mascot/favicon **upload** as a shipped feature. The instance does honour custom images — they appear on the login page and across the app — but there is no upload screen yet, so the guide now explains how to change branding today (replace the images in `frontend/public/` and rebuild, or set the URLs through the settings API). The upload UI remains on the roadmap
 
 ---

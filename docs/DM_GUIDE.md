@@ -453,12 +453,12 @@ When combat begins, click **Start Initiative** in the right sidebar's **Initiati
 
 ### Adding Combatants
 
-Click **+ Add** to add a combatant manually. Enter:
-- **Name** — Character or monster name
-- **Initiative** — The initiative roll result
-- **HP** — Starting hit points
+Combatants are the tokens already on your map — you don't type names in by hand. There are two ways to add one:
 
-You can also use the **Roll Initiative** button to auto-roll for NPCs you've added.
+- Click **+ Add** in the Initiative tab and pick a token from the list.
+- Right-click a token on the map and choose **Add to Initiative**.
+
+Each combatant carries its token's name, portrait and HP across automatically. Set an initiative value by clicking the number beside a combatant, or use the dice button on a row to roll one. Initiative values are saved on the token, so they survive ending and restarting combat.
 
 *GIF pending — Adding combatants and setting initiative order.*
 
@@ -466,7 +466,25 @@ You can also use the **Roll Initiative** button to auto-roll for NPCs you've add
 
 Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances.
 
-Click **Next Turn** to advance to the next combatant in the order. The active combatant is highlighted for all players to see.
+Click **Next Turn** to advance to the next combatant in the order.
+
+The active combatant is highlighted in two places, for everyone at the table:
+
+- **In the tracker** — the row is tinted and marked with *"[Name]'s turn"*.
+- **On the map** — a pulsing gold ring is drawn around the acting token. This is the quickest way to tell which of five identical goblins is up.
+
+The ring uses a gold band edged in black so it stays visible over any map image, light or dark. It follows the normal visibility rules: if a token is hidden from players or sitting in unexplored fog, players see no ring — so an ambusher waiting in the dark stays secret even when their turn comes around. You'll still see the ring on your own screen.
+
+Players who have the operating system's *reduce motion* setting turned on get the same ring without the pulse.
+
+### Finding a Combatant on the Map
+
+Turn order and map don't always line up in your head — especially with a row of identical monsters. Hover to connect the two:
+
+- **Hover a row in the tracker** → that token lights up on the map: a thin white ring and a slight brightening. It's quieter than the gold turn ring, and a token can show both at once.
+- **Hover a token on the map** → its row in the tracker tints to match.
+
+This works for players too, and it's read-only — hovering never selects, moves or changes anything. Like the turn ring, it respects visibility: hovering the row of a hidden or fogged creature lights it up on your screen but not on your players'.
 
 ### Updating HP
 

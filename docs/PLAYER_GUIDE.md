@@ -234,6 +234,12 @@ You'll see:
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
+**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
+
+If a creature is hidden or somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery.
+
+**Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
+
 The DM controls when initiative advances — after your turn, they'll click "Next" and the focus moves to the next combatant.
 
 *Screenshot pending — Your name highlighted in the initiative order.*

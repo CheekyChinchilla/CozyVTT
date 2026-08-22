@@ -8,7 +8,9 @@
  * Architecture:
  * - Server holds canonical CombatState in memory (initiativeState.ts)
  * - Any mutation emits the full updated state back to all campaign members via 'initiative.state'
- * - On mount, client requests state with 'initiative.request_state'
+ * - CampaignPage's useInitiativeSync() owns the subscription and mirrors that
+ *   state into the game store; this panel and the map's active-token ring are
+ *   both readers. Mutations still emit straight from here.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -28,11 +30,11 @@ import {
   GripVertical,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useTokenListIgnoringMovement } from '@/stores/gameStore';
+import { useTokenListIgnoringMovement, useCombatState, usePeekTokenId, useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
-import type { CombatState, CombatantEntry, Token } from '@/types';
+import type { CombatantEntry, Token } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -136,6 +138,8 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
 interface CombatantRowProps {
   entry: CombatantEntry;
   isActive: boolean;
+  /** This token is being pointed at — from this list, or from the map. */
+  isPeeked: boolean;
   isDM: boolean;
   mapId: string | null;
   isDragOver: boolean;
@@ -149,7 +153,7 @@ interface CombatantRowProps {
 }
 
 function CombatantRow({
-  entry, isActive, isDM, isDragOver,
+  entry, isActive, isPeeked, isDM, isDragOver,
   onSetInitiative, onRoll, onRemove,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }: CombatantRowProps) {
@@ -182,12 +186,17 @@ function CombatantRow({
       onDragOver={isDM ? (e) => onDragOver(e, entry.tokenId) : undefined}
       onDrop={isDM ? (e) => onDrop(e, entry.tokenId) : undefined}
       onDragEnd={isDM ? onDragEnd : undefined}
+      onMouseEnter={() => useGameStore.getState().setPeekToken(entry.tokenId, 'tracker')}
+      onMouseLeave={() => useGameStore.getState().setPeekToken(null, 'tracker')}
       className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
         isDragOver
           ? 'border-t-2 border-moss-green'
           : isActive
             ? 'bg-warm-amber/20 border border-warm-amber/40'
-            : 'hover:bg-moss-green/5 border border-transparent'
+            : isPeeked
+              // Mirrors the map: hovering a token there tints its row here.
+              ? 'bg-moss-green/10 border border-moss-green/40'
+              : 'hover:bg-moss-green/5 border border-transparent'
       } ${isDM ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       {/* Drag handle (DM) or active dot (players) */}
@@ -288,12 +297,13 @@ export default function InitiativeTracker() {
   // Initiative reads token names/ids, not coordinates — skip move re-renders.
   const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
-  const [combatState, setCombatState] = useState<CombatState>({
-    active: false,
-    round: 0,
-    currentTokenId: null,
-    combatants: [],
-  });
+  // Combat state is mirrored into the game store by useInitiativeSync(), which
+  // CampaignPage owns — the map's active-token ring reads the same snapshot,
+  // and the subscription no longer dies with this panel.
+  const combatState = useCombatState();
+  // Cross-highlight: set when a row here is hovered, and when a token is
+  // hovered on the map. Either way the matching row tints.
+  const peekTokenId = usePeekTokenId();
   const [collapsed, setCollapsed] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -304,25 +314,6 @@ export default function InitiativeTracker() {
 
   const isDM = userRole === 'DM';
   const mapId = currentMap?.id ?? null;
-
-  // ── WebSocket listeners ──────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleState = (state: CombatState) => {
-      setCombatState(state);
-    };
-
-    socket.onInitiativeState(handleState);
-
-    // Request current state on mount (handles reconnects too)
-    socket.emitInitiativeRequestState();
-
-    return () => {
-      socket.getSocket()?.off('initiative.state', handleState);
-    };
-  }, [socket]);
 
   // ── DM Actions ───────────────────────────────────────────────────────────
 
@@ -402,13 +393,13 @@ export default function InitiativeTracker() {
     const [moved] = reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, moved);
 
-    // Optimistic update
-    setCombatState((prev) => ({ ...prev, combatants: reordered }));
+    // Optimistic update — the server's broadcast replaces this moments later.
+    useGameStore.getState().setCombatState({ ...combatState, combatants: reordered });
     socket.emitInitiativeReorder({ orderedTokenIds: reordered.map((c) => c.tokenId) });
 
     dragTokenId.current = null;
     setDragOverTokenId(null);
-  }, [socket, combatState.combatants]);
+  }, [socket, combatState]);
 
   const handleDragEnd = useCallback(() => {
     dragTokenId.current = null;
@@ -473,6 +464,7 @@ export default function InitiativeTracker() {
                     key={entry.tokenId}
                     entry={entry}
                     isActive={combatState.active && entry.tokenId === combatState.currentTokenId}
+                    isPeeked={entry.tokenId === peekTokenId}
                     isDM={isDM}
                     mapId={mapId}
                     isDragOver={isDM && dragOverTokenId === entry.tokenId}

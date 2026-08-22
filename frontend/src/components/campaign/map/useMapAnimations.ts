@@ -113,3 +113,55 @@ export function useFogRevealAnimation(
 
   return revealOpacityRef;
 }
+
+/** Milliseconds between turn-pulse repaints (~30fps). */
+const PULSE_FRAME_MS = 33;
+
+/**
+ * Turn-highlight pulse — a self-sustaining loop that repaints the token
+ * layer while a combatant is acting, so the active-token ring can breathe.
+ *
+ * Unlike the other two hooks there is no finite work queue to drain: the
+ * pulse runs for as long as `active` stays true, so the caller is
+ * responsible for passing `false` when combat ends (and when the user
+ * prefers reduced motion, in which case the ring is drawn statically and
+ * no loop is started at all).
+ *
+ * Ticks are gated to ~30fps rather than the display rate. The cycle is
+ * 1.6s, so half the frames are visually indistinguishable, and this
+ * repaints the map's hot layer for the whole of a combat — worth halving.
+ */
+export function useTurnPulseAnimation(active: boolean, onTick: () => void) {
+  const tickRef = useRef(onTick);
+  tickRef.current = onTick;
+
+  useEffect(() => {
+    if (!active) return;
+
+    let animationFrameId: number;
+    let lastTick = 0;
+
+    const animate = (timestamp: number) => {
+      if (timestamp - lastTick >= PULSE_FRAME_MS) {
+        lastTick = timestamp;
+        tickRef.current();
+      }
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+    return () => { cancelAnimationFrame(animationFrameId); };
+  }, [active]);
+}
+
+/** Full period of one breath, in milliseconds. */
+const PULSE_PERIOD_MS = 1600;
+
+/**
+ * Pulse phase in [0, 1] for a given frame time — 0 at the tightest point
+ * of the breath, 1 at the widest. Pure, so the draw layer stays testable:
+ * pass a fixed `now` and the geometry is deterministic.
+ */
+export function pulsePhaseAt(now: number): number {
+  return 0.5 - 0.5 * Math.cos((now % PULSE_PERIOD_MS) / PULSE_PERIOD_MS * Math.PI * 2);
+}

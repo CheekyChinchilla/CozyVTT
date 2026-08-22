@@ -52,7 +52,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Walls & dynamic lighting** — DM-drawn wall segments (walls, doors, windows) with raycasting visibility; draw, polygon, and brush drawing modes; snap-to-grid and snap-to-endpoint; split, select, erase, and merge point tools; snap-to-wall door/window placement (auto-splits existing walls); players only see what their character can; door interactions for both DM and players; bright/dim light radii matching D&D 5e and PF2e rules; named light presets (Candle, Torch, Lamp, Lantern, Campfire); overlapping dim zones combine to bright
 - **Fog of war** — DM-controlled fog brush reveals the map square by square; animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
-- **Initiative tracker** — real-time combat turn order; DM controls, players watch live
+- **Initiative tracker** — real-time combat turn order; DM controls, players watch live. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
 - **Vibe tracker** — time-of-day atmosphere presets with custom color filters and ambient audio
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)

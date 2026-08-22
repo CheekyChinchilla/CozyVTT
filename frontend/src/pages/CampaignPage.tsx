@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
+import { useInitiativeSync } from '@/hooks/useInitiativeSync';
 import {
   ArrowLeft,
   Loader2,
@@ -63,6 +64,12 @@ function CampaignPageContent() {
   const navigate = useNavigate();
   const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap } = useCampaign();
   const { socket, reconnectCount, status } = useWebSocket();
+
+  // Mirror combat/initiative state into the game store. Owned here rather than
+  // by the initiative panel so both the tracker and the map's active-token
+  // ring read one source, and so the subscription survives the panel being
+  // collapsed or unmounted.
+  useInitiativeSync();
 
   // After a WebSocket reconnect, refetch the current map's state via REST.
   // The real-time stream only pushes deltas; any moves/wall edits/fog ops

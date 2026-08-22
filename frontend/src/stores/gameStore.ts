@@ -9,8 +9,8 @@
 //
 // BOUNDARY RULE (do not blur it):
 //   - zustand (this store) owns LIVE SESSION STATE fed by sockets:
-//     token positions and token lists today; walls / fog / lights /
-//     initiative may move here in future (they are currently
+//     token positions, token lists and combat/initiative today; walls /
+//     fog / lights may move here in future (they are currently
 //     MapCanvas-local state with their own undo/redo history).
 //   - react-query owns SERVER RESOURCES fetched over REST (campaign
 //     lists, characters, assets, map metadata).
@@ -27,13 +27,37 @@
 
 import { create } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
-import type { Position, Token } from '@/types';
+import type { CombatState, Position, Token } from '@/types';
+
+/** Combat is inactive until the DM starts it; matches the server's default. */
+const EMPTY_COMBAT: CombatState = {
+  active: false,
+  round: 0,
+  currentTokenId: null,
+  combatants: [],
+};
 
 interface GameState {
   /** Normalized token map — authoritative live positions live here. */
   tokens: Record<string, Token>;
   /** Render/list order (server order preserved from the last full set). */
   tokenOrder: string[];
+  /**
+   * Turn order + whose turn it is, mirrored from `initiative.state`.
+   * The server broadcasts the whole state on every mutation, so this is
+   * replaced wholesale rather than patched. Read by the initiative
+   * tracker (the list) and the map canvas (the active-token ring).
+   */
+  combat: CombatState;
+  /**
+   * Cross-highlight pointer: the token the user is currently pointing at,
+   * wherever they're pointing at it. Hovering an initiative row lights the
+   * token on the map; hovering a token on the map tints its initiative row.
+   * `peekSource` says which side started it, so the map can skip its own
+   * white ring when the map's existing blue hover outline already covers it.
+   */
+  peekTokenId: string | null;
+  peekSource: 'tracker' | 'map' | null;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -50,6 +74,10 @@ interface GameState {
   patchToken: (tokenId: string, patch: Partial<Token>) => void;
   /** Full-object replace after an editor save (NpcQuickEditor). */
   replaceToken: (token: Token) => void;
+  /** `initiative.state` — wholesale replace of the combat snapshot. */
+  setCombatState: (combat: CombatState) => void;
+  /** Point at a token from either side; pass null to clear. */
+  setPeekToken: (tokenId: string | null, source: 'tracker' | 'map') => void;
   /** Session teardown. */
   clearGameState: () => void;
 }
@@ -57,6 +85,9 @@ interface GameState {
 export const useGameStore = create<GameState>((set, get) => ({
   tokens: {},
   tokenOrder: [],
+  combat: EMPTY_COMBAT,
+  peekTokenId: null,
+  peekSource: null,
 
   setTokens: (list) =>
     set({
@@ -106,7 +137,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ tokens: { ...get().tokens, [token.id]: token } });
   },
 
-  clearGameState: () => set({ tokens: {}, tokenOrder: [] }),
+  setCombatState: (combat) => set({ combat }),
+
+  setPeekToken: (tokenId, source) => {
+    const s = get();
+    // Ignore a clear arriving from the side that isn't currently pointing —
+    // e.g. the map's mouse-leave firing after the tracker has taken over.
+    if (tokenId === null && s.peekSource !== source) return;
+    if (s.peekTokenId === tokenId && s.peekSource === (tokenId === null ? null : source)) return;
+    set({ peekTokenId: tokenId, peekSource: tokenId === null ? null : source });
+  },
+
+  clearGameState: () =>
+    set({ tokens: {}, tokenOrder: [], combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null }),
 }));
 
 // ============================================
@@ -165,4 +208,32 @@ export function useTokenList(): Token[] {
  */
 export function useTokenListIgnoringMovement(): Token[] {
   return useStoreWithEqualityFn(useGameStore, selectTokenList, tokenArrayEqualIgnoringMovement);
+}
+
+/** The whole combat snapshot — for the initiative tracker, which renders it all. */
+export function useCombatState(): CombatState {
+  return useGameStore((s) => s.combat);
+}
+
+/**
+ * Just the acting token's id, or null when combat is inactive. Deliberately
+ * narrow: the map canvas re-renders on turn change only, not when a
+ * combatant's HP ticks or the order is dragged around.
+ */
+export function useCurrentTurnTokenId(): string | null {
+  return useGameStore((s) => (s.combat.active ? s.combat.currentTokenId : null));
+}
+
+/** The pointed-at token, whichever side is pointing — for the tracker's row tint. */
+export function usePeekTokenId(): string | null {
+  return useGameStore((s) => s.peekTokenId);
+}
+
+/**
+ * The pointed-at token for the MAP to ring. Null when the map is the one
+ * pointing: hovering a token already draws the blue outline there, and a
+ * second white ring on top of it would just be noise.
+ */
+export function useMapPeekTokenId(): string | null {
+  return useGameStore((s) => (s.peekSource === 'tracker' ? s.peekTokenId : null));
 }

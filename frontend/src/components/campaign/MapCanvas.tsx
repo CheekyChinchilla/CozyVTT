@@ -8,8 +8,9 @@ import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGameStore, useTokenList } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
   Token,
   TokenMoveStartEvent,
@@ -45,7 +46,7 @@ import {
   type Viewport,
 } from './map/layers';
 import { createVisionCache, type VisionSource } from './map/vision';
-import { useTokenAnimation, useFogRevealAnimation } from './map/useMapAnimations';
+import { useTokenAnimation, useFogRevealAnimation, useTurnPulseAnimation, pulsePhaseAt } from './map/useMapAnimations';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -93,6 +94,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // socket handlers write there directly (outside React), and this
   // subscription is what re-renders the canvas per token change.
   const tokens = useTokenList();
+  // Whose turn it is, for the active-combatant ring. Narrow selector: this
+  // changes on turn advance only, not when a combatant's HP ticks.
+  const currentTurnTokenId = useCurrentTurnTokenId();
+  // Token being pointed at from the initiative tracker. Null while the map is
+  // the one pointing — the blue hover outline already marks that case.
+  const peekTokenId = useMapPeekTokenId();
+  const prefersReducedMotion = useReducedMotion();
   const { socket } = useWebSocket();
   const { user } = useAuth();
   const isDM = userRole === 'DM';
@@ -275,6 +283,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
   });
+
+  // Turn-highlight pulse. Runs only while a combatant is actually acting, and
+  // not at all under reduced motion — in which case the ring is still drawn,
+  // just held at mid-breath.
+  useTurnPulseAnimation(
+    currentTurnTokenId !== null && !prefersReducedMotion,
+    () => markDirty('tokens')
+  );
 
   // Map controls (only initialize if we have a map)
   const mapControls = useMapControls({
@@ -1329,10 +1345,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
       characterHpCache,
       isOwnToken,
+      currentTurnTokenId,
+      // Held at mid-breath under reduced motion, where no pulse loop runs.
+      pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
+      peekTokenId,
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, revealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, revealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1522,7 +1542,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId]);
+
+  // Publish this map's own token hover so the initiative tracker can tint the
+  // matching row — the other half of the cross-highlight.
+  useEffect(() => {
+    useGameStore.getState().setPeekToken(hoverToken?.id ?? null, 'map');
+  }, [hoverToken]);
 
   // Cursor position drives the token drag ghost (tokens) and, only when a
   // cursor-tracking overlay tool is active, its preview (overlay). Gating the

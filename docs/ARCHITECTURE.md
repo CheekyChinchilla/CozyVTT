@@ -138,7 +138,7 @@ src/
 │   ├── WebSocketContext.tsx  Socket.io connection lifecycle and event subscriptions
 │   └── CampaignContext.tsx   Per-campaign metadata (campaign, current map, vibe, session status, roster)
 ├── stores/
-│   └── gameStore.ts   Zustand store for live socket-fed session state (token positions, walls, fog, lights, initiative)
+│   └── gameStore.ts   Zustand store for live socket-fed session state (token positions, combat/initiative, hover cross-highlight)
 ├── lib/
 │   └── queryClient.ts  React Query client configuration
 ├── pages/             One file per route (thin; delegates to components, contexts, and query hooks)
@@ -167,7 +167,7 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 | Layer | Owns | Examples |
 |-------|------|----------|
 | **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
-| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions, walls, fog, lights, initiative |
+| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, hover cross-highlight (walls, fog and lights are still MapCanvas-local, with their own undo/redo history) |
 | **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
 
 The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.

@@ -130,6 +130,9 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     spiritAccentColor: '#9370DB',
     characterHpCache: {},
     isOwnToken: () => false,
+    currentTurnTokenId: null,
+    pulsePhase: 0.5,
+    peekTokenId: null,
     ...overrides,
   };
 }
@@ -246,6 +249,190 @@ describe('drawTokens', () => {
     drawTokens(ctx, baseTokenState({ tokens: [makeToken('a', { name: 'Goblin' })] }), viewport3x3);
     expect(count(ctx, 'fillText')).toBe(1);
     expect(ctx.calls.find((c) => c.method === 'fillText')?.args[0]).toBe('G');
+  });
+
+  // ── Turn highlight ───────────────────────────────────────────────────────
+  // A plain NPC token with no disposition, HP, conditions or hover draws no
+  // strokes at all, so stroke count isolates the turn ring: 2 (casing + core).
+
+  describe('turn highlight', () => {
+    /** Radii of every arc drawn, in call order. */
+    function arcRadii(ctx: MockCtx): number[] {
+      return ctx.calls.filter((c) => c.method === 'arc').map((c) => c.args[2] as number);
+    }
+
+    it('rings only the token whose turn it is', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a'), makeToken('b'), makeToken('c')],
+        currentTurnTokenId: 'b',
+      }), viewport3x3);
+
+      expect(count(ctx, 'stroke')).toBe(2);
+    });
+
+    it('draws no ring when combat is inactive', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a'), makeToken('b')],
+        currentTurnTokenId: null,
+      }), viewport3x3);
+
+      expect(count(ctx, 'stroke')).toBe(0);
+    });
+
+    it('draws no ring when the acting token is not on this map', () => {
+      // Combat is keyed by campaign, not map — after a map switch the id can
+      // reference a token that is no longer drawn.
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a')],
+        currentTurnTokenId: 'gone',
+      }), viewport3x3);
+
+      expect(count(ctx, 'stroke')).toBe(0);
+    });
+
+    it('never reveals an acting token the player cannot see', () => {
+      // The leak case: a DM-hidden ambusher takes its turn. The ring must be
+      // skipped by the same guard that skips the token, or it betrays them.
+      const hidden = makeToken('h', { visible: false });
+
+      const playerCtx = makeMockCtx();
+      drawTokens(playerCtx, baseTokenState({
+        tokens: [hidden], currentTurnTokenId: 'h', isDM: false,
+      }), viewport3x3);
+      expect(count(playerCtx, 'stroke')).toBe(0);
+
+      const dmCtx = makeMockCtx();
+      drawTokens(dmCtx, baseTokenState({
+        tokens: [hidden], currentTurnTokenId: 'h', isDM: true,
+      }), viewport3x3);
+      expect(count(dmCtx, 'stroke')).toBe(2);
+    });
+
+    it('never reveals an acting token hidden by fog', () => {
+      // Token at (0,0) on a 3×3 map → fog index 6, unrevealed.
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a')],
+        currentTurnTokenId: 'a',
+        revealedCells: new Set<number>(),
+        isOwnToken: () => false,
+      }), viewport3x3);
+
+      expect(count(ctx, 'stroke')).toBe(0);
+    });
+
+    it('sits outside the token edge, clear of the disposition ring', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a')],
+        currentTurnTokenId: 'a',
+        pulsePhase: 0,
+      }), viewport3x3);
+
+      // 1×1 token on a 50px grid → radius 25. The disposition ring reaches
+      // radius + 4.5; the turn ring starts 8px out at the tightest breath.
+      const ringRadii = arcRadii(ctx).filter((r) => r > 25);
+      expect(ringRadii).toEqual([33, 33]);
+    });
+
+    it('breathes outward as the pulse advances', () => {
+      const tight = makeMockCtx();
+      drawTokens(tight, baseTokenState({
+        tokens: [makeToken('a')], currentTurnTokenId: 'a', pulsePhase: 0,
+      }), viewport3x3);
+
+      const wide = makeMockCtx();
+      drawTokens(wide, baseTokenState({
+        tokens: [makeToken('a')], currentTurnTokenId: 'a', pulsePhase: 1,
+      }), viewport3x3);
+
+      expect(Math.max(...arcRadii(wide))).toBeGreaterThan(Math.max(...arcRadii(tight)));
+    });
+
+    it('follows the token shape — rounded rect for full-art', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a', { displayMode: 'full-art' } as Partial<Token>)],
+        currentTurnTokenId: 'a',
+      }), viewport3x3);
+
+      // No image, so the placeholder still draws its circle; the ring itself
+      // must be the two rounded rects, not arcs.
+      expect(count(ctx, 'roundRect')).toBe(2);
+      expect(count(ctx, 'stroke')).toBe(2);
+    });
+  });
+
+  // ── Tracker-hover highlight ──────────────────────────────────────────────
+
+  describe('tracker-hover highlight', () => {
+    function arcRadii(ctx: MockCtx): number[] {
+      return ctx.calls.filter((c) => c.method === 'arc').map((c) => c.args[2] as number);
+    }
+
+    it('rings and washes only the pointed-at token', () => {
+      const peeked = makeMockCtx();
+      drawTokens(peeked, baseTokenState({
+        tokens: [makeToken('a'), makeToken('b')],
+        peekTokenId: 'b',
+      }), viewport3x3);
+
+      const plain = makeMockCtx();
+      drawTokens(plain, baseTokenState({
+        tokens: [makeToken('a'), makeToken('b')],
+      }), viewport3x3);
+
+      expect(count(peeked, 'stroke')).toBe(2); // casing + core
+      // Exactly one extra fill: the wash over the pointed-at token
+      expect(count(peeked, 'fill')).toBe(count(plain, 'fill') + 1);
+    });
+
+    it('draws nothing when no row is hovered', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a')], peekTokenId: null,
+      }), viewport3x3);
+
+      expect(count(ctx, 'stroke')).toBe(0);
+    });
+
+    it('never reveals a token the player cannot see', () => {
+      // Hovering a hidden ambusher's row must not give its position away.
+      const hidden = makeToken('h', { visible: false });
+
+      const playerCtx = makeMockCtx();
+      drawTokens(playerCtx, baseTokenState({
+        tokens: [hidden], peekTokenId: 'h', isDM: false,
+      }), viewport3x3);
+      expect(count(playerCtx, 'stroke')).toBe(0);
+
+      const dmCtx = makeMockCtx();
+      drawTokens(dmCtx, baseTokenState({
+        tokens: [hidden], peekTokenId: 'h', isDM: true,
+      }), viewport3x3);
+      expect(count(dmCtx, 'stroke')).toBe(2);
+    });
+
+    it('sits outside the turn ring so both can show at once', () => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({
+        tokens: [makeToken('a')],
+        currentTurnTokenId: 'a',
+        peekTokenId: 'a',
+        pulsePhase: 1, // turn ring at its widest — the tightest case
+      }), viewport3x3);
+
+      // Four strokes: turn casing + core, then peek casing + core
+      expect(count(ctx, 'stroke')).toBe(4);
+
+      // radius 25. Turn ring at its widest reaches 25+11+3 = 39 outer edge;
+      // the peek ring's casing starts at 25+17-2 = 40. No overlap.
+      const rings = arcRadii(ctx).filter((r) => r > 25);
+      expect(rings).toEqual([36, 36, 42, 42]);
+    });
   });
 });
 

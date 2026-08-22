@@ -15,9 +15,14 @@ import {
   useGameStore,
   useTokenList,
   useTokenListIgnoringMovement,
+  useCurrentTurnTokenId,
 } from '../gameStore';
-import type { Token } from '@/types';
+import type { CombatState, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
+
+function makeCombat(overrides: Partial<CombatState> = {}): CombatState {
+  return { active: true, round: 1, currentTokenId: 'a', combatants: [], ...overrides };
+}
 
 function makeToken(id: string, overrides: Partial<Token> = {}): Token {
   return {
@@ -163,5 +168,93 @@ describe('selector hooks', () => {
     });
     expect(counts.renders).toBeGreaterThan(before);
     expect(result.current).toHaveLength(3);
+  });
+});
+
+describe('combat state', () => {
+  it('starts inactive and clears with the rest of the session', () => {
+    expect(useGameStore.getState().combat.active).toBe(false);
+    expect(useGameStore.getState().combat.currentTokenId).toBeNull();
+
+    useGameStore.getState().setCombatState(makeCombat());
+    expect(useGameStore.getState().combat.currentTokenId).toBe('a');
+
+    useGameStore.getState().clearGameState();
+    expect(useGameStore.getState().combat.active).toBe(false);
+    expect(useGameStore.getState().combat.currentTokenId).toBeNull();
+  });
+
+  it('useCurrentTurnTokenId reports null while combat is inactive', () => {
+    // The server keeps currentTokenId populated after `initiative.end` in some
+    // paths; the map must key off `active`, not the raw id, or a ring lingers
+    // on the map after combat is over.
+    const { result } = renderHook(() => useCurrentTurnTokenId());
+    expect(result.current).toBeNull();
+
+    act(() => {
+      useGameStore.getState().setCombatState(makeCombat({ active: false, currentTokenId: 'a' }));
+    });
+    expect(result.current).toBeNull();
+
+    act(() => {
+      useGameStore.getState().setCombatState(makeCombat({ active: true, currentTokenId: 'a' }));
+    });
+    expect(result.current).toBe('a');
+  });
+
+  it('does not re-render turn subscribers when only a combatant HP ticks', () => {
+    let renders = 0;
+    const combatants = [
+      { tokenId: 'a', name: 'A', imageUrl: '', initiative: 10, hp: { current: 9, max: 10, temp: 0 }, type: 'npc' as const, disposition: null },
+    ];
+    useGameStore.getState().setCombatState(makeCombat({ combatants }));
+
+    const { result } = renderHook(() => {
+      renders++;
+      return useCurrentTurnTokenId();
+    });
+    const initial = renders;
+
+    act(() => {
+      useGameStore.getState().setCombatState(makeCombat({
+        combatants: [{ ...combatants[0], hp: { current: 4, max: 10, temp: 0 } }],
+      }));
+    });
+    expect(renders).toBe(initial);
+    expect(result.current).toBe('a');
+
+    act(() => {
+      useGameStore.getState().setCombatState(makeCombat({ currentTokenId: 'b', combatants }));
+    });
+    expect(renders).toBeGreaterThan(initial);
+    expect(result.current).toBe('b');
+  });
+});
+
+describe('cross-highlight peek', () => {
+  it('records which side is pointing', () => {
+    useGameStore.getState().setPeekToken('a', 'tracker');
+    expect(useGameStore.getState().peekTokenId).toBe('a');
+    expect(useGameStore.getState().peekSource).toBe('tracker');
+
+    useGameStore.getState().setPeekToken(null, 'tracker');
+    expect(useGameStore.getState().peekTokenId).toBeNull();
+    expect(useGameStore.getState().peekSource).toBeNull();
+  });
+
+  it('ignores a clear from the side that is not currently pointing', () => {
+    // The map's mouse-leave can fire after the pointer has reached the
+    // tracker; without this guard it would cancel the tracker's highlight.
+    useGameStore.getState().setPeekToken('a', 'tracker');
+    useGameStore.getState().setPeekToken(null, 'map');
+    expect(useGameStore.getState().peekTokenId).toBe('a');
+    expect(useGameStore.getState().peekSource).toBe('tracker');
+  });
+
+  it('clears with the rest of the session', () => {
+    useGameStore.getState().setPeekToken('a', 'map');
+    useGameStore.getState().clearGameState();
+    expect(useGameStore.getState().peekTokenId).toBeNull();
+    expect(useGameStore.getState().peekSource).toBeNull();
   });
 });

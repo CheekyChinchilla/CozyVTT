@@ -395,6 +395,8 @@ When combat starts, the **Initiative Tracker** appears (or is revealed by the DM
 
 During your turn, you'll see your name highlighted. Use your token to move and the chat to narrate your actions!
 
+Whoever's turn it is also gets a pulsing gold ring around their token on the map, so it's clear which creature is acting even when several look alike. Hovering a name in the tracker outlines that token on the map, and hovering a token on the map tints its row in the list.
+
 ---
 
 ## Advanced Features

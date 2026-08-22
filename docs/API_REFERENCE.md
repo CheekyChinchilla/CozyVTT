@@ -1150,15 +1150,15 @@ Server → Client: emit('authenticated')   ← connection ready
 | `atmosphere.audio.set` | `{ assetId, volume, loop }` | DM — set ambient audio |
 | `vibe.update` | `{ periodId }` | DM — update vibe tracker |
 | `character.hp.update` | `{ tokenId, current, maximum, temp? }` | Update a token's HP |
-| `initiative.add` | `{ name, initiative, hp? }` | Add combatant |
-| `initiative.remove` | `{ entryId }` | Remove combatant |
-| `initiative.set` | `{ entryId, initiative }` | Set initiative value |
-| `initiative.roll` | `{ entryId }` | Auto-roll initiative |
-| `initiative.reorder` | `{ orderedIds }` | Reorder combatants |
-| `initiative.start` | — | Start combat |
-| `initiative.next` | — | Advance to next turn |
-| `initiative.end` | — | End combat |
-| `initiative.request_state` | — | Request current initiative state |
+| `initiative.add` | `{ tokenId, mapId }` | DM — add a map token as a combatant |
+| `initiative.remove` | `{ tokenId }` | DM — remove combatant |
+| `initiative.set` | `{ tokenId, mapId, value }` | DM — set initiative value (persisted on the token) |
+| `initiative.roll` | `{ tokenId, mapId, expression, characterName? }` | DM — roll initiative; also emits `dice.rolled` |
+| `initiative.reorder` | `{ orderedTokenIds }` | DM — reorder combatants |
+| `initiative.start` | — | DM — start combat |
+| `initiative.next` | — | DM — advance to next turn |
+| `initiative.end` | — | DM — end combat |
+| `initiative.request_state` | — | Request current initiative state (any role) |
 | `light:add` | `{ mapId, light: LightSource }` | DM — place a light source |
 | `light:update` | `{ mapId, light: LightSource }` | DM — update light properties |
 | `light:remove` | `{ mapId, lightId }` | DM — delete a light source |
@@ -1200,6 +1200,34 @@ Server → Client: emit('authenticated')   ← connection ready
 | `lights:replaced` | `{ mapId, lights: LightSource[] }` | All campaign members |
 | `pong` | — | Pinging client |
 | `error` | `{ message }` | Sending client |
+
+#### CombatState Object
+
+Held in memory per campaign and re-broadcast in full on every mutation — clients replace their copy
+rather than patching it. Not persisted: combat resets when the server restarts, though the per-token
+`initiative` values survive in the map's token data.
+
+```json
+{
+  "active": true,
+  "round": 2,
+  "currentTokenId": "uuid",
+  "combatants": [
+    {
+      "tokenId": "uuid",
+      "name": "Goblin",
+      "imageUrl": "/uploads/tokens/goblin.png",
+      "initiative": 14,
+      "hp": { "current": 5, "max": 7, "temp": 0 },
+      "type": "npc",
+      "disposition": "hostile"
+    }
+  ]
+}
+```
+
+`currentTokenId` identifies the acting combatant; clients use it to highlight both the tracker row
+and the token on the map. It is `null` before combat starts.
 
 #### LightSource Object
 
