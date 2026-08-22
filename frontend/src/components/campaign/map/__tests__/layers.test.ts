@@ -13,6 +13,7 @@ import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
 import { drawTokens, type TokenDrawState } from '../layers/drawTokens';
 import { drawWalls } from '../layers/drawWalls';
+import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
 import { drawSpiritLayer } from '../layers/drawBackground';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
@@ -531,5 +532,125 @@ describe('computeVisionState', () => {
     expect(vision.all).toHaveLength(2);
     expect(vision.all[0]).toBe(vision.tokenVision[0]);
     expect(vision.all[1]).toBe(vision.lightVision[0]);
+  });
+});
+
+describe('drawPings', () => {
+  const NOW = 1_000_000;
+
+  function makePing(overrides: Partial<ActivePing> = {}): ActivePing {
+    return {
+      id: 'p1',
+      x: 100,
+      y: 100,
+      name: 'Sarah',
+      color: '#45a8e0',
+      startedAt: NOW,
+      ...overrides,
+    };
+  }
+
+  function pingState(overrides: Partial<PingDrawState> = {}): PingDrawState {
+    return { pings: [], now: NOW, reducedMotion: false, ...overrides };
+  }
+
+  /** Radii of every arc drawn, in call order. */
+  function arcRadii(ctx: MockCtx): number[] {
+    return ctx.calls.filter((c) => c.method === 'arc').map((c) => c.args[2] as number);
+  }
+
+  it('draws nothing when there are no pings', () => {
+    const ctx = makeMockCtx();
+    drawPings(ctx, pingState(), viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('draws nothing for a ping that has already expired', () => {
+    const ctx = makeMockCtx();
+    drawPings(ctx, pingState({
+      pings: [makePing()],
+      now: NOW + PING_DURATION_MS + 1,
+    }), viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('draws nothing for a ping timestamped in the future', () => {
+    const ctx = makeMockCtx();
+    drawPings(ctx, pingState({
+      pings: [makePing({ startedAt: NOW + 500 })],
+    }), viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('strokes each ring twice — dark casing then coloured core', () => {
+    const ctx = makeMockCtx();
+    // Mid-life, so all three rings are in flight
+    drawPings(ctx, pingState({
+      pings: [makePing()],
+      now: NOW + PING_DURATION_MS * 0.5,
+    }), viewport3x3);
+
+    // Rings come in casing/core pairs, plus one stroke outlining the centre dot
+    const strokes = count(ctx, 'stroke');
+    expect(strokes % 2).toBe(1);
+    expect(strokes).toBeGreaterThanOrEqual(3);
+  });
+
+  it('expands the rings outward over the ping lifetime', () => {
+    const early = makeMockCtx();
+    drawPings(early, pingState({ pings: [makePing()], now: NOW + 100 }), viewport3x3);
+
+    const late = makeMockCtx();
+    drawPings(late, pingState({ pings: [makePing()], now: NOW + 900 }), viewport3x3);
+
+    expect(Math.max(...arcRadii(late))).toBeGreaterThan(Math.max(...arcRadii(early)));
+  });
+
+  it('holds the rings still under reduced motion', () => {
+    const early = makeMockCtx();
+    drawPings(early, pingState({
+      pings: [makePing()], now: NOW + 100, reducedMotion: true,
+    }), viewport3x3);
+
+    const late = makeMockCtx();
+    drawPings(late, pingState({
+      pings: [makePing()], now: NOW + 900, reducedMotion: true,
+    }), viewport3x3);
+
+    // Same radius at both times — only the alpha changes
+    expect(Math.max(...arcRadii(late))).toBe(Math.max(...arcRadii(early)));
+    // Still drawn, not skipped
+    expect(count(late, 'stroke')).toBeGreaterThan(0);
+  });
+
+  it('puts the name on a filled pill before writing the text', () => {
+    const ctx = makeMockCtx();
+    drawPings(ctx, pingState({ pings: [makePing({ name: 'Sarah' })] }), viewport3x3);
+
+    const seq = methods(ctx);
+    const pillIdx = seq.lastIndexOf('fill');
+    const textIdx = seq.indexOf('fillText');
+    expect(textIdx).toBeGreaterThan(pillIdx);
+    expect(ctx.calls.find((c) => c.method === 'fillText')?.args[0]).toBe('Sarah');
+  });
+
+  it('omits the label when the sender could not be named', () => {
+    const ctx = makeMockCtx();
+    drawPings(ctx, pingState({ pings: [makePing({ name: '' })] }), viewport3x3);
+    expect(count(ctx, 'fillText')).toBe(0);
+    // The ping itself still draws
+    expect(count(ctx, 'stroke')).toBeGreaterThan(0);
+  });
+
+  it('draws every live ping in the list', () => {
+    const one = makeMockCtx();
+    drawPings(one, pingState({ pings: [makePing({ id: 'a' })] }), viewport3x3);
+
+    const three = makeMockCtx();
+    drawPings(three, pingState({
+      pings: [makePing({ id: 'a' }), makePing({ id: 'b', x: 200 }), makePing({ id: 'c', x: 300 })],
+    }), viewport3x3);
+
+    expect(count(three, 'stroke')).toBe(count(one, 'stroke') * 3);
   });
 });

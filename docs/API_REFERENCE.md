@@ -1159,6 +1159,7 @@ Server → Client: emit('authenticated')   ← connection ready
 | `initiative.next` | — | DM — advance to next turn |
 | `initiative.end` | — | DM — end combat |
 | `initiative.request_state` | — | Request current initiative state (any role) |
+| `map.ping` | `{ mapId, x, y }` | Point at a map location (any role). Coordinates are map pixels, not grid cells. Rate limited to 10 per 10s per user; excess is dropped silently |
 | `light:add` | `{ mapId, light: LightSource }` | DM — place a light source |
 | `light:update` | `{ mapId, light: LightSource }` | DM — update light properties |
 | `light:remove` | `{ mapId, lightId }` | DM — delete a light source |
@@ -1194,6 +1195,7 @@ Server → Client: emit('authenticated')   ← connection ready
 | `vibe.updated` | `{ periodId, period }` | All campaign members |
 | `character.hp.updated` | `{ tokenId, current, maximum, temp }` | All campaign members |
 | `initiative.state` | Full `CombatState` object | All campaign members |
+| `map.pinged` | `{ mapId, x, y, userId }` | All campaign members (including the sender) |
 | `light:added` | `{ mapId, light: LightSource }` | All campaign members |
 | `light:updated` | `{ mapId, light: LightSource }` | All campaign members |
 | `light:removed` | `{ mapId, lightId }` | All campaign members |
@@ -1228,6 +1230,16 @@ rather than patching it. Not persisted: combat resets when the server restarts, 
 
 `currentTokenId` identifies the acting combatant; clients use it to highlight both the tracker row
 and the token on the map. It is `null` before combat starts.
+
+#### Map Ping
+
+Nothing is persisted — the ping is broadcast and forgotten, and each client expires its own copy
+after ~1.6s. Only the sender's `userId` is on the wire: clients already hold the campaign roster, so
+they resolve the display name and derive the identity colour locally rather than costing a database
+round-trip on a gesture people will repeat.
+
+Pings are **not** filtered by visibility. Unlike token rendering, a ping marks a location the sender
+deliberately chose to point at, so it renders for every member regardless of fog or lighting.
 
 #### LightSource Object
 

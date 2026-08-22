@@ -22,6 +22,7 @@ import type {
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,
   Character,
+  MapPingedBroadcast,
 } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
@@ -43,10 +44,14 @@ import {
   drawRuler,
   drawAoEOverlay,
   drawFogBrushCursor,
+  drawPings,
+  PING_DURATION_MS,
+  type ActivePing,
   type Viewport,
 } from './map/layers';
 import { createVisionCache, type VisionSource } from './map/vision';
-import { useTokenAnimation, useFogRevealAnimation, useTurnPulseAnimation, pulsePhaseAt } from './map/useMapAnimations';
+import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
+import { playerColor } from '@/utils/playerColor';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -287,10 +292,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Turn-highlight pulse. Runs only while a combatant is actually acting, and
   // not at all under reduced motion — in which case the ring is still drawn,
   // just held at mid-breath.
-  useTurnPulseAnimation(
+  useCanvasTicker(
     currentTurnTokenId !== null && !prefersReducedMotion,
     () => markDirty('tokens')
   );
+
+  // Live map pings. Transient and map-local, so they stay component state
+  // rather than going in the game store — nothing outside the canvas reads them.
+  const [pings, setPings] = useState<ActivePing[]>([]);
+
+  // Ping animation repaints the overlay layer (where they're drawn) and keeps
+  // running under reduced motion: the rings hold still but still need to fade.
+  useCanvasTicker(pings.length > 0, () => markDirty('overlay'));
 
   // Map controls (only initialize if we have a map)
   const mapControls = useMapControls({
@@ -1092,10 +1105,86 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [socket, currentMap?.id]);  
 
   // ============================================
+  // Map pings — receive, name, and expire
+  // ============================================
+
+  /**
+   * Resolve a pinger's display name from state the client already holds — the
+   * ping event carries only a user id. The campaign owner gets a DM membership
+   * row on creation, so the roster covers everyone; an unresolved id just
+   * draws the ping without a label rather than failing.
+   */
+  const resolvePingerName = useCallback((userId: string): string => {
+    if (userId === user?.id) return user?.displayName ?? 'You';
+    return campaign?.memberships?.find((m) => m.userId === userId)?.user?.displayName ?? '';
+  }, [user?.id, user?.displayName, campaign?.memberships]);
+
+  useEffect(() => {
+    const socketInstance = socket?.getSocket();
+    if (!socketInstance) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const handlePinged = (data: MapPingedBroadcast) => {
+      // Ignore pings for a map this client isn't looking at.
+      if (!currentMap || data.mapId !== currentMap.id) return;
+
+      const id = `${data.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const ping: ActivePing = {
+        id,
+        x: data.x,
+        y: data.y,
+        name: resolvePingerName(data.userId),
+        color: playerColor(data.userId),
+        startedAt: Date.now(),
+      };
+
+      // Cap the list as a client-side backstop to the server's rate limiter.
+      setPings((prev) => [...prev.slice(-19), ping]);
+      timers.push(setTimeout(() => {
+        setPings((prev) => prev.filter((p) => p.id !== id));
+      }, PING_DURATION_MS));
+    };
+
+    socketInstance.on('map.pinged', handlePinged);
+    return () => {
+      socketInstance.off('map.pinged', handlePinged);
+      timers.forEach(clearTimeout);
+    };
+  }, [socket, currentMap?.id, resolvePingerName]);
+
+  // Switching maps drops any pings still in flight on the old one.
+  useEffect(() => {
+    setPings([]);
+  }, [currentMap?.id]);
+
+  // ============================================
   // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ── Tab: ping at the cursor ──────────────────────────────────────
+      // Tab is the keyboard-navigation key and this listener is on `window`,
+      // so it is only safe to claim under strict guards: the pointer must be
+      // over the map, and focus must not be on anything the user could be
+      // navigating from or typing into. Click around the map and Tab pings;
+      // tab to any control and Tab keeps navigating as normal.
+      if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const at = hoverMapPxRef.current;
+        if (!at || !currentMap) return;
+
+        const el = document.activeElement as HTMLElement | null;
+        const onFormControl =
+          !!el &&
+          (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
+            el.isContentEditable);
+        if (onFormControl) return;
+
+        e.preventDefault();
+        socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+        return;
+      }
+
       if (e.key === 'Escape') {
         // Polygon mode: clear in-progress polygon first
         if (polygonPoints.length > 0) {
@@ -1496,10 +1585,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }, viewport);
     }
 
+    // 11. Map pings — drawn last in world space, above the lighting darkness
+    //     so a ping into an unlit corner is still visible. (The turn ring
+    //     makes the opposite trade on purpose: it lives on the token layer
+    //     so a hidden token's ring stays hidden.)
+    if (pings.length > 0) {
+      drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
+    }
+
     // Restore context state (back to screen-space)
     ctx.restore();
 
-    // 11. Fog brush cursor (screen-space, zoom-invariant)
+    // 12. Fog brush cursor (screen-space, zoom-invariant)
     if (fogMode && hoverCoords) {
       drawFogBrushCursor(ctx, {
         mode: fogMode,
@@ -1507,7 +1604,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         brushRadius,
       }, viewport);
     }
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallId, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, hoverCoords, fogMode, brushRadius]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallId, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, hoverCoords, fogMode, brushRadius, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1558,10 +1655,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (wallMode || showRuler || showAoE || fogMode) markDirty('overlay');
   }, [markDirty, hoverCoords, draggedToken, dragOffset, wallMode, showRuler, showAoE, fogMode]);
 
-  // Overlay content — walls, lights, DM tools, measurement, fog cursor.
+  // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallId, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogMode, brushRadius]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallId, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogMode, brushRadius, pings]);
 
   // ============================================
   // Token Hit Testing

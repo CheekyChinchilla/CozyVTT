@@ -240,6 +240,19 @@ If a creature is hidden or somewhere you haven't explored, you won't see a ring 
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
+### Pointing at the Map
+
+Saying "no, the *other* door" never works. Instead, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
+
+A few things worth knowing:
+
+- **Your mouse has to be over the map.** Tab does nothing if the cursor is over the chat panel or the sidebar.
+- **Tab still works normally everywhere else.** If you're typing in chat, or you've tabbed your way to a button, Tab keeps moving between controls as usual — it only pings when you're not in the middle of something.
+- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
+- Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
+
+If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
+
 The DM controls when initiative advances — after your turn, they'll click "Next" and the focus moves to the next combatant.
 
 *Screenshot pending — Your name highlighted in the initiative order.*

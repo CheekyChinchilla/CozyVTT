@@ -28,6 +28,8 @@ import type {
   InitiativeSetEvent,
   InitiativeRollEvent,
   InitiativeReorderEvent,
+  MapPingEvent,
+  MapPingedBroadcast,
 } from '@/types';
 
 // ============================================
@@ -445,6 +447,18 @@ class SocketClient {
 
   onInitiativeState(callback: EventCallback<CombatState>) {
     this.socket?.on('initiative.state', callback);
+  }
+
+  // ============================================
+  // Map Pings
+  // ============================================
+
+  emitMapPing(data: MapPingEvent) {
+    this.socket?.emit('map.ping', data);
+  }
+
+  onMapPinged(callback: EventCallback<MapPingedBroadcast>) {
+    this.socket?.on('map.pinged', callback);
   }
 
   // ============================================

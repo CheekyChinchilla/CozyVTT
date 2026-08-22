@@ -486,6 +486,16 @@ Turn order and map don't always line up in your head — especially with a row o
 
 This works for players too, and it's read-only — hovering never selects, moves or changes anything. Like the turn ring, it respects visibility: hovering the row of a hidden or fogged creature lights it up on your screen but not on your players'.
 
+### Pinging a Location
+
+Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
+
+- The cursor has to be over the map; Tab does nothing over the sidebar or chat.
+- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface.
+- Everyone can ping, and each person's colour is assigned automatically and stays consistent.
+- Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
+- Rapid repeat pings are rate-limited server-side and quietly dropped.
+
 ### Updating HP
 
 Click a combatant's HP during combat to update it. Changes are broadcast to all players in real time — your players will wince visibly when the boss heals.

@@ -1045,6 +1045,28 @@ export interface InitiativeRollEvent   { tokenId: string; mapId: string; express
 export interface InitiativeReorderEvent { orderedTokenIds: string[]; }
 
 // ============================================
+// Map Pings — transient "look here" marks
+// ============================================
+
+/** Client → server. Coordinates are map pixels, not grid cells. */
+export interface MapPingEvent {
+  mapId: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * Server → all campaign members. Carries only the sender's id — the display
+ * name and identity colour are resolved client-side from the roster.
+ */
+export interface MapPingedBroadcast {
+  mapId: string;
+  x: number;
+  y: number;
+  userId: string;
+}
+
+// ============================================
 // User Preferences (per-user theme + font)
 // ============================================
 

@@ -89,6 +89,10 @@ export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second p
 // silently rather than surfaced as an error toast (same policy as fog).
 export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events/second per socket
 export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per socket
+// Map pings are a deliberate human gesture, so the ceiling is low compared to
+// the drag/edit streams above. Over-limit pings are dropped silently — an error
+// toast for pressing the ping key too often is worse than nothing happening.
+export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per socket
 
 // Cleanup old events every 5 minutes. unref() so this housekeeping timer
 // never holds the process open on its own (matters for test runners and
@@ -99,6 +103,7 @@ setInterval(() => {
   fogOperationLimiter.cleanup(5 * 1000); // Fog ops: 5 second window
   tokenMoveLimiter.cleanup(1000); // Token moves: 1 second window
   mapEditLimiter.cleanup(1000); // Map edits: 1 second window
+  pingLimiter.cleanup(10 * 1000); // Map pings: 10 second window
 }, 5 * 60 * 1000).unref();
 
 // ── Fog/Wall Helpers ─────────────────────────────────────────────────────────

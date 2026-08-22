@@ -53,6 +53,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Fog of war** — DM-controlled fog brush reveals the map square by square; animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
 - **Initiative tracker** — real-time combat turn order; DM controls, players watch live. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
+- **Map pings** — press Tab to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
 - **Vibe tracker** — time-of-day atmosphere presets with custom color filters and ambient audio
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)

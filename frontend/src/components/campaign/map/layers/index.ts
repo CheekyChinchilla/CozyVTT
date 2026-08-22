@@ -7,3 +7,4 @@ export * from './drawTokens';
 export * from './drawLights';
 export * from './drawWalls';
 export * from './drawOverlays';
+export * from './drawPings';
