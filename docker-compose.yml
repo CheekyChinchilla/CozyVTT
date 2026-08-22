@@ -5,17 +5,27 @@
 # For development (hot-reload, exposed ports), use:
 #   docker compose -f docker-compose.dev.yml up
 #
+# Prefer not to edit this file: personal tweaks belong in docker-compose.override.yml,
+# which Compose merges automatically and git ignores — so `git pull` never conflicts.
+# Copy docker-compose.override.example.yml to get started.
+#
 # If you have a reverse proxy that handles INTERNAL routing too
 # (Traefik, Caddy, an existing host-level Nginx): you can remove the bundled
-# nginx service below. Then:
-#   - Change `expose` to `ports` on the frontend service so your proxy can reach it
-#   - Point your proxy at frontend:80 for the SPA and backend:4000 for /api + /socket.io
+# nginx service below. Then ALL of the following are required:
+#   - Add `ports` to the BACKEND service (e.g. "127.0.0.1:4000:4000") — it is
+#     `expose`-only by default, so nothing outside Docker can reach it and your
+#     proxy would be pointing at a closed port
+#   - Add `ports` to the FRONTEND service (e.g. "127.0.0.1:8080:80")
+#   - Route /api/* AND /socket.io/* to the backend, everything else to the frontend
+# Miss any of these and the site loads but the API is unreachable: a fresh install
+# shows the login page instead of the setup wizard, or setup fails with a 502.
 #
-# Cloudflare Tunnel users: KEEP the bundled nginx. CF Tunnel only handles
-# public-facing TLS and origin hiding; you still need the bundled nginx to
-# route between the frontend SPA and the backend API/WebSocket. Just point
-# your `cloudflared` ingress at http://localhost:80 and you're done.
-# See docs/DEPLOYMENT.md for details.
+# Cloudflare Tunnel users: the simplest setup is to KEEP the bundled nginx —
+# CF Tunnel handles public-facing TLS and origin hiding, but not the routing
+# between the frontend SPA and the backend API/WebSocket. Point your
+# `cloudflared` ingress at http://localhost:80 and you're done. To run without
+# nginx you need path-based ingress rules (specific paths first, catch-all last).
+# See docs/DEPLOYMENT.md → "Using an External Reverse Proxy" for all three setups.
 
 services:
   database:

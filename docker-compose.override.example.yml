@@ -1,0 +1,82 @@
+# ============================================================================
+# CozyVTT — example personal overrides
+#
+# WHAT THIS IS
+#   A place to keep YOUR deployment tweaks without editing docker-compose.yml.
+#   Docker Compose automatically reads a file named `docker-compose.override.yml`
+#   (this file's name, minus the `.example`) and layers it on top of the shipped
+#   docker-compose.yml. CozyVTT's .gitignore excludes that filename, so updates
+#   with `git pull` will never conflict with your changes.
+#
+# HOW TO USE IT
+#   1. cp docker-compose.override.example.yml docker-compose.override.yml
+#   2. Edit your copy — delete anything you don't need
+#   3. docker compose up -d
+#   4. docker compose config    # shows the merged result, to confirm it worked
+#
+#   No -f flags needed. (If you DO pass -f yourself, you must list both files:
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d)
+#
+# WHAT BELONGS HERE
+#   Only the settings you are changing — not a copy of docker-compose.yml.
+#   Adding or changing settings works naturally. REMOVING a service does not:
+#   Compose can only add or change, never delete. See the nginx example below.
+#
+# The example below is the common "I use my own reverse proxy / Cloudflare
+# Tunnel" setup. See docs/DEPLOYMENT.md → "Using an External Reverse Proxy".
+# ============================================================================
+
+services:
+  # ---- Turn off the bundled Nginx ------------------------------------------
+  # You can't delete a service from here, but tagging it with a profile keeps it
+  # from starting: a service with a profile only runs when that profile is
+  # switched on, and nothing switches this one on.
+  #
+  # Only do this if your own proxy handles the routing that nginx normally does:
+  #   /api/...        -> backend
+  #   /socket.io/...  -> backend
+  #   everything else -> frontend
+  nginx:
+    profiles: ["disabled"]
+
+  # ---- Open ports so your proxy can reach the containers -------------------
+  # As shipped, the backend and frontend are only reachable from inside Docker
+  # (that's what `expose` means). Removing nginx leaves nothing open, so your
+  # proxy would have nothing to connect to. These lines open them.
+  #
+  # Read "127.0.0.1:4000:4000" as: port 4000 inside the container becomes port
+  # 4000 on this server, reachable ONLY from this server itself.
+  #
+  # KEEP the 127.0.0.1: prefix. Without it the API is published on your public
+  # IP over plain HTTP, bypassing your proxy entirely. Note that a firewall does
+  # not reliably help here — Docker's published ports bypass UFW.
+  #
+  # Not needed if your proxy runs in Docker on the same network (it can reach
+  # `backend:4000` and `frontend:80` by name) — see Option B in the docs.
+  backend:
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  frontend:
+    ports:
+      - "127.0.0.1:8080:80"
+
+# ---- Other things people commonly put here ---------------------------------
+# Uncomment and adapt as needed.
+#
+# Pin the database to a specific host port for backups or an external tool:
+#   database:
+#     ports:
+#       - "127.0.0.1:5432:5432"
+#
+# Give the backend more memory than the default 512M limit:
+#   backend:
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 1G
+#
+# Add an extra environment variable to the backend:
+#   backend:
+#     environment:
+#       LOG_LEVEL: debug
