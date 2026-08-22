@@ -18,50 +18,50 @@ function abilityMod(score: number): string {
 
 export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
   return (
-    <div className="space-y-2 text-xs text-stone-700">
+    <div className="space-y-2 text-xs text-ink">
       {/* ── Header ── */}
-      <div className="border-b-2 border-amber-700/40 pb-1.5">
-        <h3 className="text-sm font-bold text-amber-900">{tokenName}</h3>
-        <div className="italic text-stone-500">
+      <div className="border-b-2 border-warning/40 pb-1.5">
+        <h3 className="text-sm font-bold text-warning-ink">{tokenName}</h3>
+        <div className="italic text-ink-muted">
           {statBlock.creatureType || 'Creature'}
           {statBlock.alignment && `, ${statBlock.alignment}`}
         </div>
       </div>
 
       {/* ── Core stats ── */}
-      <div className="border-b border-amber-700/20 pb-1.5 space-y-0.5">
-        <div><span className="font-semibold text-amber-900">Armor Class</span> {statBlock.ac}</div>
+      <div className="border-b border-warning/20 pb-1.5 space-y-0.5">
+        <div><span className="font-semibold text-warning-ink">Armor Class</span> {statBlock.ac}</div>
         {statBlock.hpMax != null && (
           <div>
-            <span className="font-semibold text-amber-900">Hit Points</span> {statBlock.hpMax}
+            <span className="font-semibold text-warning-ink">Hit Points</span> {statBlock.hpMax}
             {statBlock.hitDice && ` (${statBlock.hitDice})`}
           </div>
         )}
-        <div><span className="font-semibold text-amber-900">Speed</span> {statBlock.speed}</div>
+        <div><span className="font-semibold text-warning-ink">Speed</span> {statBlock.speed}</div>
         {statBlock.challengeRating && (
           <div>
-            <span className="font-semibold text-amber-900">Challenge</span> {statBlock.challengeRating}
+            <span className="font-semibold text-warning-ink">Challenge</span> {statBlock.challengeRating}
             {statBlock.xp != null && ` (${statBlock.xp.toLocaleString()} XP)`}
           </div>
         )}
       </div>
 
       {/* ── Ability Scores ── */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-amber-50/60 rounded p-1.5 border border-amber-700/10">
+      <div className="grid grid-cols-6 gap-1 text-center bg-warning/10 rounded p-1.5 border border-warning/10">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-amber-900 uppercase">{ab}</div>
+            <div className="text-[9px] font-bold text-warning-ink uppercase">{ab}</div>
             <div className="font-semibold">{statBlock.abilities[ab]}</div>
-            <div className="text-[10px] text-stone-500">({abilityMod(statBlock.abilities[ab])})</div>
+            <div className="text-[10px] text-ink-muted">({abilityMod(statBlock.abilities[ab])})</div>
           </div>
         ))}
       </div>
 
       {/* ── Detail lines ── */}
-      <div className="border-b border-amber-700/20 pb-1.5 space-y-0.5">
+      <div className="border-b border-warning/20 pb-1.5 space-y-0.5">
         {statBlock.savingThrows && Object.keys(statBlock.savingThrows).length > 0 && (
           <div>
-            <span className="font-semibold text-amber-900">Saving Throws</span>{' '}
+            <span className="font-semibold text-warning-ink">Saving Throws</span>{' '}
             {Object.entries(statBlock.savingThrows)
               .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)} +${v}`)
               .join(', ')}
@@ -69,29 +69,29 @@ export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
         )}
         {statBlock.skills && Object.keys(statBlock.skills).length > 0 && (
           <div>
-            <span className="font-semibold text-amber-900">Skills</span>{' '}
+            <span className="font-semibold text-warning-ink">Skills</span>{' '}
             {Object.entries(statBlock.skills)
               .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)} +${v}`)
               .join(', ')}
           </div>
         )}
         {statBlock.damageVulnerabilities && (
-          <div><span className="font-semibold text-amber-900">Damage Vulnerabilities</span> {statBlock.damageVulnerabilities}</div>
+          <div><span className="font-semibold text-warning-ink">Damage Vulnerabilities</span> {statBlock.damageVulnerabilities}</div>
         )}
         {statBlock.damageResistances && (
-          <div><span className="font-semibold text-amber-900">Damage Resistances</span> {statBlock.damageResistances}</div>
+          <div><span className="font-semibold text-warning-ink">Damage Resistances</span> {statBlock.damageResistances}</div>
         )}
         {statBlock.damageImmunities && (
-          <div><span className="font-semibold text-amber-900">Damage Immunities</span> {statBlock.damageImmunities}</div>
+          <div><span className="font-semibold text-warning-ink">Damage Immunities</span> {statBlock.damageImmunities}</div>
         )}
         {statBlock.conditionImmunities && (
-          <div><span className="font-semibold text-amber-900">Condition Immunities</span> {statBlock.conditionImmunities}</div>
+          <div><span className="font-semibold text-warning-ink">Condition Immunities</span> {statBlock.conditionImmunities}</div>
         )}
         {statBlock.senses && (
-          <div><span className="font-semibold text-amber-900">Senses</span> {statBlock.senses}</div>
+          <div><span className="font-semibold text-warning-ink">Senses</span> {statBlock.senses}</div>
         )}
         {statBlock.languages && (
-          <div><span className="font-semibold text-amber-900">Languages</span> {statBlock.languages}</div>
+          <div><span className="font-semibold text-warning-ink">Languages</span> {statBlock.languages}</div>
         )}
       </div>
 
@@ -122,7 +122,7 @@ export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
 
       {/* ── Notes ── */}
       {statBlock.notes && (
-        <div className="text-[10px] text-stone-500 italic border-t border-amber-700/20 pt-1.5">
+        <div className="text-[10px] text-ink-muted italic border-t border-warning/20 pt-1.5">
           {statBlock.notes}
         </div>
       )}
@@ -133,14 +133,14 @@ export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
 function ActionSection({ title, items }: { title: string; items: Array<{ name: string; description: string }> }) {
   return (
     <div>
-      <div className="text-[10px] font-bold text-amber-900 uppercase tracking-wide border-b border-amber-700/20 pb-0.5 mb-1">
+      <div className="text-[10px] font-bold text-warning-ink uppercase tracking-wide border-b border-warning/20 pb-0.5 mb-1">
         {title}
       </div>
       <div className="space-y-1.5">
         {items.map((item, i) => (
           <div key={i} className="leading-snug">
-            <span className="font-semibold italic text-stone-800">{item.name}.</span>{' '}
-            <span className="text-stone-600">{item.description}</span>
+            <span className="font-semibold italic text-ink">{item.name}.</span>{' '}
+            <span className="text-ink-secondary">{item.description}</span>
           </div>
         ))}
       </div>

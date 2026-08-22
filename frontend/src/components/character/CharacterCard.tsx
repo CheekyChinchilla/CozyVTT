@@ -186,13 +186,13 @@ function CharacterCardInner({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <User className="w-8 h-8 text-moss-green" />
+              <User className="w-8 h-8 text-brand-ink" />
             )}
           </div>
 
           <div className="flex-1 min-w-0 pr-8">
             {/* Character Name */}
-            <h3 className="text-xl font-semibold text-moss-green mb-1 truncate
+            <h3 className="text-xl font-semibold text-brand-ink mb-1 truncate
                          group-hover:text-spirit-purple transition-colors">
               {character.name}
             </h3>

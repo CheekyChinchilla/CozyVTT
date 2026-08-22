@@ -74,7 +74,7 @@ export default function DmFogControls({
           onClick={() => onFogModeChange(fogMode === 'fog-hide' ? null : 'fog-hide')}
           className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
             fogMode === 'fog-hide'
-              ? 'bg-orange-600/30 text-orange-400 border border-orange-500/50'
+              ? 'bg-warning/30 text-warning-ink border border-warning/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
           }`}
           title="Hide brush — paint to hide areas from players"
@@ -127,8 +127,8 @@ export default function DmFogControls({
           onClick={handleHideAll}
           className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmHideAll
-              ? 'bg-orange-500 text-white animate-pulse'
-              : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-orange-700/30 hover:text-orange-400'
+              ? 'bg-warning text-white animate-pulse'
+              : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
           }`}
           title={confirmHideAll ? 'Click again to confirm: hide entire map' : 'Hide all — cover entire map with fog'}
           aria-label="Hide entire map"

@@ -78,7 +78,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
         <div className="space-y-2 pl-1">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-stone-500 block mb-0.5">Creature Type</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">Creature Type</label>
               <input
                 type="text"
                 value={statBlock.creatureType || ''}
@@ -88,7 +88,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
               />
             </div>
             <div>
-              <label className="text-[10px] text-stone-500 block mb-0.5">Alignment</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">Alignment</label>
               <input
                 type="text"
                 value={statBlock.alignment || ''}
@@ -100,7 +100,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-[10px] text-stone-500 block mb-0.5">AC</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">AC</label>
               <input
                 type="number"
                 value={statBlock.ac}
@@ -109,7 +109,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
               />
             </div>
             <div>
-              <label className="text-[10px] text-stone-500 block mb-0.5">CR</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">CR</label>
               <input
                 type="text"
                 value={statBlock.challengeRating || ''}
@@ -119,7 +119,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
               />
             </div>
             <div>
-              <label className="text-[10px] text-stone-500 block mb-0.5">XP</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">XP</label>
               <input
                 type="number"
                 value={statBlock.xp ?? ''}
@@ -129,7 +129,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-stone-500 block mb-0.5">Speed</label>
+            <label className="text-[10px] text-ink-muted block mb-0.5">Speed</label>
             <input
               type="text"
               value={statBlock.speed}
@@ -147,7 +147,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
         <div className="grid grid-cols-6 gap-1.5 pl-1">
           {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
             <div key={ab} className="text-center">
-              <label className="text-[9px] font-bold text-moss-green uppercase block mb-0.5">{ab}</label>
+              <label className="text-[9px] font-bold text-brand-ink uppercase block mb-0.5">{ab}</label>
               <input
                 type="number"
                 value={statBlock.abilities[ab]}
@@ -191,7 +191,7 @@ export default function StatBlockEditor({ statBlock, onChange }: StatBlockEditor
             ['languages', 'Languages'],
           ] as const).map(([field, label]) => (
             <div key={field}>
-              <label className="text-[10px] text-stone-500 block mb-0.5">{label}</label>
+              <label className="text-[10px] text-ink-muted block mb-0.5">{label}</label>
               <input
                 type="text"
                 value={(statBlock[field] as string) || ''}
@@ -260,7 +260,7 @@ function SectionHeader({
     <button
       type="button"
       onClick={() => toggle(section)}
-      className="flex items-center gap-1 w-full text-left py-1 text-[10px] font-semibold text-moss-green uppercase tracking-wide hover:text-moss-green/80 transition-colors"
+      className="flex items-center gap-1 w-full text-left py-1 text-[10px] font-semibold text-brand-ink uppercase tracking-wide hover:text-brand-ink/80 transition-colors"
     >
       {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
       {title}
@@ -291,10 +291,10 @@ function KeyValueEditor({
 
   return (
     <div>
-      <label className="text-[10px] text-stone-500 block mb-0.5">{label}</label>
+      <label className="text-[10px] text-ink-muted block mb-0.5">{label}</label>
       {Object.entries(entries).map(([key, val]) => (
         <div key={key} className="flex items-center gap-1 mb-0.5">
-          <span className="text-[10px] text-stone-600 w-20 capitalize">{key}</span>
+          <span className="text-[10px] text-ink-secondary w-20 capitalize">{key}</span>
           <input
             type="number"
             value={val}
@@ -304,7 +304,7 @@ function KeyValueEditor({
           <button
             type="button"
             onClick={() => onUpdate(key, null)}
-            className="p-0.5 text-stone-400 hover:text-red-500 transition-colors"
+            className="p-0.5 text-ink-muted hover:text-danger-ink transition-colors"
             title="Remove"
           >
             <X className="w-3 h-3" />
@@ -323,7 +323,7 @@ function KeyValueEditor({
         <button
           type="button"
           onClick={handleAdd}
-          className="p-1 text-moss-green hover:text-moss-green/80 transition-colors"
+          className="p-1 text-brand-ink hover:text-brand-ink/80 transition-colors"
           title="Add"
         >
           <Plus className="w-3 h-3" />
@@ -374,7 +374,7 @@ function ActionListEditor({
           <button
             type="button"
             onClick={() => removeItem(i)}
-            className="p-1 mt-1 text-stone-400 hover:text-red-500 transition-colors flex-shrink-0"
+            className="p-1 mt-1 text-ink-muted hover:text-danger-ink transition-colors flex-shrink-0"
             title="Remove"
           >
             <X className="w-3 h-3" />
@@ -384,7 +384,7 @@ function ActionListEditor({
       <button
         type="button"
         onClick={addItem}
-        className="flex items-center gap-1 text-[10px] text-moss-green hover:text-moss-green/80 transition-colors"
+        className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
       >
         <Plus className="w-3 h-3" /> Add entry
       </button>

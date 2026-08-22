@@ -113,7 +113,7 @@ export default function AssignCharacterModal({
       <div className="space-y-4">
                 {/* Character Info */}
                 <div className="glass-panel p-4">
-                  <h3 className="font-semibold text-moss-green mb-2">Character</h3>
+                  <h3 className="font-semibold text-brand-ink mb-2">Character</h3>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg bg-moss-green/10 border-2 border-moss-green/30
                                   flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -124,7 +124,7 @@ export default function AssignCharacterModal({
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-lg font-bold text-moss-green">
+                        <span className="text-lg font-bold text-brand-ink">
                           {character.name.charAt(0).toUpperCase()}
                         </span>
                       )}
@@ -157,7 +157,7 @@ export default function AssignCharacterModal({
 
                   {loadingCampaigns ? (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 text-moss-green animate-spin" />
+                      <Loader2 className="w-6 h-6 text-brand-ink animate-spin" />
                     </div>
                   ) : compatibleCampaigns.length === 0 ? (
                     <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
@@ -242,7 +242,7 @@ export default function AssignCharacterModal({
                 {character.gameSystem && (
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-3">
                     <p className="text-xs text-stone-gray">
-                      <strong className="text-moss-green">Note:</strong> Only showing campaigns
+                      <strong className="text-brand-ink">Note:</strong> Only showing campaigns
                       compatible with {character.gameSystem} or flexible campaigns.
                     </p>
                   </div>

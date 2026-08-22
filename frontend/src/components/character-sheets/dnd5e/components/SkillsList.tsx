@@ -82,7 +82,7 @@ const SkillRow: React.FC<{
     } else if (skill.proficient) {
       return <CheckCircle2 className="w-4 h-4 text-red-700" />;
     } else {
-      return <Circle className="w-4 h-4 text-stone-400" />;
+      return <Circle className="w-4 h-4 text-stone-500" />;
     }
   };
 
@@ -146,7 +146,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
       <div className="mt-3 pt-3 border-t border-stone-200">
         <div className="flex flex-wrap gap-4 text-xs text-stone-600">
           <div className="flex items-center space-x-1">
-            <Circle className="w-3 h-3 text-stone-400" />
+            <Circle className="w-3 h-3 text-stone-500" />
             <span>Not Proficient</span>
           </div>
           <div className="flex items-center space-x-1">

@@ -411,7 +411,7 @@ export default function NewCharacterModal({
                 {/* Info Box */}
                 <div className="rounded-lg p-4 bg-moss-green/10 border border-moss-green/30">
                   <p className="text-sm text-ink">
-                    <strong className="text-moss-green">Note:</strong> After
+                    <strong className="text-brand-ink">Note:</strong> After
                     creation, you'll be redirected to the character editor where
                     you can customize all details and save when ready.
                   </p>

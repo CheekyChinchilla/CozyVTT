@@ -123,4 +123,34 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText(/Required role:/)).toBeInTheDocument();
     expect(screen.getByText(/Your role:/)).toBeInTheDocument();
   });
+
+  // The server refuses every other API call while this flag is set, so the app
+  // must send the user somewhere that works instead of a dead page.
+  it('redirects to the change-password page when a password change is required', () => {
+    mockUseAuth.mockReturnValue(
+      makeAuthState({
+        loading: false,
+        authenticated: true,
+        user: mockUser,
+        mustChangePassword: true,
+      })
+    );
+    renderRoute(<div>Protected Content</div>);
+    expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+  });
+
+  it('takes precedence over the role check', () => {
+    mockUseAuth.mockReturnValue(
+      makeAuthState({
+        loading: false,
+        authenticated: true,
+        user: mockUser,
+        mustChangePassword: true,
+      })
+    );
+    renderRoute(<div>Admin Only</div>, PlatformRole.ADMIN);
+    // Redirected to set a password rather than shown an access error
+    expect(screen.queryByText('Access Denied')).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin Only')).not.toBeInTheDocument();
+  });
 });

@@ -64,7 +64,7 @@ const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) 
           onClick={() => onRoll(opt)}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
         >
-          <Dices className="w-3 h-3 text-moss-green flex-shrink-0" />
+          <Dices className="w-3 h-3 text-brand-ink flex-shrink-0" />
           <span className="flex-1">{opt.label}</span>
         </button>
       ))}
@@ -201,7 +201,7 @@ export default function CharacterRollPicker({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
         <div className="flex items-center gap-2">
-          <Dices className="w-4 h-4 text-moss-green" />
+          <Dices className="w-4 h-4 text-brand-ink" />
           <span className="text-sm font-semibold text-stone-gray truncate">
             Roll for {characterName}
           </span>
@@ -220,7 +220,7 @@ export default function CharacterRollPicker({
               onClick={() => setModeOpen((o) => !o)}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
             >
-              <span className={mode !== 'normal' ? 'text-amber-600 font-medium' : ''}>
+              <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
                 {modeLabels[mode]}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
@@ -232,7 +232,7 @@ export default function CharacterRollPicker({
                     key={m}
                     onClick={() => { setMode(m); setModeOpen(false); }}
                     className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                      mode === m ? 'font-semibold text-moss-green' : 'text-stone-gray'
+                      mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
                     }`}
                   >
                     {modeLabels[m]}
@@ -253,7 +253,7 @@ export default function CharacterRollPicker({
         )}
 
         {error && (
-          <div className="px-3 py-4 text-sm text-red-600 text-center">{error}</div>
+          <div className="px-3 py-4 text-sm text-danger-ink text-center">{error}</div>
         )}
 
         {!loading && !error && !hasAnyRolls && (

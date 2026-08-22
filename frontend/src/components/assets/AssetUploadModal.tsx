@@ -293,7 +293,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
           <div className="space-y-6">
             {/* Locked context banner */}
             {lockedLabel && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/20 rounded-lg text-sm text-moss-green">
+              <div className="flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/20 rounded-lg text-sm text-brand-ink">
                 <MapPin className="w-4 h-4 flex-shrink-0" />
                 <span>{lockedLabel}</span>
               </div>
@@ -302,7 +302,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             {/* Asset Type Selection — hidden when type is pre-locked */}
             {!defaultType && (
               <div>
-                <label className="block text-sm font-medium text-moss-green mb-2">
+                <label className="block text-sm font-medium text-brand-ink mb-2">
                   Asset Type
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -318,7 +318,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                       disabled={uploading}
                       className={`p-4 rounded-lg border-2 transition-all ${
                         assetType === type
-                          ? 'border-moss-green bg-moss-green/10 text-moss-green'
+                          ? 'border-moss-green bg-moss-green/10 text-brand-ink'
                           : 'border-moss-green/20 text-stone-gray hover:border-moss-green/50'
                       } disabled:opacity-50`}
                     >
@@ -333,7 +333,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             {/* Scope Selection — hidden when scope is pre-locked OR when type is AVATAR */}
             {!defaultScope && !isAvatarType && (
               <div>
-                <label className="block text-sm font-medium text-moss-green mb-2">
+                <label className="block text-sm font-medium text-brand-ink mb-2">
                   Scope
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -343,7 +343,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                     disabled={uploading}
                     className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
                       assetScope === AssetScope.USER
-                        ? 'border-moss-green bg-moss-green/10 text-moss-green'
+                        ? 'border-moss-green bg-moss-green/10 text-brand-ink'
                         : 'border-moss-green/20 text-stone-gray hover:border-moss-green/50'
                     } disabled:opacity-50`}
                   >
@@ -358,7 +358,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                       disabled={uploading}
                       className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
                         assetScope === AssetScope.CAMPAIGN
-                          ? 'border-moss-green bg-moss-green/10 text-moss-green'
+                          ? 'border-moss-green bg-moss-green/10 text-brand-ink'
                           : 'border-moss-green/20 text-stone-gray hover:border-moss-green/50'
                       } disabled:opacity-50`}
                     >
@@ -374,7 +374,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                       disabled={uploading}
                       className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
                         assetScope === AssetScope.GLOBAL
-                          ? 'border-moss-green bg-moss-green/10 text-moss-green'
+                          ? 'border-moss-green bg-moss-green/10 text-brand-ink'
                           : 'border-moss-green/20 text-stone-gray hover:border-moss-green/50'
                       } disabled:opacity-50`}
                     >
@@ -392,7 +392,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             {/* AVATAR auto-scope notice */}
             {isAvatarType && !defaultScope && (
               <div className="flex items-center gap-2 px-3 py-2 bg-parchment/50 border border-moss-green/20 rounded-lg text-sm text-stone-gray">
-                <User className="w-4 h-4 flex-shrink-0 text-moss-green" />
+                <User className="w-4 h-4 flex-shrink-0 text-brand-ink" />
                 <span>Avatars are always saved to your Personal library.</span>
               </div>
             )}
@@ -400,7 +400,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             {/* Campaign Selection — shown only when scope is CAMPAIGN and campaign not pre-locked */}
             {!defaultCampaignId && assetScope === AssetScope.CAMPAIGN && (
               <div>
-                <label className="block text-sm font-medium text-moss-green mb-2">
+                <label className="block text-sm font-medium text-brand-ink mb-2">
                   Select Campaign
                 </label>
                 <select
@@ -428,7 +428,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
             {/* File Upload Area */}
             <div>
-              <label className="block text-sm font-medium text-moss-green mb-2">
+              <label className="block text-sm font-medium text-brand-ink mb-2">
                 File
                 <span className="ml-2 font-normal text-xs text-stone-gray/70">
                   max {formatUploadLimit(getUploadLimit(serverConfig, assetType))}
@@ -464,8 +464,8 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
                 {selectedFile ? (
                   <>
-                    <FileImage className="w-12 h-12 mx-auto mb-3 text-moss-green" />
-                    <p className="text-moss-green font-medium">{selectedFile.name}</p>
+                    <FileImage className="w-12 h-12 mx-auto mb-3 text-brand-ink" />
+                    <p className="text-brand-ink font-medium">{selectedFile.name}</p>
                     <p className="text-sm text-stone-gray mt-1">
                       {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
                     </p>
@@ -482,7 +482,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-moss-green mb-2">Name</label>
+              <label className="block text-sm font-medium text-brand-ink mb-2">Name</label>
               <input
                 type="text"
                 value={name}
@@ -495,7 +495,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-moss-green mb-2">
+              <label className="block text-sm font-medium text-brand-ink mb-2">
                 Description (Optional)
               </label>
               <textarea
@@ -510,7 +510,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
             {/* Tags */}
             <div>
-              <label className="block text-sm font-medium text-moss-green mb-2">
+              <label className="block text-sm font-medium text-brand-ink mb-2">
                 Tags (Optional)
               </label>
               <input
@@ -534,7 +534,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                       <button
                         onClick={() => handleRemoveTag(tag)}
                         disabled={uploading}
-                        className="ml-1 hover:text-red-500 transition-colors disabled:opacity-50"
+                        className="ml-1 hover:text-danger-ink transition-colors disabled:opacity-50"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -548,7 +548,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             {uploading && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-moss-green">Uploading...</span>
+                  <span className="text-sm text-brand-ink">Uploading...</span>
                   <span className="text-sm text-stone-gray">{uploadProgress}%</span>
                 </div>
                 <div className="w-full h-2 bg-moss-green/20 rounded-full overflow-hidden">
@@ -563,7 +563,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
             {/* Error Message */}
             {error && (
-              <div role="alert" className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-600 text-sm">
+              <div role="alert" className="p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm">
                 {error}
               </div>
             )}

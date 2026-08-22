@@ -91,7 +91,7 @@ function TokenTransferConfirmation({
       </div>
 
       <div className="flex gap-2 text-xs">
-        <button type="button" onClick={selectAll} className="text-moss-green hover:underline">
+        <button type="button" onClick={selectAll} className="text-brand-ink hover:underline">
           Select all
         </button>
         <span className="text-stone-gray/40">·</span>
@@ -224,7 +224,7 @@ function MapCard({
 
       {/* Info */}
       <div className="p-3">
-        <h3 className="font-semibold text-moss-green truncate text-sm mb-0.5">{map.name}</h3>
+        <h3 className="font-semibold text-brand-ink truncate text-sm mb-0.5">{map.name}</h3>
         <p className="text-xs text-stone-gray/60">
           {map.width}×{map.height} grid · {map.gridSize}px/sq
         </p>
@@ -238,8 +238,8 @@ function MapCard({
             title={isActive ? 'Already active' : 'Set as active map'}
             className={`flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
               isActive
-                ? 'bg-moss-green/10 text-moss-green/50 cursor-not-allowed'
-                : 'bg-moss-green/10 hover:bg-moss-green/20 text-moss-green'
+                ? 'bg-moss-green/10 text-brand-ink/50 cursor-not-allowed'
+                : 'bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink'
             }`}
           >
             {isSwitchingToThis ? (
@@ -263,7 +263,7 @@ function MapCard({
             type="button"
             onClick={() => onExport(map)}
             title="Export as .uvtt file"
-            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-moss-green transition-colors"
+            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -275,8 +275,8 @@ function MapCard({
             title={isActive ? 'Cannot delete the active map' : 'Delete map'}
             className={`p-1.5 rounded-lg transition-colors ${
               isActive
-                ? 'bg-red-500/5 text-red-400/40 cursor-not-allowed'
-                : 'bg-red-500/10 hover:bg-red-500/20 text-red-600'
+                ? 'bg-danger/5 text-danger-ink/40 cursor-not-allowed'
+                : 'bg-danger/10 hover:bg-danger/20 text-danger-ink'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -546,9 +546,9 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
               <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <MapPin className="w-6 h-6 text-moss-green" />
+                    <MapPin className="w-6 h-6 text-brand-ink" />
                     <div>
-                      <h2 className="text-xl font-bold text-moss-green">Map Library</h2>
+                      <h2 className="text-xl font-bold text-brand-ink">Map Library</h2>
                       <p className="text-xs text-stone-gray">{campaign.name}</p>
                     </div>
                   </div>
@@ -595,14 +595,14 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
               {/* Content */}
               <div className="p-6">
                 {error && (
-                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-700 text-sm flex items-start gap-2">
+                  <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     {error}
                   </div>
                 )}
 
                 {importSuccess && (
-                  <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-moss-green text-sm flex items-start gap-2">
+                  <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     {importSuccess}
                   </div>
@@ -610,7 +610,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
                 {isLoading ? (
                   <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-10 h-10 text-moss-green animate-spin" />
+                    <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
                   </div>
                 ) : maps.length === 0 ? (
                   <div className="text-center py-16 space-y-3">

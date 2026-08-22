@@ -164,7 +164,7 @@ export default function CharactersPage() {
                 <img src={mascotUrl} alt="CozyVTT" className="w-10 h-10 object-contain" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-moss-green font-heading">
+                <h1 className="text-3xl font-bold text-brand-ink font-heading">
                   My Characters
                 </h1>
                 <p className="text-sm text-warm-gray">
@@ -215,7 +215,7 @@ export default function CharactersPage() {
           {/* Create Character Section */}
           <section>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-moss-green font-heading">
+              <h2 className="text-2xl font-semibold text-brand-ink font-heading">
                 Your Characters
                 {!loading && (
                   <span className="text-lg text-warm-gray ml-2">
@@ -251,7 +251,7 @@ export default function CharactersPage() {
             {/* Loading State */}
             {loading && (
               <div className="flex flex-col items-center justify-center py-16">
-                <Loader2 className="w-12 h-12 text-moss-green animate-spin mb-4" />
+                <Loader2 className="w-12 h-12 text-brand-ink animate-spin mb-4" />
                 <p className="text-stone-gray">Loading your characters...</p>
               </div>
             )}
@@ -295,12 +295,12 @@ export default function CharactersPage() {
           {/* Character Stats (if characters exist) */}
           {!loading && characters.length > 0 && (
             <section className="glass-panel p-6">
-              <h3 className="text-lg font-semibold text-moss-green mb-4">
+              <h3 className="text-lg font-semibold text-brand-ink mb-4">
                 Quick Stats
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="text-center p-4 rounded-lg bg-moss-green/5">
-                  <p className="text-3xl font-bold text-moss-green">
+                  <p className="text-3xl font-bold text-brand-ink">
                     {characters.filter((c) => c.campaignId).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">Assigned to Campaigns</p>

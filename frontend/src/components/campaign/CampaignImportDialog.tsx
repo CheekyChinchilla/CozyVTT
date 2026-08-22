@@ -144,8 +144,8 @@ export default function CampaignImportDialog({
           {/* Header */}
           <div className="bg-moss-green/10 border-b border-moss-green/20 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FileArchive className="w-5 h-5 text-moss-green" />
-              <h2 className="text-lg font-bold text-moss-green">Import Campaign</h2>
+              <FileArchive className="w-5 h-5 text-brand-ink" />
+              <h2 className="text-lg font-bold text-brand-ink">Import Campaign</h2>
             </div>
             <button
               onClick={handleClose}
@@ -170,14 +170,14 @@ export default function CampaignImportDialog({
                 >
                   {loading ? (
                     <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="w-10 h-10 text-moss-green animate-spin" />
+                      <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
                       <p className="text-sm text-stone-gray">Reading archive...</p>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-10 h-10 text-moss-green/50 mx-auto mb-3" />
+                      <Upload className="w-10 h-10 text-brand-ink/50 mx-auto mb-3" />
                       <p className="text-sm font-medium text-stone-gray mb-1">
-                        Drop a <span className="font-mono text-moss-green">.cozyvtt</span> file here
+                        Drop a <span className="font-mono text-brand-ink">.cozyvtt</span> file here
                       </p>
                       <p className="text-xs text-warm-gray">or click to browse</p>
                     </>
@@ -280,7 +280,7 @@ export default function CampaignImportDialog({
             {/* ── IMPORTING STEP ── */}
             {step === 'importing' && (
               <div className="text-center py-8">
-                <Loader2 className="w-12 h-12 text-moss-green animate-spin mx-auto mb-4" />
+                <Loader2 className="w-12 h-12 text-brand-ink animate-spin mx-auto mb-4" />
                 <p className="text-sm font-medium text-stone-gray mb-1">Importing campaign...</p>
                 <p className="text-xs text-warm-gray">This may take a moment for large archives.</p>
               </div>
@@ -289,9 +289,9 @@ export default function CampaignImportDialog({
             {/* ── DONE STEP ── */}
             {step === 'done' && result && (
               <div className="text-center py-6 space-y-4">
-                <CheckCircle2 className="w-12 h-12 text-moss-green mx-auto" />
+                <CheckCircle2 className="w-12 h-12 text-brand-ink mx-auto" />
                 <div>
-                  <p className="text-lg font-bold text-moss-green mb-1">Import Complete!</p>
+                  <p className="text-lg font-bold text-brand-ink mb-1">Import Complete!</p>
                   <p className="text-sm text-stone-gray">
                     <span className="font-semibold">{result.campaignName}</span> is ready.
                   </p>
@@ -328,9 +328,9 @@ export default function CampaignImportDialog({
             {/* ── ERROR STEP ── */}
             {step === 'error' && (
               <div className="text-center py-6 space-y-4">
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
+                <AlertCircle className="w-12 h-12 text-danger-ink mx-auto" />
                 <div>
-                  <p className="text-lg font-bold text-red-600 mb-1">Import Failed</p>
+                  <p className="text-lg font-bold text-danger-ink mb-1">Import Failed</p>
                   <p className="text-sm text-stone-gray">{errorMessage}</p>
                 </div>
                 <div className="flex items-center gap-3 pt-2">
@@ -354,7 +354,7 @@ export default function CampaignImportDialog({
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
   return (
     <div className="flex items-center gap-2 p-3 rounded-lg bg-parchment/50 border border-moss-green/10">
-      <span className="text-moss-green">{icon}</span>
+      <span className="text-brand-ink">{icon}</span>
       <div>
         <p className="text-xs text-warm-gray">{label}</p>
         <p className="text-sm font-semibold text-stone-gray">{value}</p>

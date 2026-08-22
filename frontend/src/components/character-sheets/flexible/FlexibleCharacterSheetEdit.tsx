@@ -172,7 +172,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full border-2 border-moss-green/30 bg-moss-green/10 flex items-center justify-center">
-                  <User className="w-8 h-8 text-moss-green/40" />
+                  <User className="w-8 h-8 text-brand-ink/40" />
                 </div>
               )}
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -192,7 +192,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-moss-green">
+            <h2 className="text-2xl font-bold text-brand-ink">
               Editing: {character.name}
             </h2>
             <p className="text-sm text-stone-gray">
@@ -239,7 +239,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       <div className="relative">
         <button
           onClick={() => setShowAddMenu(!showAddMenu)}
-          className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-moss-green rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+          className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
         >
           <Plus className="w-4 h-4" />
           Add Section

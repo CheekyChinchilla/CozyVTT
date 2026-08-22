@@ -178,6 +178,8 @@ All runtime configuration is managed through the Admin dashboard after setup:
 
 | Tab | Setting | Description |
 |-----|---------|-------------|
+| Users | Invite User | Email someone a link to join and choose their own password (needs SMTP; link valid 7 days) |
+| Users | Create User | Generate a temporary password to hand over yourself — for instances without email |
 | Settings | Instance Name | Displayed in the browser title and emails |
 | Settings | Allow Registration | Whether new users can self-register |
 | Settings | Require Admin Approval | New registrations must be approved before login |
@@ -187,6 +189,9 @@ All runtime configuration is managed through the Admin dashboard after setup:
 | Appearance | Default Theme | Theme shown on the login page and used for new users (each user can override from their profile) |
 | Appearance | Default Font | Default font family applied alongside the default theme |
 | Appearance | Custom Branding | Upload custom logo, mascot icon, and favicon (always instance-wide) |
+
+However an account is added, its first sign-in ends with the person choosing their own password — an
+admin-issued temporary password cannot be used for anything else.
 
 ### Default Upload Limits
 

@@ -108,7 +108,16 @@ class ApiClient {
 
           // Forbidden
           if (status === 403) {
-            console.error('Permission denied:', data.message);
+            // The account must replace an admin-issued password before it can
+            // do anything else. Covers tabs left open when the flag was set.
+            const code = (data as { code?: string })?.code;
+            if (code === 'PASSWORD_CHANGE_REQUIRED') {
+              if (window.location.pathname !== '/auth/change-password') {
+                window.location.href = '/auth/change-password';
+              }
+            } else {
+              console.error('Permission denied:', data.message);
+            }
           }
 
           // Rate limited
@@ -318,12 +327,33 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Create a user with a temporary password. `temporaryPassword` is only
+   * returned when the welcome email could not be sent (no SMTP, or delivery
+   * failed) — otherwise the user has it and the admin does not need it.
+   */
   async createAdminUser(data: {
     email: string;
     displayName?: string;
     platformRole?: string;
-  }): Promise<{ message: string; user: User; temporaryPassword: string }> {
+  }): Promise<{ message: string; user: User; emailSent: boolean; temporaryPassword?: string }> {
     const response = await this.client.post('/api/admin/users', data);
+    return response.data;
+  }
+
+  /** Invite a user by email — no password is created or returned. */
+  async inviteAdminUser(data: {
+    email: string;
+    displayName?: string;
+    platformRole?: string;
+  }): Promise<{ message: string; user: User; expiresInDays: number }> {
+    const response = await this.client.post('/api/admin/users/invite', data);
+    return response.data;
+  }
+
+  /** Issue a fresh invitation link, invalidating any outstanding one. */
+  async resendAdminUserInvite(userId: string): Promise<{ message: string; expiresInDays: number }> {
+    const response = await this.client.post(`/api/admin/users/${userId}/resend-invite`);
     return response.data;
   }
 

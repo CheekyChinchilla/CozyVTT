@@ -124,7 +124,7 @@ export default function InvitationModal({
 
           {/* Campaign Details */}
           <div className="mb-6 p-4 rounded-lg bg-parchment/50 border border-moss-green/20">
-            <h3 className="text-lg font-semibold text-moss-green mb-2">
+            <h3 className="text-lg font-semibold text-brand-ink mb-2">
               {invitation.campaign?.name}
             </h3>
             {invitation.campaign?.description && (
@@ -152,7 +152,7 @@ export default function InvitationModal({
 
           {/* Character Selection */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-moss-green mb-3">
+            <h3 className="text-lg font-semibold text-brand-ink mb-3">
               Select Characters (Optional)
             </h3>
             <p className="text-sm text-warm-gray mb-4">
@@ -183,7 +183,7 @@ export default function InvitationModal({
                       type="checkbox"
                       checked={selectedCharacterIds.includes(character.id)}
                       onChange={() => toggleCharacter(character.id)}
-                      className="w-4 h-4 rounded border-moss-green/30 text-moss-green focus:ring-moss-green focus:ring-offset-0"
+                      className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green focus:ring-offset-0"
                     />
                     {character.tokenImageUrl ? (
                       <img
@@ -193,7 +193,7 @@ export default function InvitationModal({
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-moss-green/10 border border-moss-green/20 flex items-center justify-center">
-                        <span className="text-sm text-moss-green font-semibold">
+                        <span className="text-sm text-brand-ink font-semibold">
                           {character.name.charAt(0).toUpperCase()}
                         </span>
                       </div>

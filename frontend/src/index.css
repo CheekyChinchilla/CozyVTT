@@ -35,6 +35,21 @@
     /* Game-specific (not theme-dependent) */
     --color-spirit: 147 112 219;
 
+    /* ── Readable text variants and state colors ──
+       Overwritten per theme by applyThemeColors() → deriveReadableTokens();
+       these defaults match the Cozy Default palette so the app renders
+       correctly during the first paint, before a theme is applied. */
+    --color-brand-ink: 74 93 78;
+    --color-accent-ink: 138 90 43;
+    --color-spirit-ink: 106 71 178;
+    --color-danger-ink: 176 46 33;
+    --color-success: 34 139 68;
+    --color-success-ink: 30 122 60;
+    --color-warning: 191 129 20;
+    --color-warning-ink: 148 100 15;
+    --color-info: 37 99 190;
+    --color-info-ink: 37 99 190;
+
     /* ── Font Families ── */
     --font-heading: 'Quicksand', 'Comfortaa', sans-serif;
     --font-body: 'Inter', 'Open Sans', sans-serif;
@@ -103,6 +118,50 @@
   /* Card */
   .card-cozy {
     @apply glass-panel p-6 hover:shadow-xl transition-shadow duration-300;
+  }
+
+  /* ── Status messages ──
+     Use these instead of raw Tailwind colors (bg-red-50 / text-red-700 and
+     friends): those keep their light-mode look on dark themes, so an error
+     box renders as a pale pink panel. The tints below are alpha-composited
+     over whatever surface they sit on, and the text uses the derived `-ink`
+     variant, so both stay readable on every theme.
+
+       <div className="alert-danger">…</div>
+
+     For a message that is only text (no panel), use text-danger-ink /
+     text-success-ink / text-warning-ink / text-info-ink directly. */
+  .alert-danger {
+    @apply bg-danger/10 border border-danger/30 text-danger-ink rounded-cozy px-3 py-2 text-sm;
+  }
+
+  .alert-success {
+    @apply bg-success/10 border border-success/30 text-success-ink rounded-cozy px-3 py-2 text-sm;
+  }
+
+  .alert-warning {
+    @apply bg-warning/10 border border-warning/30 text-warning-ink rounded-cozy px-3 py-2 text-sm;
+  }
+
+  .alert-info {
+    @apply bg-info/10 border border-info/30 text-info-ink rounded-cozy px-3 py-2 text-sm;
+  }
+
+  /* ── Status pills ── */
+  .badge-danger {
+    @apply inline-flex items-center rounded-full bg-danger/15 text-danger-ink px-2 py-0.5 text-[10px] font-medium;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center rounded-full bg-success/15 text-success-ink px-2 py-0.5 text-[10px] font-medium;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center rounded-full bg-warning/15 text-warning-ink px-2 py-0.5 text-[10px] font-medium;
+  }
+
+  .badge-neutral {
+    @apply inline-flex items-center rounded-full bg-ink-muted/15 text-ink-secondary px-2 py-0.5 text-[10px] font-medium;
   }
 }
 

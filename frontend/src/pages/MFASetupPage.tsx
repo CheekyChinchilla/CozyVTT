@@ -111,10 +111,10 @@ export default function MFASetupPage() {
         <div className="text-center">
           <div className="flex justify-center mb-4">
             <div className="bg-moss-green/10 rounded-full p-3">
-              <Shield className="w-8 h-8 text-moss-green" />
+              <Shield className="w-8 h-8 text-brand-ink" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-moss-green font-heading">
+          <h1 className="text-2xl font-bold text-brand-ink font-heading">
             Set Up Two-Factor Authentication
           </h1>
           <p className="mt-1 text-sm text-warm-gray">
@@ -127,16 +127,16 @@ export default function MFASetupPage() {
         {/* ── Loading ── */}
         {step === 'loading' && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-moss-green animate-spin" />
+            <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
           </div>
         )}
 
         {/* ── Error ── */}
         {step === 'error' && (
           <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{initError}</p>
+            <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 flex gap-3">
+              <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-danger-ink">{initError}</p>
             </div>
             <Button onClick={() => navigate('/profile')} variant="secondary" className="w-full">
               Back to Profile
@@ -165,14 +165,14 @@ export default function MFASetupPage() {
             <div>
               <p className="text-xs font-medium text-stone-gray mb-1.5">Manual entry key</p>
               <div className="flex items-center gap-2 p-3 rounded-lg bg-parchment/60 border border-moss-green/15">
-                <code className="flex-1 text-sm font-mono text-moss-green break-all">{secret}</code>
+                <code className="flex-1 text-sm font-mono text-brand-ink break-all">{secret}</code>
                 <button
                   onClick={copySecret}
                   className="flex-shrink-0 p-1.5 rounded hover:bg-moss-green/10 transition-colors"
                   title="Copy secret"
                 >
                   {secretCopied ? (
-                    <CheckCircle className="w-4 h-4 text-moss-green" />
+                    <CheckCircle className="w-4 h-4 text-brand-ink" />
                   ) : (
                     <Copy className="w-4 h-4 text-stone-gray" />
                   )}
@@ -198,13 +198,13 @@ export default function MFASetupPage() {
                   }}
                   placeholder="000000"
                   className={`input-cozy w-full text-center text-2xl tracking-widest font-mono ${
-                    tokenError ? 'border-red-400 focus:ring-red-400' : ''
+                    tokenError ? 'border-danger/60 focus:ring-danger' : ''
                   }`}
                   autoFocus
                   autoComplete="one-time-code"
                 />
                 {tokenError && (
-                  <p className="mt-1 text-xs text-red-600">{tokenError}</p>
+                  <p className="mt-1 text-xs text-danger-ink">{tokenError}</p>
                 )}
               </div>
 
@@ -243,11 +243,11 @@ export default function MFASetupPage() {
         {step === 'backup-codes' && (
           <div className="space-y-5">
             {/* Success banner */}
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 border border-green-200">
-              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/30">
+              <CheckCircle className="w-5 h-5 text-success-ink flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-green-800">MFA Enabled Successfully</p>
-                <p className="text-xs text-green-700 mt-0.5">
+                <p className="text-sm font-semibold text-success-ink">MFA Enabled Successfully</p>
+                <p className="text-xs text-success-ink mt-0.5">
                   Your account is now protected with two-factor authentication.
                 </p>
               </div>
@@ -271,7 +271,7 @@ export default function MFASetupPage() {
                 </p>
                 <button
                   onClick={copyBackupCodes}
-                  className="flex items-center gap-1 text-xs text-moss-green hover:text-moss-green/80 transition-colors"
+                  className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
                 >
                   {codesCopied ? (
                     <>
@@ -290,7 +290,7 @@ export default function MFASetupPage() {
                 {backupCodes.map((code, i) => (
                   <code
                     key={i}
-                    className="text-sm font-mono text-moss-green text-center py-1.5 px-2 rounded bg-paper/60 border border-moss-green/10"
+                    className="text-sm font-mono text-brand-ink text-center py-1.5 px-2 rounded bg-paper/60 border border-moss-green/10"
                   >
                     {code.slice(0, 4)}-{code.slice(4)}
                   </code>
@@ -304,7 +304,7 @@ export default function MFASetupPage() {
                 type="checkbox"
                 checked={codesAcknowledged}
                 onChange={(e) => setCodesAcknowledged(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-moss-green/30 text-moss-green focus:ring-moss-green/50"
+                className="mt-0.5 w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
               />
               <span className="text-sm text-stone-gray">
                 I have saved my backup codes in a secure location.

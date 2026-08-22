@@ -18,6 +18,24 @@ export function isStrongPassword(password: string): boolean {
   return hasUpperCase && hasLowerCase && hasNumber;
 }
 
+/**
+ * Password rules shown as a live checklist on the pages where a password is
+ * chosen. These mirror `validatePasswordStrength` in the backend exactly — keep
+ * them in step, or the UI will accept passwords the server rejects.
+ */
+export const PASSWORD_REQUIREMENTS: Array<{ test: (p: string) => boolean; label: string }> = [
+  { test: (p) => p.length >= 8,          label: 'At least 8 characters' },
+  { test: (p) => /[A-Z]/.test(p),        label: 'One uppercase letter' },
+  { test: (p) => /[a-z]/.test(p),        label: 'One lowercase letter' },
+  { test: (p) => /[0-9]/.test(p),        label: 'One number' },
+  { test: (p) => /[^A-Za-z0-9]/.test(p), label: 'One special character' },
+];
+
+/** True when every rule in PASSWORD_REQUIREMENTS passes. */
+export function meetsPasswordRequirements(password: string): boolean {
+  return PASSWORD_REQUIREMENTS.every((r) => r.test(password));
+}
+
 export function getPasswordStrength(password: string): {
   score: number;
   label: string;

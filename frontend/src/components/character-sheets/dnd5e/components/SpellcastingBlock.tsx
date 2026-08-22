@@ -57,7 +57,7 @@ const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
           {idx < remaining ? (
             <CircleDot className="w-3 h-3 text-blue-600" />
           ) : (
-            <Circle className="w-3 h-3 text-stone-300" />
+            <Circle className="w-3 h-3 text-stone-500" />
           )}
         </div>
       ))}
@@ -78,7 +78,7 @@ const SpellRow: React.FC<{ spell: Spell }> = ({ spell }) => {
         {spell.prepared ? (
           <BookOpen className="w-4 h-4 text-blue-600" />
         ) : (
-          <BookOpen className="w-4 h-4 text-stone-300" />
+          <BookOpen className="w-4 h-4 text-stone-500" />
         )}
         <span className={`text-sm ${spell.prepared ? 'text-stone-800 font-medium' : 'text-stone-500'}`}>
           {spell.name}

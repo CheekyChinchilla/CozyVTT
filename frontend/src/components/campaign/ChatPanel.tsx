@@ -402,7 +402,7 @@ export default function ChatPanel() {
       <div className="glass-panel h-full flex flex-col">
         {/* Header skeleton */}
         <div className="flex items-center gap-2 p-4 border-b border-moss-green/20">
-          <MessageCircle className="w-5 h-5 text-moss-green/40" />
+          <MessageCircle className="w-5 h-5 text-brand-ink/40" />
           <div className="h-5 w-10 bg-moss-green/15 rounded animate-pulse" />
         </div>
         {/* Message skeletons */}
@@ -425,8 +425,8 @@ export default function ChatPanel() {
     <div className="glass-panel h-full flex flex-col">
       {/* Chat Header */}
       <div className="flex items-center gap-2 p-4 border-b border-moss-green/20">
-        <MessageCircle className="w-5 h-5 text-moss-green" />
-        <h3 className="text-lg font-semibold text-moss-green">Chat</h3>
+        <MessageCircle className="w-5 h-5 text-brand-ink" />
+        <h3 className="text-lg font-semibold text-brand-ink">Chat</h3>
         {messages.length > 0 && (
           <span className="text-xs text-stone-gray/70 ml-auto">
             {messages.length} {messages.length === 1 ? 'message' : 'messages'}
@@ -436,9 +436,9 @@ export default function ChatPanel() {
 
       {/* Error Display */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="mx-4 mt-4 p-3 bg-danger/10 border border-danger/30 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-danger-ink flex-shrink-0" />
+          <p className="text-sm text-danger-ink">{error}</p>
         </div>
       )}
 
@@ -475,7 +475,7 @@ export default function ChatPanel() {
         {/* Messages List */}
         {messages.length === 0 ? (
           <div className="text-center py-8">
-            <MessageCircle className="w-12 h-12 text-moss-green/30 mx-auto mb-3" />
+            <MessageCircle className="w-12 h-12 text-brand-ink/30 mx-auto mb-3" />
             <p className="text-sm text-warm-gray mb-2">No messages yet</p>
             <p className="text-xs text-stone-gray/70">
               Start a conversation with your party
@@ -527,7 +527,7 @@ export default function ChatPanel() {
 
           {/* Rate Limiting Feedback */}
           {!canSend && cooldownSeconds > 0 && (
-            <p className="text-xs text-amber-700 text-center">
+            <p className="text-xs text-warning-ink text-center">
               Wait {cooldownSeconds}s before sending another message
             </p>
           )}

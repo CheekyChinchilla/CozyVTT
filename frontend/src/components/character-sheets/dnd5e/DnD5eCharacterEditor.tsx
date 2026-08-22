@@ -1450,7 +1450,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         <div className="grid grid-cols-5 gap-3">
           {[
             { key: 'cp', label: 'Copper (CP)', color: 'text-amber-700' },
-            { key: 'sp', label: 'Silver (SP)', color: 'text-stone-400' },
+            { key: 'sp', label: 'Silver (SP)', color: 'text-stone-500' },
             { key: 'ep', label: 'Electrum (EP)', color: 'text-green-600' },
             { key: 'gp', label: 'Gold (GP)', color: 'text-yellow-600' },
             { key: 'pp', label: 'Platinum (PP)', color: 'text-slate-300' },

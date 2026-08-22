@@ -18,8 +18,9 @@ This guide covers deploying CozyVTT to a **production server** using Docker Comp
 8. [File Storage](#file-storage)
 9. [Database Backups](#database-backups)
 10. [Monitoring and Logs](#monitoring-and-logs)
-11. [Updating CozyVTT](#updating-cozyvtt)
-12. [Hardening Checklist](#hardening-checklist)
+11. [Troubleshooting](#troubleshooting)
+12. [Updating CozyVTT](#updating-cozyvtt)
+13. [Hardening Checklist](#hardening-checklist)
 
 ---
 
@@ -92,8 +93,16 @@ docker compose ps
 docker compose logs backend | grep -i migrat
 
 # Health check (returns {"status":"healthy",...})
-curl http://localhost/health
+docker compose exec backend wget -qO- http://localhost:4000/health
+
+# The API answers on the same address as the site — this must be JSON, not a web page
+curl -si http://localhost/api/setup/status | head -3
 ```
+
+That last check should show `content-type: application/json` followed by something like
+`{"setupCompleted":false,"hasUsers":false,"needsSetup":true}`. If it shows `content-type: text/html`,
+your `/api` requests are landing on the web pages instead of the API — see
+[Using an External Reverse Proxy](#using-an-external-reverse-proxy).
 
 ### Stopping and Starting
 
@@ -125,21 +134,71 @@ The defaults (`80`/`443`) apply if these variables are not set.
 
 If you already run a reverse proxy (Traefik, Caddy, another Nginx, or a Cloudflare Tunnel), you don't need the bundled `nginx` service.
 
-**Option A — Remove the nginx service and expose the frontend directly:**
+### First, the one thing that trips everyone up
 
-1. Delete the `nginx` service block from `docker-compose.yml`
-2. Change the `frontend` service from `expose` to `ports`:
+CozyVTT runs as three pieces: a **frontend** (the web pages you see), a **backend** (the API and live game connection), and a **database**. Your browser talks to both the frontend and the backend, on the same web address:
+
+| Web address | Must reach |
+|---|---|
+| `/api/...` | the **backend** |
+| `/socket.io/...` | the **backend** (this is the live connection — dice rolls, token movement, chat) |
+| everything else | the **frontend** |
+
+The bundled `nginx` service is what normally does that splitting. **If you remove it, your own proxy has to do all three lines above.**
+
+There's a second catch. Out of the box, the backend and frontend use `expose`, which means *"other containers can reach me"* — **not** *"the outside world can reach me."* The bundled nginx is the only piece with `ports`, which is what actually opens a port on your server. So when you delete the nginx service, you also have to open ports on the backend and frontend yourself, or your proxy will be pointing at nothing.
+
+> **If you miss this:** the site loads and looks fine, but the setup wizard never appears (you get a login page you can't use), or setup fails with **502**. That's the API being unreachable — the pages come from the frontend, which is still working.
+
+### Option A — Remove the nginx service (most common)
+
+1. **Delete the `nginx` service block** from `docker-compose.yml` (the whole `nginx:` section).
+
+2. **Open ports on the backend and frontend.** In `docker-compose.yml`, replace the `expose` block in each service with `ports`:
+
    ```yaml
-   ports:
-     - "8080:80"   # or whichever port your proxy can reach
+     backend:
+       # ...
+       ports:
+         - "127.0.0.1:4000:4000"     # was: expose: - "4000"
+
+     frontend:
+       # ...
+       ports:
+         - "127.0.0.1:8080:80"       # was: expose: - "80"
    ```
-3. Point your proxy to:
-   - `/api/*` and `/socket.io/*` → `backend:4000` (or `localhost:4000` from the host)
-   - Everything else → `frontend:80` (or `localhost:8080`)
 
-**Option B — Shared Docker network (recommended for Traefik/Caddy):**
+   Read `"127.0.0.1:8080:80"` as: *port 80 inside the container becomes port 8080 on this server, reachable only from this server itself.*
 
-1. Remove the `nginx` service from `docker-compose.yml`
+   > 🔒 **Keep the `127.0.0.1:` prefix.** Without it (`"4000:4000"`), your API is published on your server's public IP over plain, unencrypted HTTP — anyone who finds it bypasses your proxy entirely, along with any protection it provides. The `CORS_ORIGIN` setting does **not** protect against this; it only restricts browsers, not tools like `curl`.
+   >
+   > A firewall is not a substitute here: **Docker's published ports bypass UFW**, so a rule like `ufw deny 4000` usually does *not* block a port published this way. The `127.0.0.1:` prefix is the reliable control.
+
+3. **Point your proxy at those ports:**
+
+   | Requests for | Send to |
+   |---|---|
+   | `/api/...` | `http://localhost:4000` |
+   | `/socket.io/...` | `http://localhost:4000` |
+   | everything else | `http://localhost:8080` |
+
+4. **Restart and check it worked:**
+
+   ```bash
+   docker compose down     # also stops the old nginx container
+   docker compose up -d
+   curl -si https://your-domain.com/api/setup/status | head -3
+   ```
+
+   Use `down` first: deleting the `nginx` block from the file does **not** stop a container that is already running, and a leftover nginx still holding port 80 will confuse things. Your database is stored in a volume and is not affected by `down` (only `down -v` would erase it).
+
+   You should see `content-type: application/json` and a line like `{"setupCompleted":false,...}`. If you see `content-type: text/html`, your proxy is sending `/api` to the frontend instead of the backend. If you see `502`, nothing is listening where your proxy is pointing — usually step 2 was skipped.
+
+### Option B — Shared Docker network (recommended for Traefik/Caddy)
+
+If your proxy also runs in Docker, this is cleaner: it talks to the containers directly by name, and **no ports need to be opened at all**.
+
+1. Remove the `nginx` service block from `docker-compose.yml`
 2. Add your proxy's network to both `frontend` and `backend` services:
    ```yaml
    networks:
@@ -154,21 +213,143 @@ If you already run a reverse proxy (Traefik, Caddy, another Nginx, or a Cloudfla
      proxy:
        external: true
    ```
-4. Configure your proxy to route to `frontend:80` and `backend:4000` by container name.
+4. Configure your proxy to route to `frontend:80` and `backend:4000` by container name — same three routing lines from the table above.
 
-**Cloudflare Tunnel:**
+### Cloudflare Tunnel
 
-Use Option A or B above. Cloudflare Tunnel does not require ports 80 or 443 to be open on your host — `cloudflared` makes outbound connections to Cloudflare's network, so no inbound firewall rules are needed.
+`cloudflared` makes an outbound connection to Cloudflare, so no inbound ports need to be open on your server's firewall. There are three ways to set it up — pick one:
+
+**1. Keep the bundled nginx (simplest, recommended).** Leave `docker-compose.yml` exactly as shipped and point the tunnel at it. One rule, nothing to open, and nginx handles the `/api` vs `/socket.io` vs frontend split for you:
+
+```yaml
+# ~/.cloudflared/config.yml
+ingress:
+  - hostname: cozyvtt.example.com
+    service: http://localhost:80        # or your HTTP_PORT
+  - service: http_status:404
+```
+
+This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) and secure-cookie headers working without extra configuration.
+
+**2. Run `cloudflared` as a container** on CozyVTT's own Docker network. Nothing is published to the host at all — the tunnel reaches the containers by name:
+
+```yaml
+ingress:
+  - hostname: cozyvtt.example.com
+    path: ^/api/
+    service: http://backend:4000
+  - hostname: cozyvtt.example.com
+    path: ^/socket.io/
+    service: http://backend:4000
+  - hostname: cozyvtt.example.com
+    service: http://frontend:80
+  - service: http_status:404
+```
+
+> ⚠️ Inside a container, `localhost` means *that container itself*, not your server. Use the service names (`backend`, `frontend`) as above — `http://localhost:4000` will fail here.
+
+**3. `cloudflared` installed on the server** (not in Docker), with the ports from Option A step 2 opened:
+
+```yaml
+ingress:
+  - hostname: cozyvtt.example.com
+    path: ^/api/
+    service: http://localhost:4000
+  - hostname: cozyvtt.example.com
+    path: ^/socket.io/
+    service: http://localhost:4000
+  - hostname: cozyvtt.example.com        # catch-all — must be LAST
+    service: http://localhost:8080
+  - service: http_status:404
+```
+
+**Rule order matters.** Cloudflare reads ingress rules top to bottom and uses the **first** one that matches. A rule with only a `hostname` matches *everything* for that domain, so if you put it above the `path` rules, it swallows `/api` and `/socket.io` — and you get the "login page instead of setup wizard" symptom. Always list the specific `path` rules first and the catch-all last.
+
+`path: ^/api/` is a pattern meaning *"any address starting with `/api/`"*. Keep it exactly as written.
+
+After editing `~/.cloudflared/config.yml`, restart the tunnel and re-run the check from Option A step 4:
+
+```bash
+sudo systemctl restart cloudflared
+curl -si https://cozyvtt.example.com/api/setup/status | head -3
+```
 
 ### Minimum proxy requirements
 
 Whatever proxy you use, it must:
-- Forward `/api/*` and `/socket.io/*` to the backend
+- Forward `/api/*` and `/socket.io/*` to the backend, and everything else to the frontend
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
 - Pass `X-Forwarded-For` and `X-Forwarded-Proto` headers to the backend
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
 
+> ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
+
 > ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured.
+
+### Updating after you've edited `docker-compose.yml`
+
+Once you've changed `docker-compose.yml`, a plain `git pull` will stop and complain, because your changes and ours are both in that file:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        docker-compose.yml
+Please commit your changes or stash them before you merge.
+```
+
+Set your changes aside, update, then put them back:
+
+```bash
+git stash          # tuck your edits away
+git pull           # get the update
+git stash pop      # re-apply your edits
+```
+
+If `git stash pop` reports a conflict, the file will contain both versions marked with `<<<<<<<` and `>>>>>>>` lines — open it, keep the lines you want, delete the markers, then `docker compose up -d --build`.
+
+> ⚠️ **Don't "fix" this with `git checkout -- docker-compose.yml`.** That throws your customizations away and restores the shipped file — you'd lose your ports, your proxy setup, everything you changed.
+
+### Optional: avoid the conflicts entirely (advanced)
+
+If you update often and would rather never deal with the above, Docker Compose can read a **second, personal file** that sits on top of the shipped one. Name it `docker-compose.override.yml` and put it next to `docker-compose.yml`; `docker compose up -d` picks it up automatically, and CozyVTT's `.gitignore` already excludes it, so `git pull` will never touch it.
+
+Copy the ready-made example to get started:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+```
+
+It contains only the settings you're changing — **not** a copy of the whole file:
+
+```yaml
+services:
+  nginx:
+    profiles: ["disabled"]              # keeps nginx from starting
+  backend:
+    ports:
+      - "127.0.0.1:4000:4000"
+  frontend:
+    ports:
+      - "127.0.0.1:8080:80"
+```
+
+Two things to know:
+
+- **Adding settings works naturally.** The `ports` lines above are simply added to the shipped configuration. You leave `docker-compose.yml` untouched, so it updates cleanly forever.
+- **Removing a service doesn't.** There's no way to delete something in this second file — it can only add or change. The `profiles: ["disabled"]` line above is the workaround: it tags the nginx service so it never starts. (If you'd rather not use that, you can leave the line out and start CozyVTT with `docker compose up -d database backend frontend`, naming the services you want — but you have to remember it every time.)
+
+Check that it did what you expect, then restart:
+
+```bash
+docker compose config --services   # lists what will run — nginx should be absent
+docker compose config              # shows the full merged configuration
+
+docker compose down                # stops the currently-running nginx
+docker compose up -d
+```
+
+`down` is needed the first time because an nginx container that is already running keeps running until it is stopped — the profile only controls what *starts*.
+
+> One catch: this automatic pickup only happens when you run plain `docker compose` commands. If you pass `-f` yourself, list both files: `docker compose -f docker-compose.yml -f docker-compose.override.yml up -d`.
 
 ---
 
@@ -359,7 +540,7 @@ openssl rand -hex 32
 
 ### SMTP Setup (Optional)
 
-Email is required for password reset and invitation notifications. Configure in `.env`:
+Email is required for password resets and invitations. Configure in `.env`:
 
 ```env
 SMTP_HOST=smtp.example.com
@@ -373,7 +554,19 @@ APP_URL=https://your-domain.com
 
 Test from **Admin Dashboard → Settings → Test Email** after deploying.
 
-If SMTP is not configured, admin-initiated password resets still work — the admin generates a temporary password from the Users tab.
+#### What SMTP unlocks
+
+| Feature | With SMTP | Without SMTP |
+|---|---|---|
+| **Adding a user** | **Invite User** — they get an email with a link and choose their own password. Nobody else ever sees it. | **Create User** — a temporary password is generated and shown to you once, to hand over yourself |
+| Password resets (self-service) | User clicks "Forgot password" and gets a reset link | Unavailable — the user has to ask an admin |
+| Password resets (admin) | Email the user a reset link, or generate a temporary password | Generate a temporary password from the Users tab |
+| Campaign invitations | Emailed to the player | Share the invite link manually |
+
+Either way, an account created by an admin **must set its own password on first sign-in** — the
+temporary password works for nothing else, so an admin never keeps usable access to someone's
+account. Invitation links are valid for **7 days**; use **Invite** on the Users tab to send a fresh
+one if it expires.
 
 ### Upload Size Limits
 
@@ -493,14 +686,68 @@ Returns `200 OK` when healthy:
 
 Returns `503` with `"status": "degraded"` if the database is unreachable. Useful for uptime monitors and load balancer health probes.
 
+This endpoint lives on the **backend**, which the bundled Nginx does not forward — so on a default install, check it from inside the stack:
+
 ```bash
-curl http://your-server/health
+docker compose exec backend wget -qO- http://localhost:4000/health
 ```
+
+Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
+
+If you run your own reverse proxy and want an uptime monitor to reach `/health` from outside, add a route for it alongside your `/api` route, both pointing at the backend.
 
 ### Database Connectivity
 
 ```bash
 docker compose exec database pg_isready -U cozyvtt
+```
+
+---
+
+## Troubleshooting
+
+### A brand-new install shows the login page instead of the setup wizard
+
+…and going to `/setup` sends you straight back to the home page.
+
+**Cause:** your `/api` requests aren't reaching the backend, so the app can't tell that this is a new installation. Almost always a reverse-proxy routing problem, not a CozyVTT problem.
+
+**Check it:**
+
+```bash
+curl -si https://your-domain.com/api/setup/status | head -3
+```
+
+| What you see | What it means | Fix |
+|---|---|---|
+| `content-type: application/json` | The API is fine — the problem is elsewhere | Check `docker compose logs backend` |
+| `content-type: text/html` | `/api` is being answered by the web pages instead of the backend | Add the `/api/...` → backend route to your proxy |
+| `502` or a connection error | Nothing is listening where your proxy points | Open the backend port — see [Option A](#option-a--remove-the-nginx-service-most-common) step 2 |
+
+### Setup fails with "An error occurred during setup" (502)
+
+Same root cause as above: the browser reached the wizard (served by the frontend), but the request that creates your admin account goes to the backend, which your proxy can't reach. Run the same check.
+
+If you removed the bundled `nginx` service, the usual culprit is a missing `ports` entry on the **backend** service — it is `expose`-only by default, which means "reachable from other containers" but not from your proxy.
+
+### Live features don't work (dice, token movement, chat)
+
+The page loads and you can log in, but nothing updates in real time. Your proxy is routing `/api` but not `/socket.io`. Add the `/socket.io/...` → backend route, and make sure your proxy allows WebSocket upgrades.
+
+### `git pull` refuses to update because of local changes
+
+```
+error: Your local changes to the following files would be overwritten by merge
+```
+
+You edited a tracked file (usually `docker-compose.yml`). See [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml).
+
+### Uploads fail on large files
+
+Check [Upload Size Limits](#upload-size-limits). The backend logs its effective limits at startup and warns when your proxy's body limit is smaller than they are:
+
+```bash
+docker compose logs backend | grep -i "upload limits"
 ```
 
 ---
@@ -598,11 +845,17 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
        service: http://localhost:80   # or whatever HTTP_PORT you set
      - service: http_status:404
    ```
+   > This single rule assumes you kept the bundled `nginx` service, which is the recommended setup — it splits `/api` and `/socket.io` off to the backend for you. **If you removed nginx**, one rule is not enough; you need path-based rules in a specific order, plus published ports. See [Cloudflare Tunnel](#cloudflare-tunnel) under "Using an External Reverse Proxy".
 6. Run as a service:
    ```bash
    sudo cloudflared service install
    sudo systemctl start cloudflared
    ```
+7. Confirm the API is reachable through the tunnel, not just the web pages:
+   ```bash
+   curl -si https://cozyvtt.example.com/api/setup/status | head -3
+   ```
+   You want `content-type: application/json`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
 
 Once running, you can **close ports 80 and 443 on your VPS firewall entirely** — only SSH (port 22, or your chosen alternative) needs to be reachable, and even that you can put behind Cloudflare Access if you want.
 

@@ -43,7 +43,7 @@ const VARIANT_CONFIG: Record<ConfirmVariant, {
     confirmClass: 'bg-warm-amber hover:bg-sunset-orange focus:ring-warm-amber text-white',
   },
   info: {
-    icon: <HelpCircle className="w-6 h-6 text-brand" aria-hidden="true" />,
+    icon: <HelpCircle className="w-6 h-6 text-brand-ink" aria-hidden="true" />,
     iconBg: 'bg-brand/10',
     confirmClass: 'bg-brand hover:bg-brand-dark focus:ring-brand text-white',
   },

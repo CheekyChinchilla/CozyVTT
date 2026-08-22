@@ -29,7 +29,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ section }) => {
           >
             <div className="text-sm text-stone-gray mb-1">{field.name}</div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-moss-green">{field.value}</span>
+              <span className="text-2xl font-bold text-brand-ink">{field.value}</span>
               {field.modifier !== undefined && (
                 <span className="text-lg text-stone-gray">
                   ({formatModifier(field.modifier)})

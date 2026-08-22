@@ -26,7 +26,7 @@ export const TableDisplay: React.FC<TableDisplayProps> = ({ section }) => {
             {section.columns.map((column) => (
               <th
                 key={column.id}
-                className="px-4 py-2 text-left text-sm font-semibold text-moss-green"
+                className="px-4 py-2 text-left text-sm font-semibold text-brand-ink"
                 style={{ width: column.width }}
               >
                 {column.name}

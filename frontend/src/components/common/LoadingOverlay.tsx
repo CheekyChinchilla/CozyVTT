@@ -31,7 +31,7 @@ export default function LoadingOverlay({ show, message, contained = false }: Loa
         aria-label={message || 'Loading'}
         className="glass-panel px-8 py-6 flex flex-col items-center gap-4 shadow-xl"
       >
-        <Loader2 className="w-8 h-8 text-moss-green animate-spin" aria-hidden="true" />
+        <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
         {message ? (
           <p className="text-sm font-medium text-stone-gray text-center max-w-xs">
             {message}

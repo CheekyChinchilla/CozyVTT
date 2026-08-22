@@ -124,7 +124,7 @@ export default function DeleteCharacterModal({
                 {!campaign && (
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-4">
                     <p className="text-sm text-stone-gray">
-                      Are you sure you want to delete <strong className="text-moss-green">{character.name}</strong>?
+                      Are you sure you want to delete <strong className="text-brand-ink">{character.name}</strong>?
                       This action cannot be undone.
                     </p>
                   </div>
@@ -132,7 +132,7 @@ export default function DeleteCharacterModal({
 
                 {/* Character Info */}
                 <div className="glass-panel p-4">
-                  <h3 className="font-semibold text-moss-green mb-2">Character Details</h3>
+                  <h3 className="font-semibold text-brand-ink mb-2">Character Details</h3>
                   <dl className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <dt className="text-warm-gray">Name:</dt>

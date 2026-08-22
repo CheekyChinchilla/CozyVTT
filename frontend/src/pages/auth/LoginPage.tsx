@@ -108,7 +108,7 @@ export default function LoginPage() {
       <main id="main-content" className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-moss-green font-heading">
+          <h1 className="text-3xl font-bold text-brand-ink font-heading">
             Welcome Back
           </h1>
           <p className="mt-2 text-sm text-warm-gray">
@@ -129,7 +129,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Email
             </label>
@@ -160,7 +160,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-moss-green mb-1"
+              className="block text-sm font-medium text-brand-ink mb-1"
             >
               Password
             </label>
@@ -208,7 +208,7 @@ export default function LoginPage() {
 
             <Link
               to="/auth/forgot-password"
-              className="text-sm text-moss-green hover:text-moss-green/80 transition-colors"
+              className="text-sm text-brand-ink hover:text-brand-ink/80 transition-colors"
             >
               Forgot password?
             </Link>
@@ -257,7 +257,7 @@ export default function LoginPage() {
               Don't have an account?{' '}
               <Link
                 to="/auth/register"
-                className="text-moss-green hover:text-moss-green/80 font-medium transition-colors"
+                className="text-brand-ink hover:text-brand-ink/80 font-medium transition-colors"
               >
                 Create one
               </Link>

@@ -450,7 +450,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-moss-green/10 flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-moss-green/40" />
+                  <Heart className="w-5 h-5 text-brand-ink/40" />
                 </div>
               )}
               <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
@@ -464,14 +464,14 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={handleNameBlur}
-              className="flex-1 text-base font-bold text-moss-green bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-none px-0"
+              className="flex-1 text-base font-bold text-brand-ink bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-none px-0"
             />
 
             {/* Badge */}
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
               tokenType === TokenType.OBJECT
                 ? 'bg-stone-gray/10 text-stone-gray'
-                : 'bg-moss-green/10 text-moss-green'
+                : 'bg-moss-green/10 text-brand-ink'
             }`}>
               {tokenType === TokenType.OBJECT ? 'Object' : 'NPC'}
             </span>
@@ -496,7 +496,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     <button
                       onClick={() => imageFileRef.current?.click()}
                       disabled={isUploadingImage}
-                      className="flex items-center gap-1 text-[10px] text-moss-green hover:text-moss-green/80 disabled:opacity-40 transition-colors"
+                      className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
                     >
                       {isUploadingImage ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -505,7 +505,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       )}
                       {isUploadingImage ? 'Uploading...' : 'Upload'}
                     </button>
-                    <span className="text-stone-300">·</span>
+                    <span className="text-ink-muted">·</span>
                     <button
                       onClick={() => setShowImagePicker(false)}
                       className="text-[10px] text-stone-gray hover:text-stone-gray/80 transition-colors"
@@ -528,12 +528,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       title="Use colored-letter placeholder"
                       className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
                         !token.imageUrl
-                          ? 'border-moss-green ring-1 ring-moss-green/30 bg-stone-700/60'
-                          : 'border-transparent hover:border-moss-green/40 bg-stone-700/40'
+                          ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
+                          : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
                       }`}
                     >
-                      <span className="text-sm font-bold text-stone-400">?</span>
-                      <span className="absolute bottom-0 text-[7px] text-stone-500">None</span>
+                      <span className="text-sm font-bold text-ink-secondary">?</span>
+                      <span className="absolute bottom-0 text-[7px] text-ink-muted">None</span>
                     </button>
                     {assets.map((asset) => {
                       const isSelected = token.imageUrl?.includes(asset.id);
@@ -555,7 +555,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                           />
                           {isSelected && (
                             <div className="absolute inset-0 bg-moss-green/25 flex items-center justify-center">
-                              <Check className="w-3 h-3 text-moss-green drop-shadow" />
+                              <Check className="w-3 h-3 text-brand-ink drop-shadow" />
                             </div>
                           )}
                         </button>
@@ -573,7 +573,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                           This is an SRD creature. A custom copy will be created in your campaign library.
                         </p>
                         {duplicateWarning && (
-                          <p className="text-[11px] text-amber-700 bg-amber-500/10 rounded px-2 py-1">
+                          <p className="text-[11px] text-warning-ink bg-warning/10 rounded px-2 py-1">
                             {duplicateWarning}
                           </p>
                         )}
@@ -594,7 +594,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                           <button
                             onClick={handleConfirmDuplicate}
                             disabled={isSavingToCreature || !duplicateName.trim()}
-                            className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/20 text-moss-green transition-colors font-medium disabled:opacity-40"
+                            className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/20 text-brand-ink transition-colors font-medium disabled:opacity-40"
                           >
                             {isSavingToCreature ? (
                               <span className="flex items-center justify-center gap-1">
@@ -616,7 +616,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       <button
                         onClick={handleSaveImageToCreature}
                         disabled={isSavingToCreature}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy border border-moss-green/30 hover:bg-moss-green/10 text-moss-green transition-colors"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy border border-moss-green/30 hover:bg-moss-green/10 text-brand-ink transition-colors"
                       >
                         {isSavingToCreature ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -659,7 +659,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       <div className="text-center text-sm font-semibold mt-1" style={{ color: hpColor }}>
                         {hp.current} / {hp.max}
                         {hp.temp > 0 && (
-                          <span className="text-blue-400 ml-1 text-xs">+{hp.temp} temp</span>
+                          <span className="text-info-ink ml-1 text-xs">+{hp.temp} temp</span>
                         )}
                       </div>
                     </div>
@@ -670,7 +670,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                         <button
                           key={d}
                           onClick={() => adjustHp(d)}
-                          className="flex-1 py-1.5 text-xs rounded-cozy border border-red-500/30 hover:bg-red-500/10 text-red-600 transition-colors font-medium"
+                          className="flex-1 py-1.5 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors font-medium"
                         >
                           {d}
                         </button>
@@ -679,7 +679,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                         <button
                           key={d}
                           onClick={() => adjustHp(d)}
-                          className="flex-1 py-1.5 text-xs rounded-cozy border border-green-500/30 hover:bg-green-500/10 text-green-600 transition-colors font-medium"
+                          className="flex-1 py-1.5 text-xs rounded-cozy border border-success/30 hover:bg-success/10 text-success-ink transition-colors font-medium"
                         >
                           +{d}
                         </button>
@@ -759,14 +759,14 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     <div className="flex gap-1">
                       <button
                         onClick={() => setEditingStatBlock(!editingStatBlock)}
-                        className="text-[10px] text-moss-green hover:text-moss-green/80 transition-colors"
+                        className="text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
                       >
                         {editingStatBlock ? 'View' : 'Edit'}
                       </button>
-                      <span className="text-stone-300">·</span>
+                      <span className="text-ink-muted">·</span>
                       <button
                         onClick={handleRemoveStatBlock}
-                        className="text-[10px] text-red-500 hover:text-red-600 transition-colors"
+                        className="text-[10px] text-danger-ink hover:text-danger-ink transition-colors"
                       >
                         Remove
                       </button>
@@ -833,8 +833,8 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 <div className="flex gap-2">
                   {([
                     { d: TokenDisposition.FRIENDLY, label: 'Friendly', activeClass: 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold' },
-                    { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: 'border-amber-500 bg-amber-500/10 text-amber-700 font-semibold' },
-                    { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: 'border-red-500 bg-red-500/10 text-red-700 font-semibold' },
+                    { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: 'border-warning/60 bg-warning/10 text-warning-ink font-semibold' },
+                    { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: 'border-danger/60 bg-danger/10 text-danger-ink font-semibold' },
                   ] as const).map(({ d, label, activeClass }) => (
                     <button
                       key={d}
@@ -880,7 +880,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     <button
                       key={c}
                       onClick={() => toggleCondition(c)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-700 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-warning/15 border border-warning/30 text-warning-ink hover:bg-danger/10 hover:border-danger/30 hover:text-danger-ink transition-colors"
                     >
                       {c} <X className="w-3 h-3" />
                     </button>
@@ -898,7 +898,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       onClick={() => toggleCondition(c)}
                       className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
                         active
-                          ? 'border-amber-500/50 bg-amber-500/15 text-amber-700'
+                          ? 'border-warning/50 bg-warning/15 text-warning-ink'
                           : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                       }`}
                     >
@@ -962,7 +962,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
                     visible
                       ? 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
-                      : 'border-moss-green/40 bg-moss-green/10 text-moss-green font-semibold'
+                      : 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
                   }`}
                 >
                   {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -972,7 +972,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 <button
                   onClick={handleRemove}
                   disabled={isRemoving}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-cozy border border-red-500/30 hover:bg-red-500/10 text-red-600 transition-colors"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   {isRemoving ? 'Removing…' : 'Remove'}

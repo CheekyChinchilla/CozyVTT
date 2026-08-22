@@ -141,7 +141,7 @@ export default function CreateCampaignModal({
         {/* Info Box */}
         <div className="rounded-lg p-4 bg-brand/10 border border-brand/30">
           <p className="text-sm text-ink">
-            <strong className="text-brand">Note:</strong> You will be automatically assigned
+            <strong className="text-brand-ink">Note:</strong> You will be automatically assigned
             as the Dungeon Master (DM) for this campaign. You can invite players from the campaign
             settings page.
           </p>

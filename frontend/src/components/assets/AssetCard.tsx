@@ -66,7 +66,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
       case AssetType.MAP:
         return <MapPin className="w-8 h-8 text-warm-amber" />;
       case AssetType.TOKEN:
-        return <User className="w-8 h-8 text-moss-green" />;
+        return <User className="w-8 h-8 text-brand-ink" />;
       case AssetType.AUDIO:
         return <FileAudio className="w-8 h-8 text-spirit-purple" />;
       case AssetType.AVATAR:
@@ -144,7 +144,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-moss-green truncate">
+            <h3 className="text-lg font-semibold text-brand-ink truncate">
               {asset.name}
             </h3>
             <div className="flex items-center gap-3 mt-1 text-sm text-stone-gray">
@@ -185,7 +185,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           <div className="flex items-center gap-2">
             <button
               onClick={onView}
-              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-moss-green transition-colors"
+              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
               title="View details"
             >
               <Eye className="w-5 h-5" />
@@ -201,7 +201,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors disabled:opacity-50"
+                className="p-2 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger-ink transition-colors disabled:opacity-50"
                 title="Delete"
               >
                 <Trash2 className="w-5 h-5" />
@@ -282,7 +282,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
               className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
               title="View details"
             >
-              <Eye className="w-5 h-5 text-moss-green" />
+              <Eye className="w-5 h-5 text-brand-ink" />
             </button>
             <button
               onClick={handleDownload}
@@ -295,7 +295,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="p-3 bg-red-500/90 rounded-full hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="p-3 bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
                 title="Delete"
               >
                 <Trash2 className="w-5 h-5 text-white" />
@@ -307,7 +307,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="text-lg font-semibold text-moss-green truncate mb-2">
+        <h3 className="text-lg font-semibold text-brand-ink truncate mb-2">
           {asset.name}
         </h3>
 

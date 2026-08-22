@@ -200,13 +200,13 @@ export default function CampaignRoster() {
   const getSystemBadgeColor = (gameSystem: GameSystem | null) => {
     switch (gameSystem) {
       case 'DND_5E':
-        return 'bg-red-100 text-red-700';
+        return 'bg-danger/10 text-danger-ink';
       case 'PATHFINDER_2E':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-info/10 text-info-ink';
       case 'SHADOWRUN_6E':
-        return 'bg-purple-100 text-purple-700';
+        return 'bg-spirit/10 text-spirit-ink';
       case 'CALL_OF_CTHULHU_7E':
-        return 'bg-green-100 text-green-700';
+        return 'bg-success/10 text-success-ink';
       default:
         return 'bg-ink/10 text-ink';
     }
@@ -240,8 +240,8 @@ export default function CampaignRoster() {
     <div className="glass-panel p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2 pb-2 border-b border-moss-green/20">
-        <Users className="w-5 h-5 text-moss-green" />
-        <h3 className="text-lg font-semibold text-moss-green">Campaign Roster</h3>
+        <Users className="w-5 h-5 text-brand-ink" />
+        <h3 className="text-lg font-semibold text-brand-ink">Campaign Roster</h3>
       </div>
 
       {loading ? (
@@ -257,7 +257,7 @@ export default function CampaignRoster() {
           {/* DM Section */}
           {groupedRoster.DM.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-moss-green/60 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-brand-ink/60 uppercase tracking-wider mb-2">
                 Dungeon Master
               </h4>
               <div className="space-y-2">
@@ -271,7 +271,7 @@ export default function CampaignRoster() {
           {/* Players Section */}
           {groupedRoster.PLAYER.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-moss-green/60 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-brand-ink/60 uppercase tracking-wider mb-2">
                 Players
               </h4>
               <div className="space-y-2">
@@ -285,7 +285,7 @@ export default function CampaignRoster() {
           {/* Spectators Section */}
           {groupedRoster.SPECTATOR.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-moss-green/60 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-brand-ink/60 uppercase tracking-wider mb-2">
                 Spectators
               </h4>
               <div className="space-y-2">
@@ -347,7 +347,7 @@ export default function CampaignRoster() {
               label: 'Remove from Campaign',
               onClick: handleRemoveFromCampaign,
               visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
-              className: 'text-red-600 hover:bg-red-50',
+              className: 'text-danger-ink hover:bg-danger/10',
             },
           ]}
           onClose={handleCloseContextMenu}
@@ -418,7 +418,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
         >
           <RoleIcon
             className={`w-4 h-4 ${
-              member.role === 'DM' ? 'text-moss-green' : 'text-spirit-purple'
+              member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-purple'
             }`}
           />
         </div>
@@ -471,7 +471,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-moss-green/10 border border-moss-green/20 flex items-center justify-center">
-                  <span className="text-xs text-moss-green font-semibold">
+                  <span className="text-xs text-brand-ink font-semibold">
                     {character.name.charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -500,10 +500,10 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
               const canAdjust = isDM || character.userId === currentUserId;
               if (!hp || hp.max === 0) return null;
               const pct = Math.max(0, Math.min(1, hp.current / hp.max));
-              const barColor = pct >= 0.75 ? 'bg-green-500'
+              const barColor = pct >= 0.75 ? 'bg-success'
                             : pct >= 0.50 ? 'bg-lime-500'
-                            : pct >= 0.25 ? 'bg-amber-500'
-                            :               'bg-red-500';
+                            : pct >= 0.25 ? 'bg-warning'
+                            :               'bg-danger';
               return (
                 <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
                   {/* HP progress bar */}
@@ -514,7 +514,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     />
                     {hp.temp > 0 && (
                       <div
-                        className="h-full rounded-full bg-blue-300/75 -mt-1.5 ml-auto"
+                        className="h-full rounded-full bg-info/75 -mt-1.5 ml-auto"
                         style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%` }}
                       />
                     )}
@@ -524,26 +524,26 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => onHpDelta(character.id, -5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-red-100 hover:text-red-600 transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−5 HP"
                       >−5</button>
                       <button
                         onClick={() => onHpDelta(character.id, -1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-red-100 hover:text-red-600 transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−1 HP"
                       ><Minus className="w-3 h-3" /></button>
                       <span className="flex-1 text-center text-xs font-semibold text-stone-gray">
                         {hp.current}<span className="font-normal text-warm-gray">/{hp.max}</span>
-                        {hp.temp > 0 && <span className="text-blue-500 ml-0.5">+{hp.temp}</span>}
+                        {hp.temp > 0 && <span className="text-info-ink ml-0.5">+{hp.temp}</span>}
                       </span>
                       <button
                         onClick={() => onHpDelta(character.id, 1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-green-100 hover:text-green-600 transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+1 HP"
                       ><Plus className="w-3 h-3" /></button>
                       <button
                         onClick={() => onHpDelta(character.id, 5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-green-100 hover:text-green-600 transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+5 HP"
                       >+5</button>
                     </div>
@@ -552,7 +552,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                   {!canAdjust && (
                     <p className="text-center text-xs font-semibold text-stone-gray">
                       {hp.current}<span className="font-normal text-warm-gray">/{hp.max}</span>
-                      {hp.temp > 0 && <span className="text-blue-500 ml-0.5">+{hp.temp}</span>}
+                      {hp.temp > 0 && <span className="text-info-ink ml-0.5">+{hp.temp}</span>}
                     </p>
                   )}
                 </div>

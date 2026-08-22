@@ -267,6 +267,8 @@ router.post('/verify-login', mfaLoginLimiter, async (req: AuthenticatedRequest, 
     req.session.email = user.email;
     req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    // Carried through the MFA step so the gate applies to MFA logins too
+    req.session.mustChangePassword = user.mustChangePassword;
 
     // Apply remember me if requested
     if (rememberMe) {

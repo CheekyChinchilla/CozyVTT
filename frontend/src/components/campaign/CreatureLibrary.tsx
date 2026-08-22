@@ -342,8 +342,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           >
             {/* ── Header ── */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <BookOpen className="w-5 h-5 text-moss-green flex-shrink-0" />
-              <h2 className="flex-1 text-base font-bold text-moss-green">
+              <BookOpen className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <h2 className="flex-1 text-base font-bold text-brand-ink">
                 Creature Library
               </h2>
               <span className="text-xs text-stone-gray/60">
@@ -371,7 +371,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
               {/* Filter toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-1 text-xs text-moss-green hover:text-moss-green/80 transition-colors"
+                className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
               >
                 {showFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 Filters
@@ -406,7 +406,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowCreateForm(true)}
-                  className="flex items-center gap-1 text-xs text-moss-green hover:text-moss-green/80 transition-colors"
+                  className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
                 >
                   <Plus className="w-3 h-3" /> Create Custom
                 </button>
@@ -414,7 +414,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   <button
                     onClick={handleSeedSrd}
                     disabled={isSeeding}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-500 transition-colors"
+                    className="flex items-center gap-1 text-xs text-info-ink hover:text-info-ink transition-colors"
                   >
                     {isSeeding ? (
                       <><Loader2 className="w-3 h-3 animate-spin" /> Seeding...</>
@@ -425,7 +425,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 )}
               </div>
               {seedResult && (
-                <div className="text-[10px] text-green-600 bg-green-500/10 rounded px-2 py-1">
+                <div className="text-[10px] text-success-ink bg-success/10 rounded px-2 py-1">
                   {seedResult}
                 </div>
               )}
@@ -433,7 +433,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
             {/* ── Error ── */}
             {error && (
-              <div className="mx-4 mt-2 text-xs text-red-600 bg-red-500/10 border border-red-500/20 rounded-cozy px-3 py-2">
+              <div className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
                 {error}
               </div>
             )}
@@ -446,7 +446,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <Star className="w-3.5 h-3.5 text-warning-ink fill-amber-500" />
                     <span className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
                       Favorites
                     </span>
@@ -459,7 +459,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   )}
                 </button>
                 {showFavorites && (
-                  <div className="divide-y divide-moss-green/10 bg-amber-500/[0.02]">
+                  <div className="divide-y divide-moss-green/10 bg-warning/[0.02]">
                     {isLoadingFavorites ? (
                       <div className="flex items-center gap-2 text-stone-gray text-xs py-3 px-4">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -500,7 +500,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 </div>
               ) : creatures.length === 0 ? (
                 <div className="text-center py-12 px-6">
-                  <BookOpen className="w-8 h-8 text-moss-green/30 mx-auto mb-2" />
+                  <BookOpen className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
                   <p className="text-sm text-stone-gray/70">
                     {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
                   </p>
@@ -646,8 +646,8 @@ function CreatureRow({
         ) : (
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm ${
-              creature.disposition === 'hostile' ? 'bg-red-500' :
-              creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-amber-500'
+              creature.disposition === 'hostile' ? 'bg-danger' :
+              creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
             }`}
           >
             {creature.name.charAt(0).toUpperCase()}
@@ -665,8 +665,8 @@ function CreatureRow({
         {/* Source badge */}
         <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
           creature.source === 'srd'
-            ? 'bg-blue-500/10 text-blue-600'
-            : 'bg-moss-green/10 text-moss-green'
+            ? 'bg-info/10 text-info-ink'
+            : 'bg-moss-green/10 text-brand-ink'
         }`}>
           {creature.source === 'srd' ? 'SRD' : 'Custom'}
         </span>
@@ -674,13 +674,13 @@ function CreatureRow({
         {/* Favorite star */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className="flex-shrink-0 p-0.5 rounded hover:bg-amber-500/10 transition-colors"
+          className="flex-shrink-0 p-0.5 rounded hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
             isFavorite
-              ? 'text-amber-500 fill-amber-500'
-              : 'text-stone-gray/30 hover:text-amber-400'
+              ? 'text-warning-ink fill-amber-500'
+              : 'text-stone-gray/30 hover:text-warning-ink'
           }`} />
         </button>
 
@@ -700,7 +700,7 @@ function CreatureRow({
             <button
               onClick={onPlace}
               disabled={isPlacing}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-moss-green border border-moss-green/30 hover:bg-moss-green/20 transition-colors font-medium"
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/20 transition-colors font-medium"
             >
               {isPlacing ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -712,7 +712,7 @@ function CreatureRow({
             {creature.source !== 'srd' && (
               <button
                 onClick={onEdit}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-moss-green/20 text-moss-green hover:bg-moss-green/10 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-moss-green/20 text-brand-ink hover:bg-moss-green/10 transition-colors"
                 title="Edit creature"
               >
                 <Pencil className="w-3 h-3" /> Edit
@@ -728,7 +728,7 @@ function CreatureRow({
             {creature.source !== 'srd' && (
               <button
                 onClick={onDelete}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-red-500/20 text-red-500 hover:bg-red-500/10 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-danger/20 text-danger-ink hover:bg-danger/10 transition-colors"
               >
                 <Trash2 className="w-3 h-3" /> Delete
               </button>
@@ -769,7 +769,7 @@ function NameDescriptionList({
         <button
           type="button"
           onClick={() => onChange([...items, { name: '', description: '' }])}
-          className="text-[10px] text-moss-green hover:text-moss-green/80 flex items-center gap-0.5"
+          className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-0.5"
         >
           <Plus className="w-2.5 h-2.5" /> Add
         </button>
@@ -803,7 +803,7 @@ function NameDescriptionList({
           <button
             type="button"
             onClick={() => onChange(items.filter((_, idx) => idx !== i))}
-            className="p-1 text-red-400 hover:text-red-600 flex-shrink-0 mt-0.5"
+            className="p-1 text-danger-ink hover:text-danger-ink flex-shrink-0 mt-0.5"
             title="Remove"
           >
             <Trash2 className="w-3 h-3" />
@@ -974,7 +974,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   return (
     <div className="border-t border-moss-green/20 bg-parchment/40 p-4 space-y-3 max-h-[70vh] overflow-y-auto">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-moss-green uppercase tracking-wide">
+        <h3 className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
           {isEdit ? 'Edit Creature' : 'Create Custom Creature'}
         </h3>
         <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
@@ -983,7 +983,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
       </div>
 
       {formError && (
-        <div className="text-xs text-red-600 bg-red-500/10 rounded px-2 py-1">{formError}</div>
+        <div className="text-xs text-danger-ink bg-danger/10 rounded px-2 py-1">{formError}</div>
       )}
 
       {/* Name */}
@@ -1024,7 +1024,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="text-[10px] text-moss-green hover:text-moss-green/80 flex items-center gap-1"
+            className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-1"
           >
             {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
             {imageUrl ? 'Change' : 'Upload'}
@@ -1033,7 +1033,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             <button
               type="button"
               onClick={() => setImageUrl('')}
-              className="text-[10px] text-red-500 hover:text-red-600"
+              className="text-[10px] text-danger-ink hover:text-danger-ink"
             >
               Remove
             </button>
@@ -1120,7 +1120,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             ['CHA', cha, setCha],
           ] as const).map(([label, val, setter]) => (
             <div key={label} className="text-center">
-              <label className="text-[8px] font-bold text-moss-green block">{label}</label>
+              <label className="text-[8px] font-bold text-brand-ink block">{label}</label>
               <input
                 type="number"
                 value={val}
@@ -1148,8 +1148,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
               className={`flex-1 py-1 text-[10px] rounded-cozy border transition-all ${
                 disposition === d
                   ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                  : color === 'amber' ? 'border-amber-500 bg-amber-500/10 text-amber-700 font-semibold'
-                  :                     'border-red-500 bg-red-500/10 text-red-700 font-semibold'
+                  : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
+                  :                     'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
                   : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
               }`}
             >
@@ -1164,7 +1164,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center gap-1 text-[10px] text-moss-green hover:text-moss-green/80 font-medium"
+          className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 font-medium"
         >
           {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           Advanced Stats

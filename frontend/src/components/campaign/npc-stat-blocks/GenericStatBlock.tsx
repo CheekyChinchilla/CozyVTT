@@ -18,11 +18,11 @@ function abilityMod(score: number): string {
 
 export default function GenericStatBlock({ statBlock, tokenName }: Props) {
   return (
-    <div className="space-y-2 text-xs text-stone-700">
+    <div className="space-y-2 text-xs text-ink">
       {/* Header */}
       <div className="border-b-2 border-moss-green/40 pb-1.5">
-        <h3 className="text-sm font-bold text-moss-green">{tokenName}</h3>
-        <div className="italic text-stone-500">
+        <h3 className="text-sm font-bold text-brand-ink">{tokenName}</h3>
+        <div className="italic text-ink-muted">
           {statBlock.creatureType || 'Creature'}
           {statBlock.alignment && `, ${statBlock.alignment}`}
         </div>
@@ -30,17 +30,17 @@ export default function GenericStatBlock({ statBlock, tokenName }: Props) {
 
       {/* Core stats */}
       <div className="flex gap-4 flex-wrap">
-        <div><span className="font-semibold text-moss-green">AC</span> {statBlock.ac}</div>
+        <div><span className="font-semibold text-brand-ink">AC</span> {statBlock.ac}</div>
         {statBlock.hpMax != null && (
           <div>
-            <span className="font-semibold text-moss-green">HP</span> {statBlock.hpMax}
+            <span className="font-semibold text-brand-ink">HP</span> {statBlock.hpMax}
             {statBlock.hitDice && ` (${statBlock.hitDice})`}
           </div>
         )}
-        <div><span className="font-semibold text-moss-green">Speed</span> {statBlock.speed}</div>
+        <div><span className="font-semibold text-brand-ink">Speed</span> {statBlock.speed}</div>
         {statBlock.challengeRating && (
           <div>
-            <span className="font-semibold text-moss-green">CR</span> {statBlock.challengeRating}
+            <span className="font-semibold text-brand-ink">CR</span> {statBlock.challengeRating}
             {statBlock.xp != null && ` (${statBlock.xp.toLocaleString()} XP)`}
           </div>
         )}
@@ -50,9 +50,9 @@ export default function GenericStatBlock({ statBlock, tokenName }: Props) {
       <div className="grid grid-cols-6 gap-1 text-center bg-moss-green/5 rounded p-1.5">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-moss-green uppercase">{ab}</div>
+            <div className="text-[9px] font-bold text-brand-ink uppercase">{ab}</div>
             <div className="font-semibold">{statBlock.abilities[ab]}</div>
-            <div className="text-[10px] text-stone-500">({abilityMod(statBlock.abilities[ab])})</div>
+            <div className="text-[10px] text-ink-muted">({abilityMod(statBlock.abilities[ab])})</div>
           </div>
         ))}
       </div>
@@ -68,7 +68,7 @@ export default function GenericStatBlock({ statBlock, tokenName }: Props) {
       {statBlock.legendaryActions?.length ? <ActionList title="Legendary Actions" items={statBlock.legendaryActions} /> : null}
 
       {statBlock.notes && (
-        <div className="text-[10px] text-stone-500 italic border-t border-moss-green/20 pt-1.5">
+        <div className="text-[10px] text-ink-muted italic border-t border-moss-green/20 pt-1.5">
           {statBlock.notes}
         </div>
       )}
@@ -98,7 +98,7 @@ function DetailLines({ statBlock }: { statBlock: NpcStatBlock }) {
     <div className="space-y-0.5 border-y border-moss-green/20 py-1.5">
       {entries.map(([label, value]) => (
         <div key={label}>
-          <span className="font-semibold text-moss-green">{label}</span> {value}
+          <span className="font-semibold text-brand-ink">{label}</span> {value}
         </div>
       ))}
     </div>
@@ -108,14 +108,14 @@ function DetailLines({ statBlock }: { statBlock: NpcStatBlock }) {
 function ActionList({ title, items }: { title: string; items: Array<{ name: string; description: string }> }) {
   return (
     <div>
-      <div className="text-[10px] font-bold text-moss-green uppercase tracking-wide border-b border-moss-green/20 pb-0.5 mb-1">
+      <div className="text-[10px] font-bold text-brand-ink uppercase tracking-wide border-b border-moss-green/20 pb-0.5 mb-1">
         {title}
       </div>
       <div className="space-y-1.5">
         {items.map((item, i) => (
           <div key={i} className="leading-snug">
-            <span className="font-semibold italic text-stone-800">{item.name}.</span>{' '}
-            <span className="text-stone-600">{item.description}</span>
+            <span className="font-semibold italic text-ink">{item.name}.</span>{' '}
+            <span className="text-ink-secondary">{item.description}</span>
           </div>
         ))}
       </div>

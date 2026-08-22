@@ -106,10 +106,10 @@ export default function Modal({
                 <div className="flex items-center gap-3">
                   {Icon && (
                     <div className="p-2 rounded-lg bg-brand/10" aria-hidden="true">
-                      <Icon className="w-6 h-6 text-brand" />
+                      <Icon className="w-6 h-6 text-brand-ink" />
                     </div>
                   )}
-                  <h2 id={titleId} className="text-2xl font-semibold text-brand font-heading">
+                  <h2 id={titleId} className="text-2xl font-semibold text-brand-ink font-heading">
                     {title}
                   </h2>
                 </div>

@@ -39,45 +39,45 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
   return (
     <div className="space-y-2 text-xs">
       {/* Header */}
-      <div className="border-b-2 border-red-700/40 pb-1.5">
-        <h3 className="text-sm font-bold text-red-800">{tokenName}</h3>
-        <div className="flex gap-3 text-stone-600">
+      <div className="border-b-2 border-danger/40 pb-1.5">
+        <h3 className="text-sm font-bold text-danger-ink">{tokenName}</h3>
+        <div className="flex gap-3 text-ink-secondary">
           {statBlock.creatureType && <span>{statBlock.creatureType}</span>}
           {statBlock.alignment && <span className="italic">{statBlock.alignment}</span>}
         </div>
       </div>
 
       {/* Key stats */}
-      <div className="flex gap-4 flex-wrap text-stone-700">
+      <div className="flex gap-4 flex-wrap text-ink">
         {statBlock.challengeRating && (
-          <div><span className="font-semibold text-red-800">Level</span> {statBlock.challengeRating}</div>
+          <div><span className="font-semibold text-danger-ink">Level</span> {statBlock.challengeRating}</div>
         )}
-        <div><span className="font-semibold text-red-800">AC</span> {statBlock.ac}</div>
+        <div><span className="font-semibold text-danger-ink">AC</span> {statBlock.ac}</div>
         {statBlock.hpMax != null && (
           <div>
-            <span className="font-semibold text-red-800">HP</span> {statBlock.hpMax}
+            <span className="font-semibold text-danger-ink">HP</span> {statBlock.hpMax}
             {statBlock.hitDice && ` (${statBlock.hitDice})`}
           </div>
         )}
-        <div><span className="font-semibold text-red-800">Speed</span> {statBlock.speed}</div>
+        <div><span className="font-semibold text-danger-ink">Speed</span> {statBlock.speed}</div>
       </div>
 
       {/* Abilities */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-red-50/50 rounded p-1.5">
+      <div className="grid grid-cols-6 gap-1 text-center bg-danger/10 rounded p-1.5">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-red-800 uppercase">{ab}</div>
-            <div className="text-stone-700">{statBlock.abilities[ab]}</div>
-            <div className="text-[10px] text-stone-500">{mod(statBlock.abilities[ab])}</div>
+            <div className="text-[9px] font-bold text-danger-ink uppercase">{ab}</div>
+            <div className="text-ink">{statBlock.abilities[ab]}</div>
+            <div className="text-[10px] text-ink-muted">{mod(statBlock.abilities[ab])}</div>
           </div>
         ))}
       </div>
 
       {/* Defenses & senses */}
-      <StatBlockDetailLines statBlock={statBlock} accentColor="red" />
+      <StatBlockDetailLines statBlock={statBlock} accentColor="danger" />
 
       {/* Abilities and actions */}
-      <StatBlockActionSections statBlock={statBlock} accentColor="red" />
+      <StatBlockActionSections statBlock={statBlock} accentColor="danger" />
     </div>
   );
 }
@@ -87,46 +87,62 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
   return (
     <div className="space-y-2 text-xs">
       {/* Header */}
-      <div className="border-b-2 border-emerald-700/40 pb-1.5">
-        <h3 className="text-sm font-bold text-emerald-800">{tokenName}</h3>
+      <div className="border-b-2 border-success/40 pb-1.5">
+        <h3 className="text-sm font-bold text-success-ink">{tokenName}</h3>
         {statBlock.creatureType && (
-          <div className="text-stone-600 italic">{statBlock.creatureType}</div>
+          <div className="text-ink-secondary italic">{statBlock.creatureType}</div>
         )}
       </div>
 
       {/* Characteristics — CoC uses STR/CON/SIZ/DEX/INT/POW/APP/EDU */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-emerald-50/50 rounded p-1.5">
+      <div className="grid grid-cols-6 gap-1 text-center bg-success/10 rounded p-1.5">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => {
           // Map D&D ability names to CoC equivalents for display
           const cocLabel = ab === 'wis' ? 'POW' : ab === 'cha' ? 'APP' : ab.toUpperCase();
           return (
             <div key={ab}>
-              <div className="text-[9px] font-bold text-emerald-800 uppercase">{cocLabel}</div>
-              <div className="text-stone-700">{statBlock.abilities[ab]}</div>
+              <div className="text-[9px] font-bold text-success-ink uppercase">{cocLabel}</div>
+              <div className="text-ink">{statBlock.abilities[ab]}</div>
             </div>
           );
         })}
       </div>
 
       {/* Combat stats */}
-      <div className="flex gap-4 flex-wrap text-stone-700">
-        <div><span className="font-semibold text-emerald-800">Armor</span> {statBlock.ac}</div>
+      <div className="flex gap-4 flex-wrap text-ink">
+        <div><span className="font-semibold text-success-ink">Armor</span> {statBlock.ac}</div>
         {statBlock.hpMax != null && (
-          <div><span className="font-semibold text-emerald-800">HP</span> {statBlock.hpMax}</div>
+          <div><span className="font-semibold text-success-ink">HP</span> {statBlock.hpMax}</div>
         )}
-        <div><span className="font-semibold text-emerald-800">Move</span> {statBlock.speed}</div>
+        <div><span className="font-semibold text-success-ink">Move</span> {statBlock.speed}</div>
       </div>
 
-      <StatBlockDetailLines statBlock={statBlock} accentColor="emerald" />
-      <StatBlockActionSections statBlock={statBlock} accentColor="emerald" />
+      <StatBlockDetailLines statBlock={statBlock} accentColor="success" />
+      <StatBlockActionSections statBlock={statBlock} accentColor="success" />
     </div>
   );
 }
 
 // ─── Shared sub-components ───────────────────────────────────────
 
-function StatBlockDetailLines({ statBlock, accentColor }: { statBlock: NpcStatBlock; accentColor: string }) {
-  const accent = `text-${accentColor}-800`;
+/**
+ * Per-system accent classes.
+ *
+ * Written out in full because Tailwind only ships classes it can find as
+ * literal strings — the previous `text-${accentColor}-800` template produced
+ * class names that were never generated, so the accent silently did nothing.
+ */
+const ACCENTS = {
+  danger: { text: 'text-danger-ink', border: 'border-danger/20' },
+  success: { text: 'text-success-ink', border: 'border-success/20' },
+  warning: { text: 'text-warning-ink', border: 'border-warning/20' },
+  brand: { text: 'text-brand-ink', border: 'border-brand/20' },
+} as const;
+
+type AccentName = keyof typeof ACCENTS;
+
+function StatBlockDetailLines({ statBlock, accentColor }: { statBlock: NpcStatBlock; accentColor: AccentName }) {
+  const accent = ACCENTS[accentColor].text;
   const lines: Array<{ label: string; value: string }> = [];
 
   if (statBlock.savingThrows && Object.keys(statBlock.savingThrows).length > 0) {
@@ -155,7 +171,7 @@ function StatBlockDetailLines({ statBlock, accentColor }: { statBlock: NpcStatBl
   if (lines.length === 0) return null;
 
   return (
-    <div className="space-y-0.5 text-stone-700">
+    <div className="space-y-0.5 text-ink">
       {lines.map(({ label, value }) => (
         <div key={label}>
           <span className={`font-semibold ${accent}`}>{label}</span> {value}
@@ -165,7 +181,7 @@ function StatBlockDetailLines({ statBlock, accentColor }: { statBlock: NpcStatBl
   );
 }
 
-function StatBlockActionSections({ statBlock, accentColor }: { statBlock: NpcStatBlock; accentColor: string }) {
+function StatBlockActionSections({ statBlock, accentColor }: { statBlock: NpcStatBlock; accentColor: AccentName }) {
   const sections: Array<{ title: string; items: Array<{ name: string; description: string }> }> = [];
 
   if (statBlock.traits?.length) sections.push({ title: 'Traits', items: statBlock.traits });
@@ -180,14 +196,14 @@ function StatBlockActionSections({ statBlock, accentColor }: { statBlock: NpcSta
     <>
       {sections.map(({ title, items }) => (
         <div key={title}>
-          <div className={`text-[10px] font-bold text-${accentColor}-800 uppercase tracking-wide border-b border-${accentColor}-700/20 pb-0.5 mb-1`}>
+          <div className={`text-[10px] font-bold ${ACCENTS[accentColor].text} uppercase tracking-wide border-b ${ACCENTS[accentColor].border} pb-0.5 mb-1`}>
             {title}
           </div>
           <div className="space-y-1">
             {items.map((item, i) => (
               <div key={i}>
-                <span className="font-semibold italic text-stone-800">{item.name}.</span>{' '}
-                <span className="text-stone-600">{item.description}</span>
+                <span className="font-semibold italic text-ink">{item.name}.</span>{' '}
+                <span className="text-ink-secondary">{item.description}</span>
               </div>
             ))}
           </div>

@@ -28,8 +28,8 @@ export default function PartyRoster() {
     <div className="glass-panel p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2 pb-2 border-b border-moss-green/20">
-        <Users className="w-5 h-5 text-moss-green" />
-        <h3 className="text-lg font-semibold text-moss-green">Party Roster</h3>
+        <Users className="w-5 h-5 text-brand-ink" />
+        <h3 className="text-lg font-semibold text-brand-ink">Party Roster</h3>
       </div>
 
       {/* Members List */}
@@ -52,7 +52,7 @@ export default function PartyRoster() {
                   <RoleIcon
                     className={`w-4 h-4 ${
                       membership.role === 'DM'
-                        ? 'text-moss-green'
+                        ? 'text-brand-ink'
                         : 'text-spirit-purple'
                     }`}
                   />

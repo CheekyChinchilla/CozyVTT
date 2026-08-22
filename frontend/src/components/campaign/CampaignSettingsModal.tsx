@@ -216,9 +216,9 @@ export default function CampaignSettingsModal({
               <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Settings className="w-6 h-6 text-moss-green" />
+                    <Settings className="w-6 h-6 text-brand-ink" />
                     <div>
-                      <h2 className="text-xl font-bold text-moss-green">Campaign Settings</h2>
+                      <h2 className="text-xl font-bold text-brand-ink">Campaign Settings</h2>
                       <p className="text-xs text-stone-gray truncate max-w-[220px]">{campaign.name}</p>
                     </div>
                   </div>
@@ -247,8 +247,8 @@ export default function CampaignSettingsModal({
                       className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                         activeTab === tab.id
                           ? tab.id === 'danger'
-                            ? 'bg-red-500/10 text-red-600 border border-red-500/20'
-                            : 'bg-moss-green/15 text-moss-green border border-moss-green/20'
+                            ? 'bg-danger/10 text-danger-ink border border-danger/20'
+                            : 'bg-moss-green/15 text-brand-ink border border-moss-green/20'
                           : 'text-stone-gray hover:bg-warm-gray/10'
                       }`}
                     >
@@ -269,7 +269,7 @@ export default function CampaignSettingsModal({
                         htmlFor="cs-name"
                         className="block text-sm font-semibold text-stone-gray mb-1.5"
                       >
-                        Campaign Name <span className="text-red-500">*</span>
+                        Campaign Name <span className="text-danger-ink">*</span>
                       </label>
                       <input
                         id="cs-name"
@@ -327,7 +327,7 @@ export default function CampaignSettingsModal({
                     {/* ── Export ── */}
                     <div className="pt-4 mt-4 border-t border-moss-green/15 space-y-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-stone-gray">
-                        <Download className="w-4 h-4 text-moss-green" />
+                        <Download className="w-4 h-4 text-brand-ink" />
                         Export Campaign
                       </div>
                       <p className="text-xs text-warm-gray">
@@ -383,7 +383,7 @@ export default function CampaignSettingsModal({
                 {activeTab === 'chat' && (
                   <div className="space-y-5">
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-moss-green/5 border border-moss-green/15">
-                      <MessageCircle className="w-5 h-5 text-moss-green flex-shrink-0 mt-0.5" />
+                      <MessageCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
                       <p className="text-sm text-stone-gray">
                         A message cooldown prevents players from sending messages too quickly.
                         When enabled, each player must wait the configured number of seconds
@@ -502,7 +502,7 @@ export default function CampaignSettingsModal({
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center flex-shrink-0">
-                                <span className="text-sm font-bold text-moss-green uppercase">
+                                <span className="text-sm font-bold text-brand-ink uppercase">
                                   {(membership.user?.displayName ?? '?')[0]}
                                 </span>
                               </div>
@@ -527,7 +527,7 @@ export default function CampaignSettingsModal({
                                     ? 'bg-spirit-purple/10 text-spirit-purple border-spirit-purple/20'
                                     : membership.role === 'SPECTATOR'
                                     ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
-                                    : 'bg-moss-green/10 text-moss-green border-moss-green/20'
+                                    : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
                                 }`}
                               >
                                 {isDm ? (
@@ -546,7 +546,7 @@ export default function CampaignSettingsModal({
                                   type="button"
                                   onClick={() => handleRemoveMemberClick(membership)}
                                   disabled={isRemoving}
-                                  className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                                  className="p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                                   aria-label={`Remove ${membership.user?.displayName} from campaign`}
                                 >
                                   {isRemoving ? (
@@ -567,17 +567,17 @@ export default function CampaignSettingsModal({
                 {/* ════ DANGER ZONE TAB ════ */}
                 {activeTab === 'danger' && (
                   <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                    <div className="p-4 rounded-lg bg-danger/10 border border-danger/30">
                       <div className="flex items-start gap-3 mb-4">
-                        <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
                         <div>
-                          <h3 className="text-sm font-bold text-red-800 mb-1">Delete Campaign</h3>
-                          <p className="text-sm text-red-700">
+                          <h3 className="text-sm font-bold text-danger-ink mb-1">Delete Campaign</h3>
+                          <p className="text-sm text-danger-ink">
                             Permanently deletes this campaign and all associated maps, tokens, chat
                             history, and session records. Characters and uploaded assets are{' '}
                             <strong>not</strong> deleted — they remain in your library.
                           </p>
-                          <p className="text-sm text-red-700 mt-2">
+                          <p className="text-sm text-danger-ink mt-2">
                             This action <strong>cannot be undone</strong>.
                           </p>
                         </div>
@@ -587,16 +587,16 @@ export default function CampaignSettingsModal({
                         <div>
                           <label
                             htmlFor="cs-delete-confirm"
-                            className="block text-sm font-semibold text-red-800 mb-1.5"
+                            className="block text-sm font-semibold text-danger-ink mb-1.5"
                           >
-                            Type <span className="font-mono bg-red-100 px-1 rounded">{campaign.name}</span> to confirm:
+                            Type <span className="font-mono bg-danger/10 px-1 rounded">{campaign.name}</span> to confirm:
                           </label>
                           <input
                             id="cs-delete-confirm"
                             type="text"
                             value={deleteConfirmName}
                             onChange={(e) => setDeleteConfirmName(e.target.value)}
-                            className="input-cozy w-full border-red-300 focus:border-red-500 focus:ring-red-500/20"
+                            className="input-cozy w-full border-danger/30 focus:border-danger/60 focus:ring-danger/20"
                             placeholder={campaign.name}
                             autoComplete="off"
                           />

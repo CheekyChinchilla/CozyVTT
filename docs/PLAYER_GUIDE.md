@@ -24,16 +24,23 @@ No technical knowledge required. Let's go.
 
 ## Getting Your Account
 
-Your platform administrator (or your DM, if they're also the admin) will create an account for you and send you login credentials. You'll receive:
+Your platform administrator (or your DM, if they're also the admin) sets up your account. Depending on how their instance is configured, you'll get one of two things by email.
 
-- The URL for your CozyVTT instance
-- Your email address
-- A temporary password
+**If you receive an invitation link** (most common):
 
-**First login:**
+1. Click **Accept Invitation** in the email
+2. Choose your own password — nobody else ever sees it
+3. Sign in with your email and that password
+
+The link is valid for **7 days**. If it expires, ask your administrator to send another.
+
+**If you receive a temporary password instead:**
+
 1. Go to the CozyVTT URL
-2. Log in with your email and temporary password
-3. You'll be prompted to change your password — pick something you'll actually remember
+2. Sign in with your email and the temporary password
+3. You'll be asked immediately to choose your own password — this is required, and until you do, the temporary one won't get you anywhere else in the app
+
+Either way you end up with a password only you know. Pick something you'll actually remember.
 
 *Screenshot pending — Login page.*
 

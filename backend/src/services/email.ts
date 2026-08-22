@@ -217,6 +217,49 @@ export async function sendWelcomeEmail(
 }
 
 /**
+ * Send an account invitation with a link to choose a password.
+ *
+ * Unlike the welcome email, no password exists yet — the account is created
+ * without a usable one, and this link is the only way in. The admin who sent
+ * the invitation never sees a credential.
+ */
+export async function sendInvitationEmail(
+  toEmail: string,
+  token: string,
+  displayName: string,
+  invitedByName: string,
+  expiryDays: number
+): Promise<void> {
+  const transporter = createTransporter();
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const appUrl = getAppUrl();
+  const instanceName = getInstanceName();
+  const inviteLink = `${appUrl}/accept-invite?token=${token}`;
+
+  const content =
+    h2(`You're invited to ${instanceName}`) +
+    p(`Hello <strong>${displayName}</strong>,`) +
+    p(`<strong>${invitedByName}</strong> has invited you to join ${instanceName}, a cozy virtual tabletop for online tabletop RPG campaigns. Click below to choose a password and finish setting up your account.`) +
+    ctaButton('Accept Invitation', inviteLink) +
+    infoBox(
+      `Or copy and paste this link into your browser:<br>` +
+      `<span style="word-break:break-all;font-family:monospace;font-size:12px;color:#5C4A2A;">${inviteLink}</span>`
+    ) +
+    warningBox(
+      `<strong>This invitation expires in ${expiryDays} days.</strong> If it expires, ask ${invitedByName} to send a new one. ` +
+      'If you were not expecting this invitation, you can safely ignore this email — no account can be used until someone sets a password with this link.'
+    );
+
+  await transporter.sendMail({
+    from: fromAddress,
+    to: toEmail,
+    subject: `${invitedByName} invited you to ${instanceName}`,
+    html: emailLayout(content, `Join ${instanceName} — set your password to get started.`),
+  });
+  logger.info('Email sent', { type: 'invitation', to: toEmail });
+}
+
+/**
  * Send a password reset email with a token link.
  * Used by both the self-service forgot-password flow and admin-initiated resets.
  */

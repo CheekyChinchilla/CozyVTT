@@ -35,7 +35,7 @@ export const SectionEditor: React.FC<SectionEditorProps> = ({
           type="text"
           value={section.title}
           onChange={(e) => updateTitle(e.target.value)}
-          className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-moss-green"
+          className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-brand-ink"
           placeholder="Section title"
         />
 

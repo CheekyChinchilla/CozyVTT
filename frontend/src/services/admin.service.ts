@@ -60,9 +60,26 @@ class AdminService {
     email: string;
     displayName?: string;
     platformRole?: string;
-  }): Promise<{ user: User; temporaryPassword: string }> {
+  }): Promise<{ user: User; emailSent: boolean; temporaryPassword?: string }> {
     const result = await api.createAdminUser(data);
-    return { user: result.user, temporaryPassword: result.temporaryPassword };
+    return {
+      user: result.user,
+      emailSent: result.emailSent,
+      temporaryPassword: result.temporaryPassword,
+    };
+  }
+
+  async inviteUser(data: {
+    email: string;
+    displayName?: string;
+    platformRole?: string;
+  }): Promise<{ user: User; expiresInDays: number }> {
+    const result = await api.inviteAdminUser(data);
+    return { user: result.user, expiresInDays: result.expiresInDays };
+  }
+
+  async resendInvite(userId: string): Promise<{ message: string; expiresInDays: number }> {
+    return await api.resendAdminUserInvite(userId);
   }
 
   async resetMfa(userId: string): Promise<void> {

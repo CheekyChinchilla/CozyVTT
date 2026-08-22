@@ -135,7 +135,7 @@ export default function ImportCharacterModal({
               ${isDragging ? 'border-moss-green bg-moss-green/10' : 'border-moss-green/30 hover:border-moss-green/50'}
             `}
           >
-            <Upload className="w-16 h-16 text-moss-green mx-auto mb-4" />
+            <Upload className="w-16 h-16 text-brand-ink mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-ink mb-2">
               {isDragging ? 'Drop file here' : 'Upload Character JSON'}
             </h3>
@@ -185,9 +185,9 @@ export default function ImportCharacterModal({
           <div className="space-y-6">
             <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-4">
               <div className="flex items-start gap-3 mb-4">
-                <CheckCircle className="w-5 h-5 text-moss-green flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-moss-green mb-1">Character Loaded Successfully</h4>
+                  <h4 className="font-semibold text-brand-ink mb-1">Character Loaded Successfully</h4>
                   <p className="text-sm text-ink">Review the character details below before importing.</p>
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default function ImportCharacterModal({
 
             {/* Character Preview */}
             <div className="bg-parchment rounded-lg border border-moss-green/20 p-6">
-              <h3 className="text-lg font-semibold text-moss-green mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-brand-ink mb-4 flex items-center gap-2">
                 <FileText className="w-5 h-5" />
                 Character Preview
               </h3>

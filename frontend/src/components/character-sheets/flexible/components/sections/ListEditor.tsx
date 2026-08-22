@@ -55,7 +55,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                   className="flex-shrink-0"
                 >
                   {item.checked ? (
-                    <CheckSquare className="w-5 h-5 text-moss-green" />
+                    <CheckSquare className="w-5 h-5 text-brand-ink" />
                   ) : (
                     <Square className="w-5 h-5 text-stone-gray" />
                   )}
@@ -88,7 +88,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
 
       <button
         onClick={addItem}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-moss-green rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
       >
         <Plus className="w-4 h-4" />
         Add Item

@@ -160,10 +160,10 @@ export default function CharacterSheetViewerModal({
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 rounded-full bg-moss-green/10">
-                <UserIcon className="w-5 h-5 text-moss-green" />
+                <UserIcon className="w-5 h-5 text-brand-ink" />
               </div>
               <div>
-                <h2 id="character-sheet-viewer-title" className="text-2xl font-bold text-moss-green">
+                <h2 id="character-sheet-viewer-title" className="text-2xl font-bold text-brand-ink">
                   {character.name}
                 </h2>
                 <div className="flex items-center gap-3 text-sm text-warm-gray">
@@ -177,8 +177,8 @@ export default function CharacterSheetViewerModal({
             {/* DM Edit Banner */}
             {isDMEditingOtherCharacter && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/30 rounded-lg">
-                <Shield className="w-4 h-4 text-moss-green" />
-                <p className="text-sm text-moss-green">
+                <Shield className="w-4 h-4 text-brand-ink" />
+                <p className="text-sm text-brand-ink">
                   You are viewing <strong>{ownerName}'s</strong> character as DM
                 </p>
               </div>

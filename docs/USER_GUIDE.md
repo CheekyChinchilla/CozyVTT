@@ -63,7 +63,9 @@ Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor 
 
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** Contact your platform administrator — they can generate a temporary password from the Admin Panel.
+**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel.
+
+**First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
 ---
 
@@ -442,7 +444,7 @@ CozyVTT theming works in two layers:
 
 - **Default theme** — 16 built-in themes spanning warm, cool, dark, neutral, and vibrant palettes
 - **Default font** — 8 open-source font families (Quicksand + Inter default, plus medieval, elegant, handwritten, etc.)
-- **Custom theme builder** — primary, accent, background, and text colors; complementary shades derived automatically
+- **Custom theme builder** — primary, accent, background, and text colors; complementary shades derived automatically. The picker shows a live **Readability** check with the contrast ratio of each key text/background pair, flagging anything below the 4.5:1 minimum, and CozyVTT adjusts text shades automatically where it can
 - **Custom branding** — logo, mascot, and favicon shown on the login page and across the instance (always system-wide regardless of user theme)
 
 Changes preview live as you configure them.

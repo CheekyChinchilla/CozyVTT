@@ -13,28 +13,32 @@ interface GameSystemBadgeProps {
 }
 
 /**
- * Color schemes for each game system
+ * Color schemes for each game system.
+ *
+ * These use the semantic tokens purely as a set of four distinguishable, themed
+ * hues — a D&D badge is not "danger", it just needs to look different from a
+ * Pathfinder one and stay readable on every theme.
  */
 const GAME_SYSTEM_COLORS: Record<GameSystem, { bg: string; text: string; border: string }> = {
   DND_5E: {
-    bg: 'bg-red-100',
-    text: 'text-red-800',
-    border: 'border-red-300',
+    bg: 'bg-danger/10',
+    text: 'text-danger-ink',
+    border: 'border-danger/30',
   },
   PATHFINDER_2E: {
-    bg: 'bg-blue-100',
-    text: 'text-blue-800',
-    border: 'border-blue-300',
+    bg: 'bg-info/10',
+    text: 'text-info-ink',
+    border: 'border-info/30',
   },
   SHADOWRUN_6E: {
-    bg: 'bg-purple-100',
-    text: 'text-purple-800',
-    border: 'border-purple-300',
+    bg: 'bg-spirit/10',
+    text: 'text-spirit-ink',
+    border: 'border-spirit/30',
   },
   CALL_OF_CTHULHU_7E: {
-    bg: 'bg-green-100',
-    text: 'text-green-800',
-    border: 'border-green-300',
+    bg: 'bg-success/10',
+    text: 'text-success-ink',
+    border: 'border-success/30',
   },
 };
 

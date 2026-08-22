@@ -126,7 +126,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
       case AssetType.MAP:
         return <MapPin className="w-5 h-5 text-warm-amber" />;
       case AssetType.TOKEN:
-        return <User className="w-5 h-5 text-moss-green" />;
+        return <User className="w-5 h-5 text-brand-ink" />;
       case AssetType.AUDIO:
         return <FileAudio className="w-5 h-5 text-spirit-purple" />;
       case AssetType.AVATAR:
@@ -227,7 +227,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
             <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-2xl font-bold text-moss-green mb-1 truncate">
+                  <h2 className="text-2xl font-bold text-brand-ink mb-1 truncate">
                     {currentAsset.name}
                   </h2>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -274,7 +274,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
             <div className="p-6 space-y-6">
               {/* Preview */}
               <div>
-                <h3 className="text-lg font-semibold text-moss-green mb-3">Preview</h3>
+                <h3 className="text-lg font-semibold text-brand-ink mb-3">Preview</h3>
                 <div className="relative w-full rounded-lg overflow-hidden bg-moss-green/10">
                   {currentAsset.type === AssetType.AUDIO ? (
                     <div className="flex items-center justify-center h-64">
@@ -309,7 +309,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
               {/* Description */}
               {currentAsset.description && (
                 <div>
-                  <h3 className="text-lg font-semibold text-moss-green mb-3">Description</h3>
+                  <h3 className="text-lg font-semibold text-brand-ink mb-3">Description</h3>
                   <p className="text-stone-gray whitespace-pre-wrap">{currentAsset.description}</p>
                 </div>
               )}
@@ -317,7 +317,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
               {/* Tags */}
               {currentAsset.tags.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-moss-green mb-3">Tags</h3>
+                  <h3 className="text-lg font-semibold text-brand-ink mb-3">Tags</h3>
                   <div className="flex items-center gap-2 flex-wrap">
                     {currentAsset.tags.map((tag) => (
                       <span
@@ -335,7 +335,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
               {/* Move to… */}
               {canMove && availableMoveScopes.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-moss-green mb-3 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-brand-ink mb-3 flex items-center gap-2">
                     <ArrowRightLeft className="w-5 h-5" />
                     Move to…
                   </h3>
@@ -386,10 +386,10 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
                     {/* Error / success */}
                     {moveError && (
-                      <p className="text-sm text-red-600">{moveError}</p>
+                      <p className="text-sm text-danger-ink">{moveError}</p>
                     )}
                     {moveSuccess && (
-                      <p className="flex items-center gap-1 text-sm text-moss-green">
+                      <p className="flex items-center gap-1 text-sm text-brand-ink">
                         <Check className="w-4 h-4" />
                         Asset moved successfully.
                       </p>
@@ -423,7 +423,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
               {/* Metadata */}
               <div>
-                <h3 className="text-lg font-semibold text-moss-green mb-3">Metadata</h3>
+                <h3 className="text-lg font-semibold text-brand-ink mb-3">Metadata</h3>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
                     <HardDrive className="w-5 h-5 text-stone-gray/60" />
@@ -471,7 +471,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
               {/* Technical Details */}
               <div>
-                <h3 className="text-lg font-semibold text-moss-green mb-3">Technical Details</h3>
+                <h3 className="text-lg font-semibold text-brand-ink mb-3">Technical Details</h3>
                 <div className="p-4 bg-parchment/50 border border-moss-green/20 rounded-lg">
                   <div className="space-y-2 font-mono text-sm">
                     <div className="flex justify-between">
