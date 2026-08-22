@@ -2,6 +2,10 @@
 // Reset Password Page
 // Allows users to set a new password via a valid reset token
 // Accessed via /reset-password?token=<uuid>
+//
+// Also serves invitations at /accept-invite?token=<uuid> (`invite` prop). Same
+// token, same endpoint — an invited account has no password yet, so "set one"
+// and "reset yours" are the same operation with different wording.
 // ============================================
 
 import { useState, FormEvent, useEffect } from 'react';
@@ -9,16 +13,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { KeyRound, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import authService from '@/services/auth.service';
 import Button from '@/components/ui/Button';
+import { PASSWORD_REQUIREMENTS } from '@/utils/validation';
 
-const PASSWORD_REQUIREMENTS = [
-  { test: (p: string) => p.length >= 8,           label: 'At least 8 characters' },
-  { test: (p: string) => /[A-Z]/.test(p),         label: 'One uppercase letter' },
-  { test: (p: string) => /[a-z]/.test(p),         label: 'One lowercase letter' },
-  { test: (p: string) => /[0-9]/.test(p),         label: 'One number' },
-  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: 'One special character' },
-];
+interface ResetPasswordPageProps {
+  /** Render invitation copy instead of password-reset copy (route: /accept-invite) */
+  invite?: boolean;
+}
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordPage({ invite = false }: ResetPasswordPageProps) {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
@@ -31,9 +33,13 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     if (!token) {
-      setError('This password reset link is invalid. Please request a new one.');
+      setError(
+        invite
+          ? 'This invitation link is invalid. Ask your administrator to send a new one.'
+          : 'This password reset link is invalid. Please request a new one.'
+      );
     }
-  }, [token]);
+  }, [token, invite]);
 
   const requirementsMet = PASSWORD_REQUIREMENTS.map((r) => r.test(password));
   const allRequirementsMet = requirementsMet.every(Boolean);
@@ -66,7 +72,12 @@ export default function ResetPasswordPage() {
       setSuccess(true);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setError(msg || 'Failed to reset password. This link may have expired.');
+      setError(
+        msg ||
+          (invite
+            ? 'Failed to set your password. This invitation may have expired.'
+            : 'Failed to reset password. This link may have expired.')
+      );
     } finally {
       setLoading(false);
     }
@@ -80,9 +91,13 @@ export default function ResetPasswordPage() {
           /* Success state */
           <div className="text-center space-y-4">
             <CheckCircle className="w-14 h-14 text-moss-green mx-auto" aria-hidden="true" />
-            <h1 className="text-2xl font-bold text-moss-green font-heading">Password updated!</h1>
+            <h1 className="text-2xl font-bold text-moss-green font-heading">
+              {invite ? "You're all set!" : 'Password updated!'}
+            </h1>
             <p className="text-sm text-warm-gray">
-              Your password has been reset successfully. You can now sign in with your new password.
+              {invite
+                ? 'Your account is ready. Sign in with the password you just chose.'
+                : 'Your password has been reset successfully. You can now sign in with your new password.'}
             </p>
             <Link to="/auth/login" className="btn-primary inline-block px-6 py-2">
               Sign In
@@ -94,12 +109,14 @@ export default function ResetPasswordPage() {
             <AlertCircle className="w-14 h-14 text-red-500 mx-auto" aria-hidden="true" />
             <h1 className="text-2xl font-bold text-moss-green font-heading">Invalid link</h1>
             <p className="text-sm text-warm-gray">{error}</p>
-            <Link
-              to="/auth/forgot-password"
-              className="inline-flex items-center gap-1.5 text-sm text-moss-green hover:text-moss-green/80 font-medium transition-colors"
-            >
-              Request a new reset link
-            </Link>
+            {!invite && (
+              <Link
+                to="/auth/forgot-password"
+                className="inline-flex items-center gap-1.5 text-sm text-moss-green hover:text-moss-green/80 font-medium transition-colors"
+              >
+                Request a new reset link
+              </Link>
+            )}
           </div>
         ) : (
           /* Form state */
@@ -108,9 +125,13 @@ export default function ResetPasswordPage() {
               <div className="flex justify-center mb-3">
                 <KeyRound className="w-10 h-10 text-moss-green/70" aria-hidden="true" />
               </div>
-              <h1 className="text-2xl font-bold text-moss-green font-heading">Set new password</h1>
+              <h1 className="text-2xl font-bold text-moss-green font-heading">
+                {invite ? 'Welcome to CozyVTT' : 'Set new password'}
+              </h1>
               <p className="mt-2 text-sm text-warm-gray">
-                Choose a strong password for your account.
+                {invite
+                  ? 'Choose a password to finish setting up your account.'
+                  : 'Choose a strong password for your account.'}
               </p>
             </div>
 
@@ -199,7 +220,7 @@ export default function ResetPasswordPage() {
                     Updating...
                   </span>
                 ) : (
-                  'Set New Password'
+                  invite ? 'Create My Account' : 'Set New Password'
                 )}
               </Button>
             </form>

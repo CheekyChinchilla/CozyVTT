@@ -187,6 +187,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     req.session.email = user.email;
     req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    // Gates every other API call until the password is replaced
+    req.session.mustChangePassword = user.mustChangePassword;
 
     // Extend session if "Remember Me" is checked
     if (rememberMe && req.session.cookie) {
@@ -449,6 +451,9 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
         mustChangePassword: false,
       },
     });
+
+    // Lift the gate for this session immediately (see middleware/passwordChange.ts)
+    req.session.mustChangePassword = false;
 
     return res.status(200).json({
       message: 'Password changed successfully',

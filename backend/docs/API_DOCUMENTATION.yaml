@@ -28,6 +28,14 @@ info:
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
 
+    ## Forced password changes
+    Accounts an admin created, or whose password an admin reset, are flagged
+    `mustChangePassword`. Until a new password is set, every endpoint except
+    `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`,
+    `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config` returns
+    HTTP 403 with `code: PASSWORD_CHANGE_REQUIRED`. WebSocket connections are refused
+    on the same basis. Clients should route on `code` rather than the message.
+
     ## Real-time Events
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     See the WebSocket section at the bottom of this document for the full event reference.
@@ -4590,7 +4598,15 @@ paths:
     post:
       tags: [Admin]
       summary: Create a new user
-      description: Creates a user with a generated temporary password. The user must change their password on first login (`mustChangePassword` is set to true).
+      description: |
+        Creates a user with a generated temporary password. The account is flagged
+        `mustChangePassword`, so that password can only be used to set a real one — every
+        other endpoint returns 403 `PASSWORD_CHANGE_REQUIRED` until it is replaced.
+
+        When SMTP is configured the credentials are emailed and `temporaryPassword` is
+        **withheld** from the response; it is returned only when the email could not be
+        sent, so the admin never holds a working credential unnecessarily. To create an
+        account without any password at all, use `/api/admin/users/invite`.
       operationId: adminCreateUser
       security:
         - cookieAuth: []
@@ -4624,9 +4640,14 @@ paths:
                     type: string
                   user:
                     $ref: '#/components/schemas/User'
+                  emailSent:
+                    type: boolean
+                    description: Whether the welcome email with the credentials was delivered
                   temporaryPassword:
                     type: string
-                    description: One-time temporary password — store securely and share with user
+                    description: >-
+                      One-time temporary password. Present ONLY when emailSent is false —
+                      share it securely; it is not retrievable afterwards.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4635,6 +4656,108 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           description: Email already in use
+
+  /api/admin/users/invite:
+    post:
+      tags: [Admin]
+      summary: Invite a user by email
+      description: |
+        Creates an account with **no usable password** and emails the new user a link to
+        choose one. The link expires in 7 days and is the only way into the account, so
+        no credential is ever returned or shown to the inviting admin.
+
+        Requires SMTP. If the invitation cannot be delivered the account is rolled back
+        rather than left unreachable.
+
+        The recipient completes setup at `/accept-invite?token=…`, which submits to
+        `POST /api/auth/reset-password` — invitations and password resets share the same
+        token machinery.
+      operationId: adminInviteUser
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+                  maxLength: 50
+                platformRole:
+                  type: string
+                  enum: [USER, ADMIN]
+                  default: USER
+      responses:
+        '201':
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  expiresInDays:
+                    type: integer
+                    example: 7
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Email already in use
+        '502':
+          description: The invitation email could not be delivered; no account was created
+        '503':
+          description: SMTP is not configured on this instance
+
+  /api/admin/users/{id}/resend-invite:
+    post:
+      tags: [Admin]
+      summary: Resend an invitation
+      description: |
+        Issues a fresh invitation link and invalidates any outstanding one. Useful when the
+        original expired or never arrived. Requires SMTP.
+      operationId: adminResendInvite
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation resent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  expiresInDays:
+                    type: integer
+                    example: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: SMTP is not configured on this instance
 
   /api/admin/users/{id}/approve:
     post:
@@ -6306,6 +6429,21 @@ components:
           example:
             error: Forbidden
             message: You do not have permission to perform this action.
+
+    PasswordChangeRequired:
+      description: >-
+        Forbidden - The account must set a new password before it can do anything else
+        (admin-created account, or an admin reset its password). Returned by every
+        endpoint except change-password, logout, /auth/me, /auth/ping, /auth/appearance
+        and /api/config. Route on `code`, not the message.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Password Change Required
+            code: PASSWORD_CHANGE_REQUIRED
+            message: You must set a new password before continuing.
 
     NotFound:
       description: Not Found - Resource does not exist or you cannot see it.

@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Invite users by email.** With SMTP configured, admins can add someone from **Admin → Users → Invite User** by entering just an email address and role. The person receives a link, chooses their own password, and signs in — no password is ever generated, shown to the admin, or sent by email. Links are valid for 7 days, and a **Invite** button on any user who has never signed in sends a fresh one (invalidating the previous link). Instances without SMTP keep using Create User exactly as before
+
+### Fixed
+
+- **Admin-issued temporary passwords now stop working once used.** Accounts created or reset by an admin were flagged as needing a password change, and the login response even said so — but nothing acted on it, so the temporary password the admin had just seen kept working indefinitely and the user was never prompted. The flag is now enforced on the server: until the password is replaced, every API call except changing it is refused, WebSocket connections are declined, and the app sends the user straight to a change-password screen
+- Resetting a user's password from the admin panel now signs out that user's existing sessions, instead of leaving them browsing on a session created with the old password
+
+### Changed
+
+- The temporary password from **Create User** is no longer displayed to the admin when the welcome email was delivered successfully — it is shown only when there is no other way to hand it over (no SMTP, or the send failed)
+- Password requirement checklists are now defined once and shared by every screen that sets a password, so they cannot drift from what the server enforces
+
 ### Documentation
 
 - **Fixed the external-reverse-proxy instructions, which described a setup that cannot work.** Removing the bundled `nginx` service leaves *nothing* publishing a port — the backend and frontend are `expose`-only — so the old "Option A" sent people's proxies at a closed port. The API then either failed outright (502 during setup) or, when a proxy pointed only at the frontend, returned the web page itself for every `/api` call, which made a brand-new install show the login page instead of the setup wizard. Option A now covers publishing both services on `127.0.0.1`, why the loopback prefix matters (and that Docker's published ports bypass UFW), and the routing every proxy must do

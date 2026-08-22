@@ -12,6 +12,11 @@
 .env.production
 .env.*.local
 *.env.local
+# Any other suffix too (.env.test, .env.staging, .env.dev, …) — these hold real
+# credentials just as often as .env does. The committed templates are re-included
+# below.
+.env.*
+!.env.example
 
 # ---- Dependencies -----------------------------------------------------------
 node_modules/

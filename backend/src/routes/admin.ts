@@ -24,7 +24,7 @@ import {
 } from '../services/systemSettings';
 import { sanitizeInput, validateEmail } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
-import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail } from '../services/email';
+import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { FILE_SIZE_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import logger from '../utils/logger';
@@ -93,6 +93,13 @@ async function writeAdminLog(
     logger.error('Failed to write system log', { err: e });
   }
 }
+
+/**
+ * How long an invitation link stays valid. Longer than the 1-hour password
+ * reset window on purpose — an invitation has to survive someone not checking
+ * email over a weekend.
+ */
+const INVITE_EXPIRY_DAYS = 7;
 
 function generateTemporaryPassword(): string {
   const bytes = crypto.randomBytes(16);
@@ -277,21 +284,202 @@ router.post('/users', async (req, res) => {
       { targetUserId: user.id, role }
     );
 
-    // Send welcome email if SMTP is configured
+    // Send the welcome email if SMTP is configured. Awaited, because whether it
+    // succeeded decides if the admin needs to see the password at all.
+    let emailSent = false;
     if (isSmtpConfigured()) {
-      sendWelcomeEmail(user.email, user.displayName, temporaryPassword).catch((err) => {
+      try {
+        await sendWelcomeEmail(user.email, user.displayName, temporaryPassword);
+        emailSent = true;
+      } catch (err) {
         logger.error(`[admin] Failed to send welcome email to ${user.email}`, { err: err });
-      });
+      }
     }
 
     return res.status(201).json({
-      message: 'User created successfully',
+      message: emailSent
+        ? `User created. Sign-in details were emailed to ${user.email}.`
+        : 'User created successfully',
       user: sanitizeUser(user),
-      temporaryPassword,
+      emailSent,
+      // Withheld once the user has it by email — no reason for the admin to
+      // hold a working credential for someone else's account
+      ...(emailSent ? {} : { temporaryPassword }),
     });
   } catch (error) {
     logger.error('Error creating user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create user' });
+  }
+});
+
+// ============================================
+// POST /api/admin/users/invite
+// Creates an account with NO usable password and emails the new user a link to
+// choose their own. Requires SMTP — the link is the only way into the account,
+// so there is nothing to hand over manually.
+// ============================================
+
+router.post('/users/invite', async (req, res) => {
+  try {
+    if (!isSmtpConfigured()) {
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message:
+          'SMTP is not configured on this instance, so invitations cannot be emailed. Configure SMTP in your .env, or use Create User to generate a temporary password instead.',
+      });
+    }
+
+    const { email, displayName, platformRole } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Email is required' });
+    }
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address' });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existing) {
+      return res.status(409).json({ error: 'Conflict', message: 'Email is already in use' });
+    }
+
+    const role = platformRole === 'ADMIN' ? 'ADMIN' : 'USER';
+    const rawName = typeof displayName === 'string' && displayName.trim()
+      ? displayName
+      : email.split('@')[0];
+
+    // The account is created with an unusable password: a hash of random bytes
+    // that are discarded immediately. Nobody — including this admin — holds a
+    // credential for it. The invitation token is the only way in.
+    const unusablePassword = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await hashPassword(unusablePassword);
+
+    const user = await prisma.user.create({
+      data: {
+        email: sanitizeInput(email).toLowerCase(),
+        displayName: sanitizeInput(rawName).slice(0, 50),
+        passwordHash,
+        platformRole: role,
+        // The invitation link sets the password, so there is nothing to force
+        // a change of afterwards
+        mustChangePassword: false,
+      },
+    });
+
+    const token = crypto.randomUUID();
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.session.userId! },
+      select: { displayName: true },
+    });
+
+    try {
+      await sendInvitationEmail(
+        user.email,
+        token,
+        user.displayName,
+        inviter?.displayName || 'An administrator',
+        INVITE_EXPIRY_DAYS
+      );
+    } catch (err) {
+      // The account exists but is unreachable without the emailed link, so roll
+      // it back rather than leaving an unusable account behind
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => undefined);
+      logger.error(`[admin] Failed to send invitation to ${user.email}`, { err });
+      return res.status(502).json({
+        error: 'Email Delivery Failed',
+        message: 'The invitation could not be emailed, so the account was not created. Check your SMTP settings and try again.',
+      });
+    }
+
+    await writeAdminLog(
+      req.session.userId!,
+      `Invited user ${user.email} with role ${role}`,
+      'INFO',
+      { targetUserId: user.id, role }
+    );
+
+    return res.status(201).json({
+      message: `Invitation sent to ${user.email}`,
+      user: sanitizeUser(user),
+      expiresInDays: INVITE_EXPIRY_DAYS,
+    });
+  } catch (error) {
+    logger.error('Error inviting user', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to invite user' });
+  }
+});
+
+// ============================================
+// POST /api/admin/users/:id/resend-invite
+// Issues a fresh invitation link, invalidating any outstanding one.
+// ============================================
+
+router.post('/users/:id/resend-invite', async (req, res) => {
+  try {
+    if (!isSmtpConfigured()) {
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'SMTP is not configured on this instance, so invitations cannot be emailed.',
+      });
+    }
+
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+
+    // Invalidate outstanding links so only the newest one works
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: id, used: false },
+      data: { used: true },
+    });
+
+    const token = crypto.randomUUID();
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: id,
+        token,
+        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const inviter = await prisma.user.findUnique({
+      where: { id: req.session.userId! },
+      select: { displayName: true },
+    });
+
+    await sendInvitationEmail(
+      user.email,
+      token,
+      user.displayName,
+      inviter?.displayName || 'An administrator',
+      INVITE_EXPIRY_DAYS
+    );
+
+    await writeAdminLog(
+      req.session.userId!,
+      `Resent invitation to ${user.email}`,
+      'INFO',
+      { targetUserId: user.id }
+    );
+
+    return res.status(200).json({
+      message: `Invitation resent to ${user.email}`,
+      expiresInDays: INVITE_EXPIRY_DAYS,
+    });
+  } catch (error) {
+    logger.error('Error resending invitation', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to resend invitation' });
   }
 });
 

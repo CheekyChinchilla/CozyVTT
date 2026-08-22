@@ -540,7 +540,7 @@ openssl rand -hex 32
 
 ### SMTP Setup (Optional)
 
-Email is required for password reset and invitation notifications. Configure in `.env`:
+Email is required for password resets and invitations. Configure in `.env`:
 
 ```env
 SMTP_HOST=smtp.example.com
@@ -554,7 +554,19 @@ APP_URL=https://your-domain.com
 
 Test from **Admin Dashboard → Settings → Test Email** after deploying.
 
-If SMTP is not configured, admin-initiated password resets still work — the admin generates a temporary password from the Users tab.
+#### What SMTP unlocks
+
+| Feature | With SMTP | Without SMTP |
+|---|---|---|
+| **Adding a user** | **Invite User** — they get an email with a link and choose their own password. Nobody else ever sees it. | **Create User** — a temporary password is generated and shown to you once, to hand over yourself |
+| Password resets (self-service) | User clicks "Forgot password" and gets a reset link | Unavailable — the user has to ask an admin |
+| Password resets (admin) | Email the user a reset link, or generate a temporary password | Generate a temporary password from the Users tab |
+| Campaign invitations | Emailed to the player | Share the invite link manually |
+
+Either way, an account created by an admin **must set its own password on first sign-in** — the
+temporary password works for nothing else, so an admin never keeps usable access to someone's
+account. Invitation links are valid for **7 days**; use **Invite** on the Users tab to send a fresh
+one if it expires.
 
 ### Upload Size Limits
 

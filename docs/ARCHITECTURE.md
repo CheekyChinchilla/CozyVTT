@@ -61,6 +61,7 @@ src/
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
 │   ├── auth.ts        Passport.js session middleware, requireAuth guards
+│   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
 │   └── upload.ts      Multer configuration, magic byte validation
 ├── routes/            HTTP route handlers

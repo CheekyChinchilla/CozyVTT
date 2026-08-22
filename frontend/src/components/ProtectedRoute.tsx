@@ -18,7 +18,7 @@ export default function ProtectedRoute({
   children,
   requireRole,
 }: ProtectedRouteProps) {
-  const { user, loading, authenticated } = useAuth();
+  const { user, loading, authenticated, mustChangePassword } = useAuth();
 
   // Show loading state while checking authentication
   if (loading) {
@@ -35,6 +35,12 @@ export default function ProtectedRoute({
   // Redirect to login if not authenticated
   if (!authenticated || !user) {
     return <Navigate to="/auth/login" replace />;
+  }
+
+  // Account still has to replace an admin-issued password. The server rejects
+  // every other API call until it does, so send them somewhere that works.
+  if (mustChangePassword) {
+    return <Navigate to="/auth/change-password" replace />;
   }
 
   // Check role-based access if required

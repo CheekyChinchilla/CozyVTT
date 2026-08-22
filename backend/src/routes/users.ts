@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { sanitizeUser, hashPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
+import { destroyUserLoginSessions } from '../services/sessionStore';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import crypto from 'crypto';
 import logger from '../utils/logger';
@@ -414,11 +415,16 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       },
     });
 
+    // End any sessions the user already has open — otherwise they keep full
+    // access on the old session and the forced-change gate would only take
+    // effect at their next login
+    await destroyUserLoginSessions(id);
+
     return res.status(200).json({
       message: 'Password reset successfully',
       temporaryPassword,
       mustChangePassword: true,
-      notice: 'This temporary password will only be displayed once. The user will be required to change it on next login.',
+      notice: 'This temporary password will only be displayed once. The user will be required to change it on next login, and any active sessions have been signed out.',
     });
   } catch (error) {
     logger.error('Error resetting password', { err: error });

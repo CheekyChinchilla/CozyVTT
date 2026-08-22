@@ -21,6 +21,7 @@ const LoginPage           = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage        = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPasswordPage  = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage   = lazy(() => import('@/pages/auth/ResetPasswordPage'));
+const ChangePasswordPage  = lazy(() => import('@/pages/auth/ChangePasswordPage'));
 const MFAVerifyPage       = lazy(() => import('@/pages/auth/MFAVerifyPage'));
 const MFASetupPage     = lazy(() => import('@/pages/MFASetupPage'));
 const SetupWizardPage  = lazy(() => import('@/pages/SetupWizardPage'));
@@ -84,8 +85,12 @@ function App() {
           <Route path="/auth/register" element={<RegisterPage />} />
           <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/accept-invite" element={<ResetPasswordPage invite />} />
           <Route path="/auth/mfa-verify" element={<MFAVerifyPage />} />
           <Route path="/auth/mfa-setup" element={<MFASetupPage />} />
+          {/* Signed in, but the account still has to replace an admin-issued
+              password — the server rejects everything else until it does */}
+          <Route path="/auth/change-password" element={<ChangePasswordPage />} />
 
           {/* Protected Routes - Require Authentication */}
           <Route

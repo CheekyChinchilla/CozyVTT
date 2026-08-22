@@ -865,9 +865,10 @@ List all users on the platform.
 
 ---
 
-### `POST /api/users` *(Admin only)*
+### `POST /api/admin/users` *(Admin only)*
 
-Create a new user account. Returns a generated temporary password.
+Create a new user account with a generated temporary password. The account is flagged
+`mustChangePassword`, so that password can only be used to set a real one.
 
 **Request:**
 ```json
@@ -875,6 +876,59 @@ Create a new user account. Returns a generated temporary password.
   "email": "newplayer@example.com",
   "displayName": "New Player",
   "platformRole": "USER"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "User created. Sign-in details were emailed to newplayer@example.com.",
+  "user": { "id": "…", "email": "newplayer@example.com", "…": "…" },
+  "emailSent": true
+}
+```
+
+`temporaryPassword` is included **only when `emailSent` is false** — that is, when SMTP is not configured or delivery failed and the admin has no other way to hand it over. When the welcome email went out, the password is withheld so the admin never holds a working credential for another account.
+
+---
+
+### `POST /api/admin/users/invite` *(Admin only)*
+
+Invite a user by email. The account is created **without a usable password**; the emailed link is the only way in, and it expires in **7 days**. Nothing password-related is returned.
+
+Requires SMTP — returns `503` when it isn't configured. If the email fails to send, the account is rolled back rather than left unreachable (`502`).
+
+**Request:**
+```json
+{
+  "email": "newplayer@example.com",
+  "displayName": "New Player",
+  "platformRole": "USER"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Invitation sent to newplayer@example.com",
+  "user": { "id": "…", "email": "newplayer@example.com", "…": "…" },
+  "expiresInDays": 7
+}
+```
+
+The recipient opens `/accept-invite?token=…` and sets a password, which is completed through `POST /api/auth/reset-password` — invitations and resets share the same token machinery.
+
+---
+
+### `POST /api/admin/users/:id/resend-invite` *(Admin only)*
+
+Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (`503` otherwise).
+
+**Response:**
+```json
+{
+  "message": "Invitation resent to newplayer@example.com",
+  "expiresInDays": 7
 }
 ```
 
@@ -888,7 +942,9 @@ Update a user's platform role or approval status.
 
 ### `POST /api/users/:id/reset-password` *(Admin only)*
 
-Generate a temporary password for a user. The user must change it on next login.
+Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
+sessions the user currently has open are signed out** — otherwise they would keep browsing on the
+old session and the forced change would only apply at their next login.
 
 **Response:**
 ```json
@@ -1190,6 +1246,28 @@ All error responses follow this shape:
 | `409` | Conflict — e.g., email already in use |
 | `429` | Rate limit exceeded |
 | `500` | Server error — check server logs |
+| `502` | Upstream failure — e.g., an invitation email could not be delivered |
+| `503` | Feature unavailable — e.g., an email-dependent endpoint with no SMTP configured |
+
+### Password change required
+
+Accounts an admin created, or whose password an admin reset, must set a new password before doing
+anything else. Until they do, **every endpoint except the ones needed to change it** returns:
+
+```json
+{
+  "error": "Password Change Required",
+  "code": "PASSWORD_CHANGE_REQUIRED",
+  "message": "You must set a new password before continuing."
+}
+```
+
+Status `403`. Still reachable while in this state: `POST /api/auth/change-password`,
+`POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance`, and
+`GET /api/config`. WebSocket connections are refused on the same basis.
+
+Clients should route on `code`, not the message — the web app redirects to its change-password screen
+when it sees it.
 
 ---
 

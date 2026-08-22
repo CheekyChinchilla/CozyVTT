@@ -197,6 +197,12 @@ export default function AdminPage() {
   const [createUserError, setCreateUserError] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserPasswordCopied, setNewUserPasswordCopied] = useState(false);
+  // 'create' generates a temporary password; 'invite' emails a set-password link
+  const [createUserMode, setCreateUserMode] = useState<'create' | 'invite'>('create');
+  // Success message shown after an invite or an emailed create
+  const [createUserSuccess, setCreateUserSuccess] = useState('');
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [resendInviteResult, setResendInviteResult] = useState<{ id: string; message: string } | null>(null);
 
   // MFA reset per-row (inline confirm)
   const [resetMfaConfirmId, setResetMfaConfirmId] = useState<string | null>(null);
@@ -418,6 +424,8 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === 'dashboard' && !stats && !statsLoading) loadStats();
     if (activeTab === 'users' && users.length === 0 && !usersLoading) loadUsers();
+    // The Users tab needs smtp.configured to decide whether inviting is possible
+    if (activeTab === 'users' && !serverConfig && !configLoading) loadServerConfig();
     if (activeTab === 'settings' || activeTab === 'appearance') {
       if (!settings && !settingsLoading) loadSettings();
       if (activeTab === 'settings' && !serverConfig && !configLoading) loadServerConfig();
@@ -578,18 +586,53 @@ export default function AdminPage() {
     setCreatingUser(true);
     setCreateUserError('');
     try {
-      const { user: newUser, temporaryPassword } = await adminService.createUser({
+      const payload = {
         email: createUserForm.email.trim(),
         displayName: createUserForm.displayName.trim() || undefined,
         platformRole: createUserForm.platformRole,
-      });
-      setNewUserPassword(temporaryPassword);
-      setUsers(prev => [newUser, ...prev]);
+      };
+
+      if (createUserMode === 'invite') {
+        const { user: newUser, expiresInDays } = await adminService.inviteUser(payload);
+        setCreateUserSuccess(
+          `Invitation sent to ${newUser.email}. The link expires in ${expiresInDays} days.`
+        );
+        setUsers(prev => [newUser, ...prev]);
+      } else {
+        const { user: newUser, emailSent, temporaryPassword } = await adminService.createUser(payload);
+        if (emailSent) {
+          // The user has their password by email; the admin doesn't need it
+          setCreateUserSuccess(`User created. Sign-in details were emailed to ${newUser.email}.`);
+        } else {
+          setNewUserPassword(temporaryPassword ?? '');
+        }
+        setUsers(prev => [newUser, ...prev]);
+      }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setCreateUserError(e.response?.data?.message ?? 'Failed to create user');
+      setCreateUserError(
+        e.response?.data?.message ??
+          (createUserMode === 'invite' ? 'Failed to send invitation' : 'Failed to create user')
+      );
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleResendInvite = async (userId: string) => {
+    setResendingInviteId(userId);
+    setResendInviteResult(null);
+    try {
+      const { message } = await adminService.resendInvite(userId);
+      setResendInviteResult({ id: userId, message });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setResendInviteResult({
+        id: userId,
+        message: e.response?.data?.message ?? 'Failed to resend invitation',
+      });
+    } finally {
+      setResendingInviteId(null);
     }
   };
 
@@ -599,6 +642,7 @@ export default function AdminPage() {
     setCreateUserError('');
     setNewUserPassword('');
     setNewUserPasswordCopied(false);
+    setCreateUserSuccess('');
   };
 
   const handleResetMfa = async (userId: string) => {
@@ -993,8 +1037,20 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-moss-green">User Management</h2>
               <div className="flex items-center gap-2">
+                {/* Only offered when email can actually be delivered — the
+                    invitation link is the sole way into an invited account */}
+                {serverConfig?.smtp.configured && (
+                  <Button
+                    onClick={() => { setCreateUserMode('invite'); setCreateUserOpen(true); }}
+                    className="flex items-center gap-2 text-sm py-1.5 px-3"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    Invite User
+                  </Button>
+                )}
                 <Button
-                  onClick={() => setCreateUserOpen(true)}
+                  onClick={() => { setCreateUserMode('create'); setCreateUserOpen(true); }}
+                  variant={serverConfig?.smtp.configured ? 'secondary' : 'primary'}
                   className="flex items-center gap-2 text-sm py-1.5 px-3"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
@@ -1131,10 +1187,32 @@ export default function AdminPage() {
                                 {/* Joined */}
                                 <td className="px-4 py-3 text-warm-gray text-xs">{formatDate(u.createdAt)}</td>
                                 {/* Last Login */}
-                                <td className="px-4 py-3 text-warm-gray text-xs">{formatDate(u.lastLoginAt)}</td>
+                                <td className="px-4 py-3 text-warm-gray text-xs">
+                                  {u.lastLoginAt ? (
+                                    formatDate(u.lastLoginAt)
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-full bg-warm-amber/15 text-warm-amber px-2 py-0.5 text-[10px] font-medium">
+                                      Never signed in
+                                    </span>
+                                  )}
+                                </td>
                                 {/* Actions */}
                                 <td className="px-4 py-3">
                                   <div className="flex items-center justify-end gap-1.5">
+                                    {/* Resend invite — only useful before a first sign-in */}
+                                    {!u.lastLoginAt && serverConfig?.smtp.configured && (
+                                      <button
+                                        onClick={() => handleResendInvite(u.id)}
+                                        disabled={resendingInviteId === u.id}
+                                        title="Email a fresh invitation link (invalidates any previous one)"
+                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-moss-green/30 text-moss-green hover:bg-moss-green/5 transition-colors disabled:opacity-50"
+                                      >
+                                        {resendingInviteId === u.id
+                                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                                          : <Mail className="w-3 h-3" />}
+                                        Invite
+                                      </button>
+                                    )}
                                     {/* Approve — only when pending */}
                                     {isPending && (
                                       <button
@@ -1254,6 +1332,14 @@ export default function AdminPage() {
                                 </tr>
                               )}
 
+                              {/* Resend invite result */}
+                              {resendInviteResult?.id === u.id && (
+                                <tr className="bg-moss-green/5 border-b border-warm-gray/10">
+                                  <td colSpan={7} className="px-6 py-2">
+                                    <p className="text-xs text-stone-gray">{resendInviteResult.message}</p>
+                                  </td>
+                                </tr>
+                              )}
                               {/* Reset Password Inline Panel */}
                               {isResetExpanded && (
                                 <tr className="bg-blue-50/50 border-b border-warm-gray/10">
@@ -2471,8 +2557,8 @@ export default function AdminPage() {
           <div className="bg-paper rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-warm-gray/20">
               <h2 className="text-lg font-semibold text-moss-green flex items-center gap-2">
-                <UserPlus className="w-5 h-5" />
-                Create User
+                {createUserMode === 'invite' ? <Mail className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                {createUserMode === 'invite' ? 'Invite User' : 'Create User'}
               </h2>
               {!newUserPassword && (
                 <button onClick={closeCreateUserModal} className="text-warm-gray hover:text-stone-gray transition-colors">
@@ -2482,12 +2568,27 @@ export default function AdminPage() {
             </div>
 
             <div className="p-5">
-              {newUserPassword ? (
+              {createUserSuccess ? (
+                /* Invited, or created with the details emailed — no password to show */
+                <div className="space-y-4">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-green-700 font-medium">{createUserSuccess}</p>
+                  </div>
+                  <p className="text-xs text-warm-gray">
+                    They choose their own password, so no one else ever sees it.
+                  </p>
+                  <Button onClick={closeCreateUserModal} className="w-full">
+                    Done
+                  </Button>
+                </div>
+              ) : newUserPassword ? (
                 /* Success — show temp password */
                 <div>
                   <p className="text-sm text-green-700 font-medium mb-1">User created successfully!</p>
                   <p className="text-xs text-warm-gray mb-4">
-                    Share this temporary password securely. The user must change it on first login.
+                    Share this temporary password securely — it is shown only once, and they will be
+                    required to replace it before they can use their account.
                   </p>
                   <div className="flex items-center gap-2 mb-4">
                     <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded px-3 py-2 text-sm font-mono text-stone-gray select-all">
@@ -2508,6 +2609,14 @@ export default function AdminPage() {
               ) : (
                 /* Form */
                 <div className="space-y-4">
+                  <p className="text-xs text-warm-gray">
+                    {createUserMode === 'invite'
+                      ? 'They receive an email with a link to choose their own password. No password is created, so nobody else ever sees one.'
+                      : serverConfig?.smtp.configured
+                        ? 'A temporary password is generated and emailed to them. They must replace it before they can use the account.'
+                        : 'A temporary password is generated for you to pass on. They must replace it before they can use the account.'}
+                  </p>
+
                   {createUserError && (
                     <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
                       {createUserError}
@@ -2571,7 +2680,7 @@ export default function AdminPage() {
                       className="flex-1 flex items-center justify-center gap-2"
                     >
                       {creatingUser && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Create User
+                      {createUserMode === 'invite' ? 'Send Invitation' : 'Create User'}
                     </Button>
                     <Button
                       onClick={closeCreateUserModal}
