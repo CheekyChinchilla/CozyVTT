@@ -445,9 +445,19 @@ CozyVTT theming works in two layers:
 - **Default theme** — 16 built-in themes spanning warm, cool, dark, neutral, and vibrant palettes
 - **Default font** — 8 open-source font families (Quicksand + Inter default, plus medieval, elegant, handwritten, etc.)
 - **Custom theme builder** — primary, accent, background, and text colors; complementary shades derived automatically. The picker shows a live **Readability** check with the contrast ratio of each key text/background pair, flagging anything below the 4.5:1 minimum, and CozyVTT adjusts text shades automatically where it can
-- **Custom branding** — logo, mascot, and favicon shown on the login page and across the instance (always system-wide regardless of user theme)
-
 Changes preview live as you configure them.
+
+**Custom branding (logo, mascot, favicon)** is not part of the Appearance panel yet. The instance
+already honours custom images — they appear on the login page and across the app, system-wide
+regardless of each user's theme — but there is no upload screen, so a self-hoster sets them one of
+two ways:
+
+- **Replace the default images** in `frontend/public/` (`default-logo.png`, `default-mascot.png`,
+  `favicon-32.png`, `favicon-192.png`) and rebuild, or
+- **Point the instance at hosted images** by sending `customLogoUrl`, `customMascotUrl` and
+  `customFaviconUrl` to `PUT /api/admin/settings` as URLs
+
+An admin upload UI is on the roadmap — see [Future Features](FUTURE_FEATURES.md).
 
 ---
 

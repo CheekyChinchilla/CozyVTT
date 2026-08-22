@@ -81,7 +81,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **8 font families** — open-source Google Fonts including medieval, elegant, modern, handwritten, and scholarly options
 - **Live preview** — theme and font changes preview instantly before saving
 - **Default theme** — admin selects the theme shown on the login page and applied to brand-new users
-- **Custom branding** — admins can upload a custom logo, mascot, and favicon
+- **Custom branding** — the instance logo, mascot, and favicon can be replaced (swap the images in `frontend/public/` before building; an admin upload UI is [planned](docs/FUTURE_FEATURES.md))
 
 ### Security
 - **Argon2id password hashing** (64 MB memory cost, timeCost 3)
@@ -188,10 +188,13 @@ All runtime configuration is managed through the Admin dashboard after setup:
 | Settings | Upload Limits | Per-type file size limits (maps, tokens, audio, avatars) |
 | Appearance | Default Theme | Theme shown on the login page and used for new users (each user can override from their profile) |
 | Appearance | Default Font | Default font family applied alongside the default theme |
-| Appearance | Custom Branding | Upload custom logo, mascot icon, and favicon (always instance-wide) |
+| Appearance | Custom Theme | Build a palette from primary, accent, background, and text colors, with a live readability check |
 
 However an account is added, its first sign-in ends with the person choosing their own password — an
 admin-issued temporary password cannot be used for anything else.
+
+Instance branding (logo, mascot, favicon) is **not** set from the dashboard yet — see
+[Appearance & Theming](docs/USER_GUIDE.md#appearance--theming) for how to change it today.
 
 ### Default Upload Limits
 
