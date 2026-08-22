@@ -10,6 +10,7 @@ import type { Token } from '@/types';
 import { TokenLayer, TokenType, TokenDisposition } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import type { TokenAnimation, Viewport } from './types';
+import { gridYToTopPx, gridYToFogRow, gridXToFogCol, fogCellIndex } from '../coords';
 
 export interface TokenDrawState {
   tokens: readonly Token[];
@@ -135,11 +136,10 @@ export function drawTokens(
     // revealedCells === null means fog data hasn't been received yet — show everything.
     if (!isDM && state.revealedCells) {
       if (!state.isOwnToken(token)) {
-        const fogCols = mapWidth;
-        // Token grid Y is bottom-left origin; fog grid is top-left origin
-        const fogRow = mapHeight - 1 - Math.floor(token.position.y + (token.size.height - 1) / 2);
-        const fogCol = Math.floor(token.position.x + (token.size.width - 1) / 2);
-        const fogIdx = fogRow * fogCols + fogCol;
+        // Token grid Y is bottom-left origin; fog rows are top-left. See map/coords.ts.
+        const fogRow = gridYToFogRow(token.position.y, token.size.height, mapHeight);
+        const fogCol = gridXToFogCol(token.position.x, token.size.width);
+        const fogIdx = fogCellIndex(fogCol, fogRow, { fogCols: mapWidth });
         if (!state.revealedCells.has(fogIdx)) continue;
       }
     }
@@ -166,10 +166,9 @@ export function drawTokens(
     }
 
     // Grid coordinates → world coordinates. position is the bottom-left grid
-    // cell; the token extends upward in grid-Y, so its top-left pixel
-    // corresponds to grid row (posY + height - 1).
+    // cell; the token extends upward in grid-Y. See map/coords.ts.
     const tokenX = posX * gridSize;
-    const tokenY = (mapHeight - posY - token.size.height) * gridSize;
+    const tokenY = gridYToTopPx(posY, token.size.height, mapHeight, gridSize);
 
     const tokenWidth = token.size.width * gridSize;
     const tokenHeight = token.size.height * gridSize;
@@ -451,7 +450,7 @@ export function drawTokens(
     const ghostPosX = Math.max(0, Math.min(maxPosX, state.hoverCoords.x - state.dragOffset.x));
     const ghostPosY = Math.max(0, Math.min(maxPosY, state.hoverCoords.y - state.dragOffset.y));
     const ghostX = ghostPosX * gridSize;
-    const ghostY = (mapHeight - ghostPosY - draggedToken.size.height) * gridSize;
+    const ghostY = gridYToTopPx(ghostPosY, draggedToken.size.height, mapHeight, gridSize);
 
     const ghostW = draggedToken.size.width * gridSize;
     const ghostH = draggedToken.size.height * gridSize;

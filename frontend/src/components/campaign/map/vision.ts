@@ -10,6 +10,7 @@ import type { Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { computeVisibility, type VisibilityPolygon } from '@/utils/raycasting';
 import { mapSizePx, type Viewport } from './layers/types';
+import { gridYToCentrePx } from './coords';
 
 /**
  * A visibility polygon plus its source center. The center is kept so
@@ -38,7 +39,7 @@ function tokenSource(token: Token, viewport: Viewport): { cx: number; cy: number
   // Token grid coords use Y=0 at bottom; canvas pixel coords use Y=0 at top.
   return {
     cx: (token.position.x + token.size.width / 2) * viewport.gridSize,
-    cy: (viewport.mapHeight - token.position.y - token.size.height / 2) * viewport.gridSize,
+    cy: gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize),
     r: (token.sightRadius ?? 0) * viewport.gridSize,
   };
 }

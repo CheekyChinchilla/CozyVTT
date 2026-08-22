@@ -10,6 +10,7 @@
 
 import type { Token } from '@/types';
 import type { LightSource } from '@/types/walls';
+import { gridYToCentrePx } from '../coords';
 import type { LightToolMode } from '@/components/campaign/DmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
@@ -143,7 +144,7 @@ export function drawDynamicLighting(
   ctx.save();
   for (const token of state.myTokens) {
     const cx = (token.position.x + token.size.width / 2) * viewport.gridSize;
-    const cy = (viewport.mapHeight - token.position.y - token.size.height / 2) * viewport.gridSize;
+    const cy = gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize);
     const glowR = Math.max(
       viewport.gridSize * 2,
       (token.sightRadius ?? 3) * viewport.gridSize * 0.25

@@ -4,6 +4,7 @@
 // ============================================
 
 import { useState, useCallback, useRef } from 'react';
+import { flipGridY } from '@/components/campaign/map/coords';
 
 interface MapControlsConfig {
   /** Grid size in pixels (e.g., 50 means each grid cell is 50x50 pixels at 1x zoom) */
@@ -201,8 +202,8 @@ export function useMapControls(config: MapControlsConfig) {
       const gridX = Math.floor(worldX / gridSize);
       const gridYFromTop = Math.floor(worldY / gridSize);
 
-      // Invert Y to use bottom-left origin (D&D/VTT standard)
-      const gridY = mapHeight - 1 - gridYFromTop;
+      // Invert Y to use bottom-left origin (D&D/VTT standard) — see map/coords.ts
+      const gridY = flipGridY(gridYFromTop, mapHeight);
 
       return { x: gridX, y: gridY };
     },
@@ -216,8 +217,8 @@ export function useMapControls(config: MapControlsConfig) {
    */
   const gridToScreen = useCallback(
     (grid: GridCoordinates): ScreenCoordinates => {
-      // Convert bottom-left grid Y to top-left world Y
-      const gridYFromTop = mapHeight - 1 - grid.y;
+      // Convert bottom-left grid Y to top-left world Y (flipGridY is its own inverse)
+      const gridYFromTop = flipGridY(grid.y, mapHeight);
 
       // Convert grid coordinates to world coordinates (top-left of cell)
       const worldX = grid.x * gridSize;
