@@ -145,7 +145,7 @@ src/
 ├── components/
 │   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
-│   │   └── map/       MapCanvas render layers, vision cache, and animation/render-loop hooks
+│   │   └── map/       MapCanvas render layers, coordinate conversions, fog selection, vision cache, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Admin panel tabs
@@ -167,7 +167,7 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 | Layer | Owns | Examples |
 |-------|------|----------|
 | **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
-| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, hover cross-highlight (walls, fog and lights are still MapCanvas-local, with their own undo/redo history) |
+| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, hover cross-highlight (walls, fog and lights are still MapCanvas-local; walls additionally keep their own undo/redo history) |
 | **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
 
 The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.
@@ -536,7 +536,7 @@ JWTs are stateless, which makes revocation difficult — a compromised token sta
 
 ### Why Zustand + React Query alongside React Context?
 
-Each tool owns what it's good at. React Query handles server resources — caching, deduping, and refetch-on-reconnect for campaigns, characters, and assets — so pages don't hand-roll `useEffect` + loading/error state. Zustand holds live, high-frequency socket state (token positions, fog, lights, initiative) because it can be written from **outside** React, so a token move updates only its subscribers instead of re-rendering the whole campaign tree through a context provider. React Context is kept for genuinely app-wide wiring (auth, the socket connection) and slow-changing campaign metadata. The boundary rule — one layer per datum — keeps the three from fighting over the same state.
+Each tool owns what it's good at. React Query handles server resources — caching, deduping, and refetch-on-reconnect for campaigns, characters, and assets — so pages don't hand-roll `useEffect` + loading/error state. Zustand holds live, high-frequency socket state (token positions, combat/initiative) because it can be written from **outside** React, so a token move updates only its subscribers instead of re-rendering the whole campaign tree through a context provider. React Context is kept for genuinely app-wide wiring (auth, the socket connection) and slow-changing campaign metadata. The boundary rule — one layer per datum — keeps the three from fighting over the same state.
 
 ### Why store tokens in `Map.tokens` JSON instead of a separate table?
 

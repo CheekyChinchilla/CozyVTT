@@ -13,13 +13,14 @@ import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
 import { drawTokens, type TokenDrawState } from '../layers/drawTokens';
 import { drawWalls } from '../layers/drawWalls';
+import { drawFogSelection, type FogSelectionState } from '../layers/drawOverlays';
 import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
 import { drawSpiritLayer } from '../layers/drawBackground';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
-import type { WallSegment } from '@/types/walls';
+import type { FogState, WallSegment } from '@/types/walls';
 
 // ── Recording mock 2D context ────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ function makeMockCtx(): MockCtx {
     fill: record('fill'),
     clip: record('clip'),
     fillRect: record('fillRect'),
+    strokeRect: record('strokeRect'),
     clearRect: record('clearRect'),
     drawImage: record('drawImage'),
     fillText: record('fillText'),
@@ -652,5 +654,84 @@ describe('drawPings', () => {
     }), viewport3x3);
 
     expect(count(three, 'stroke')).toBe(count(one, 'stroke') * 3);
+  });
+});
+
+describe('drawFogSelection', () => {
+  const fog: FogState = {
+    fogCols: 20, fogRows: 15, cellPx: 50, revealed: new Array(300).fill(false),
+  };
+
+  function fogState(overrides: Partial<FogSelectionState> = {}): FogSelectionState {
+    return { mode: 'fog-reveal', fog, anchor: null, cursor: null, ...overrides };
+  }
+
+  /** Args of every strokeRect / fillRect call. */
+  function rects(ctx: MockCtx, method: 'strokeRect' | 'fillRect'): unknown[][] {
+    return ctx.calls.filter((c) => c.method === method).map((c) => c.args);
+  }
+
+  it('draws nothing before the cursor is over the map', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState(), viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('outlines just the hovered cell when no drag is in progress', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({ cursor: { x: 137, y: 88 } }), viewport3x3);
+
+    // Snapped to the containing cell (col 2, row 1), not the raw cursor
+    expect(rects(ctx, 'strokeRect')).toEqual([[100, 50, 50, 50]]);
+    // No fill and no size readout until a drag starts
+    expect(count(ctx, 'fillRect')).toBe(0);
+    expect(count(ctx, 'fillText')).toBe(0);
+  });
+
+  it('draws nothing when the cursor is off the map', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({ cursor: { x: -10, y: -10 } }), viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('snaps the dragged box to cell boundaries, not the raw cursor', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({
+      anchor: { x: 137, y: 88 },   // inside col 2, row 1
+      cursor: { x: 233, y: 191 },  // inside col 4, row 3
+    }), viewport3x3);
+
+    expect(rects(ctx, 'fillRect')).toEqual([[100, 50, 150, 150]]);
+    expect(rects(ctx, 'strokeRect')).toEqual([[100, 50, 150, 150]]);
+  });
+
+  it('reports the size in whole squares', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({
+      anchor: { x: 125, y: 175 },  // col 2, row 3
+      cursor: { x: 275, y: 475 },  // col 5, row 9  -> 4 x 7
+    }), viewport3x3);
+
+    expect(ctx.calls.find((c) => c.method === 'fillText')?.args[0]).toBe('4 × 7');
+  });
+
+  it('puts the readout on a filled pill before writing the text', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({
+      anchor: { x: 125, y: 175 }, cursor: { x: 275, y: 475 },
+    }), viewport3x3);
+
+    const seq = methods(ctx);
+    expect(seq.indexOf('fill')).toBeGreaterThan(-1);
+    expect(seq.indexOf('fillText')).toBeGreaterThan(seq.indexOf('fill'));
+  });
+
+  it('draws nothing for a drag entirely off the map', () => {
+    const ctx = makeMockCtx();
+    drawFogSelection(ctx, fogState({
+      anchor: { x: -400, y: -400 }, cursor: { x: -200, y: -200 },
+    }), viewport3x3);
+    expect(count(ctx, 'fillRect')).toBe(0);
+    expect(count(ctx, 'strokeRect')).toBe(0);
   });
 });

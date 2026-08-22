@@ -219,6 +219,17 @@ Your movement is visible to everyone in real time — your party can watch you c
 
 If your token is missing or in the wrong place, just let your DM know in chat — they can adjust it.
 
+### Why parts of the map are dark
+
+Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
+
+Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move.
+
+Two things worth knowing:
+
+- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there.
+- **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
+
 ---
 
 ## The Initiative Tracker

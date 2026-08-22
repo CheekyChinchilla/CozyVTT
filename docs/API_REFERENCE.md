@@ -1160,6 +1160,8 @@ Server → Client: emit('authenticated')   ← connection ready
 | `initiative.end` | — | DM — end combat |
 | `initiative.request_state` | — | Request current initiative state (any role) |
 | `map.ping` | `{ mapId, x, y }` | Point at a map location (any role). Coordinates are map pixels, not grid cells. Rate limited to 10 per 10s per user; excess is dropped silently |
+| `fog:operation` | `{ mapId, operation }` | DM — apply a fog operation (see below). Throttled to 10/second per socket; excess dropped silently |
+| `fog:request_state` | `{ mapId }` | Request current fog state (any role) |
 | `light:add` | `{ mapId, light: LightSource }` | DM — place a light source |
 | `light:update` | `{ mapId, light: LightSource }` | DM — update light properties |
 | `light:remove` | `{ mapId, lightId }` | DM — delete a light source |
@@ -1196,6 +1198,8 @@ Server → Client: emit('authenticated')   ← connection ready
 | `character.hp.updated` | `{ tokenId, current, maximum, temp }` | All campaign members |
 | `initiative.state` | Full `CombatState` object | All campaign members |
 | `map.pinged` | `{ mapId, x, y, userId }` | All campaign members (including the sender) |
+| `fog:updated` | `{ mapId, fogState }` | DM only — the full fog grid |
+| `fog:cells` | `{ mapId, revealedCells, fogCols, fogRows, cellPx }` | Players only — revealed cell indices, never the unrevealed ones |
 | `light:added` | `{ mapId, light: LightSource }` | All campaign members |
 | `light:updated` | `{ mapId, light: LightSource }` | All campaign members |
 | `light:removed` | `{ mapId, lightId }` | All campaign members |
@@ -1230,6 +1234,29 @@ rather than patching it. Not persisted: combat resets when the server restarts, 
 
 `currentTokenId` identifies the acting combatant; clients use it to highlight both the tracker row
 and the token on the map. It is `null` before combat starts.
+
+#### Fog Operation
+
+```json
+{ "op": "reveal", "cells": [43, 44, 63, 64] }
+{ "op": "hide",   "cells": [43, 44] }
+{ "op": "reveal_all" }
+{ "op": "hide_all" }
+```
+
+`cells` are indices into the fog grid, row-major from the **top-left**: `row * fogCols + col`. One
+fog cell is one grid square — `cellPx` equals the map's `gridSize`, `fogCols` its width in squares
+and `fogRows` its height — so a fog cell and a visible grid square are always the same thing. Note
+this is the opposite Y convention from token grid coordinates, which are bottom-left origin; the
+frontend converts between them in `map/coords.ts`.
+
+Indices outside the grid are ignored rather than rejected, so a client that miscalculates cannot
+corrupt the fog array. If the stored fog no longer matches the map's dimensions (the grid size or
+map size changed), the server rebuilds it fully hidden rather than trying to remap it.
+
+The two outbound events are deliberately asymmetric: the DM receives the whole grid, while players
+receive only the list of cells that *are* revealed. An unrevealed cell is never sent to a player, so
+the client cannot leak what it has not been told.
 
 #### Map Ping
 

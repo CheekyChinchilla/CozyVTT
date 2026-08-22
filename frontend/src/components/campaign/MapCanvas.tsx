@@ -43,13 +43,14 @@ import {
   drawPolygonOverlay,
   drawRuler,
   drawAoEOverlay,
-  drawFogBrushCursor,
+  drawFogSelection,
   drawPings,
   PING_DURATION_MS,
   type ActivePing,
   type Viewport,
 } from './map/layers';
 import { createVisionCache, type VisionSource } from './map/vision';
+import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -249,11 +250,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Drag-to-move state for lights in select mode
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
-  // Fog brush tool state (DM only)
+  // Fog selection tool state (DM only)
   const [fogMode, setFogMode] = useState<FogToolMode>(null);
-  const [brushRadius, setBrushRadius] = useState(64); // map-space pixels
-  const fogPendingCellsRef = useRef<Set<number>>(new Set());
-  const fogFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Fog selection drag: anchor is fixed on mousedown, current follows the
+  // cursor. Both in map pixels — the fog raster is top-left origin like map
+  // pixels, so the box never touches the bottom-left grid convention.
+  const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
 
   // Token socket handlers read/write live token state synchronously via
   // useGameStore.getState() — no stale-closure ref bookkeeping needed.
@@ -447,56 +450,47 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * Return all fog cell indices whose center falls within brushRadius of (mapX, mapY).
+   * Apply a set of fog cells: optimistic local update plus one server op.
+   *
+   * A rectangle drag produces exactly one call here, which is why the old
+   * pending-cells buffer and its 80ms flush interval are gone — those existed
+   * only to batch the continuous stream a brush stroke produced.
    */
-  const getCellsUnderBrush = (mapX: number, mapY: number, fog: FogState): number[] => {
-    const { fogCols, fogRows, cellPx } = fog;
-    const r = brushRadius;
-    const cells: number[] = [];
-    const minCol = Math.max(0, Math.floor((mapX - r) / cellPx));
-    const maxCol = Math.min(fogCols - 1, Math.floor((mapX + r) / cellPx));
-    const minRow = Math.max(0, Math.floor((mapY - r) / cellPx));
-    const maxRow = Math.min(fogRows - 1, Math.floor((mapY + r) / cellPx));
-    for (let row = minRow; row <= maxRow; row++) {
-      for (let col = minCol; col <= maxCol; col++) {
-        const cx = (col + 0.5) * cellPx;
-        const cy = (row + 0.5) * cellPx;
-        if ((cx - mapX) ** 2 + (cy - mapY) ** 2 <= r * r) {
-          cells.push(row * fogCols + col);
-        }
-      }
-    }
-    return cells;
-  };
+  const applyFogCells = useCallback((cells: number[]) => {
+    if (!currentMap || !fogMode || cells.length === 0) return;
 
-  /**
-   * Flush pending fog cells to the server and apply optimistically.
-   */
-  const flushFogBrush = useCallback(() => {
-    if (!currentMap || !fogMode || fogPendingCellsRef.current.size === 0) return;
-    const cells = Array.from(fogPendingCellsRef.current);
-    fogPendingCellsRef.current.clear();
+    const reveal = fogMode === 'fog-reveal';
+    const operation = { op: reveal ? 'reveal' : 'hide', cells } as const;
 
-    const operation = { op: fogMode === 'fog-reveal' ? 'reveal' : 'hide' as const, cells };
-
-    // Optimistic update
     setFogState((prev) => {
       if (!prev) return prev;
       const revealed = [...prev.revealed];
       for (const idx of cells) {
-        if (idx >= 0 && idx < revealed.length) {
-          revealed[idx] = fogMode === 'fog-reveal';
-        }
+        if (idx >= 0 && idx < revealed.length) revealed[idx] = reveal;
       }
       return { ...prev, revealed };
     });
 
-    // Emit to server
-    const socketInstance = socket?.getSocket();
-    if (socketInstance && currentMap) {
-      socketInstance.emit('fog:operation', { mapId: currentMap.id, operation });
-    }
+    socket?.getSocket()?.emit('fog:operation', { mapId: currentMap.id, operation });
   }, [currentMap, fogMode, socket]);
+
+  /** Finish a fog drag: compute the snapped rectangle once and apply it. */
+  const commitFogDrag = useCallback((endX: number, endY: number) => {
+    const anchor = fogDragAnchorRef.current;
+    fogDragAnchorRef.current = null;
+    setFogDragCurrent(null);
+    if (!anchor || !fogState) return;
+
+    const rect = fogRectFromDrag(fogState, anchor.x, anchor.y, endX, endY);
+    if (!rect) return; // Entirely off the map
+    applyFogCells(fogCellsInRect(fogState, rect));
+  }, [fogState, applyFogCells]);
+
+  /** Abandon a drag without changing anything (Escape, right-click, map change). */
+  const cancelFogDrag = useCallback(() => {
+    fogDragAnchorRef.current = null;
+    setFogDragCurrent(null);
+  }, []);
 
   // Helper: change a door's type and broadcast. Uses wallSegmentsRef to avoid stale closure
   // (changeDoorType is memoised with [currentMap, socket, replaceWallHistory] deps).
@@ -1186,6 +1180,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
 
       if (e.key === 'Escape') {
+        // A fog box being dragged is abandoned before any other Escape action
+        if (fogDragAnchorRef.current) {
+          cancelFogDrag();
+          return;
+        }
         // Polygon mode: clear in-progress polygon first
         if (polygonPoints.length > 0) {
           setPolygonPoints([]);
@@ -1281,28 +1280,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
   }, [wallMode]);
 
-  // ============================================
-  // Fog Brush Flush Timer
-  // Batches cell updates and sends every 80ms
-  // ============================================
+  // Leaving fog mode, or switching maps, drops any drag in progress.
   useEffect(() => {
-    if (!fogMode) {
-      if (fogFlushTimerRef.current) {
-        clearInterval(fogFlushTimerRef.current);
-        fogFlushTimerRef.current = null;
-      }
-      fogPendingCellsRef.current.clear();
-      return;
-    }
-
-    fogFlushTimerRef.current = setInterval(flushFogBrush, 80);
-    return () => {
-      if (fogFlushTimerRef.current) {
-        clearInterval(fogFlushTimerRef.current);
-        fogFlushTimerRef.current = null;
-      }
-    };
-  }, [fogMode, flushFogBrush]);
+    cancelFogDrag();
+  }, [fogMode, currentMap?.id, cancelFogDrag]);
 
   // ============================================
   // Canvas Rendering
@@ -1585,7 +1566,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }, viewport);
     }
 
-    // 11. Map pings — drawn last in world space, above the lighting darkness
+    // 11. Fog selection box — world space, so the snapped rectangle stays
+    //     locked to the grid through pan and zoom.
+    if (fogMode && isDM && fogState) {
+      drawFogSelection(ctx, {
+        mode: fogMode,
+        fog: fogState,
+        anchor: fogDragAnchorRef.current,
+        cursor: fogDragCurrent,
+      }, viewport);
+    }
+
+    // 12. Map pings — drawn last in world space, above the lighting darkness
     //     so a ping into an unlit corner is still visible. (The turn ring
     //     makes the opposite trade on purpose: it lives on the token layer
     //     so a hidden token's ring stays hidden.)
@@ -1595,16 +1587,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-
-    // 12. Fog brush cursor (screen-space, zoom-invariant)
-    if (fogMode && hoverCoords) {
-      drawFogBrushCursor(ctx, {
-        mode: fogMode,
-        hoverCoords,
-        brushRadius,
-      }, viewport);
-    }
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallId, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, hoverCoords, fogMode, brushRadius, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallId, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, hoverCoords, fogMode, isDM, fogState, fogDragCurrent, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1658,7 +1641,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallId, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogMode, brushRadius, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallId, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeOrigin, fogMode, fogDragCurrent, fogState, pings]);
 
   // ============================================
   // Token Hit Testing
@@ -1759,6 +1742,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Right-button while a tool is active: start panning (left-click is reserved for tools).
     // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
     if (e.button === 2 && (wallMode || fogMode || lightMode) && isDM) {
+      cancelFogDrag(); // Panning away mid-drag must not reveal anything
       rightPanActiveRef.current = true;
       mapControls.startDrag(e);
       return;
@@ -2038,12 +2022,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // Fog brush mode: begin painting on mousedown
+    // Fog selection: anchor the box on mousedown
     if (fogMode && isDM && fogState) {
-      e.preventDefault(); // Prevent native drag — keeps mousemove firing during paint stroke
+      e.preventDefault(); // Prevent native drag — keeps mousemove firing during the drag
       const mapPx = screenToMapPx(screenX, screenY);
-      const cells = getCellsUnderBrush(mapPx.x, mapPx.y, fogState);
-      cells.forEach((c) => fogPendingCellsRef.current.add(c));
+      fogDragAnchorRef.current = mapPx;
+      setFogDragCurrent(mapPx);
       return;
     }
 
@@ -2289,11 +2273,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // Fog brush: collect cells while mouse button is held (e.buttons & 1 = left button)
-    if (fogMode && isDM && fogState && (e.buttons & 1)) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const cells = getCellsUnderBrush(mapPx.x, mapPx.y, fogState);
-      cells.forEach((c) => fogPendingCellsRef.current.add(c));
+    // Fog selection: track the cursor. Also runs with no button held, so the
+    // idle single-cell outline follows the mouse before a drag starts.
+    if (fogMode && isDM && fogState) {
+      setFogDragCurrent(screenToMapPx(screenX, screenY));
       markDirty('overlay');
       return;
     }
@@ -2377,9 +2360,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
       }
     }
-    // Flush fog brush immediately on mouse release
-    if (fogMode && fogPendingCellsRef.current.size > 0) {
-      flushFogBrush();
+    // Commit the fog selection box on mouse release — one operation per drag.
+    if (fogMode && fogDragAnchorRef.current) {
+      const end = fogDragCurrent ?? fogDragAnchorRef.current;
+      commitFogDrag(end.x, end.y);
     }
     // Commit wall erase brush
     if (wallMode === 'wall-erase' && wallEraseBrushActiveRef.current) {
@@ -2904,8 +2888,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 setSelectedWallId(null);
               }
             }}
-            brushRadius={brushRadius}
-            onBrushRadiusChange={setBrushRadius}
             onRevealAll={() => {
               const socketInstance = socket?.getSocket();
               if (socketInstance && currentMap) {

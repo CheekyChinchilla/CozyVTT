@@ -17,11 +17,12 @@ This guide focuses on DM-specific features. For general platform features (chara
 7. [Managing Your Players](#managing-your-players)
 8. [Running a Session](#running-a-session)
 9. [Combat and Initiative](#combat-and-initiative)
-10. [Walls & Dynamic Lighting](#walls--dynamic-lighting)
-11. [The Spirit Layer](#the-spirit-layer)
-12. [Atmosphere Controls](#atmosphere-controls)
-13. [Session State and Continuity](#session-state-and-continuity)
-14. [Tips and Best Practices](#tips-and-best-practices)
+10. [Fog of War](#fog-of-war)
+11. [Walls & Dynamic Lighting](#walls--dynamic-lighting)
+12. [The Spirit Layer](#the-spirit-layer)
+13. [Atmosphere Controls](#atmosphere-controls)
+14. [Session State and Continuity](#session-state-and-continuity)
+15. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -507,6 +508,42 @@ Click the remove button next to any combatant to pull them from the tracker (whe
 ### Ending Combat
 
 Click **End Initiative** to close combat and hide the tracker. The order is preserved in case you need to resume.
+
+---
+
+## Fog of War
+
+Fog of war covers your map and lets you reveal it a piece at a time, so players discover a dungeon room by room instead of seeing the whole floor plan at once. You control it by hand — nothing is revealed until you say so.
+
+> 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
+
+### Revealing and Hiding
+
+Click the **Fog** button in the campaign header to open the **Fog of War** panel, then pick a mode:
+
+- **Reveal** — drag a box over the map to show that area to players
+- **Hide** — drag a box to cover an area back up
+
+**Drag a box over the area you want.** The selection snaps to whole grid squares as you drag, and the size is shown in the middle of the box as you go — so you can drag exactly `4 × 7` and get exactly those 28 squares. Release to apply.
+
+To toggle a single square, just click it without dragging. Before you start a drag, the square under your cursor is outlined, so you always know which one a click would take.
+
+*GIF pending — Dragging a fog reveal box across a corridor.*
+
+Some details worth knowing:
+
+- **Drag in any direction.** Right-to-left and bottom-to-top work exactly like dragging forward.
+- **Cancel a drag** with **Esc**, or by right-dragging (which pans the map instead). Neither reveals anything.
+- **Dragging off the edge is fine** — the box clamps to the map.
+- Only the DM sees the fog controls and the selection box. Players just see areas appear.
+
+### Revealing or Hiding Everything
+
+The panel's **Reveal all** and **Hide all** buttons apply to the entire map. Both ask for a second click to confirm, since they are hard to undo by hand — **Hide all** is the quick way to reset a map you have finished exploring, ready for next time.
+
+### Fog and Tokens
+
+A token standing in an unrevealed area is hidden from players entirely, even if the token itself is set to visible. That is what makes fog useful for staging: you can place a room full of monsters in advance and your players will not see them until you reveal the square they are standing in.
 
 ---
 

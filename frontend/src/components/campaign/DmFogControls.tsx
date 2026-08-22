@@ -1,19 +1,18 @@
 /**
  * DmFogControls
- * DM-only fog of war brush tool controls panel.
- * Allows the DM to reveal/hide regions of the map using a brush or bulk actions.
+ * DM-only fog of war controls panel.
+ * The DM reveals or hides regions by dragging a box over the map — the
+ * selection snaps to whole grid squares — plus bulk reveal/hide actions.
  */
 
 import { useState } from 'react';
-import { Eye, EyeOff, Brush } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 export type FogToolMode = 'fog-reveal' | 'fog-hide' | null;
 
 interface DmFogControlsProps {
   fogMode: FogToolMode;
   onFogModeChange: (mode: FogToolMode) => void;
-  brushRadius: number;
-  onBrushRadiusChange: (radius: number) => void;
   onRevealAll: () => void;
   onHideAll: () => void;
 }
@@ -21,8 +20,6 @@ interface DmFogControlsProps {
 export default function DmFogControls({
   fogMode,
   onFogModeChange,
-  brushRadius,
-  onBrushRadiusChange,
   onRevealAll,
   onHideAll,
 }: DmFogControlsProps) {
@@ -64,8 +61,8 @@ export default function DmFogControls({
               ? 'bg-lime-600/30 text-lime-400 border border-lime-500/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
           }`}
-          title="Reveal brush — paint to reveal areas to players"
-          aria-label="Fog reveal brush"
+          title="Reveal — drag a box over the map to reveal it to players"
+          aria-label="Fog reveal box"
         >
           <Eye className="w-3.5 h-3.5" />
           Reveal
@@ -77,35 +74,21 @@ export default function DmFogControls({
               ? 'bg-warning/30 text-warning-ink border border-warning/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
           }`}
-          title="Hide brush — paint to hide areas from players"
-          aria-label="Fog hide brush"
+          title="Hide — drag a box over the map to hide it from players"
+          aria-label="Fog hide box"
         >
           <EyeOff className="w-3.5 h-3.5" />
           Hide
         </button>
       </div>
 
-      {/* Brush size */}
+      {/* How-to hint — only while a mode is armed */}
       {fogMode && (
-        <div className="px-1">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-stone-400">
-              <Brush className="w-3 h-3 inline mr-1" />
-              Brush size
-            </span>
-            <span className="text-xs text-warm-amber/80">{Math.round(brushRadius)}px</span>
-          </div>
-          <input
-            type="range"
-            min={16}
-            max={256}
-            step={8}
-            value={brushRadius}
-            onChange={(e) => onBrushRadiusChange(Number(e.target.value))}
-            className="w-full h-1.5 accent-warm-amber"
-            aria-label="Fog brush radius"
-          />
-        </div>
+        <p className="px-1 text-[11px] leading-snug text-stone-400">
+          Drag a box over the map. The selection snaps to whole squares —
+          click a single square to {fogMode === 'fog-reveal' ? 'reveal' : 'hide'} just that one.
+          <span className="block mt-0.5 text-stone-500">Esc or right-drag cancels.</span>
+        </p>
       )}
 
       {/* Bulk actions */}

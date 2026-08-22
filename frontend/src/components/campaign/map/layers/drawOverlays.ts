@@ -1,13 +1,15 @@
 // ============================================
 // Interaction overlays — DM wall-tool previews (draw/split/erase/
-// brush/polygon), the ruler, AoE templates, and the fog brush cursor.
+// brush/polygon), the ruler, AoE templates, and the fog selection box.
 // Pure: no React, no component closures. Snap helpers arrive as
 // callbacks because snapping depends on live tool flags.
 // ============================================
 
-import type { WallSegment, WallType } from '@/types/walls';
+import type { FogState, WallSegment, WallType } from '@/types/walls';
 import { calcGridDistance } from '@/utils/geometry';
 import type { Viewport } from './types';
+import { mapPxToFogCell } from '../coords';
+import { fogRectFromDrag, fogRectToPx, fogRectSize } from '../fogSelection';
 
 type Pt = { x: number; y: number };
 
@@ -483,34 +485,95 @@ export function drawAoEOverlay(
   ctx.restore();
 }
 
-export interface FogBrushCursorState {
+export interface FogSelectionState {
   mode: 'fog-reveal' | 'fog-hide';
-  /** Grid coords of the cursor. */
-  hoverCoords: Pt;
-  /** Brush radius in map-space pixels. */
-  brushRadius: number;
+  fog: FogState;
+  /** Drag anchor in map pixels, or null when only hovering. */
+  anchor: Pt | null;
+  /** Current cursor in map pixels. */
+  cursor: Pt | null;
 }
 
+const FOG_REVEAL_TINT = '163, 230, 53';  // lime
+const FOG_HIDE_TINT = '249, 115, 22';    // orange
+
 /**
- * Fog brush cursor. Drawn in SCREEN space (zoom-invariant) — the caller
- * must invoke this AFTER restoring the world transform.
+ * Fog selection preview — the snapped rectangle being dragged, or the single
+ * cell under the cursor when idle.
+ *
+ * Drawn in WORLD space, unlike the circular brush cursor this replaces: a
+ * grid-snapped rectangle has to stay locked to the grid while the DM pans and
+ * zooms, so the caller must invoke this BEFORE restoring the world transform.
  */
-export function drawFogBrushCursor(
+export function drawFogSelection(
   ctx: CanvasRenderingContext2D,
-  state: FogBrushCursorState,
+  state: FogSelectionState,
   viewport: Viewport
 ): void {
-  const screenX = state.hoverCoords.x * viewport.zoom * viewport.gridSize + viewport.panOffset.x;
-  const screenY = (viewport.mapHeight - 1 - state.hoverCoords.y) * viewport.zoom * viewport.gridSize + viewport.panOffset.y;
-  const screenRadius = state.brushRadius * viewport.zoom;
+  const { zoom } = viewport;
+  const { cursor, anchor, fog } = state;
+  if (!cursor) return;
+
+  const tint = state.mode === 'fog-reveal' ? FOG_REVEAL_TINT : FOG_HIDE_TINT;
+
+  // Idle: outline just the cell a click would toggle, so the DM can see
+  // exactly which square is in play before committing to a drag.
+  if (!anchor) {
+    const cell = mapPxToFogCell(cursor.x, cursor.y, fog);
+    if (!cell) return;
+    ctx.save();
+    ctx.strokeStyle = `rgba(${tint}, 0.9)`;
+    ctx.lineWidth = 2 / zoom;
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.strokeRect(cell.col * fog.cellPx, cell.row * fog.cellPx, fog.cellPx, fog.cellPx);
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+
+  const rect = fogRectFromDrag(fog, anchor.x, anchor.y, cursor.x, cursor.y);
+  if (!rect) return;
+
+  const { x, y, w, h } = fogRectToPx(fog, rect);
+  const { cols, rows } = fogRectSize(rect);
+
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // reset to screen-space
-  ctx.strokeStyle = state.mode === 'fog-reveal' ? 'rgba(163, 230, 53, 0.8)' : 'rgba(249, 115, 22, 0.8)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath();
-  ctx.arc(screenX, screenY, screenRadius, 0, Math.PI * 2);
-  ctx.stroke();
+
+  ctx.fillStyle = `rgba(${tint}, 0.22)`;
+  ctx.fillRect(x, y, w, h);
+
+  ctx.strokeStyle = `rgba(${tint}, 0.95)`;
+  ctx.lineWidth = 2 / zoom;
+  ctx.setLineDash([6 / zoom, 4 / zoom]);
+  ctx.strokeRect(x, y, w, h);
   ctx.setLineDash([]);
+
+  // Size readout on an opaque pill — the text contrasts against its own
+  // background rather than the map, same technique as the ruler.
+  const label = `${cols} × ${rows}`;
+  const fontSize = Math.max(11, 13 / zoom);
+  ctx.font = `bold ${fontSize}px 'Inter', system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const pad = 5 / zoom;
+  const textW = ctx.measureText(label).width;
+  const pillW = textW + pad * 2;
+  const pillH = fontSize + pad * 2;
+  const pillX = x + w / 2 - pillW / 2;
+  const pillY = y + h / 2 - pillH / 2;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(pillX, pillY, pillW, pillH, 4 / zoom);
+  } else {
+    ctx.rect(pillX, pillY, pillW, pillH);
+  }
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, x + w / 2, y + h / 2);
+
   ctx.restore();
 }
