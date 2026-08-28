@@ -83,7 +83,7 @@ export async function validateFileType(
 
     // File is valid, proceed
     next();
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error validating file type', { err: error });
 
     // Attempt to delete the file if it exists
@@ -154,7 +154,7 @@ export async function validateFileSize(
     }
 
     next();
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error validating file size', { err: error });
 
     // Attempt to delete the file if it exists

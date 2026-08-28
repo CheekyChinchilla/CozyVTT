@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
 import logger from './logger';
+import { errorCode } from './errors';
 
 /**
  * Asset types supported by the application
@@ -191,8 +192,8 @@ export async function deleteFile(filePath: string): Promise<boolean> {
   try {
     await fs.unlink(filePath);
     return true;
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
       // File doesn't exist, consider it already deleted
       return false;
     }
@@ -208,8 +209,8 @@ export async function deleteFile(filePath: string): Promise<boolean> {
 export async function ensureDirectory(dirPath: string): Promise<void> {
   try {
     await fs.mkdir(dirPath, { recursive: true });
-  } catch (error: any) {
-    if (error.code !== 'EEXIST') {
+  } catch (error) {
+    if (errorCode(error) !== 'EEXIST') {
       throw error;
     }
   }

@@ -61,7 +61,6 @@ module.exports = {
       files: [
       'src/__tests__/helpers/websocket-test-server.ts',
       'src/middleware/auth.test.ts',
-      'src/middleware/fileValidation.ts',
       'src/middleware/passwordChange.test.ts',
       'src/middleware/upload.ts',
       'src/routes/__tests__/auth.e2e.test.ts',
@@ -89,7 +88,6 @@ module.exports = {
       'src/utils/character-templates/flexible-templates.ts',
       'src/utils/character-templates/pathfinder2e-templates.ts',
       'src/utils/character-templates/shadowrun6e-templates.ts',
-      'src/utils/fileUtils.ts',
       'src/utils/spirit-layer.ts',
       'src/validators/__tests__/userPreferences.test.ts',
       'src/validators/game-systems/__tests__/validation.test.ts',
