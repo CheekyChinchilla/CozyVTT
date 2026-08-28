@@ -20,6 +20,7 @@ import { useGameStore } from '@/stores/gameStore';
 import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
+import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -105,6 +106,21 @@ interface CampaignProviderProps {
   children: ReactNode;
 }
 
+/**
+ * The atmosphere fields this context reads out of a campaign's `vibeSettings`
+ * blob. Declared locally rather than as `Record<string, any>` so each optional
+ * hop is checked — the reads below already guard with `??`, and the type now
+ * says so.
+ */
+interface VibeSettingsBlob {
+  atmosphereEffect?: string | null;
+  atmosphereAudio?: {
+    assetId?: string;
+    volume?: number;
+    loop?: boolean;
+  };
+}
+
 export function CampaignProvider({ children }: CampaignProviderProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -150,7 +166,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       setActiveSession(data.activeSession ?? null);
 
       // Initialize atmosphere state from saved campaign vibeSettings
-      const vs = data.vibeSettings as Record<string, any> | undefined;
+      const vs = data.vibeSettings as VibeSettingsBlob | undefined;
       setActiveAtmosphereEffect(vs?.atmosphereEffect ?? null);
       if (vs?.atmosphereAudio?.assetId) {
         setActiveAtmosphereAudio({
@@ -193,18 +209,18 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load campaign:', err);
 
       // Handle specific errors
-      if (err.response?.status === 403) {
+      if (apiErrorStatus(err) === 403) {
         setError('You do not have permission to view this campaign');
         setTimeout(() => navigate('/dashboard'), 2000);
-      } else if (err.response?.status === 404) {
+      } else if (apiErrorStatus(err) === 404) {
         setError('Campaign not found');
         setTimeout(() => navigate('/dashboard'), 2000);
       } else {
-        setError(err.response?.data?.message || 'Failed to load campaign');
+        setError(apiErrorMessage(err) || 'Failed to load campaign');
       }
     } finally {
       setLoading(false);
