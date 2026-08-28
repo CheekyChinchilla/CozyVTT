@@ -13,6 +13,7 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -114,15 +115,16 @@ export default function RegisterPage() {
         return;
       }
       // On success, user is logged in and will be redirected by auth check above
-    } catch (err: any) {
+    } catch (err) {
       // Handle specific error messages
-      if (err.response?.status === 403) {
-        setError(err.response.data.message || 'Registration is currently disabled.');
-      } else if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.status === 409) {
+      const serverError = apiErrorText(err);
+      if (apiErrorStatus(err) === 403) {
+        setError(apiErrorMessage(err) || 'Registration is currently disabled.');
+      } else if (serverError) {
+        setError(serverError);
+      } else if (apiErrorStatus(err) === 409) {
         setError('An account with this email already exists');
-      } else if (err.response?.status === 429) {
+      } else if (apiErrorStatus(err) === 429) {
         setError('Too many registration attempts. Please try again later.');
       } else {
         setError('An error occurred during registration. Please try again.');

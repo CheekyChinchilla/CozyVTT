@@ -30,6 +30,7 @@ import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { CampaignMembership } from '@/types';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -110,8 +111,8 @@ export default function CampaignSettingsModal({
       });
       await refreshCampaign();
       showToast('Campaign settings saved', 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? 'Failed to save settings', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to save settings', 'error');
     } finally {
       setSavingGeneral(false);
     }
@@ -126,8 +127,8 @@ export default function CampaignSettingsModal({
       });
       await refreshCampaign();
       showToast('Chat settings saved', 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? 'Failed to save chat settings', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to save chat settings', 'error');
     } finally {
       setSavingChat(false);
     }
@@ -145,8 +146,8 @@ export default function CampaignSettingsModal({
       await api.removeCampaignMember(campaign.id, memberToRemove.userId);
       await refreshCampaign();
       showToast('Player removed from campaign', 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? 'Failed to remove member', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to remove member', 'error');
     } finally {
       setRemovingMemberId(null);
     }
@@ -159,8 +160,8 @@ export default function CampaignSettingsModal({
       await campaignService.deleteCampaign(campaign.id);
       showToast(`Campaign "${campaign.name}" deleted`, 'success');
       navigate('/dashboard');
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? 'Failed to delete campaign', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to delete campaign', 'error');
       setDeletingCampaign(false);
     }
   };
@@ -179,8 +180,8 @@ export default function CampaignSettingsModal({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('Campaign exported successfully', 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? 'Failed to export campaign', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to export campaign', 'error');
     } finally {
       setExporting(false);
     }

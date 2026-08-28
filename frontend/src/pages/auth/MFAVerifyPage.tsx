@@ -8,6 +8,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
+import { apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
@@ -57,14 +58,15 @@ export default function MFAVerifyPage() {
       await verifyMFA(token);
 
       // On success, user is logged in and will be redirected
-    } catch (err: any) {
+    } catch (err) {
       console.error('MFA verification error:', err);
 
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.status === 401) {
+      const serverError = apiErrorText(err);
+      if (serverError) {
+        setError(serverError);
+      } else if (apiErrorStatus(err) === 401) {
         setError('Invalid authentication code. Please try again.');
-      } else if (err.response?.status === 429) {
+      } else if (apiErrorStatus(err) === 429) {
         setError('Too many attempts. Please try again later.');
       } else {
         setError('An error occurred during verification. Please try again.');
@@ -99,14 +101,15 @@ export default function MFAVerifyPage() {
       await verifyMFAWithBackupCode(cleanedCode);
 
       // On success, user is logged in and will be redirected
-    } catch (err: any) {
+    } catch (err) {
       console.error('Backup code verification error:', err);
 
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.status === 401) {
+      const serverError = apiErrorText(err);
+      if (serverError) {
+        setError(serverError);
+      } else if (apiErrorStatus(err) === 401) {
         setError('Invalid backup code. Please try again.');
-      } else if (err.response?.status === 429) {
+      } else if (apiErrorStatus(err) === 429) {
         setError('Too many attempts. Please try again later.');
       } else {
         setError('An error occurred during verification. Please try again.');

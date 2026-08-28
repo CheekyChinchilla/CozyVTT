@@ -10,6 +10,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import type { User } from '@/types';
 import { Button, Modal, Field, Select } from '@/components/ui';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface InvitePlayerModalProps {
   campaignId: string;
@@ -42,7 +43,7 @@ export default function InvitePlayerModal({
         setLoading(true);
         const response = await api.listInvitableUsers(campaignId);
         setUsers(response.users || []);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error fetching invitable users:', err);
         setError('Failed to load users');
       } finally {
@@ -73,9 +74,9 @@ export default function InvitePlayerModal({
       );
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error sending invitation:', err);
-      setError(err.response?.data?.message || 'Failed to send invitation');
+      setError(apiErrorMessage(err) || 'Failed to send invitation');
     } finally {
       setSending(false);
     }

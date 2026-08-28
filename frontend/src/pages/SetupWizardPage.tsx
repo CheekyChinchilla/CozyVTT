@@ -17,6 +17,7 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -199,12 +200,13 @@ export default function SetupWizardPage() {
 
       // Redirect to dashboard
       navigate('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Setup error:', err);
 
-      if (err.response?.data?.error) {
-        setError(err.response.data.message || err.response.data.error);
-      } else if (err.response?.status === 400) {
+      const serverError = apiErrorText(err);
+      if (serverError) {
+        setError(apiErrorMessage(err) || serverError);
+      } else if (apiErrorStatus(err) === 400) {
         setError('Setup has already been completed');
       } else {
         setError('An error occurred during setup. Please try again.');

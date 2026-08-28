@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { Character, Campaign } from '@/types';
 import { Button, Modal } from '@/components/ui';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface DeleteCharacterModalProps {
   isOpen: boolean;
@@ -60,8 +61,8 @@ export default function DeleteCharacterModal({
     try {
       await onConfirm(character.id);
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete character');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to delete character');
     } finally {
       setLoading(false);
     }

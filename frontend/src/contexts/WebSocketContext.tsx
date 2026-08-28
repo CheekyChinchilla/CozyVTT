@@ -16,6 +16,7 @@ import {
 import { useParams } from 'react-router-dom';
 import socketClient from '@/services/socket';
 import api from '@/services/api';
+import { errorMessage } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -169,11 +170,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
       const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
       heartbeatCleanupRef.current = cleanup || null;
-    } catch (err: any) {
+    } catch (err) {
       console.error('[WebSocket] Connection failed:', err);
       if (isMountedRef.current) {
         setStatus('error');
-        setError(err.message || 'Failed to connect to campaign');
+        setError(errorMessage(err) || 'Failed to connect to campaign');
         connectedCampaignRef.current = null;
       }
     }

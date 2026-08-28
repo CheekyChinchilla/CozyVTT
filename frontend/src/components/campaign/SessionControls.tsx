@@ -15,6 +15,7 @@ import api from '@/services/api';
 import { CampaignStatus } from '@/types';
 import EndSessionModal from '@/components/campaign/EndSessionModal';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
 // Session timer hook
@@ -85,8 +86,8 @@ export default function SessionControls() {
         startedAt: result.session.startedAt,
       });
       showToast(`Session ${result.session.sessionNumber} started!`, 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to start session', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to start session', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -99,8 +100,8 @@ export default function SessionControls() {
       await api.pauseSession(campaign.id, activeSession.id);
       updateCampaignStatus(CampaignStatus.PAUSED);
       showToast('Session paused. Game state saved.', 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to pause session', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to pause session', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -118,8 +119,8 @@ export default function SessionControls() {
         startedAt: new Date().toISOString(), // Resume resets timer display to now
       });
       showToast(`Session ${result.session.sessionNumber} resumed!`, 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to resume session', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to resume session', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -135,8 +136,8 @@ export default function SessionControls() {
       setActiveSession(null);
       setIsEndModalOpen(false);
       showToast(`Session ${activeSession.sessionNumber} ended.${saveState ? ' State saved.' : ''}`, 'success');
-    } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to end session', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to end session', 'error');
     } finally {
       setIsLoading(false);
     }
