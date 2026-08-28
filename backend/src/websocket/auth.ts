@@ -22,7 +22,12 @@ export interface AuthenticatedSocket extends Socket {
  */
 export async function authenticateSocket(socket: AuthenticatedSocket): Promise<boolean> {
   try {
-    const session = (socket.request as any).session;
+    // express-session attaches `session` to the underlying request, but the
+    // socket.io type for `socket.request` is the bare Node IncomingMessage and
+    // knows nothing about it. Narrowed to just the field actually read, so a
+    // typo in `userId` is a compile error rather than an unauthenticated socket
+    // being let through as `undefined`.
+    const session = (socket.request as { session?: { userId?: string } }).session;
 
     if (!session || !session.userId) {
       return false;

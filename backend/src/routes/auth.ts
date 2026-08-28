@@ -725,7 +725,17 @@ router.post('/mfa/verify-login', authLimiter, async (req: Request, res: Response
       req.session.cookie.maxAge = rememberMeMaxAge;
     }
 
-    const response: any = {
+    // Typed rather than `any` because the backup-code fields below are added
+    // conditionally: with `any` a typo in one of those names would have compiled
+    // and silently dropped the warning a user needs to see.
+    const response: {
+      message: string;
+      user: ReturnType<typeof sanitizeUser>;
+      mustChangePassword: boolean;
+      backupCodeUsed?: boolean;
+      remainingBackupCodes?: number;
+      warning?: string;
+    } = {
       message: 'Login successful',
       user: sanitizeUser(user),
       mustChangePassword: user.mustChangePassword,

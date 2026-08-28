@@ -72,7 +72,14 @@ export async function updateSystemSettings(data: {
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   themeId?: string;
-  customThemeColors?: any;
+  // A `Json?` column: a map of theme token names to colour strings.
+  //
+  // Deliberately not `| null`. Prisma wants `Prisma.DbNull` rather than a plain
+  // `null` for a nullable Json column, so a caller passing `null` here would be
+  // rejected at runtime — which `any` allowed and this now prevents at compile
+  // time. No caller passes null today; the only `customThemeColors: null` in the
+  // codebase is a response body, not an argument to this.
+  customThemeColors?: Record<string, string>;
   fontId?: string;
   customLogoUrl?: string | null;
   customFaviconUrl?: string | null;
