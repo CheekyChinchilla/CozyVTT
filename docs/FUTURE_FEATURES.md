@@ -38,6 +38,20 @@ _Nothing in progress._
 
 ### Polish / tech debt
 
+- **Saving a flexible character discards every top-level field except
+  `sections`.** `FlexibleCharacterSheetEdit.tsx:97` calls
+  `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than
+  spreading what was loaded — so anything else stored alongside is dropped on
+  the next save, silently. Reproduced on a test character: two top-level keys
+  before saving, one after. Untouched since v1.1.2, so it predates the 1.2.2
+  work; found by round-tripping every system's sheet through save while
+  verifying the typing changes. `FlexibleCharacterData` declares only
+  `sections`, so nothing the sheet *renders* is lost, which is why it has gone
+  unnoticed — but a character imported from elsewhere, or one that gains a
+  field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
+  needs a moment's thought about whether any field is meant to be dropped.
+
+
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with
   `{ error: 'Authentication Failed', message: 'Invalid email or password' }` —
