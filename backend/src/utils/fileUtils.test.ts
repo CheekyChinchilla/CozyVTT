@@ -115,7 +115,6 @@ describe('getProxyLimitWarnings', () => {
   const loadWith = (env: Record<string, string>): string[] => {
     process.env = { ...originalEnv, ...env };
     jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { getProxyLimitWarnings } = require('./proxyLimits');
     return getProxyLimitWarnings(process.env);
   };

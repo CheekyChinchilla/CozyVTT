@@ -289,7 +289,6 @@ function extractCharacterHp(
   data: unknown
 ): { current: number; max: number; temp: number } | null {
   if (!data || !gameSystem) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = data as any;
   switch (gameSystem) {
     case 'DND_5E':
