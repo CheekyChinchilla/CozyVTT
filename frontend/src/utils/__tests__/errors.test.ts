@@ -86,7 +86,9 @@ describe('apiValidationIssues', () => {
       ],
     });
     expect(apiValidationIssues(err)).toEqual([
-      { path: 'stats.dexterity.score', message: 'Expected number' },
+      // `code` is carried through when the backend sends it, so the console
+      // diagnostic is no quieter than the raw payload was.
+      { path: 'stats.dexterity.score', message: 'Expected number', code: 'invalid_type' },
       { path: 'level', message: 'Too small' },
     ]);
   });

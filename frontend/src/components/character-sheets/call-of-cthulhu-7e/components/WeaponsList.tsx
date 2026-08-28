@@ -43,7 +43,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
   onChange,
   onRoll,
 }) => {
-  const handleWeaponChange = (index: number, field: keyof Weapon, value: Weapon[keyof Weapon]) => {
+  const handleWeaponChange = <K extends keyof Weapon>(index: number, field: K, value: Weapon[K]) => {
     if (!onChange) return;
     const updated = [...weapons];
     updated[index] = { ...updated[index], [field]: value };

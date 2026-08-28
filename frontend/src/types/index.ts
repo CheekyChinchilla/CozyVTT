@@ -584,7 +584,11 @@ export type CharacterData =
   | import('./game-systems').DnD5eCharacterData
   | import('./game-systems').PF2eCharacterData
   | import('./game-systems').SR6CharacterData
-  | import('./game-systems').CoC7eCharacterData;
+  | import('./game-systems').CoC7eCharacterData
+  // A character with no game system stores a flexible sheet here. The union
+  // omitted it, so `Character.data` never admitted a shape it demonstrably
+  // holds — invisible while the flexible editor's props were `any`.
+  | import('./flexible-character-sheet').FlexibleCharacterData;
 
 // ============================================
 // Map & Tokens

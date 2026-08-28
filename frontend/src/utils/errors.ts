@@ -68,6 +68,8 @@ export function apiErrorStatus(err: unknown): number | undefined {
 export interface ApiValidationIssue {
   path: string;
   message: string;
+  /** Zod's issue code, e.g. `invalid_type`. Present on the backend's report. */
+  code?: string;
 }
 
 /**
@@ -85,6 +87,7 @@ export function apiValidationIssues(err: unknown): ApiValidationIssue[] | undefi
     return {
       path: typeof record.path === 'string' ? record.path : String(record.path ?? ''),
       message: typeof record.message === 'string' ? record.message : String(record.message ?? ''),
+      ...(typeof record.code === 'string' ? { code: record.code } : {}),
     };
   });
 }
