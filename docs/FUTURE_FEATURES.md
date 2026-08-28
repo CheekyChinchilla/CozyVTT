@@ -38,6 +38,22 @@ _Nothing in progress._
 
 ### Polish / tech debt
 
+- **Sign-in errors show a status label instead of the helpful sentence.** The
+  API answers a failed login with
+  `{ error: 'Authentication Failed', message: 'Invalid email or password' }` —
+  `error` is the status label, `message` is the text meant for a person. The auth
+  pages check `error` first, so that is what the user sees: "Authentication
+  Failed" rather than "Invalid email or password". The friendlier 401 and 409
+  branches sitting below it in `LoginPage`, `MFAVerifyPage` and `RegisterPage`
+  are effectively unreachable for the same reason. Found while converting those
+  catch blocks off `any`, and deliberately left alone there — the conversion was
+  required to change no behaviour. Fixing it means preferring `message` over
+  `error`, which is a one-line change per page plus a decision about whether any
+  endpoint relies on `error` carrying something a user should read. Note the 429
+  path is fine: the rate limiter replies with a bare string rather than JSON, so
+  the status branch handles it and the wording is already correct.
+
+
 - **Map events still die on a reconnect.** `frontend/src/services/socket.ts` keeps
   a listener registry so subscriptions survive the socket being replaced, and the
   components fixed in 1.2.2 go through it. `MapCanvas.tsx` does not: roughly
