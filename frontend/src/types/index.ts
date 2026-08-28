@@ -473,6 +473,15 @@ export interface Campaign {
   lastPlayedAt: string | null;
   memberships?: CampaignMembership[];
   /**
+   * The requesting user's role in this campaign.
+   *
+   * Sent by `GET /campaigns` and `GET /campaigns/:id` (see `userRole: m.role`
+   * in backend/src/routes/campaigns.ts), but it was missing from this interface
+   * — code that needed it annotated the value as `any` to get at it, which is
+   * how the omission survived.
+   */
+  userRole?: CampaignRole;
+  /**
    * NOTE: from `GET /campaigns/:id` these are METADATA ONLY — the
    * `tokens`/`wallSegments`/`fogData`/`lights`/`annotations` map blobs and the
    * character `data` sheet are NOT included. Fetch the active map via

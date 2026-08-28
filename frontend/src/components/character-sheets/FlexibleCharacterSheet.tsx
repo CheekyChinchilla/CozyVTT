@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { CharacterSheetProps } from './types';
+import type { CharacterData } from '../../types';
 import { FlexibleCharacterSheetView } from './flexible/FlexibleCharacterSheetView';
 import { FlexibleCharacterSheetEdit } from './flexible/FlexibleCharacterSheetEdit';
 
@@ -15,7 +16,7 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
     setCurrentMode('view');
   };
 
-  const handleSave = async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+  const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }

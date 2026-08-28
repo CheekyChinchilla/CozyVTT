@@ -2,7 +2,7 @@
  * Shared types for character sheet components
  */
 
-import { Character } from '../../types';
+import { Character, CharacterData } from '../../types';
 
 /**
  * Character sheet display mode
@@ -22,8 +22,15 @@ export interface CharacterSheetProps {
   /** Display mode (view or edit) */
   mode: CharacterSheetMode;
 
-  /** Callback when character data is saved (edit mode only) */
-  onSave?: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  /**
+   * Callback when character data is saved (edit mode only).
+   *
+   * `CharacterData` is the same union `Character.data` and
+   * `UpdateCharacterRequest.data` already use, so this closes a gap rather than
+   * inventing a type: both ends of the round trip were typed and only the
+   * callback between them was `any`.
+   */
+  onSave?: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
 
   /** Callback when edit mode is cancelled */
   onCancel?: () => void;

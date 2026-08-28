@@ -10,6 +10,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { Users, Crown, Gamepad2, Eye, Edit, UserPlus, X, Minus, Plus, Dices } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import CharacterSheetViewerModal from '../character/CharacterSheetViewerModal';
 import CharacterSheetEditorModal from '../character/CharacterSheetEditorModal';
@@ -420,7 +421,7 @@ export default function CampaignRoster() {
 
 interface MemberCardProps {
   member: RosterMember;
-  getRoleIcon: (role: CampaignRole) => any;
+  getRoleIcon: (role: CampaignRole) => LucideIcon;
   getSystemBadgeColor: (gameSystem: GameSystem | null) => string;
   getSystemShortName: (gameSystem: GameSystem | null) => string;
   onCharacterClick: (characterId: string) => void;

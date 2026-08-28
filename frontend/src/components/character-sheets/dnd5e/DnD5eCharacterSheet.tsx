@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { CharacterSheetProps } from '../types';
+import type { CharacterData } from '../../../types';
 import { DnD5eCharacterView } from './DnD5eCharacterView';
 import { DnD5eCharacterEditor } from './DnD5eCharacterEditor';
 
@@ -24,7 +25,7 @@ export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
   };
 
   // Handle save - save data and return to view mode
-  const handleSave = async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+  const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }

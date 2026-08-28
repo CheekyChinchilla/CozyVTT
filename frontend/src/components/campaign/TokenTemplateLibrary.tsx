@@ -116,7 +116,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     api.listCampaigns().then(({ campaigns }) => {
       setDmCampaigns(
         campaigns.filter(
-          (c: any) => c.userRole === CampaignRole.DM && c.id !== campaign?.id
+          (c) => c.userRole === CampaignRole.DM && c.id !== campaign?.id
         )
       );
     }).catch(() => {});
