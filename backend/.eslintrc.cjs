@@ -17,7 +17,7 @@ module.exports = {
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
   ],
-  ignorePatterns: ['dist', 'coverage', 'node_modules', '.eslintrc.cjs', 'prisma/**'],
+  ignorePatterns: ['dist', 'coverage', 'node_modules', '.eslintrc.cjs'],
   parser: '@typescript-eslint/parser',
   parserOptions: { ecmaVersion: 2022, sourceType: 'module' },
   plugins: ['@typescript-eslint'],

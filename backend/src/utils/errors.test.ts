@@ -61,7 +61,20 @@ describe('errorStack', () => {
     expect(errorStack(new Error('trace me'))).toContain('trace me');
   });
 
-  it('returns undefined for a non-Error', () => {
-    expect(errorStack({ stack: 'fake' })).toBeUndefined();
+  // Duck-typed on purpose: an error that crossed a serialisation boundary, or
+  // came from a library with its own Error subclass in another realm, still
+  // carries a usable stack. Dropping it is the wrong failure mode for the one
+  // accessor whose whole job is diagnosis.
+  it('reads a stack off an error-shaped object that is not an Error', () => {
+    expect(errorStack({ stack: 'at somewhere' })).toBe('at somewhere');
+  });
+
+  it.each([
+    ['no stack', { message: 'x' }],
+    ['a non-string stack', { stack: 42 }],
+    ['null', null],
+    ['a bare string', 'thrown'],
+  ])('returns undefined for %s', (_label, thrown) => {
+    expect(errorStack(thrown)).toBeUndefined();
   });
 });

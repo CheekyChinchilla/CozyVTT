@@ -39,8 +39,19 @@ export function errorCode(err: unknown): string | undefined {
   return undefined;
 }
 
-/** `err.stack` when present — for logging only. */
+/**
+ * `err.stack` when present — for logging only.
+ *
+ * Duck-typed like `errorMessage` above rather than gated on `instanceof Error`.
+ * Errors that have crossed a serialisation boundary, and those from libraries
+ * with their own Error subclasses in a separate realm, carry a stack without
+ * passing `instanceof` — and dropping a stack is exactly the wrong failure mode
+ * for the one accessor that exists to help diagnose a problem.
+ */
 export function errorStack(err: unknown): string | undefined {
-  if (err instanceof Error && typeof err.stack === 'string') return err.stack;
+  if (err && typeof err === 'object') {
+    const stack = (err as { stack?: unknown }).stack;
+    if (typeof stack === 'string') return stack;
+  }
   return undefined;
 }
