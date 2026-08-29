@@ -70,7 +70,6 @@ module.exports = {
       'src/routes/campaigns.ts',
       'src/routes/characters.ts',
       'src/routes/creatures.ts',
-      'src/routes/maps.ts',
       'src/routes/tokenTemplates.ts',
       'src/routes/users.ts',
       'src/scripts/migrate-asset-urls.ts',

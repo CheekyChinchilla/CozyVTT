@@ -16,6 +16,8 @@ import { buildUVTT } from '../services/uvttExporter';
 import { getFilePath, ensureDirectory } from '../utils/fileUtils';
 import sharp from 'sharp';
 import logger from '../utils/logger';
+import { toJson } from '../utils/prisma-json';
+import type { Prisma } from '@prisma/client';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -46,7 +48,7 @@ interface Token {
   controlledBy?: string | null;
   rotation: number;
   conditions: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   type?: 'player' | 'npc' | 'object';
   disposition?: 'friendly' | 'neutral' | 'hostile' | null;
   hp?: { current: number; max: number; temp: number } | null;
@@ -55,7 +57,7 @@ interface Token {
   initiative?: number | null;
   sightRadius?: number;
   displayMode?: 'pog' | 'top-down' | 'full-art';
-  statBlock?: Record<string, any> | null;
+  statBlock?: Record<string, unknown> | null;
   creatureTemplateId?: string | null;
 }
 
@@ -271,8 +273,8 @@ router.post(
           gridSize: gridSizePx,
           tokens: [],
           annotations: [],
-          wallSegments: parsed.wallSegments as any,
-          lights: parsed.lightSources as any,
+          wallSegments: toJson(parsed.wallSegments),
+          lights: toJson(parsed.lightSources),
           lightingEnabled: parsed.wallSegments.length > 0, // auto-enable if walls present
         },
       });
@@ -476,8 +478,12 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // Build update data object
-    const updateData: any = {};
+    // Build update data object.
+    //
+    // Typed rather than `any` because it is assembled field by field from
+    // request body values: with `any`, a typo in one of these names compiled
+    // and silently dropped that field from the update instead of saving it.
+    const updateData: Prisma.MapUpdateInput = {};
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -866,7 +872,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // Update the map with new tokens array
     const updatedMap = await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(201).json({
@@ -1047,7 +1053,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(200).json({
@@ -1111,7 +1117,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     // Update the map
     await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(200).json({
@@ -1239,7 +1245,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { wallSegments: parsed.data as any },
+      data: { wallSegments: toJson(parsed.data) },
     });
 
     return res.status(200).json({ segments: updated.wallSegments });
@@ -1273,7 +1279,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { wallSegments: [...existing, parsed.data] as any },
+      data: { wallSegments: toJson([...existing, parsed.data]) },
     });
 
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
@@ -1300,7 +1306,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
       return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
     }
 
-    await prisma.map.update({ where: { id }, data: { wallSegments: filtered as any } });
+    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
     logger.error('Error deleting wall segment', { err: error });
@@ -1332,7 +1338,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     }
 
     existing[segIndex] = { ...existing[segIndex], type: req.body.type };
-    await prisma.map.update({ where: { id }, data: { wallSegments: existing as any } });
+    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
@@ -1380,7 +1386,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { lights: parsed.data as any },
+      data: { lights: toJson(parsed.data) },
     });
 
     broadcastToCampaign(campaignId, 'lights:replaced', { mapId: id, lights: updated.lights });
@@ -1415,7 +1421,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { lights: [...existing, parsed.data] as any },
+      data: { lights: toJson([...existing, parsed.data]) },
     });
 
     broadcastToCampaign(campaignId, 'light:added', { mapId: id, light: parsed.data });
@@ -1449,7 +1455,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     }
 
     existing[idx] = { ...existing[idx], ...parsed.data };
-    await prisma.map.update({ where: { id }, data: { lights: existing as any } });
+    await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
     broadcastToCampaign(campaignId, 'light:updated', { mapId: id, light: existing[idx] });
     return res.status(200).json({ light: existing[idx] });
@@ -1476,7 +1482,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
       return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
     }
 
-    await prisma.map.update({ where: { id }, data: { lights: filtered as any } });
+    await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
 
     broadcastToCampaign(campaignId, 'light:removed', { mapId: id, lightId });
     return res.status(200).json({ message: 'Light source deleted' });
@@ -1530,7 +1536,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { fogData: fog as any },
+      data: { fogData: toJson(fog) },
     });
 
     return res.status(200).json({ fogState: updated.fogData });
