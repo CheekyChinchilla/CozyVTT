@@ -717,7 +717,13 @@ export interface Message {
 }
 
 export interface MessageMetadata {
-  [key: string]: any;
+  /**
+   * Free-form per-message payload — a dice breakdown, a `user.joined` action,
+   * whatever the sender attached. `unknown` rather than `any` so a reader has to
+   * check what it found before using it; the shape genuinely varies by message
+   * type and is not worth a discriminated union while only a few types set it.
+   */
+  [key: string]: unknown;
 }
 
 // ============================================

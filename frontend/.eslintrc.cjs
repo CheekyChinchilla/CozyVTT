@@ -45,7 +45,6 @@ module.exports = {
       // each file is converted; when this list is empty the block goes with it.
       // Do not add to it — a new file with `any` should fail lint.
       files: [
-      'src/components/campaign/ChatPanel.tsx',
       'src/components/campaign/DmLightControls.tsx',
       'src/components/campaign/MapManager.tsx',
       'src/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor.tsx',
@@ -58,18 +57,13 @@ module.exports = {
       'src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterEditor.tsx',
       'src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterView.tsx',
       'src/components/character/ImportCharacterModal.tsx',
-      'src/components/character/NewCharacterModal.tsx',
-      'src/contexts/ThemeContext.tsx',
       'src/hooks/__tests__/useInitiativeSync.test.tsx',
       'src/hooks/useWebSocketEvent.ts',
       'src/pages/AdminPage.tsx',
       'src/pages/CharacterEditorPage.tsx',
-      'src/pages/CharactersPage.tsx',
       'src/services/api.ts',
-      'src/services/socket.ts',
       'src/types/index.ts',
       'src/utils/character-export.ts',
-      'src/utils/characterHp.ts',
       'src/utils/characterRolls.ts',
       ],
       rules: { '@typescript-eslint/no-explicit-any': 'off' },

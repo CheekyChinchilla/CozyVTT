@@ -101,6 +101,17 @@ describe('apiValidationIssues', () => {
     expect(apiValidationIssues(axiosError({ validationErrors: 'oops' }))).toBeUndefined();
   });
 
+  // Call sites branch on the result being truthy, where the old code branched on
+  // `validationErrors && Array.isArray(validationErrors)`. An empty array is
+  // truthy under both, so it must stay an array here rather than becoming
+  // undefined — otherwise a rejected save with no itemised issues would take a
+  // different branch than it used to.
+  it('returns an empty array, not undefined, for an empty report', () => {
+    const issues = apiValidationIssues(axiosError({ validationErrors: [] }));
+    expect(issues).toEqual([]);
+    expect(issues ? 'validation branch' : 'generic branch').toBe('validation branch');
+  });
+
   it('survives malformed entries rather than throwing mid-render', () => {
     const err = axiosError({ validationErrors: [null, { path: 1, message: undefined }] });
     expect(apiValidationIssues(err)).toEqual([
