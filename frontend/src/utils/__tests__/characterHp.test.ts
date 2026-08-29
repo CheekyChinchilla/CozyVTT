@@ -109,4 +109,15 @@ describe('extractCharacterHp', () => {
       ).toBeNull();
     });
   });
+
+  // NaN fails every comparison, so `max <= 0` does not reject it the way
+  // `max > 0` accepted only real numbers. Caught by review when the per-system
+  // branches were collapsed into one reader; without this the sheet would draw
+  // a bar against a NaN maximum.
+  it('rejects a NaN maximum rather than returning a NaN bar', () => {
+    expect(extractCharacterHp('DND_5E', { hp: { maximum: NaN, current: 5 } })).toBeNull();
+    expect(
+      extractCharacterHp('CALL_OF_CTHULHU_7E', { derivedStats: { hp: { maximum: NaN } } })
+    ).toBeNull();
+  });
 });

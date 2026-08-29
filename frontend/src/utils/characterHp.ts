@@ -47,7 +47,12 @@ function record(value: unknown): Record<string, unknown> | null {
 function readHp(hp: Record<string, unknown> | null, ignoreTemporary: boolean): CharacterHpInfo | null {
   if (!hp) return null;
   const max = hp.maximum;
-  if (typeof max !== 'number' || max <= 0) return null;
+  // `!(max > 0)` rather than `max <= 0`: the two differ on NaN, which fails
+  // every comparison. The original guard was `typeof max === 'number' && max > 0`
+  // and rejected NaN; inverting it to `<= 0` would have let NaN through and
+  // returned a bar with a NaN maximum. This keeps the backend twin's behaviour
+  // (routes/campaigns.ts) identical too.
+  if (typeof max !== 'number' || !(max > 0)) return null;
   return {
     current: typeof hp.current === 'number' ? hp.current : max,
     max,

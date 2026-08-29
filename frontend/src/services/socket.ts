@@ -291,7 +291,12 @@ class SocketClient {
     });
   }
 
-  onSyncState(callback: EventCallback) {
+  // `never` rather than the `unknown` default: this event has no payload type
+  // declared yet, and `EventCallback<unknown>` would reject a handler that names
+  // its own payload — forcing the next subscriber into a cast. Same
+  // contravariance the registry relies on. Replace with a real payload type when
+  // `sync.state` gains one.
+  onSyncState(callback: EventCallback<never>) {
     this.addListener('sync.state', callback);
   }
 
