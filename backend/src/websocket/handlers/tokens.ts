@@ -11,6 +11,7 @@ import { getSpiritVisibility, getSpiritVisibilityBatch, filterTokensByLighting }
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
+import { toJson } from '../../utils/prisma-json';
 
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -258,7 +259,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       await prisma.map.update({
         where: { id: mapId },
-        data: { tokens: updatedTokens as any },
+        data: { tokens: toJson(updatedTokens) },
       });
 
       // Role-filtered broadcast for spirit tokens

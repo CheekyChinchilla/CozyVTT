@@ -18,6 +18,7 @@ import sharp from 'sharp';
 import logger from '../utils/logger';
 import { toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
+import type { Token } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -35,31 +36,8 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-// Token type definition
-interface Token {
-  id: string;
-  characterId?: string | null;
-  name: string;
-  imageUrl: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  layer: 'token' | 'spirit';
-  visible: boolean;
-  controlledBy?: string | null;
-  rotation: number;
-  conditions: string[];
-  metadata: Record<string, unknown>;
-  type?: 'player' | 'npc' | 'object';
-  disposition?: 'friendly' | 'neutral' | 'hostile' | null;
-  hp?: { current: number; max: number; temp: number } | null;
-  showHpBar?: boolean;
-  notes?: string;
-  initiative?: number | null;
-  sightRadius?: number;
-  displayMode?: 'pog' | 'top-down' | 'full-art';
-  statBlock?: Record<string, unknown> | null;
-  creatureTemplateId?: string | null;
-}
+// The token shape lives in websocket/shared.ts — see the note there on why this
+// file no longer keeps its own copy.
 
 const VALID_TOKEN_TYPES = ['player', 'npc', 'object'];
 const VALID_TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'];

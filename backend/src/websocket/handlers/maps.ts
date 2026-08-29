@@ -55,8 +55,8 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
         const filteredMap = filterMapData(
           {
             ...map,
-            tokens: map.tokens as any,
-            annotations: map.annotations as any,
+            tokens: map.tokens,
+            annotations: map.annotations,
           },
           authedSocket.role || 'PLAYER',
           spiritVisible,

@@ -8,7 +8,18 @@
 
 import type { FogState, FogOperation } from '../types/walls';
 
-// Token interface
+/**
+ * A token as stored in the `Map.tokens` JSON column.
+ *
+ * This is the single declaration of that shape for the backend — `routes/maps.ts`
+ * imports it rather than keeping its own. It used to keep its own, and the two
+ * drifted: this copy was missing `type`, `disposition`, `hp` and `initiative`,
+ * all of which the REST routes write and the websocket handlers read. Nothing
+ * caught it because every reader reached the column through `as any[]`.
+ *
+ * The fields the REST routes only set conditionally are optional here, because
+ * tokens placed by older versions of the app genuinely do not carry them.
+ */
 export interface Token {
   id: string;
   characterId?: string | null;
@@ -21,9 +32,16 @@ export interface Token {
   controlledBy?: string | null;
   rotation: number;
   conditions: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
+  type?: 'player' | 'npc' | 'object';
+  disposition?: 'friendly' | 'neutral' | 'hostile' | null;
+  hp?: { current: number; max: number; temp: number } | null;
+  showHpBar?: boolean;
+  notes?: string;
+  initiative?: number | null;
+  sightRadius?: number;
   displayMode?: 'pog' | 'top-down' | 'full-art';
-  statBlock?: Record<string, any> | null;
+  statBlock?: Record<string, unknown> | null;
   creatureTemplateId?: string | null;
 }
 

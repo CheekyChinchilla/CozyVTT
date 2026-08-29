@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
+import { readJsonObject, toJson } from '../../utils/prisma-json';
 
 export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -31,11 +32,11 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
         where: { id: socket.campaignId },
         select: { vibeSettings: true },
       });
-      const existing = (campaign?.vibeSettings as Record<string, any>) ?? {};
+      const existing = readJsonObject(campaign?.vibeSettings) ?? {};
 
       await prisma.campaign.update({
         where: { id: socket.campaignId },
-        data: { vibeSettings: { ...existing, atmosphereEffect: effect } as any },
+        data: { vibeSettings: toJson({ ...existing, atmosphereEffect: effect }) },
       });
 
       io.to(socket.campaignId).emit('atmosphere.effect.updated', {
@@ -95,17 +96,17 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
         where: { id: socket.campaignId },
         select: { vibeSettings: true },
       });
-      const existing = (campaign?.vibeSettings as Record<string, any>) ?? {};
+      const existing = readJsonObject(campaign?.vibeSettings) ?? {};
 
       await prisma.campaign.update({
         where: { id: socket.campaignId },
         data: {
-          vibeSettings: {
+          vibeSettings: toJson({
             ...existing,
             atmosphereAudio: data.assetId
               ? { assetId: data.assetId, volume, loop }
               : null,
-          } as any,
+          }),
         },
       });
 

@@ -7,6 +7,21 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
+import { toJson } from '../../utils/prisma-json';
+
+/** The parts of a character blob this handler touches — see `charData` below. */
+interface HpBlock {
+  current?: unknown;
+  maximum?: unknown;
+  temporary?: unknown;
+}
+interface CharacterHpData {
+  /** D&D 5e and Pathfinder 2e keep HP at the top level. */
+  hp?: HpBlock;
+  /** Call of Cthulhu 7e keeps it under derived stats. */
+  derivedStats?: { hp?: HpBlock };
+  [key: string]: unknown;
+}
 
 export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocket): void {
   socket.on('character.hp.update', async (data: { characterId: string; delta: number }) => {
@@ -49,8 +64,14 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // System-aware HP read + apply delta
-      const charData = character.data as Record<string, any>;
+      // System-aware HP read + apply delta.
+      //
+      // Only the HP-bearing corners of the sheet are described here: the blob is
+      // a full character in one of several systems, and this handler reads and
+      // writes nothing else. The values stay `unknown` because the guards below
+      // are what establish they are numbers — those guards are pre-existing, and
+      // typing them out is the whole reason this is no longer `any`.
+      const charData = character.data as unknown as CharacterHpData;
       let current: number;
       let max: number;
       let temp: number;
@@ -87,7 +108,7 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
       // Save updated character data
       await prisma.character.update({
         where: { id: characterId },
-        data: { data: charData },
+        data: { data: toJson(charData) },
       });
 
       // Broadcast updated HP to all campaign members
