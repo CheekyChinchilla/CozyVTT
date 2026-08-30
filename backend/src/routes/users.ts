@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
+import type { Prisma } from '@prisma/client';
+import { toJson } from '../utils/prisma-json';
 import { sanitizeUser, hashPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
@@ -123,7 +125,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.UserUpdateInput = {};
 
     if (displayName !== undefined) {
       updateData.displayName = sanitizeInput(displayName);
@@ -333,7 +335,7 @@ router.put('/:id/preferences', requireAuth, async (req: Request, res: Response) 
 
     const updated = await prisma.user.update({
       where: { id },
-      data: { preferences: merged as any },
+      data: { preferences: toJson(merged) },
       select: { id: true, preferences: true },
     });
 

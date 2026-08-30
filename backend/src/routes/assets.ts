@@ -1,4 +1,6 @@
 import { Router, Response } from 'express';
+import type { NextFunction } from 'express';
+import type { Prisma } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
@@ -100,7 +102,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const skip = (pageNum - 1) * limitNum;
 
     // Build filter conditions
-    const where: any = {};
+    const where: Prisma.AssetWhereInput = {};
 
     // Type filter
     if (type) {
@@ -145,7 +147,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         }
       }
 
-      where.campaignId = campaignId;
+      where.campaignId = campaignId as string;
     } else if (!isAdmin) {
       // Non-admin: enforce three-scope visibility rules
       const userMemberships = await prisma.campaignMembership.findMany({
@@ -158,7 +160,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       where.OR = [
         { scope: 'GLOBAL' },                          // Platform-wide assets
         { scope: 'USER', uploadedById: userId },       // User's own personal assets
-        ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN', campaignId: cId })), // Campaign assets
+        ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN' as const, campaignId: cId })), // Campaign assets
       ];
     }
     // Admin with no campaignId: no OR filter — sees all assets across all scopes/users
@@ -226,9 +228,9 @@ router.post(
   authenticated,
   uploadLimiter,
   // First, use a generic upload to parse the multipart data
-  (req: UploadRequest, res: Response, next: any) => {
+  (req: UploadRequest, res: Response, next: NextFunction) => {
     // Use generic uploader - no asset-type-specific filtering yet
-    uploadGeneric.single('file')(req, res, (err: any) => {
+    uploadGeneric.single('file')(req, res, (err: unknown) => {
       if (err) {
         return handleUploadError(err, req, res, next);
       }
@@ -236,7 +238,7 @@ router.post(
     });
   },
   // Now validate and set asset metadata (req.body is populated)
-  async (req: UploadRequest, res: Response, next: any) => {
+  async (req: UploadRequest, res: Response, next: NextFunction) => {
     try {
       const { type, scope, campaignId } = req.body;
 

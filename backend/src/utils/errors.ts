@@ -55,3 +55,18 @@ export function errorStack(err: unknown): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * `err.stderr` when present — what a failed `child_process` exec wrote.
+ *
+ * The admin backup/restore routes shell out to `pg_dump` and `psql`, and the
+ * useful diagnostic is the tool's own stderr rather than the wrapper message
+ * Node builds.
+ */
+export function errorStderr(err: unknown): string | undefined {
+  if (err && typeof err === 'object') {
+    const stderr = (err as { stderr?: unknown }).stderr;
+    if (typeof stderr === 'string') return stderr;
+  }
+  return undefined;
+}
