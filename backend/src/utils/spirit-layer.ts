@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible } from './serverRaycasting';
 import type { WallSegment, LightSource } from '../types/walls';
 import logger from './logger';
+import type { Token } from '../websocket/shared';
 
 /**
  * Spirit Layer Utility Functions
@@ -11,31 +12,9 @@ import logger from './logger';
  * Spirit layer tokens and data are never sent to players — only DMs see them.
  */
 
-// Token interface
-interface Token {
-  id: string;
-  characterId?: string | null;
-  name: string;
-  imageUrl: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  layer: 'token' | 'spirit';
-  visible: boolean;
-  controlledBy?: string | null;
-  rotation: number;
-  conditions: string[];
-  metadata: Record<string, any>;
-  type?: string;
-  disposition?: string | null;
-  hp?: { current: number; max: number; temp: number } | null;
-  showHpBar?: boolean;
-  notes?: string;
-  initiative?: number | null;
-  sightRadius?: number;
-  displayMode?: 'pog' | 'top-down' | 'full-art';
-  statBlock?: Record<string, any> | null;
-  creatureTemplateId?: string | null;
-}
+// The token shape lives in websocket/shared.ts — this file used to keep a third
+// copy of it, looser than both others (`type` and `disposition` as bare
+// strings). See the note there.
 
 // Map data as returned from Prisma
 interface MapData {

@@ -84,6 +84,15 @@ export function readLights(value: JsonColumn): LightSource[] {
 }
 
 /**
+ * A JSON array column whose elements have no declared shape — map annotations,
+ * for instance. Elements come back as `unknown`, so a reader has to check what
+ * it found.
+ */
+export function readJsonArray(value: JsonColumn): unknown[] {
+  return readArray<unknown>(value);
+}
+
+/**
  * Fog of war for a map, or null when none has been drawn.
  *
  * Unlike the others this is an object rather than an array, and `null` is a

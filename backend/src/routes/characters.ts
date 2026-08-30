@@ -9,6 +9,29 @@ import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../va
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+import { readTokens, toJson } from '../utils/prisma-json';
+
+/**
+ * The `issues` array off a thrown Zod-shaped error.
+ *
+ * Duck-typed rather than `instanceof z.ZodError` because that is what the code
+ * this replaces checked, and the two differ for an error that merely looks
+ * like one.
+ */
+interface ZodLikeIssue {
+  path: Array<string | number>;
+  message: string;
+  code?: string;
+}
+function zodLikeIssues(error: unknown): ZodLikeIssue[] | undefined {
+  if (error && typeof error === 'object' && 'errors' in error) {
+    const { errors } = error as { errors: unknown };
+    if (Array.isArray(errors)) return errors as ZodLikeIssue[];
+  }
+  return undefined;
+}
+
 
 const router = Router();
 
@@ -348,15 +371,21 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
 
     // Validate character data
     try {
-      validateCharacterData(character.gameSystem as any, character.data);
+      validateCharacterData(character.gameSystem as GameSystem, character.data);
 
       return res.status(200).json({
         isValid: true,
       });
-    } catch (error: any) {
-      // Validation failed - return detailed errors
-      if (error.errors) {
-        const formattedErrors = error.errors.map((err: any) => ({
+    } catch (error: unknown) {
+      // TODO(typing): this catch cannot fire on a validation failure.
+      // `validateCharacterData` *returns* `{ success: false, errors }` rather
+      // than throwing, and the call above discards its return value — so this
+      // endpoint answers `isValid: true` for every character, valid or not.
+      // Left exactly as it was: a typing pass must not change what an endpoint
+      // returns. Logged separately to be fixed with a test that fails first.
+      const issues = zodLikeIssues(error);
+      if (issues) {
+        const formattedErrors = issues.map((err) => ({
           path: err.path.join('.') || 'root',
           message: err.message,
           code: err.code,
@@ -373,7 +402,7 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
         isValid: false,
         errors: [{
           path: 'unknown',
-          message: error.message || 'Unknown validation error',
+          message: errorMessage(error) || 'Unknown validation error',
           code: 'unknown',
         }],
       });
@@ -475,9 +504,13 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: {
+      name?: string;
+      data?: Prisma.InputJsonValue;
+      tokenImageUrl?: string | null;
+    } = {};
     if (name !== undefined) updateData.name = name;
-    if (data !== undefined) updateData.data = data;
+    if (data !== undefined) updateData.data = toJson(data);
 
     // Keep the `name` column in step with the name typed on the sheet.
     //
@@ -536,7 +569,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         });
 
         for (const map of maps) {
-          const tokens = Array.isArray(map.tokens) ? (map.tokens as any[]) : [];
+          const tokens = readTokens(map.tokens);
           let mapChanged = false;
 
           const nextTokens = tokens.map((token) => {
@@ -546,7 +579,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           });
 
           if (mapChanged) {
-            await prisma.map.update({ where: { id: map.id }, data: { tokens: nextTokens } });
+            await prisma.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
             tokensChanged = true;
           }
         }
@@ -897,7 +930,7 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       data: {
         userId,
         name: `${originalCharacter.name} (Copy)`,
-        data: originalCharacter.data as any, // Type assertion for Prisma JSON compatibility
+        data: toJson(originalCharacter.data),
         tokenImageUrl: originalCharacter.tokenImageUrl,
         gameSystem: originalCharacter.gameSystem,
         campaignId: null, // Copies are unassigned by default

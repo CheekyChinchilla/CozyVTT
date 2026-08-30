@@ -12,6 +12,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { readTokens } from '../utils/prisma-json';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ export async function exportCampaign(
     const spiritLayerRef = map.spiritLayerUrl ? await registerAsset(map.spiritLayerUrl) : null;
 
     // Register token image assets
-    const tokens = (includeTokens ? (map.tokens as any[]) || [] : []);
+    const tokens = includeTokens ? readTokens(map.tokens) : [];
     for (const token of tokens) {
       if (token.imageUrl) {
         const tokenAssetRef = await registerAsset(token.imageUrl);

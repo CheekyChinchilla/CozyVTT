@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import {
   jsonOrNull,
   readFogState,
+  readJsonArray,
   readJsonObject,
   readLights,
   readTokens,
@@ -25,6 +26,7 @@ describe('array columns', () => {
     ['readTokens', readTokens],
     ['readWallSegments', readWallSegments],
     ['readLights', readLights],
+    ['readJsonArray', readJsonArray],
   ] as const;
 
   it.each(readers)('%s returns the array as stored', (_name, read) => {
