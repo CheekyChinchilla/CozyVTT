@@ -14,6 +14,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
+import { readTokens, toJson } from '../utils/prisma-json';
 
 const prisma = new PrismaClient();
 
@@ -71,10 +72,10 @@ async function migrateAssetUrls() {
 
     let tokensUpdated = 0;
     for (const map of mapsWithTokens) {
-      const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as any[];
+      const tokens = readTokens(map.tokens);
       let mapHasUpdates = false;
 
-      const updatedTokens = tokens.map((token: any) => {
+      const updatedTokens = tokens.map((token) => {
         if (token.imageUrl && !token.imageUrl.startsWith('/api/')) {
           const normalizedUrl = normalizeAssetUrl(token.imageUrl, 'tokens');
           console.log(`  ✅ Updated token "${token.name}" on map "${map.name}"`);
@@ -89,7 +90,7 @@ async function migrateAssetUrls() {
       if (mapHasUpdates) {
         await prisma.map.update({
           where: { id: map.id },
-          data: { tokens: updatedTokens as any },
+          data: { tokens: toJson(updatedTokens) },
         });
       }
     }

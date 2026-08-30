@@ -34,7 +34,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
     const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
     const skip = Math.max(0, parseInt(offset as string, 10) || 0);
 
-    const where: Record<string, unknown> = { campaignId };
+    const where: Prisma.TokenTemplateWhereInput = { campaignId };
 
     if (search && typeof search === 'string') {
       where.name = { contains: search, mode: 'insensitive' };
@@ -45,12 +45,12 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
 
     const [templates, total] = await Promise.all([
       prisma.tokenTemplate.findMany({
-        where: where as any,
+        where,
         orderBy: { name: 'asc' },
         take,
         skip,
       }),
-      prisma.tokenTemplate.count({ where: where as any }),
+      prisma.tokenTemplate.count({ where }),
     ]);
 
     return res.json({ templates, total, limit: take, offset: skip });

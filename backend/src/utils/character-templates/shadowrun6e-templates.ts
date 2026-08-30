@@ -11,7 +11,8 @@ export interface CharacterTemplate {
   name: string;
   description: string;
   gameSystem: GameSystem;
-  data: any;
+  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
+  data: Record<string, unknown>;
 }
 
 /**

@@ -230,7 +230,7 @@ router.post(
   // First, use a generic upload to parse the multipart data
   (req: UploadRequest, res: Response, next: NextFunction) => {
     // Use generic uploader - no asset-type-specific filtering yet
-    uploadGeneric.single('file')(req, res, (err: unknown) => {
+    uploadGeneric.single('file')(req, res, (err: unknown): Response | void => {
       if (err) {
         return handleUploadError(err, req, res, next);
       }
