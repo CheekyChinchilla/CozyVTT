@@ -63,7 +63,17 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         tokenId,
         name: token.name,
         imageUrl: token.imageUrl || '',
-        initiative: token.initiative ?? null,
+        // Always null, never `token.initiative`.
+        //
+        // A rolled value is persisted onto the map token, and ending combat
+        // clears only the in-memory order — so the number outlives the fight it
+        // was rolled for. Seeding from it meant a token joining a *new* fight
+        // arrived carrying its result from the last one, already placed in the
+        // order before anyone had rolled.
+        //
+        // Joining the order and having a place in it are separate steps: a
+        // combatant sorts to the bottom as "—" until something rolls for it.
+        initiative: null,
         hp: token.hp ?? null,
         type: token.type ?? 'npc',
         disposition: token.disposition ?? null,

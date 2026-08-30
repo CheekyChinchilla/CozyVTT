@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A token added to the initiative tracker starts with no initiative.** A rolled initiative is saved onto the token itself, but ending combat only clears the order — so the number outlived the fight it was rolled for. Adding that token to the *next* fight seeded its entry from the leftover value, so it arrived already sorted into the order carrying last fight's result, before anyone had rolled. Combatants now join as **—** and take their place once something rolls for them. Joining the fight and having a position in it are separate steps. The value still stored on the token is untouched, so a DM who typed one into the NPC editor still sees it there
+
+---
+
 ## [1.2.2] — 2026-08-27
 
 ### Added
