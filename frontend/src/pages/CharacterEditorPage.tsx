@@ -16,7 +16,7 @@ import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiErrorText, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
 import type { CharacterData } from '@/types';
 
 export default function CharacterEditorPage() {
@@ -151,7 +151,6 @@ export default function CharacterEditorPage() {
         }
       } catch (err: unknown) {
         console.error('Failed to save character:', err);
-        console.error('Error response:', apiErrorText(err));
 
         // Show detailed validation errors if available
         const validationErrors = apiValidationIssues(err);

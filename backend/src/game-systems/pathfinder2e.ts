@@ -358,7 +358,8 @@ export interface PF2eSpellcasting {
   spells: PF2eSpell[];
   focusSpells: PF2eFocusSpells;
   innateSpells: PF2eInnateSpell[];
-  rituals: string[];
+  /** Either a bare name, or a name with the rank it is cast at. */
+  rituals: (string | { name: string; rank: number })[];
 }
 
 /**

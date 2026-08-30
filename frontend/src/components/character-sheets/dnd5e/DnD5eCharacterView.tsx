@@ -397,7 +397,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               <div key={idx} className="px-4 py-2 bg-white border border-stone-300 rounded-lg">
                 <div className="text-xs text-stone-500 capitalize">{hd.class}</div>
                 <div className="font-semibold text-stone-800">
-                  {hd.remaining}/{hd.total.replace(/\d+/, hd.total.match(/\d+/)![0])}
+                  {hd.remaining}/{hd.total}
                 </div>
               </div>
             ))}
