@@ -8,10 +8,8 @@ import type {
   PF2eAttributes,
   PF2eSavingThrows,
   PF2eSkills,
-  PF2eLoreSkill,
   CoC7eCharacterData,
   CoC7eCharacteristics,
-  CoC7eWeapon,
 } from '@/types/game-systems';
 
 /**
@@ -293,10 +291,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
     for (const [key, name] of Object.entries(PF2E_SKILL_NAMES)) {
       const skill = data.skills[key as keyof PF2eSkills];
       if (!skill) continue;
-      // TODO(typing): a PF2e skill stores its modifier as `bonus` — the type
-      // says so and the backend schema agrees. `total` is not a field, so
-      // this reads undefined and every Pathfinder skill is offered at +0.
-      const total = (skill as { total?: number }).total ?? 0;
+      const total = skill.bonus ?? 0;
       const expr = `1d20${fmt(total)}`;
       skills.push({
         label:             `${name} ${fmt(total)}`,
@@ -305,19 +300,19 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
         supportsAdvantage: true,
       });
     }
-    // Lore skills (dynamic)
-    if (Array.isArray((data.skills as { loreSkills?: unknown }).loreSkills)) {
-      for (const lore of (data.skills as unknown as { loreSkills: PF2eLoreSkill[] }).loreSkills) {
-        if (!lore.name) continue;
-        // TODO(typing): same as above — a lore skill stores `bonus`.
-        const total = (lore as { total?: number }).total ?? 0;
-        skills.push({
-          label:             `${lore.name} Lore ${fmt(total)}`,
-          expression:        `1d20${fmt(total)}`,
-          purpose:           `${lore.name} Lore Check`,
-          supportsAdvantage: true,
-        });
-      }
+  }
+
+  // Lore skills, which the sheet keeps beside `skills` rather than inside it.
+  if (Array.isArray(data.loreSkills)) {
+    for (const lore of data.loreSkills) {
+      if (!lore.name) continue;
+      const total = lore.bonus ?? 0;
+      skills.push({
+        label:             `${lore.name} Lore ${fmt(total)}`,
+        expression:        `1d20${fmt(total)}`,
+        purpose:           `${lore.name} Lore Check`,
+        supportsAdvantage: true,
+      });
     }
   }
 
@@ -353,15 +348,18 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
 // Call of Cthulhu 7e
 // ---------------------------------------------------------------------------
 
-const COC_CHARACTERISTIC_NAMES: Record<string, string> = {
-  str: 'STR',
-  con: 'CON',
-  siz: 'SIZ',
-  dex: 'DEX',
-  app: 'APP',
-  int: 'INT',
-  pow: 'POW',
-  edu: 'EDU',
+// Keyed by what a sheet actually stores. These were lowercase, which is half
+// of why characteristic rolls never appeared: `characteristics.str` is
+// undefined when the sheet holds `characteristics.STR`.
+const COC_CHARACTERISTIC_NAMES: Record<keyof CoC7eCharacteristics, string> = {
+  STR: 'STR',
+  CON: 'CON',
+  SIZ: 'SIZ',
+  DEX: 'DEX',
+  APP: 'APP',
+  INT: 'INT',
+  POW: 'POW',
+  EDU: 'EDU',
 };
 
 const COC_SKILL_DISPLAY: Record<string, string> = {
@@ -420,12 +418,8 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
 
   // Characteristics
   if (data.characteristics) {
-    for (const [key, label] of Object.entries(COC_CHARACTERISTIC_NAMES)) {
-      // TODO(typing): a CoC characteristic stores `regular`, not `value` —
-      // the type and the backend schema both say so. This reads undefined,
-      // so the `typeof` check below rejects every one and an investigator is
-      // offered no characteristic rolls at all.
-      const val = (data.characteristics[key as keyof CoC7eCharacteristics] as unknown as { value?: number })?.value;
+    for (const [key, label] of Object.entries(COC_CHARACTERISTIC_NAMES) as [keyof CoC7eCharacteristics, string][]) {
+      const val = data.characteristics[key]?.regular;
       if (typeof val !== 'number') continue;
       abilities.push({
         label:             `${label} (target: ${val}%)`,
@@ -528,12 +522,9 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
     }
   }
 
-  // Weapons
-  // TODO(typing): CoC weapons are stored under `combat.weapons`, not at the
-  // top level — the schema nests them and the editor writes them there. This
-  // reads undefined, so no weapon rolls are ever offered.
-  if (Array.isArray((data as { weapons?: unknown }).weapons)) {
-    for (const w of (data as unknown as { weapons: CoC7eWeapon[] }).weapons) {
+  // Weapons, which the sheet keeps under `combat`.
+  if (Array.isArray(data.combat?.weapons)) {
+    for (const w of data.combat.weapons) {
       if (!w.name) continue;
       // Skill check to hit
       if (typeof w.skillValue === 'number') {
