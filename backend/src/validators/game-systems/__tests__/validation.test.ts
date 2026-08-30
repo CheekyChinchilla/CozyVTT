@@ -150,6 +150,45 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    // The editor's Add Ritual button writes { name, rank } — a ritual has a
+    // rank in Pathfinder, and the rank selector is right there in the UI. The
+    // schema declared `string[]`, so adding a ritual made the whole sheet
+    // unsavable: the PUT came back 400 and nothing the player had typed
+    // survived. Both shapes are accepted now, so a sheet written against the
+    // old declaration still loads.
+    describe('rituals', () => {
+      const withRituals = (rituals: unknown) => {
+        const example = loadExampleJSON('Pathfinder_2e_character.json');
+        return validateCharacterData(GameSystem.PATHFINDER_2E, {
+          ...example.data,
+          spellcasting: { ...example.data.spellcasting, rituals },
+        });
+      };
+
+      it('accepts a ritual with a name and a rank, which is what the editor writes', () => {
+        const result = withRituals([{ name: 'Consecrate', rank: 2 }]);
+        expect(result.success).toBe(true);
+      });
+
+      it('still accepts a bare string, which is what the schema used to declare', () => {
+        expect(withRituals(['Consecrate']).success).toBe(true);
+      });
+
+      it('accepts the two side by side, so a part-upgraded sheet still loads', () => {
+        expect(withRituals(['Consecrate', { name: 'Planar Binding', rank: 6 }]).success).toBe(true);
+      });
+
+      it('still rejects a ritual with no name', () => {
+        expect(withRituals([{ rank: 2 }]).success).toBe(false);
+        expect(withRituals([{ name: '', rank: 2 }]).success).toBe(false);
+      });
+
+      it('still rejects a rank outside 1-10', () => {
+        expect(withRituals([{ name: 'Consecrate', rank: 0 }]).success).toBe(false);
+        expect(withRituals([{ name: 'Consecrate', rank: 11 }]).success).toBe(false);
+      });
+    });
+
     it('should fail validation for invalid proficiency rank', () => {
       const example = loadExampleJSON('Pathfinder_2e_character.json');
       const invalidData = {

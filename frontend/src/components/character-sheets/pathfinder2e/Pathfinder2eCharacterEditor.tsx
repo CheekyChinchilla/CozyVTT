@@ -67,21 +67,17 @@ interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'>
  * Spellcasting as this editor manipulates it, which is not what the shared type
  * or the backend schema declare.
  *
- * TODO(typing) — `rituals`. The editor's Add Ritual button pushes
- * `{ name, rank }`, but `PF2eSpellcasting.rituals` is `string[]` and the
- * backend's Zod schema agrees (`z.array(z.string())`). Verified against the
- * validator: an object ritual is **rejected**, so a Pathfinder 2e character
- * with any ritual on it cannot be saved at all — `PUT /characters/:id` answers
- * 400 "Character data does not match game system schema". This is a live bug,
- * not a typing artefact. Described here rather than corrected, because a typing
- * pass must not change what the editor writes; it needs its own commit, and a
- * decision about which of the two shapes is the right one.
- *
  * `cantrips` is widened because the rendering reads `cantrip.name || cantrip`,
  * tolerating a bare string. The schema wants objects, so that defence only ever
  * mattered for sheets written before the shape settled.
  */
 interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips' | 'slots'> {
+  /**
+   * Objects only. A stored ritual may be a bare name — that is all the schema
+   * allowed until recently — so the initializer below normalises one into
+   * `{ name, rank: 1 }` and the rest of the editor works with a single shape.
+   * The name survives, so the upgrade costs nothing.
+   */
   rituals?: { name: string; rank: number }[];
   cantrips?: (PF2eCantrip | string)[];
   /**
@@ -246,7 +242,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       spells: data.spellcasting.spells || [],
       focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
       innateSpells: data.spellcasting.innateSpells || [],
-      rituals: data.spellcasting.rituals || [],
+      rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
+        typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
     } : null,
     // TODO(typing): `{}` has none of the keys these types require, and the
     // inputs below read straight off them. Pre-existing; cast so the

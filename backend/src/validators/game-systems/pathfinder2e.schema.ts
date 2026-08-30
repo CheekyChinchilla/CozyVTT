@@ -94,6 +94,23 @@ const skillsSchema = z.object({
 /**
  * Lore skill
  */
+/**
+ * Ritual
+ *
+ * Either a bare name, or a name with the rank it is cast at. The editor writes
+ * the second — a ritual has a rank in Pathfinder, and the editor offers a rank
+ * selector — while this schema originally declared only the first, which made
+ * a sheet with any ritual on it impossible to save. Both are accepted so that a
+ * sheet written against the old declaration still loads.
+ */
+const ritualSchema = z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1),
+    rank: z.number().int().min(1).max(10),
+  }),
+]);
+
 const loreSkillSchema = z.object({
   name: z.string().min(1),
   attribute: z.string().min(1),
@@ -365,7 +382,7 @@ const spellcastingSchema = z.object({
   spells: z.array(spellSchema).optional(),
   focusSpells: focusSpellsSchema.optional(),
   innateSpells: z.array(innateSpellSchema).optional(),
-  rituals: z.array(z.string()).optional(),
+  rituals: z.array(ritualSchema).optional(),
 });
 
 /**

@@ -287,6 +287,14 @@ export interface PF2eSpellSlots {
 /**
  * Cantrip
  */
+/**
+ * A ritual, as either a bare name or a name with the rank it is cast at.
+ *
+ * The editor writes the second; the backend schema accepts both, so a sheet
+ * written when only the bare name was allowed still loads.
+ */
+export type PF2eRitual = string | { name: string; rank: number };
+
 export interface PF2eCantrip {
   rank: number;
   name: string;
@@ -358,7 +366,7 @@ export interface PF2eSpellcasting {
   spells: PF2eSpell[];
   focusSpells: PF2eFocusSpells;
   innateSpells: PF2eInnateSpell[];
-  rituals: string[];
+  rituals: PF2eRitual[];
 }
 
 /**
