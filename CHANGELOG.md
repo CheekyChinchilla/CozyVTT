@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Internal: the codebase is strictly typed again.** CozyVTT was specified as strictly typed, but the rule that enforces it was switched off in the frontend and absent from the backend entirely, so 326 uses of TypeScript's `any` escape hatch had accumulated. All of them are gone from both projects, the rule is now an error in each, and a CI workflow runs the checks on every push so it cannot quietly lapse again. **Nothing about this changes how CozyVTT behaves**: types are erased when the code is compiled, so there is no schema change, no migration, and nothing required of a self-hosted instance beyond the usual rebuild. Every backend change was checked by comparing the compiled JavaScript before and after, which is what makes that claim verifiable rather than a promise
+
 ### Fixed
 
 - **A token added to the initiative tracker starts with no initiative.** A rolled initiative is saved onto the token itself, but ending combat only clears the order — so the number outlived the fight it was rolled for. Adding that token to the *next* fight seeded its entry from the leftover value, so it arrived already sorted into the order carrying last fight's result, before anyone had rolled. Combatants now join as **—** and take their place once something rolls for them. Joining the fight and having a position in it are separate steps. The value still stored on the token is untouched, so a DM who typed one into the NPC editor still sees it there. The **Add Combatant** list no longer shows a token's old initiative beside its name either — it was advertising a number that adding the token would not carry in
