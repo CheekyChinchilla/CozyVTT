@@ -11,13 +11,15 @@ import { readJSONFile, validateImportedCharacter } from '@/utils/character-expor
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import type { GameSystem } from '@/types';
 import { Button, Modal } from '@/components/ui';
+import { apiErrorMessage, errorMessage } from '@/utils/errors';
+import type { CharacterData } from '@/types';
 
 interface ImportCharacterModalProps {
   onClose: () => void;
   onImport: (data: {
     name: string;
     gameSystem: string | null;
-    data: any;
+    data: CharacterData;
     description?: string;
   }) => Promise<void>;
   existingCharacterNames: string[];
@@ -49,7 +51,7 @@ export default function ImportCharacterModal({
   const [previewData, setPreviewData] = useState<{
     name: string;
     gameSystem: string | null;
-    data: any;
+    data: CharacterData;
   } | null>(null);
   const [nameConflict, setNameConflict] = useState(false);
   const [importName, setImportName] = useState('');
@@ -84,8 +86,8 @@ export default function ImportCharacterModal({
           setImportName(characterName);
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to read file');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to read file');
     } finally {
       setIsLoading(false);
     }
@@ -138,10 +140,10 @@ export default function ImportCharacterModal({
       });
 
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.response?.data?.message ||
-          err.message ||
+        apiErrorMessage(err) ||
+          errorMessage(err) ||
           `Failed to import ${noun.toLowerCase()}`
       );
     } finally {

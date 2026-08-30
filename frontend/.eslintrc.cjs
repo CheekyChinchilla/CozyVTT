@@ -45,16 +45,7 @@ module.exports = {
       // each file is converted; when this list is empty the block goes with it.
       // Do not add to it — a new file with `any` should fail lint.
       files: [
-      'src/components/campaign/DmLightControls.tsx',
-      'src/components/campaign/MapManager.tsx',
-      'src/components/character-sheets/flexible/FlexibleCharacterSheetEdit.tsx',
-      'src/components/character-sheets/flexible/utils/section-helpers.ts',
-      'src/components/character/ImportCharacterModal.tsx',
       'src/hooks/__tests__/useInitiativeSync.test.tsx',
-      'src/pages/AdminPage.tsx',
-      'src/pages/CharacterEditorPage.tsx',
-      'src/utils/character-export.ts',
-      'src/utils/characterRolls.ts',
       ],
       rules: { '@typescript-eslint/no-explicit-any': 'off' },
     },

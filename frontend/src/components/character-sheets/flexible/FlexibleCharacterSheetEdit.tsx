@@ -18,10 +18,12 @@ import { api } from '../../../services/api';
 import { AssetType } from '../../../types';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { apiErrorMessage } from '@/utils/errors';
+import type { CharacterData } from '@/types';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
-  onSave: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -86,9 +88,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
           const uploadResponse = await api.uploadAsset(assetFormData);
           const assetId = uploadResponse.asset.id;
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setTokenError(uploadError.response?.data?.message || 'Failed to upload token image');
+          setTokenError(apiErrorMessage(uploadError) || 'Failed to upload token image');
           setIsSaving(false);
           return;
         }

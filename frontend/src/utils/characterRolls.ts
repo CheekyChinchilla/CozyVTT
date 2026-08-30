@@ -1,3 +1,34 @@
+import type { CharacterData } from '@/types';
+import type {
+  DnD5eCharacterData,
+  DnD5eStats,
+  DnD5eSkills,
+  DnD5eSavingThrows,
+  PF2eCharacterData,
+  PF2eAttributes,
+  PF2eSavingThrows,
+  PF2eSkills,
+  PF2eLoreSkill,
+  CoC7eCharacterData,
+  CoC7eCharacteristics,
+  CoC7eWeapon,
+} from '@/types/game-systems';
+
+/**
+ * A skill entry as this file probes it.
+ *
+ * The Call of Cthulhu skills object mixes shapes: most entries are a skill,
+ * `fighting` and `firearms` hold a group of them, and two hold arrays. Rather
+ * than discriminate, the extractor checks for `currentValue` and skips what
+ * does not have one — so what it needs is a shape that says "this may or may
+ * not be a leaf".
+ */
+interface CoC7eSkillLike {
+  currentValue?: number;
+  name?: string;
+  /** `fighting` holds a group rather than a leaf; the extractor checks for it. */
+  brawl?: { currentValue?: number };
+}
 /**
  * characterRolls.ts
  * Extracts rollable dice expressions from character data for any supported game system.
@@ -92,7 +123,7 @@ const DND5E_SKILL_NAMES: Record<string, string> = {
   survival:       'Survival',
 };
 
-function extractDnd5eRolls(data: any): CharacterRolls {
+function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
   const abilities: RollOption[] = [];
   const skills:    RollOption[] = [];
   const saves:     RollOption[] = [];
@@ -101,7 +132,7 @@ function extractDnd5eRolls(data: any): CharacterRolls {
   // Ability checks
   if (data.stats) {
     for (const [key, name] of Object.entries(DND5E_ABILITY_NAMES)) {
-      const mod = data.stats[key]?.modifier ?? 0;
+      const mod = data.stats[key as keyof DnD5eStats]?.modifier ?? 0;
       const expr = `1d20${fmt(mod)}`;
       abilities.push({
         label:             `${name.slice(0, 3).toUpperCase()} ${fmt(mod)}`,
@@ -115,7 +146,7 @@ function extractDnd5eRolls(data: any): CharacterRolls {
   // Saving throws
   if (data.savingThrows) {
     for (const [key, name] of Object.entries(DND5E_ABILITY_NAMES)) {
-      const save = data.savingThrows[key];
+      const save = data.savingThrows[key as keyof DnD5eSavingThrows];
       if (!save) continue;
       const bonus = save.bonus ?? 0;
       const expr = `1d20${fmt(bonus)}`;
@@ -131,7 +162,7 @@ function extractDnd5eRolls(data: any): CharacterRolls {
   // Skills
   if (data.skills) {
     for (const [key, name] of Object.entries(DND5E_SKILL_NAMES)) {
-      const skill = data.skills[key];
+      const skill = data.skills[key as keyof DnD5eSkills];
       if (!skill) continue;
       const bonus = skill.bonus ?? 0;
       const expr = `1d20${fmt(bonus)}`;
@@ -210,7 +241,7 @@ const PF2E_SKILL_NAMES: Record<string, string> = {
   thievery:       'Thievery',
 };
 
-function extractPf2eRolls(data: any): CharacterRolls {
+function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
   const abilities: RollOption[] = [];
   const skills:    RollOption[] = [];
   const saves:     RollOption[] = [];
@@ -219,7 +250,7 @@ function extractPf2eRolls(data: any): CharacterRolls {
   // Ability checks
   if (data.attributes) {
     for (const [key, name] of Object.entries(PF2E_ABILITY_NAMES)) {
-      const mod = data.attributes[key]?.modifier ?? 0;
+      const mod = data.attributes[key as keyof PF2eAttributes]?.modifier ?? 0;
       const expr = `1d20${fmt(mod)}`;
       abilities.push({
         label:             `${name.slice(0, 3).toUpperCase()} ${fmt(mod)}`,
@@ -233,7 +264,7 @@ function extractPf2eRolls(data: any): CharacterRolls {
   // Saving throws
   if (data.savingThrows) {
     for (const [key, name] of Object.entries(PF2E_SAVE_NAMES)) {
-      const save = data.savingThrows[key];
+      const save = data.savingThrows[key as keyof PF2eSavingThrows];
       if (!save) continue;
       const bonus = save.bonus ?? 0;
       const expr = `1d20${fmt(bonus)}`;
@@ -260,9 +291,12 @@ function extractPf2eRolls(data: any): CharacterRolls {
   // Skills
   if (data.skills) {
     for (const [key, name] of Object.entries(PF2E_SKILL_NAMES)) {
-      const skill = data.skills[key];
+      const skill = data.skills[key as keyof PF2eSkills];
       if (!skill) continue;
-      const total = skill.total ?? 0;
+      // TODO(typing): a PF2e skill stores its modifier as `bonus` — the type
+      // says so and the backend schema agrees. `total` is not a field, so
+      // this reads undefined and every Pathfinder skill is offered at +0.
+      const total = (skill as { total?: number }).total ?? 0;
       const expr = `1d20${fmt(total)}`;
       skills.push({
         label:             `${name} ${fmt(total)}`,
@@ -272,10 +306,11 @@ function extractPf2eRolls(data: any): CharacterRolls {
       });
     }
     // Lore skills (dynamic)
-    if (Array.isArray(data.skills.loreSkills)) {
-      for (const lore of data.skills.loreSkills) {
+    if (Array.isArray((data.skills as { loreSkills?: unknown }).loreSkills)) {
+      for (const lore of (data.skills as unknown as { loreSkills: PF2eLoreSkill[] }).loreSkills) {
         if (!lore.name) continue;
-        const total = lore.total ?? 0;
+        // TODO(typing): same as above — a lore skill stores `bonus`.
+        const total = (lore as { total?: number }).total ?? 0;
         skills.push({
           label:             `${lore.name} Lore ${fmt(total)}`,
           expression:        `1d20${fmt(total)}`,
@@ -377,7 +412,7 @@ const COC_SKILL_DISPLAY: Record<string, string> = {
   track:                 'Track',
 };
 
-function extractCocRolls(data: any): CharacterRolls {
+function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
   const abilities: RollOption[] = [];   // characteristics
   const skills:    RollOption[] = [];
   const saves:     RollOption[] = [];   // (empty for CoC)
@@ -386,7 +421,11 @@ function extractCocRolls(data: any): CharacterRolls {
   // Characteristics
   if (data.characteristics) {
     for (const [key, label] of Object.entries(COC_CHARACTERISTIC_NAMES)) {
-      const val = data.characteristics[key]?.value;
+      // TODO(typing): a CoC characteristic stores `regular`, not `value` —
+      // the type and the backend schema both say so. This reads undefined,
+      // so the `typeof` check below rejects every one and an investigator is
+      // offered no characteristic rolls at all.
+      const val = (data.characteristics[key as keyof CoC7eCharacteristics] as unknown as { value?: number })?.value;
       if (typeof val !== 'number') continue;
       abilities.push({
         label:             `${label} (target: ${val}%)`,
@@ -399,7 +438,7 @@ function extractCocRolls(data: any): CharacterRolls {
 
   // Skills
   if (data.skills && typeof data.skills === 'object') {
-    for (const [key, skill] of Object.entries(data.skills as Record<string, any>)) {
+    for (const [key, skill] of Object.entries(data.skills as unknown as Record<string, CoC7eSkillLike>)) {
       if (key === 'customSkills') continue;
 
       // Handle specializations (fighting, firearms, languageOther, science)
@@ -417,7 +456,7 @@ function extractCocRolls(data: any): CharacterRolls {
       }
 
       if (key === 'firearms' && typeof skill === 'object' && !('currentValue' in skill)) {
-        for (const [sub, subSkill] of Object.entries(skill as Record<string, any>)) {
+        for (const [sub, subSkill] of Object.entries(skill as Record<string, CoC7eSkillLike>)) {
           if (!subSkill?.currentValue) continue;
           const val = subSkill.currentValue as number;
           const subName = sub.charAt(0).toUpperCase() + sub.slice(1);
@@ -475,11 +514,14 @@ function extractCocRolls(data: any): CharacterRolls {
     // Custom skills
     if (Array.isArray(data.skills.customSkills)) {
       for (const cs of data.skills.customSkills) {
-        if (!cs?.name || typeof cs.currentValue !== 'number') continue;
+        // A custom skill carries its own label. Declared by neither the type
+        // nor the schema, but it round-trips — see SkillsList for why.
+        const named = cs as { name?: string; currentValue?: number };
+        if (!named.name || typeof named.currentValue !== 'number') continue;
         skills.push({
-          label:             `${cs.name} — target: ${cs.currentValue}%`,
+          label:             `${named.name} — target: ${named.currentValue}%`,
           expression:        '1d100',
-          purpose:           `${cs.name} — target: ${cs.currentValue}%`,
+          purpose:           `${named.name} — target: ${named.currentValue}%`,
           supportsAdvantage: false,
         });
       }
@@ -487,8 +529,11 @@ function extractCocRolls(data: any): CharacterRolls {
   }
 
   // Weapons
-  if (Array.isArray(data.weapons)) {
-    for (const w of data.weapons) {
+  // TODO(typing): CoC weapons are stored under `combat.weapons`, not at the
+  // top level — the schema nests them and the editor writes them there. This
+  // reads undefined, so no weapon rolls are ever offered.
+  if (Array.isArray((data as { weapons?: unknown }).weapons)) {
+    for (const w of (data as unknown as { weapons: CoC7eWeapon[] }).weapons) {
       if (!w.name) continue;
       // Skill check to hit
       if (typeof w.skillValue === 'number') {
@@ -532,16 +577,18 @@ function extractCocRolls(data: any): CharacterRolls {
  * @param data        The raw `character.data` JSON object
  * @returns           Structured roll options grouped by category
  */
-export function getCharacterRolls(gameSystem: string | null, data: any): CharacterRolls {
+export function getCharacterRolls(gameSystem: string | null, data: CharacterData | null | undefined): CharacterRolls {
   if (!data) return { abilities: [], skills: [], savingThrows: [], combat: [] };
 
+  // The system decides which shape `data` is in, which is exactly what the
+  // switch below is establishing — so each branch asserts the one it selected.
   switch (gameSystem) {
     case 'DND_5E':
-      return extractDnd5eRolls(data);
+      return extractDnd5eRolls(data as DnD5eCharacterData);
     case 'PATHFINDER_2E':
-      return extractPf2eRolls(data);
+      return extractPf2eRolls(data as PF2eCharacterData);
     case 'CALL_OF_CTHULHU_7E':
-      return extractCocRolls(data);
+      return extractCocRolls(data as CoC7eCharacterData);
     default:
       return { abilities: [], skills: [], savingThrows: [], combat: [] };
   }

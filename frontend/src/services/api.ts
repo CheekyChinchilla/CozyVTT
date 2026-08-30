@@ -660,7 +660,7 @@ class ApiClient {
     file: File,
     name?: string,
     gridSize?: number,
-  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number }> {
+  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);
