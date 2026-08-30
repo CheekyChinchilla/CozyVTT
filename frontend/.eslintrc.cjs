@@ -50,7 +50,6 @@ module.exports = {
       'src/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor.tsx',
       'src/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView.tsx',
       'src/components/character-sheets/call-of-cthulhu-7e/components/SkillsList.tsx',
-      'src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx',
       'src/components/character-sheets/dnd5e/DnD5eCharacterView.tsx',
       'src/components/character-sheets/flexible/FlexibleCharacterSheetEdit.tsx',
       'src/components/character-sheets/flexible/utils/section-helpers.ts',

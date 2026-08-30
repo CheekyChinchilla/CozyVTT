@@ -19,6 +19,17 @@ import {
   Palette,
 } from 'lucide-react';
 import { Character, AssetType } from '../../../types';
+import type { CharacterData } from '../../../types';
+import type {
+  DnD5eCharacterData,
+  DnD5eStats,
+  DnD5eSavingThrows,
+  DnD5eSkills,
+  DnD5eSpellcasting,
+  DnD5eAppearance,
+  DnD5ePersonality,
+} from '../../../types/game-systems';
+import { apiErrorMessage } from '@/utils/errors';
 import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
@@ -29,10 +40,31 @@ import {
   dnd5eBackfilledInitiativeBonus,
 } from '@/utils/rules/initiative';
 
+/**
+ * The sheet as this editor holds it.
+ *
+ * `DnD5eCharacterData` describes what the game system defines. `proficiencies`
+ * is not part of that: it is a structured object the four proficiency textareas
+ * bind to, distinct from the `proficienciesAndLanguages` array the schema
+ * declares. It survives a save because `PUT /characters/:id` validates the body
+ * but stores it as sent, rather than storing Zod's parsed output — which would
+ * strip it, since the schema is not `.passthrough()`.
+ */
+interface DnD5eFormData extends DnD5eCharacterData {
+  proficiencies?: Partial<{
+    armor: string;
+    weapons: string;
+    tools: string;
+    languages: string;
+  }>;
+  /** Header colour, chosen in the editor and saved with the sheet. */
+  themeColor?: string;
+}
+
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
   character: Character;
-  onSave: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -119,25 +151,34 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const { data: serverConfig } = useServerConfigQuery();
 
   // Type assertion for D&D 5e character data
-  const data = character.data as any;
+  const data = character.data as DnD5eFormData;
 
   // Form state - initialize with character data
-  const [formData, setFormData] = useState<any>(() => ({
+  const [formData, setFormData] = useState<DnD5eFormData>(() => ({
     ...data,
-    // Ensure nested objects exist
-    stats: data.stats || {},
-    savingThrows: data.savingThrows || {},
-    skills: data.skills || {},
+    // Ensure nested objects exist.
+    //
+    // TODO(typing): `{}` is not a valid container — none of these has its keys,
+    // and the effects below read `.score` / `.proficient` off each entry. A
+    // sheet stored without one of these blocks therefore reads `undefined`
+    // where a number is expected. Pre-existing; the casts keep the behaviour
+    // exactly as it was rather than changing what a malformed sheet does.
+    stats: (data.stats || {}) as DnD5eStats,
+    savingThrows: (data.savingThrows || {}) as DnD5eSavingThrows,
+    skills: (data.skills || {}) as DnD5eSkills,
     hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
     deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    spellcasting: data.spellcasting || {
+    // Same TODO(typing) as the containers above: this default omits `class`
+    // and its `slots` has none of the nine levels, both of which the type
+    // requires and the sheet below reads. Cast rather than corrected.
+    spellcasting: (data.spellcasting || {
       ability: '',
       spellSaveDC: 0,
       spellAttackBonus: 0,
       cantrips: [],
       slots: {},
       spells: [],
-    },
+    }) as DnD5eSpellcasting,
     currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: data.inventory || [],
     attacks: data.attacks || [],
@@ -150,8 +191,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ? { armor: '', weapons: '', tools: '', languages: '', ...data.proficiencies }
       : { armor: '', weapons: '', tools: '', languages: '' },
     featuresAndTraits: data.featuresAndTraits || [],
-    appearance: data.appearance || {},
-    personality: data.personality || {},
+    // Same TODO(typing) as the containers above.
+    appearance: (data.appearance || {}) as DnD5eAppearance,
+    personality: (data.personality || {}) as DnD5ePersonality,
     alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
   }));
 
@@ -245,7 +287,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedStats = { ...formData.stats };
       let hasChanges = false;
 
-      Object.keys(updatedStats).forEach(ability => {
+      (Object.keys(updatedStats) as (keyof DnD5eStats)[]).forEach(ability => {
         const score = updatedStats[ability].score;
         const newModifier = calculateModifier(score);
         if (updatedStats[ability].modifier !== newModifier) {
@@ -255,7 +297,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (hasChanges) {
-        setFormData((prev: any) => ({ ...prev, stats: updatedStats }));
+        setFormData((prev) => ({ ...prev, stats: updatedStats }));
       }
     }
   }, [
@@ -273,7 +315,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSavingThrows = { ...formData.savingThrows };
       let hasChanges = false;
 
-      Object.keys(updatedSavingThrows).forEach(ability => {
+      (Object.keys(updatedSavingThrows) as (keyof DnD5eSavingThrows)[]).forEach(ability => {
         const abilityMod = formData.stats[ability]?.modifier || 0;
         const proficient = updatedSavingThrows[ability].proficient;
         const newBonus = abilityMod + (proficient ? formData.proficiencyBonus : 0);
@@ -285,7 +327,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (hasChanges) {
-        setFormData((prev: any) => ({ ...prev, savingThrows: updatedSavingThrows }));
+        setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
       }
     }
   }, [
@@ -305,7 +347,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   ]);
 
   // Skill-to-ability mapping
-  const skillAbilities: Record<string, string> = {
+  const skillAbilities: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
     acrobatics: 'dexterity',
     animalHandling: 'wisdom',
     arcana: 'intelligence',
@@ -332,7 +374,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSkills = { ...formData.skills };
       let needsUpdate = false;
 
-      Object.keys(skillAbilities).forEach((skill) => {
+      (Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).forEach((skill) => {
         if (!updatedSkills[skill]) {
           updatedSkills[skill] = { proficient: false, expertise: false, bonus: 0 };
           needsUpdate = true;
@@ -340,7 +382,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (needsUpdate) {
-        setFormData((prev: any) => ({ ...prev, skills: updatedSkills }));
+        setFormData((prev) => ({ ...prev, skills: updatedSkills }));
       }
     }
   }, []); // Run once on mount
@@ -351,7 +393,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSkills = { ...formData.skills };
       let hasChanges = false;
 
-      Object.keys(updatedSkills).forEach(skill => {
+      (Object.keys(updatedSkills) as (keyof DnD5eSkills)[]).forEach(skill => {
         const ability = skillAbilities[skill];
         const abilityMod = formData.stats[ability]?.modifier || 0;
         const proficient = updatedSkills[skill].proficient;
@@ -395,7 +437,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         formData.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
 
       if (hasChanges || passiveChanged) {
-        setFormData((prev: any) => ({
+        setFormData((prev) => ({
           ...prev,
           skills: updatedSkills,
           passivePerceptionBonus: passiveBonus,
@@ -412,7 +454,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.wisdom?.modifier,
     formData.stats?.charisma?.modifier,
     // Explicitly depend on each skill's proficient and expertise flags
-    ...Object.keys(skillAbilities).flatMap(skill => [
+    ...(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).flatMap(skill => [
       formData.skills?.[skill]?.proficient,
       formData.skills?.[skill]?.expertise,
     ]),
@@ -448,7 +490,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     const needsTotal = formData.initiative !== total;
     if (!needsBonus && !needsTotal) return;
 
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       ...(needsBonus ? { initiativeBonus: bonus } : {}),
       initiative: total,
@@ -497,7 +539,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
     // Validate ability scores (1-30)
     if (formData.stats) {
-      Object.entries(formData.stats).forEach(([ability, data]: [string, any]) => {
+      Object.entries(formData.stats).forEach(([ability, data]) => {
         if (!data.score || data.score < 1 || data.score > 30) {
           newErrors[`stats.${ability}`] = 'Ability score must be between 1 and 30';
         }
@@ -590,9 +632,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
           // Store the new token URL to pass separately to onSave
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: uploadError.response?.data?.message || 'Failed to upload token image' });
+          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
           setIsSaving(false);
           return;
         }
@@ -609,25 +651,33 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     }
   };
 
-  // Update form field
-  const updateField = (path: string, value: any) => {
-    setFormData((prev: any) => {
-      const newData = { ...prev };
+  /**
+   * Set a value at a dotted path, cloning each level on the way down.
+   *
+   * The walk is untyped on purpose: the path is a runtime string, so no type
+   * can describe what it lands on. The `Record<string, unknown>` view says
+   * exactly that — this is indexing an object by a name only known at runtime —
+   * rather than `any`, which would also have silenced the *call sites*.
+   */
+  const updateField = (path: string, value: unknown) => {
+    setFormData((prev) => {
+      const newData = { ...prev } as unknown as Record<string, unknown>;
       const keys = path.split('.');
       let current = newData;
       for (let i = 0; i < keys.length - 1; i++) {
         // CRITICAL: Preserve array types when cloning nested structures
-        if (Array.isArray(current[keys[i]])) {
-          current[keys[i]] = [...current[keys[i]]];
-        } else if (typeof current[keys[i]] === 'object' && current[keys[i]] !== null) {
-          current[keys[i]] = { ...current[keys[i]] };
+        const branch = current[keys[i]];
+        if (Array.isArray(branch)) {
+          current[keys[i]] = [...branch];
+        } else if (typeof branch === 'object' && branch !== null) {
+          current[keys[i]] = { ...(branch as Record<string, unknown>) };
         } else {
           current[keys[i]] = {};
         }
-        current = current[keys[i]];
+        current = current[keys[i]] as Record<string, unknown>;
       }
       current[keys[keys.length - 1]] = value;
-      return newData;
+      return newData as unknown as DnD5eFormData;
     });
   };
 
@@ -946,7 +996,7 @@ min={2}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-4">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-          {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+          {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const abilityData = formData.stats?.[ability] || { score: 10, modifier: 0 };
             const error = errors[`stats.${ability}`];
 
@@ -999,7 +1049,7 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
         <div className="grid grid-cols-2 gap-2">
-          {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+          {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
             return (
               <div key={ability} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded">
@@ -1030,7 +1080,7 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-          {Object.keys(skillAbilities).map((skill) => {
+          {(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).map((skill) => {
             const skillData = formData.skills?.[skill] || { proficient: false, expertise: false, bonus: 0 };
             const skillLabel = skill
               .replace(/([A-Z])/g, ' $1')
@@ -1248,7 +1298,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-2">
-          {(formData.hitDice || []).map((die: any, index: number) => (
+          {(formData.hitDice || []).map((die, index) => (
             <div key={index} className="flex items-center space-x-2">
               <input
                 type="text"
@@ -1274,7 +1324,7 @@ min={0}
               />
               <button
                 onClick={() => {
-                  const newHitDice = formData.hitDice.filter((_: any, i: number) => i !== index);
+                  const newHitDice = formData.hitDice!.filter((_, i) => i !== index);
                   updateField('hitDice', newHitDice);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1379,7 +1429,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-4">
-          {(formData.attacks || []).map((attack: any, index: number) => (
+          {(formData.attacks || []).map((attack, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
@@ -1391,7 +1441,7 @@ min={0}
                 />
                 <button
                   onClick={() => {
-                    const newAttacks = formData.attacks.filter((_: any, i: number) => i !== index);
+                    const newAttacks = formData.attacks!.filter((_, i) => i !== index);
                     updateField('attacks', newAttacks);
                   }}
                   className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1514,7 +1564,7 @@ value={formData.spellcasting?.spellAttackBonus}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Spell Slots</h3>
         <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((level) => {
+          {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((level) => {
             const slotData = formData.spellcasting?.slots?.[level] || { total: 0, expended: 0 };
             return (
               <div key={level} className="bg-white border border-stone-300 rounded-lg p-3">
@@ -1565,7 +1615,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-2">
-          {(formData.spellcasting?.spells || []).map((spell: any, index: number) => (
+          {(formData.spellcasting?.spells || []).map((spell, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
               <NumberField
 min={1}
@@ -1612,7 +1662,7 @@ min={1}
               </label>
               <button
                 onClick={() => {
-                  const newSpells = formData.spellcasting.spells.filter((_: any, i: number) => i !== index);
+                  const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1636,13 +1686,13 @@ min={1}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Currency</h3>
         <div className="grid grid-cols-5 gap-3">
-          {[
+          {([
             { key: 'cp', label: 'Copper (CP)', color: 'text-amber-700' },
             { key: 'sp', label: 'Silver (SP)', color: 'text-stone-500' },
             { key: 'ep', label: 'Electrum (EP)', color: 'text-green-600' },
             { key: 'gp', label: 'Gold (GP)', color: 'text-yellow-600' },
             { key: 'pp', label: 'Platinum (PP)', color: 'text-slate-300' },
-          ].map((currency) => (
+          ] as const).map((currency) => (
             <div key={currency.key}>
               <label className={`block text-xs font-semibold ${currency.color} mb-1`}>
                 {currency.label}
@@ -1687,7 +1737,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-3">
-          {(formData.inventory || []).map((item: any, index: number) => (
+          {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
@@ -1699,7 +1749,7 @@ min={0}
                 />
                 <button
                   onClick={() => {
-                    const newInventory = formData.inventory.filter((_: any, i: number) => i !== index);
+                    const newInventory = formData.inventory!.filter((_, i) => i !== index);
                     updateField('inventory', newInventory);
                   }}
                   className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
