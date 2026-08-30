@@ -28,6 +28,7 @@ import type {
   DnD5eSpellcasting,
   DnD5eAppearance,
   DnD5ePersonality,
+  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { api } from '../../../services/api';
@@ -50,15 +51,13 @@ import {
  * but stores it as sent, rather than storing Zod's parsed output — which would
  * strip it, since the schema is not `.passthrough()`.
  */
-interface DnD5eFormData extends DnD5eCharacterData {
+interface DnD5eFormData extends DnD5eCharacterData, SheetChrome {
   proficiencies?: Partial<{
     armor: string;
     weapons: string;
     tools: string;
     languages: string;
   }>;
-  /** Header colour, chosen in the editor and saved with the sheet. */
-  themeColor?: string;
 }
 
 interface DnD5eCharacterEditorProps {

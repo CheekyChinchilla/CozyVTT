@@ -42,6 +42,7 @@ import type {
   PF2eSpellSlots,
   PF2eAppearance,
   PF2ePersonality,
+  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
@@ -57,8 +58,7 @@ import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
  * `PUT /characters/:id` validates the body and stores it as sent, rather than
  * storing Zod's parsed output, so a key the schema does not declare survives.
  */
-interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'> {
-  themeColor?: string;
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'>, SheetChrome {
   spellcasting?: PF2eEditorSpellcasting | null;
   feats?: Record<keyof PF2eFeats, PF2eEditorFeat[]>;
 }

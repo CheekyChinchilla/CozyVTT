@@ -47,11 +47,8 @@ module.exports = {
       files: [
       'src/components/campaign/DmLightControls.tsx',
       'src/components/campaign/MapManager.tsx',
-      'src/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView.tsx',
-      'src/components/character-sheets/dnd5e/DnD5eCharacterView.tsx',
       'src/components/character-sheets/flexible/FlexibleCharacterSheetEdit.tsx',
       'src/components/character-sheets/flexible/utils/section-helpers.ts',
-      'src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterView.tsx',
       'src/components/character/ImportCharacterModal.tsx',
       'src/hooks/__tests__/useInitiativeSync.test.tsx',
       'src/pages/AdminPage.tsx',

@@ -46,3 +46,15 @@ export type GameSystemCharacterData =
   | PF2eCharacterData
   | SR6CharacterData
   | CoC7eCharacterData;
+
+/**
+ * Fields the app stores on every character sheet, whatever the game system.
+ *
+ * `themeColor` is the header colour chosen in the editor. No game system
+ * defines it and no Zod schema declares it, but it round-trips: an undeclared
+ * key is stripped by Zod's parse, and `PUT /characters/:id` stores the request
+ * body as sent rather than the parsed output.
+ */
+export interface SheetChrome {
+  themeColor?: string;
+}

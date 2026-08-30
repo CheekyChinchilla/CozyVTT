@@ -29,6 +29,7 @@ import type {
   CoC7eBackstory,
   CoC7eAppearance,
   CoC7eConditions,
+  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 
@@ -38,8 +39,7 @@ import { apiErrorMessage } from '@/utils/errors';
  * it is saved with the sheet, because `PUT /characters/:id` validates the body
  * and stores it as sent rather than storing Zod's parsed output.
  */
-interface CoC7eFormData extends CoC7eCharacterData {
-  themeColor?: string;
+interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
   /**
    * Not declared by `CoC7eCharacterData`, which keeps the investigator's name
    * at the top level as `investigatorName`. Only the token-upload filename

@@ -19,6 +19,11 @@ import {
   Palette,
 } from 'lucide-react';
 import { Character } from '../../../types';
+import type {
+  CoC7eCharacterData,
+  CoC7eCharacteristics,
+  SheetChrome,
+} from '../../../types/game-systems';
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
@@ -72,7 +77,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   onRoll,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const data = character.data as any; // Type will be CallOfCthulhu7eCharacterData
+  const data = character.data as CoC7eCharacterData & SheetChrome;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -302,13 +307,13 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
           {data.characteristics && (
             <>
-              {orderedCharacteristics(data.characteristics).map((key) => (
+              {orderedCharacteristics(data.characteristics as unknown as Record<string, unknown>).map((key) => (
                 <CharacteristicBlock
                   key={key}
                   label={key}
-                  regular={data.characteristics[key].regular}
-                  half={data.characteristics[key].half}
-                  fifth={data.characteristics[key].fifth}
+                  regular={data.characteristics[key as keyof CoC7eCharacteristics].regular}
+                  half={data.characteristics[key as keyof CoC7eCharacteristics].half}
+                  fifth={data.characteristics[key as keyof CoC7eCharacteristics].fifth}
                   onRoll={onRoll}
                 />
               ))}
@@ -438,7 +443,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-amber-900 mb-3 uppercase">Current Conditions</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {Object.entries(data.conditions).map(([key, value]: [string, any]) => (
+            {(Object.entries(data.conditions ?? {}) as [string, boolean][]).map(([key, value]) => (
               <div
                 key={key}
                 className={`flex items-center space-x-2 px-3 py-2 rounded ${
@@ -514,7 +519,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div>
           <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions</h3>
           <div className="space-y-2">
-            {data.possessions.map((item: any, index: number) => (
+            {data.possessions!.map((item, index) => (
               <div key={index} className="bg-parchment border border-sepia-400 rounded-md p-3">
                 <div className="flex items-start justify-between">
                   <div className="font-semibold text-sepia-900">{item.name}</div>
@@ -531,7 +536,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div>
           <h3 className="text-lg font-bold text-sepia-900 mb-4">Contacts</h3>
           <div className="space-y-2">
-            {data.contacts.map((contact: any, index: number) => (
+            {data.contacts!.map((contact, index) => (
               <div key={index} className="bg-blue-50 border border-blue-300 rounded-md p-3">
                 <div className="flex items-start justify-between">
                   <div>
