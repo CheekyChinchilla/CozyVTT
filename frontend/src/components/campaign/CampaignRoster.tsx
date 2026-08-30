@@ -18,23 +18,7 @@ import CharacterContextMenu from './CharacterContextMenu';
 import CharacterRollPicker from './CharacterRollPicker';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignRole, GameSystem, Character } from '@/types';
-
-interface RosterMember {
-  userId: string;
-  userName: string;
-  userAvatar: string | null;
-  role: CampaignRole;
-  joinedAt: string;
-  characters: {
-    id: string;
-    name: string;
-    tokenImageUrl: string | null;
-    gameSystem: GameSystem | null;
-    userId: string;
-    hp: CharacterHpInfo | null;
-  }[];
-}
+import type { CampaignRole, GameSystem, Character, RosterMember } from '@/types';
 
 export default function CampaignRoster() {
   const { campaign, userRole, characterHpCache, seedCharacterHpCache } = useCampaign();
@@ -62,7 +46,7 @@ export default function CampaignRoster() {
       setRoster(response.roster);
 
       // Seed the HP cache in CampaignContext so MapCanvas can render player HP bars
-      const hpEntries = response.roster.flatMap((m: RosterMember) =>
+      const hpEntries = response.roster.flatMap((m) =>
         m.characters.map((c) => ({ id: c.id, hp: c.hp }))
       );
       seedCharacterHpCache(hpEntries);

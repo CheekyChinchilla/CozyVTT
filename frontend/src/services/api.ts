@@ -46,6 +46,8 @@ import type {
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
+  RosterMember,
+  CampaignMembership,
 } from '@/types';
 
 // ============================================
@@ -476,7 +478,7 @@ class ApiClient {
     return response.data;
   }
 
-  async getCampaignCharacters(campaignId: string): Promise<{ roster: any[] }> {
+  async getCampaignCharacters(campaignId: string): Promise<{ roster: RosterMember[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/characters`);
     return response.data;
   }
@@ -490,7 +492,7 @@ class ApiClient {
     return response.data;
   }
 
-  async acceptInvitation(invitationId: string, characterIds: string[]): Promise<{ message: string; membership: any }> {
+  async acceptInvitation(invitationId: string, characterIds: string[]): Promise<{ message: string; membership: CampaignMembership }> {
     const response = await this.client.post(`/api/invitations/${invitationId}/accept`, { characterIds });
     return response.data;
   }

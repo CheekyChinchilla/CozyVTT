@@ -1,3 +1,4 @@
+import type { CharacterHpInfo } from '@/utils/characterHp';
 // ============================================
 // CozyVTT Frontend Type Definitions
 // Mirrors backend API models (Prisma schema)
@@ -497,7 +498,7 @@ export interface Campaign {
 
 export interface VibeSettings {
   periods: VibePeriod[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface VibePeriod {
@@ -628,7 +629,7 @@ export interface Token {
   controlledBy: string | null;
   rotation: number;
   conditions: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   // Token type system
   type:        TokenType;
   disposition: TokenDisposition | null;
@@ -661,7 +662,30 @@ export interface Annotation {
   type: 'circle' | 'line' | 'rectangle' | 'polygon';
   position: Position;
   color: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+/**
+ * One member of a campaign roster, from `GET /campaigns/:id/characters`.
+ *
+ * The characters here are deliberately not `Character`: the endpoint strips the
+ * `data` sheet and returns a derived `hp` in its place, so that no campaign
+ * member can read another player's sheet off the roster.
+ */
+export interface RosterMember {
+  userId: string;
+  userName: string;
+  userAvatar: string | null;
+  role: CampaignRole;
+  joinedAt: string;
+  characters: {
+    id: string;
+    name: string;
+    tokenImageUrl: string | null;
+    gameSystem: GameSystem | null;
+    userId: string;
+    hp: CharacterHpInfo | null;
+  }[];
 }
 
 // ============================================
@@ -797,10 +821,10 @@ export interface ApiError {
   message: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   message?: string;
   data?: T;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Login
@@ -912,7 +936,7 @@ export interface CreateTokenRequest {
   controlledBy?: string | null;
   rotation?: number;
   conditions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   // Token type system
   type?: TokenType;
   disposition?: TokenDisposition | null;
@@ -932,7 +956,7 @@ export interface UpdateTokenRequest {
   controlledBy?: string | null;
   rotation?: number;
   conditions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   // Token type system
   type?: TokenType;
   disposition?: TokenDisposition | null;
@@ -946,7 +970,7 @@ export interface UpdateTokenRequest {
 // WebSocket Event Types
 // ============================================
 
-export interface WebSocketEvent<T = any> {
+export interface WebSocketEvent<T = unknown> {
   type: string;
   data: T;
   timestamp: string;
