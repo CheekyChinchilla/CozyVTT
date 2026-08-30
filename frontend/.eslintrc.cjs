@@ -53,7 +53,6 @@ module.exports = {
       'src/components/character-sheets/dnd5e/DnD5eCharacterView.tsx',
       'src/components/character-sheets/flexible/FlexibleCharacterSheetEdit.tsx',
       'src/components/character-sheets/flexible/utils/section-helpers.ts',
-      'src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterEditor.tsx',
       'src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterView.tsx',
       'src/components/character/ImportCharacterModal.tsx',
       'src/hooks/__tests__/useInitiativeSync.test.tsx',
