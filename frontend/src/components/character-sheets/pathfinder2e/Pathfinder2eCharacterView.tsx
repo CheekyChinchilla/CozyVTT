@@ -188,6 +188,18 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
                 {data.background}
               </span>
+              {/* Deity and alignment: on the sheet and in the schema, but shown
+                  nowhere in the app until now. */}
+              {data.deity && (
+                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                  {data.deity}
+                </span>
+              )}
+              {data.alignment && (
+                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                  {data.alignment}
+                </span>
+              )}
             </div>
             {data.playerName && (
               <div className="mt-2 text-sm opacity-80">
@@ -605,8 +617,82 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         inventory={data.inventory || []}
         bulk={data.bulk || { current: 0, encumbered: 5, maximum: 10 }}
       />
+
+      {/* Treasure — recorded on the sheet but never shown here before. */}
+      {data.treasure && (
+        <div className="bg-white border border-stone-200 rounded-lg p-3 mt-4">
+          <h4 className="text-sm font-semibold text-stone-700 mb-1">Treasure</h4>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.treasure}</p>
+        </div>
+      )}
     </div>
   );
+
+  /**
+   * Weapon and armour proficiencies, and any conditions currently on the
+   * character. Both are edited on the sheet and neither was shown here, so a
+   * player reading their own character could not see what they were trained in.
+   */
+  const renderProficienciesAndConditions = () => {
+    const weapons = Object.entries(data.proficiencies?.weapons ?? {});
+    const armor = Object.entries(data.proficiencies?.armor ?? {});
+    const conditions = data.conditions ?? [];
+    if (!weapons.length && !armor.length && !conditions.length) return null;
+
+    return (
+      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+          <Shield className="w-5 h-5 mr-2" />
+          Proficiencies &amp; Conditions
+        </h3>
+
+        {conditions.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-stone-700 mb-2">Conditions</h4>
+            <div className="flex flex-wrap gap-2">
+              {conditions.map((condition, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium"
+                >
+                  {condition}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {weapons.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-stone-700 mb-2">Weapons</h4>
+              <div className="space-y-1">
+                {weapons.map(([kind, rank]) => (
+                  <div key={kind} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-stone-700">{kind}</span>
+                    <ProficiencyIndicator rank={rank as ProficiencyRank} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {armor.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-stone-700 mb-2">Armor</h4>
+              <div className="space-y-1">
+                {armor.map(([kind, rank]) => (
+                  <div key={kind} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-stone-700">{kind}</span>
+                    <ProficiencyIndicator rank={rank as ProficiencyRank} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Render feats organized by category
   const renderFeats = () => (
@@ -803,6 +889,28 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           </div>
         )}
 
+        {/* Rituals. A stored ritual may be a bare name or a name with the rank
+            it is cast at — the schema accepts both, so read both. */}
+        {spellcasting.rituals && spellcasting.rituals.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-purple-800 mb-2">Rituals</h4>
+            <div className="space-y-2">
+              {spellcasting.rituals.map((ritual, index) => (
+                <div key={index} className="bg-white border border-purple-200 rounded p-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-purple-800">
+                      {typeof ritual === 'string' ? ritual : ritual.name}
+                    </span>
+                    {typeof ritual !== 'string' && (
+                      <span className="text-xs text-purple-600">Rank {ritual.rank}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Innate Spells */}
         {spellcasting.innateSpells && spellcasting.innateSpells.length > 0 && (
           <div>
@@ -937,6 +1045,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {renderFeats()}
         {renderSpellcasting()}
         {renderInventory()}
+        {renderProficienciesAndConditions()}
         {renderBio()}
       </div>
 
