@@ -61,14 +61,42 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // Determine final gameSystem value
     let finalGameSystem = gameSystem;
 
-    // If creating for a campaign and no gameSystem provided, inherit from campaign
-    if (campaignId && !gameSystem) {
+    // Creating straight into a campaign. The membership has to be checked here
+    // and updated below, because campaign membership is recorded in two places:
+    // `Character.campaignId`, and the `characterIds` array on the member's
+    // `CampaignMembership`. Nearly everything a player sees reads the second —
+    // the roster is built from it, and services/permissions.ts asks it whether
+    // a player may move a token. Writing only the column left a character that
+    // was in the campaign but invisible in it, and whose own owner could not
+    // move its token. POST /:id/assign has always written both; this mirrors it.
+    let membershipToJoin: { characterIds: string[] } | null = null;
+
+    if (campaignId) {
       const campaign = await prisma.campaign.findUnique({
         where: { id: campaignId },
         select: { gameSystem: true },
       });
 
-      if (campaign) {
+      if (!campaign) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Campaign not found',
+        });
+      }
+
+      membershipToJoin = await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { characterIds: true },
+      });
+
+      if (!membershipToJoin) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You must be a member of the campaign to create a character in it',
+        });
+      }
+
+      if (!gameSystem) {
         // Prisma's GameSystem is a string-literal union; cast to the local enum
         // type finalGameSystem was inferred from (identical string values).
         finalGameSystem = campaign.gameSystem as GameSystem | null;
@@ -126,15 +154,29 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // Normalize tokenImageUrl to full path if provided
     const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
 
-    const character = await prisma.character.create({
-      data: {
-        userId,
-        name,
-        data: dataWithIdentity as Prisma.InputJsonValue,
-        tokenImageUrl: normalizedTokenImageUrl,
-        campaignId: campaignId || null,
-        gameSystem: finalGameSystem || null,
-      },
+    // Both halves in one transaction. Written separately, a failure between
+    // them would produce exactly the state this fixes: a character carrying a
+    // campaignId that the campaign itself does not know about.
+    const character = await prisma.$transaction(async (tx) => {
+      const created = await tx.character.create({
+        data: {
+          userId,
+          name,
+          data: dataWithIdentity as Prisma.InputJsonValue,
+          tokenImageUrl: normalizedTokenImageUrl,
+          campaignId: campaignId || null,
+          gameSystem: finalGameSystem || null,
+        },
+      });
+
+      if (campaignId && membershipToJoin && !membershipToJoin.characterIds.includes(created.id)) {
+        await tx.campaignMembership.update({
+          where: { userId_campaignId: { userId, campaignId } },
+          data: { characterIds: [...membershipToJoin.characterIds, created.id] },
+        });
+      }
+
+      return created;
     });
 
     return res.status(201).json({
