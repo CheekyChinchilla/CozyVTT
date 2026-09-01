@@ -11,7 +11,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { Users, Crown, Gamepad2, Eye, Edit, UserPlus, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
+import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import CharacterSheetViewerModal from '../character/CharacterSheetViewerModal';
@@ -221,10 +221,6 @@ export default function CampaignRoster() {
     }
   };
 
-  const handleReassignCharacter = async () => {
-    showToast('Character reassignment is not yet available', 'info');
-  };
-
   const handleRemoveFromCampaign = () => {
     if (!contextMenu || !campaign) return;
     setConfirmRemove(true);
@@ -402,12 +398,11 @@ export default function CampaignRoster() {
               onClick: handleAddTokenToMap,
               visible: userMembership.role === 'DM' && !!currentMap,
             },
-            {
-              icon: UserPlus,
-              label: 'Reassign to Player',
-              onClick: handleReassignCharacter,
-              visible: userMembership.role === 'DM',
-            },
+            // "Reassign to Player" used to sit here. It never did anything —
+            // it popped "not yet available" — and there is no endpoint behind
+            // it either: /characters/:id/assign moves a character between
+            // *campaigns*, not between owners. Better absent than advertised.
+            // It comes back when the endpoint does.
             {
               icon: X,
               label: 'Remove from Campaign',
