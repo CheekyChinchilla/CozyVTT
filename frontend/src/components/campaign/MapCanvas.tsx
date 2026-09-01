@@ -54,6 +54,7 @@ import { createVisionCache, type VisionSource } from './map/vision';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
+import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -2555,13 +2556,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     e.preventDefault();
     if (!campaign?.id || !currentMap || userRole !== 'DM' || !canvasRef.current) return;
 
-    let dragData: { type?: string; characterId?: string; name?: string; imageUrl?: string; userId?: string };
-    try {
-      dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
-    } catch {
-      return;
-    }
-    if (dragData?.type !== 'character-token' || !dragData.imageUrl) return;
+    const dragData = readCharacterTokenDrag(e.dataTransfer.getData('text/plain'));
+    if (!dragData) return;
 
     // Convert screen position to map grid coordinates
     const rect = canvasRef.current.getBoundingClientRect();
@@ -2580,19 +2576,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       : TokenLayer.TOKEN;
 
     try {
-      const result = await api.addToken(campaign.id, currentMap.id, {
-        characterId: dragData.characterId ?? null,
-        name: dragData.name ?? 'Token',
-        imageUrl: dragData.imageUrl,
-        position,
-        size: { width: 1, height: 1 },
-        layer: targetLayer,
-        visible: true,
-        controlledBy: dragData.userId ?? null,
-        // Explicitly mark as player token so TokenRoster categorises it correctly.
-        // Without this, the backend defaults to 'npc'.
-        type: TokenType.PLAYER,
-      });
+      const result = await api.addToken(
+        campaign.id,
+        currentMap.id,
+        characterTokenRequest(dragData, position, targetLayer),
+      );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
     } catch (err) {
