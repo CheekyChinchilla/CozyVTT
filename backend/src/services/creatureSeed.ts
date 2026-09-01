@@ -3,8 +3,8 @@
  * Service that fetches D&D 5e SRD monsters from Open5e API and seeds the
  * CreatureTemplate table. Used by both the CLI script and the API endpoint.
  *
- * SRD content is used under the Open Game License v1.0a.
- * See OGL_ATTRIBUTION.md for details.
+ * SRD 5.1 content is used under CC BY 4.0, and reaches us through Open5e.
+ * See SRD_ATTRIBUTION.md for the notice and why that licence rather than the OGL.
  */
 
 import { PrismaClient } from '@prisma/client';

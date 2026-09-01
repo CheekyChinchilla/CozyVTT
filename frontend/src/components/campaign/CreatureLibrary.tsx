@@ -575,7 +575,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                         )}
                       </Button>
                       <p className="text-[10px] text-stone-gray/40">
-                        SRD content used under the Open Game License v1.0a.
+                        SRD 5.1 content by Wizards of the Coast, used under CC BY 4.0.
+                        Served by Open5e.
                       </p>
                     </div>
                   )}
