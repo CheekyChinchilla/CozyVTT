@@ -1,8 +1,20 @@
 openapi: 3.0.3
 info:
-  title: CozyVTT API
+  title: CozyVTT Backend Route Reference
   description: |
-    RESTful API for CozyVTT — a self-hosted, browser-based Virtual Tabletop platform.
+    The HTTP routes CozyVTT's own web client calls, described for people working
+    on CozyVTT itself.
+
+    ## No stability guarantee
+    This is an internal surface, not a public API. It is **not versioned**, it
+    carries **no compatibility promise**, and any route here may change shape or
+    disappear in a point release without notice or a deprecation period.
+
+    There is also no way to authenticate as a program: the only mechanism is the
+    browser session cookie below. There are no API keys, no bearer tokens and no
+    service accounts, so there is nothing here to build a third-party integration
+    on top of. Treat this document as a map of the current code, useful for
+    working on the server or the client, and nothing more.
 
     ## Authentication
     All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
@@ -18,7 +30,13 @@ info:
 
     ## Rate Limiting
     - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
-    - Authentication endpoints: 5 requests per 15 minutes
+    - Credential endpoints (login, register, reset-password, MFA login verify):
+      5 **failed** requests per 15 minutes. Successful requests are not counted,
+      so getting your password right never moves you towards a lockout.
+    - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
+      or not they succeed. That endpoint answers identically for a known and an
+      unknown address, so successes cannot be skipped without removing the limit
+      on the mail it sends
     - MFA setup verification: 5 attempts per 15 minutes
     - MFA login verification: 5 attempts per 15 minutes (separate limit)
     - Asset uploads: 30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
@@ -1969,6 +1987,12 @@ paths:
         - If `gameSystem` is provided, character data is validated against that
           system's Zod schema.
         - If `gameSystem` is null, no validation occurs (flexible character).
+        - If `campaignId` is provided, the caller must already be a member of
+          that campaign; a non-member gets 403 and nothing is created. The
+          character is added to the caller's membership as well as carrying the
+          `campaignId` column, in one transaction — both are needed, because the
+          campaign roster and the token permission checks read the membership,
+          not the column.
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -2033,6 +2057,12 @@ paths:
                           type: string
                         code:
                           type: string
+        '403':
+          description: >
+            The caller is not a member of the campaign named by `campaignId`.
+            Nothing is created.
+        '404':
+          description: No campaign exists with the id given in `campaignId`
 
   /api/characters/{id}:
     get:
@@ -5327,6 +5357,293 @@ paths:
 # ============================================
 # COMPONENTS
 # ============================================
+
+  # ---------------------------------------------------------------------------
+  # Shared character sheets ("character templates")
+  #
+  # Server-wide starter sheets any signed-in user can copy. Creating, editing and
+  # deleting one requires the `templateEditor` flag on the user, or platform
+  # ADMIN. That check reads the database rather than the session, because
+  # templateEditor is not carried in the session.
+  # ---------------------------------------------------------------------------
+  /api/character-templates:
+    get:
+      tags: [Character Templates]
+      summary: List shared character sheets
+      operationId: listCharacterTemplates
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Templates visible to the caller
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Character Templates]
+      summary: Publish a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: createCharacterTemplate
+      security:
+        - cookieAuth: []
+      responses:
+        '201':
+          description: Template created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/character-templates/{id}:
+    get:
+      tags: [Character Templates]
+      summary: Get one shared character sheet
+      operationId: getCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The template
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Character Templates]
+      summary: Update a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: updateCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Character Templates]
+      summary: Delete a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: deleteCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/characters/templates/{gameSystem}/{templateName}:
+    get:
+      tags: [Characters]
+      summary: Get a blank starter sheet for a game system
+      description: >
+        The factory templates built into the server, as distinct from the
+        user-published sheets under /api/character-templates.
+      operationId: getBuiltInCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: gameSystem
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: templateName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The blank sheet
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/dice-rolls:
+    get:
+      tags: [Campaigns]
+      summary: Roll history for a campaign
+      description: >
+        Newest first. Secret rolls are filtered server-side before anything is
+        sent: a player receives public rolls plus their own secret ones, a DM
+        receives everything. Rolls older than the last history clear are
+        omitted; the rows themselves are kept, so a DM can still audit them.
+      operationId: getCampaignDiceRolls
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: The rolls this caller is entitled to see
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/messages/join-leave:
+    delete:
+      tags: [Campaigns]
+      summary: Clear the old join and leave chat messages
+      description: >
+        DM only. Those notices are no longer written, and nothing is removed on
+        upgrade, so this is how a campaign clears the ones it already has.
+      operationId: clearJoinLeaveMessages
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Messages removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/maps/import-uvtt:
+    post:
+      tags: [Maps]
+      summary: Create a map from a Universal VTT file
+      description: >
+        DM only. Accepts .uvtt, .dd2vtt and .df2vtt, bringing in the image along
+        with its wall segments, doors and lights.
+      operationId: importUvttMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                gridSize:
+                  type: integer
+      responses:
+        '201':
+          description: Map created, with counts of what was imported
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/maps/{id}/export-uvtt:
+    get:
+      tags: [Maps]
+      summary: Export a map as a Universal VTT file
+      description: DM only.
+      operationId: exportUvttMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The .uvtt payload
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/backups/restore:
+    post:
+      tags: [Admin]
+      summary: Restore the instance from a backup archive
+      description: >
+        Platform ADMIN only. Replaces the database and the uploaded files from
+        an archive downloaded earlier. Needs psql present in the backend image.
+      operationId: restoreBackup
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [backup]
+              properties:
+                backup:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Restore completed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Restore failed, or psql is not available in the image
 
 components:
   securitySchemes:
