@@ -71,7 +71,9 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 ### The Campaign Roster
 
-The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. This is a quick-reference during sessions for names, character names, and party composition.
+The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. It is a quick reference during sessions for names, character names and party composition — and it is also how you get a player's character onto the map.
+
+**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves.
 
 **Who's actually here.** A small dot on each person's icon shows whether they're connected right now — green for in session, grey for not. It updates as people arrive and leave, so you can tell at a glance whether the quiet player is thinking or has dropped off. Someone with the campaign open in two tabs stays green until they close the last one.
 
@@ -154,7 +156,11 @@ The **Token Roster** (visible only to you, in the left sidebar) lists all tokens
 
 ### Placing Tokens on the Map
 
-Tokens aren't automatically placed on the map — you drag them from the Token Manager onto the canvas.
+Tokens aren't automatically placed on the map. Where you drag them from depends on what they are:
+
+- **Player characters** — from the **Campaign Roster**, or right-click a character there and choose **Add to Map**.
+- **NPCs and monsters** — from the **Creature Library**, or the **Place on Map** button on a creature.
+- **Anything you built yourself** — from the **Token Manager**.
 
 *GIF pending — Dragging a token from the manager onto the map.*
 
@@ -595,7 +601,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **+ Add** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant carries its token's name, portrait and HP across automatically. Set an initiative value by clicking the number beside a combatant, or use the dice button on a row to roll one. Initiative values are saved on the token, so they survive ending and restarting combat.
+Each combatant carries its token's name, portrait and HP across automatically, but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in chat.
 

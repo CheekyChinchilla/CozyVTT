@@ -253,7 +253,12 @@ Templates you publish are visible to everyone on your instance. You can edit or 
 
 ### Assigning a Character to a Campaign
 
-Characters need to be assigned to a campaign before they show up in that campaign's roster. From the Characters page, click the **Assign** option on any character card and pick the campaign.
+A character has to belong to a campaign before it shows up in that campaign's roster. There are two ways:
+
+- **When you create it** — pick the campaign in the new character dialog. The character joins the roster straight away.
+- **Afterwards** — click **Assign** on any character card on the Characters page and pick the campaign.
+
+You can only choose a campaign you are already a member of.
 
 *GIF pending — Assigning a character to a campaign.*
 
