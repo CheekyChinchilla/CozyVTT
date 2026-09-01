@@ -9,10 +9,11 @@
 2. [Connection Setup](#connection-setup)
 3. [Authentication](#authentication)
 4. [Event Reference](#event-reference)
-5. [Token Movement](#token-movement)
+5. [Token Movement — a worked example](#token-movement--a-worked-example)
 6. [Error Handling](#error-handling)
 7. [Client Examples](#client-examples)
 8. [Testing](#testing)
+9. [Event Inventory](#event-inventory)
 
 ---
 
@@ -182,6 +183,9 @@ Specific events also check role:
 
 ## Event Reference
 
+The connection, authentication and presence events, with their payloads.
+For every other event, see the [Event Inventory](#event-inventory).
+
 ### Connection Events
 
 #### `connected`
@@ -319,7 +323,11 @@ push and would otherwise show everyone offline until somebody moved.
 
 ---
 
-## Token Movement
+## Token Movement — a worked example
+
+The one subsystem documented end to end, kept because the three-event
+start/move/end flow is the pattern the others follow. It is not the only
+subsystem; see the [Event Inventory](#event-inventory) for the full list.
 
 ### Event Flow
 
@@ -898,53 +906,115 @@ io.to(campaignId).emit('event', data);
 
 ---
 
-## Additional Implemented Events
+## Event Inventory
 
-The following events are fully implemented beyond the token movement documented above. See `backend/docs/API_DOCUMENTATION.yaml` (WebSocket comments section) for the complete event reference with payloads.
+Every event the server listens for or emits. **This table is generated** from
+the handlers in `backend/src/websocket/` — do not edit it by hand:
 
-### Dice Rolling
-- `dice.roll` — Client sends `{ expression, isSecret }`. Server evaluates and broadcasts `dice.rolled` (or `dice.rolled.secret` for DM-only rolls) to all campaign members.
-- `dice.clearHistory` — DM only; clears the roll log for all players.
+```bash
+python scripts/websocket-events.py --write     # refresh it
+python scripts/websocket-events.py --check     # fail if it is behind
+```
 
-### Chat
-- `chat.message` — Client sends `{ content, type }`. Server broadcasts to all campaign members with username and timestamp.
+It exists because the hand-written catalogue this replaced fell about half a
+protocol behind: fog, walls, lights and map pings had no entry at all, while
+token movement had two hundred lines. The sections above cover the handshake
+and one subsystem in depth; this covers everything, shallowly.
 
-### Map & Token Management
-- `map.change` — DM switches the active map. Server broadcasts `map.changed` with full map data (filtered per-client for spirit layer).
-- `map.changed` — Server broadcasts updated map data whenever tokens are added, removed, or modified.
+Payload shapes are not generated. For those, read the handler named in the
+right-hand column.
 
-### Wall Segments
-- `wall:add` — Client sends a new wall segment `{ id, x1, y1, x2, y2, type }`. Server adds it to the map and broadcasts to other clients.
-- `wall:remove` — Client sends `{ segmentId }` to remove a wall. Server removes and broadcasts.
-- `wall:bulkAdd` / `wall:bulkRemove` — Batch operations for auto-detect results and polygon tool commits.
+<!-- BEGIN GENERATED EVENTS -->
 
-### Spirit Layer
-- `spirit_layer.toggle` — DM toggles the spirit layer on/off. Broadcasts `spirit_layer.toggled`.
-- `spirit_layer.token.toggle` — DM toggles individual token visibility in the spirit layer. Broadcasts `spirit_layer.token.toggled`.
-- `spirit_layer.style_change` — DM changes the spirit layer style (wispy or custom color). Broadcasts `spirit_layer.style_changed`.
+### Client → server
 
-### Initiative Tracker
-- `initiative.add` / `initiative.remove` / `initiative.set` — Manage combatants. **DM only.**
-- `initiative.roll` — Roll initiative for a token. The **DM** may roll for any token on the map, and doing so adds it to the combatant list if it is not already there. A **player** may roll only for a token whose `controlledBy` is their own user id, and only when that token is already a combatant — a player's roll never adds anyone to the list. Rejected rolls emit `error` with `You can only roll initiative for your own token` or `That token is not in the initiative order yet`.
+| Event | Who may send it | What it does |
+| --- | --- | --- |
+| `atmosphere.audio.set` | DM only | DM queues or stops ambient audio for all players. |
+| `atmosphere.effect.set` | DM only | DM sets a visual particle overlay on the map canvas. |
+| `authenticate` | Any member | — |
+| `character.hp.update` | Any member | — |
+| `chat.message` | Any member | User sends chat message. |
+| `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
+| `dice.roll` | Any member | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
+| `dm:editing` | DM only | — |
+| `fog:operation` | DM only | DM applies a fog operation (reveal/hide cells). |
+| `fog:request_state` | Any member | Any campaign member requests current fog state on (re)join. |
+| `initiative.add` | DM only | DM adds a token to the combatant list. |
+| `initiative.end` | DM only | DM ends combat and clears all state. |
+| `initiative.next` | DM only | DM advances to the next combatant. |
+| `initiative.remove` | DM only | DM removes a token from the combatant list. |
+| `initiative.reorder` | DM only | DM drags combatants into a custom order. |
+| `initiative.request_state` | Any member | Client requests current state on (re)connect. |
+| `initiative.roll` | Any member | roll initiative for a token using a dice expression. |
+| `initiative.set` | DM only | DM manually sets a token's initiative value. |
+| `initiative.start` | DM only | DM begins combat (round 1, first combatant active). |
+| `light:add` | DM only | DM places a single light source. |
+| `light:remove` | DM only | DM removes a light source by id. |
+| `light:update` | DM only | DM updates a light source (position, radius, color, enabled, etc.). |
+| `lights:replace` | DM only | DM bulk-replaces all light sources. |
+| `lights:request` | Any member | Any campaign member requests current light sources on (re)join. |
+| `map.change` | DM only | DM switches to a different map. |
+| `map.ping` | Any member | user points at a location. |
+| `presence.request` | Any member | — |
+| `spirit_layer.style_change` | DM only | DM changes the realm atmosphere style. |
+| `spirit_layer.toggle` | DM only | DM toggles spirit layer visibility for the campaign. |
+| `spirit_layer.token.toggle` | DM only | DM toggles visibility of a specific token. |
+| `token.move` | Any member | — |
+| `token.move.end` | Any member | User finishes dragging (final position) Updates database and broadcasts to campaign |
+| `token.move.start` | Any member | User begins dragging a token Validates permission and broadcasts to campaign |
+| `vibe.update` | DM only | DM changes the current vibe period. |
+| `wall:add` | DM only | DM adds a single wall segment. |
+| `wall:remove` | DM only | DM removes a wall segment by id. |
+| `wall:update` | DM only | DM updates a wall segment (e.g., door open/close). |
+| `walls:replace` | DM only | DM bulk-replaces all wall segments. |
+| `walls:request` | Any member | Any campaign member requests current wall segments on (re)join. |
 
-  **The server decides what is rolled**, from the token's linked character, else its stat block, via `utils/rules/initiative.ts` — which is per-system: D&D 5e uses Dexterity plus the sheet's `initiativeBonus`, Pathfinder 2e uses the stat named by `initiative.usedStat`, Shadowrun 6e uses the character's own initiative dice, and **Call of Cthulhu does not roll at all** (combatants rank in DEX order). The client's `expression` is optional and used only when nothing can be derived; it is ignored otherwise, so a client cannot choose its own initiative dice.
+### Server → client
 
-  The result is persisted to the token and followed by `initiative.state`. `dice.rolled` — attributed to whoever rolled — is emitted **only when dice were actually thrown**, so a Call of Cthulhu initiative produces no dice-log entry.
-- `initiative.reorder` — Reorder combatants manually. **DM only.**
-- `initiative.start` / `initiative.next` / `initiative.end` — Combat lifecycle. **DM only.**
-- `initiative.state` — Server broadcasts the full `CombatState` object after any change.
+| Event | Emitted from |
+| --- | --- |
+| `atmosphere.audio.updated` | `atmosphere.ts` |
+| `atmosphere.effect.updated` | `atmosphere.ts` |
+| `authenticated` | `events.ts` |
+| `character.hp.updated` | `characters.ts` |
+| `chat.message` | `chat.ts` |
+| `chat.system` | `utils.ts` |
+| `connected` | `events.ts` |
+| `dice.historyCleared` | `dice.ts` |
+| `dice.rolled` | `dice.ts` |
+| `dice.rolled.secret` | `dice.ts` |
+| `dm:editing` | `walls.ts` |
+| `fog:cells` | `fog.ts` |
+| `fog:updated` | `fog.ts` |
+| `initiative.state` | `initiative.ts` |
+| `light:added` | `lights.ts` |
+| `light:removed` | `lights.ts` |
+| `light:updated` | `lights.ts` |
+| `lights:replaced` | `lights.ts` |
+| `map.changed` | `maps.ts` |
+| `map.pinged` | `pings.ts` |
+| `pong` | `events.ts` |
+| `presence.state` | `events.ts` |
+| `spirit_layer.style_changed` | `spirit.ts` |
+| `spirit_layer.toggled` | `spirit.ts` |
+| `spirit_layer.token.toggled` | `spirit.ts` |
+| `token.move.start` | `tokens.ts` |
+| `token.moved` | `tokens.ts` |
+| `token:appeared` | `tokens.ts` |
+| `token:disappeared` | `tokens.ts` |
+| `user.joined` | `events.ts` |
+| `user.left` | `events.ts` |
+| `vibe.updated` | `vibe.ts` |
+| `wall:added` | `walls.ts` |
+| `wall:removed` | `walls.ts` |
+| `wall:updated` | `walls.ts` |
+| `walls:replaced` | `walls.ts` |
 
-### Session Lifecycle
-- `session.start` / `session.pause` / `session.end` — DM controls. Broadcasts to all members.
-
-### Atmosphere
-- `atmosphere.effect.set` / `atmosphere.audio.set` — DM sets visual effects or ambient audio.
-- `vibe.update` — DM updates the vibe tracker period.
-
-### Character HP
-- `character.hp.update` — Update a token's HP. Broadcasts `character.hp.updated` to all members.
+<!-- END GENERATED EVENTS -->
 
 ---
+
 
 ## Troubleshooting
 

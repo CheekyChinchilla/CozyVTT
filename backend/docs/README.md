@@ -21,18 +21,23 @@ itself.
 
 ## Working with the spec
 
-### Check it still matches the code
+### Check the docs still match the code
 
-The spec drifts the moment a route is added without a matching entry, which is
-how it came to be missing eleven endpoints. This compares the two directly:
+Both documents drift the moment something is added without a matching entry.
+Two checks, run from the repository root:
 
 ```bash
-cd backend
-python ../scripts/spec-coverage.py
+python scripts/spec-coverage.py       # HTTP routes
+python scripts/websocket-events.py --check   # Socket.io events
 ```
 
-It exits non-zero and names anything routed but undocumented, or documented but
-no longer routed.
+The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
+directions, and `docs/API_REFERENCE.md`, a hand-written guide that is allowed to
+be partial but must not describe routes that do not exist — twelve of those had
+accumulated, all wrong paths rather than removed features.
+
+The second fails when an event exists in the handlers with no line in the
+generated inventory. Refresh it with `--write`.
 
 ### Validate
 
