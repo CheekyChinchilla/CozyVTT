@@ -187,7 +187,7 @@ Click any token on the map to open the **Quick Editor**. From here you can:
 - View and edit the stat block (for NPC tokens with creature template data)
 - **Change the token image** — click the token avatar in the Quick Editor header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
-- Apply or remove conditions. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+- Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
 *Screenshot pending — NPC quick editor popup with image picker.*
 

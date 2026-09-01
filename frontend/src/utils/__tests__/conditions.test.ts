@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CONDITION_ABBREVIATIONS,
+  DND5E_CONDITIONS,
   MAX_CONDITION_BADGES,
   conditionAbbreviation,
 } from '../conditions';
@@ -27,26 +28,27 @@ describe('condition abbreviations', () => {
     expect(new Set(codes).size).toBe(collided.length);
   });
 
-  it('covers the conditions the token editor offers', () => {
-    // Mirrors COMMON_CONDITIONS in NpcQuickEditor.
-    const offered = [
-      'Blinded', 'Charmed', 'Exhausted', 'Frightened', 'Incapacitated', 'Invisible',
-      'Paralyzed', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious',
-    ];
-    for (const condition of offered) {
-      expect(CONDITION_ABBREVIATIONS[condition.toLowerCase()]).toBeDefined();
-    }
+  // These two used to hand-copy the lists out of the editors, which is how the
+  // divergence they were meant to catch got through: the token editor's twelve
+  // are a subset of the sheet's fifteen, so "every offered condition has a code"
+  // held for both while the editors disagreed with each other. They now compare
+  // against the one exported list instead.
+
+  it('has a code for every condition, and no codes for anything else', () => {
+    const listed = DND5E_CONDITIONS.map((c) => c.toLowerCase()).sort();
+    const coded = Object.keys(CONDITION_ABBREVIATIONS).sort();
+    expect(coded).toEqual(listed);
   });
 
-  it('covers the conditions the D&D 5e sheet offers', () => {
-    const offered = [
+  it('offers the complete set of 5e conditions', () => {
+    // Basic Rules, Appendix A. Spelled out rather than derived, so that dropping
+    // one from the export fails here instead of silently narrowing what a DM can
+    // apply — which is exactly what happened to Deafened, Grappled and Petrified.
+    expect([...DND5E_CONDITIONS].sort()).toEqual([
       'Blinded', 'Charmed', 'Deafened', 'Exhausted', 'Frightened', 'Grappled',
       'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned',
       'Prone', 'Restrained', 'Stunned', 'Unconscious',
-    ];
-    for (const condition of offered) {
-      expect(CONDITION_ABBREVIATIONS[condition.toLowerCase()]).toBeDefined();
-    }
+    ].sort());
   });
 
   it('is case- and whitespace-insensitive', () => {

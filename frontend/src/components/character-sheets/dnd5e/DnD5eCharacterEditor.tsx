@@ -31,6 +31,7 @@ import type {
   SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
+import { DND5E_CONDITIONS } from '@/utils/conditions';
 import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
@@ -1171,12 +1172,8 @@ min={1}
     </div>
   );
 
-  // D&D 5e conditions list
-  const conditions = [
-    'Blinded', 'Charmed', 'Deafened', 'Exhausted', 'Frightened', 'Grappled',
-    'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned',
-    'Prone', 'Restrained', 'Stunned', 'Unconscious'
-  ];
+  // The 5e conditions, shared with the token editor so the two cannot drift.
+  const conditions = DND5E_CONDITIONS;
 
   // Render Combat tab
   const renderCombatTab = () => (

@@ -15,6 +15,39 @@
  */
 
 /**
+ * The fifteen conditions of D&D 5e, in the order the rules list them.
+ *
+ * This is the only place the set is written down. It used to be declared twice
+ * — the character sheet offered all fifteen, the token editor a hand-picked
+ * twelve — and the two drifted: a DM could not mark an NPC Deafened, Grappled
+ * or Petrified, though a player character could be. Grappled in particular is
+ * one of the most frequently applied conditions in play.
+ *
+ * Both editors import this list, so the two cannot disagree again. Anything
+ * added here needs an entry in CONDITION_ABBREVIATIONS below; a test checks the
+ * two match exactly, in both directions.
+ *
+ * Rules reference: the Basic Rules, Appendix A "Conditions".
+ */
+export const DND5E_CONDITIONS: readonly string[] = [
+  'Blinded',
+  'Charmed',
+  'Deafened',
+  'Exhausted',
+  'Frightened',
+  'Grappled',
+  'Incapacitated',
+  'Invisible',
+  'Paralyzed',
+  'Petrified',
+  'Poisoned',
+  'Prone',
+  'Restrained',
+  'Stunned',
+  'Unconscious',
+];
+
+/**
  * Two-letter codes, one per 5e condition. Every value here is unique; a test
  * enforces that, since a collision would quietly bring back the original bug.
  */
