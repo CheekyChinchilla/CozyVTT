@@ -24,7 +24,6 @@ _Nothing in progress._
 - **Sound effects** — dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications** — desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
 - **Per-user default dice color** — surface a color in the dice picker so a player's rolls visually stand apart in chat. Needs: pass the color into the dice renderer (`DicePanel`, roll display in chat, socket roll payload metadata), then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
-- **Asset move-between-scopes UI** — the three-scope asset model (GLOBAL / USER / CAMPAIGN) is fully wired in the backend, but there's no UI for moving assets between scopes yet.
 - **Bulk character export as a ZIP** — exporting multiple characters currently downloads each one as a separate file. Bundling them into a single ZIP (e.g. via JSZip) would be tidier. See the multi-character export path in `frontend/src/utils/character-export.ts`.
 - **Merge the hardcoded starter templates into the character template library** — `backend/src/utils/character-templates/` holds four presets per system as source constants, served by `GET /api/characters/templates/:system/:name`, while user-published templates now live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. Note `getTemplatesForGameSystem`, `getAllTemplates` and `getBlankTemplate` in that directory are already dead code with no callers; `getBlankCharacterTemplate` in `validators/game-systems/index.ts` is the one still in use.
 - **Shadowrun 6E character sheet** — the backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
@@ -39,7 +38,7 @@ _Nothing in progress._
 ### Polish / tech debt
 
 - **Saving a flexible character discards every top-level field except
-  `sections`.** `FlexibleCharacterSheetEdit.tsx:97` calls
+  `sections`.** `FlexibleCharacterSheetEdit.tsx:99` calls
   `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than
   spreading what was loaded — so anything else stored alongside is dropped on
   the next save, silently. Reproduced on a test character: two top-level keys
@@ -70,8 +69,7 @@ _Nothing in progress._
 
 - **Map events still die on a reconnect.** `frontend/src/services/socket.ts` keeps
   a listener registry so subscriptions survive the socket being replaced, and the
-  components fixed in 1.2.2 go through it. `MapCanvas.tsx` does not: roughly
-  fifteen subscriptions there (walls, fog, lights, spirit layer, map changes,
+  components fixed in 1.2.2 go through it. `MapCanvas.tsx` does not: twenty subscriptions there (walls, fog, lights, spirit layer, map changes,
   pings, token appear/disappear) still bind straight to `socket.getSocket()`, so
   they are lost when the underlying socket is rebuilt and never re-attached. The
   pairs are symmetric, so nothing leaks — the events simply stop arriving until
@@ -106,7 +104,7 @@ _Nothing in progress._
 
 - **Chat "load more" refetches the same 50 messages.** Two separate faults in one
   path, found while adding roll-history persistence in 1.2.2. The client sends a
-  `before` cursor that `GET /:campaignId/messages` never reads, so scrolling back
+  `before` cursor that `GET /api/campaigns/:campaignId/messages` never reads, so scrolling back
   returns the newest page every time. And that route applies `take` *before*
   filtering `DICE_ROLL` rows out, so a campaign with a lot of rolls returns fewer
   than `limit` chat messages — occasionally none at all, which looks like empty
@@ -128,10 +126,63 @@ _Nothing in progress._
   the same layout bugs. `frontend/src/components/character-sheets/types.ts` holds
   the props contract the extraction would build on.
 
+- **Reassigning a character to a different player.** The roster's right-click
+  menu carried a "Reassign to Player" entry that only ever showed "not yet
+  available"; it was removed on 2026-09-01 rather than left advertising a
+  control that did not exist. There is no endpoint behind it either —
+  `POST /api/characters/:id/assign` moves a character between *campaigns*, not
+  between owners. Building it means a new route (DM only, target must be a
+  member of the same campaign), moving the character between both memberships'
+  `characterIds` as well as changing `userId`, and a player picker in the menu.
+
+- **Call of Cthulhu `pulpTalents` has no UI.** Declared in the type and the
+  backend schema, shown and editable nowhere. It belongs to Pulp Cthulhu, a
+  supplement the app does not otherwise support, so it was left alone when the
+  rest of the CoC sheet was completed on 2026-09-01. Either build it with the
+  rest of Pulp, or drop the field.
+
+- **A D&D 5e sheet records a Player Name it never displays.** The editor writes
+  `playerName`; the read-only view does not read it. The only edit/view gap left
+  in 5e after the 2026-09-01 parity pass, and small enough that it was not worth
+  its own commit at the time.
+
+- **Pathfinder Class DC assumes Intelligence.** When a sheet has no
+  `classDC.keyAttribute` stored, the editor falls back to Intelligence, but the
+  key attribute is class-dependent — Strength for a fighter, Charisma for a
+  sorcerer. Only affects sheets that never set it, and the DM can correct it by
+  hand, so it is a default worth improving rather than a miscalculation.
+
+- **`docs/API_REFERENCE.md` covers 75 of 134 routes.** Deliberate after the
+  2026-09-01 documentation pass: it is a hand-written guide to the endpoints
+  people ask about, and `backend/docs/API_DOCUMENTATION.yaml` is the complete
+  list. `scripts/spec-coverage.py` enforces the split — the spec must be
+  complete, the guide must not invent routes. Worth revisiting only if the guide
+  starts being treated as exhaustive again.
+
+- **`any` in test files.** The burn-down cleared every explicit `any` from
+  production code in both projects; roughly 85 remain across nine test files,
+  which are the only entries left in the two ESLint allowlists. Scoped out of
+  that work deliberately so the diffs stayed readable. The allowlist is the
+  to-do list.
+
+- **The upgrade rehearsal has not been run.** The typing plan's stated
+  acceptance test: build an instance from the 1.2.2 tag, populate it the way a
+  real table would, then deploy the current branch over the same volume without
+  resetting it and confirm everything still loads, edits and saves. Nothing in
+  the work since is expected to break an upgrade — no schema change, no
+  migration — but that expectation is untested.
+
+- **CI reports, it does not block.** `.github/workflows/ci.yml` runs typecheck,
+  lint, tests and build on both projects, but GitHub Actions only reports
+  failures. Making them binding needs branch protection with required status
+  checks on `dev` and `main`, which is a repository setting rather than a file.
+  Worth doing the first time the workflow actually runs.
+
 ---
 
 ## Shipped
 
+- **v1.0.0 — Asset move-between-scopes UI.** Listed as outstanding until 2026-09-01; the “Move to…” section has been in `AssetDetailPanel` since the initial release, reachable from the Asset Library and wired to `PATCH /api/assets/:id/scope`.
 - **2026-08-23 — Global asset manager toggle (admin).** Was listed as outstanding long after it shipped; the pill toggle is in the user table on the admin panel, beside the new Templates one.
 - **2026-04-26 — Per-user theme preferences.** Theme + font picker moved from admin-only to per-user (profile page). Admin theme becomes the public-page / new-user default. Bug fix: themes now persist across logout/login.
 - **2026-04-26 — DM right-click NPC token rolls.** DMs can now right-click an NPC token to roll abilities, saves, skills, attacks, and damage parsed from the stat block. Includes a free-form custom roll fallback for tokens without stat blocks or non-d20 systems. D&D 5e gets full roll math; other systems get the custom roll path.

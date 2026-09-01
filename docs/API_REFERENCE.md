@@ -122,7 +122,7 @@ Authenticate a user and create a session.
   "mfaRequired": true
 }
 ```
-HTTP status: `200 OK` — client must follow up with `POST /api/mfa/verify-login`.
+HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login`.
 
 ---
 
@@ -274,7 +274,7 @@ Create a new campaign. The authenticated user becomes the DM.
 
 ### `GET /api/campaigns/:id`
 
-Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/maps/:id` and `GET /api/characters/:id`.
+Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/campaigns/:campaignId/maps/:id` and `GET /api/characters/:id`.
 
 ---
 

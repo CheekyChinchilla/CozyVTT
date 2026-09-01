@@ -1,5 +1,7 @@
 # RBAC Quick Reference Guide
 
+_Last verified against the code on 2026-09-01._
+
 ## Middleware Cheat Sheet
 
 ### Import Statement
@@ -157,6 +159,30 @@ router.put('/api/characters/:characterId', authenticated, async (req: Authentica
   // ... proceed with update
 });
 ```
+
+---
+
+## Per-user permission flags
+
+Four booleans on `User` gate things the role system does not. None is carried in
+the session, so each is read from the database at the point of use — do not
+assume `req.session` knows about them.
+
+| Flag | Default | What it gates |
+|---|---|---|
+| `globalAssetManager` | `false` | Uploading or managing GLOBAL-scope assets. Checked in `routes/assets.ts` alongside `platformRole === 'ADMIN'`; either is sufficient. |
+| `templateEditor` | `false` | Publishing, editing and deleting shared character sheets (`/api/character-templates`). Checked in `routes/characterTemplates.ts`; platform ADMIN also passes. |
+| `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
+| `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
+
+Two things to get right when adding a check of this kind:
+
+- **Read the flag, do not trust the session.** `templateEditor` and
+  `globalAssetManager` are deliberately not session fields, so a permission
+  change takes effect immediately rather than after the next sign-in.
+- **Branch on `code`, not on the message.** The password-change gate answers with
+  a machine-readable `code`; clients route on that, and changing the wording must
+  not change behaviour.
 
 ---
 

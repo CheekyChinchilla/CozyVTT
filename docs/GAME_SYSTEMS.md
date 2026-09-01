@@ -512,8 +512,9 @@ The router (Step 10) imports exactly one file per system: `…/{system}/{System}
 export interface CharacterSheetProps {
   character: Character;                 // includes character.data (the JSON blob) and character.gameSystem
   mode: 'view' | 'edit';
-  onSave?: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  onSave?: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;   // fired on first edit and after each save
 }
 ```
 
@@ -542,7 +543,7 @@ export const MySystemCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
   const { mode, character, onSave } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
-  const handleSave = async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+  const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) await onSave(data, showToast, tokenImageUrl);
     setCurrentMode('view');
   };
@@ -561,6 +562,25 @@ export const MySystemCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
 
 export default MySystemCharacterSheet;
 ```
+
+**No `any`.** `@typescript-eslint/no-explicit-any` is an error in both projects
+and there are none left in application code. Type the sheet's form state with
+the per-system interface in `frontend/src/types/game-systems/`, which is what
+those files are for. Where a value genuinely is not known, `unknown` plus a
+narrowing check — never `any`.
+
+**The editor and the view must agree on what exists.** Every field the editor
+lets someone fill in has to appear when the sheet is read back, and vice versa.
+This is the single most common defect in the existing sheets: Pathfinder 2e was
+missing six sections from its view — rituals, proficiencies, conditions,
+treasure, deity and alignment — and Call of Cthulhu displayed conditions,
+appearance and Keeper's notes that the editor gave no way to set. Both went
+unnoticed for releases.
+
+Check it mechanically rather than by eye: list the fields the editor writes,
+list the fields the view reads, and diff the two. A field declared in the type
+and the Zod schema but present in neither is also a gap — it means the sheet
+cannot record something the server will happily store.
 
 **Styling.** Use the shared UI primitives and theme tokens so the sheet follows every theme:
 
