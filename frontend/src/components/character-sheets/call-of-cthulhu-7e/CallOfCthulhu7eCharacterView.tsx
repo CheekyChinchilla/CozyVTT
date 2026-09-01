@@ -603,6 +603,35 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         </div>
       )}
 
+      {/* Spells & Mythos.
+          The Cthulhu Mythos rating and the spells an investigator knows are on
+          the official sheet and are among the most consequential things it
+          records — the rating caps maximum Sanity. Neither had anywhere to be
+          shown or set in the app until now. */}
+      {(data.spellsAndMythos?.cthulhuMythos || data.spellsAndMythos?.spells?.length) && (
+        <div className="mt-6 bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-purple-900 mb-3">Spells &amp; Mythos</h3>
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-xs text-purple-700 uppercase">Cthulhu Mythos</span>
+            <span className="text-xl font-bold text-purple-900">
+              {data.spellsAndMythos?.cthulhuMythos ?? 0}%
+            </span>
+          </div>
+          {data.spellsAndMythos?.spells && data.spellsAndMythos.spells.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {data.spellsAndMythos.spells.map((spell, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-purple-200 text-purple-900 rounded-full text-sm font-medium"
+                >
+                  {spell}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Notes */}
       {data.notes && (
         <div className="mt-6 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
