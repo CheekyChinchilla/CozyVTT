@@ -224,6 +224,27 @@ export function useCurrentTurnTokenId(): string | null {
   return useGameStore((s) => (s.combat.active ? s.combat.currentTokenId : null));
 }
 
+/**
+ * What initiative a token is holding, for the map's details panel.
+ *
+ * Three answers, deliberately distinguished so the panel can leave the row out
+ * entirely rather than showing a misleading blank:
+ *   `undefined` — not a combatant; the row should not appear at all
+ *   `null`      — in the turn order but nothing has rolled for it yet
+ *   a number    — its place in the order
+ *
+ * Returns a primitive rather than the combatant object so the identity is
+ * stable: this is read by the map canvas, which must not re-render every time
+ * the server rebroadcasts the whole combat snapshot.
+ */
+export function useTokenInitiative(tokenId: string | null): number | null | undefined {
+  return useGameStore((s) => {
+    if (!tokenId) return undefined;
+    const entry = s.combat.combatants.find((c) => c.tokenId === tokenId);
+    return entry ? entry.initiative : undefined;
+  });
+}
+
 /** The pointed-at token, whichever side is pointing — for the tracker's row tint. */
 export function usePeekTokenId(): string | null {
   return useGameStore((s) => s.peekTokenId);

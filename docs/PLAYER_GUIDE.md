@@ -233,6 +233,12 @@ A creature at **zero hit points** is the exception. It's drawn faded to show it'
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
+### Pointing at a token
+
+Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
+
+You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+
 ### Why parts of the map are dark
 
 Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.

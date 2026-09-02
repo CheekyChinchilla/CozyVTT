@@ -3,12 +3,12 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
@@ -147,6 +147,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [draggedToken, setDraggedToken] = useState<Token | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
+  /** Initiative of the token being pointed at — for the details panel. */
+  const hoverInitiative = useTokenInitiative(hoverToken?.id ?? null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -3411,57 +3413,91 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         // turned on. Same rule the bar on the token itself draws by.
         const hp = visibleTokenHp(hoverToken, characterHpCache, userRole === 'DM');
         const image = tokenImages.get(hoverToken.id);
+        const conditions = hoverToken.conditions ?? [];
+        // `undefined` means "not in the turn order" — the row is left out
+        // rather than shown blank. `null` means it is, but nothing has rolled.
+        const inTurnOrder = hoverInitiative !== undefined;
+
+        /** One labelled row. The labels line up, so the panel reads as a list. */
+        const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+          <div className="flex items-baseline gap-2">
+            <span className="w-[4.75rem] shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
+              {label}
+            </span>
+            <span className="min-w-0 text-sm text-brand-ink">{children}</span>
+          </div>
+        );
+
         return (
-          <div className="absolute bottom-4 left-4 glass-panel px-3 py-2 bg-parchment/90 backdrop-blur-sm max-w-xs">
-            <div className="flex items-start gap-2.5">
-              {/* A bigger look at the art than the map can give at play zoom —
-                  the token on the canvas is often only a few dozen pixels. */}
+          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-sm w-[22rem] max-w-[calc(100%-2rem)] shadow-lg">
+            <div className="flex items-start gap-3.5">
+              {/* Large enough to actually recognise the art. On the map a token
+                  is often only a few dozen pixels at play zoom, which is what
+                  made "token images are hard to see" a real complaint. */}
               {image ? (
                 <img
                   src={image.src}
                   alt=""
-                  className="w-12 h-12 rounded-cozy object-cover border border-warm-amber/40 shrink-0"
+                  className="w-[4.5rem] h-[4.5rem] rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
                 />
               ) : (
                 <div
-                  className="w-12 h-12 rounded-cozy border border-warm-amber/40 shrink-0 flex items-center justify-center text-base font-semibold text-white"
+                  className="w-[4.5rem] h-[4.5rem] rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
                   style={{ backgroundColor: placeholderColor(hoverToken) }}
                   aria-hidden="true"
                 >
                   {(hoverToken.name || '?').charAt(0).toUpperCase()}
                 </div>
               )}
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xs text-brand-ink font-semibold truncate">
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                  <span className="text-sm font-semibold text-brand-ink truncate">
                     {hoverToken.name}
                   </span>
                   <span className="text-xs text-stone-gray font-mono shrink-0">
                     ({hoverCoords.x}, {hoverCoords.y})
                   </span>
                 </div>
-                {hp && (
-                  <div className="mt-0.5 text-xs text-stone-gray font-mono">
-                    {hp.current}/{hp.max}
-                    {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
-                  </div>
-                )}
-                {hoverToken.conditions && hoverToken.conditions.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {hoverToken.conditions.map((condition) => (
-                      <span
-                        key={condition}
-                        className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[10px] font-medium text-brand-ink"
-                      >
-                        {condition}
+
+                <div className="space-y-1">
+                  {hp && (
+                    <Row label="HP">
+                      <span className="font-mono">
+                        {hp.current}/{hp.max}
+                        {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
                       </span>
-                    ))}
-                  </div>
-                )}
+                    </Row>
+                  )}
+
+                  {conditions.length > 0 && (
+                    <Row label="Conditions">
+                      <span className="flex flex-wrap gap-1">
+                        {conditions.map((condition) => (
+                          <span
+                            key={condition}
+                            className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[11px] font-medium text-brand-ink capitalize"
+                          >
+                            {condition}
+                          </span>
+                        ))}
+                      </span>
+                    </Row>
+                  )}
+
+                  {inTurnOrder && (
+                    <Row label="Initiative">
+                      <span className="font-mono">
+                        {hoverInitiative === null ? '—' : hoverInitiative}
+                      </span>
+                    </Row>
+                  )}
+                </div>
+
                 {!canMoveToken(hoverToken) && (
-                  <span className="text-[10px] text-warm-gray">
-                    (Locked)
-                  </span>
+                  <div className="mt-1.5 text-[11px] text-warm-gray italic">
+                    Not yours to move
+                  </div>
                 )}
               </div>
             </div>
