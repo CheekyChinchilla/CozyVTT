@@ -71,9 +71,24 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
             <span className="font-medium text-sm text-ink truncate">
               {userName}
               {isCurrentUser && <span className="ml-1 text-xs opacity-60">(You)</span>}
-              {secret && !isCurrentUser && (
-                <span className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded">
-                  🔒 Secret (DM View)
+              {/* Every secret roll in the list is labelled, whoever is looking.
+                  It used to be marked only on someone *else's* roll — the DM's
+                  audit view — which left your own secret rolls indistinguishable
+                  from open ones now that they appear in the list at all.
+
+                  The wording differs because the two cases mean different
+                  things: yours is hidden from the other players, and the one
+                  you are reading as DM is somebody else's. */}
+              {secret && (
+                <span
+                  className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded"
+                  title={
+                    isCurrentUser
+                      ? 'Hidden from the other players — your DM can still see it'
+                      : 'A player rolled this secretly; you see it as DM'
+                  }
+                >
+                  🔒 {isCurrentUser ? 'Secret' : 'Secret (DM view)'}
                 </span>
               )}
             </span>
