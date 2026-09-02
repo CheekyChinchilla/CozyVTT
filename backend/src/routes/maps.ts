@@ -10,6 +10,7 @@ import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
 import { broadcastToCampaign } from '../websocket/utils';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
+import { validateTokenShapes } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
@@ -808,6 +809,15 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: 'Invalid display mode' });
     }
 
+    // The JSON fields. Hand-checking stopped short of these, so anything at all
+    // could be written into the column and every reader then had to cope — HP
+    // sent in the character-sheet shape stored happily and rendered as
+    // "8/undefined" everywhere. Same schemas the token-template route uses.
+    const shapes = validateTokenShapes(tokenData);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
     // Normalize token imageUrl to full path (optional for placeholder tokens)
     const normalizedTokenImageUrl = tokenData.imageUrl
       ? normalizeAssetUrl(tokenData.imageUrl, 'tokens')
@@ -823,21 +833,21 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
         x: tokenData.position.x,
         y: tokenData.position.y,
       },
-      size: tokenData.size || { width: 1, height: 1 },
+      size: shapes.value.size ?? { width: 1, height: 1 },
       layer,
       visible: tokenData.visible !== undefined ? tokenData.visible : true,
       controlledBy: tokenData.controlledBy || null,
       rotation: tokenData.rotation || 0,
-      conditions: tokenData.conditions || [],
-      metadata: tokenData.metadata || {},
+      conditions: shapes.value.conditions ?? [],
+      metadata: shapes.value.metadata ?? {},
       type: tokenType,
       disposition: disposition,
-      hp: tokenData.hp || null,
+      hp: shapes.value.hp ?? null,
       showHpBar: tokenData.showHpBar !== undefined ? tokenData.showHpBar : false,
       notes: typeof tokenData.notes === 'string' ? tokenData.notes : '',
       initiative: tokenData.initiative !== undefined ? tokenData.initiative : null,
       displayMode: displayMode,
-      statBlock: tokenData.statBlock || null,
+      statBlock: shapes.value.statBlock ?? null,
       creatureTemplateId: tokenData.creatureTemplateId || null,
     };
 
@@ -1000,22 +1010,30 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       }
     }
 
+    // The JSON-valued fields, checked against the same schemas the create route
+    // and the token templates use. Only what the request actually carries is
+    // checked, so a position-only move is unaffected.
+    const shapes = validateTokenShapes(updates);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
     // Build updated token (merge updates with existing)
     const updatedToken: Token = {
       ...existingToken,
       ...(updates.name && { name: updates.name }),
       ...(updates.imageUrl !== undefined && { imageUrl: updates.imageUrl ? (normalizeAssetUrl(updates.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
       ...(updates.position && { position: updates.position }),
-      ...(updates.size && { size: updates.size }),
+      ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
       ...(updates.visible !== undefined && { visible: updates.visible }),
       ...(updates.controlledBy !== undefined && { controlledBy: updates.controlledBy }),
       ...(updates.rotation !== undefined && { rotation: updates.rotation }),
-      ...(updates.conditions && { conditions: updates.conditions }),
-      ...(updates.metadata && { metadata: { ...existingToken.metadata, ...updates.metadata } }),
+      ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
+      ...(shapes.value.metadata && { metadata: { ...existingToken.metadata, ...shapes.value.metadata } }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
-      ...(updates.hp !== undefined && { hp: updates.hp }),
+      ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
       ...(updates.showHpBar !== undefined && { showHpBar: updates.showHpBar }),
       ...(updates.notes !== undefined && { notes: updates.notes }),
       ...(updates.initiative !== undefined && { initiative: updates.initiative }),

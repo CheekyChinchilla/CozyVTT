@@ -255,3 +255,46 @@ export function getTempDirectory(): string {
   const baseDir = process.env.UPLOAD_DIR || 'uploads';
   return path.join(baseDir, 'temp');
 }
+
+/**
+ * Move an uploaded file into the directory its type and scope call for.
+ *
+ * Uploads arrive as multipart, and the asset type is a *field* of the same body
+ * as the file — so it cannot be read until multer has already parsed and written
+ * the file somewhere. Multer's destination callback therefore ran before
+ * anything knew what was being uploaded and fell back to MAP, which is why every
+ * asset, of every type, ended up in `uploads/maps/global/`.
+ *
+ * Nothing was broken by that: the database records wherever the file actually
+ * is, so serving and deleting worked. But the directories described a layout
+ * that never happened, which is misleading to anyone looking through their own
+ * uploads folder.
+ *
+ * Returns the path the file now occupies. If the move fails for any reason the
+ * original path is returned and the upload proceeds from there — a tidier
+ * directory is not worth losing somebody's file over.
+ */
+export async function relocateUpload(
+  currentPath: string,
+  assetType: AssetType,
+  scope: AssetScope,
+  campaignId?: string
+): Promise<string> {
+  try {
+    const targetDir =
+      assetType === 'AVATAR'
+        ? getFilePath('AVATAR', 'GLOBAL')
+        : scope === 'CAMPAIGN' && campaignId
+          ? getFilePath(assetType, scope, campaignId)
+          : getFilePath(assetType, 'GLOBAL');
+
+    const targetPath = path.join(targetDir, path.basename(currentPath));
+    if (path.resolve(targetPath) === path.resolve(currentPath)) return currentPath;
+
+    await ensureDirectory(targetDir);
+    await fs.rename(currentPath, targetPath);
+    return targetPath;
+  } catch {
+    return currentPath;
+  }
+}

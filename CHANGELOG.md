@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Uploaded files are filed by what they are.** Every asset — token art, audio, avatars — was written into the maps folder, because the upload knows what it is only after the file has already been saved. Nothing was broken by it, since CozyVTT records where each file actually is, but anyone looking through their own `uploads/` folder was told something untrue. New uploads go to the right place. **Files you already have are left exactly where they are** and keep working.
+
+### Security
+
+- **A token's hit points, size, conditions and stat block are now checked before they are stored.** The route that places a token on a map validated its name, position and type, then wrote the rest of what it was sent straight into the database — while the near-identical token *template* route had always checked the same fields properly. Nothing CozyVTT itself sends is affected, and there is no way to reach it without already being the campaign's DM, so this is a hardening fix rather than a hole anyone could have walked through. It also closes the way malformed hit points could be stored and then show up as "8/undefined" wherever the token appeared.
+
 - **Pathfinder 2e sheets show the right Armor Class, Class DC and Initiative.** Initiative read **+0** for everyone — a character with Perception +6 showed nothing at all — because the sheet printed a stored number that was never worked out. Armor Class and Class DC had the same problem, and the built-in Level 1 Fighter shipped both one point too high: AC 18 where its own armour and proficiency give 17, and Class DC 17 where they give 16. All three are now worked out from your character rather than read from a stored copy, so they are right on every sheet immediately, with nothing to open or re-save. The starter template's numbers are corrected too, and a test now compares each template against the rules so one cannot ship a wrong number again.
 
 - **Your character keeps the name you gave it.** Picking one of the "(Example)" starter templates quietly replaced it: type "Grimtooth Ashfang", choose the Level 1 Fighter, and the sheet came out headed "Brave Fighter". Worse, the sheet's name is what the character record follows, so the first time you saved, the character was **renamed** — permanently. All three game systems did it (Brave Fighter, Dwarven Defender, Jack Morrison). The name you type now wins.

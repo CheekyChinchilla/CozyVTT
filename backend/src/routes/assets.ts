@@ -7,7 +7,7 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
-import { AssetType, AssetScope, deleteFile } from '../utils/fileUtils';
+import { AssetType, AssetScope, deleteFile, relocateUpload } from '../utils/fileUtils';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
@@ -380,6 +380,20 @@ router.post(
   async (req: UploadRequest, res: Response) => {
     try {
       const userId = req.session.userId!;
+
+      // Multer wrote the file before the asset type was known — it arrives in
+      // the same multipart body — so everything landed under maps/global.
+      // Now that the type and scope are settled, put it where it belongs. See
+      // utils/fileUtils.relocateUpload; a failed move keeps the original path
+      // rather than losing the upload.
+      if (req.file) {
+        req.file.path = await relocateUpload(
+          req.file.path,
+          req.assetType!,
+          req.assetScope!,
+          req.campaignId
+        );
+      }
       const { name, description, tags } = req.body;
       const file = req.file!;
 
