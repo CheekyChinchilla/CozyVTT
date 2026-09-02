@@ -202,7 +202,11 @@ Type directly into the expression input. Supported notation:
 
 **Why my roll showed up in chat:** Dice results are public by default. Everyone can see what you rolled. The DM may occasionally roll secretly — you'll see a "DM rolled secretly" message instead of the actual result.
 
-**Your roll history sticks around.** The arrows at the top of the panel step back through recent rolls, and that list is kept on the server — refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Your own secret rolls stay yours; nobody else's secret rolls ever appear in your history. Only the DM can clear it.
+**Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
+
+**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel hides them; that only changes your own view, and nobody else's rolls are affected either way.
+
+Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
 One thing to know: if the DM has **paused** the session, your rolls are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh.
 
