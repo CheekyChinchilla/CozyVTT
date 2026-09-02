@@ -32,7 +32,7 @@ import type {
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
-import { collectSheetFeatures } from '@/utils/featureEntries';
+import { collectSheetFeatures, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
@@ -137,6 +137,27 @@ const shouldUseWhiteText = (hexColor: string): boolean => {
 };
 
 /**
+ * Settle a sheet's features into one editable list, once, on load.
+ *
+ * Two fields can hold them: `featuresAndTraits`, which the sheet has always
+ * displayed, and `features`, which the built-in templates wrote and nothing
+ * read. Both are folded in here and the orphan dropped, so that from this point
+ * on the form has exactly one list.
+ *
+ * Doing it on load rather than on every render matters twice over. The reader
+ * discards entries with no name — correct for storage, wrong for an editor,
+ * where a row you have just added and not yet typed into is nameless, so a
+ * derived list threw away every new row the moment it appeared. And re-reading
+ * `features` each render would resurrect a template feature the second after it
+ * was deleted.
+ */
+function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
+  const settled = { ...sheet, featuresAndTraits: collectSheetFeatures(sheet) };
+  delete (settled as Record<string, unknown>).features;
+  return settled;
+}
+
+/**
  * DnD5eCharacterEditor - Editable D&D 5e character sheet
  */
 export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
@@ -154,9 +175,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   // Type assertion for D&D 5e character data
   const data = character.data as DnD5eFormData;
 
+
   // Form state - initialize with character data
   const [formData, setFormData] = useState<DnD5eFormData>(() => ({
-    ...data,
+    ...withoutOrphanFeatures(data),
     // Ensure nested objects exist.
     //
     // TODO(typing): `{}` is not a valid container — none of these has its keys,
@@ -191,7 +213,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     proficiencies: (data.proficiencies && !Array.isArray(data.proficiencies))
       ? { armor: '', weapons: '', tools: '', languages: '', ...data.proficiencies }
       : { armor: '', weapons: '', tools: '', languages: '' },
-    featuresAndTraits: data.featuresAndTraits || [],
+    // featuresAndTraits is not defaulted here: the spread above has already
+    // settled it, folding in the template-era `features` field. Re-reading
+    // `data` would throw that away.
     // Same TODO(typing) as the containers above.
     appearance: (data.appearance || {}) as DnD5eAppearance,
     personality: (data.personality || {}) as DnD5ePersonality,
@@ -469,15 +493,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const initiativeModifier = dnd5eInitiativeModifier(formData);
 
   /**
-   * Features as editable rows, whatever shape the stored sheet holds them in.
+   * The feature rows, straight from form state.
    *
-   * A sheet saved before features gained descriptions holds plain strings, and
-   * one made from a built-in template has its features in the separate field
-   * the templates used to write. Both are read here, so opening the sheet shows
-   * everything it has — including the template descriptions, which until now
-   * were stored and never displayed anywhere. Saving writes the single field.
+   * Deliberately not derived: `withoutOrphanFeatures` has already settled both
+   * stored shapes into this one list when the form was created, so what is here
+   * is exactly what the user is editing — including rows they have added and
+   * not yet named. Blank rows are dropped on save, not while typing.
    */
-  const featureRows = useMemo(() => collectSheetFeatures(formData), [formData]);
+  const featureRows = useMemo(
+    () => readFeatureEntriesForEditing(formData.featuresAndTraits),
+    [formData.featuresAndTraits]
+  );
 
   /**
    * Convert a character saved before `initiativeBonus` existed, and keep the

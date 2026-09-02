@@ -78,6 +78,37 @@ export function readFeatureEntries(value: unknown): FeatureEntry[] {
 }
 
 /**
+ * Read one field into entries **for an editor**, keeping rows that have no name.
+ *
+ * `readFeatureEntries` discards nameless entries, which is right for storage and
+ * wrong here: a row the user has just added and not yet typed into has no name
+ * by definition, and dropping it makes the "Add Feature" button appear to do
+ * nothing. Names are left untrimmed for the same reason — trimming as somebody
+ * types would eat the space before every second word.
+ *
+ * Blank rows are removed by `readFeatureEntries` on save, so they never reach
+ * the database.
+ */
+export function readFeatureEntriesForEditing(value: unknown): FeatureEntry[] {
+  if (typeof value === 'string') {
+    return splitTypedList(value).map((name) => ({ name, description: '' }));
+  }
+  if (!Array.isArray(value)) return [];
+
+  return value.map((raw) => {
+    if (typeof raw === 'string') return { name: raw, description: '' };
+    if (raw && typeof raw === 'object') {
+      const record = raw as Record<string, unknown>;
+      return {
+        name: typeof record.name === 'string' ? record.name : '',
+        description: typeof record.description === 'string' ? record.description : '',
+      };
+    }
+    return { name: '', description: '' };
+  });
+}
+
+/**
  * Merge feature lists, keeping the first occurrence of each name.
  *
  * Names are matched case-insensitively after trimming, so a player who typed

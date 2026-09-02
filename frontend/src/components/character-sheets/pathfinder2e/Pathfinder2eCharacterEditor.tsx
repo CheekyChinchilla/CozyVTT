@@ -49,7 +49,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
-import { readFeatureEntries } from '@/utils/featureEntries';
+import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 
 /**
  * The sheet as this editor holds it.
@@ -265,7 +265,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
    * their rules text — in a field nothing read. Both are read here.
    */
   const classFeatureRows = useMemo(
-    () => readFeatureEntries(formData.classFeatures),
+    // For editing, so a row added and not yet named survives to be typed into —
+    // the storage reader drops nameless entries, which made "Add Feature"
+    // look like it did nothing. Blanks are dropped on save.
+    () => readFeatureEntriesForEditing(formData.classFeatures),
     [formData.classFeatures]
   );
 
@@ -698,7 +701,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       // Cast at the boundary: the sheet is saved exactly as the editor holds
       // it, which includes the fields `PF2eCharacterData` does not declare —
       // see PF2eFormData above for which those are and why they survive.
-      const updatedData = { ...formData, themeColor: isCustomColor ? customColorHex : selectedColor.name } as CharacterData;
+      const updatedData = {
+        ...formData,
+        // Drop class-feature rows left blank. The editor keeps them while you
+        // type; storage should not.
+        classFeatures: readFeatureEntries(formData.classFeatures),
+        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+      } as CharacterData;
 
       // Upload token image if a new one was selected
       let newTokenImageUrl: string | undefined = undefined;

@@ -19,10 +19,63 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import {
   readFeatureEntries,
+  readFeatureEntriesForEditing,
   mergeFeatureEntries,
   collectSheetFeatures,
   alreadyMigrated,
 } from '../featureEntries';
+
+describe('readFeatureEntriesForEditing', () => {
+  // The storage reader drops nameless entries. An editor cannot: a row just
+  // added and not yet typed into has no name, and discarding it made the
+  // "Add Feature" button appear to do nothing at all.
+
+  it('keeps a blank row, so a new one can be typed into', () => {
+    expect(readFeatureEntriesForEditing([{ name: '', description: '' }])).toEqual([
+      { name: '', description: '' },
+    ]);
+  });
+
+  it('keeps blank rows alongside real ones, in order', () => {
+    expect(
+      readFeatureEntriesForEditing([
+        { name: 'NakuDama-Amphibious', description: '' },
+        { name: '', description: '' },
+      ])
+    ).toEqual([
+      { name: 'NakuDama-Amphibious', description: '' },
+      { name: '', description: '' },
+    ]);
+  });
+
+  it('does not trim, so a space can be typed between words', () => {
+    // Trimming on every keystroke would eat the space the moment it was typed.
+    expect(readFeatureEntriesForEditing([{ name: 'Frog ', description: '' }])).toEqual([
+      { name: 'Frog ', description: '' },
+    ]);
+  });
+
+  it('keeps a row that has a description but no name yet', () => {
+    expect(readFeatureEntriesForEditing([{ description: 'Typed first.' }])).toEqual([
+      { name: '', description: 'Typed first.' },
+    ]);
+  });
+
+  it('reads the stored shapes the same way the storage reader does', () => {
+    expect(readFeatureEntriesForEditing(['Darkvision'])).toEqual([
+      { name: 'Darkvision', description: '' },
+    ]);
+    expect(readFeatureEntriesForEditing(undefined)).toEqual([]);
+  });
+
+  it('is undone by the storage reader, which drops the blanks again', () => {
+    const editing = readFeatureEntriesForEditing([
+      { name: 'Real', description: '' },
+      { name: '', description: '' },
+    ]);
+    expect(readFeatureEntries(editing)).toEqual([{ name: 'Real', description: '' }]);
+  });
+});
 
 describe('parity with the frontend copy', () => {
   // The migration, the editor and the read-only view all have to agree about
