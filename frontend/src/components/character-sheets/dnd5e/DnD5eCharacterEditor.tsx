@@ -37,7 +37,16 @@ import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
-import { passiveScore } from '@/utils/rules/dnd5e';
+import {
+  passiveScore,
+  dnd5eSpellSaveDC,
+  dnd5eSpellAttackBonus,
+  dnd5eBackfilledSpellSaveDCBonus,
+  dnd5eBackfilledSpellAttackBonus,
+  spellcastingAbilityModifier,
+  exhaustionLevel,
+  exhaustionEffects,
+} from '@/utils/rules/dnd5e';
 import {
   dnd5eInitiativeModifier,
   dnd5eBackfilledInitiativeBonus,
@@ -492,6 +501,15 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    */
   const initiativeModifier = dnd5eInitiativeModifier(formData);
 
+  // Spell save DC and attack bonus, derived the way the rules define them.
+  // Both were hand-typed boxes, which is why the templates could ship DC 8 —
+  // a number no character can legitimately have, since the lowest at level 1
+  // is 10.
+  const exhaustion = exhaustionLevel(formData.exhaustionLevel);
+  const spellAbilityModifier = spellcastingAbilityModifier(formData);
+  const spellSaveDC = dnd5eSpellSaveDC(formData);
+  const spellAttackBonus = dnd5eSpellAttackBonus(formData);
+
   /**
    * The feature rows, straight from form state.
    *
@@ -538,6 +556,62 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.dexterity?.modifier,
     formData.initiativeBonus,
     formData.initiative,
+  ]);
+
+  /**
+   * Keep the stored spell save DC and attack bonus in step with the formulas,
+   * and read an older hand-typed value back into its parts.
+   *
+   * The same arrangement as initiative above, for the same reason: both used to
+   * be typed by hand, so a caster with a Rod of the Pact Keeper had a DC one
+   * higher than the formula gives. Deriving without converting would take that
+   * point away silently. The conversion runs once, only where the adjustment
+   * field is absent.
+   */
+  useEffect(() => {
+    if (!formData.spellcasting) return;
+
+    const dcBackfill = dnd5eBackfilledSpellSaveDCBonus(formData);
+    const attackBackfill = dnd5eBackfilledSpellAttackBonus(formData);
+
+    const withBonuses = {
+      ...formData,
+      spellcasting: {
+        ...formData.spellcasting,
+        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
+        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
+      },
+    };
+
+    const dcTotal = dnd5eSpellSaveDC(withBonuses);
+    const attackTotal = dnd5eSpellAttackBonus(withBonuses);
+
+    const needsChange =
+      dcBackfill !== null ||
+      attackBackfill !== null ||
+      formData.spellcasting.spellSaveDC !== dcTotal ||
+      formData.spellcasting.spellAttackBonus !== attackTotal;
+    if (!needsChange) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      spellcasting: {
+        ...prev.spellcasting,
+        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
+        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
+        spellSaveDC: dcTotal,
+        spellAttackBonus: attackTotal,
+      } as DnD5eSpellcasting,
+    }));
+  }, [
+    formData.proficiencyBonus,
+    formData.level,
+    formData.stats,
+    formData.spellcasting?.ability,
+    formData.spellcasting?.spellSaveDCOtherBonus,
+    formData.spellcasting?.spellAttackOtherBonus,
+    formData.spellcasting?.spellSaveDC,
+    formData.spellcasting?.spellAttackBonus,
   ]);
 
   // Handle token image upload
@@ -1222,7 +1296,12 @@ min={1}
   );
 
   // The 5e conditions, shared with the token editor so the two cannot drift.
-  const conditions = DND5E_CONDITIONS;
+  //
+  // Exhaustion is left out of the checkboxes here because this sheet tracks it
+  // properly, in its six levels, just below. A tick box beside the level picker
+  // would be the same fact recorded twice and free to disagree with itself. The
+  // token editor keeps it in its list, since a token has no level to track.
+  const conditions = DND5E_CONDITIONS.filter((c) => c !== 'Exhausted');
 
   // Render Combat tab
   const renderCombatTab = () => (
@@ -1456,6 +1535,51 @@ min={0}
         </div>
       </div>
 
+      {/* Exhaustion.
+          Basic Rules, Appendix A: six cumulative levels, not something you
+          either have or do not. It used to be one checkbox in the list above,
+          which could not tell disadvantage on ability checks apart from death. */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Exhaustion</h3>
+        <p className="text-xs text-stone-600 mb-3">
+          Six levels, and each one carries every level below it. A long rest with food
+          and drink removes one.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {[0, 1, 2, 3, 4, 5, 6].map((level) => {
+            const active = exhaustion === level;
+            return (
+              <button
+                key={level}
+                onClick={() => updateField('exhaustionLevel', level)}
+                aria-label={level === 0 ? 'No exhaustion' : `Exhaustion level ${level}`}
+                aria-pressed={active}
+                className={`px-3 py-1 rounded-cozy border text-sm transition-all ${
+                  active
+                    ? 'bg-red-700 text-white border-red-800 font-semibold'
+                    : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+                }`}
+              >
+                {level === 0 ? 'None' : level}
+              </button>
+            );
+          })}
+        </div>
+        {exhaustionEffects(exhaustion).length > 0 && (
+          <ul className="text-sm text-stone-700 space-y-0.5">
+            {exhaustionEffects(exhaustion).map((effect, idx) => (
+              <li key={idx} className="flex items-start space-x-2">
+                <span className="text-red-600">•</span>
+                <span>
+                  <span className="text-stone-500 mr-1">{idx + 1}.</span>
+                  {effect}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* Attacks */}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
@@ -1558,8 +1682,23 @@ min={0}
   // Render Spells tab
   const renderSpellsTab = () => (
     <div className="space-y-6">
-      {/* Spellcasting Ability */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Spellcasting class and ability */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Class</label>
+          <input
+            type="text"
+            value={formData.spellcasting?.class || ''}
+            onChange={(e) => updateField('spellcasting.class', e.target.value)}
+            placeholder="e.g., Wizard — leave blank if you don't cast"
+            aria-label="Spellcasting Class"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <p className="mt-1 text-xs text-stone-600">
+            Shown as the heading on your sheet. There was no field for this, so every
+            character read &quot;Wizard Spellcasting&quot; whatever they were.
+          </p>
+        </div>
         <div>
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Ability</label>
           <input
@@ -1567,29 +1706,58 @@ min={0}
             value={formData.spellcasting?.ability || ''}
             onChange={(e) => updateField('spellcasting.ability', e.target.value)}
             placeholder="e.g., Intelligence"
+            aria-label="Spellcasting Ability"
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
-        <div>
+      </div>
+
+      {/* Save DC and attack bonus, both derived. Basic Rules, "Spellcasting
+          Ability": DC is 8 + proficiency + ability modifier, attack is the same
+          without the 8. Each keeps a manual box for the things that change it
+          without changing either input — and they are separate, because a Wand
+          of the War Mage raises the attack roll and not the DC. */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Save DC</label>
+          <div
+            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            title={`8 + proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
+          >
+            {spellSaveDC}
+          </div>
+          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
-min={0}
-            value={formData.spellcasting?.spellSaveDC}
-            onChange={(v: number) => updateField('spellcasting.spellSaveDC', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
-          fallback={0}
+            value={formData.spellcasting?.spellSaveDCOtherBonus}
+            onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
+            aria-label="Spell save DC other bonus"
+            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            fallback={0}
           />
         </div>
-        <div>
+        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Attack Bonus</label>
+          <div
+            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            title={`proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
+          >
+            {formatModifier(spellAttackBonus)}
+          </div>
+          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
-value={formData.spellcasting?.spellAttackBonus}
-            onChange={(v: number) => updateField('spellcasting.spellAttackBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
-          fallback={0}
+            value={formData.spellcasting?.spellAttackOtherBonus}
+            onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
+            aria-label="Spell attack other bonus"
+            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            fallback={0}
           />
         </div>
       </div>
+      <p className="text-xs text-stone-600 -mt-3">
+        Both are worked out from your proficiency bonus and spellcasting ability. Use
+        &quot;Other bonus&quot; for anything else that changes them — a Rod of the Pact
+        Keeper, a Robe of the Archmagi. They are separate because some items raise only one.
+      </p>
 
       {/* Cantrips */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">

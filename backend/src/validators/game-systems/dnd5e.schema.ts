@@ -185,10 +185,21 @@ const spellSchema = z.object({
  * Class and ability recommended but optional for flexibility
  */
 const spellcastingSchema = z.object({
-  class: z.string().min(1).optional(),
-  ability: z.string().min(1).optional(),
+  // Empty is allowed, and means "does not cast". These are free-text boxes on
+  // the sheet, so clearing one writes an empty string — which `min(1)` rejected,
+  // meaning a player who emptied the field could not save their character at all.
+  class: z.string().optional(),
+  ability: z.string().optional(),
   spellSaveDC: z.number().int().min(1).optional(),
   spellAttackBonus: z.number().int().optional(),
+  // Adjustments that are neither the proficiency bonus nor the ability
+  // modifier: a Rod of the Pact Keeper, a Robe of the Archmagi. Kept apart from
+  // each other because items exist that raise one and not the other — a Wand of
+  // the War Mage adds to attack rolls alone. The two totals above are derived
+  // from these and kept for exports, exactly as initiative and passive
+  // Perception already are.
+  spellSaveDCOtherBonus: z.number().int().optional(),
+  spellAttackOtherBonus: z.number().int().optional(),
   cantrips: z.array(z.string()).optional(),
   slots: spellSlotsSchema.optional(),
   spells: z.array(spellSchema).optional(),
@@ -271,6 +282,11 @@ export const dnd5eCharacterDataSchema = z.object({
   speed: z.number().int().min(0).optional(),
   hp: hitPointsSchema.optional(),
   conditions: z.array(z.string()).optional(),
+  // Exhaustion is six cumulative levels, not a condition you either have or do
+  // not (Basic Rules, Appendix A) — level 1 is disadvantage on ability checks,
+  // level 6 is death. It used to be a checkbox in the list above, which could
+  // not tell those apart. 0 means none.
+  exhaustionLevel: z.number().int().min(0).max(6).optional(),
   hitDice: z.array(hitDiceSchema).optional(),
   deathSaves: deathSavesSchema.optional(),
   attacks: z.array(attackSchema).optional(),

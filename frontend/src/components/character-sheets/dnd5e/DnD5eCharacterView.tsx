@@ -32,7 +32,12 @@ import { AttacksList } from './components/AttacksList';
 import { InventoryList } from './components/InventoryList';
 import { SpellcastingBlock } from './components/SpellcastingBlock';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
-import { passiveScore } from '../../../utils/rules/dnd5e';
+import {
+  passiveScore,
+  hasSpellcasting,
+  exhaustionLevel,
+  exhaustionEffects,
+} from '../../../utils/rules/dnd5e';
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
 
@@ -462,6 +467,30 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
         </div>
       )}
 
+      {/* Exhaustion. Six cumulative levels (Basic Rules, Appendix A), so the
+          effects of every level below the current one apply too. */}
+      {exhaustionLevel(data.exhaustionLevel) > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-2">
+            <h3 className="text-lg font-semibold text-stone-800">Exhaustion</h3>
+            <span className="px-2 py-0.5 bg-red-700 text-white text-sm font-bold rounded-full">
+              Level {exhaustionLevel(data.exhaustionLevel)}
+            </span>
+          </div>
+          <ul className="space-y-0.5">
+            {exhaustionEffects(data.exhaustionLevel).map((effect, idx) => (
+              <li key={idx} className="flex items-start space-x-2 text-stone-700">
+                <span className="text-red-600">•</span>
+                <span>
+                  <span className="text-stone-500 mr-1">{idx + 1}.</span>
+                  {effect}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Attacks */}
       {data.attacks && (
         <div>
@@ -479,8 +508,13 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   // Render Spells tab
   const renderSpellsTab = () => (
     <div>
-      {data.spellcasting ? (
-        <SpellcastingBlock spellcasting={data.spellcasting} />
+      {/* `data.spellcasting` is an object on every sheet, including a barbarian's,
+          so testing it for truth showed a spellcasting panel to everybody — and
+          because the templates seeded class "Wizard", a Fighter's sheet read
+          "Wizard Spellcasting". What decides is whether the character actually
+          casts: an ability named, or any cantrip, slot or spell recorded. */}
+      {hasSpellcasting(data) ? (
+        <SpellcastingBlock spellcasting={data.spellcasting!} character={data} />
       ) : (
         <div className="text-center py-12 text-stone-500">
           <Sparkles className="w-12 h-12 mx-auto mb-3 text-stone-500" />

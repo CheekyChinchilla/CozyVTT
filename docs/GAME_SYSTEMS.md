@@ -108,6 +108,18 @@ question, and getting it wrong invents numbers the designers never intended.
   dice-pool systems have neither ability modifiers nor a proficiency bonus, so
   there is nothing to derive and nothing sensible to offer from this data.
 
+**Where a number is derived, give it a manual bonus alongside.** The 5e sheet
+derives initiative, passive Perception, spell save DC and spell attack, and each
+carries an "other bonus" box. Deriving without one is a trap: a feat or an item
+adjusts the total without changing either input, and the player is then left with
+no way to record a character they legitimately have. Spell save DC and spell
+attack get **separate** boxes rather than sharing one, because items exist that
+raise the attack roll and not the DC.
+
+**Do not let the templates seed a derived number.** They shipped spell save DC 8
+and attack +0 — the base with nothing added, which no character can legitimately
+have. The formulas live in `rules/dnd5e.ts` alongside the rest of the 5e maths.
+
 ### Initiative — not every system rolls
 
 The same per-system care applies to initiative, and it is the clearest example of

@@ -183,8 +183,13 @@ export interface DnD5eSpell {
 export interface DnD5eSpellcasting {
   class: string;
   ability: string;
+  /** Derived: 8 + proficiency bonus + ability modifier + spellSaveDCOtherBonus. */
   spellSaveDC: number;
+  /** Derived: proficiency bonus + ability modifier + spellAttackOtherBonus. */
   spellAttackBonus: number;
+  /** Adjustments from items and features; separate, since some raise only one. */
+  spellSaveDCOtherBonus?: number;
+  spellAttackOtherBonus?: number;
   cantrips: string[];
   slots: DnD5eSpellSlots;
   spells: DnD5eSpell[];
@@ -258,6 +263,8 @@ export interface DnD5eCharacterData {
   speed?: number;
   hp?: DnD5eHitPoints;
   conditions?: string[];
+  /** Exhaustion 0-6; six cumulative levels, not a yes/no condition. */
+  exhaustionLevel?: number;
   hitDice?: DnD5eHitDice[];
   deathSaves?: DnD5eDeathSaves;
   attacks?: DnD5eAttack[];

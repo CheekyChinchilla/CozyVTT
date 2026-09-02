@@ -96,10 +96,14 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
     },
     inventory: [],
     spellcasting: {
-      class: 'Wizard',
-      ability: 'Intelligence',
-      spellSaveDC: 8,
-      spellAttackBonus: 0,
+      // Left blank rather than seeded. Every 5e character got class "Wizard"
+      // and ability "Intelligence" — so a Fighter's sheet announced "Wizard
+      // Spellcasting" — and DC 8 with attack +0, which no character can
+      // legitimately have; the lowest legal DC at level 1 is 10. Both numbers
+      // are derived now, and a sheet with nothing filled in shows no
+      // spellcasting panel at all.
+      class: '',
+      ability: '',
       cantrips: [],
       slots: {
         '1': { total: 0, expended: 0 },
@@ -272,10 +276,14 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
       },
     ],
     spellcasting: {
-      class: 'Wizard',
-      ability: 'Intelligence',
-      spellSaveDC: 8,
-      spellAttackBonus: 0,
+      // Left blank rather than seeded. Every 5e character got class "Wizard"
+      // and ability "Intelligence" — so a Fighter's sheet announced "Wizard
+      // Spellcasting" — and DC 8 with attack +0, which no character can
+      // legitimately have; the lowest legal DC at level 1 is 10. Both numbers
+      // are derived now, and a sheet with nothing filled in shows no
+      // spellcasting panel at all.
+      class: '',
+      ability: '',
       cantrips: [],
       slots: {
         '1': { total: 0, expended: 0 },
