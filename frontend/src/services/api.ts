@@ -36,6 +36,7 @@ import type {
   Message,
   DiceRolledEvent,
   Session,
+  SessionSummary,
   CampaignInvitation,
   ApiError,
   SystemStats,
@@ -512,6 +513,12 @@ class ApiClient {
   // ============================================
   // Sessions
   // ============================================
+
+  /** Past sessions and the notes recorded when each ended. Newest first. */
+  async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/sessions`);
+    return response.data;
+  }
 
   async startSession(campaignId: string): Promise<{ message: string; session: Session }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/sessions`);

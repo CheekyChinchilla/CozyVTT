@@ -551,6 +551,20 @@ export interface Session {
   notes: string | null;
 }
 
+/**
+ * A past session as the history list returns it.
+ *
+ * Deliberately without `savedState`: that is a large blob of token positions
+ * kept for resuming a session, and the server does not send it here.
+ */
+export interface SessionSummary {
+  id: string;
+  sessionNumber: number;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string | null;
+}
+
 export interface SessionState {
   sessionId: string;
   savedAt: string;

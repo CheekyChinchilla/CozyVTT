@@ -1838,6 +1838,57 @@ paths:
   # ============================================
 
   /api/campaigns/{campaignId}/sessions:
+    get:
+      tags:
+        - Sessions
+      summary: List past sessions
+      description: >
+        Sessions for the campaign, newest first, with the notes the DM recorded
+        when each one ended. Any campaign member may read them — the notes
+        describe what happened at the table, which is what the session history
+        panel shows a player before the next game.
+
+
+        `savedState` is deliberately not returned: it is a large blob of token
+        positions kept for resuming a session, and nothing reading history needs
+        it. Capped at the 50 most recent sessions.
+      operationId: listSessions
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Sessions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        sessionNumber:
+                          type: integer
+                        startedAt:
+                          type: string
+                          format: date-time
+                        endedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        notes:
+                          type: string
+                          nullable: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Sessions

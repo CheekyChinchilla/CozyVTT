@@ -233,6 +233,12 @@ A creature at **zero hit points** is the exception. It's drawn faded to show it'
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
+### Catching up on last time
+
+The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
+
+If a session shows no notes, your DM simply didn't write any that night.
+
 ### Pointing at a token
 
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.

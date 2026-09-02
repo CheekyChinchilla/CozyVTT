@@ -1214,6 +1214,49 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
 });
 
 /**
+ * GET /api/campaigns/:campaignId/sessions
+ * Past sessions and the notes recorded when each one ended.
+ * Requires: Campaign membership (any role)
+ *
+ * The DM has always been able to write notes when ending a session, and the
+ * dialog said they were kept — but nothing read them back, so they were stored
+ * and invisible. They were never private: the field is labelled "Session Notes"
+ * and asks "What happened this session?", so every member can read them, which
+ * is what a player wanting to remember last time needs.
+ *
+ * `savedState` is deliberately not selected. It is a large blob of token
+ * positions kept for resuming, and nothing reading history needs it.
+ */
+router.get('/:campaignId/sessions', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+
+    const sessions = await prisma.session.findMany({
+      where: { campaignId },
+      orderBy: { sessionNumber: 'desc' },
+      // Bounded: a long-running campaign accumulates these indefinitely, and
+      // nobody scrolls back a hundred sessions in a side panel.
+      take: 50,
+      select: {
+        id: true,
+        sessionNumber: true,
+        startedAt: true,
+        endedAt: true,
+        notes: true,
+      },
+    });
+
+    return res.status(200).json({ sessions });
+  } catch (error) {
+    logger.error('Error fetching sessions', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch sessions',
+    });
+  }
+});
+
+/**
  * POST /api/campaigns/:campaignId/sessions
  * Start a new session
  * Requires: Campaign DM role

@@ -568,6 +568,10 @@ Click **Resume Session** when you're ready to continue.
 
 Click **End Session** when the adventure is done for the night. CozyVTT will save the session state — token positions, chat history, initiative order — so everything is ready for next time.
 
+The dialog also offers a **Session Notes** box. Whatever you write there is kept with that session and shown to **everyone in the campaign** under **Session → Past Sessions**, newest first, with the date and how long you played. It is the recap your players read before the next game, so write it for them rather than as a private reminder — there is nowhere here that hides notes from the table.
+
+Leaving it blank is fine; the session still appears in the list, marked as having no notes.
+
 *Screenshot pending — End session confirmation dialog.*
 
 ### The Chat Panel (DM View)

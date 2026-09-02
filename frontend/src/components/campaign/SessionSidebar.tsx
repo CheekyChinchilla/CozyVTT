@@ -21,6 +21,7 @@ import DiceRoller from './DiceRoller';
 import VibeTracker from './VibeTracker';
 import InitiativeTracker from './InitiativeTracker';
 import SessionControls from './SessionControls';
+import SessionHistory from './SessionHistory';
 import type { ChatMessageBroadcast } from '@/types';
 
 type RailTab = 'chat' | 'dice' | 'initiative' | 'session';
@@ -175,6 +176,8 @@ export default function SessionSidebar() {
           <VibeTracker />
           {/* SessionControls renders nothing for players */}
           <SessionControls />
+          {/* Everyone: the notes the DM wrote when each session ended */}
+          <SessionHistory />
         </div>
       </div>
     </aside>
