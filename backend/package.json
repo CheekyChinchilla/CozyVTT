@@ -17,7 +17,8 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "migrate:characters": "ts-node src/scripts/migrate-characters.ts",
     "validate:characters": "ts-node src/scripts/validate-characters.ts",
-    "migrate:avatar-scope": "ts-node src/scripts/migrate-avatar-scope.ts"
+    "migrate:avatar-scope": "ts-node src/scripts/migrate-avatar-scope.ts",
+    "migrate:sheet-fields": "ts-node src/scripts/migrate-sheet-fields.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

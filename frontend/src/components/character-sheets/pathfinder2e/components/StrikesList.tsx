@@ -9,17 +9,28 @@ import React from 'react';
 import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
 
+/**
+ * A strike, as the schema actually declares it.
+ *
+ * Only `name` is required. Everything else is optional, and this type used to
+ * insist otherwise — which is how a strike without a `proficiencyRank` took the
+ * whole sheet down with "Cannot read properties of undefined (reading
+ * 'bgColor')", and how a missing reach printed "(undefined ft.)". A sheet from
+ * an older version, an import, or a hand edit can be missing any of these, so
+ * the renderer has to cope rather than the type pretending they are always
+ * there.
+ */
 export interface Strike {
   name: string;
-  type: 'melee' | 'ranged';
-  attackBonus: number | null;
-  damageRoll: string;
-  damageType: string;
-  attributeModifier: string;
-  proficiencyRank: ProficiencyRank;
-  itemBonus: number;
-  traits: string[];
-  range: number | null;
+  type?: 'melee' | 'ranged';
+  attackBonus?: number | null;
+  damageRoll?: string;
+  damageType?: string;
+  attributeModifier?: string;
+  proficiencyRank?: ProficiencyRank;
+  itemBonus?: number;
+  traits?: string[];
+  range?: number | null;
   savingThrow?: string;
   notes?: string;
 }
@@ -33,15 +44,15 @@ interface StrikesListProps {
 /**
  * Format attack bonus with sign
  */
-const formatBonus = (bonus: number | null): string => {
-  if (bonus === null) return '—';
+const formatBonus = (bonus: number | null | undefined): string => {
+  if (typeof bonus !== 'number') return '—';
   return bonus >= 0 ? `+${bonus}` : `${bonus}`;
 };
 
 /**
  * Get icon for strike type
  */
-const getStrikeIcon = (type: string, savingThrow?: string) => {
+const getStrikeIcon = (type: string | undefined, savingThrow?: string) => {
   if (savingThrow) return Zap; // Spell attack
   return type === 'melee' ? Sword : Target;
 };
@@ -60,9 +71,12 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
       {strikes.map((strike, index) => {
         const Icon = getStrikeIcon(strike.type, strike.savingThrow);
         const isMelee = strike.type === 'melee';
-        const isClickable = !!onRoll && strike.attackBonus !== null && !strike.savingThrow;
-        const attackExpr = strike.attackBonus !== null
-          ? (strike.attackBonus >= 0 ? `1d20+${strike.attackBonus}` : `1d20${strike.attackBonus}`)
+        // A strike is only rollable once it has a bonus recorded — absent is as
+        // unrollable as null, and used to slip through to produce "1d20+undefined".
+        const bonus = typeof strike.attackBonus === 'number' ? strike.attackBonus : null;
+        const isClickable = !!onRoll && bonus !== null && !strike.savingThrow;
+        const attackExpr = bonus !== null
+          ? (bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`)
           : '';
         const attackPurpose = `${strike.name} Strike`;
 
@@ -85,7 +99,11 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
               <div className="text-right">
                 <div className="text-xs text-stone-500 uppercase tracking-wide">
                   {strike.type}
-                  {strike.range !== null && ` (${strike.range} ft.)`}
+                  {/* `!== null` alone let an absent range through as
+                      "(undefined ft.)". The field is optional on the schema, so
+                      a sheet written by an older version, or converted from one,
+                      simply has no reach recorded. */}
+                  {typeof strike.range === 'number' && ` (${strike.range} ft.)`}
                 </div>
               </div>
             </div>
@@ -109,7 +127,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
               {/* Damage — click separately */}
               <div
                 className={onRoll && strike.damageRoll ? 'cursor-pointer hover:text-red-700' : ''}
-                onClick={onRoll && strike.damageRoll ? (e) => { e.stopPropagation(); onRoll(strike.damageRoll, `${strike.name} Damage`); } : undefined}
+                onClick={onRoll && strike.damageRoll ? (e) => { e.stopPropagation(); onRoll(strike.damageRoll!, `${strike.name} Damage`); } : undefined}
                 title={onRoll && strike.damageRoll ? `Click to roll damage: ${strike.damageRoll}` : undefined}
               >
                 <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">

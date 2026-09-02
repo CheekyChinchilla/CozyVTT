@@ -781,6 +781,26 @@ docker compose logs backend | grep -i migrat
 
 Database migrations run automatically via `prisma migrate deploy` on every startup. Downtime is typically under 30 seconds while containers restart.
 
+> **Back up before you upgrade.** See [Database Backups](#database-backups) — one `pg_dump` command, and back up `backend/uploads/` alongside it.
+
+### One-off data migration for this release
+
+If you have **Pathfinder 2e** characters made from the built-in templates, run
+this once after upgrading so their strikes and class features appear on the
+sheet. It also tidies up D&D 5e sheets, whose features already display without
+it.
+
+```bash
+# See what would change, without writing anything
+docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+
+# Apply
+docker compose exec backend npm run migrate:sheet-fields
+```
+
+Running it twice is harmless. Details in
+[backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).
+
 ### Without Docker
 
 ```bash
