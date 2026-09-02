@@ -175,6 +175,32 @@ assume `req.session` knows about them.
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
 
+## Reading an asset: access follows use
+
+The four asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
+`/audio/:id`, `/avatars/:userId`) decide read access from the asset's **scope**.
+`GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that campaign's members,
+and `USER` by its uploader.
+
+Scope alone is not enough for maps and tokens, because an asset can be *used*
+somewhere its scope does not describe. A DM picking a map out of their own
+library — which the picker offers, listing personal assets with no campaign
+filter — leaves every player at that table 403ing on the battlemap. So
+`routes/assets.ts` funnels both image routes through one `canReadAssetFile`,
+which falls back to `assetUsedInUserCampaign(assetId, userId)`: true when a map
+layer, a token placed on a map, a character, a creature template or a token
+template in one of the caller's campaigns points at that asset.
+
+Three things this deliberately does **not** do:
+
+- **It does not re-scope the asset.** `Asset.scope` carries a single
+  `campaignId`, and one map is commonly shared by several campaigns at once, so
+  promoting it on use would break the others.
+- **It grants read only.** Deleting and editing are decided by their own routes
+  and are unchanged — seeing the battlemap must not mean being able to delete it.
+- **It does not cover audio or avatars.** Those have their own reference paths
+  and were left alone.
+
 Two things to get right when adding a check of this kind:
 
 - **Read the flag, do not trust the session.** `templateEditor` and

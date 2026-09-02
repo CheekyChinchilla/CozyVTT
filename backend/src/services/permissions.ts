@@ -1,5 +1,6 @@
 import { CampaignRole, PlatformRole } from '@prisma/client';
 import { prisma } from '../config/database';
+import { readTokens } from '../utils/prisma-json';
 
 /**
  * Permission Verification Helpers
@@ -265,4 +266,78 @@ export async function canExportCampaign(
   }
 
   return campaign.ownerId === userId;
+}
+
+/**
+ * Check whether something in a campaign this user belongs to uses an asset.
+ *
+ * Access to an image follows its **use**, not only its upload. A DM may pick a
+ * map out of their own asset library — the picker lists personal assets with no
+ * campaign filter — and that map then *is* the campaign's battlemap. Until this
+ * existed, every player got 403 on it and saw "Failed to load map image", and
+ * token art fell back to plain initial circles for the same reason.
+ *
+ * Deliberately not solved by re-scoping the asset to the campaign on use:
+ * `Asset.scope` carries a single campaignId, and one map is commonly shared by
+ * several campaigns at once, so promoting it would break the others.
+ *
+ * This grants READ only. Who may edit or delete an asset is decided elsewhere
+ * and is unchanged — being able to see the battlemap must not mean being able
+ * to delete it.
+ *
+ * The asset id is matched as a substring of the stored URL, which is the shape
+ * everything writes (`/api/assets/maps/<id>`). Ids are UUIDs, so a partial
+ * collision is not a practical concern.
+ */
+export async function assetUsedInUserCampaign(
+  assetId: string,
+  userId: string
+): Promise<boolean> {
+  const memberships = await prisma.campaignMembership.findMany({
+    where: { userId },
+    select: { campaignId: true },
+  });
+  const campaignIds = memberships.map((m) => m.campaignId);
+  if (campaignIds.length === 0) return false;
+
+  // A map's own layers first: that is the common case, and it answers without
+  // reading any JSON.
+  const mapLayer = await prisma.map.findFirst({
+    where: {
+      campaignId: { in: campaignIds },
+      OR: [
+        { imageUrl: { contains: assetId } },
+        { baseLayerUrl: { contains: assetId } },
+        { spiritLayerUrl: { contains: assetId } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (mapLayer) return true;
+
+  const [character, creature, tokenTemplate] = await Promise.all([
+    prisma.character.findFirst({
+      where: { campaignId: { in: campaignIds }, tokenImageUrl: { contains: assetId } },
+      select: { id: true },
+    }),
+    prisma.creatureTemplate.findFirst({
+      where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
+      select: { id: true },
+    }),
+    prisma.tokenTemplate.findFirst({
+      where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
+      select: { id: true },
+    }),
+  ]);
+  if (character || creature || tokenTemplate) return true;
+
+  // Tokens live as JSON on the map, so they cannot be matched by column. Only
+  // the art URL is read, and only once everything cheaper has missed.
+  const maps = await prisma.map.findMany({
+    where: { campaignId: { in: campaignIds } },
+    select: { tokens: true },
+  });
+  return maps.some((map) =>
+    readTokens(map.tokens).some((token) => token?.imageUrl?.includes(assetId))
+  );
 }

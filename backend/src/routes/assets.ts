@@ -8,6 +8,7 @@ import { prisma } from '../config/database';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import { AssetType, AssetScope, deleteFile, relocateUpload } from '../utils/fileUtils';
+import { assetUsedInUserCampaign } from '../services/permissions';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
@@ -44,6 +45,43 @@ const uploadLimiter = rateLimit({
  */
 function normalizePath(filePath: string): string {
   return path.resolve(filePath.replace(/\\/g, '/'));
+}
+
+/**
+ * Whether this request may read an asset's bytes.
+ *
+ * The map and token routes asked this in identical, separately-written blocks,
+ * and neither allowed for an asset being *used* by a campaign rather than
+ * uploaded into one — which is how a DM's own map, picked from their personal
+ * library, 403'd for every player at the table. One place now, so the two
+ * cannot answer differently again.
+ *
+ * Read only. Editing and deleting are decided by their own routes and are
+ * untouched by this.
+ */
+async function canReadAssetFile(
+  asset: { id: string; scope: string; uploadedById: string | null; campaignId: string | null },
+  req: AuthenticatedRequest
+): Promise<boolean> {
+  const userId = req.session.userId!;
+  if (req.session.platformRole === 'ADMIN') return true;
+
+  if (asset.scope === 'USER') {
+    if (asset.uploadedById === userId) return true;
+    return assetUsedInUserCampaign(asset.id, userId);
+  }
+
+  if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
+    const membership = await prisma.campaignMembership.findUnique({
+      where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
+    });
+    if (membership) return true;
+    // Scoped to one campaign, but a map in another campaign may point at it.
+    return assetUsedInUserCampaign(asset.id, userId);
+  }
+
+  // GLOBAL, or a campaign asset with no campaign recorded — as before.
+  return true;
 }
 
 /**
@@ -732,7 +770,6 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
 router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.session.userId!;
 
     const asset = await prisma.asset.findUnique({
       where: { id, type: 'MAP' },
@@ -746,17 +783,8 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Check access permissions
-    const isAdminMap = req.session.platformRole === 'ADMIN';
-    if (asset.scope === 'USER' && asset.uploadedById !== userId && !isAdminMap) {
+    if (!(await canReadAssetFile(asset, req))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
-    }
-    if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isAdminMap) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
-      });
-      if (!membership) {
-        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
-      }
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -788,7 +816,6 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
 router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.session.userId!;
 
     const asset = await prisma.asset.findUnique({
       where: { id, type: 'TOKEN' },
@@ -802,17 +829,8 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
     }
 
     // Check access permissions
-    const isAdminToken = req.session.platformRole === 'ADMIN';
-    if (asset.scope === 'USER' && asset.uploadedById !== userId && !isAdminToken) {
+    if (!(await canReadAssetFile(asset, req))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
-    }
-    if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isAdminToken) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
-      });
-      if (!membership) {
-        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
-      }
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
