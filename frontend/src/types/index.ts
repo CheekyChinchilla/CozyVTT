@@ -552,6 +552,25 @@ export interface Session {
 }
 
 /**
+ * One of the caller's own notes, as the list returns it.
+ *
+ * No `content`: a note runs to tens of thousands of characters and the list
+ * would otherwise move megabytes every time the panel opened. The body arrives
+ * from `getNote`, one note at a time.
+ */
+export interface PersonalNoteSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A note with its Markdown source. */
+export interface PersonalNote extends PersonalNoteSummary {
+  content: string;
+}
+
+/**
  * A past session as the history list returns it.
  *
  * Deliberately without `savedState`: that is a large blob of token positions

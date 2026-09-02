@@ -37,6 +37,8 @@ import type {
   DiceRolledEvent,
   Session,
   SessionSummary,
+  PersonalNote,
+  PersonalNoteSummary,
   CampaignInvitation,
   ApiError,
   SystemStats,
@@ -513,6 +515,48 @@ class ApiClient {
   // ============================================
   // Sessions
   // ============================================
+
+  // ============================================
+  // Personal notes
+  //
+  // Private to the signed-in user; the server scopes every one of these by the
+  // session's own id, so there is no user parameter to pass or to get wrong.
+  // ============================================
+
+  /** The caller's notes for a campaign, newest first. Titles only, no bodies. */
+  async listNotes(campaignId: string): Promise<{ notes: PersonalNoteSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/notes`);
+    return response.data;
+  }
+
+  /** One note, with its Markdown source. */
+  async getNote(campaignId: string, noteId: string): Promise<{ note: PersonalNote }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  async createNote(
+    campaignId: string,
+    title: string,
+    content = ''
+  ): Promise<{ note: PersonalNote }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/notes`, { title, content });
+    return response.data;
+  }
+
+  async updateNote(
+    campaignId: string,
+    noteId: string,
+    patch: { title?: string; content?: string }
+  ): Promise<{ note: PersonalNote }> {
+    const response = await this.client.put(`/api/campaigns/${campaignId}/notes/${noteId}`, patch);
+    return response.data;
+  }
+
+  async deleteNote(campaignId: string, noteId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
 
   /** Past sessions and the notes recorded when each ended. Newest first. */
   async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {

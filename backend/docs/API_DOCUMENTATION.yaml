@@ -1834,6 +1834,226 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   # ============================================
+  # PERSONAL NOTES
+  #
+  # Private to the signed-in user. Every route scopes its query by the session's
+  # own user id as well as the campaign, never by an id from the request, and a
+  # note belonging to somebody else answers 404 rather than 403 — a 403 would
+  # confirm the id exists. The DM has no access to a player's notes.
+  # ============================================
+
+  /api/campaigns/{campaignId}/notes:
+    get:
+      tags:
+        - Notes
+      summary: List your own notes
+      description: >
+        The caller's notes for this campaign, most recently edited first.
+        **Titles only** — `content` is deliberately not returned. A note may run
+        to 100,000 characters, and a list carrying every body would move
+        megabytes each time the panel opened; fetch one note to read it.
+      operationId: listPersonalNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Your notes, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonalNoteSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Notes
+      summary: Create a note
+      description: >
+        Starts a note. `content` may be omitted — notes are usually created
+        empty and written into afterwards. Refused once you hold 200 notes in
+        this campaign.
+      operationId: createPersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  maxLength: 120
+                content:
+                  type: string
+                  maxLength: 100000
+                  description: Markdown source.
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '400':
+          description: Invalid title or content, or the per-campaign limit reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/notes/{noteId}:
+    get:
+      tags:
+        - Notes
+      summary: Read one of your notes
+      description: >
+        The note with its Markdown source. Answers 404 for a note that is not
+        yours — including to the campaign's DM — rather than 403, so the
+        response does not confirm that the id exists.
+      operationId: getPersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags:
+        - Notes
+      summary: Rename a note, replace its body, or both
+      operationId: updatePersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: At least one of the two must be present.
+              properties:
+                title:
+                  type: string
+                  maxLength: 120
+                content:
+                  type: string
+                  maxLength: 100000
+      responses:
+        '200':
+          description: The updated note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '400':
+          description: Invalid values, or a body that changes nothing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags:
+        - Notes
+      summary: Delete a note
+      operationId: deletePersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================
   # SESSIONS
   # ============================================
 
@@ -5985,6 +6205,36 @@ components:
         joinedAt:
           type: string
           format: date-time
+
+    PersonalNoteSummary:
+      type: object
+      description: >
+        A note in a listing. Carries no `content` on purpose — see the list
+        endpoint.
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PersonalNote:
+      allOf:
+        - $ref: '#/components/schemas/PersonalNoteSummary'
+        - type: object
+          properties:
+            content:
+              type: string
+              description: >
+                Markdown source, stored exactly as typed. Rendered on the client
+                with raw HTML disabled, so markup in a note is shown as text
+                rather than executed.
 
     Session:
       type: object

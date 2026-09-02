@@ -53,11 +53,19 @@ npm run prisma:studio
 
 Migration files are located in `backend/prisma/migrations/`. Each migration is stored in a timestamped folder with SQL files.
 
-Current migrations:
+`backend/prisma/migrations/` is the authoritative list — the folder names are in
+order and `npx prisma migrate status` tells you what a given database has
+applied. The ones below are called out because they are the ones people ask
+about; the list is not exhaustive.
+
 - `20260211040616_init` - Initial database schema
 - `20260211043730_add_system_settings` - System settings table for setup wizard
 - `20260215000000_add_password_reset` - Password reset tokens
 - `20260220041038_add_game_system_support` - Game system support for characters
+- `20260902204427_add_personal_notes` - `PersonalNote` table for per-user
+  Markdown notes. Purely additive: one `CREATE TABLE` with two foreign keys and
+  an index, and no `ALTER` on any existing table, so upgrading cannot touch
+  data you already have. New installs and upgrades both start with it empty.
 
 ## Data migrations (one-off scripts)
 

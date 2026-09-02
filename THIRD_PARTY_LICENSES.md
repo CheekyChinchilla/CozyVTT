@@ -60,6 +60,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
 | [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |
 | [Framer Motion](https://www.framer.com/motion/) | Animations | MIT |
+| [react-markdown](https://github.com/remarkjs/react-markdown) | Renders personal notes written in Markdown | MIT |
 | [Express](https://expressjs.com/) | Backend HTTP framework | MIT |
 | [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |

@@ -237,6 +237,18 @@ A creature at **zero hit points** is the exception. It's drawn faded to show it'
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
+## Your Own Notes
+
+The **Notes** tab is yours alone. Keep as many notes as you like for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
+
+**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
+
+**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
+
+Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
+
+A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
+
 ### Catching up on last time
 
 The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.

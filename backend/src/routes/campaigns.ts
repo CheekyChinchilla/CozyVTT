@@ -12,6 +12,11 @@ import { GameSystem } from '../game-systems';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema } from '../validators/campaigns';
+import {
+  CreatePersonalNoteSchema,
+  UpdatePersonalNoteSchema,
+  MAX_NOTES_PER_CAMPAIGN,
+} from '../validators/personalNotes';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -1210,6 +1215,179 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
       error: 'Internal Server Error',
       message: 'Failed to fetch dice rolls',
     });
+  }
+});
+
+// ============================================
+// PERSONAL NOTES
+//
+// A player's own notes, in Markdown. Private to whoever wrote them — the DM
+// included. `Session.notes` is the shared recap; this is not that.
+//
+// SECURITY: every query below is scoped by `req.session.userId` as well as the
+// campaign, and never by an id taken from the request. A note that is not the
+// caller's answers **404 rather than 403**, deliberately: 403 would confirm the
+// id exists, which is itself a disclosure to someone with no business knowing.
+// ============================================
+
+/**
+ * GET /api/campaigns/:campaignId/notes
+ * The caller's own notes for this campaign, most recently edited first.
+ * Requires: Campaign membership (any role)
+ *
+ * Titles only. A note runs to tens of thousands of characters, and a list that
+ * shipped every body would move megabytes each time the panel opened; the body
+ * is fetched when a note is actually opened.
+ */
+router.get('/:campaignId/notes', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const notes = await prisma.personalNote.findMany({
+      where: { campaignId: req.params.campaignId, userId: req.session.userId! },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, title: true, createdAt: true, updatedAt: true },
+    });
+    return res.status(200).json({ notes });
+  } catch (error) {
+    logger.error('Error fetching personal notes', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch notes' });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/notes
+ * Start a new note. Requires: Campaign membership (any role)
+ */
+router.post('/:campaignId/notes', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = CreatePersonalNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid note',
+      });
+    }
+
+    const { campaignId } = req.params;
+    const userId = req.session.userId!;
+
+    const existing = await prisma.personalNote.count({ where: { campaignId, userId } });
+    if (existing >= MAX_NOTES_PER_CAMPAIGN) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `You already have ${MAX_NOTES_PER_CAMPAIGN} notes in this campaign. Delete one to make room.`,
+      });
+    }
+
+    const note = await prisma.personalNote.create({
+      data: {
+        campaignId,
+        userId,
+        title: parsed.data.title,
+        content: parsed.data.content ?? '',
+      },
+    });
+
+    return res.status(201).json({ note });
+  } catch (error) {
+    logger.error('Error creating personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create note' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/notes/:noteId
+ * One note, body included. Requires: Campaign membership, and authorship.
+ */
+router.get('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const note = await prisma.personalNote.findFirst({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+    });
+
+    if (!note) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    return res.status(200).json({ note });
+  } catch (error) {
+    logger.error('Error fetching personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch note' });
+  }
+});
+
+/**
+ * PUT /api/campaigns/:campaignId/notes/:noteId
+ * Rename a note, replace its body, or both.
+ * Requires: Campaign membership, and authorship.
+ */
+router.put('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = UpdatePersonalNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid note',
+      });
+    }
+
+    // Scoped lookup first: the id used in the update below is one this caller
+    // has already been proven to own, rather than one taken from the request.
+    const owned = await prisma.personalNote.findFirst({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+      select: { id: true },
+    });
+
+    if (!owned) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    const note = await prisma.personalNote.update({
+      where: { id: owned.id },
+      data: {
+        ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+        ...(parsed.data.content !== undefined ? { content: parsed.data.content } : {}),
+      },
+    });
+
+    return res.status(200).json({ note });
+  } catch (error) {
+    logger.error('Error updating personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update note' });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId/notes/:noteId
+ * Requires: Campaign membership, and authorship.
+ */
+router.delete('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // deleteMany rather than delete: the whole ownership scope goes into the
+    // one statement, so there is no window between checking and deleting.
+    const { count } = await prisma.personalNote.deleteMany({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+    });
+
+    if (count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    return res.status(200).json({ message: 'Note deleted' });
+  } catch (error) {
+    logger.error('Error deleting personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete note' });
   }
 });
 
