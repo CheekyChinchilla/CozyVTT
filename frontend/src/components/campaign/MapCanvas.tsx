@@ -51,6 +51,7 @@ import {
   type Viewport,
 } from './map/layers';
 import { createVisionCache, type VisionSource } from './map/vision';
+import { pickTokenAt, pickMovableTokenAt, blockingTokensAt } from './map/tokenHitTest';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
@@ -1740,29 +1741,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const getTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
-
-      // Check tokens in reverse order (top to bottom in z-order)
-      for (let i = tokens.length - 1; i >= 0; i--) {
-        const token = tokens[i];
-        if (!token.visible) continue;
-
-        const tokenX = token.position.x;
-        const tokenY = token.position.y;
-        const tokenWidth = token.size.width;
-        const tokenHeight = token.size.height;
-
-        // Check if click is within token bounds
-        if (
-          gridX >= tokenX &&
-          gridX < tokenX + tokenWidth &&
-          gridY >= tokenY &&
-          gridY < tokenY + tokenHeight
-        ) {
-          return token;
-        }
-      }
-
-      return null;
+      return pickTokenAt(tokens, gridX, gridY);
     },
     [tokens, currentMap]
   );
@@ -1800,6 +1779,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return false;
     },
     [campaign, userRole, user?.id]
+  );
+
+  /**
+   * The topmost token on a cell that this user is allowed to move.
+   *
+   * Distinct from `getTokenAtPosition`, which answers "what is drawn here" and
+   * is what hovering and the context menu want. Picking a token up has to look
+   * further down the stack: an NPC sharing the square is drawn on top of it, and
+   * stopping at that NPC left a player unable to pick up their own token at all.
+   */
+  const getMovableTokenAtPosition = useCallback(
+    (gridX: number, gridY: number): Token | null => {
+      if (!currentMap) return null;
+      return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken);
+    },
+    [tokens, currentMap, canMoveToken]
   );
 
   // ============================================
@@ -2137,6 +2132,36 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
       const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
 
+      // Two creatures do not share a square. The Basic Rules are blunt about it
+      // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+      // friend or an enemy, you can't willingly end your move in its space."
+      // A token at zero hit points is treated as no longer holding its space,
+      // so a body can be stood on — that part is a house rule, not something
+      // the rulebook spells out.
+      //
+      // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
+      // swarm, scenery being arranged — is ordinary DM work, and refusing it
+      // would be an obstacle rather than a rule.
+      //
+      // Checked here on the client and nowhere else, deliberately: see
+      // `blockingTokensAt`, which explains why enforcing this server-side would
+      // turn a refused move into a way to find hidden creatures.
+      if (userRole !== 'DM') {
+        const blockedBy = blockingTokensAt(
+          tokens,
+          draggedToken,
+          { x: Math.floor(finalX), y: Math.floor(finalY) },
+          characterHpCache
+        );
+        if (blockedBy.length > 0) {
+          showToast(`${blockedBy[0].name} is already standing there.`, 'info');
+          setDraggedToken(null);
+          setDragOffset(null);
+          markDirty('tokens');
+          return;
+        }
+      }
+
       // Emit token.move.end event
       if (canEmit() && currentMap.id) {
         const event: TokenMoveEndEvent = {
@@ -2163,11 +2188,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
-    // Check if clicked on a token to pick it up
-    const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
-    console.log('🔍 Token at click position:', token?.name || 'none');
+    // Check if clicked on a token to pick it up.
+    //
+    // Deliberately looks past tokens this user cannot move rather than stopping
+    // at whatever is drawn on top: a player standing on the same square as an
+    // NPC could otherwise never pick their own token up again.
+    const token = getMovableTokenAtPosition(gridCoords.x, gridCoords.y);
+    console.log('🔍 Movable token at click position:', token?.name || 'none');
 
-    if (token && canMoveToken(token)) {
+    if (token) {
       // Pick up token — disable ruler if it was active
       if (showRuler) {
         setShowRuler(false);

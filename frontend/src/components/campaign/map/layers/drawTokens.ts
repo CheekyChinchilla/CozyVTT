@@ -12,6 +12,10 @@ import type { CharacterHpInfo } from '@/utils/characterHp';
 import type { TokenAnimation, Viewport } from './types';
 import { gridYToTopPx, gridYToFogRow, gridXToFogCol, fogCellIndex } from '../coords';
 import { conditionAbbreviation, MAX_CONDITION_BADGES } from '@/utils/conditions';
+import { isTokenDowned } from '../tokenHitTest';
+
+/** How much of its opacity a token at zero hit points keeps. */
+export const DOWNED_TOKEN_ALPHA = 0.45;
 
 export interface TokenDrawState {
   tokens: readonly Token[];
@@ -189,6 +193,14 @@ export function drawTokens(
     // Spirit tokens seen by DM get reduced alpha so they don't overwhelm material tokens
     if (isDM && token.layer === TokenLayer.SPIRIT) {
       ctx.globalAlpha = state.dmViewBothPlanes ? 0.80 : 1.0;
+    }
+    // A token at zero hit points is drawn faded. It still marks where the body
+    // fell, but reads as scenery rather than a combatant — which matches what
+    // movement allows, since a downed token no longer holds its square.
+    // Multiplied in rather than assigned, so a hidden or spirit-layer token
+    // keeps its own reduction as well.
+    if (isTokenDowned(token, state.characterHpCache)) {
+      ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
 
     if (tokenImg) {

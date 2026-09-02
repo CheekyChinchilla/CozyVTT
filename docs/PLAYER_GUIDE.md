@@ -225,6 +225,14 @@ Your movement is visible to everyone in real time — your party can watch you c
 
 If your token is missing or in the wrong place, just let your DM know in chat — they can adjust it.
 
+### Two creatures can't stand in the same square
+
+Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
+
+A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight.
+
+If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
+
 ### Why parts of the map are dark
 
 Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
