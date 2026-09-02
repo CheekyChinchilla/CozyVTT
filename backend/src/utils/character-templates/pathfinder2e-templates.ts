@@ -179,7 +179,9 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       weaknesses: [],
     },
     armorClass: {
-      total: 18,
+      // 10 + Dex 1 (capped at 2) + trained 3 + scale mail 3. Was 18, which did
+      // not follow from the components recorded alongside it.
+      total: 17,
       proficiencyRank: 'trained',
       capDex: 2,
       itemBonus: 3,
@@ -197,7 +199,8 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       senses: ['Darkvision'],
     },
     classDC: {
-      total: 17,
+      // 10 + trained 3 + Strength 3. Was 17.
+      total: 16,
       keyAttribute: 'str',
       proficiencyRank: 'trained',
     },

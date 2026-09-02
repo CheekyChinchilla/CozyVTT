@@ -19,6 +19,7 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
+import { pf2eArmorClass, pf2eClassDC } from '../../rules/pathfinder2e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -67,6 +68,32 @@ describe('built-in templates match their schema', () => {
           expect(result.success).toBe(true);
         });
       }
+    });
+  }
+});
+
+/**
+ * A template must not ship a derived total that contradicts the components it
+ * stores alongside it.
+ *
+ * The Level 1 Fighter shipped Armor Class 18 and Class DC 17, each one higher
+ * than its own recorded proficiency rank, item bonus and attribute give. The
+ * read-only sheet printed the stored number, so those were what a player saw.
+ */
+describe('Pathfinder 2e templates agree with the rules maths', () => {
+  for (const template of getTemplatesForGameSystem(GameSystem.PATHFINDER_2E)) {
+    const data = template.data as Record<string, unknown>;
+
+    it(`${template.name} stores the Armor Class its own components give`, () => {
+      const stored = (data.armorClass as { total?: number } | undefined)?.total;
+      if (stored === undefined) return;
+      expect(stored).toBe(pf2eArmorClass(data));
+    });
+
+    it(`${template.name} stores the Class DC its own components give`, () => {
+      const stored = (data.classDC as { total?: number } | undefined)?.total;
+      if (stored === undefined) return;
+      expect(stored).toBe(pf2eClassDC(data));
     });
   }
 });

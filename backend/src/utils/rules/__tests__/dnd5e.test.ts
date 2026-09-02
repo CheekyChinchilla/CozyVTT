@@ -153,6 +153,20 @@ describe('parity with the frontend copy', () => {
     expect(backendCopy).toBe(frontendCopy);
   });
 
+  // Same arrangement for the Pathfinder 2e maths, which the read-only sheet, the
+  // editor and the template checks all read. Drift would let a template ship an
+  // Armor Class the sheet then disagreed with — which is the bug it was added
+  // for.
+  it('rules/pathfinder2e.ts is byte-for-byte identical to the frontend copy', () => {
+    const backendCopy = readFileSync(path.resolve(__dirname, '../pathfinder2e.ts'), 'utf8');
+    const frontendCopy = readFileSync(
+      path.resolve(__dirname, '../../../../../frontend/src/utils/rules/pathfinder2e.ts'),
+      'utf8'
+    );
+
+    expect(backendCopy).toBe(frontendCopy);
+  });
+
   // Same arrangement for the initiative rules, which the server uses to decide
   // what is rolled while the sheets use it to decide what to display. If the two
   // drift, a character shows one initiative and rolls another.

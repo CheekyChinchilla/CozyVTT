@@ -98,12 +98,18 @@ question, and getting it wrong invents numbers the designers never intended.
   `frontend/src/utils/rules/dnd5e.ts` (duplicated at
   `backend/src/utils/rules/dnd5e.ts`; a parity test fails on drift). The editor
   is `npc-stat-blocks/ProficiencyEditor.tsx`.
-- **Pathfinder 2e does not derive.** PF2e stat blocks print final modifiers
+- **Pathfinder 2e does not derive *creature* stat blocks.** PF2e stat blocks print final modifiers
   because Paizo builds creatures from level benchmark tables, not from
   "level + proficiency rank + attribute". The printed number *is* the rule.
   `npc-stat-blocks/Pf2eProficiencyEditor.tsx` therefore stores what the DM types
   and computes nothing; `pf2eStatBlock.ts` adds only a loose plausibility warning
   to catch typos, explicitly not a rules check.
+
+  **Player characters are different.** A PF2e character sheet records the parts
+  — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
+  DC and initiative *are* derivable, and `rules/pathfinder2e.ts` derives them.
+  The distinction is where the number comes from: a creature's is printed by
+  Paizo, a character's is built from their own sheet.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and
   dice-pool systems have neither ability modifiers nor a proficiency bonus, so
   there is nothing to derive and nothing sensible to offer from this data.

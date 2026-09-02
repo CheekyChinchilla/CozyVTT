@@ -49,6 +49,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
+import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 
 /**
@@ -514,12 +515,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate AC
   useEffect(() => {
     if (!formData.attributes || !formData.armorClass || !formData.level) return;
-    const dexMod = formData.attributes.dexterity?.modifier || 0;
-    const capDex = formData.armorClass.capDex;
-    const effectiveDexMod = capDex !== null && capDex !== undefined ? Math.min(dexMod, capDex) : dexMod;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.armorClass.proficiencyRank || 'untrained');
-    const itemBonus = formData.armorClass!.itemBonus || 0;
-    const total = 10 + effectiveDexMod + profBonus + itemBonus;
+    // Shared with the read-only sheet, so the two cannot disagree about a
+    // character's AC — which is how the built-in Fighter came to show 18 where
+    // its own stored components give 17.
+    const total = pf2eArmorClass(formData);
     setFormData((prev) => ({ ...prev, armorClass: { ...prev.armorClass, total } as PF2eArmorClass }));
   }, [formData.level, formData.attributes?.dexterity?.modifier, formData.armorClass?.proficiencyRank, formData.armorClass?.itemBonus, formData.armorClass?.capDex]);
 
@@ -554,10 +553,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate Class DC
   useEffect(() => {
     if (!formData.attributes || !formData.classDC || !formData.level) return;
-    const keyAttr = formData.classDC.keyAttribute || 'intelligence';
-    const attrMod = formData.attributes[keyAttr as keyof PF2eAttributes]?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.classDC.proficiencyRank || 'untrained');
-    const total = 10 + attrMod + profBonus;
+    const total = pf2eClassDC(formData);
     if (formData.classDC.total !== total) {
       setFormData((prev) => ({ ...prev, classDC: { ...prev.classDC, total } as PF2eClassDC }));
     }

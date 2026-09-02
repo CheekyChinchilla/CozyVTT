@@ -29,6 +29,8 @@ import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
+import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
+import { pf2eArmorClass, pf2eClassDC } from '../../../utils/rules/pathfinder2e';
 import type { Character } from '../../../types';
 import type {
   PF2eCharacterData,
@@ -372,7 +374,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             rank={data.armorClass?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
           <span className="text-4xl font-bold text-blue-800">
-            {data.armorClass?.total || 10}
+            {/* Derived, like initiative below: the stored total was printed
+                as-is, and the built-in Fighter's was one too high. */}
+            {pf2eArmorClass(data)}
           </span>
         </div>
         {data.armorClass?.capDex !== null && data.armorClass?.capDex !== undefined && (
@@ -393,7 +397,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             rank={data.classDC?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
           <span className="text-4xl font-bold text-purple-800">
-            {data.classDC?.total || 10}
+            {pf2eClassDC(data)}
           </span>
         </div>
         {data.classDC?.keyAttribute && (
@@ -414,7 +418,12 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             {data.initiative?.usedStat || 'perception'}
           </span>
           <span className="text-4xl font-bold text-amber-800">
-            {formatModifier(data.initiative?.bonus || 0)}
+            {/* Derived rather than read from the stored `initiative.bonus`,
+                which nothing kept in step: a character with Perception +6 read
+                +0 here. The editor recalculates it on open, so only sheets
+                nobody had re-saved were wrong — which is most of them. This is
+                also the number the server rolls, so the two cannot disagree. */}
+            {formatModifier(pf2eInitiativeBonus(data))}
           </span>
         </div>
       </div>
