@@ -611,6 +611,16 @@ list the fields the view reads, and diff the two. A field declared in the type
 and the Zod schema but present in neither is also a gap — it means the sheet
 cannot record something the server will happily store.
 
+**They must also agree on what a stored value *means*.** Agreeing a field exists
+is not enough if each end interprets it differently. The 5e sheet's four
+proficiency boxes were flattened into one list for storage, and the read-only
+view guessed the categories back from a hardcoded list of language names — a
+list the editor also had, with different words in it. A player who wrote
+"Thieves' Cant" or "Druidic" under Languages was shown them under Weapons.
+Store what the player chose (`proficiencies`), keep the flattened list only for
+older readers, and if a value has to be interpreted, put the interpretation in
+one shared function rather than one per component.
+
 **Styling.** Use the shared UI primitives and theme tokens so the sheet follows every theme:
 
 - Inputs: the `input-cozy` class (or the `<Input>` / `<Field>` components in `frontend/src/components/ui/`).

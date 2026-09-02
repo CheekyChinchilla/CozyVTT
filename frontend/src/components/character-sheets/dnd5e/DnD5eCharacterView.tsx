@@ -40,6 +40,7 @@ import {
 } from '../../../utils/rules/dnd5e';
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
+import { readProficiencyGroups } from '../../../utils/proficiencies';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -531,60 +532,20 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     </div>
   );
 
-  // Helper function to categorize proficiencies
-  const categorizeProficiencies = (items: string[]) => {
-    const armor: string[] = [];
-    const weapons: string[] = [];
-    const tools: string[] = [];
-    const languages: string[] = [];
-
-    // Common D&D 5e languages
-    const knownLanguages = [
-      'Common', 'Dwarvish', 'Elvish', 'Giant', 'Gnomish', 'Goblin', 'Halfling', 'Orc',
-      'Abyssal', 'Celestial', 'Draconic', 'Deep Speech', 'Infernal', 'Primordial',
-      'Sylvan', 'Undercommon', 'Aquan', 'Auran', 'Ignan', 'Terran'
-    ];
-
-    items.forEach(item => {
-      const lower = item.toLowerCase();
-
-      // Check if it's a language
-      if (knownLanguages.some(lang => item.includes(lang))) {
-        languages.push(item);
-      }
-      // Check if it's armor
-      else if (lower.includes('armor') || lower.includes('shield')) {
-        armor.push(item);
-      }
-      // Check if it's a tool
-      else if (
-        lower.includes('tools') || lower.includes('kit') ||
-        lower.includes('instrument') || lower.includes('supplies') ||
-        lower.includes('drum') || lower.includes('flute') ||
-        lower.includes('lute') || lower.includes('viol') || lower.includes('horn')
-      ) {
-        tools.push(item);
-      }
-      // Otherwise, assume it's a weapon
-      else {
-        weapons.push(item);
-      }
-    });
-
-    return { armor, weapons, tools, languages };
-  };
-
   // Render Features tab
   const renderFeaturesTab = () => {
-    const proficiencies = data.proficienciesAndLanguages
-      ? categorizeProficiencies(data.proficienciesAndLanguages)
-      : { armor: [], weapons: [], tools: [], languages: [] };
+    // Read through the shared reader, which returns each box as the player
+    // typed it. The categories used to be re-derived here from a hardcoded list
+    // of language names, so anything it did not recognise — Thieves' Cant,
+    // Druidic, anything homebrew — was shown under Weapons.
+    const proficiencies = readProficiencyGroups(data);
+    const hasProficiencies = Object.values(proficiencies).some((group) => group.trim().length > 0);
     const features = collectSheetFeatures(data);
 
     return (
       <div className="space-y-6">
         {/* Proficiencies & Training - Organized like D&D character sheet */}
-        {data.proficienciesAndLanguages && data.proficienciesAndLanguages.length > 0 && (
+        {hasProficiencies && (
           <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
               <Shield className="w-5 h-5 mr-2 text-red-700" />
@@ -599,7 +560,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                     Armor
                   </div>
                   <div className="text-stone-800">
-                    {proficiencies.armor.join(', ')}
+                    {proficiencies.armor}
                   </div>
                 </div>
               )}
@@ -611,7 +572,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                     Weapons
                   </div>
                   <div className="text-stone-800">
-                    {proficiencies.weapons.join(', ')}
+                    {proficiencies.weapons}
                   </div>
                 </div>
               )}
@@ -623,7 +584,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                     Tools
                   </div>
                   <div className="text-stone-800">
-                    {proficiencies.tools.join(', ')}
+                    {proficiencies.tools}
                   </div>
                 </div>
               )}
@@ -635,7 +596,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                     Languages
                   </div>
                   <div className="text-stone-800">
-                    {proficiencies.languages.join(', ')}
+                    {proficiencies.languages}
                   </div>
                 </div>
               )}

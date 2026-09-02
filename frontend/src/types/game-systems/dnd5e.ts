@@ -270,6 +270,20 @@ export interface DnD5eCharacterData {
   attacks?: DnD5eAttack[];
   currency?: DnD5eCurrency;
   inventory?: DnD5eInventoryItem[];
+  /**
+   * The four proficiency boxes as the player typed them, each free text.
+   *
+   * `proficienciesAndLanguages` below is the same four flattened into one list,
+   * kept for exports and for sheets written before this existed. It cannot
+   * replace this: flattening loses which box an entry came from, and guessing
+   * it back put anything unrecognised — Thieves' Cant, Druidic — under weapons.
+   */
+  proficiencies?: {
+    armor?: string;
+    weapons?: string;
+    tools?: string;
+    languages?: string;
+  };
   proficienciesAndLanguages?: string[];
   /**
    * Features and traits: a name plus an optional description.

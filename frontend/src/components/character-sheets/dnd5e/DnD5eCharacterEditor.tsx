@@ -51,25 +51,17 @@ import {
   dnd5eInitiativeModifier,
   dnd5eBackfilledInitiativeBonus,
 } from '@/utils/rules/initiative';
+import { readProficiencyGroups, flattenProficiencyGroups } from '@/utils/proficiencies';
 
 /**
  * The sheet as this editor holds it.
  *
- * `DnD5eCharacterData` describes what the game system defines. `proficiencies`
- * is not part of that: it is a structured object the four proficiency textareas
- * bind to, distinct from the `proficienciesAndLanguages` array the schema
- * declares. It survives a save because `PUT /characters/:id` validates the body
- * but stores it as sent, rather than storing Zod's parsed output — which would
- * strip it, since the schema is not `.passthrough()`.
+ * `proficiencies` used to be redeclared here, because the game system's own
+ * type did not describe it and it survived a save only by accident — the route
+ * stores the body as sent rather than Zod's parsed output. It is a declared
+ * field on both sides now, so this adds nothing but the editor's own chrome.
  */
-interface DnD5eFormData extends DnD5eCharacterData, SheetChrome {
-  proficiencies?: Partial<{
-    armor: string;
-    weapons: string;
-    tools: string;
-    languages: string;
-  }>;
-}
+type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -217,11 +209,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     hitDice: data.hitDice || [],
     conditions: data.conditions || [],
     proficienciesAndLanguages: data.proficienciesAndLanguages || [],
-    // Always use a structured object for proficiencies so the textarea fields work correctly.
-    // If legacy data stored proficiencies as an array, ignore it and start with empty strings.
-    proficiencies: (data.proficiencies && !Array.isArray(data.proficiencies))
-      ? { armor: '', weapons: '', tools: '', languages: '', ...data.proficiencies }
-      : { armor: '', weapons: '', tools: '', languages: '' },
+    // Always four strings, so the textareas are controlled from the first
+    // render. The shared reader settles where they come from: the stored boxes
+    // when the sheet has them, otherwise a one-time guess from the flat list a
+    // sheet written before the boxes existed carries.
+    proficiencies: readProficiencyGroups(data),
     // featuresAndTraits is not defaulted here: the spread above has already
     // settled it, folding in the template-era `features` field. Re-reading
     // `data` would throw that away.
@@ -697,22 +689,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         themeColor: isCustomColor ? customColorHex : selectedColor.name,
       };
 
-      // Parse comma-separated strings into arrays for storage
-      // Proficiencies
-      if (updatedData.proficiencies && typeof updatedData.proficiencies === 'object') {
-        const armorArray = parseCommaSeparated(updatedData.proficiencies.armor);
-        const weaponsArray = parseCommaSeparated(updatedData.proficiencies.weapons);
-        const toolsArray = parseCommaSeparated(updatedData.proficiencies.tools);
-        const languagesArray = parseCommaSeparated(updatedData.proficiencies.languages);
-
-        // Flatten to backwards-compatible array
-        updatedData.proficienciesAndLanguages = [
-          ...armorArray,
-          ...weaponsArray,
-          ...toolsArray,
-          ...languagesArray,
-        ];
-      }
+      // Proficiencies.
+      //
+      // The four boxes are stored as typed, under `proficiencies`, and that is
+      // what both this editor and the read-only view display. The flattened
+      // array is written alongside purely for older readers — it loses which
+      // box an entry came from, which is what used to leave a player's
+      // Thieves' Cant filed under Weapons.
+      const proficiencyGroups = readProficiencyGroups(updatedData);
+      updatedData.proficiencies = proficiencyGroups;
+      updatedData.proficienciesAndLanguages = flattenProficiencyGroups(proficiencyGroups);
 
       // Features & Traits.
       //
@@ -2057,36 +2043,16 @@ min={0}
     </div>
   );
 
-  // Helper to get proficiencies by category from flat array (backwards compatibility)
-  const getProficienciesByCategory = () => {
-    // If using new structured format with strings (not arrays)
-    if (formData.proficiencies && typeof formData.proficiencies === 'object' && !Array.isArray(formData.proficiencies)) {
-      return {
-        armor: formData.proficiencies.armor || '',
-        weapons: formData.proficiencies.weapons || '',
-        tools: formData.proficiencies.tools || '',
-        languages: formData.proficiencies.languages || '',
-      };
-    }
-
-    // Backwards compatibility: parse from flat array
-    const all = formData.proficienciesAndLanguages || [];
-    const languages = ['Common', 'Elvish', 'Dwarvish', 'Draconic', 'Giant', 'Gnomish', 'Goblin', 'Halfling', 'Orc', 'Abyssal', 'Celestial', 'Deep Speech', 'Infernal', 'Primordial', 'Sylvan', 'Undercommon'];
-    const armorKeywords = ['Armor', 'Shield'];
-    const toolKeywords = ['Tools', 'Supplies', 'Kit', 'Instruments', 'Vehicles', 'Vehicle'];
-
-    const armorList = all.filter((p: string) => armorKeywords.some(k => p.includes(k)));
-    const weaponsList = all.filter((p: string) => !armorKeywords.some(k => p.includes(k)) && !toolKeywords.some(k => p.includes(k)) && !languages.includes(p) && (p.includes('Weapon') || ['Dagger', 'Sword', 'Bow', 'Axe', 'Mace', 'Staff', 'Crossbow', 'Spear', 'Hammer'].some(w => p.includes(w))));
-    const toolsList = all.filter((p: string) => toolKeywords.some(k => p.includes(k)));
-    const languagesList = all.filter((p: string) => languages.includes(p));
-
-    return {
-      armor: armorList.join(', '),
-      weapons: weaponsList.join(', '),
-      tools: toolsList.join(', '),
-      languages: languagesList.join(', '),
-    };
-  };
+  /**
+   * The four proficiency boxes, as the player typed them.
+   *
+   * This used to hold a second, separately-written copy of the read-only view's
+   * guess-the-category heuristic — with a different list of language names, so
+   * the two disagreed about where an entry belonged. Both now read the same
+   * function, and neither guesses unless the sheet predates the boxes being
+   * stored separately.
+   */
+  const getProficienciesByCategory = () => readProficiencyGroups(formData);
 
   // Render Features tab
   const renderFeaturesTab = () => {

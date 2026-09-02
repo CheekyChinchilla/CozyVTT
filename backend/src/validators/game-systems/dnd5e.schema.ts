@@ -292,6 +292,35 @@ export const dnd5eCharacterDataSchema = z.object({
   attacks: z.array(attackSchema).optional(),
   currency: currencySchema.optional(),
   inventory: z.array(inventoryItemSchema).optional(),
+  // The four proficiency boxes as the player typed them: armour, weapons,
+  // tools and languages, each free text.
+  //
+  // This was already being stored, but only because PUT /characters/:id writes
+  // the body as sent rather than Zod's parsed output — the field was undeclared
+  // and survived by accident. That is precisely how the built-in templates came
+  // to seed fields nothing read, so it is declared properly here.
+  //
+  // `proficienciesAndLanguages` below is the same four boxes flattened into one
+  // list, kept for exports and for sheets written before this existed. It
+  // cannot replace this: flattening loses which box an entry came from, and
+  // guessing it back filed anything unrecognised — Thieves' Cant, Druidic —
+  // under weapons.
+  // The array arm is legacy tolerance, not a supported shape. The editor used
+  // to guard against `proficiencies` arriving as an array, so sheets in the
+  // wild may carry one; rejecting those would make an upgraded instance unable
+  // to save an affected character at all. Readers ignore the array and fall
+  // back to `proficienciesAndLanguages`.
+  proficiencies: z
+    .union([
+      z.object({
+        armor: z.string().max(2000).optional(),
+        weapons: z.string().max(2000).optional(),
+        tools: z.string().max(2000).optional(),
+        languages: z.string().max(2000).optional(),
+      }),
+      z.array(z.string()),
+    ])
+    .optional(),
   proficienciesAndLanguages: z.array(z.string()).optional(),
   // Features carry a name and an optional description. The built-in templates
   // always had descriptions — Second Wind's full rules text, and so on — but

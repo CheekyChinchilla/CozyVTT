@@ -41,6 +41,51 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    describe('the four proficiency boxes', () => {
+      // Declared rather than left to survive by accident: the route stores the
+      // body as sent, so an undeclared field persisted silently — which is how
+      // the built-in templates came to seed fields nothing read.
+      const sheetWith = (proficiencies: unknown) => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        return { ...example.data, proficiencies };
+      };
+
+      it('accepts the four boxes as free text', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith({
+            armor: 'All armor, shields',
+            weapons: 'Simple, martial',
+            tools: "Thieves' tools",
+            languages: "Common, Elvish, Thieves' Cant, Druidic",
+          })
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('accepts a sheet that fills in only some of them', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, sheetWith({ languages: 'Common' })).success)
+          .toBe(true);
+      });
+
+      // The editor used to guard against this shape, so sheets in the wild may
+      // carry it. Rejecting one would leave its owner unable to save at all.
+      it('still accepts the legacy array shape', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, sheetWith(['Light armor', 'Common'])).success)
+          .toBe(true);
+      });
+
+      it('accepts a sheet with no proficiencies field at all', () => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        expect(validateCharacterData(GameSystem.DND_5E, example.data).success).toBe(true);
+      });
+
+      it('rejects a box that is not text', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, sheetWith({ languages: 42 })).success)
+          .toBe(false);
+      });
+    });
+
     describe('featuresAndTraits accepts both the old and new shapes', () => {
       // Sheets written before features gained descriptions hold plain strings,
       // and so does any JSON a player exported. Rejecting those would make a
