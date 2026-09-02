@@ -209,6 +209,21 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
           supportsAdvantage: false,
         });
       }
+
+      // Further damage lines — a versatile weapon's two-handed die, a spell's
+      // higher-level damage. The sheet makes these rollable; the picker has to
+      // as well, or a spear is one-handed everywhere except the sheet itself.
+      for (const extra of atk.additionalDamage ?? []) {
+        const roll = extra.damageRoll?.trim();
+        if (!roll || !isValidDiceExpression(roll)) continue;
+        const label = extra.label?.trim() || 'Alternate';
+        combat.push({
+          label:             `${atk.name} — ${label} (${roll})`,
+          expression:        roll,
+          purpose:           `${atk.name} Damage (${label})`,
+          supportsAdvantage: false,
+        });
+      }
     }
   }
 
