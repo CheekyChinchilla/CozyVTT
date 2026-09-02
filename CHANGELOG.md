@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Hit points changed on a character sheet show up straight away.** Editing hit points on the sheet — the maximum, the current value, or temporary hit points — left the campaign screen showing the old number until the page was reloaded. Both the player's card on the roster and the health bar on their map token kept displaying whatever they had last seen, which meant a DM could not watch damage land during a fight. The **+** and **−** buttons on the roster were never affected; it was only edits made on the sheet itself. Everyone in the campaign now sees the new value the moment the sheet is saved
+
 - **Uploaded files are filed by what they are.** Every asset — token art, audio, avatars — was written into the maps folder, because the upload knows what it is only after the file has already been saved. Nothing was broken by it, since CozyVTT records where each file actually is, but anyone looking through their own `uploads/` folder was told something untrue. New uploads go to the right place. **Files you already have are left exactly where they are** and keep working.
 
 - **The roster's "Reassign to Player" menu entry is gone.** It never did anything — it opened a "not yet available" notice — and there is no groundwork behind it either, so it was advertising a control the DM did not have. It will come back when it works

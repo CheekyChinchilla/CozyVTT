@@ -14,7 +14,8 @@ import { previewCampaignImport, importCampaign } from '../services/campaignImpor
 import { CreateCampaignSchema } from '../validators/campaigns';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
-import { toJson } from '../utils/prisma-json';
+import { toJson, readJsonObject } from '../utils/prisma-json';
+import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -286,57 +287,6 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
  * Requires: Campaign membership (any role)
  */
 
-/**
- * The HP-bearing corners of a character sheet, for `extractCharacterHp` below.
- * Values stay `unknown` because the `typeof` guards there are what establish
- * they are numbers.
- */
-interface HpBlock {
-  current?: unknown;
-  maximum?: unknown;
-  temporary?: unknown;
-}
-interface CharacterHpData {
-  hp?: HpBlock;
-  derivedStats?: { hp?: HpBlock };
-}
-
-/** Extract { current, max, temp } from character data in a game-system-aware way */
-function extractCharacterHp(
-  gameSystem: string | null,
-  data: unknown
-): { current: number; max: number; temp: number } | null {
-  if (!data || !gameSystem) return null;
-  const d = data as CharacterHpData;
-  switch (gameSystem) {
-    case 'DND_5E':
-    case 'PATHFINDER_2E':
-    case 'FLEXIBLE': {
-      if (d.hp && typeof d.hp.maximum === 'number' && d.hp.maximum > 0) {
-        return {
-          current: typeof d.hp.current === 'number' ? d.hp.current : d.hp.maximum,
-          max: d.hp.maximum,
-          temp: typeof d.hp.temporary === 'number' ? d.hp.temporary : 0,
-        };
-      }
-      return null;
-    }
-    case 'CALL_OF_CTHULHU_7E': {
-      const hp = d.derivedStats?.hp;
-      if (hp && typeof hp.maximum === 'number' && hp.maximum > 0) {
-        return {
-          current: typeof hp.current === 'number' ? hp.current : hp.maximum,
-          max: hp.maximum,
-          temp: 0,
-        };
-      }
-      return null;
-    }
-    default:
-      return null;
-  }
-}
-
 router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
@@ -379,7 +329,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
         .filter((c) => membership.characterIds.includes(c.id))
         .map(({ data, ...char }) => ({
           ...char,
-          hp: extractCharacterHp(char.gameSystem, data),
+          hp: extractCharacterHp(char.gameSystem, readJsonObject(data)),
         }));
 
       return {

@@ -10,7 +10,8 @@ import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/char
 import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
-import { readTokens, toJson } from '../utils/prisma-json';
+import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
+import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
 
 /**
  * The `issues` array off a thrown Zod-shaped error.
@@ -643,6 +644,33 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           // than on every sheet save — HP edits broadcast through here too.
           tokensChanged,
         });
+
+        // Hit points additionally go out as `character.hp.updated`, the narrow
+        // event the campaign screen's HP cache is built on — it feeds both the
+        // roster cards and the HP bars drawn on map tokens.
+        //
+        // Until this was added, only the roster's own +/- control emitted it,
+        // from a WebSocket handler. Editing HP on the sheet took this route
+        // instead, so the new value reached the database and the broadcast above
+        // but never the cache, and the campaign screen went on showing the old
+        // number until the page was refreshed and the roster refetched.
+        //
+        // Sent only when the value really moved: every roster card and token bar
+        // re-renders on this, and most sheet saves do not touch hit points.
+        const previousHp = extractCharacterHp(
+          updatedCharacter.gameSystem,
+          readJsonObject(character.data)
+        );
+        const currentHp = extractCharacterHp(
+          updatedCharacter.gameSystem,
+          readJsonObject(updatedCharacter.data)
+        );
+        if (currentHp && !sameCharacterHp(previousHp, currentHp)) {
+          broadcastToCampaign(updatedCharacter.campaignId, 'character.hp.updated', {
+            characterId: updatedCharacter.id,
+            hp: currentHp,
+          });
+        }
       } catch (error) {
         logger.error('Failed to broadcast character update', { err: error });
         // Don't fail the request if broadcast fails

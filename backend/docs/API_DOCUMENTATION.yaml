@@ -5340,6 +5340,12 @@ paths:
 # character.hp.updated:
 #   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
 #   description: A character's HP was updated. Broadcast to all campaign members.
+#                Emitted from two places: the 'character.hp.update' socket handler
+#                (the roster's +/- control) and PUT /api/characters/:id, which
+#                sends it after a sheet save when the hit points actually changed.
+#                Both matter — the campaign screen's HP cache, which feeds the
+#                roster cards and the HP bars on map tokens, is filled by this
+#                event alone.
 #
 # character.updated:
 #   payload: { characterId: string, character: object }
