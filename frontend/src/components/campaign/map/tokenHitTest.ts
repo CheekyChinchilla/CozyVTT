@@ -5,7 +5,9 @@
 // ============================================
 
 import type { Token } from '@/types';
+import { TokenLayer } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
+import { gridYToFogRow, gridXToFogCol, fogCellIndex } from './coords';
 
 /** Whether a grid cell falls inside a token's footprint. */
 export function tokenCoversCell(token: Token, gridX: number, gridY: number): boolean {
@@ -49,20 +51,89 @@ export function isTokenDowned(
 }
 
 /**
+ * What a viewer is allowed to see of the map.
+ *
+ * `revealedCells` is null until fog data arrives, which means "show everything"
+ * — the same convention the fog layer uses.
+ */
+export interface TokenVisibility {
+  isDM: boolean;
+  revealedCells: Set<number> | null;
+  /** Players always see their own tokens; you know where you are. */
+  isOwnToken: (token: Token) => boolean;
+  /** DM-only view preference: spirit-layer tokens hidden from the canvas. */
+  dmShowSpiritTokens: boolean;
+  mapWidth: number;
+  mapHeight: number;
+}
+
+/**
+ * Whether this viewer can see a token at all.
+ *
+ * Written out here because the draw loop and the hover panel both need it and
+ * used to disagree. Drawing skipped fogged tokens; hit testing did not, so the
+ * lower-left panel happily named a creature standing in unrevealed dark that
+ * the player could not see and had been given no other hint about. Fog is a
+ * *rendering* filter — the token really is in the client's data, unlike a
+ * DM-hidden one, which the server never sends at all.
+ *
+ * Deliberately excludes the dragged-token skip: that is a drawing concern (it
+ * is drawn as a ghost instead), and a dragged token must stay hit-testable.
+ */
+export function isTokenVisibleTo(token: Token, view: TokenVisibility): boolean {
+  // The server filters these out for players already; this is the safeguard.
+  if (!token.visible && !view.isDM) return false;
+
+  if (view.isDM) {
+    if (!view.dmShowSpiritTokens && token.layer === TokenLayer.SPIRIT) return false;
+    return true;
+  }
+
+  if (view.revealedCells && !view.isOwnToken(token)) {
+    // Token grid Y is bottom-left origin; fog rows are top-left. See coords.ts.
+    const fogRow = gridYToFogRow(token.position.y, token.size.height, view.mapHeight);
+    const fogCol = gridXToFogCol(token.position.x, token.size.width);
+    if (!view.revealedCells.has(fogCellIndex(fogCol, fogRow, { fogCols: view.mapWidth }))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * The hit points a viewer is allowed to see on a token.
+ *
+ * A player token follows its character sheet, which every campaign member may
+ * already read. An NPC's own hit points are the DM's to reveal, so they show
+ * only when the DM has turned the bar on — or to the DM themselves.
+ */
+export function visibleTokenHp(
+  token: Token,
+  characterHpCache: Record<string, CharacterHpInfo>,
+  isDM: boolean
+): CharacterHpInfo | null {
+  if (token.characterId) return characterHpCache[token.characterId] ?? token.hp ?? null;
+  if (!token.hp || token.hp.max <= 0) return null;
+  return isDM || token.showHpBar ? token.hp : null;
+}
+
+/**
  * The token a click at this cell should act on: the topmost drawn there.
  *
- * Array order is z-order, so this walks backwards. Hidden tokens are skipped —
- * for a player they never arrive from the server at all, and for a DM they are
- * still theirs to click.
+ * Array order is z-order, so this walks backwards. `view` filters to what the
+ * caller can actually see; omit it only where visibility has already been
+ * decided.
  */
 export function pickTokenAt(
   tokens: readonly Token[],
   gridX: number,
-  gridY: number
+  gridY: number,
+  view?: TokenVisibility
 ): Token | null {
   for (let i = tokens.length - 1; i >= 0; i--) {
     const token = tokens[i];
-    if (!token.visible) continue;
+    if (view ? !isTokenVisibleTo(token, view) : !token.visible) continue;
     if (tokenCoversCell(token, gridX, gridY)) return token;
   }
   return null;
@@ -82,11 +153,12 @@ export function pickMovableTokenAt(
   tokens: readonly Token[],
   gridX: number,
   gridY: number,
-  canMove: (token: Token) => boolean
+  canMove: (token: Token) => boolean,
+  view?: TokenVisibility
 ): Token | null {
   for (let i = tokens.length - 1; i >= 0; i--) {
     const token = tokens[i];
-    if (!token.visible) continue;
+    if (view ? !isTokenVisibleTo(token, view) : !token.visible) continue;
     if (tokenCoversCell(token, gridX, gridY) && canMove(token)) return token;
   }
   return null;

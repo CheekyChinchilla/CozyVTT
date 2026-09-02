@@ -707,6 +707,10 @@ The panel's **Reveal all** and **Hide all** buttons apply to the entire map. Bot
 
 A token standing in an unrevealed area is hidden from players entirely, even if the token itself is set to visible. That is what makes fog useful for staging: you can place a room full of monsters in advance and your players will not see them until you reveal the square they are standing in.
 
+**Entirely** means the details panel too. Pointing at an unrevealed square tells a player nothing — no name, no picture, no hit points, no conditions. A player's own token is the one exception, and is always shown to them wherever it stands.
+
+Worth knowing what fog does *not* do: it hides tokens from view, but the map still sends them to the player's browser, because revealing a square has to be instant. A token you want kept secret from a determined player should be set **hidden** rather than merely left in the dark — a hidden token is never sent at all.
+
 ---
 
 ## Walls & Dynamic Lighting

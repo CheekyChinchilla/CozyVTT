@@ -51,7 +51,8 @@ import {
   type Viewport,
 } from './map/layers';
 import { createVisionCache, type VisionSource } from './map/vision';
-import { pickTokenAt, pickMovableTokenAt, blockingTokensAt } from './map/tokenHitTest';
+import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
+import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
@@ -1473,10 +1474,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const renderIsDM = userRole === 'DM';
-    // Ownership predicate — fog exemption
-    const isOwnToken = (t: Token): boolean =>
-      t.controlledBy === user?.id ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id));
 
     // 5. Tokens (+ drag ghost)
     drawTokens(ctx, {
@@ -1530,10 +1527,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const renderIsDM = userRole === 'DM';
-    // Ownership predicate — lighting vision sources
-    const isOwnToken = (t: Token): boolean =>
-      t.controlledBy === user?.id ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id));
 
     // 6. Dynamic lighting — raycast visibility darkness over tokens.
     //    DM always sees all; "Preview player view" simulates player vision.
@@ -1736,14 +1729,46 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
 
   /**
+   * Whether this user owns or controls a token.
+   *
+   * Used for the fog exemption (you always see your own token), as a lighting
+   * vision source, and by the visibility context below. It was written out
+   * twice, identically, in two draw callbacks; one definition now.
+   */
+  const isOwnToken = useCallback(
+    (t: Token): boolean =>
+      t.controlledBy === user?.id ||
+      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id)),
+    [user?.id, campaign?.characters]
+  );
+
+  /**
+   * What this viewer can see — the same rule the token layer draws by.
+   *
+   * Hit testing used to ignore fog entirely, so hovering unrevealed dark named
+   * whatever was standing there. The panel and the canvas now agree.
+   */
+  const tokenView = useMemo(
+    () => ({
+      isDM: userRole === 'DM',
+      revealedCells,
+      isOwnToken,
+      dmShowSpiritTokens,
+      mapWidth: currentMap?.width ?? 0,
+      mapHeight: currentMap?.height ?? 0,
+    }),
+    [userRole, revealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
+  );
+
+  /**
    * Check if a grid coordinate is within a token's bounds
    */
   const getTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
-      return pickTokenAt(tokens, gridX, gridY);
+      return pickTokenAt(tokens, gridX, gridY, tokenView);
     },
-    [tokens, currentMap]
+    [tokens, currentMap, tokenView]
   );
 
   /**
@@ -1792,9 +1817,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const getMovableTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
-      return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken);
+      return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken, tokenView);
     },
-    [tokens, currentMap, canMoveToken]
+    [tokens, currentMap, canMoveToken, tokenView]
   );
 
   // ============================================
@@ -2428,6 +2453,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         socket!.emitTokenMove(event);
         lastMoveEmitRef.current = now;
       }
+
+      // Keep the hover panel honest while dragging. It used to be updated only
+      // in the branch below, so a held token left the last name it happened to
+      // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
+      // the cursor was over something else entirely. Reading the square under
+      // the cursor also shows what you are about to land on.
+      setHoverToken(getTokenAtPosition(gridCoords.x, gridCoords.y));
 
       // Ghost follows the cursor — tokens layer only.
       markDirty('tokens');
@@ -3372,35 +3404,70 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           is enough to tell them apart at a glance but not to learn them — and a
           player who cannot read what is afflicting a creature cannot play
           around it. */}
-      {hoverToken && hoverCoords && (
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-sm max-w-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-brand-ink font-semibold">
-              {hoverToken.name}
-            </span>
-            <span className="text-xs text-stone-gray font-mono">
-              ({hoverCoords.x}, {hoverCoords.y})
-            </span>
-          </div>
-          {hoverToken.conditions && hoverToken.conditions.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {hoverToken.conditions.map((condition) => (
-                <span
-                  key={condition}
-                  className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[10px] font-medium text-brand-ink"
+      {hoverToken && hoverCoords && (() => {
+        // Only what this viewer may see. A player token follows its character
+        // sheet, which every campaign member can already read; an NPC's own hit
+        // points are the DM's to reveal, so they appear only once the HP bar is
+        // turned on. Same rule the bar on the token itself draws by.
+        const hp = visibleTokenHp(hoverToken, characterHpCache, userRole === 'DM');
+        const image = tokenImages.get(hoverToken.id);
+        return (
+          <div className="absolute bottom-4 left-4 glass-panel px-3 py-2 bg-parchment/90 backdrop-blur-sm max-w-xs">
+            <div className="flex items-start gap-2.5">
+              {/* A bigger look at the art than the map can give at play zoom —
+                  the token on the canvas is often only a few dozen pixels. */}
+              {image ? (
+                <img
+                  src={image.src}
+                  alt=""
+                  className="w-12 h-12 rounded-cozy object-cover border border-warm-amber/40 shrink-0"
+                />
+              ) : (
+                <div
+                  className="w-12 h-12 rounded-cozy border border-warm-amber/40 shrink-0 flex items-center justify-center text-base font-semibold text-white"
+                  style={{ backgroundColor: placeholderColor(hoverToken) }}
+                  aria-hidden="true"
                 >
-                  {condition}
-                </span>
-              ))}
+                  {(hoverToken.name || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-brand-ink font-semibold truncate">
+                    {hoverToken.name}
+                  </span>
+                  <span className="text-xs text-stone-gray font-mono shrink-0">
+                    ({hoverCoords.x}, {hoverCoords.y})
+                  </span>
+                </div>
+                {hp && (
+                  <div className="mt-0.5 text-xs text-stone-gray font-mono">
+                    {hp.current}/{hp.max}
+                    {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
+                  </div>
+                )}
+                {hoverToken.conditions && hoverToken.conditions.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {hoverToken.conditions.map((condition) => (
+                      <span
+                        key={condition}
+                        className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[10px] font-medium text-brand-ink"
+                      >
+                        {condition}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {!canMoveToken(hoverToken) && (
+                  <span className="text-[10px] text-warm-gray">
+                    (Locked)
+                  </span>
+                )}
+              </div>
             </div>
-          )}
-          {!canMoveToken(hoverToken) && (
-            <span className="text-[10px] text-warm-gray">
-              (Locked)
-            </span>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Image Loading State */}
       {currentMap && !imageLoaded && !imageError && (

@@ -15,6 +15,9 @@ import {
   pickTokenAt,
   pickMovableTokenAt,
   blockingTokensAt,
+  isTokenVisibleTo,
+  visibleTokenHp,
+  type TokenVisibility,
 } from '../tokenHitTest';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -98,6 +101,90 @@ describe('isTokenDowned', () => {
   it('follows the character sheet over the stale copy on the token', () => {
     const token = makeToken('a', { characterId: 'char-1', hp: alive });
     expect(isTokenDowned(token, { 'char-1': downed })).toBe(true);
+  });
+});
+
+describe('isTokenVisibleTo', () => {
+  // A 4x4 map. Fog rows are top-left origin, token grid Y is bottom-left, so
+  // grid (0,0) is the bottom-left cell and fog index 12 in a 4-wide raster.
+  const view = (over: Partial<TokenVisibility> = {}): TokenVisibility => ({
+    isDM: false,
+    revealedCells: null,
+    isOwnToken: () => false,
+    dmShowSpiritTokens: true,
+    mapWidth: 4,
+    mapHeight: 4,
+    ...over,
+  });
+
+  it('shows everything before fog data has arrived', () => {
+    expect(isTokenVisibleTo(makeToken('a'), view({ revealedCells: null }))).toBe(true);
+  });
+
+  it('hides a token standing in an unrevealed cell', () => {
+    const token = makeToken('lurker', { position: { x: 0, y: 0 } });
+    expect(isTokenVisibleTo(token, view({ revealedCells: new Set() }))).toBe(false);
+  });
+
+  it('shows a token standing in a revealed cell', () => {
+    const token = makeToken('seen', { position: { x: 0, y: 0 } });
+    expect(isTokenVisibleTo(token, view({ revealedCells: new Set([12]) }))).toBe(true);
+  });
+
+  // You always know where you are.
+  it('shows your own token even in the dark', () => {
+    const mine = makeToken('mine', { position: { x: 0, y: 0 } });
+    expect(
+      isTokenVisibleTo(mine, view({ revealedCells: new Set(), isOwnToken: (t) => t.id === 'mine' }))
+    ).toBe(true);
+  });
+
+  it('hides a DM-hidden token from a player', () => {
+    expect(isTokenVisibleTo(makeToken('a', { visible: false }), view())).toBe(false);
+  });
+
+  it('shows a DM-hidden token to the DM', () => {
+    expect(isTokenVisibleTo(makeToken('a', { visible: false }), view({ isDM: true }))).toBe(true);
+  });
+
+  it('ignores fog entirely for the DM', () => {
+    const token = makeToken('a', { position: { x: 0, y: 0 } });
+    expect(isTokenVisibleTo(token, view({ isDM: true, revealedCells: new Set() }))).toBe(true);
+  });
+
+  it('respects the DM hiding spirit tokens from their own canvas', () => {
+    const spirit = makeToken('s', { layer: TokenLayer.SPIRIT });
+    expect(isTokenVisibleTo(spirit, view({ isDM: true, dmShowSpiritTokens: false }))).toBe(false);
+    expect(isTokenVisibleTo(spirit, view({ isDM: true, dmShowSpiritTokens: true }))).toBe(true);
+  });
+});
+
+describe('visibleTokenHp', () => {
+  const alivePlayer = { current: 5, max: 10, temp: 0 };
+
+  it('shows a player token from the character sheet, to anyone', () => {
+    const token = makeToken('p', { characterId: 'char-1' });
+    expect(visibleTokenHp(token, { 'char-1': alivePlayer }, false)).toEqual(alivePlayer);
+  });
+
+  // An NPC's hit points are the DM's to reveal.
+  it('hides an NPC token from a player unless the bar is on', () => {
+    const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: false });
+    expect(visibleTokenHp(npc, {}, false)).toBeNull();
+  });
+
+  it('shows an NPC token to a player once the DM turns the bar on', () => {
+    const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: true });
+    expect(visibleTokenHp(npc, {}, false)).toEqual({ current: 4, max: 7, temp: 0 });
+  });
+
+  it('shows an NPC token to the DM regardless', () => {
+    const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: false });
+    expect(visibleTokenHp(npc, {}, true)).toEqual({ current: 4, max: 7, temp: 0 });
+  });
+
+  it('is null when nothing tracks hit points', () => {
+    expect(visibleTokenHp(makeToken('o'), {}, true)).toBeNull();
   });
 });
 
