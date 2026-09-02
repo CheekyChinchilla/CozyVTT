@@ -3893,15 +3893,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </div>
       )}
 
-      {/* Toast notifications (e.g., locked door message) */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-        <Toast
-          show={toast.show}
-          message={toast.message}
-          type={toast.type}
-          onClose={hideToast}
-        />
-      </div>
+      {/* Toast notifications (locked door, a square already occupied).
+
+          Rendered bare, exactly as every other caller does. It used to sit in a
+          positioning wrapper, which broke it three ways at once: the wrapper's
+          `-translate-x-1/2` is a transform, and a transform makes it the
+          containing block for `position: fixed` descendants — so the toast
+          anchored to a zero-width div at the bottom of the map instead of the
+          viewport, `max-w-md` measured against that sliver and wrapped the text
+          into an unreadable column, and `pointer-events-none` stopped the close
+          button working. Toast already positions itself; it needs no help. */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={hideToast}
+      />
     </div>
   );
 }
