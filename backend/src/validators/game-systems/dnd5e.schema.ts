@@ -109,6 +109,23 @@ const deathSavesSchema = z.object({
  * Attack/weapon
  * Notes, properties optional; allow empty damage/type for partial entries
  */
+/**
+ * A further way the same weapon or spell deals damage.
+ *
+ * A spear is 1d6 in one hand and 1d8 in two — "versatile (1d8)" in the Weapons
+ * table (Basic Rules p. 48) — and one damage line cannot say that. The built-in
+ * Longsword template recorded its two-handed die in the free-text note instead,
+ * where nothing could roll it.
+ *
+ * Every field tolerates empty, because a row exists from the moment it is added
+ * and is filled in afterwards. Readers skip a row with no dice in it.
+ */
+const additionalDamageSchema = z.object({
+  label: z.string().max(60).optional(),
+  damageRoll: z.string().max(60).optional(),
+  damageType: z.string().max(40).optional(),
+});
+
 const attackSchema = z.object({
   name: z.string().min(1),
   attackBonus: z.number().int(),
@@ -117,6 +134,7 @@ const attackSchema = z.object({
   range: z.number().min(0).optional(),
   properties: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  additionalDamage: z.array(additionalDamageSchema).max(10).optional(),
 });
 
 /**

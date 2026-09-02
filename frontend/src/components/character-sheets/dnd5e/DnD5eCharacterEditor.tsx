@@ -52,6 +52,12 @@ import {
   dnd5eBackfilledInitiativeBonus,
 } from '@/utils/rules/initiative';
 import { readProficiencyGroups, flattenProficiencyGroups } from '@/utils/proficiencies';
+import {
+  DND5E_WEAPON_PROPERTIES,
+  hasWeaponProperty,
+  toggleWeaponProperty,
+  customWeaponProperties,
+} from '@/utils/weaponProperties';
 
 /**
  * The sheet as this editor holds it.
@@ -1645,13 +1651,145 @@ min={0}
                   />
                 </div>
               </div>
+              {/* Properties.
+                  These draw as badges on the read-only sheet, but until now
+                  only the built-in templates could set them — the editor's only
+                  offer was a note reading "e.g., Versatile, Finesse", which
+                  stored prose nothing could read. */}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Properties/Notes</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Properties</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DND5E_WEAPON_PROPERTIES.map((property) => {
+                    const on = hasWeaponProperty(attack.properties || [], property);
+                    return (
+                      <button
+                        key={property}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          updateField(
+                            `attacks.${index}.properties`,
+                            toggleWeaponProperty(attack.properties || [], property)
+                          )
+                        }
+                        className={`px-2 py-0.5 text-xs rounded-full border capitalize transition-colors ${
+                          on
+                            ? 'bg-red-700 border-red-700 text-white'
+                            : 'bg-white border-stone-300 text-stone-600 hover:border-red-400'
+                        }`}
+                      >
+                        {property}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Anything the rules do not name — homebrew, or whatever an
+                    import brought in. Shown so it is visible and removable
+                    rather than silently kept. */}
+                {customWeaponProperties(attack.properties || []).length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {customWeaponProperties(attack.properties || []).map((property) => (
+                      <button
+                        key={property}
+                        type="button"
+                        onClick={() =>
+                          updateField(
+                            `attacks.${index}.properties`,
+                            toggleWeaponProperty(attack.properties || [], property)
+                          )
+                        }
+                        title={`Remove "${property}"`}
+                        className="px-2 py-0.5 text-xs rounded-full border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      >
+                        {property} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Further damage lines.
+                  A spear is 1d6 in one hand and 1d8 in two; one damage box
+                  cannot say that, so the two-handed die used to be typed into
+                  the note where nothing could roll it. */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-stone-600">
+                    Other Damage Rolls
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateField(`attacks.${index}.additionalDamage`, [
+                        ...(attack.additionalDamage || []),
+                        { label: '', damageRoll: '', damageType: '' },
+                      ])
+                    }
+                    className="px-2 py-0.5 text-xs font-medium text-red-700 hover:text-red-900"
+                  >
+                    + Add Damage Roll
+                  </button>
+                </div>
+                {(attack.additionalDamage || []).map((entry, dmgIndex) => (
+                  <div key={dmgIndex} className="flex gap-2 mb-1">
+                    <input
+                      type="text"
+                      value={entry.label || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.label`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="When (e.g. Two-handed)"
+                      className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <input
+                      type="text"
+                      value={entry.damageRoll || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.damageRoll`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="1d10+3"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <input
+                      type="text"
+                      value={entry.damageType || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.damageType`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="slashing"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateField(
+                          `attacks.${index}.additionalDamage`,
+                          (attack.additionalDamage || []).filter((_, i) => i !== dmgIndex)
+                        )
+                      }
+                      aria-label={`Remove damage roll ${dmgIndex + 1}`}
+                      className="px-2 text-red-600 hover:text-red-800 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
                 <input
                   type="text"
                   value={attack.notes || ''}
                   onChange={(e) => updateField(`attacks.${index}.notes`, e.target.value)}
-                  placeholder="e.g., Versatile, Finesse"
+                  placeholder="e.g., silvered, returns when thrown"
                   className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>

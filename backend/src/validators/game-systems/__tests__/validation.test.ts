@@ -41,6 +41,69 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    describe('an attack with more than one damage roll', () => {
+      // A spear is 1d6 in one hand and 1d8 in two — "versatile (1d8)" in the
+      // Weapons table (Basic Rules p. 48). One damage line cannot say that.
+      const attackWith = (additionalDamage: unknown) => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        return {
+          ...example.data,
+          attacks: [
+            {
+              name: 'Spear',
+              attackBonus: 5,
+              damageRoll: '1d6+3',
+              damageType: 'piercing',
+              range: 5,
+              properties: ['thrown', 'versatile'],
+              notes: '',
+              additionalDamage,
+            },
+          ],
+        };
+      };
+
+      it('accepts a versatile weapon carrying its two-handed die', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          attackWith([{ label: 'Two-handed', damageRoll: '1d8+3', damageType: 'piercing' }])
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('accepts several, for a spell with more than one mode', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          attackWith([
+            { label: 'At 3rd level', damageRoll: '2d8' },
+            { label: 'At 5th level', damageRoll: '3d8' },
+          ])
+        );
+        expect(result.success).toBe(true);
+      });
+
+      // A row exists from the moment it is added and is filled in afterwards,
+      // so a half-typed row must not block the save.
+      it('accepts a row that is still empty', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, attackWith([{ label: '', damageRoll: '' }])).success)
+          .toBe(true);
+      });
+
+      it('accepts an attack with no extra damage at all', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, attackWith(undefined)).success).toBe(true);
+      });
+
+      it('rejects a roll that is not text', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, attackWith([{ damageRoll: 8 }])).success)
+          .toBe(false);
+      });
+
+      it('rejects an absurd number of rows', () => {
+        const many = Array.from({ length: 11 }, () => ({ label: 'x', damageRoll: '1d4' }));
+        expect(validateCharacterData(GameSystem.DND_5E, attackWith(many)).success).toBe(false);
+      });
+    });
+
     describe('the four proficiency boxes', () => {
       // Declared rather than left to survive by accident: the route stores the
       // body as sent, so an undeclared field persisted silently — which is how

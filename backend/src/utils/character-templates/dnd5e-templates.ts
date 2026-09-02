@@ -210,7 +210,13 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
         damageType: 'slashing',
         range: 5,
         properties: ['versatile'],
-        notes: 'Two-handed: 1d10+3',
+        // A longsword is "versatile (1d10)" in the Weapons table (Basic Rules
+        // p. 48). This used to be a free-text note, which read as prose and
+        // could not be rolled.
+        additionalDamage: [
+          { label: 'Two-handed', damageRoll: '1d10+3', damageType: 'slashing' },
+        ],
+        notes: '',
       },
       {
         name: 'Shield Bash',

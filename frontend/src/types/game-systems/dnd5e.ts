@@ -105,6 +105,24 @@ export interface DnD5eDeathSaves {
 }
 
 /**
+ * A further way the same weapon or spell deals damage.
+ *
+ * The rules attach a second die to a weapon often enough that one damage line
+ * cannot describe it: a spear is "1d6 piercing" in one hand and "1d8" in two,
+ * printed as "versatile (1d8)" in the Weapons table (Basic Rules p. 48). The
+ * built-in Longsword template used to record its two-handed die in the free-text
+ * note, where it read as prose and could not be rolled.
+ *
+ * `label` is what the sheet calls this line — "Two-handed", "At 5th level",
+ * "Radiant rider" — and is free text, because the reasons are not enumerable.
+ */
+export interface DnD5eAdditionalDamage {
+  label: string;
+  damageRoll: string;
+  damageType?: string;
+}
+
+/**
  * Attack/weapon entry
  */
 export interface DnD5eAttack {
@@ -115,6 +133,8 @@ export interface DnD5eAttack {
   range: number;
   properties: string[];
   notes: string;
+  /** Extra damage lines beyond the primary one. Absent on most attacks. */
+  additionalDamage?: DnD5eAdditionalDamage[];
 }
 
 /**

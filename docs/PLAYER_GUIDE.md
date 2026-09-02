@@ -299,6 +299,14 @@ Either way the result drops straight into the turn order and the roll appears in
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
 
+### Weapons that do more than one thing
+
+**Properties** — Finesse, Light, Thrown and the rest — are buttons on each weapon in the Combat tab. Tap the ones that apply and they appear as labels on your sheet. Anything the list doesn't cover stays where you put it, so a homebrew property is safe.
+
+**More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
+
+If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
+
 **The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
 
 Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
