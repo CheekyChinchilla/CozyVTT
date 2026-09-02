@@ -247,7 +247,14 @@ export interface DnD5eCharacterData {
   currency: DnD5eCurrency;
   inventory: DnD5eInventoryItem[];
   proficienciesAndLanguages: string[];
-  featuresAndTraits: string[];
+  /**
+   * Features and traits, each a name with an optional description.
+   *
+   * Strings are still accepted on the way in — every sheet written before this
+   * change holds them, and so does any exported JSON — and are read as a name
+   * with no description. See utils/featureEntries.
+   */
+  featuresAndTraits: Array<string | { name: string; description: string }>;
   spellcasting?: DnD5eSpellcasting;
   appearance: DnD5eAppearance;
   personality: DnD5ePersonality;

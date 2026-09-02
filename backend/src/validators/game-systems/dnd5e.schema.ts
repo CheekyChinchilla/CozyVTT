@@ -108,6 +108,23 @@ const deathSavesSchema = z.object({
  * Attack/weapon
  * Notes, properties optional; allow empty damage/type for partial entries
  */
+/**
+ * One feature or trait.
+ *
+ * Accepts the plain string every sheet written before this change holds, and
+ * normalises it to a named entry with no description. A string is not parsed
+ * for a description: players type things like "NakuDama-Amphibious" and
+ * "Fighting Style: Defense", and splitting on the punctuation would invent a
+ * description out of half the name.
+ */
+const featureEntrySchema = z.union([
+  z.string().transform((name) => ({ name: name.trim(), description: '' })),
+  z.object({
+    name: z.string().min(1),
+    description: z.string().default(''),
+  }),
+]);
+
 const attackSchema = z.object({
   name: z.string().min(1),
   attackBonus: z.number().int(),
@@ -276,7 +293,17 @@ export const dnd5eCharacterDataSchema = z.object({
   currency: currencySchema.optional(),
   inventory: z.array(inventoryItemSchema).optional(),
   proficienciesAndLanguages: z.array(z.string()).optional(),
-  featuresAndTraits: z.array(z.string()).optional(),
+  // Features carry a name and an optional description. The built-in templates
+  // always had descriptions — Second Wind's full rules text, and so on — but
+  // wrote them to an undeclared `features` field that nothing read, so no
+  // player has ever seen one.
+  //
+  // Plain strings are still accepted, and always will be: every sheet written
+  // before this change holds them, exported JSON in someone's backups holds
+  // them, and a string is exactly what a feature with no description is. They
+  // are read as a name with an empty description — never split up to invent one.
+  // See utils/featureEntries.
+  featuresAndTraits: z.array(featureEntrySchema).optional(),
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),

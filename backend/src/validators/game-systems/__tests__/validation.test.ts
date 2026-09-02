@@ -41,6 +41,65 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    describe('featuresAndTraits accepts both the old and new shapes', () => {
+      // Sheets written before features gained descriptions hold plain strings,
+      // and so does any JSON a player exported. Rejecting those would make a
+      // working sheet unsaveable the moment its owner opened it.
+      const sheetWith = (featuresAndTraits: unknown) => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        return { ...example.data, featuresAndTraits };
+      };
+
+      it('accepts plain strings and reads them as names with no description', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith(['NakuDama-Amphibious', 'Aspiring Shadow Warrior'])
+        );
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect((result.data as { featuresAndTraits: unknown }).featuresAndTraits).toEqual([
+            { name: 'NakuDama-Amphibious', description: '' },
+            { name: 'Aspiring Shadow Warrior', description: '' },
+          ]);
+        }
+      });
+
+      it('accepts named entries with descriptions', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith([{ name: 'Second Wind', description: 'Regain 1d10 + fighter level.' }])
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('accepts a mixture, which is what a part-migrated sheet looks like', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith(['Darkvision', { name: 'Second Wind', description: 'Regain HP.' }])
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('defaults a missing description rather than rejecting the entry', () => {
+        const result = validateCharacterData(GameSystem.DND_5E, sheetWith([{ name: 'Rage' }]));
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect((result.data as { featuresAndTraits: unknown }).featuresAndTraits).toEqual([
+            { name: 'Rage', description: '' },
+          ]);
+        }
+      });
+
+      it('rejects an entry with no name at all', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith([{ description: 'orphaned' }])
+        );
+        expect(result.success).toBe(false);
+      });
+    });
+
     it('should fail validation for D&D 5e data missing required fields', () => {
       const invalidData = {
         characterName: 'Test',
