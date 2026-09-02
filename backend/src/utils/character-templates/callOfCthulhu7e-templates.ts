@@ -136,7 +136,6 @@ export const coc7ePrivateInvestigatorTemplate: CharacterTemplate = {
   gameSystem: GameSystem.CALL_OF_CTHULHU_7E,
   data: {
     investigatorName: 'Jack Morrison',
-    player: '',
     occupation: 'Private Investigator',
     era: 'Modern',
     age: 35,

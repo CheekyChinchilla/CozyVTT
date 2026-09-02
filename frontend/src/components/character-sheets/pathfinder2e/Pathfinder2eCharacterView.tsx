@@ -28,6 +28,7 @@ import FeatsList from './components/FeatsList';
 import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
+import { readFeatureEntries } from '../../../utils/featureEntries';
 import type { Character } from '../../../types';
 import type {
   PF2eCharacterData,
@@ -707,18 +708,26 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render class features
   const renderClassFeatures = () => {
-    if (!data.classFeatures || data.classFeatures.length === 0) return null;
+    // Read through the shared reader so a sheet holding plain names displays
+    // the same as one whose features carry their rules text.
+    const features = readFeatureEntries(data.classFeatures);
+    if (features.length === 0) return null;
 
     return (
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Class Features</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {data.classFeatures.map((feature: string, index: number) => (
+          {features.map((feature, index) => (
             <div
               key={index}
-              className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm font-medium text-blue-800"
+              className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm text-blue-800"
             >
-              {feature}
+              <span className="font-medium">{feature.name}</span>
+              {feature.description && (
+                <p className="mt-1 text-xs text-blue-900/80 whitespace-pre-wrap">
+                  {feature.description}
+                </p>
+              )}
             </div>
           ))}
         </div>

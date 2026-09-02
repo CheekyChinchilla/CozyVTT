@@ -5,7 +5,7 @@
  * color customization, and token upload functionality.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Swords,
   Package,
@@ -32,6 +32,7 @@ import type {
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
+import { collectSheetFeatures } from '@/utils/featureEntries';
 import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
@@ -468,6 +469,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const initiativeModifier = dnd5eInitiativeModifier(formData);
 
   /**
+   * Features as editable rows, whatever shape the stored sheet holds them in.
+   *
+   * A sheet saved before features gained descriptions holds plain strings, and
+   * one made from a built-in template has its features in the separate field
+   * the templates used to write. Both are read here, so opening the sheet shows
+   * everything it has — including the template descriptions, which until now
+   * were stored and never displayed anywhere. Saving writes the single field.
+   */
+  const featureRows = useMemo(() => collectSheetFeatures(formData), [formData]);
+
+  /**
    * Convert a character saved before `initiativeBonus` existed, and keep the
    * stored total in step afterwards.
    *
@@ -602,8 +614,19 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         ];
       }
 
-      // Features & Traits
-      updatedData.featuresAndTraits = parseCommaSeparated(updatedData.featuresAndTraits);
+      // Features & Traits.
+      //
+      // Normalised through the shared reader rather than split on commas, so a
+      // sheet that arrives holding strings, or holding the separate field the
+      // built-in templates used to write, is saved back as one list of named
+      // entries. Rows left completely blank are dropped rather than saved as
+      // nameless features.
+      //
+      // `features` goes with it: the templates' copy has been folded into the
+      // list above, and leaving it behind would mean the same features were
+      // recorded twice, in two shapes, drifting apart from here on.
+      updatedData.featuresAndTraits = collectSheetFeatures(updatedData);
+      delete (updatedData as Record<string, unknown>).features;
 
       // Cantrips
       if (updatedData.spellcasting) {
@@ -1934,17 +1957,75 @@ min={0}
 
         {/* Features & Traits */}
         <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Features & Traits</h3>
-          <p className="text-xs text-stone-600 mb-3">Class features, racial traits, and feats (comma-separated)</p>
-          <textarea
-            value={typeof formData.featuresAndTraits === 'string'
-              ? formData.featuresAndTraits
-              : (formData.featuresAndTraits || []).join(', ')}
-            onChange={(e) => updateField('featuresAndTraits', e.target.value)}
-            placeholder="Darkvision, Fey Ancestry, Sneak Attack, Rage, Spellcasting, Action Surge"
-            rows={5}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-stone-800">Features &amp; Traits</h3>
+            <button
+              onClick={() =>
+                updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
+              }
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+            >
+              + Add Feature
+            </button>
+          </div>
+          <p className="text-xs text-stone-600 mb-3">
+            Class features, racial traits and feats. A description is optional — leave it blank
+            for anything that is just a name.
+          </p>
+          {featureRows.length === 0 ? (
+            <p className="text-sm text-stone-500 italic">No features added yet</p>
+          ) : (
+            <div className="space-y-3">
+              {featureRows.map((feature, index) => (
+                <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <input
+                      type="text"
+                      value={feature.name}
+                      onChange={(e) =>
+                        updateField(
+                          'featuresAndTraits',
+                          featureRows.map((f, i) =>
+                            i === index ? { ...f, name: e.target.value } : f
+                          )
+                        )
+                      }
+                      placeholder="Feature name, e.g. Darkvision"
+                      aria-label={`Feature ${index + 1} name`}
+                      className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <button
+                      onClick={() =>
+                        updateField(
+                          'featuresAndTraits',
+                          featureRows.filter((_, i) => i !== index)
+                        )
+                      }
+                      aria-label={`Remove ${feature.name || 'feature'}`}
+                      className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <textarea
+                    value={feature.description}
+                    onChange={(e) =>
+                      updateField(
+                        'featuresAndTraits',
+                        featureRows.map((f, i) =>
+                          i === index ? { ...f, description: e.target.value } : f
+                        )
+                      )
+                    }
+                    placeholder="Description (optional)"
+                    aria-label={`Feature ${index + 1} description`}
+                    rows={2}
+                    className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Additional Features & Traits */}

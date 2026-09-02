@@ -3,6 +3,8 @@
  * Mirrors backend types from backend/src/game-systems/pathfinder2e.ts
  */
 
+import type { FeatureEntry } from '@/utils/featureEntries';
+
 /**
  * Ability score with modifier
  */
@@ -445,7 +447,11 @@ export interface PF2eCharacterData {
   bulk?: PF2eBulk;
   languages?: string[];
   feats?: PF2eFeats;
-  classFeatures?: string[];
+  /**
+   * Class features: a name with optional rules text. Strings are still read,
+   * meaning a feature with no description. See utils/featureEntries.
+   */
+  classFeatures?: Array<string | FeatureEntry>;
   spellcasting?: PF2eSpellcasting;
   appearance?: PF2eAppearance;
   personality?: PF2ePersonality;

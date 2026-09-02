@@ -72,7 +72,7 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       land: 25,
       other: [],
     },
-    attacks: [],
+    strikes: [],
     skills: {
       acrobatics: { attribute: 'dex', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'int', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
@@ -98,7 +98,6 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       general: [],
       bonus: [],
     },
-    specialAbilities: [],
     inventory: [],
     bulk: {
       current: 0,
@@ -139,9 +138,6 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       rituals: [],
     },
     languages: ['Common'],
-    senses: ['Normal vision'],
-    resistances: [],
-    immunities: [],
     conditions: [],
     notes: '',
   },
@@ -209,14 +205,14 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       land: 20,
       other: [],
     },
-    attacks: [
+    strikes: [
       {
         name: 'Warhammer',
         attackBonus: 7,
         damageRoll: '1d8+3',
         damageType: 'bludgeoning',
         traits: ['Dwarf', 'Shove'],
-        range: 'melee',
+        type: 'melee',
         notes: 'Versatile P',
       },
       {
@@ -225,7 +221,7 @@ export const pf2eFighterTemplate: CharacterTemplate = {
         damageRoll: '1d8',
         damageType: 'piercing',
         traits: ['Range 120ft', 'Reload 1'],
-        range: 'ranged',
+        type: 'ranged',
         notes: '',
       },
     ],
@@ -261,7 +257,7 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       general: [],
       bonus: [],
     },
-    specialAbilities: [
+    classFeatures: [
       {
         name: 'Attack of Opportunity',
         description: 'You can make melee Strikes against creatures that move adjacent to you or take certain actions.',
@@ -384,9 +380,6 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       rituals: [],
     },
     languages: ['Common', 'Dwarven'],
-    senses: ['Darkvision (60 feet)'],
-    resistances: [],
-    immunities: [],
     conditions: [],
     notes: 'A sturdy dwarf fighter, trained in the ways of war.',
   },

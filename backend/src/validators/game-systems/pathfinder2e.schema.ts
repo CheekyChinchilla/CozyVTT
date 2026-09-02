@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { featureEntrySchema } from './featureEntry.schema';
 
 /**
  * Proficiency rank
@@ -462,7 +463,10 @@ export const pathfinder2eCharacterDataSchema = z.object({
   bulk: bulkSchema.optional(),
   languages: z.array(z.string()).optional(),
   feats: featsSchema.optional(),
-  classFeatures: z.array(z.string()).optional(),
+  // Named class features with optional rules text. Strings are still
+  // accepted — that is what every sheet written so far holds, and what a
+  // feature with no description is. See validators/game-systems/featureEntry.
+  classFeatures: z.array(featureEntrySchema).optional(),
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),

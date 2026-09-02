@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { featureEntrySchema } from './featureEntry.schema';
 
 /**
  * Ability score with modifier
@@ -108,23 +109,6 @@ const deathSavesSchema = z.object({
  * Attack/weapon
  * Notes, properties optional; allow empty damage/type for partial entries
  */
-/**
- * One feature or trait.
- *
- * Accepts the plain string every sheet written before this change holds, and
- * normalises it to a named entry with no description. A string is not parsed
- * for a description: players type things like "NakuDama-Amphibious" and
- * "Fighting Style: Defense", and splitting on the punctuation would invent a
- * description out of half the name.
- */
-const featureEntrySchema = z.union([
-  z.string().transform((name) => ({ name: name.trim(), description: '' })),
-  z.object({
-    name: z.string().min(1),
-    description: z.string().default(''),
-  }),
-]);
-
 const attackSchema = z.object({
   name: z.string().min(1),
   attackBonus: z.number().int(),

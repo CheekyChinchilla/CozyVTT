@@ -34,6 +34,7 @@ import { SpellcastingBlock } from './components/SpellcastingBlock';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
 import { passiveScore } from '../../../utils/rules/dnd5e';
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
+import { collectSheetFeatures } from '../../../utils/featureEntries';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -544,6 +545,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     const proficiencies = data.proficienciesAndLanguages
       ? categorizeProficiencies(data.proficienciesAndLanguages)
       : { armor: [], weapons: [], tools: [], languages: [] };
+    const features = collectSheetFeatures(data);
 
     return (
       <div className="space-y-6">
@@ -607,15 +609,28 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           </div>
         )}
 
-      {/* Features & Traits */}
-      {data.featuresAndTraits && data.featuresAndTraits.length > 0 && (
+      {/* Features & Traits.
+          Read through the shared reader so a sheet still holding plain strings,
+          or the separate field the built-in templates used to write, displays
+          the same as a migrated one. Most entries are a bare name — a
+          description only appears when there is one. */}
+      {features.length > 0 && (
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Features & Traits</h3>
+          <h3 className="text-lg font-semibold text-stone-800 mb-3">Features &amp; Traits</h3>
           <ul className="space-y-2">
-            {data.featuresAndTraits.map((feature: string, idx: number) => (
+            {features.map((feature, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="text-red-600 mt-1">•</span>
-                <span className="text-stone-700">{feature}</span>
+                <div className="text-stone-700">
+                  <span className={feature.description ? 'font-semibold' : undefined}>
+                    {feature.name}
+                  </span>
+                  {feature.description && (
+                    <p className="text-sm text-stone-600 whitespace-pre-wrap mt-0.5">
+                      {feature.description}
+                    </p>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

@@ -5,7 +5,7 @@
  * auto-calculation, validation, color customization, and token upload.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Target,
   Swords,
@@ -49,6 +49,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
+import { readFeatureEntries } from '@/utils/featureEntries';
 
 /**
  * The sheet as this editor holds it.
@@ -255,6 +256,18 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     notes: data.notes || '',
     treasure: data.treasure || '',
   }));
+
+  /**
+   * Class features as editable rows, whatever shape the sheet holds them in.
+   *
+   * Sheets saved before features gained descriptions hold plain names, and the
+   * built-in Fighter kept "Attack of Opportunity" and "Shield Block" — with
+   * their rules text — in a field nothing read. Both are read here.
+   */
+  const classFeatureRows = useMemo(
+    () => readFeatureEntries(formData.classFeatures),
+    [formData.classFeatures]
+  );
 
   // Report the first edit up to whoever is hosting this sheet, so leaving with
   // unsaved work can be caught. One effect on the whole form rather than a call
@@ -1563,21 +1576,41 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Class Features</h3>
-            <button onClick={() => { const newFeatures = [...(formData.classFeatures || []), 'New Class Feature']; updateField('classFeatures', newFeatures); }} className="px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} className="px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Feature</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.classFeatures || []).map((feature: string, index: number) => (
-              <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={feature} onChange={(e) => updateField(`classFeatures.${index}`, e.target.value)} placeholder="Class Feature Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <button onClick={() => { const newFeatures = formData.classFeatures!.filter((_, i) => i !== index); updateField('classFeatures', newFeatures); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            {/* Read through the shared reader, so a sheet still holding plain
+                names — every sheet saved before descriptions existed — opens
+                the same as one that has them. */}
+            {classFeatureRows.map((feature, index) => (
+              <div key={index} className="bg-white border border-stone-200 rounded-lg p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <input
+                    type="text"
+                    value={feature.name}
+                    onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, name: e.target.value } : f))}
+                    placeholder="Class Feature Name"
+                    aria-label={`Class feature ${index + 1} name`}
+                    className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={feature.description}
+                  onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, description: e.target.value } : f))}
+                  placeholder="Description (optional)"
+                  aria-label={`Class feature ${index + 1} description`}
+                  rows={2}
+                  className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
             ))}
-            {(!formData.classFeatures || formData.classFeatures.length === 0) && (
+            {classFeatureRows.length === 0 && (
               <div className="text-sm text-stone-500 italic text-center py-4">No class features added yet</div>
             )}
           </div>

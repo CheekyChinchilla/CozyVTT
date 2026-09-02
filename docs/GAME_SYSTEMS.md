@@ -412,6 +412,17 @@ function createBlankMySystemCharacter(): MySystemCharacterData {
 > from `GET /api/characters/templates/<system>/blank`, so a system whose blank
 > is missing or invalid cannot have templates created for it.
 
+> **A template may only write fields the schema declares.** Every one of the
+> original four had drifted: they seeded fields no reader knew about, so the
+> data was stored and never shown. A D&D 5e Fighter's Features tab was blank
+> while "Second Wind" sat in the character's own row. This survives because
+> `PUT /api/characters/:id` stores the body as sent rather than Zod's parsed
+> output, so an undeclared field is saved rather than rejected — validating a
+> template proves it is acceptable, not that it is complete.
+>
+> `templateSchemaParity.test.ts` compares each template's top-level keys against
+> its schema and fails on any extra. Run the suite after editing a template.
+
 The template layer powers the "start from a preset" picker and the template API. Create `backend/src/utils/character-templates/mySystem-templates.ts` exporting **named `CharacterTemplate`s** plus two getter functions:
 
 ```typescript

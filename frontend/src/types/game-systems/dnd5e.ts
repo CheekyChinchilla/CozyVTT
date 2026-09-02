@@ -3,6 +3,8 @@
  * Mirrors backend types from backend/src/game-systems/dnd5e.ts
  */
 
+import type { FeatureEntry } from '@/utils/featureEntries';
+
 /**
  * Ability score with modifier
  */
@@ -262,7 +264,15 @@ export interface DnD5eCharacterData {
   currency?: DnD5eCurrency;
   inventory?: DnD5eInventoryItem[];
   proficienciesAndLanguages?: string[];
-  featuresAndTraits?: string[];
+  /**
+   * Features and traits: a name plus an optional description.
+   *
+   * Strings are still read, because every sheet saved before descriptions
+   * existed holds them and so does any exported JSON. They mean a feature with
+   * no description, and are never split apart to invent one — see
+   * utils/featureEntries.
+   */
+  featuresAndTraits?: Array<string | FeatureEntry>;
   spellcasting?: DnD5eSpellcasting;
   appearance?: DnD5eAppearance;
   personality?: DnD5ePersonality;
