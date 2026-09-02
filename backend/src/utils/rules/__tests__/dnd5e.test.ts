@@ -11,6 +11,9 @@ import {
   parseChallengeRating,
   proficiencyBonusForCR,
   proficiencyBonusForLevel,
+  dnd5eCustomSkillBonus,
+  readCustomSkills,
+  type Dnd5eCustomSkill,
 } from '../dnd5e';
 
 describe('abilityModifier', () => {
@@ -136,6 +139,107 @@ describe('derivedBonus / decomposeBonus', () => {
         }
       }
     }
+  });
+});
+
+describe('skills of the player\'s own', () => {
+  // "Proficiency with a tool allows you to add your proficiency bonus to any
+  // ability check you make using that tool" (Basic Rules p. 51) — the same
+  // arithmetic as a skill, which is why this reuses derivedBonus.
+  const sheet = {
+    proficiencyBonus: 3,
+    stats: {
+      strength: { score: 8, modifier: -1 },
+      dexterity: { score: 16, modifier: 3 },
+      wisdom: { score: 12, modifier: 1 },
+    },
+  };
+
+  const skill = (over: Partial<Dnd5eCustomSkill> = {}): Dnd5eCustomSkill => ({
+    name: "Thieves' Tools",
+    ability: 'dexterity',
+    proficient: false,
+    expertise: false,
+    ...over,
+  });
+
+  it('is the bare ability modifier when not proficient', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill())).toBe(3);
+  });
+
+  it('adds the proficiency bonus when proficient', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill({ proficient: true }))).toBe(6);
+  });
+
+  it('doubles it for expertise', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill({ proficient: true, expertise: true }))).toBe(9);
+  });
+
+  // Expertise means expertise, whatever the proficient box says.
+  it('doubles for expertise even if proficient was left unticked', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill({ expertise: true }))).toBe(9);
+  });
+
+  it('adds a manual bonus on top', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill({ proficient: true, otherBonus: 2 }))).toBe(8);
+  });
+
+  it('handles a negative ability modifier', () => {
+    expect(dnd5eCustomSkillBonus(sheet, skill({ ability: 'strength', proficient: true }))).toBe(2);
+  });
+
+  // A stored modifier that has drifted from the score must not skew the check.
+  it('recomputes from the score rather than trusting a stale modifier', () => {
+    const stale = { proficiencyBonus: 2, stats: { dexterity: { score: 16, modifier: 99 } } };
+    expect(dnd5eCustomSkillBonus(stale, skill())).toBe(3);
+  });
+
+  it('falls back to the level-1 proficiency bonus when none is recorded', () => {
+    const noPb = { level: 1, stats: { dexterity: { score: 14, modifier: 2 } } };
+    expect(dnd5eCustomSkillBonus(noPb, skill({ proficient: true }))).toBe(4);
+  });
+
+  it('treats an ability the sheet does not have as no modifier', () => {
+    expect(dnd5eCustomSkillBonus({ proficiencyBonus: 3 }, skill({ proficient: true }))).toBe(3);
+  });
+
+  describe('readCustomSkills', () => {
+    it('reads a well-formed row', () => {
+      const data = { customSkills: [{ name: 'Thieves\' Tools', ability: 'dexterity', proficient: true, expertise: false }] };
+      expect(readCustomSkills(data)).toEqual([
+        { name: "Thieves' Tools", ability: 'dexterity', proficient: true, expertise: false },
+      ]);
+    });
+
+    it('trims the name', () => {
+      const data = { customSkills: [{ name: '  Vehicles (Water)  ', ability: 'wisdom' }] };
+      expect(readCustomSkills(data)[0].name).toBe('Vehicles (Water)');
+    });
+
+    // A row exists from the moment it is added and is named afterwards.
+    it('drops a nameless row', () => {
+      expect(readCustomSkills({ customSkills: [{ name: '   ', ability: 'dexterity' }] })).toEqual([]);
+    });
+
+    // An unrecognised ability would silently roll off Strength.
+    it.each([['missing', undefined], ['unknown', 'luck'], ['short form', 'dex']])(
+      'drops a row whose ability is %s',
+      (_label, ability) => {
+        expect(readCustomSkills({ customSkills: [{ name: 'X', ability }] })).toEqual([]);
+      }
+    );
+
+    it('keeps a manual bonus but omits an unusable one', () => {
+      expect(readCustomSkills({ customSkills: [{ name: 'A', ability: 'wisdom', otherBonus: 2 }] })[0].otherBonus).toBe(2);
+      expect(readCustomSkills({ customSkills: [{ name: 'B', ability: 'wisdom', otherBonus: 'two' }] })[0].otherBonus).toBeUndefined();
+    });
+
+    it.each([['no field', {}], ['not an array', { customSkills: 'none' }], ['nothing', undefined]])(
+      'returns nothing for %s',
+      (_label, data) => {
+        expect(readCustomSkills(data)).toEqual([]);
+      }
+    );
   });
 });
 

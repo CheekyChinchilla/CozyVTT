@@ -46,6 +46,8 @@ import {
   spellcastingAbilityModifier,
   exhaustionLevel,
   exhaustionEffects,
+  dnd5eCustomSkillBonus,
+  DND5E_ABILITY_NAMES,
 } from '@/utils/rules/dnd5e';
 import {
   dnd5eInitiativeModifier,
@@ -1273,6 +1275,134 @@ min={1}
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Skills of your own.
+          Tool proficiencies mostly: "proficiency with a tool allows you to add
+          your proficiency bonus to any ability check you make using that tool"
+          (Basic Rules p. 51). Same arithmetic as a skill, so the bonus is
+          derived here too rather than typed in. */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
+          <button
+            type="button"
+            onClick={() =>
+              updateField('customSkills', [
+                ...(formData.customSkills || []),
+                { name: '', ability: 'dexterity', proficient: true, expertise: false },
+              ])
+            }
+            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+          >
+            + Add Skill
+          </button>
+        </div>
+        <p className="text-xs text-stone-500 mb-3">
+          Tool proficiencies, or anything your table made up. Pick the ability it uses
+          and the bonus is worked out for you.
+        </p>
+
+        <div className="space-y-2">
+          {(formData.customSkills || []).map((custom, index) => {
+            const bonus = dnd5eCustomSkillBonus(formData, {
+              name: custom.name,
+              ability: custom.ability,
+              proficient: !!custom.proficient,
+              expertise: !!custom.expertise,
+              ...(custom.otherBonus !== undefined ? { otherBonus: custom.otherBonus } : {}),
+            });
+
+            return (
+              <div key={index} className="flex flex-wrap items-center gap-2 bg-white border border-stone-300 rounded-lg p-2">
+                <input
+                  type="text"
+                  value={custom.name || ''}
+                  onChange={(e) => updateField(`customSkills.${index}.name`, e.target.value)}
+                  placeholder="e.g. Thieves' Tools"
+                  maxLength={60}
+                  className="flex-1 min-w-[9rem] px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+
+                <select
+                  value={custom.ability}
+                  onChange={(e) => updateField(`customSkills.${index}.ability`, e.target.value)}
+                  aria-label={`Ability used by ${custom.name || 'this skill'}`}
+                  className="px-2 py-1 text-sm border border-stone-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  {DND5E_ABILITY_NAMES.map((ability) => (
+                    <option key={ability} value={ability}>
+                      {ability.slice(0, 3).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="flex items-center gap-1 text-xs text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={!!custom.proficient}
+                    onChange={(e) => {
+                      updateField(`customSkills.${index}.proficient`, e.target.checked);
+                      if (!e.target.checked) {
+                        updateField(`customSkills.${index}.expertise`, false);
+                      }
+                    }}
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                  />
+                  Prof
+                </label>
+
+                <label className="flex items-center gap-1 text-xs text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={!!custom.expertise}
+                    disabled={!custom.proficient}
+                    onChange={(e) => updateField(`customSkills.${index}.expertise`, e.target.checked)}
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-full focus:ring-2 focus:ring-red-500 disabled:opacity-30"
+                    title="Expertise (double proficiency)"
+                  />
+                  Exp
+                </label>
+
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-stone-500">Other</label>
+                  <NumberField
+                    value={custom.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`customSkills.${index}.otherBonus`, v)}
+                    className="w-14 px-1 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                </div>
+
+                <span
+                  className={`text-sm font-semibold w-10 text-right ${
+                    custom.expertise ? 'text-purple-700' : custom.proficient ? 'text-red-700' : 'text-stone-600'
+                  }`}
+                >
+                  {formatModifier(bonus)}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(
+                      'customSkills',
+                      (formData.customSkills || []).filter((_, i) => i !== index)
+                    )
+                  }
+                  aria-label={`Remove ${custom.name || 'skill'}`}
+                  className="px-2 text-red-600 hover:text-red-800 font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+
+          {(formData.customSkills || []).length === 0 && (
+            <p className="text-sm text-stone-500 italic">None yet</p>
+          )}
         </div>
       </div>
 

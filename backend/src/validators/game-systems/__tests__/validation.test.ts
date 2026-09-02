@@ -41,6 +41,69 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    describe('skills of the player\'s own', () => {
+      const sheetWith = (customSkills: unknown) => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        return { ...example.data, customSkills };
+      };
+
+      it('accepts a tool proficiency', () => {
+        const result = validateCharacterData(
+          GameSystem.DND_5E,
+          sheetWith([{ name: "Thieves' Tools", ability: 'dexterity', proficient: true, expertise: false }])
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('accepts a manual bonus alongside', () => {
+        expect(
+          validateCharacterData(
+            GameSystem.DND_5E,
+            sheetWith([{ name: 'Cartography', ability: 'intelligence', otherBonus: 2 }])
+          ).success
+        ).toBe(true);
+      });
+
+      // A row exists from the moment it is added and is named afterwards.
+      it('accepts a row that has not been named yet', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, sheetWith([{ name: '', ability: 'wisdom' }])).success)
+          .toBe(true);
+      });
+
+      // An unrecognised ability would silently roll off nothing at all.
+      it.each([
+        ['a short form', 'dex'],
+        ['an invented ability', 'luck'],
+        ['nothing', undefined],
+      ])('rejects %s as the ability', (_label, ability) => {
+        expect(validateCharacterData(GameSystem.DND_5E, sheetWith([{ name: 'X', ability }])).success)
+          .toBe(false);
+      });
+
+      it('rejects a name long enough to be used as storage', () => {
+        expect(
+          validateCharacterData(
+            GameSystem.DND_5E,
+            sheetWith([{ name: 'x'.repeat(61), ability: 'wisdom' }])
+          ).success
+        ).toBe(false);
+      });
+
+      it('rejects an absurd manual bonus', () => {
+        expect(
+          validateCharacterData(
+            GameSystem.DND_5E,
+            sheetWith([{ name: 'X', ability: 'wisdom', otherBonus: 999 }])
+          ).success
+        ).toBe(false);
+      });
+
+      it('accepts a sheet with none at all', () => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        expect(validateCharacterData(GameSystem.DND_5E, example.data).success).toBe(true);
+      });
+    });
+
     describe('weapon properties are not limited to the eleven the rules name', () => {
       const weaponWith = (properties: unknown) => {
         const example = loadExampleJSON('DnD_5e_character.json');

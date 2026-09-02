@@ -392,7 +392,7 @@ export function spellcastingAbilityModifier(data: unknown): number {
 }
 
 /** The proficiency bonus a sheet records, falling back to the level-1 value. */
-function sheetProficiencyBonus(data: unknown): number {
+export function sheetProficiencyBonus(data: unknown): number {
   const sheet = data as Record<string, unknown> | null | undefined;
   const stored = sheet?.proficiencyBonus;
   if (typeof stored === 'number' && Number.isFinite(stored)) return stored;
@@ -565,4 +565,107 @@ export function exhaustionLevel(value: unknown): number {
  */
 export function exhaustionEffects(level: unknown): string[] {
   return EXHAUSTION_EFFECTS.slice(0, exhaustionLevel(level));
+}
+
+// ---------------------------------------------------------------------------
+// Skills of the player's own
+// ---------------------------------------------------------------------------
+
+/** The six abilities, spelled as a character sheet's `stats` keys. */
+export const DND5E_ABILITY_NAMES = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+] as const;
+
+export type Dnd5eAbilityName = (typeof DND5E_ABILITY_NAMES)[number];
+
+/**
+ * A check the eighteen skills do not cover.
+ *
+ * Tool proficiencies are the reason this exists: "proficiency with a tool
+ * allows you to add your proficiency bonus to any ability check you make using
+ * that tool" (Basic Rules p. 51), which is the same arithmetic as a skill but
+ * has nowhere on the sheet to live. A player wanting to roll Thieves' Tools had
+ * to either work it out by hand or record it as a weapon, which put a lockpick
+ * on the combat tab and gave it an attack roll it does not have.
+ */
+export interface Dnd5eCustomSkill {
+  name: string;
+  ability: Dnd5eAbilityName;
+  proficient: boolean;
+  expertise: boolean;
+  /** Anything the maths cannot know about — a magic item, a feat. */
+  otherBonus?: number;
+}
+
+/** The modifier a sheet's named ability has, recomputed from its score. */
+export function sheetAbilityModifier(data: unknown, ability: string): number {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const stats = sheet?.stats as Record<string, unknown> | undefined;
+  const entry = stats?.[ability] as Record<string, unknown> | undefined;
+  if (!entry) return 0;
+  // Score first: a stored modifier that has fallen out of step with the score
+  // would otherwise quietly skew every check made with it.
+  return typeof entry.score === 'number'
+    ? abilityModifier(entry.score)
+    : (typeof entry.modifier === 'number' ? entry.modifier : 0);
+}
+
+/**
+ * The total bonus for one of the player's own skills.
+ *
+ * Derived rather than stored, like initiative and passive Perception: ability
+ * modifier, plus the proficiency bonus doubled for expertise, plus whatever the
+ * sheet cannot work out for itself. Nothing here is specific to tools — the
+ * same arithmetic covers a homebrew skill or a subsystem a table invented.
+ */
+export function dnd5eCustomSkillBonus(data: unknown, skill: Dnd5eCustomSkill): number {
+  const abilityMod = sheetAbilityModifier(data, skill.ability);
+  const proficiency = sheetProficiencyBonus(data);
+  const level = skill.expertise ? 'expertise' : skill.proficient ? 'proficient' : 'none';
+  const extra =
+    typeof skill.otherBonus === 'number' && Number.isFinite(skill.otherBonus)
+      ? skill.otherBonus
+      : 0;
+  return derivedBonus(abilityMod, proficiency, level) + extra;
+}
+
+/**
+ * Read the custom skills off a sheet, dropping anything unusable.
+ *
+ * A row exists from the moment it is added and is named afterwards, so a
+ * nameless one is a half-finished edit rather than a skill; an unrecognised
+ * ability would silently roll off Strength, so those go too.
+ */
+export function readCustomSkills(data: unknown): Dnd5eCustomSkill[] {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const raw = sheet?.customSkills;
+  if (!Array.isArray(raw)) return [];
+
+  const abilities = new Set<string>(DND5E_ABILITY_NAMES);
+  const skills: Dnd5eCustomSkill[] = [];
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const name = typeof row.name === 'string' ? row.name.trim() : '';
+    const ability = typeof row.ability === 'string' ? row.ability : '';
+    if (!name || !abilities.has(ability)) continue;
+
+    skills.push({
+      name,
+      ability: ability as Dnd5eAbilityName,
+      proficient: row.proficient === true,
+      expertise: row.expertise === true,
+      ...(typeof row.otherBonus === 'number' && Number.isFinite(row.otherBonus)
+        ? { otherBonus: row.otherBonus }
+        : {}),
+    });
+  }
+
+  return skills;
 }

@@ -1,4 +1,5 @@
 import type { CharacterData } from '@/types';
+import { readCustomSkills, dnd5eCustomSkillBonus } from '@/utils/rules/dnd5e';
 import type {
   DnD5eCharacterData,
   DnD5eStats,
@@ -171,6 +172,19 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
         supportsAdvantage: true,
       });
     }
+  }
+
+  // Skills of the player's own — tool proficiencies and anything homebrew.
+  // The bonus is derived from the sheet rather than stored, so it follows the
+  // character's ability scores and level without being re-entered.
+  for (const custom of readCustomSkills(data)) {
+    const bonus = dnd5eCustomSkillBonus(data, custom);
+    skills.push({
+      label:             `${custom.name} ${fmt(bonus)}`,
+      expression:        `1d20${fmt(bonus)}`,
+      purpose:           `${custom.name} Check`,
+      supportsAdvantage: true,
+    });
   }
 
   // Attacks / weapons

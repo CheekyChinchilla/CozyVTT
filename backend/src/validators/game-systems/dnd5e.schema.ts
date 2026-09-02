@@ -56,6 +56,35 @@ const skillSchema = z.object({
 });
 
 /**
+ * A check the eighteen skills do not cover.
+ *
+ * Tool proficiencies are why this exists: "proficiency with a tool allows you
+ * to add your proficiency bonus to any ability check you make using that tool"
+ * (Basic Rules p. 51) — the same arithmetic as a skill, with nowhere to live.
+ * Players were recording Thieves' Tools as a weapon to get a rollable entry,
+ * which put a lockpick on the combat tab and gave it an attack roll.
+ *
+ * The bonus is derived, not stored: ability modifier plus proficiency, doubled
+ * for expertise, plus `otherBonus` for what the sheet cannot work out. Empty
+ * names are tolerated because a row exists from the moment it is added; readers
+ * drop them.
+ */
+const customSkillSchema = z.object({
+  name: z.string().max(60),
+  ability: z.enum([
+    'strength',
+    'dexterity',
+    'constitution',
+    'intelligence',
+    'wisdom',
+    'charisma',
+  ]),
+  proficient: z.boolean().optional(),
+  expertise: z.boolean().optional(),
+  otherBonus: z.number().int().min(-30).max(30).optional(),
+});
+
+/**
  * All skills
  */
 const skillsSchema = z.object({
@@ -287,6 +316,7 @@ export const dnd5eCharacterDataSchema = z.object({
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),
   skills: skillsSchema.optional(),
+  customSkills: z.array(customSkillSchema).max(30).optional(),
   passivePerception: z.number().int().min(1).optional(),
   // Additions to passive Perception that are not the Perception skill itself:
   // the Observant feat's +5, and items that raise passive scores. Mirrors

@@ -37,6 +37,8 @@ import {
   hasSpellcasting,
   exhaustionLevel,
   exhaustionEffects,
+  readCustomSkills,
+  dnd5eCustomSkillBonus,
 } from '../../../utils/rules/dnd5e';
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
@@ -323,6 +325,15 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               passivePerception={passiveScore(
                 (data.skills.perception?.bonus ?? 0) + (data.passivePerceptionBonus ?? 0)
               )}
+              // Derived here for the same reason: the bonus follows the
+              // character's ability scores and level rather than being stored
+              // and going stale.
+              customSkills={readCustomSkills(data).map((custom) => ({
+                name: custom.name,
+                proficient: custom.proficient,
+                expertise: custom.expertise,
+                bonus: dnd5eCustomSkillBonus(data, custom),
+              }))}
               onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
               onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
             />

@@ -611,6 +611,14 @@ list the fields the view reads, and diff the two. A field declared in the type
 and the Zod schema but present in neither is also a gap — it means the sheet
 cannot record something the server will happily store.
 
+**Derive what the sheet can work out; store what it cannot.** The 5e sheet's own
+skills (`customSkills`) record a name, an ability and a proficiency level, and
+nothing else — the bonus comes from `dnd5eCustomSkillBonus`, so it follows the
+character's ability scores and level instead of going stale the way a stored
+`passivePerception` did. The `otherBonus` field is the escape hatch for what the
+rules cannot derive, matching initiative and passive Perception. Storing a total
+here would have reintroduced exactly the drift those two were fixed for.
+
 **They must also agree on what a stored value *means*.** Agreeing a field exists
 is not enough if each end interprets it differently. The 5e sheet's four
 proficiency boxes were flattened into one list for storage, and the read-only

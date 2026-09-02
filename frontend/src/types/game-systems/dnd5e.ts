@@ -4,6 +4,7 @@
  */
 
 import type { FeatureEntry } from '@/utils/featureEntries';
+import type { Dnd5eCustomSkill } from '@/utils/rules/dnd5e';
 
 /**
  * Ability score with modifier
@@ -53,6 +54,15 @@ export interface DnD5eSkill {
   expertise: boolean;
   bonus: number;
 }
+
+/**
+ * A check the eighteen skills do not cover — a tool proficiency, or anything a
+ * table invented.
+ *
+ * Re-exported from the shared rules module so the sheet type and the maths that
+ * derives the bonus cannot describe different shapes.
+ */
+export type DnD5eCustomSkill = Dnd5eCustomSkill;
 
 /**
  * All D&D 5e skills
@@ -271,6 +281,13 @@ export interface DnD5eCharacterData {
   inspiration?: boolean;
   savingThrows?: DnD5eSavingThrows;
   skills?: DnD5eSkills;
+  /**
+   * Checks the eighteen skills do not cover — tool proficiencies above all.
+   *
+   * The bonus is derived by `dnd5eCustomSkillBonus`, not stored, so it follows
+   * the character's ability scores and level without anyone re-entering it.
+   */
+  customSkills?: DnD5eCustomSkill[];
   /** Total passive Perception: 10 + Perception bonus + `passivePerceptionBonus`. */
   passivePerception?: number;
   /** Non-skill additions to passive Perception (Observant, items). */
