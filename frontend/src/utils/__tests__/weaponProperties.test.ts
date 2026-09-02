@@ -17,6 +17,8 @@ import {
   hasWeaponProperty,
   toggleWeaponProperty,
   customWeaponProperties,
+  addCustomWeaponProperty,
+  MAX_WEAPON_PROPERTY_LENGTH,
 } from '../weaponProperties';
 
 describe('DND5E_WEAPON_PROPERTIES', () => {
@@ -84,6 +86,53 @@ describe('toggleWeaponProperty', () => {
     expect(toggleWeaponProperty(['silvered', 'light'], 'finesse')).toEqual([
       'silvered', 'light', 'finesse',
     ]);
+  });
+});
+
+describe('addCustomWeaponProperty', () => {
+  // The eleven are the common case, not the limit. A homebrew game may name any
+  // number more, and the stored shape and the sheet's badges always allowed
+  // them — only the editor could not create one.
+  it('adds a property the rules do not name', () => {
+    expect(addCustomWeaponProperty(['finesse'], 'moonforged')).toEqual(['finesse', 'moonforged']);
+  });
+
+  it('keeps the case the player typed for their own property', () => {
+    expect(addCustomWeaponProperty([], 'Moon-Forged')).toEqual(['Moon-Forged']);
+  });
+
+  it('trims surrounding space', () => {
+    expect(addCustomWeaponProperty([], '  returning  ')).toEqual(['returning']);
+  });
+
+  // Typing a canonical name should light the toggle, not add a second chip.
+  it('stores a canonical name lowercase however it was typed', () => {
+    expect(addCustomWeaponProperty([], 'Finesse')).toEqual(['finesse']);
+  });
+
+  it('does not duplicate one already present, whatever its case', () => {
+    expect(addCustomWeaponProperty(['Moonforged'], 'moonforged')).toEqual(['Moonforged']);
+    expect(addCustomWeaponProperty(['finesse'], 'Finesse')).toEqual(['finesse']);
+  });
+
+  it.each([['nothing', ''], ['only spaces', '   ']])('refuses %s', (_label, value) => {
+    expect(addCustomWeaponProperty(['light'], value)).toEqual(['light']);
+  });
+
+  it('refuses a value long enough to be used as storage', () => {
+    expect(addCustomWeaponProperty(['light'], 'x'.repeat(MAX_WEAPON_PROPERTY_LENGTH + 1)))
+      .toEqual(['light']);
+  });
+
+  it('accepts one exactly at the limit', () => {
+    const atLimit = 'x'.repeat(MAX_WEAPON_PROPERTY_LENGTH);
+    expect(addCustomWeaponProperty([], atLimit)).toEqual([atLimit]);
+  });
+
+  it('does not mutate the list it was given', () => {
+    const original = ['finesse'];
+    addCustomWeaponProperty(original, 'moonforged');
+    expect(original).toEqual(['finesse']);
   });
 });
 

@@ -54,9 +54,11 @@ import {
 import { readProficiencyGroups, flattenProficiencyGroups } from '@/utils/proficiencies';
 import {
   DND5E_WEAPON_PROPERTIES,
+  MAX_WEAPON_PROPERTY_LENGTH,
   hasWeaponProperty,
   toggleWeaponProperty,
   customWeaponProperties,
+  addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 
 /**
@@ -774,6 +776,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    * exactly that — this is indexing an object by a name only known at runtime —
    * rather than `any`, which would also have silenced the *call sites*.
    */
+  /**
+   * What has been typed into each attack's "add your own property" box, keyed
+   * by that attack's index. Draft text only — nothing reaches the sheet until
+   * it is committed, so a half-typed word is never stored.
+   */
+  const [customPropertyDrafts, setCustomPropertyDrafts] = useState<Record<number, string>>({});
+
+  /** Move a typed property onto the attack and clear the box. */
+  const commitCustomProperty = (index: number, properties: string[]) => {
+    const draft = customPropertyDrafts[index] ?? '';
+    const next = addCustomWeaponProperty(properties, draft);
+    // Refused (blank, too long, already there) — leave the text so it can be
+    // corrected rather than silently discarding what was typed.
+    if (next.length === properties.length) return;
+    updateField(`attacks.${index}.properties`, next);
+    setCustomPropertyDrafts((prev) => ({ ...prev, [index]: '' }));
+  };
+
   const updateField = (path: string, value: unknown) => {
     setFormData((prev) => {
       const newData = { ...prev } as unknown as Record<string, unknown>;
@@ -1706,6 +1726,35 @@ min={0}
                     ))}
                   </div>
                 )}
+                {/* The eleven are the common case, not the limit. A homebrew
+                    game may name any number more, and both storage and the
+                    sheet's badges have always allowed them. */}
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    type="text"
+                    value={customPropertyDrafts[index] ?? ''}
+                    onChange={(e) =>
+                      setCustomPropertyDrafts((prev) => ({ ...prev, [index]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitCustomProperty(index, attack.properties || []);
+                      }
+                    }}
+                    maxLength={MAX_WEAPON_PROPERTY_LENGTH}
+                    placeholder="Add your own property"
+                    aria-label="Add a custom weapon property"
+                    className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => commitCustomProperty(index, attack.properties || [])}
+                    className="px-3 py-1 text-sm font-medium text-red-700 hover:text-red-900"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
               {/* Further damage lines.
                   A spear is 1d6 in one hand and 1d8 in two; one damage box

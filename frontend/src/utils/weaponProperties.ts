@@ -76,3 +76,32 @@ export function toggleWeaponProperty(
 export function customWeaponProperties(properties: readonly string[]): string[] {
   return properties.filter((entry) => entry.trim().length > 0 && !isCanonicalWeaponProperty(entry));
 }
+
+/** Longest property a weapon will accept, so the field cannot be used as storage. */
+export const MAX_WEAPON_PROPERTY_LENGTH = 60;
+
+/**
+ * Add a property of the player's own.
+ *
+ * The eleven the rules name are the common case, not the limit — a homebrew
+ * game may have any number more, and both the stored shape and the badges on
+ * the sheet have always allowed them. Only the editor could not create one.
+ *
+ * Typing the name of a canonical property switches that one on rather than
+ * storing a near-duplicate, and an entry already present is left alone whatever
+ * case it was stored in. A blank or over-long value is refused: the caller gets
+ * the list back unchanged.
+ */
+export function addCustomWeaponProperty(
+  properties: readonly string[],
+  value: string
+): string[] {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_WEAPON_PROPERTY_LENGTH) return [...properties];
+  if (hasWeaponProperty(properties, trimmed)) return [...properties];
+
+  // Canonical names are always stored lowercase, however they were typed, so
+  // the toggle above reads as on rather than showing a second amber chip.
+  const stored = isCanonicalWeaponProperty(trimmed) ? trimmed.toLowerCase() : trimmed;
+  return [...properties, stored];
+}

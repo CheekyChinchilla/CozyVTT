@@ -41,6 +41,48 @@ describe('Game Systems Validation', () => {
       }
     });
 
+    describe('weapon properties are not limited to the eleven the rules name', () => {
+      const weaponWith = (properties: unknown) => {
+        const example = loadExampleJSON('DnD_5e_character.json');
+        return {
+          ...example.data,
+          attacks: [
+            {
+              name: 'Moonforged Blade',
+              attackBonus: 5,
+              damageRoll: '1d8+3',
+              damageType: 'slashing',
+              range: 5,
+              properties,
+              notes: '',
+            },
+          ],
+        };
+      };
+
+      // Homebrew is normal, and the sheet draws a badge for whatever is stored.
+      it('accepts a property of the player\'s own invention', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, weaponWith(['finesse', 'moonforged'])).success)
+          .toBe(true);
+      });
+
+      it('accepts a property with spaces and punctuation', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, weaponWith(["gnome's bane, +1"])).success)
+          .toBe(true);
+      });
+
+      // Bounded only so the field cannot be used as storage.
+      it('rejects one long enough to be used as storage', () => {
+        expect(validateCharacterData(GameSystem.DND_5E, weaponWith(['x'.repeat(61)])).success)
+          .toBe(false);
+      });
+
+      it('rejects an absurd number of them', () => {
+        const many = Array.from({ length: 21 }, (_, i) => `prop${i}`);
+        expect(validateCharacterData(GameSystem.DND_5E, weaponWith(many)).success).toBe(false);
+      });
+    });
+
     describe('an attack with more than one damage roll', () => {
       // A spear is 1d6 in one hand and 1d8 in two — "versatile (1d8)" in the
       // Weapons table (Basic Rules p. 48). One damage line cannot say that.

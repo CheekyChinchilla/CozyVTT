@@ -132,7 +132,11 @@ const attackSchema = z.object({
   damageRoll: z.string().optional(),
   damageType: z.string().optional(),
   range: z.number().min(0).optional(),
-  properties: z.array(z.string()).optional(),
+  // Free text, deliberately not an enum. The eleven the rules name are the
+  // common case, not the limit — a homebrew game may name any number more, and
+  // the sheet draws a badge for whatever is stored. Bounded only so the field
+  // cannot be used as storage, the same reason token conditions are bounded.
+  properties: z.array(z.string().max(60)).max(20).optional(),
   notes: z.string().optional(),
   additionalDamage: z.array(additionalDamageSchema).max(10).optional(),
 });
