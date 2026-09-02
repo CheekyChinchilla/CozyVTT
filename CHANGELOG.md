@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The setup wizard now keeps the settings it asks you for.** Its "System Configuration" step collects an instance name, a timezone, and whether people may register themselves — it even checks the name and shows all three back for confirmation on the last screen. None of them were ever saved. Every new instance came up called "CozyVTT", on UTC, with registration switched off, whatever you chose. The one that mattered was registration: an administrator who deliberately turned it **on** got an instance with it **off**, and nothing said so. All three are now stored, and registration takes effect immediately.
+
+- **Finishing setup takes you to your dashboard, signed in.** The wizard's closing screen says you will be logged in automatically and sent to the dashboard. Instead it dropped you on the login page to type the password you had just chosen. You are now signed in as the wizard promised.
+
 - **A DM can now mark an NPC with any of the fifteen D&D 5e conditions.** The token quick editor offered only twelve of them — Deafened, Grappled and Petrified were missing, so a creature that was grappled could not be recorded as such even though a player character on the same map could be. The two lists are now one list, which is what stops them parting company again.
 
 ### Changed

@@ -241,6 +241,25 @@ paths:
                   minLength: 12
                 displayName:
                   type: string
+                instanceName:
+                  type: string
+                  maxLength: 100
+                  default: CozyVTT
+                  description: >-
+                    Shown in browser tabs and page titles. Blank, missing or
+                    non-string values leave the default in place rather than
+                    failing setup, which can only be run once.
+                timezone:
+                  type: string
+                  maxLength: 50
+                  default: UTC
+                  description: IANA timezone name, used for timestamps.
+                allowRegistration:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Whether people may create their own accounts. Changeable
+                    afterwards from Admin → Settings.
       responses:
         '201':
           description: Setup completed successfully

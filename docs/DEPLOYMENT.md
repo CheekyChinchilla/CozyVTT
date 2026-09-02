@@ -808,7 +808,7 @@ Before going live:
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
-- [ ] **Registration** — `allowRegistration` is **off** for private instances (configure in **Admin → Settings** after setup)
+- [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
 - [ ] **Admin MFA** — Admin account has MFA enabled
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server

@@ -209,7 +209,14 @@ class ApiClient {
     return response.data;
   }
 
-  async initializeSetup(data: { email: string; password: string; displayName: string }): Promise<{ message: string; user: User }> {
+  async initializeSetup(data: {
+    email: string;
+    password: string;
+    displayName: string;
+    instanceName?: string;
+    timezone?: string;
+    allowRegistration?: boolean;
+  }): Promise<{ message: string; user: User }> {
     const response = await this.client.post('/api/setup/init', data);
     return response.data;
   }
