@@ -950,7 +950,7 @@ Keep the spec in the repo and reference it from a separate docs site (e.g. `cozy
 Whichever option you pick, do **not** rely on hiding the spec as a security measure. Real protection comes from:
 
 - Per-endpoint authentication and RBAC checks (built in — see `backend/src/middleware/`)
-- Rate limiting (auth 5/15min, uploads 30/min, general API 300/min)
+- Rate limiting (sign-in 5 failures/15min, new accounts 10/hour, uploads 30/min, general API 300/min)
 - Magic-byte file validation (not MIME header)
 - Strong session secrets and Argon2id password hashing
 - Helmet.js CSP headers in production

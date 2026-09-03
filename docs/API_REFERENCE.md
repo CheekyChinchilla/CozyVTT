@@ -1239,14 +1239,28 @@ when it sees it.
 
 ## Rate Limits
 
-| Endpoint Group | Limit | Window |
-|----------------|-------|--------|
-| Login / Register | 5 requests | 15 minutes |
-| Password reset | 3 requests | 1 hour |
-| File upload | 20 requests | 1 minute |
-| General API | 300 requests | 1 minute |
-| Dice rolls (WebSocket) | 30 events | 1 minute |
-| Chat messages (WebSocket) | 10 events | 1 minute |
-| Token movement (WebSocket) | 60 events | 1 second |
+| Endpoint Group | Limit | Window | Counts |
+|----------------|-------|--------|--------|
+| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Register | 10 requests | 1 hour | Every request |
+| Forgot password | 5 requests | 15 minutes | Every request |
+| File upload | 30 requests | 1 minute | Every request |
+| General API | 300 requests | 1 minute | Every request |
+| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
+| Token movement (WebSocket) | 60 events | 1 second | Every event |
+
+The **Counts** column matters. Where only failures count, signing in correctly
+never uses up the allowance — otherwise a household sharing one address could
+lock itself out by logging in normally. Where every request counts, the success
+is the thing being limited: sending a password-reset email, or creating an
+account.
+
+Chat messages are not on this list because they are limited per campaign rather
+than globally: a DM can switch on a cooldown of between 1 and 300 seconds
+between messages, and it is **off by default**.
+
+The upload and general-API limits are configurable with the
+`ASSET_UPLOAD_RATE_LIMIT` and `RATE_LIMIT_MAX_REQUESTS` environment variables;
+the rest are fixed.
 
 Rate limit responses return HTTP `429` with a `Retry-After` header indicating when the limit resets.

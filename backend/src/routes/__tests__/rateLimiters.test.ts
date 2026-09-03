@@ -20,7 +20,7 @@
 import express, { Request, Response } from 'express';
 import request from 'supertest';
 
-import { credentialLimiter, emailDispatchLimiter } from '../auth';
+import { credentialLimiter, emailDispatchLimiter, accountCreationLimiter } from '../auth';
 import { mfaLoginLimiter, mfaSetupLimiter } from '../mfa';
 
 type Limiter = typeof credentialLimiter;
@@ -112,6 +112,45 @@ describe('emailDispatchLimiter', () => {
       expect((await hit(app, ip, 200)).status).toBe(200);
     }
     expect((await hit(app, ip, 200)).status).toBe(429);
+  });
+});
+
+describe('accountCreationLimiter', () => {
+  /**
+   * Registration has no wrong answer to repeat, so `skipSuccessfulRequests` —
+   * right for a credential check — leaves the endpoint effectively unlimited:
+   * only failures count, and creating an account is a success. While /register
+   * shared the credential limiter, an instance with open registration could be
+   * filled with accounts by anyone able to reach it.
+   */
+  it('counts the accounts it creates, not just the attempts that fail', async () => {
+    const app = appWith(accountCreationLimiter);
+    const ip = '10.0.5.1';
+
+    for (let i = 0; i < 10; i++) {
+      expect((await hit(app, ip, 201)).status).toBe(201);
+    }
+    expect((await hit(app, ip, 201)).status).toBe(429);
+  });
+
+  it('is more generous than the credential limiter, for a shared address', async () => {
+    // A household behind one address may legitimately sign several people up in
+    // a sitting; five would be too few.
+    const app = appWith(accountCreationLimiter);
+    const ip = '10.0.5.2';
+
+    for (let i = 0; i < 6; i++) {
+      expect((await hit(app, ip, 201)).status).toBe(201);
+    }
+  });
+
+  it('keeps buckets separate per client', async () => {
+    const app = appWith(accountCreationLimiter);
+
+    for (let i = 0; i < 10; i++) await hit(app, '10.0.5.3', 201);
+    expect((await hit(app, '10.0.5.3', 201)).status).toBe(429);
+
+    expect((await hit(app, '10.0.5.4', 201)).status).toBe(201);
   });
 });
 

@@ -72,11 +72,33 @@ export const emailDispatchLimiter = rateLimit({
 });
 
 /**
+ * Rate limiting for creating accounts.
+ *
+ * Registration is not a credential check: there is no wrong answer to repeat,
+ * and the thing worth limiting is how many accounts one client can create. It
+ * shared the credential limiter for a while, which skips successful requests —
+ * so only *failed* registrations counted, and an instance with open
+ * registration could be filled with accounts by anyone who could reach it.
+ *
+ * More generous than the credential limiter because a household behind one
+ * address may legitimately sign several people up in a sitting, and nothing
+ * here is a lockout: it delays a stranger rather than shutting anyone out of an
+ * account they already have.
+ */
+export const accountCreationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 accounts per hour per address, successful or not
+  message: 'Too many accounts created from this address, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * POST /api/auth/register
  * Register a new user account
  * First user automatically becomes ADMIN
  */
-router.post('/register', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/register', accountCreationLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, displayName } = req.body;
 
