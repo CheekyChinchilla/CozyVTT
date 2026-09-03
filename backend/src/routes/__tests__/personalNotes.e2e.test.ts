@@ -240,6 +240,47 @@ describe('personal notes', () => {
       expect(res.status).toBe(201);
     });
 
+    /**
+     * Characters are not bytes.
+     *
+     * The cap is expressed in characters, but the body parser counts bytes, and
+     * its default 100kb is smaller than 100,000 characters of anything but
+     * plain ASCII. A note of accented text was refused at about 70,000
+     * characters — well inside its own limit — and the writer was told "An
+     * unexpected error occurred" while autosave silently stopped.
+     *
+     * These pin the two limits together at their worst realistic ratio, so
+     * lowering the parser's limit again fails here rather than in a game.
+     */
+    it('accepts a full-length note of accented text, not just ASCII', async () => {
+      const line = 'Père Lachaise — the “tomb” was sealed. ';
+      const content = line.repeat(Math.ceil(MAX_NOTE_CONTENT_LENGTH / line.length))
+        .slice(0, MAX_NOTE_CONTENT_LENGTH);
+      expect(content.length).toBe(MAX_NOTE_CONTENT_LENGTH);
+      // Comfortably past the parser's old 100kb ceiling.
+      expect(Buffer.byteLength(content, 'utf8')).toBeGreaterThan(100 * 1024);
+
+      const res = await create(player, { title: 'Accented', content });
+      expect(res.status).toBe(201);
+      expect(res.body.note.content).toBe(content);
+    });
+
+    it('accepts a full-length note of markdown prose with many line breaks', async () => {
+      const line = '- the party moved on\n';
+      const content = line.repeat(Math.ceil(MAX_NOTE_CONTENT_LENGTH / line.length))
+        .slice(0, MAX_NOTE_CONTENT_LENGTH);
+      const res = await create(player, { title: 'Prose', content });
+      expect(res.status).toBe(201);
+    });
+
+    // Over the parser's limit is a 413 the caller can act on, not a 500 that
+    // blames the server for something they can fix.
+    it('answers 413 rather than 500 when the body itself is too big', async () => {
+      const res = await create(player, { title: 'Enormous', content: 'x'.repeat(2_000_000) });
+      expect(res.status).toBe(413);
+      expect(res.body.message).toMatch(/too large/i);
+    });
+
     it('refuses one over it', async () => {
       const res = await create(player, { title: 'Too long', content: 'x'.repeat(MAX_NOTE_CONTENT_LENGTH + 1) });
       expect(res.status).toBe(400);

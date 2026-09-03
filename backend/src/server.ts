@@ -11,6 +11,8 @@ import rateLimit from 'express-rate-limit';
 import { sessionConfig } from './config/session';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
+import { bodyParsers } from './middleware/bodyParsers';
+import { errorHandler } from './middleware/errorHandler';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
@@ -88,8 +90,9 @@ const generalApiLimiter = rateLimit({
 // BODY PARSING
 // ============================================
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Shared with the integration-test app — see middleware/bodyParsers.ts for why
+// the limit is what it is.
+app.use(bodyParsers());
 
 // ============================================
 // SESSION MANAGEMENT
@@ -187,14 +190,7 @@ app.use('*', (_req, res) => {
 // GLOBAL ERROR HANDLER
 // ============================================
 
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('Unhandled error', { message: err.message, stack: err.stack });
-
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred',
-  });
-});
+app.use(errorHandler);
 
 // ============================================
 // WEBSOCKET
