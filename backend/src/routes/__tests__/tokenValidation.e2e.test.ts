@@ -35,9 +35,11 @@ const app = createTestApp();
 
 describe('map token validation', () => {
   let dmId: string;
+  let playerId: string;
   let campaignId: string;
   let mapId: string;
   let dm: ReturnType<typeof request.agent>;
+  let player: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
     const dmUser = await createTestUser({ displayName: 'Token Validation DM' });
@@ -51,8 +53,20 @@ describe('map token validation', () => {
       data: { userId: dmId, campaignId, role: 'DM', characterIds: [] },
     });
 
+    const playerUser = await createTestUser({ displayName: 'Token Validation Player' });
+    playerId = playerUser.id;
+    await prisma.campaignMembership.create({
+      data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+    });
+
     dm = request.agent(app);
     await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+
+    player = request.agent(app);
+    await player.post('/api/auth/login').send({
+      email: playerUser.email,
+      password: TEST_PASSWORD,
+    });
 
     const map = await prisma.map.create({
       data: {
@@ -73,7 +87,7 @@ describe('map token validation', () => {
   afterAll(async () => {
     await prisma.map.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId]);
+    await cleanupUsers([dmId, playerId]);
     await prisma.$disconnect();
   });
 
@@ -230,6 +244,48 @@ describe('map token validation', () => {
       });
       expect(res.status).toBe(200);
       expect(Object.keys(res.body.token.statBlock.savingThrows)).toEqual(['dex']);
+    });
+  });
+
+  /**
+   * What a player may change on a token they control.
+   *
+   * `metadata` was not on the DM-only list, so any campaign member controlling a
+   * token could write arbitrary data into the map's JSON. Nothing reads it
+   * structurally and nothing player-facing writes it, so it was a write-only
+   * channel into the database that served no purpose.
+   */
+  describe('a player controlling a token', () => {
+    let ownedTokenId: string;
+
+    beforeAll(async () => {
+      const res = await place({ name: 'Player Token', controlledBy: playerId });
+      ownedTokenId = res.body.token.id;
+    });
+
+    const playerUpdate = (body: Record<string, unknown>) =>
+      player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${ownedTokenId}`).send(body);
+
+    it('may move it', async () => {
+      // Establishes that the refusal below is about the field, not the token:
+      // the player really can update this one.
+      expect((await playerUpdate({ position: { x: 4, y: 4 } })).status).toBe(200);
+    });
+
+    it('may not write metadata', async () => {
+      const res = await playerUpdate({ metadata: { anything: 'at all' } });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/metadata/);
+    });
+
+    it('may not write a stat block either', async () => {
+      expect((await playerUpdate({ statBlock: null })).status).toBe(403);
+    });
+
+    it('leaves the stored metadata untouched when refused', async () => {
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const token = after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId);
+      expect(token.metadata).toEqual({});
     });
   });
 });

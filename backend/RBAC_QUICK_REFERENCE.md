@@ -79,6 +79,22 @@ if (!canMove) {
 }
 ```
 
+#### Which token fields a player may change
+
+`PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` is mounted on
+`campaignMember`, so the route guard alone does **not** decide this. A player who
+controls the token may change only where it is and how it looks in play:
+
+| A player controlling the token may set | Everything else is DM-only |
+|---|---|
+| `position`, `rotation`, `size`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata` |
+
+The DM-only list is `restrictedFields` in `routes/maps.ts`. **Adding a token field
+means adding it there too** unless a player is meant to write it — the list is
+deny-based, so a new field is player-writable by default. That is how `metadata`
+came to be writable by any campaign member: it was added to the token shape and
+never added to the list.
+
 #### Check Campaign Deletion Permission
 ```typescript
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);
