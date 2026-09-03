@@ -186,6 +186,41 @@ describe('visibleTokenHp', () => {
   it('is null when nothing tracks hit points', () => {
     expect(visibleTokenHp(makeToken('o'), {}, true)).toBeNull();
   });
+
+  /**
+   * The cache is not always warm.
+   *
+   * A token bound to a character that is not in the cache — the window before
+   * the roster fetch returns, or a character no member holds — must still
+   * respect the DM's choice. It briefly did not: the bound branch returned the
+   * token's own hit points outright, so a hidden NPC's HP appeared for every
+   * player until the roster arrived.
+   */
+  describe('when the character sheet is not cached', () => {
+    const bound = (over: Partial<Token> = {}) =>
+      makeToken('b', { characterId: 'char-missing', ...over });
+
+    it('does not reveal a hidden NPC\'s hit points to a player', () => {
+      const token = bound({ hp: { current: 3, max: 9, temp: 0 }, showHpBar: false });
+      expect(visibleTokenHp(token, {}, false)).toBeNull();
+    });
+
+    it('shows them once the DM turns the bar on', () => {
+      const token = bound({ hp: { current: 3, max: 9, temp: 0 }, showHpBar: true });
+      expect(visibleTokenHp(token, {}, false)).toEqual({ current: 3, max: 9, temp: 0 });
+    });
+
+    it('shows them to the DM', () => {
+      const token = bound({ hp: { current: 3, max: 9, temp: 0 }, showHpBar: false });
+      expect(visibleTokenHp(token, {}, true)).toEqual({ current: 3, max: 9, temp: 0 });
+    });
+
+    // A zero maximum would divide by zero when drawing the bar.
+    it('ignores a zero maximum rather than drawing a NaN bar', () => {
+      const token = bound({ hp: { current: 0, max: 0, temp: 0 }, showHpBar: true });
+      expect(visibleTokenHp(token, {}, true)).toBeNull();
+    });
+  });
 });
 
 describe('pickTokenAt', () => {

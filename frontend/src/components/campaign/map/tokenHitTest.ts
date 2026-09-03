@@ -113,7 +113,15 @@ export function visibleTokenHp(
   characterHpCache: Record<string, CharacterHpInfo>,
   isDM: boolean
 ): CharacterHpInfo | null {
-  if (token.characterId) return characterHpCache[token.characterId] ?? token.hp ?? null;
+  // The sheet, when it is loaded. A character's hit points are readable by
+  // every campaign member already, so this needs no gate.
+  const fromSheet = token.characterId ? characterHpCache[token.characterId] : undefined;
+  if (fromSheet) return fromSheet;
+
+  // Falling back to the token's own copy does NOT skip the gate. It briefly
+  // did: a bound token whose character was not in the cache — the window before
+  // the roster fetch returns, or a character no member holds — returned
+  // `token.hp` outright, showing hit points a DM had chosen to keep hidden.
   if (!token.hp || token.hp.max <= 0) return null;
   return isDM || token.showHpBar ? token.hp : null;
 }
