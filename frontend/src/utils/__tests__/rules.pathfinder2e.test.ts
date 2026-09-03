@@ -96,6 +96,33 @@ describe('pf2eClassDC', () => {
     expect(pf2eClassDC(seelah)).toBe(16);
   });
 
+  /**
+   * A sheet that never recorded a key attribute must not silently borrow one.
+   *
+   * The lookup accepted a prefix so that "str" would find "strength", but an
+   * empty key is a prefix of every name — so `find` returned whichever
+   * attribute the object happened to list first, which is Strength on every
+   * sheet the app writes. A wizard with no key attribute recorded therefore got
+   * a Class DC built from their Strength, and nothing on the sheet said so.
+   */
+  it('does not fall back to the first attribute when none is recorded', () => {
+    const noKey = { ...seelah, classDC: { proficiencyRank: 'trained' } };
+    // 10 + trained 3 + nothing. Not 16, which would be Strength quietly used.
+    expect(pf2eClassDC(noKey)).toBe(13);
+  });
+
+  it('does not use a blank or whitespace key attribute', () => {
+    expect(pf2eClassDC({ ...seelah, classDC: { keyAttribute: '', proficiencyRank: 'trained' } }))
+      .toBe(13);
+    expect(pf2eClassDC({ ...seelah, classDC: { keyAttribute: '   ', proficiencyRank: 'trained' } }))
+      .toBe(13);
+  });
+
+  it('ignores a key attribute that names nothing on the sheet', () => {
+    const nonsense = { ...seelah, classDC: { keyAttribute: 'luck', proficiencyRank: 'trained' } };
+    expect(pf2eClassDC(nonsense)).toBe(13);
+  });
+
   it('reads the key attribute written in full as well as abbreviated', () => {
     expect(pf2eClassDC({ ...seelah, classDC: { ...seelah.classDC, keyAttribute: 'strength' } })).toBe(16);
   });

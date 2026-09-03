@@ -93,7 +93,13 @@ export function pf2eClassDC(data: unknown): number {
   // ("str"), depending on which version of the sheet wrote it.
   const key = typeof dc.keyAttribute === 'string' ? dc.keyAttribute.trim().toLowerCase() : '';
   const attributes = rec(sheet?.attributes) ?? {};
-  const matched = Object.keys(attributes).find((name) => name === key || name.startsWith(key));
+  // The empty key is checked first because `startsWith('')` is true of every
+  // name: a sheet that never recorded a key attribute matched whichever one
+  // came first, which is Strength on everything the app writes, and used it
+  // without saying so.
+  const matched = key
+    ? Object.keys(attributes).find((name) => name === key || name.startsWith(key))
+    : undefined;
   const attrMod = matched ? num(rec(attributes[matched])?.modifier) : 0;
 
   return 10 + attrMod + pf2eProficiencyBonus(sheet?.level, dc.proficiencyRank);
