@@ -8,7 +8,7 @@ import { prisma } from '../config/database';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import { AssetType, AssetScope, deleteFile, relocateUpload } from '../utils/fileUtils';
-import { assetUsedInUserCampaign } from '../services/permissions';
+import { canReadAsset, type AssetAccessFacts } from '../services/permissions';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
@@ -60,28 +60,10 @@ function normalizePath(filePath: string): string {
  * untouched by this.
  */
 async function canReadAssetFile(
-  asset: { id: string; scope: string; uploadedById: string | null; campaignId: string | null },
+  asset: AssetAccessFacts,
   req: AuthenticatedRequest
 ): Promise<boolean> {
-  const userId = req.session.userId!;
-  if (req.session.platformRole === 'ADMIN') return true;
-
-  if (asset.scope === 'USER') {
-    if (asset.uploadedById === userId) return true;
-    return assetUsedInUserCampaign(asset.id, userId);
-  }
-
-  if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
-    const membership = await prisma.campaignMembership.findUnique({
-      where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
-    });
-    if (membership) return true;
-    // Scoped to one campaign, but a map in another campaign may point at it.
-    return assetUsedInUserCampaign(asset.id, userId);
-  }
-
-  // GLOBAL, or a campaign asset with no campaign recorded — as before.
-  return true;
+  return canReadAsset(asset, req.session.userId!, req.session.platformRole === 'ADMIN');
 }
 
 /**

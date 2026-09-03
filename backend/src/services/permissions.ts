@@ -291,13 +291,33 @@ export async function canExportCampaign(
  */
 export async function assetUsedInUserCampaign(
   assetId: string,
-  userId: string
+  userId: string,
+  uploaderId: string | null
 ): Promise<boolean> {
-  const memberships = await prisma.campaignMembership.findMany({
-    where: { userId },
-    select: { campaignId: true },
-  });
-  const campaignIds = memberships.map((m) => m.campaignId);
+  // The owner has to be in the room too.
+  //
+  // Without this, "used in a campaign you belong to" meant "named by any row
+  // you can write" — and nothing stops someone creating a campaign of their own
+  // and a map whose imageUrl is a stranger's asset id, which the map route
+  // formats but never checks. Referencing an asset therefore granted the right
+  // to read it. Requiring the uploader's membership expresses what the rule was
+  // always meant to say: you see an asset because somebody who has it brought
+  // it somewhere you both are.
+  //
+  // A null uploader (their account was deleted) grants nothing, deliberately —
+  // there is no longer anyone whose access is being shared.
+  if (!uploaderId) return false;
+
+  const [viewerIn, uploaderIn] = await Promise.all([
+    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }),
+    prisma.campaignMembership.findMany({ where: { userId: uploaderId }, select: { campaignId: true } }),
+  ]);
+
+  const uploaderCampaigns = new Set(uploaderIn.map((m) => m.campaignId));
+  const campaignIds = viewerIn
+    .map((m) => m.campaignId)
+    .filter((id) => uploaderCampaigns.has(id));
+
   if (campaignIds.length === 0) return false;
 
   // A map's own layers first: that is the common case, and it answers without
@@ -340,4 +360,66 @@ export async function assetUsedInUserCampaign(
   return maps.some((map) =>
     readTokens(map.tokens).some((token) => token?.imageUrl?.includes(assetId))
   );
+}
+
+/** The asset fields the read decision depends on. */
+export interface AssetAccessFacts {
+  id: string;
+  scope: string;
+  uploadedById: string | null;
+  campaignId: string | null;
+}
+
+/**
+ * Whether a user may read an asset's bytes.
+ *
+ * The single rule, used both by the route that serves an asset and by every
+ * route that lets a user *point* at one. Those two were separate before, which
+ * is how referencing a stranger's asset came to grant the right to read it:
+ * only the serving side asked the question, and by then the reference already
+ * existed and answered it in the affirmative.
+ */
+export async function canReadAsset(
+  asset: AssetAccessFacts,
+  userId: string,
+  isAdmin: boolean
+): Promise<boolean> {
+  if (isAdmin) return true;
+
+  if (asset.scope === 'USER') {
+    if (asset.uploadedById === userId) return true;
+    return assetUsedInUserCampaign(asset.id, userId, asset.uploadedById);
+  }
+
+  if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
+    const membership = await prisma.campaignMembership.findUnique({
+      where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
+    });
+    if (membership) return true;
+    // Scoped to one campaign, but a map in another may point at it.
+    return assetUsedInUserCampaign(asset.id, userId, asset.uploadedById);
+  }
+
+  // GLOBAL, or a campaign asset with no campaign recorded.
+  return true;
+}
+
+/**
+ * The same decision, given only an id — for routes that are about to store a
+ * reference to an asset and must check the caller may use it first.
+ *
+ * An asset that does not exist answers false: a reference to nothing is not
+ * something to write into a map either.
+ */
+export async function canReadAssetById(
+  assetId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<boolean> {
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+  });
+  if (!asset) return false;
+  return canReadAsset(asset, userId, isAdmin);
 }

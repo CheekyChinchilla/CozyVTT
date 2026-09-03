@@ -8,7 +8,8 @@ import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
 import { broadcastToCampaign } from '../websocket/utils';
-import { normalizeAssetUrl } from '../utils/asset-urls';
+import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
+import { canReadAssetById } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -110,6 +111,29 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         error: 'Validation Error',
         message: 'Invalid map imageUrl',
       });
+    }
+
+    // SECURITY: you may only point a map at a picture you can already see.
+    //
+    // Normalising a URL formats it; it does not check anything. Storing an
+    // unchecked reference is what let someone read a stranger's private asset —
+    // they created a campaign of their own, made a map naming the asset id, and
+    // the read rule then saw a legitimate-looking reference and allowed it.
+    // Refusing the reference is the half of that fix that stops it being
+    // created in the first place.
+    const referenced = [normalizedImageUrl, normalizedSpiritLayerUrl].filter(
+      (url): url is string => typeof url === 'string' && url.length > 0
+    );
+    const isAdmin = req.session.platformRole === 'ADMIN';
+    for (const url of referenced) {
+      const assetId = extractAssetId(url);
+      if (!assetId) continue;
+      if (!(await canReadAssetById(assetId, req.session.userId!, isAdmin))) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not have access to that image',
+        });
+      }
     }
 
     // Create the map
