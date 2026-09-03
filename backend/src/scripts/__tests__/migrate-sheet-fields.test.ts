@@ -61,6 +61,45 @@ describe('D&D 5e', () => {
     expect(out).not.toHaveProperty('languages');
   });
 
+  /**
+   * The merge decided it had achieved something by comparing list lengths, which
+   * is not the same question. A destination already holding a case-variant
+   * duplicate, or an entry that is not a string, makes the deduplicated result
+   * no longer than what was there — so the merge was judged a no-op and skipped,
+   * while the source fields were deleted anyway.
+   *
+   * Unlike the template-versus-typed cases below, nothing is redundant here:
+   * these entries exist nowhere else afterwards.
+   */
+  it('keeps a new language when the destination already holds a duplicate', () => {
+    const out = dnd({
+      proficienciesAndLanguages: ['Common', 'common'],
+      proficiencies: ['Elvish'],
+    });
+
+    expect(out.proficienciesAndLanguages).toContain('Elvish');
+    expect(out).not.toHaveProperty('proficiencies');
+  });
+
+  it('keeps a new language when the destination holds something malformed', () => {
+    const out = dnd({
+      proficienciesAndLanguages: [{ not: 'a string' }, 'Common'],
+      languages: ['Draconic'],
+    });
+
+    expect(out.proficienciesAndLanguages).toContain('Draconic');
+    // And the malformed entry is left where it was rather than filtered away.
+    expect(out.proficienciesAndLanguages).toContainEqual({ not: 'a string' });
+    expect(out).not.toHaveProperty('languages');
+  });
+
+  it('keeps a source entry it cannot merge rather than dropping it', () => {
+    // A non-string in the source has nowhere to go in a list of strings. It
+    // stays put instead of vanishing.
+    const out = dnd({ languages: [{ tongue: 'Druidic' }] });
+    expect(out.languages).toEqual([{ tongue: 'Druidic' }]);
+  });
+
   it('leaves the editor structured proficiencies object alone', () => {
     // The editor binds four text boxes to an object of this shape and folds it
     // into proficienciesAndLanguages itself on save. Only the flat template

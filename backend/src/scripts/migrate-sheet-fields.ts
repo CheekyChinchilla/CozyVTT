@@ -55,6 +55,40 @@ function textOrNull(value: unknown): string | null {
 }
 
 /**
+ * Take the text entries of `source` that are not already accounted for.
+ *
+ * `seen` holds the lower-cased entries the destination already has and is added
+ * to as it goes, so two sources merged in turn cannot introduce a duplicate
+ * between them.
+ *
+ * The `unmergeable` count is what makes deleting the source safe to decide:
+ * an entry that is not usable text has nowhere to go in a list of strings, and
+ * a source still holding one must be kept rather than dropped.
+ */
+function absorbTextEntries(
+  source: readonly unknown[],
+  seen: Set<string>
+): { added: string[]; unmergeable: number } {
+  const added: string[] = [];
+  let unmergeable = 0;
+
+  for (const entry of source) {
+    if (typeof entry !== 'string') {
+      unmergeable += 1;
+      continue;
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) continue; // Blank: nothing to lose by dropping it.
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue; // Already in the destination.
+    seen.add(key);
+    added.push(trimmed);
+  }
+
+  return { added, unmergeable };
+}
+
+/**
  * D&D 5e. Fold the template-era fields into the ones the sheet reads.
  *
  * `featuresAndTraits` is normalised even when there is nothing to merge, so a
@@ -80,16 +114,35 @@ export function migrateDnD5e(sheet: Sheet, notes: string[]): Sheet {
   const languages = arrayOrNull(sheet.languages);
   if (flatProficiencies || languages) {
     const existing = arrayOrNull(sheet.proficienciesAndLanguages) ?? [];
-    const merged = [...existing, ...(flatProficiencies ?? []), ...(languages ?? [])]
-      .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
-      .map((entry) => entry.trim());
-    const deduped = [...new Map(merged.map((e) => [e.toLowerCase(), e])).values()];
-    if (deduped.length > existing.length) {
-      next.proficienciesAndLanguages = deduped;
-      notes.push(`merged ${deduped.length - existing.length} proficiency/language entries`);
+
+    // Existing entries are kept exactly as they are, malformed ones included,
+    // and only genuinely new text is appended. Judging the merge by comparing
+    // list lengths asked the wrong question: a destination that already held a
+    // case-variant duplicate — or anything that was not a string — produced a
+    // result no longer than what was there, so the merge was written off as a
+    // no-op and skipped while the sources were deleted regardless, taking
+    // entries that existed nowhere else with them.
+    const seen = new Set(
+      existing
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim().toLowerCase())
+    );
+    const fromProficiencies = absorbTextEntries(flatProficiencies ?? [], seen);
+    const fromLanguages = absorbTextEntries(languages ?? [], seen);
+    const additions = [...fromProficiencies.added, ...fromLanguages.added];
+
+    if (additions.length > 0) {
+      next.proficienciesAndLanguages = [...existing, ...additions];
+      notes.push(`merged ${additions.length} proficiency/language entries`);
     }
-    if (flatProficiencies) delete next.proficiencies;
-    delete next.languages;
+
+    // A source is dropped only once everything in it is either already in the
+    // destination or was just added to it.
+    if (flatProficiencies && fromProficiencies.unmergeable === 0) delete next.proficiencies;
+    if (fromLanguages.unmergeable === 0) delete next.languages;
+
+    const kept = fromProficiencies.unmergeable + fromLanguages.unmergeable;
+    if (kept > 0) notes.push(`kept ${kept} entr${kept === 1 ? 'y' : 'ies'} that are not text`);
   }
 
   // Four loose strings become the `personality` object the sheet renders.
