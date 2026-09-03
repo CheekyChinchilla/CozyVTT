@@ -94,7 +94,10 @@ describe('PersonalNotes autosave', () => {
       await vi.advanceTimersByTimeAsync(1200);
     });
 
-    expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', { content: 'a thought' });
+    expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', {
+      content: 'a thought',
+      title: 'First',
+    });
   });
 
   it('does not save merely opening a note', async () => {
@@ -128,6 +131,7 @@ describe('PersonalNotes autosave', () => {
 
     expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', {
       content: 'written but not yet saved',
+      title: 'First',
     });
   });
 
@@ -144,7 +148,10 @@ describe('PersonalNotes autosave', () => {
     await openNote('n2');
 
     // Saved against the note it was typed in, not the one now on screen.
-    expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', { content: 'about to switch' });
+    expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', {
+      content: 'about to switch',
+      title: 'First',
+    });
   });
 
   it('does not resurrect a deleted note on the way out', async () => {
@@ -164,6 +171,78 @@ describe('PersonalNotes autosave', () => {
     updateNote.mockClear();
     unmount();
     expect(updateNote).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Renaming used to PUT on every keystroke: typing a title sent one request per
+   * character, with no ordering guarantee between the responses. It rides the
+   * same debounce as the body now.
+   */
+  describe('renaming', () => {
+    const rename = (to: string) =>
+      fireEvent.change(screen.getByLabelText('Note title'), { target: { value: to } });
+
+    it('does not send a request per keystroke', async () => {
+      render(<PersonalNotes />);
+      await waitFor(() => expect(listNotes).toHaveBeenCalled());
+      await openNote('n1');
+
+      for (const partial of ['A', 'An', 'An ', 'An i', 'An id', 'An ide', 'An idea']) {
+        rename(partial);
+      }
+      expect(updateNote).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1200);
+      });
+
+      expect(updateNote).toHaveBeenCalledTimes(1);
+      expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', {
+        content: 'body of n1',
+        title: 'An idea',
+      });
+    });
+
+    it('shows the new title in the picker as it is typed', async () => {
+      render(<PersonalNotes />);
+      await waitFor(() => expect(listNotes).toHaveBeenCalled());
+      await openNote('n1');
+
+      rename('Renamed');
+      expect(screen.getByRole('option', { name: 'Renamed' })).toBeInTheDocument();
+    });
+
+    it('keeps a rename that has not been saved yet when the panel closes', async () => {
+      const { unmount } = render(<PersonalNotes />);
+      await waitFor(() => expect(listNotes).toHaveBeenCalled());
+      await openNote('n1');
+
+      rename('Nearly lost');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      unmount();
+
+      expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', {
+        content: 'body of n1',
+        title: 'Nearly lost',
+      });
+    });
+
+    it('does not send a blank title, which the server would refuse', async () => {
+      render(<PersonalNotes />);
+      await waitFor(() => expect(listNotes).toHaveBeenCalled());
+      await openNote('n1');
+
+      rename('   ');
+      fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'still saves' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1200);
+      });
+
+      // The body still reaches the server; the title is simply left alone.
+      expect(updateNote).toHaveBeenCalledWith('camp-1', 'n1', { content: 'still saves' });
+    });
   });
 
   it('reports unsaved changes rather than claiming everything is saved', async () => {

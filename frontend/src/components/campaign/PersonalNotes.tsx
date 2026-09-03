@@ -33,16 +33,21 @@ const MAX_CONTENT = 100_000;
 /** How long to wait after the last keystroke before saving. */
 const SAVE_DEBOUNCE_MS = 1200;
 
-/** A note's text at a point in time, tagged with the note it belongs to. */
+/** A note at a point in time, tagged with which note it is. */
 interface NoteSnapshot {
   noteId: string;
+  title: string;
   content: string;
 }
 
 /** Whether a draft holds anything the server has not been told about. */
 function isUnsaved(draft: NoteSnapshot | null, saved: NoteSnapshot | null): boolean {
   if (!draft) return false;
-  return saved?.noteId !== draft.noteId || saved.content !== draft.content;
+  return (
+    saved?.noteId !== draft.noteId ||
+    saved.content !== draft.content ||
+    saved.title !== draft.title
+  );
 }
 
 export default function PersonalNotes() {
@@ -103,11 +108,25 @@ export default function PersonalNotes() {
       setSaving(true);
       setError(null);
       try {
-        await api.updateNote(campaignId, snapshot.noteId, { content: snapshot.content });
+        // A blank title is left out rather than sent: the server requires a
+        // non-empty one, and refusing the whole save would take the body with
+        // it. The title is restored from the server the next time the note is
+        // opened.
+        const trimmedTitle = snapshot.title.trim();
+        await api.updateNote(campaignId, snapshot.noteId, {
+          content: snapshot.content,
+          ...(trimmedTitle && { title: trimmedTitle }),
+        });
         setSavedSnapshot(snapshot);
         setNotes((prev) =>
           prev.map((n) =>
-            n.id === snapshot.noteId ? { ...n, updatedAt: new Date().toISOString() } : n
+            n.id === snapshot.noteId
+              ? {
+                  ...n,
+                  ...(trimmedTitle && { title: trimmedTitle }),
+                  updatedAt: new Date().toISOString(),
+                }
+              : n
           )
         );
       } catch (err) {
@@ -149,8 +168,8 @@ export default function PersonalNotes() {
         setContent(note.content);
         // What was just loaded is, by definition, what the server has. Setting
         // both means a note opened and not typed in is never treated as unsaved.
-        draftRef.current = { noteId: note.id, content: note.content };
-        setSavedSnapshot({ noteId: note.id, content: note.content });
+        draftRef.current = { noteId: note.id, title: note.title, content: note.content };
+        setSavedSnapshot({ noteId: note.id, title: note.title, content: note.content });
       } catch (err) {
         setError(apiErrorMessage(err) ?? 'Could not open that note.');
       } finally {
@@ -167,13 +186,13 @@ export default function PersonalNotes() {
   // someone press Save is how work gets lost.
   useEffect(() => {
     if (!selectedId || loadingBodyRef.current) return;
-    draftRef.current = { noteId: selectedId, content };
+    draftRef.current = { noteId: selectedId, title, content };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(flush, SAVE_DEBOUNCE_MS);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [content, selectedId, flush]);
+  }, [content, title, selectedId, flush]);
 
   /**
    * Write out the pending draft when the note is switched or the panel closes.
@@ -208,22 +227,28 @@ export default function PersonalNotes() {
       setSelectedId(note.id);
       setTitle(note.title);
       setContent('');
-      draftRef.current = { noteId: note.id, content: '' };
-      setSavedSnapshot({ noteId: note.id, content: '' });
+      draftRef.current = { noteId: note.id, title: note.title, content: '' };
+      setSavedSnapshot({ noteId: note.id, title: note.title, content: '' });
       setEditing(true);
     } catch (err) {
       setError(apiErrorMessage(err) ?? 'Could not create a note.');
     }
   };
 
-  const handleRename = async (next: string) => {
+  /**
+   * Renaming is local; the autosave carries it to the server with the body.
+   *
+   * It used to PUT on every keystroke, so typing a title sent a request per
+   * character — up to 120 of them for one rename, with no ordering guarantee
+   * between the responses.
+   */
+  const handleRename = (next: string) => {
     setTitle(next);
-    if (!campaignId || !selectedId || !next.trim()) return;
-    try {
-      await api.updateNote(campaignId, selectedId, { title: next.trim() });
-      setNotes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, title: next.trim() } : n)));
-    } catch (err) {
-      setError(apiErrorMessage(err) ?? 'Could not rename that note.');
+    if (!selectedId) return;
+    // The picker reads from `notes`, so it has to follow along as you type.
+    const trimmed = next.trim();
+    if (trimmed) {
+      setNotes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, title: trimmed } : n)));
     }
   };
 
@@ -249,7 +274,7 @@ export default function PersonalNotes() {
 
   // Derived from state rather than the refs, so the label re-renders with it.
   const unsaved =
-    selectedId !== null && isUnsaved({ noteId: selectedId, content }, savedSnapshot);
+    selectedId !== null && isUnsaved({ noteId: selectedId, title, content }, savedSnapshot);
   const nearLimit = content.length > MAX_CONTENT * 0.9;
 
   return (
@@ -309,7 +334,7 @@ export default function PersonalNotes() {
             <div className="flex items-center gap-2">
               <input
                 value={title}
-                onChange={(e) => { void handleRename(e.target.value); }}
+                onChange={(e) => handleRename(e.target.value)}
                 maxLength={120}
                 aria-label="Note title"
                 className="flex-1 min-w-0 px-2 py-1 text-sm font-semibold border border-warm-amber/30 rounded-cozy bg-parchment/60 focus:outline-none focus:ring-2 focus:ring-warm-amber"
