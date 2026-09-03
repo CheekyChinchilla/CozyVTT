@@ -2208,6 +2208,59 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/campaigns/{campaignId}/sessions/{sessionId}/notes:
+    put:
+      tags:
+        - Sessions
+      summary: Edit or clear a past session's notes
+      description: >-
+        Rewrite the recap recorded for a session, or clear it by sending an
+        empty string. DM only. The session must belong to the campaign in the
+        path; one that does not answers 404 rather than 403, so the response
+        cannot be used to discover which session ids exist.
+      operationId: updateSessionNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notes
+              properties:
+                notes:
+                  type: string
+                  maxLength: 2000
+                  description: >-
+                    The recap. Empty, or only whitespace, clears it and stores
+                    null.
+      responses:
+        '200':
+          description: Notes updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/campaigns/{campaignId}/resume:
     put:
       tags:

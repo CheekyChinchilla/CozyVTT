@@ -578,6 +578,25 @@ Leaving it blank is fine; the session still appears in the list, marked as havin
 
 *Screenshot pending — End session confirmation dialog.*
 
+### Editing or clearing a past session's notes
+
+Under **Session → Past Sessions**, each entry has a **pencil** button that only
+you can see. Click it to rewrite that session's notes, then the **tick** to save
+or the **cross** to cancel.
+
+**To delete a recap entirely, clear the box and save.** The entry stays in the
+list — it is a record that the session happened — but it goes back to reading
+"No notes were written."
+
+This exists for a specific reason. CozyVTT saved session notes long before
+anything displayed them, so the first time you open Past Sessions you may find
+recaps going back months that nobody has ever seen — including any you wrote as
+private reminders to yourself, back when nothing showed them to anyone. Read
+through them and clear anything you would rather the table did not see.
+
+Notes are limited to 2,000 characters, the same as the box in the end-session
+dialog.
+
 ### The Chat Panel (DM View)
 
 As the DM, chat works the same as it does for players — type and hit Enter to send. However, you have one extra option: **Secret Dice Rolls**. When you roll dice, you can choose to roll secretly. Only you see the result in chat; players see a "DM rolled secretly" notice.

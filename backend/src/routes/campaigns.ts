@@ -17,6 +17,7 @@ import {
   UpdatePersonalNoteSchema,
   MAX_NOTES_PER_CAMPAIGN,
 } from '../validators/personalNotes';
+import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -1430,6 +1431,59 @@ router.get('/:campaignId/sessions', campaignMember, async (req: AuthenticatedReq
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch sessions',
+    });
+  }
+});
+
+/**
+ * PUT /api/campaigns/:campaignId/sessions/:sessionId/notes
+ * Rewrite or clear the recap for a session that has already ended.
+ * Requires: Campaign DM role
+ *
+ * Sessions were being ended with notes long before anything displayed them, so
+ * the history list showed every recap ever written at once. A DM who had treated
+ * that box as private working notes had no way to take them back. Sending an
+ * empty string clears the recap outright.
+ */
+router.put('/:campaignId/sessions/:sessionId/notes', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, sessionId } = req.params;
+
+    const parsed = UpdateSessionNotesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid session notes',
+      });
+    }
+
+    const trimmed = parsed.data.notes.trim();
+
+    // Scoped by campaign as well as id, in one statement: `campaignDM` proves
+    // the caller runs *this* campaign, and looking the session up separately
+    // would leave a window between the check and the write. A session belonging
+    // to someone else's campaign matches nothing and answers 404 — a 403 would
+    // confirm the id exists.
+    const updated = await prisma.session.updateMany({
+      where: { id: sessionId, campaignId },
+      data: { notes: trimmed.length > 0 ? trimmed : null },
+    });
+
+    if (updated.count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Session not found' });
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true, sessionNumber: true, startedAt: true, endedAt: true, notes: true },
+    });
+
+    return res.status(200).json({ session });
+  } catch (error) {
+    logger.error('Error updating session notes', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to update session notes',
     });
   }
 });

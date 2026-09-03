@@ -8,14 +8,22 @@
  * is the panel the dialog was promising. Everyone in the campaign sees it: the
  * notes describe what happened at the table, which is exactly what a player
  * wants before the next game.
+ *
+ * Which is also why the DM can edit and clear them here. Sessions were being
+ * ended with notes for as long as the box has existed, and showing them all at
+ * once makes public something a DM may have treated as a private scratchpad.
+ * Editing is the way to take that back.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollText, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { ScrollText, ChevronDown, ChevronRight, RefreshCw, Pencil, Check, X } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import type { SessionSummary } from '@/types';
+
+/** Matches the server's cap on a session recap. */
+const MAX_SESSION_NOTES = 2000;
 
 /** "8 Jan 2026" — short enough for a side panel, unambiguous about the month. */
 function formatDate(iso: string): string {
@@ -43,13 +51,19 @@ function formatDuration(startedAt: string, endedAt: string | null): string | nul
 }
 
 export default function SessionHistory() {
-  const { campaign, activeSession } = useCampaign();
+  const { campaign, activeSession, userRole } = useCampaign();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
 
+  /** The session whose notes are open for editing, and the text being typed. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+
   const campaignId = campaign?.id;
+  const isDM = userRole === 'DM';
 
   const load = useCallback(async () => {
     if (!campaignId) return;
@@ -70,6 +84,23 @@ export default function SessionHistory() {
   useEffect(() => {
     void load();
   }, [load, activeSession?.id]);
+
+  /** Save the open draft, replacing the row in place rather than refetching. */
+  const saveNotes = async (sessionId: string) => {
+    if (!campaignId) return;
+    setSavingNotes(true);
+    setError(null);
+    try {
+      const { session } = await api.updateSessionNotes(campaignId, sessionId, draft);
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? session : s)));
+      setEditingId(null);
+      setDraft('');
+    } catch (err) {
+      setError(apiErrorMessage(err) ?? 'Could not save those notes.');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   if (!campaignId) return null;
 
@@ -130,13 +161,67 @@ export default function SessionHistory() {
                   <h4 className="text-xs font-semibold text-brand-ink">
                     Session {session.sessionNumber}
                   </h4>
-                  <span className="text-[11px] text-stone-gray shrink-0">
-                    {formatDate(session.startedAt)}
-                    {duration && ` · ${duration}`}
-                  </span>
+                  <div className="flex items-baseline gap-2 shrink-0">
+                    <span className="text-[11px] text-stone-gray">
+                      {formatDate(session.startedAt)}
+                      {duration && ` · ${duration}`}
+                    </span>
+                    {isDM && editingId !== session.id && (
+                      <button
+                        onClick={() => {
+                          setEditingId(session.id);
+                          setDraft(session.notes ?? '');
+                        }}
+                        className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink"
+                        title="Edit these notes"
+                        aria-label={`Edit notes for session ${session.sessionNumber}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </header>
 
-                {session.notes ? (
+                {editingId === session.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      maxLength={MAX_SESSION_NOTES}
+                      rows={5}
+                      aria-label={`Notes for session ${session.sessionNumber}`}
+                      placeholder="What happened this session? Leave empty to clear these notes."
+                      className="w-full px-2 py-1.5 text-xs border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-y focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-warm-gray">
+                        {draft.trim()
+                          ? `${draft.length.toLocaleString()} / ${MAX_SESSION_NOTES.toLocaleString()}`
+                          : 'Saving empty will clear these notes.'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setEditingId(null); setDraft(''); }}
+                          disabled={savingNotes}
+                          className="p-1 rounded border border-warm-amber/30 text-stone-gray hover:text-brand-ink disabled:opacity-50"
+                          title="Cancel"
+                          aria-label="Cancel editing"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => void saveNotes(session.id)}
+                          disabled={savingNotes}
+                          className="p-1 rounded border border-moss-green/40 bg-moss-green/10 text-moss-green hover:bg-moss-green/20 disabled:opacity-50"
+                          title="Save"
+                          aria-label="Save notes"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : session.notes ? (
                   // `whitespace-pre-wrap` so the DM's own line breaks survive —
                   // these are usually written as a short list of what happened.
                   <p className="text-xs text-brand-ink whitespace-pre-wrap break-words">

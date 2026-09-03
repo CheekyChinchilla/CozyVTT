@@ -564,6 +564,19 @@ class ApiClient {
     return response.data;
   }
 
+  /** Rewrite a past session's recap. An empty string clears it. DM only. */
+  async updateSessionNotes(
+    campaignId: string,
+    sessionId: string,
+    notes: string
+  ): Promise<{ session: SessionSummary }> {
+    const response = await this.client.put(
+      `/api/campaigns/${campaignId}/sessions/${sessionId}/notes`,
+      { notes }
+    );
+    return response.data;
+  }
+
   async startSession(campaignId: string): Promise<{ message: string; session: Session }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/sessions`);
     return response.data;
