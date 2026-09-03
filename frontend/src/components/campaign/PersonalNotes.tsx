@@ -33,6 +33,18 @@ const MAX_CONTENT = 100_000;
 /** How long to wait after the last keystroke before saving. */
 const SAVE_DEBOUNCE_MS = 1200;
 
+/** A note's text at a point in time, tagged with the note it belongs to. */
+interface NoteSnapshot {
+  noteId: string;
+  content: string;
+}
+
+/** Whether a draft holds anything the server has not been told about. */
+function isUnsaved(draft: NoteSnapshot | null, saved: NoteSnapshot | null): boolean {
+  if (!draft) return false;
+  return saved?.noteId !== draft.noteId || saved.content !== draft.content;
+}
+
 export default function PersonalNotes() {
   const { campaign } = useCampaign();
   const campaignId = campaign?.id;
@@ -47,9 +59,20 @@ export default function PersonalNotes() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  /** A note's text at a moment in time — what is in the editor, or what the server has. */
+  const [savedSnapshot, setSavedSnapshot] = useState<NoteSnapshot | null>(null);
+
   /** Set while loading a note, so the load does not look like an edit. */
   const loadingBodyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The autosave has to be readable from a cleanup function, which runs with the
+  // values from the render it was created in. Refs give the cleanup the *latest*
+  // text instead, which is the whole point: when the cleanup fires it is because
+  // the component is going away, and the newest keystrokes are the ones at risk.
+  const draftRef = useRef<NoteSnapshot | null>(null);
+  const savedRef = useRef<NoteSnapshot | null>(null);
+  savedRef.current = savedSnapshot;
 
   const loadList = useCallback(async () => {
     if (!campaignId) return;
@@ -67,10 +90,55 @@ export default function PersonalNotes() {
     void loadList();
   }, [loadList]);
 
+  /**
+   * Write one note's text to the server.
+   *
+   * Takes what to save rather than reading it from state, because the flush
+   * below saves the note being *left behind* — by the time it runs, `selectedId`
+   * may already point at a different note.
+   */
+  const save = useCallback(
+    async (snapshot: NoteSnapshot) => {
+      if (!campaignId) return;
+      setSaving(true);
+      setError(null);
+      try {
+        await api.updateNote(campaignId, snapshot.noteId, { content: snapshot.content });
+        setSavedSnapshot(snapshot);
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === snapshot.noteId ? { ...n, updatedAt: new Date().toISOString() } : n
+          )
+        );
+      } catch (err) {
+        setError(apiErrorMessage(err) ?? 'Could not save. Your text is still here — try again.');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [campaignId]
+  );
+
+  /** Save now, if there is anything the server has not been told about. */
+  const flush = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const draft = draftRef.current;
+    if (!isUnsaved(draft, savedRef.current) || !draft) return;
+    void save(draft);
+  }, [save]);
+
   /** Open a note, fetching its body. */
   const openNote = useCallback(
     async (noteId: string) => {
       if (!campaignId) return;
+      // Before anything else, because loading overwrites the draft. Relying on
+      // the unmount cleanup alone was not enough: the new note's text landed in
+      // `draftRef` first, and the outgoing note's edits were gone by the time
+      // the cleanup looked for them.
+      flush();
       setLoading(true);
       setError(null);
       loadingBodyRef.current = true;
@@ -79,6 +147,10 @@ export default function PersonalNotes() {
         setSelectedId(note.id);
         setTitle(note.title);
         setContent(note.content);
+        // What was just loaded is, by definition, what the server has. Setting
+        // both means a note opened and not typed in is never treated as unsaved.
+        draftRef.current = { noteId: note.id, content: note.content };
+        setSavedSnapshot({ noteId: note.id, content: note.content });
       } catch (err) {
         setError(apiErrorMessage(err) ?? 'Could not open that note.');
       } finally {
@@ -88,39 +160,47 @@ export default function PersonalNotes() {
         setTimeout(() => { loadingBodyRef.current = false; }, 0);
       }
     },
-    [campaignId]
+    [campaignId, flush]
   );
-
-  /** Save whatever is in the editor now. */
-  const save = useCallback(async () => {
-    if (!campaignId || !selectedId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.updateNote(campaignId, selectedId, { content });
-      setNotes((prev) =>
-        prev.map((n) => (n.id === selectedId ? { ...n, updatedAt: new Date().toISOString() } : n))
-      );
-    } catch (err) {
-      setError(apiErrorMessage(err) ?? 'Could not save. Your text is still here — try again.');
-    } finally {
-      setSaving(false);
-    }
-  }, [campaignId, selectedId, content]);
 
   // Autosave after a pause in typing. A note is long-form writing; making
   // someone press Save is how work gets lost.
   useEffect(() => {
     if (!selectedId || loadingBodyRef.current) return;
+    draftRef.current = { noteId: selectedId, content };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => { void save(); }, SAVE_DEBOUNCE_MS);
+    saveTimerRef.current = setTimeout(flush, SAVE_DEBOUNCE_MS);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [content, selectedId, save]);
+  }, [content, selectedId, flush]);
+
+  /**
+   * Write out the pending draft when the note is switched or the panel closes.
+   *
+   * Without this the cleanup above simply cancelled the timer, so anything typed
+   * in the last 1.2 seconds before switching notes or navigating away was thrown
+   * out — while the panel said "Saved automatically" the whole time. Depending on
+   * `selectedId` alone means this cleanup runs when the note changes and on
+   * unmount, and not on every keystroke.
+   */
+  useEffect(() => flush, [selectedId, flush]);
+
+  // The one case a flush cannot cover: the tab closing takes the request with
+  // it. Warn instead of pretending, and let the browser word the prompt.
+  useEffect(() => {
+    const warnIfUnsaved = (event: BeforeUnloadEvent) => {
+      if (!isUnsaved(draftRef.current, savedRef.current)) return;
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warnIfUnsaved);
+    return () => window.removeEventListener('beforeunload', warnIfUnsaved);
+  }, []);
 
   const handleCreate = async () => {
     if (!campaignId) return;
+    // Same reason as openNote: this replaces the draft.
+    flush();
     setError(null);
     try {
       const { note } = await api.createNote(campaignId, 'Untitled note', '');
@@ -128,6 +208,8 @@ export default function PersonalNotes() {
       setSelectedId(note.id);
       setTitle(note.title);
       setContent('');
+      draftRef.current = { noteId: note.id, content: '' };
+      setSavedSnapshot({ noteId: note.id, content: '' });
       setEditing(true);
     } catch (err) {
       setError(apiErrorMessage(err) ?? 'Could not create a note.');
@@ -150,6 +232,10 @@ export default function PersonalNotes() {
     setConfirmDelete(false);
     try {
       await api.deleteNote(campaignId, selectedId);
+      // Drop the draft before clearing the selection, or the flush that runs on
+      // the way out would recreate the text of the note just deleted.
+      draftRef.current = null;
+      setSavedSnapshot(null);
       setSelectedId(null);
       setTitle('');
       setContent('');
@@ -161,7 +247,10 @@ export default function PersonalNotes() {
 
   if (!campaignId) return null;
 
-  const overLimit = content.length > MAX_CONTENT;
+  // Derived from state rather than the refs, so the label re-renders with it.
+  const unsaved =
+    selectedId !== null && isUnsaved({ noteId: selectedId, content }, savedSnapshot);
+  const nearLimit = content.length > MAX_CONTENT * 0.9;
 
   return (
     <>
@@ -253,6 +342,9 @@ export default function PersonalNotes() {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={'# Heading\n\n- a list\n- of things\n\n[a link](https://example.com)'}
                 aria-label="Note content"
+                // Matches the server's cap, so the editor cannot get into a
+                // state where every autosave is refused.
+                maxLength={MAX_CONTENT}
                 className="flex-1 min-h-0 w-full px-3 py-2 text-sm font-mono border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-none focus:outline-none focus:ring-2 focus:ring-warm-amber"
               />
             ) : (
@@ -268,10 +360,10 @@ export default function PersonalNotes() {
             )}
 
             <div className="flex items-center justify-between text-[11px] text-warm-gray">
-              <span>
-                {saving ? 'Saving…' : 'Saved automatically'}
+              <span aria-live="polite">
+                {saving ? 'Saving…' : unsaved ? 'Unsaved changes…' : 'Saved'}
               </span>
-              <span className={overLimit ? 'text-danger-ink font-semibold' : ''}>
+              <span className={nearLimit ? 'text-danger-ink font-semibold' : ''}>
                 {content.length.toLocaleString()} / {MAX_CONTENT.toLocaleString()}
               </span>
             </div>
