@@ -635,7 +635,31 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 **Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage.
 
+### Via the included scripts
+
+Run these from the folder you installed CozyVTT into, with the stack running:
+
+```bash
+# Create a backup — written to ./backups/cozyvtt_YYYYMMDD_HHMMSS.sql.gz
+./backend/scripts/backup.sh
+
+# Restore one (this REPLACES the current database — it asks you to confirm)
+./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+```
+
+Both notice that you are running under Docker and do the work inside the
+database container, so you do **not** need PostgreSQL installed on the host.
+Backups older than 30 days are pruned; set `BACKUP_RETAIN_DAYS` to change that.
+
+If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
+
+```bash
+DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
+```
+
 ### Via Command Line
+
+The same thing by hand, if you would rather not use the scripts:
 
 ```bash
 # Create a backup
