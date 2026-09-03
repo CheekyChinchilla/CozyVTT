@@ -182,5 +182,54 @@ describe('map token validation', () => {
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
       expect(token.hp).toEqual({ current: 2, max: 5, temp: 0 });
     });
+
+    /**
+     * The metadata limit bounds the column, not the request.
+     *
+     * An update merges into what the token already holds, so checking only the
+     * incoming patch left the stored object free to grow: every request stayed
+     * under 8KB on its own while the total climbed past it, one new key at a
+     * time.
+     */
+    describe('metadata size', () => {
+      // Comfortably under 8KB alone; four of them together are over it.
+      const chunk = (key: string) => ({ [key]: 'x'.repeat(2500) });
+
+      it('accepts metadata within the limit', async () => {
+        expect((await update({ metadata: chunk('a') })).status).toBe(200);
+      });
+
+      it('refuses a patch that pushes the stored total over the limit', async () => {
+        expect((await update({ metadata: chunk('b') })).status).toBe(200);
+        expect((await update({ metadata: chunk('c') })).status).toBe(200);
+
+        const res = await update({ metadata: chunk('d') });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/metadata/i);
+      });
+
+      it('leaves the stored metadata as it was when the merge is refused', async () => {
+        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const token = after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
+        expect(Object.keys(token.metadata).sort()).toEqual(['a', 'b', 'c']);
+      });
+    });
+
+    it('stores the checked stat block rather than what was sent', async () => {
+      // The schema normalises save and skill keys by trimming them. Storing the
+      // raw body kept the untrimmed key, so the same save could be written twice
+      // under names that only differ by whitespace — and the update route was
+      // the one place doing it, while the create route stored what it checked.
+      const res = await update({
+        statBlock: {
+          ac: 14,
+          speed: '30 ft.',
+          abilities: { str: 10, dex: 12, con: 11, int: 10, wis: 10, cha: 10 },
+          savingThrows: { '  dex  ': 3 },
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.token.statBlock.savingThrows)).toEqual(['dex']);
+    });
   });
 });

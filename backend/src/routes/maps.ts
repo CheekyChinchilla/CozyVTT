@@ -11,7 +11,7 @@ import { broadcastToCampaign } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
-import { validateTokenShapes } from '../validators/tokens';
+import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
@@ -1042,6 +1042,23 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
+    // Metadata is merged into what the token already holds, so the size limit
+    // has to be checked against the result. Checking only the incoming patch
+    // bounded each request and not the column: a sequence of small updates
+    // carrying different keys grew the stored object without limit.
+    const mergedMetadata = shapes.value.metadata
+      ? { ...existingToken.metadata, ...shapes.value.metadata }
+      : undefined;
+    if (mergedMetadata) {
+      const merged = TokenMetadataSchema.safeParse(mergedMetadata);
+      if (!merged.success) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}`,
+        });
+      }
+    }
+
     // Build updated token (merge updates with existing)
     const updatedToken: Token = {
       ...existingToken,
@@ -1054,7 +1071,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       ...(updates.controlledBy !== undefined && { controlledBy: updates.controlledBy }),
       ...(updates.rotation !== undefined && { rotation: updates.rotation }),
       ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
-      ...(shapes.value.metadata && { metadata: { ...existingToken.metadata, ...shapes.value.metadata } }),
+      ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
       ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
@@ -1062,7 +1079,11 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       ...(updates.notes !== undefined && { notes: updates.notes }),
       ...(updates.initiative !== undefined && { initiative: updates.initiative }),
       ...(updates.displayMode !== undefined && { displayMode: updates.displayMode }),
-      ...(updates.statBlock !== undefined && { statBlock: updates.statBlock }),
+      // The parsed value, not the raw one: Zod drops keys the schema does not
+      // declare, and storing what arrived instead of what was checked is how
+      // undeclared fields survived into sheets and then drifted. The create
+      // route above has always stored the parsed value.
+      ...(updates.statBlock !== undefined && { statBlock: shapes.value.statBlock ?? null }),
       ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: updates.creatureTemplateId }),
     };
 
