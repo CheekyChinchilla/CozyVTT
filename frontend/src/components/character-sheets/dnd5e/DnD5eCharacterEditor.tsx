@@ -796,6 +796,25 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     setCustomPropertyDrafts((prev) => ({ ...prev, [index]: '' }));
   };
 
+  /**
+   * Drop one attack's draft and shift the rest down.
+   *
+   * The drafts are keyed by position in the attacks array, so deleting a weapon
+   * renumbers every weapon after it. Without this, half-typed text moved to
+   * whichever weapon inherited the deleted one's index.
+   */
+  const removeCustomPropertyDraft = (removed: number) => {
+    setCustomPropertyDrafts((prev) => {
+      const next: Record<number, string> = {};
+      for (const [key, draft] of Object.entries(prev)) {
+        const at = Number(key);
+        if (at === removed) continue;
+        next[at > removed ? at - 1 : at] = draft;
+      }
+      return next;
+    });
+  };
+
   const updateField = (path: string, value: unknown) => {
     setFormData((prev) => {
       const newData = { ...prev } as unknown as Record<string, unknown>;
@@ -1754,6 +1773,7 @@ min={0}
                   onClick={() => {
                     const newAttacks = formData.attacks!.filter((_, i) => i !== index);
                     updateField('attacks', newAttacks);
+                    removeCustomPropertyDraft(index);
                   }}
                   className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
                 >
