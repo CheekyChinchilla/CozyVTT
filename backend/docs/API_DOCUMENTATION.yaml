@@ -10,11 +10,19 @@ info:
     carries **no compatibility promise**, and any route here may change shape or
     disappear in a point release without notice or a deprecation period.
 
-    There is also no way to authenticate as a program: the only mechanism is the
-    browser session cookie below. There are no API keys, no bearer tokens and no
-    service accounts, so there is nothing here to build a third-party integration
-    on top of. Treat this document as a map of the current code, useful for
-    working on the server or the client, and nothing more.
+    There are no API keys, no bearer tokens and no service accounts. The only
+    credential is the session cookie described below — but a program can obtain
+    one exactly as the web client does, by posting a user's own email and
+    password to `/api/auth/login` and keeping the cookie it returns. That cookie
+    also authenticates the Socket.io connection, which shares the same session.
+
+    So scripting CozyVTT is possible, and people have done it. What it does not
+    come with is a promise: a script authenticates **as a specific user** and can
+    do only what that user could do in the browser, the session expires after an
+    hour of inactivity (refreshed by activity), an account with MFA enabled needs
+    the second step, and any route here may change shape in a point release
+    without notice. Treat this document as a map of the current code rather than
+    a contract.
 
     ## Authentication
     All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.

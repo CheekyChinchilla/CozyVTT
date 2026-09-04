@@ -70,9 +70,14 @@ For the complete, checked list of every route the server mounts, see
 That file is verified against the code by `scripts/spec-coverage.py`, so it
 cannot silently fall behind the way this one did.
 
-These routes are also not a public API: they are not versioned, they carry no
-compatibility promise, and there is no way for a program to authenticate
-against them.
+These routes are also not a public API: they are not versioned and they carry no
+compatibility promise, so any of them may change shape in a point release.
+
+A program can still call them. There are no API keys or service accounts, but
+signing in with a user's own email and password returns a session cookie that
+authenticates both these routes and the Socket.io connection. A script doing
+that is acting as that user, with exactly that user's permissions — see
+[Authentication](#authentication) below.
 
 ## REST API Overview
 
