@@ -1,6 +1,6 @@
 {
   "name": "cozyvtt-backend",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "CozyVTT Backend - Self-hosted Virtual Tabletop",
   "main": "dist/server.js",
   "scripts": {

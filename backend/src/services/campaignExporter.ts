@@ -198,7 +198,7 @@ export async function exportCampaign(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.2.2'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.3.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,

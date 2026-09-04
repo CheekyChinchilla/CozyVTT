@@ -3,11 +3,11 @@
 > **A historical record, not a current picture.** This captures the schema
 > verification done for the v1.0.0 release on 10 February 2026, against a
 > statement of work that is not in this repository. The schema has grown a lot
-> since: **17 models and 9 enums today**, against the 10 and 7 recorded below.
+> since: **18 models and 9 enums today**, against the 10 and 7 recorded below.
 >
 > Models added since and *not* covered here: `PasswordResetToken`,
 > `CampaignInvitation`, `CharacterTemplate`, `CreatureTemplate`,
-> `CreatureFavorite`, `TokenTemplate`, `SystemSettings`.
+> `CreatureFavorite`, `TokenTemplate`, `SystemSettings`, `PersonalNote`.
 >
 > Treat `backend/prisma/schema.prisma` as the source of truth. Kept because the
 > field-level and relationship checks below still describe the original models
