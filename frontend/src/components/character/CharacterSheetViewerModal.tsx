@@ -72,7 +72,11 @@ export default function CharacterSheetViewerModal({
   useEffect(() => {
     if (!socket) return;
 
-    const handleCharacterUpdate = (data: { characterId: string; character: Character }) => {
+    const handleCharacterUpdate = (data: { characterId: string; character?: Character }) => {
+      // The same event is also sent to campaigns that merely hold a token for
+      // this character, and those carry no sheet — reading it is not something
+      // membership of *that* campaign entitles you to. Nothing to refresh here.
+      if (!data.character) return;
       if (data.characterId === character.id) {
         console.log('Character updated - refreshing viewer');
         setCharacter(data.character);

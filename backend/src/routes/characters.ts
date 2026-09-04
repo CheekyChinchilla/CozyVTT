@@ -600,18 +600,35 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // DM may have renamed it ("Aldra (charmed)", or A/B for duplicates) and
     // silently overwriting that on the player's next save would be its own bug.
     let tokensChanged = false;
+    const campaignsWithChangedTokens = new Set<string>();
     if (
       updateData.tokenImageUrl !== undefined &&
-      updateData.tokenImageUrl !== character.tokenImageUrl &&
-      updatedCharacter.campaignId
+      updateData.tokenImageUrl !== character.tokenImageUrl
     ) {
       try {
-        const maps = await prisma.map.findMany({
-          where: { campaignId: updatedCharacter.campaignId },
-          select: { id: true, tokens: true },
-        });
+        // Maps are found by the binding itself — a token carrying this
+        // `characterId` — rather than by the character's own `campaignId`.
+        //
+        // Scoping by campaignId silently missed most of the cases it needed to
+        // cover, because a character reaches a mismatched state easily:
+        // unassigning it nulls `campaignId` and leaves its tokens where they
+        // were, a character with tokens in two campaigns can only point at one
+        // of them, and a DM placing a player's character writes the token's
+        // `characterId` without touching the character. In every one of those
+        // the player saw their new picture on the sheet while the token kept the
+        // old one, and only removing and re-adding the token helped.
+        //
+        // `@>` is jsonb containment, so this is one indexable query rather than
+        // reading every map in the campaign.
+        const boundMaps = await prisma.$queryRaw<
+          Array<{ id: string; campaignId: string; tokens: Prisma.JsonValue }>
+        >`
+          SELECT id, "campaignId", tokens
+          FROM "Map"
+          WHERE tokens @> ${JSON.stringify([{ characterId: updatedCharacter.id }])}::jsonb
+        `;
 
-        for (const map of maps) {
+        for (const map of boundMaps) {
           const tokens = readTokens(map.tokens);
           let mapChanged = false;
 
@@ -624,6 +641,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           if (mapChanged) {
             await prisma.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
             tokensChanged = true;
+            campaignsWithChangedTokens.add(map.campaignId);
           }
         }
       } catch (error) {
@@ -675,6 +693,27 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         logger.error('Failed to broadcast character update', { err: error });
         // Don't fail the request if broadcast fails
       }
+    }
+
+    // A campaign whose map holds a token for this character still needs to
+    // repaint it, even when the character does not belong to that campaign —
+    // which is the ordinary case once `campaignId` is null, and the reason the
+    // token used to sit on the old picture until it was removed and re-added.
+    //
+    // The sheet itself is deliberately NOT sent here. Membership of the
+    // character's campaign is what entitles someone to read it, and these
+    // campaigns are by definition not that one; they get the id and the fact
+    // that a token moved on, which is all a repaint needs.
+    try {
+      for (const affectedCampaignId of campaignsWithChangedTokens) {
+        if (affectedCampaignId === updatedCharacter.campaignId) continue;
+        broadcastToCampaign(affectedCampaignId, 'character.updated', {
+          characterId: updatedCharacter.id,
+          tokensChanged: true,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to broadcast token repaint', { err: error });
     }
 
     return res.status(200).json({
