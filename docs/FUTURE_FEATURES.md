@@ -184,6 +184,26 @@ _Nothing in progress._
   source". Reproduced on 2026-09-03 with the host unreachable. Wants a timeout on
   the fetch and an error the UI can explain.
 
+- **Token moves bypass the spirit-plane filter.** `filterTokensByRole` is what
+  splits the material and spirit planes, and `filterMapData` is its only caller.
+  The token-move handler filters by lighting alone, so a player in the spirit
+  realm is sent material token positions on every move; they persist until the
+  player refreshes, when the plane filter reapplies and the tokens vanish. Two
+  paths deciding one fact and disagreeing. Confirmed 2026-09-04 by measuring the
+  map payload for a player with the campaign Spirit Layer on: zero tokens over
+  REST, material tokens over the move broadcast. Left alone before 1.3.0 because
+  the spirit layer is a minor feature and the fix changes what players see; the
+  two paths should end up sharing one decision, with `filterMapData` as the
+  authority.
+
+- **A lit map is black for a player in the spirit realm.** Dynamic lighting draws
+  vision from the player's own tokens, and a player in the spirit realm receives
+  none unless they control a spirit-layer token — so the map renders fully dark
+  with no explanation. Currently documented in `DM_GUIDE.md` as a troubleshooting
+  note rather than fixed. A spirit-realm player with no spirit token arguably
+  wants either their own token back as a vision source, or a message saying why
+  the map is empty.
+
 - **CI reports, it does not block.** `.github/workflows/ci.yml` runs typecheck,
   lint, tests and build on both projects, but GitHub Actions only reports
   failures. Making them binding needs branch protection with required status

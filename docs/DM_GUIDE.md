@@ -933,15 +933,28 @@ As DM you always see all walls and the full map. To preview what a player is act
 
 ## The Spirit Layer
 
-The Spirit Layer is an alternate visual overlay for your map — useful for games where some characters can perceive things others can't (astral space in Shadowrun, ethereal plane in D&D, spirit world in various systems).
+The Spirit Layer is a second plane for your map — useful for games where some characters can perceive things others can't (astral space in Shadowrun, the ethereal plane in D&D, the spirit world in various systems).
 
-### Toggling the Spirit Layer
+It is a **separate plane, not a see-through overlay.** Someone viewing the spirit realm sees the tokens on that plane *instead of* the ordinary ones, not as well as them. You, as DM, always see both.
 
-Click the **Spirit Layer** button in the campaign header to open the Spirit Layer controls.
+### Sending players to the spirit realm
+
+There are two ways a player ends up there:
+
+- **The whole table at once.** Click the **Spirit Layer** button in the campaign header and toggle it **on**. Every player is in the spirit realm until you toggle it back off.
+- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane.
 
 *Screenshot pending — Spirit Layer control panel.*
 
-Toggle the spirit layer **on** to activate the overlay on the map. Toggle it **off** to return to the normal view.
+Players in the spirit realm see a pulsing **Spirit Realm** badge in the corner of the map, so they know why the view changed.
+
+> **A player in the spirit realm cannot see ordinary tokens — including their own.** That is the point: they have left the material plane. It has one surprising consequence, below.
+
+### The Spirit Layer and dynamic lighting
+
+On a map with **dynamic lighting** switched on, a player sees by their own token's line of sight. A player who is in the spirit realm but has no spirit-layer token has nothing to see with — so the map renders **completely black** for them.
+
+If a player reports a black map, check whether the Spirit Layer is toggled on in the campaign header. Either switch it off, or give that player a spirit-layer token to look through.
 
 ### Spirit Layer Styles
 
@@ -956,7 +969,7 @@ Two style options are available:
 
 ### Token Visibility in the Spirit Layer
 
-Each token can be set as visible or hidden within the spirit layer independently of its normal-world visibility. This lets you show astral/spiritual entities only to characters with the perception to see them.
+Every token sits on exactly one plane: the material one, or the spirit layer. Moving a token to the spirit layer is what makes it visible to players in the spirit realm — and hides it from everyone still on the material plane. This is how you show astral or spiritual entities only to the characters with the perception to see them.
 
 In the Token Manager, toggle **Spirit Layer Visibility** for each token as needed.
 

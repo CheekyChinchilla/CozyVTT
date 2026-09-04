@@ -479,7 +479,9 @@ A campaign can have multiple maps loaded at once. The DM can switch the active m
 
 ### The Spirit Layer
 
-The Spirit Layer is a special visual overlay primarily used for Shadowrun and similar games where some characters can perceive things others can't. The DM can toggle the spirit layer on or off per-token, and choose the visual style.
+The Spirit Layer is a second plane for the map, used for games where some characters can perceive things others can't — astral space, the ethereal plane, the spirit world. It is a separate plane rather than a see-through overlay: a player viewing the spirit realm sees the tokens on that plane instead of the ordinary ones, including instead of their own. The DM chooses which tokens live on it, who can see it, and the visual style.
+
+If you are a player and the map has gone dark or your token has vanished, ask your DM whether the Spirit Layer is switched on — see [The Spirit Layer](DM_GUIDE.md#the-spirit-layer) in the DM guide.
 
 *Screenshot pending — Map with spirit layer overlay.*
 

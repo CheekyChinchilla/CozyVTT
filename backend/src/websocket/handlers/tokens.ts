@@ -289,6 +289,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           if (!authedSocket.userId) continue;
 
           // Compute which tokens are visible for this player after the move
+          //
+          // TODO(spirit-layer): this applies the lighting filter but never
+          // filterTokensByRole, which is the only thing that enforces the
+          // material/spirit plane split. A player in the spirit realm is sent
+          // material token positions here, and they persist until the next
+          // refresh — at which point filterMapData applies the plane filter and
+          // they vanish again. The two paths should share one decision;
+          // filterMapData is the one that is right.
           const allVisible = filterTokensByLighting(
             updatedTokens,
             authedSocket.userId,
