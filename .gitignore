@@ -128,3 +128,8 @@ playwright-report/
 # These are copyrighted material and must never be committed — CozyVTT ships
 # rules-reference scaffolding only (see the legal note in docs/GAME_SYSTEMS.md).
 system-docs/
+
+# Throwaway local stacks used to rehearse upgrades against a real backup.
+# These carry generated secrets and point at real data; never commit them.
+.env.live
+docker-compose.live.yml
