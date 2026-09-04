@@ -5,7 +5,8 @@ A running list of features, polish, and ideas that have been discussed or scoped
 **How to use this doc:**
 - New ideas go under **Backlog** with a short description and any relevant context.
 - When work begins, move the entry to **In Progress** with a date and short note.
-- When shipped, move it to **Shipped** with the version/date for searchability.
+- When shipped, delete the entry. `CHANGELOG.md` is the record of what shipped;
+  keeping a second list here only gives the two something to disagree about.
 - When dropped, move it to **Won't Do** with a one-liner explaining why.
 - Keep entries terse — link to a longer plan or PR if more detail is needed.
 
@@ -60,9 +61,11 @@ _Nothing in progress._
   branches sitting below it in `LoginPage`, `MFAVerifyPage` and `RegisterPage`
   are effectively unreachable for the same reason. Found while converting those
   catch blocks off `any`, and deliberately left alone there — the conversion was
-  required to change no behaviour. Fixing it means preferring `message` over
-  `error`, which is a one-line change per page plus a decision about whether any
-  endpoint relies on `error` carrying something a user should read. Note the 429
+  required to change no behaviour. Since the burn-down the reading is centralised in
+  `apiErrorText` in `frontend/src/utils/errors.ts`, which returns
+  `data.error` — so the fix is now one helper rather than a change per page,
+  plus a decision about whether any endpoint relies on `error` carrying
+  something a user should read. Note the 429
   path is fine: the rate limiter replies with a bare string rather than JSON, so
   the status branch handles it and the wording is already correct.
 
@@ -152,7 +155,7 @@ _Nothing in progress._
   sorcerer. Only affects sheets that never set it, and the DM can correct it by
   hand, so it is a default worth improving rather than a miscalculation.
 
-- **`docs/API_REFERENCE.md` covers 75 of 134 routes.** Deliberate after the
+- **`docs/API_REFERENCE.md` covers 75 of 141 routes.** Deliberate after the
   2026-09-01 documentation pass: it is a hand-written guide to the endpoints
   people ask about, and `backend/docs/API_DOCUMENTATION.yaml` is the complete
   list. `scripts/spec-coverage.py` enforces the split — the spec must be
@@ -160,34 +163,32 @@ _Nothing in progress._
   starts being treated as exhaustive again.
 
 - **`any` in test files.** The burn-down cleared every explicit `any` from
-  production code in both projects; roughly 85 remain across nine test files,
-  which are the only entries left in the two ESLint allowlists. Scoped out of
+  production code in both projects; roughly 75 remain across ten test files,
+  which are the only entries left in the two ESLint allowlists (eight backend,
+  two frontend). Scoped out of
   that work deliberately so the diffs stayed readable. The allowlist is the
   to-do list.
 
-- **The upgrade rehearsal has not been run.** The typing plan's stated
-  acceptance test: build an instance from the 1.2.2 tag, populate it the way a
-  real table would, then deploy the current branch over the same volume without
-  resetting it and confirm everything still loads, edits and saves. Nothing in
-  the work since is expected to break an upgrade — no schema change, no
-  migration — but that expectation is untested.
+- **Campaign creation is uncapped, so the per-campaign notes limit is not a real
+  ceiling.** A personal note is capped at 100,000 characters and 200 notes per
+  campaign, but nothing limits how many campaigns one account can create, so the
+  storage bound can be walked around by making more of them. True of every
+  per-campaign limit rather than notes specifically, and capping campaign
+  creation is a product decision — it would affect legitimate users — so it was
+  left alone when notes were added.
+
+- **The SRD creature import answers 504 when Open5e is unreachable.** The seed
+  endpoint fetches from `api.open5e.com` with no timeout of its own, so when that
+  host is down or blocked the request hangs until the reverse proxy gives up and
+  the DM sees a bare gateway error rather than "could not reach the creature
+  source". Reproduced on 2026-09-03 with the host unreachable. Wants a timeout on
+  the fetch and an error the UI can explain.
 
 - **CI reports, it does not block.** `.github/workflows/ci.yml` runs typecheck,
   lint, tests and build on both projects, but GitHub Actions only reports
   failures. Making them binding needs branch protection with required status
   checks on `dev` and `main`, which is a repository setting rather than a file.
   Worth doing the first time the workflow actually runs.
-
----
-
-## Shipped
-
-- **v1.0.0 — Asset move-between-scopes UI.** Listed as outstanding until 2026-09-01; the “Move to…” section has been in `AssetDetailPanel` since the initial release, reachable from the Asset Library and wired to `PATCH /api/assets/:id/scope`.
-- **2026-08-23 — Global asset manager toggle (admin).** Was listed as outstanding long after it shipped; the pill toggle is in the user table on the admin panel, beside the new Templates one.
-- **2026-04-26 — Per-user theme preferences.** Theme + font picker moved from admin-only to per-user (profile page). Admin theme becomes the public-page / new-user default. Bug fix: themes now persist across logout/login.
-- **2026-04-26 — DM right-click NPC token rolls.** DMs can now right-click an NPC token to roll abilities, saves, skills, attacks, and damage parsed from the stat block. Includes a free-form custom roll fallback for tokens without stat blocks or non-d20 systems. D&D 5e gets full roll math; other systems get the custom roll path.
-- **2026-04-26 — Token templates can edit stat blocks.** The Token Templates editor now mounts the full `StatBlockEditor` for NPC-type templates, matching the live token edit panel.
-- **2026-04-26 — Number input clipping fixed.** Native browser spinner arrows are hidden via a new `input-cozy-number` utility on AC, ability scores, HP, initiative, save/skill bonuses, and template width/height fields.
 
 ---
 

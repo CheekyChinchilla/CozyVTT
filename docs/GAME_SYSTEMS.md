@@ -126,6 +126,16 @@ raise the attack roll and not the DC.
 and attack +0 — the base with nothing added, which no character can legitimately
 have. The formulas live in `rules/dnd5e.ts` alongside the rest of the 5e maths.
 
+**The same pattern extends to skills a player invents.** A 5e sheet can carry
+skills of its own beyond the standard eighteen — a tool proficiency, a homebrew
+skill — and each records the ability it uses plus proficiency or expertise
+rather than a typed total, so the bonus follows the character as their scores
+and level change. `dnd5eCustomSkillBonus` in `rules/dnd5e.ts` computes it and it
+carries an "other bonus" box for the same reason the others do. If you are
+adding a system where players routinely track something the sheet does not
+enumerate, this is the shape to copy: store the inputs, derive the total, and
+leave one box for what the maths cannot know.
+
 ### Initiative — not every system rolls
 
 The same per-system care applies to initiative, and it is the clearest example of

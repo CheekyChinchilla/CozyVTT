@@ -200,7 +200,7 @@ Type directly into the expression input. Supported notation:
 
 *GIF pending — Typing a dice expression and seeing the result in chat.*
 
-**Why my roll showed up in chat:** Dice results are public by default. Everyone can see what you rolled. The DM may occasionally roll secretly — you'll see a "DM rolled secretly" message instead of the actual result.
+**Why my roll showed up in chat:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
@@ -265,7 +265,7 @@ You will only ever see what you are meant to. Another player's hit points come f
 
 Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
 
-Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move.
+Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
 
 Two things worth knowing:
 

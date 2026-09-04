@@ -867,6 +867,34 @@ Place light sources on the map to illuminate areas for players. Each light has t
 
 When two dim zones from different light sources overlap, the combined area is treated as bright light.
 
+#### A light does not see for your players
+
+A light shows a player something only where their own character could already
+have seen it. Walls block sight as well as light, so a lamp burning inside a
+closed room reveals nothing to someone standing outside it, and the creatures in
+that room are not sent to their browser at all until they can see in. This is how
+dynamic lighting works in every virtual tabletop that has it, and it is what lets
+you light a building in advance without spoiling what is inside.
+
+A token's **sight radius** governs how far it makes things out in the dark. It
+does not limit how far it can notice something that is lit: a character with a
+short sight radius still sees a bonfire across a field, provided nothing solid is
+in the way.
+
+Two practical consequences when you are building a map:
+
+- **A room stays dark until someone can see into it.** If you want a lit room
+  visible from the corridor, leave a door or a gap — a sealed room reads as
+  darkness, which is usually what you want.
+- **Windows are not walls.** A window segment passes light and sight, so a lit
+  room behind one *is* visible from outside. That is the tool for "you can see
+  the lamp burning through the shutters".
+
+> **If you are upgrading from 1.2.2**, this is a change. Lit rooms used to be
+> visible to everyone whether or not they could see in, so maps built against
+> that behaviour may now be darker than you expect until a character gets line of
+> sight.
+
 #### Placing Lights
 
 1. Open the **Lights** panel in the wall/lighting controls
