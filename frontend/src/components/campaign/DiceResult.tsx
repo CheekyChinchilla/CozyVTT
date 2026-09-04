@@ -13,11 +13,24 @@ interface DiceResultProps {
 export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
   const { userName, characterName, expression, result, breakdown, purpose, timestamp, secret } = roll;
 
+  /**
+   * `breakdown` is a JSON column, so its type is a promise rather than a
+   * guarantee — it is erased before the value is ever read. A row written by an
+   * older version, restored from another instance, or imported can arrive
+   * without `rolls`, and this component used to throw on it. Because the error
+   * boundary sits at the page level, one such row took down the whole campaign:
+   * no map, no roster, no chat.
+   *
+   * A roll that cannot be drawn in full still shows its expression and total,
+   * which is the part anyone actually reads.
+   */
+  const detail = Array.isArray(breakdown?.rolls) ? breakdown.rolls : [];
+
   // Determine if critical success or fail (for d20 rolls)
-  const isCriticalSuccess = breakdown.rolls.some(
+  const isCriticalSuccess = detail.some(
     (r) => r.notation === '1d20' && r.results?.includes(20)
   );
-  const isCriticalFail = breakdown.rolls.some(
+  const isCriticalFail = detail.some(
     (r) => r.notation === '1d20' && r.results?.includes(1)
   );
 
@@ -137,14 +150,16 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
       <div className="mt-2 pt-2 border-t border-current/10">
         <div className="text-xs text-ink-secondary space-y-1">
           {/* Formula */}
-          <div className="font-mono">
-            <span className="opacity-60">Formula: </span>
-            {breakdown.formula}
-          </div>
+          {breakdown?.formula && (
+            <div className="font-mono">
+              <span className="opacity-60">Formula: </span>
+              {breakdown.formula}
+            </div>
+          )}
 
           {/* Individual dice rolls */}
           <div className="flex flex-wrap gap-2 mt-2">
-            {breakdown.rolls.map((roll, idx) => (
+            {detail.map((roll, idx) => (
               <div key={idx} className="flex items-center gap-1">
                 {roll.type === 'dice' && roll.notation && (
                   <div className="inline-flex items-center gap-1 bg-ink/5 px-2 py-1 rounded">
