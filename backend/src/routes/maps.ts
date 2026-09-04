@@ -439,8 +439,13 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     // Get spirit layer visibility for this user
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
 
-    // Filter map data based on role and spirit visibility
-    const responseMap = filterMapData(map, membership.role, spiritVisible);
+    // Filter map data based on role, spirit visibility and dynamic lighting.
+    //
+    // `userId` is what enables the lighting filter, and this call used to omit
+    // it — so on a lit map the two WebSocket paths filtered tokens by what the
+    // player could see while this one, the fetch the client makes on opening a
+    // map, handed over every token on it.
+    const responseMap = filterMapData(map, membership.role, spiritVisible, userId);
 
     return res.status(200).json({ map: responseMap, spiritVisible });
   } catch (error) {

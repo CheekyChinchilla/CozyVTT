@@ -292,6 +292,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Recreated only when map dimensions change; prevents ~5MB alloc per render frame.
   const lightingOffscreenRef = useRef<HTMLCanvasElement | null>(null);
   const lightCoverageOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // Light coverage is built here first so it can be intersected with the
+  // viewer's line of sight before joining the coverage mask.
+  const lightOnlyOffscreenRef = useRef<HTMLCanvasElement | null>(null);
 
   // Raw map-pixel position from last mousemove — ghost line uses this when snap is off.
   // screenToGrid() quantises to integer grid coords, so hoverCoords can't be used for free-draw.
@@ -1019,6 +1022,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     wallCacheValidRef.current = false;
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
+    lightOnlyOffscreenRef.current = null;
   }, [currentMap?.id]);  
 
   // ============================================
@@ -1551,9 +1555,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           myTokens,
           enabledLights,
           tokenVision: vision.tokenVision,
+          tokenSight: vision.tokenSight,
           lightVision: vision.lightVision,
           lightingCanvas: lightingOffscreenRef,
           coverageCanvas: lightCoverageOffscreenRef,
+          lightCanvas: lightOnlyOffscreenRef,
         }, viewport);
       }
       // DM (not in preview) sees everything — skip fog entirely

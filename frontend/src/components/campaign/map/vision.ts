@@ -28,6 +28,16 @@ export interface VisionSource {
 export interface VisionState {
   /** One entry per viewer-controlled token (sight radius applied). */
   tokenVision: VisionSource[];
+  /**
+   * One entry per viewer-controlled token with **no** radius limit — pure line
+   * of sight, bounded only by walls.
+   *
+   * This is what a light is allowed to reveal. A sight radius says how far you
+   * can make something out in the dark; it does not stop you seeing a lit room
+   * across a courtyard. Keeping the two separate is what stops a light behind a
+   * wall lighting that room for someone who cannot see into it.
+   */
+  tokenSight: VisionSource[];
   /** One entry per enabled light source (dim radius applied). */
   lightVision: VisionSource[];
   /** Concatenated in draw order — used by the walls layer door filter. */
@@ -63,13 +73,22 @@ export function computeVisionState(
     return { poly, cx, cy };
   });
 
+  // A radius of 0 already means unbounded, so that polygon *is* the line of
+  // sight — only a token with a real radius needs the second raycast.
+  const tokenSight: VisionSource[] = myTokens.map((token, i) => {
+    const { cx, cy, r } = tokenSource(token, viewport);
+    if (r <= 0) return tokenVision[i];
+    const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, 0);
+    return { poly, cx, cy };
+  });
+
   const lightVision: VisionSource[] = enabledLights.map((light) => {
     const dimRadiusPx = light.dimRadius * viewport.gridSize;
     const poly = computeVisibility({ x: light.x, y: light.y }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, dimRadiusPx);
     return { poly, cx: light.x, cy: light.y };
   });
 
-  return { tokenVision, lightVision, all: [...tokenVision, ...lightVision] };
+  return { tokenVision, tokenSight, lightVision, all: [...tokenVision, ...lightVision] };
 }
 
 /**
@@ -105,6 +124,7 @@ interface CachedSource {
 export function createVisionCache(): VisionCache {
   let lastWalls: readonly WallSegment[] | null = null;
   const tokenCache = new Map<string, CachedSource>();
+  const sightCache = new Map<string, CachedSource>();
   const lightCache = new Map<string, CachedSource>();
 
   return {
@@ -114,6 +134,7 @@ export function createVisionCache(): VisionCache {
       // Any wall mutation (or a map switch) replaces the array reference.
       if (wallSegments !== lastWalls) {
         tokenCache.clear();
+        sightCache.clear();
         lightCache.clear();
         lastWalls = wallSegments;
       }
@@ -131,6 +152,21 @@ export function createVisionCache(): VisionCache {
       });
       for (const id of tokenCache.keys()) if (!seenTokens.has(id)) tokenCache.delete(id);
 
+      // Unbounded line of sight, cached separately — see VisionState.tokenSight.
+      // A token with no radius is already unbounded, so it costs nothing extra;
+      // only a token with a real sight radius adds a second raycast.
+      const tokenSight: VisionSource[] = myTokens.map((token, i) => {
+        const { cx, cy, r } = tokenSource(token, viewport);
+        if (r <= 0) return tokenVision[i];
+        const hit = sightCache.get(token.id);
+        if (hit && hit.x === cx && hit.y === cy) return hit.src;
+        const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, 0);
+        const src: VisionSource = { poly, cx, cy };
+        sightCache.set(token.id, { x: cx, y: cy, r: 0, src });
+        return src;
+      });
+      for (const id of sightCache.keys()) if (!seenTokens.has(id)) sightCache.delete(id);
+
       const seenLights = new Set<string>();
       const lightVision: VisionSource[] = enabledLights.map((light) => {
         const r = light.dimRadius * viewport.gridSize;
@@ -144,7 +180,7 @@ export function createVisionCache(): VisionCache {
       });
       for (const id of lightCache.keys()) if (!seenLights.has(id)) lightCache.delete(id);
 
-      return { tokenVision, lightVision, all: [...tokenVision, ...lightVision] };
+      return { tokenVision, tokenSight, lightVision, all: [...tokenVision, ...lightVision] };
     },
   };
 }
