@@ -250,6 +250,20 @@ Set these in `.env` and restart — no rebuild needed. If you raise one, raise y
 
 ---
 
+## Community Projects
+
+Built by other people, on their own terms. They are not part of CozyVTT, are not maintained by this project, and are listed because they are useful — check their own documentation and licence before running them.
+
+| Project | What it does |
+|---------|--------------|
+| [cozyvtt-mcp](https://github.com/yanjingzhaisun/cozyvtt-mcp) | An MCP bridge that lets an AI assistant act in a campaign — post to chat, roll dice, move tokens, change maps and run initiative. MIT licensed, independent of this codebase. |
+
+A note on building things like this. CozyVTT's HTTP and WebSocket surfaces are **not a public API**: they are what the web client calls, they are not versioned, and they carry no compatibility promise, so they can change in any release. They *can* be driven by a program — signing in with your own email and password returns a session cookie that authenticates both, and a script can do exactly what the web client does, as that user with that user's permissions. Unsupported is the honest word for it, not impossible.
+
+That is why `cozyvtt-mcp` pins to a CozyVTT version and keeps a compatibility table. At the time of writing it targets **v1.2.2**, and 1.3.0 changed enough of the API that you should check its table before pairing the two.
+
+---
+
 ## Asset Storage
 
 Uploaded files are stored in `backend/uploads/` organized by type:
