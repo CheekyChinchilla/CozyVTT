@@ -184,6 +184,21 @@ _Nothing in progress._
   source". Reproduced on 2026-09-03 with the host unreachable. Wants a timeout on
   the fetch and an error the UI can explain.
 
+- **Only maps check an asset reference at write time.** `canReadAsset` grants a
+  read when an asset is *used* by a map, character, creature template or token
+  template in a campaign the viewer and the uploader are both in. That is the
+  right rule, but only `routes/maps.ts` calls `canReadAssetById` before storing
+  a reference — `characters.ts`, `creatures.ts` and `tokenTemplates.ts` store
+  one unchecked. So a campaign co-member can point their own character's
+  `tokenImageUrl` at another member's `USER`-scoped asset and gain read access
+  to it. Low severity and not a hole anyone can walk through: it grants viewing
+  only, needs a shared campaign with the uploader, and needs the asset's UUID,
+  which the listing route never discloses (it filters `USER` assets to
+  `uploadedById: userId`). Found 2026-09-04 reviewing 1.3.0 before merge. The
+  fix is the write-time check the map route already has, applied to the other
+  three — the same one-fact-two-places shape the read side was consolidated to
+  avoid.
+
 - **Token moves bypass the spirit-plane filter.** `filterTokensByRole` is what
   splits the material and spirit planes, and `filterMapData` is its only caller.
   The token-move handler filters by lighting alone, so a player in the spirit
