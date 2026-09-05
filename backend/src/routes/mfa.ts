@@ -29,22 +29,28 @@ import logger from '../utils/logger';
 
 const router = Router();
 
-// Rate limit MFA setup verification (5 attempts per 15 minutes)
-const mfaSetupLimiter = rateLimit({
+// Rate limit MFA setup verification (5 failed attempts per 15 minutes).
+// `skipSuccessfulRequests` so only wrong codes count: entering the right one
+// should never move you closer to being locked out. Exported for the tests.
+export const mfaSetupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: 'Rate Limited', message: 'Too many MFA verification attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
 });
 
-// Rate limit MFA login verification (5 attempts per 15 minutes, separate from setup)
-const mfaLoginLimiter = rateLimit({
+// Rate limit MFA login verification (5 failed attempts per 15 minutes, on its
+// own window separate from setup). Same reasoning as above: a correct code is
+// not an attack, so it does not spend the allowance.
+export const mfaLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: 'Rate Limited', message: 'Too many MFA login attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
 });
 
 /**

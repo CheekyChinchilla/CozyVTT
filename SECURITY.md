@@ -17,4 +17,4 @@ Self-hosters are responsible for keeping their instances up to date.
 Use the **"Report a vulnerability"** button on the [Security tab](https://github.com/CheekyChinchilla/CozyVTT/security) of this repository. This creates a private advisory that only repository maintainers can see.
 
 
-See `Dev-Docs/docs/KNOWN_ISSUES.md` for items intentionally deferred and their rationale.
+Known issues and deliberately deferred work are tracked in [docs/FUTURE_FEATURES.md](docs/FUTURE_FEATURES.md).

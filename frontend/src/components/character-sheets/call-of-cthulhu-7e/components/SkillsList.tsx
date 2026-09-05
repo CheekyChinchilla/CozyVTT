@@ -7,14 +7,31 @@
 
 import React from 'react';
 import { Check, Dices } from 'lucide-react';
+import type {
+  CoC7eSkill,
+  CoC7eSkills,
+  CoC7eLanguageSkill,
+  CoC7eScienceSkill,
+  CoC7eFirearmsSkills,
+  CoC7eFightingSkills,
+} from '@/types/game-systems';
 
-interface Skill {
-  baseValue: number;
-  currentValue: number;
-  improvementChecked: boolean;
-  specialization?: string | null;
+/**
+ * What a skill row can render.
+ *
+ * `CoC7eSkill` plus `language`, because the same row renders the entries of
+ * `languageOther`, which carry one. A science specialisation fits too — its
+ * `specialization` is required there and optional here.
+ */
+interface Skill extends CoC7eSkill {
   language?: string;
-  notes?: string;
+  /**
+   * Custom skills carry their own label. Neither `CoC7eSkill` nor the backend's
+   * `skillSchema` declares it, but it survives a save the same way the other
+   * undeclared keys do: Zod strips it on parse, and the route stores the body
+   * as sent rather than the parsed output.
+   */
+  name?: string;
 }
 
 interface ThemeColor {
@@ -28,7 +45,7 @@ interface ThemeColor {
 
 interface SkillsListProps {
   /** Skills object from character data */
-  skills: Record<string, any>;
+  skills: Partial<CoC7eSkills>;
 
   /** Theme color for styling checkboxes */
   themeColor?: ThemeColor;
@@ -37,7 +54,7 @@ interface SkillsListProps {
   editable?: boolean;
 
   /** onChange handler for edit mode */
-  onChange?: (skillName: string, field: keyof Skill, value: any) => void;
+  onChange?: (skillName: string, field: keyof Skill, value: unknown) => void;
 
   /** Click to roll 1d100. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
@@ -129,7 +146,7 @@ const SkillRow: React.FC<{
   skill: Skill;
   editable: boolean;
   themeColor?: ThemeColor;
-  onChange?: (field: keyof Skill, value: any) => void;
+  onChange?: (field: keyof Skill, value: unknown) => void;
   onRoll?: (expression: string, purpose: string) => void;
 }> = ({ name, displayName, skill, editable, themeColor, onChange, onRoll }) => {
   if (!skill) return null;
@@ -218,7 +235,7 @@ const SkillRow: React.FC<{
  * SkillsList - Display all skills organized by category
  */
 export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, editable = false, onChange, onRoll }) => {
-  const handleSkillChange = (skillName: string, field: keyof Skill, value: any) => {
+  const handleSkillChange = (skillName: string, field: keyof Skill, value: unknown) => {
     onChange?.(skillName, field, value);
   };
 
@@ -243,17 +260,17 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
           </h4>
           <div className="space-y-0.5">
             {skillNames.map((skillName) => {
-              const skill = skills[skillName];
+              const skill = skills[skillName as keyof CoC7eSkills];
 
               // Handle special cases
-              if (skillName === 'fighting' && skill?.custom) {
+              if (skillName === 'fighting' && (skill as CoC7eFightingSkills)?.custom) {
                 // Fighting specializations
                 return (
                   <div key={skillName}>
                     <SkillRow
                       name="fighting.brawl"
                       displayName="Fighting (Brawl)"
-                      skill={skill.brawl}
+                      skill={(skill as CoC7eFightingSkills).brawl}
                       editable={editable}
                       themeColor={themeColor}
                       onRoll={onRoll}
@@ -267,31 +284,31 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                 // Firearms specializations
                 return (
                   <div key={skillName} className="space-y-0.5">
-                    {skill.handgun && (
+                    {(skill as CoC7eFirearmsSkills).handgun && (
                       <SkillRow
                         name="firearms.handgun"
                         displayName="Firearms (Handgun)"
-                        skill={skill.handgun}
+                        skill={(skill as CoC7eFirearmsSkills).handgun}
                         editable={editable}
                         themeColor={themeColor}
                         onChange={(field, value) => handleSkillChange('firearms.handgun', field, value)}
                       />
                     )}
-                    {skill.rifle && (
+                    {(skill as CoC7eFirearmsSkills).rifle && (
                       <SkillRow
                         name="firearms.rifle"
                         displayName="Firearms (Rifle)"
-                        skill={skill.rifle}
+                        skill={(skill as CoC7eFirearmsSkills).rifle}
                         editable={editable}
                         themeColor={themeColor}
                         onChange={(field, value) => handleSkillChange('firearms.rifle', field, value)}
                       />
                     )}
-                    {skill.shotgun && (
+                    {(skill as CoC7eFirearmsSkills).shotgun && (
                       <SkillRow
                         name="firearms.shotgun"
                         displayName="Firearms (Shotgun)"
-                        skill={skill.shotgun}
+                        skill={(skill as CoC7eFirearmsSkills).shotgun}
                         editable={editable}
                         themeColor={themeColor}
                         onChange={(field, value) => handleSkillChange('firearms.shotgun', field, value)}
@@ -305,7 +322,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                 // Other languages (array)
                 return (
                   <div key={skillName}>
-                    {skill.map((lang: any, idx: number) => (
+                    {(skill as CoC7eLanguageSkill[]).map((lang, idx) => (
                       <SkillRow
                         key={`language-${idx}`}
                         name={`languageOther.${idx}`}
@@ -324,7 +341,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                 // Science specializations (array)
                 return (
                   <div key={skillName}>
-                    {skill.map((sci: any, idx: number) => (
+                    {(skill as CoC7eScienceSkill[]).map((sci, idx) => (
                       <SkillRow
                         key={`science-${idx}`}
                         name={`science.${idx}`}
@@ -368,7 +385,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
             Custom Skills
           </h4>
           <div className="space-y-0.5">
-            {skills.customSkills.map((skill: any, idx: number) => (
+            {((skills.customSkills ?? []) as Skill[]).map((skill, idx) => (
               <SkillRow
                 key={`custom-${idx}`}
                 name={`customSkills.${idx}`}

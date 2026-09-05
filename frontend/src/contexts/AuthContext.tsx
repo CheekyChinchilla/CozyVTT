@@ -239,6 +239,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Refresh User Data
   // ============================================
 
+  /**
+   * Adopt a session the server created without going through the login form.
+   *
+   * Setup is the only caller: it posts the admin's details, the server signs
+   * them in and returns the user, and the browser is left holding a session
+   * this context has never heard of. `refreshUser` is no help there — it bails
+   * out unless `authenticated` is already true, so the wizard used to navigate
+   * to the dashboard with the context still empty and the route guard sent the
+   * brand-new admin to the login screen, contradicting the wizard's own closing
+   * screen.
+   */
+  const adoptSession = useCallback((adopted: User): void => {
+    setUser(adopted);
+    setAuthenticated(true);
+    setMfaPending(false);
+    setMustChangePassword(adopted.mustChangePassword || false);
+  }, []);
+
   const refreshUser = useCallback(async (): Promise<void> => {
     if (!authenticated) {
       return;
@@ -280,12 +298,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     disableMFA,
     changePassword,
     refreshUser,
+    adoptSession,
   }), [
     user,
     loading,
     authenticated,
     mfaPending,
     mustChangePassword,
+    adoptSession,
     login,
     logout,
     register,

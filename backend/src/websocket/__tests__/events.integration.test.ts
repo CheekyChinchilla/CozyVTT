@@ -443,6 +443,40 @@ describe('initiative', () => {
     player.disconnect();
   });
 
+  // A rolled value is persisted onto the map token and survives the fight it was
+  // rolled for — ending combat clears only the in-memory order. Adding a token
+  // to a new fight must therefore not seed from it, or the token arrives already
+  // placed in the order carrying last fight's result.
+  it('adds a token with no initiative, even when it still carries one from a previous fight', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+
+    // First fight: roll for the Goblin, which persists the value on the token.
+    const firstAdd = waitForEvent<{ combatants: any[] }>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: DM_TOKEN_ID, mapId });
+    await firstAdd;
+
+    const firstRoll = waitForEvent<{ combatants: any[] }>(dm, 'initiative.state');
+    dm.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId, expression: '1d20' });
+    await firstRoll;
+
+    const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const stored = (map.tokens as any[]).find((t) => t.id === DM_TOKEN_ID);
+    expect(typeof stored.initiative).toBe('number');   // the value that used to leak
+
+    // The fight ends, and the same token is added to the next one.
+    dm.emit('initiative.end');
+    await waitForEvent<{ active: boolean }>(dm, 'initiative.state');
+
+    const secondAdd = waitForEvent<{ combatants: any[] }>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: DM_TOKEN_ID, mapId });
+    const state = await secondAdd;
+
+    const entry = state.combatants.find((c) => c.tokenId === DM_TOKEN_ID);
+    expect(entry.initiative).toBeNull();
+
+    dm.disconnect();
+  });
+
   // Rolling is the one initiative action a player may take, and only for their
   // own token, and only once the DM has put it in the order. Everything else —
   // who is in the fight, the order, whose turn it is — stays with the DM.

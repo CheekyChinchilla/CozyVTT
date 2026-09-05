@@ -19,6 +19,11 @@ import {
   Palette,
 } from 'lucide-react';
 import { Character } from '../../../types';
+import type {
+  CoC7eCharacterData,
+  CoC7eCharacteristics,
+  SheetChrome,
+} from '../../../types/game-systems';
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
@@ -72,7 +77,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   onRoll,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const data = character.data as any; // Type will be CallOfCthulhu7eCharacterData
+  const data = character.data as CoC7eCharacterData & SheetChrome;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -302,13 +307,13 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
           {data.characteristics && (
             <>
-              {orderedCharacteristics(data.characteristics).map((key) => (
+              {orderedCharacteristics(data.characteristics as unknown as Record<string, unknown>).map((key) => (
                 <CharacteristicBlock
                   key={key}
                   label={key}
-                  regular={data.characteristics[key].regular}
-                  half={data.characteristics[key].half}
-                  fifth={data.characteristics[key].fifth}
+                  regular={data.characteristics[key as keyof CoC7eCharacteristics].regular}
+                  half={data.characteristics[key as keyof CoC7eCharacteristics].half}
+                  fifth={data.characteristics[key as keyof CoC7eCharacteristics].fifth}
                   onRoll={onRoll}
                 />
               ))}
@@ -438,7 +443,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-amber-900 mb-3 uppercase">Current Conditions</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {Object.entries(data.conditions).map(([key, value]: [string, any]) => (
+            {(Object.entries(data.conditions ?? {}) as [string, boolean][]).map(([key, value]) => (
               <div
                 key={key}
                 className={`flex items-center space-x-2 px-3 py-2 rounded ${
@@ -514,7 +519,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div>
           <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions</h3>
           <div className="space-y-2">
-            {data.possessions.map((item: any, index: number) => (
+            {data.possessions!.map((item, index) => (
               <div key={index} className="bg-parchment border border-sepia-400 rounded-md p-3">
                 <div className="flex items-start justify-between">
                   <div className="font-semibold text-sepia-900">{item.name}</div>
@@ -531,7 +536,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <div>
           <h3 className="text-lg font-bold text-sepia-900 mb-4">Contacts</h3>
           <div className="space-y-2">
-            {data.contacts.map((contact: any, index: number) => (
+            {data.contacts!.map((contact, index) => (
               <div key={index} className="bg-blue-50 border border-blue-300 rounded-md p-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -595,6 +600,35 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Spells & Mythos.
+          The Cthulhu Mythos rating and the spells an investigator knows are on
+          the official sheet and are among the most consequential things it
+          records — the rating caps maximum Sanity. Neither had anywhere to be
+          shown or set in the app until now. */}
+      {(data.spellsAndMythos?.cthulhuMythos || data.spellsAndMythos?.spells?.length) && (
+        <div className="mt-6 bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-purple-900 mb-3">Spells &amp; Mythos</h3>
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-xs text-purple-700 uppercase">Cthulhu Mythos</span>
+            <span className="text-xl font-bold text-purple-900">
+              {data.spellsAndMythos?.cthulhuMythos ?? 0}%
+            </span>
+          </div>
+          {data.spellsAndMythos?.spells && data.spellsAndMythos.spells.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {data.spellsAndMythos.spells.map((spell, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-purple-200 text-purple-900 rounded-full text-sm font-medium"
+                >
+                  {spell}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

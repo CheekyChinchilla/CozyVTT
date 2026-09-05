@@ -10,7 +10,11 @@ import React from 'react';
 export type ProficiencyRank = 'untrained' | 'trained' | 'expert' | 'master' | 'legendary';
 
 interface ProficiencyIndicatorProps {
-  rank: ProficiencyRank;
+  /**
+   * Optional: a stored sheet need not record one, and older or imported sheets
+   * often do not. Absent or unrecognised renders nothing.
+   */
+  rank?: ProficiencyRank;
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -68,7 +72,17 @@ export const ProficiencyIndicator: React.FC<ProficiencyIndicatorProps> = ({
   rank,
   size = 'md',
 }) => {
-  const config = PROFICIENCY_CONFIG[rank];
+  // `proficiencyRank` is optional on a strike, and a sheet written by an older
+  // version, imported from elsewhere, or converted from an earlier shape may
+  // not carry one at all. Reading the config blind used to throw and take the
+  // whole sheet down with it.
+  //
+  // Nothing is rendered rather than falling back to Untrained: a Fighter's
+  // warhammer is not untrained, and a "U" would assert something about the
+  // character that simply is not known.
+  const config = rank ? PROFICIENCY_CONFIG[rank] : undefined;
+  if (!config) return null;
+
   const sizeClass = SIZE_CLASSES[size];
 
   return (

@@ -200,9 +200,13 @@ Type directly into the expression input. Supported notation:
 
 *GIF pending — Typing a dice expression and seeing the result in chat.*
 
-**Why my roll showed up in chat:** Dice results are public by default. Everyone can see what you rolled. The DM may occasionally roll secretly — you'll see a "DM rolled secretly" message instead of the actual result.
+**Why my roll showed up in chat:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
 
-**Your roll history sticks around.** The arrows at the top of the panel step back through recent rolls, and that list is kept on the server — refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Your own secret rolls stay yours; nobody else's secret rolls ever appear in your history. Only the DM can clear it.
+**Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
+
+**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel hides them; that only changes your own view, and nobody else's rolls are affected either way.
+
+Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
 One thing to know: if the DM has **paused** the session, your rolls are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh.
 
@@ -225,11 +229,43 @@ Your movement is visible to everyone in real time — your party can watch you c
 
 If your token is missing or in the wrong place, just let your DM know in chat — they can adjust it.
 
+### Two creatures can't stand in the same square
+
+Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
+
+A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight.
+
+If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
+
+## Your Own Notes
+
+The **Notes** tab is yours alone. Keep as many notes as you like for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
+
+**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
+
+**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
+
+Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
+
+A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
+
+### Catching up on last time
+
+The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
+
+If a session shows no notes, your DM simply didn't write any that night.
+
+### Pointing at a token
+
+Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
+
+You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+
 ### Why parts of the map are dark
 
 Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
 
-Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move.
+Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
 
 Two things worth knowing:
 
@@ -290,6 +326,24 @@ Either way the result drops straight into the turn order and the roll appears in
 **D&D 5e players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: the **Alert** feat's flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
+
+### Skills the sheet doesn't have (D&D 5e)
+
+Thieves' tools, a musical instrument, a vehicle, or whatever your table invented — none of these are among the eighteen printed skills, but they roll the same way. Under **Stats & Skills** there's a **Your Own Skills** section: **+ Add Skill**, type the name, choose the ability it uses, and tick **Prof** (or **Exp** for expertise).
+
+The bonus is worked out for you from that ability and your proficiency bonus, so it keeps up as your character grows — there's nothing to re-enter when you level. The **Other** box is for anything the maths can't know about, like a +1 set of tools.
+
+Your own skills show up with the rest on your sheet and in the right-click roll menu, so rolling them is one click.
+
+### Weapons that do more than one thing
+
+**Properties** — Finesse, Light, Thrown and the rest — are buttons on each weapon in the Combat tab. Tap the ones that apply and they appear as labels on your sheet.
+
+The eleven buttons are the ones the rules name, not a limit. If your game has a property of its own, type it into **Add your own property** and it gets a label like any other. Your own properties show in amber while editing so you can tell them apart, and clicking one removes it.
+
+**More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
+
+If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
 
 **The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
 

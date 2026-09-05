@@ -65,9 +65,15 @@ function num(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-/** Narrow unknown to an indexable record without trusting its shape. */
-function rec(value: unknown): Record<string, any> | null {
-  return value && typeof value === 'object' ? (value as Record<string, any>) : null;
+/**
+ * Narrow unknown to an indexable record without trusting its shape.
+ *
+ * Values come back as `unknown` rather than `any`, so every read below has to
+ * narrow before it can be used — which is the point. An `any` here would spread
+ * silently through every caller and undo the checking this module exists to do.
+ */
+function rec(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
 /** A d20 roll with the given total modifier. */

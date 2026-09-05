@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canDeleteCampaign } from '../services/permissions';
-import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
+import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign } from '../websocket/utils';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, VibeSettings } from '../utils/vibe-presets';
@@ -12,6 +12,16 @@ import { GameSystem } from '../game-systems';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema } from '../validators/campaigns';
+import {
+  CreatePersonalNoteSchema,
+  UpdatePersonalNoteSchema,
+  MAX_NOTES_PER_CAMPAIGN,
+} from '../validators/personalNotes';
+import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
+import type { Prisma } from '@prisma/client';
+import { errorMessage } from '../utils/errors';
+import { toJson, readJsonObject } from '../utils/prisma-json';
+import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -125,7 +135,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         name,
         description: description || '',
         ownerId: userId,
-        vibeSettings: DEFAULT_VIBE_SETTINGS as any,
+        vibeSettings: toJson(DEFAULT_VIBE_SETTINGS),
         gameSystem: gameSystem || null,
       },
     });
@@ -283,43 +293,6 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
  * Requires: Campaign membership (any role)
  */
 
-/** Extract { current, max, temp } from character data in a game-system-aware way */
-function extractCharacterHp(
-  gameSystem: string | null,
-  data: unknown
-): { current: number; max: number; temp: number } | null {
-  if (!data || !gameSystem) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const d = data as any;
-  switch (gameSystem) {
-    case 'DND_5E':
-    case 'PATHFINDER_2E':
-    case 'FLEXIBLE': {
-      if (d.hp && typeof d.hp.maximum === 'number' && d.hp.maximum > 0) {
-        return {
-          current: typeof d.hp.current === 'number' ? d.hp.current : d.hp.maximum,
-          max: d.hp.maximum,
-          temp: typeof d.hp.temporary === 'number' ? d.hp.temporary : 0,
-        };
-      }
-      return null;
-    }
-    case 'CALL_OF_CTHULHU_7E': {
-      const hp = d.derivedStats?.hp;
-      if (hp && typeof hp.maximum === 'number' && hp.maximum > 0) {
-        return {
-          current: typeof hp.current === 'number' ? hp.current : hp.maximum,
-          max: hp.maximum,
-          temp: 0,
-        };
-      }
-      return null;
-    }
-    default:
-      return null;
-  }
-}
-
 router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
@@ -362,7 +335,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
         .filter((c) => membership.characterIds.includes(c.id))
         .map(({ data, ...char }) => ({
           ...char,
-          hp: extractCharacterHp(char.gameSystem, data),
+          hp: extractCharacterHp(char.gameSystem, readJsonObject(data)),
         }));
 
       return {
@@ -395,11 +368,11 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     const { campaignId } = req.params;
     const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = req.body;
 
-    const updateData: any = {};
+    const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
-    if (vibeSettings !== undefined) updateData.vibeSettings = vibeSettings;
+    if (vibeSettings !== undefined) updateData.vibeSettings = toJson(vibeSettings);
     if (spiritLayerEnabled !== undefined) updateData.spiritLayerEnabled = spiritLayerEnabled;
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
@@ -438,7 +411,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         logger.warn('campaign game system changed with existing characters', { campaignId, characterCount });
       }
 
-      updateData.gameSystem = gameSystem;
+      updateData.gameSystem = gameSystem as GameSystem | null;
     }
 
     const campaign = await prisma.campaign.update({
@@ -492,7 +465,7 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
       select: { currentVibe: true },
     });
 
-    const updateData: any = { vibeSettings };
+    const updateData: Prisma.CampaignUpdateInput = { vibeSettings: toJson(vibeSettings) };
 
     // Reset currentVibe if current period no longer exists in new settings
     if (campaign?.currentVibe) {
@@ -1246,6 +1219,275 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
   }
 });
 
+// ============================================
+// PERSONAL NOTES
+//
+// A player's own notes, in Markdown. Private to whoever wrote them — the DM
+// included. `Session.notes` is the shared recap; this is not that.
+//
+// SECURITY: every query below is scoped by `req.session.userId` as well as the
+// campaign, and never by an id taken from the request. A note that is not the
+// caller's answers **404 rather than 403**, deliberately: 403 would confirm the
+// id exists, which is itself a disclosure to someone with no business knowing.
+// ============================================
+
+/**
+ * GET /api/campaigns/:campaignId/notes
+ * The caller's own notes for this campaign, most recently edited first.
+ * Requires: Campaign membership (any role)
+ *
+ * Titles only. A note runs to tens of thousands of characters, and a list that
+ * shipped every body would move megabytes each time the panel opened; the body
+ * is fetched when a note is actually opened.
+ */
+router.get('/:campaignId/notes', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const notes = await prisma.personalNote.findMany({
+      where: { campaignId: req.params.campaignId, userId: req.session.userId! },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, title: true, createdAt: true, updatedAt: true },
+    });
+    return res.status(200).json({ notes });
+  } catch (error) {
+    logger.error('Error fetching personal notes', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch notes' });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/notes
+ * Start a new note. Requires: Campaign membership (any role)
+ */
+router.post('/:campaignId/notes', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = CreatePersonalNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid note',
+      });
+    }
+
+    const { campaignId } = req.params;
+    const userId = req.session.userId!;
+
+    const existing = await prisma.personalNote.count({ where: { campaignId, userId } });
+    if (existing >= MAX_NOTES_PER_CAMPAIGN) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `You already have ${MAX_NOTES_PER_CAMPAIGN} notes in this campaign. Delete one to make room.`,
+      });
+    }
+
+    const note = await prisma.personalNote.create({
+      data: {
+        campaignId,
+        userId,
+        title: parsed.data.title,
+        content: parsed.data.content ?? '',
+      },
+    });
+
+    return res.status(201).json({ note });
+  } catch (error) {
+    logger.error('Error creating personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create note' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/notes/:noteId
+ * One note, body included. Requires: Campaign membership, and authorship.
+ */
+router.get('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const note = await prisma.personalNote.findFirst({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+    });
+
+    if (!note) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    return res.status(200).json({ note });
+  } catch (error) {
+    logger.error('Error fetching personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch note' });
+  }
+});
+
+/**
+ * PUT /api/campaigns/:campaignId/notes/:noteId
+ * Rename a note, replace its body, or both.
+ * Requires: Campaign membership, and authorship.
+ */
+router.put('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const parsed = UpdatePersonalNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid note',
+      });
+    }
+
+    // Scoped lookup first: the id used in the update below is one this caller
+    // has already been proven to own, rather than one taken from the request.
+    const owned = await prisma.personalNote.findFirst({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+      select: { id: true },
+    });
+
+    if (!owned) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    const note = await prisma.personalNote.update({
+      where: { id: owned.id },
+      data: {
+        ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+        ...(parsed.data.content !== undefined ? { content: parsed.data.content } : {}),
+      },
+    });
+
+    return res.status(200).json({ note });
+  } catch (error) {
+    logger.error('Error updating personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update note' });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId/notes/:noteId
+ * Requires: Campaign membership, and authorship.
+ */
+router.delete('/:campaignId/notes/:noteId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // deleteMany rather than delete: the whole ownership scope goes into the
+    // one statement, so there is no window between checking and deleting.
+    const { count } = await prisma.personalNote.deleteMany({
+      where: {
+        id: req.params.noteId,
+        campaignId: req.params.campaignId,
+        userId: req.session.userId!,
+      },
+    });
+
+    if (count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Note not found' });
+    }
+
+    return res.status(200).json({ message: 'Note deleted' });
+  } catch (error) {
+    logger.error('Error deleting personal note', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete note' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/sessions
+ * Past sessions and the notes recorded when each one ended.
+ * Requires: Campaign membership (any role)
+ *
+ * The DM has always been able to write notes when ending a session, and the
+ * dialog said they were kept — but nothing read them back, so they were stored
+ * and invisible. They were never private: the field is labelled "Session Notes"
+ * and asks "What happened this session?", so every member can read them, which
+ * is what a player wanting to remember last time needs.
+ *
+ * `savedState` is deliberately not selected. It is a large blob of token
+ * positions kept for resuming, and nothing reading history needs it.
+ */
+router.get('/:campaignId/sessions', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+
+    const sessions = await prisma.session.findMany({
+      where: { campaignId },
+      orderBy: { sessionNumber: 'desc' },
+      // Bounded: a long-running campaign accumulates these indefinitely, and
+      // nobody scrolls back a hundred sessions in a side panel.
+      take: 50,
+      select: {
+        id: true,
+        sessionNumber: true,
+        startedAt: true,
+        endedAt: true,
+        notes: true,
+      },
+    });
+
+    return res.status(200).json({ sessions });
+  } catch (error) {
+    logger.error('Error fetching sessions', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch sessions',
+    });
+  }
+});
+
+/**
+ * PUT /api/campaigns/:campaignId/sessions/:sessionId/notes
+ * Rewrite or clear the recap for a session that has already ended.
+ * Requires: Campaign DM role
+ *
+ * Sessions were being ended with notes long before anything displayed them, so
+ * the history list showed every recap ever written at once. A DM who had treated
+ * that box as private working notes had no way to take them back. Sending an
+ * empty string clears the recap outright.
+ */
+router.put('/:campaignId/sessions/:sessionId/notes', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, sessionId } = req.params;
+
+    const parsed = UpdateSessionNotesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid session notes',
+      });
+    }
+
+    const trimmed = parsed.data.notes.trim();
+
+    // Scoped by campaign as well as id, in one statement: `campaignDM` proves
+    // the caller runs *this* campaign, and looking the session up separately
+    // would leave a window between the check and the write. A session belonging
+    // to someone else's campaign matches nothing and answers 404 — a 403 would
+    // confirm the id exists.
+    const updated = await prisma.session.updateMany({
+      where: { id: sessionId, campaignId },
+      data: { notes: trimmed.length > 0 ? trimmed : null },
+    });
+
+    if (updated.count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Session not found' });
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true, sessionNumber: true, startedAt: true, endedAt: true, notes: true },
+    });
+
+    return res.status(200).json({ session });
+  } catch (error) {
+    logger.error('Error updating session notes', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to update session notes',
+    });
+  }
+});
+
 /**
  * POST /api/campaigns/:campaignId/sessions
  * Start a new session
@@ -1363,7 +1605,7 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
     const gameState = await captureGameState(campaignId, sessionId);
     await prisma.session.update({
       where: { id: sessionId },
-      data: { savedState: gameState as any },
+      data: { savedState: toJson(gameState) },
     });
 
     // Update campaign status to PAUSED
@@ -1443,7 +1685,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
       where: { id: sessionId },
       data: {
         endedAt: new Date(),
-        savedState: savedState as any,
+        savedState: toJson(savedState),
         ...(notes ? { notes: String(notes).slice(0, 2000) } : {}),
       },
     });
@@ -1514,7 +1756,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
     }
 
     // Restore game state
-    await restoreGameState(campaignId, lastSession.savedState as any);
+    await restoreGameState(campaignId, lastSession.savedState as unknown as GameState);
 
     // Clear endedAt to "reopen" the session
     await prisma.session.update({
@@ -1591,10 +1833,10 @@ router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, 
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
     res.setHeader('Content-Length', result.buffer.length);
     return res.send(result.buffer);
-  } catch (error: any) {
-    logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: error.message });
+  } catch (error: unknown) {
+    logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: errorMessage(error) });
 
-    if (error.message === 'Campaign not found') {
+    if (errorMessage(error) === 'Campaign not found') {
       return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
     }
 
@@ -1635,11 +1877,11 @@ router.post('/import/preview', authenticated, (req: Request, res: Response, next
 
     const preview = await previewCampaignImport(req.file.buffer);
     return res.status(200).json({ preview });
-  } catch (error: any) {
-    logger.warn('Campaign import preview failed', { error: error.message });
+  } catch (error: unknown) {
+    logger.warn('Campaign import preview failed', { error: errorMessage(error) });
     return res.status(400).json({
       error: 'Invalid Archive',
-      message: error.message || 'Could not read archive.',
+      message: errorMessage(error) || 'Could not read archive.',
     });
   }
 });
@@ -1696,11 +1938,11 @@ router.post('/import', authenticated, (req: Request, res: Response, next: NextFu
       message: 'Campaign imported successfully',
       ...result,
     });
-  } catch (error: any) {
-    logger.error('Campaign import failed', { error: error.message, userId: req.session?.userId });
+  } catch (error: unknown) {
+    logger.error('Campaign import failed', { error: errorMessage(error), userId: req.session?.userId });
     return res.status(400).json({
       error: 'Import Failed',
-      message: error.message || 'Failed to import campaign.',
+      message: errorMessage(error) || 'Failed to import campaign.',
     });
   }
 });

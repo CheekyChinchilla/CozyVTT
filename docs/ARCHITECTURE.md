@@ -308,12 +308,22 @@ erDiagram
         json metadata
     }
 
-    GameSession {
+    Session {
         string id PK
+        int sessionNumber
         datetime startedAt
         datetime endedAt
-        string status
-        json capturedState
+        json savedState
+        string notes
+    }
+
+    PersonalNote {
+        string id PK
+        string userId FK
+        string campaignId FK
+        string title
+        string content
+        datetime updatedAt
     }
 
     CreatureTemplate {
@@ -347,7 +357,9 @@ erDiagram
     Campaign ||--o{ Character : "has assigned"
     Campaign ||--o{ Map : "has"
     Campaign ||--o{ Message : "has"
-    Campaign ||--o{ GameSession : "has"
+    Campaign ||--o{ Session : "has"
+    Campaign ||--o{ PersonalNote : "has"
+    User ||--o{ PersonalNote : "writes"
     User ||--o{ Asset : "uploaded"
     Campaign ||--o{ Asset : "scoped to"
     Map ||--o{ Asset : "uses"
@@ -362,8 +374,9 @@ erDiagram
 
 - **Token data is stored as JSON inside `Map.tokens`** — tokens are not a separate table. This simplifies real-time updates (the whole token list is atomically replaced on moves).
 - **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas but stored untyped in Postgres. This allows flexible incremental saves.
-- **`vibeSettings` and `capturedState` are JSON columns** — used to persist complex nested state that changes frequently.
+- **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
+- **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
 
 ---

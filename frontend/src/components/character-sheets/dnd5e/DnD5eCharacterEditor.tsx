@@ -5,7 +5,7 @@
  * color customization, and token upload functionality.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Swords,
   Package,
@@ -19,20 +19,64 @@ import {
   Palette,
 } from 'lucide-react';
 import { Character, AssetType } from '../../../types';
+import type { CharacterData } from '../../../types';
+import type {
+  DnD5eCharacterData,
+  DnD5eStats,
+  DnD5eSavingThrows,
+  DnD5eSkills,
+  DnD5eSpellcasting,
+  DnD5eAppearance,
+  DnD5ePersonality,
+  SheetChrome,
+} from '../../../types/game-systems';
+import { apiErrorMessage } from '@/utils/errors';
+import { DND5E_CONDITIONS } from '@/utils/conditions';
+import { collectSheetFeatures, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
-import { passiveScore } from '@/utils/rules/dnd5e';
+import {
+  passiveScore,
+  dnd5eSpellSaveDC,
+  dnd5eSpellAttackBonus,
+  dnd5eBackfilledSpellSaveDCBonus,
+  dnd5eBackfilledSpellAttackBonus,
+  spellcastingAbilityModifier,
+  exhaustionLevel,
+  exhaustionEffects,
+  dnd5eCustomSkillBonus,
+  DND5E_ABILITY_NAMES,
+} from '@/utils/rules/dnd5e';
 import {
   dnd5eInitiativeModifier,
   dnd5eBackfilledInitiativeBonus,
 } from '@/utils/rules/initiative';
+import { readProficiencyGroups, flattenProficiencyGroups } from '@/utils/proficiencies';
+import {
+  DND5E_WEAPON_PROPERTIES,
+  MAX_WEAPON_PROPERTY_LENGTH,
+  hasWeaponProperty,
+  toggleWeaponProperty,
+  customWeaponProperties,
+  addCustomWeaponProperty,
+} from '@/utils/weaponProperties';
+
+/**
+ * The sheet as this editor holds it.
+ *
+ * `proficiencies` used to be redeclared here, because the game system's own
+ * type did not describe it and it survived a save only by accident — the route
+ * stores the body as sent rather than Zod's parsed output. It is a declared
+ * field on both sides now, so this adds nothing but the editor's own chrome.
+ */
+type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
   character: Character;
-  onSave: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -104,6 +148,27 @@ const shouldUseWhiteText = (hexColor: string): boolean => {
 };
 
 /**
+ * Settle a sheet's features into one editable list, once, on load.
+ *
+ * Two fields can hold them: `featuresAndTraits`, which the sheet has always
+ * displayed, and `features`, which the built-in templates wrote and nothing
+ * read. Both are folded in here and the orphan dropped, so that from this point
+ * on the form has exactly one list.
+ *
+ * Doing it on load rather than on every render matters twice over. The reader
+ * discards entries with no name — correct for storage, wrong for an editor,
+ * where a row you have just added and not yet typed into is nameless, so a
+ * derived list threw away every new row the moment it appeared. And re-reading
+ * `features` each render would resurrect a template feature the second after it
+ * was deleted.
+ */
+function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
+  const settled = { ...sheet, featuresAndTraits: collectSheetFeatures(sheet) };
+  delete (settled as Record<string, unknown>).features;
+  return settled;
+}
+
+/**
  * DnD5eCharacterEditor - Editable D&D 5e character sheet
  */
 export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
@@ -119,39 +184,52 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const { data: serverConfig } = useServerConfigQuery();
 
   // Type assertion for D&D 5e character data
-  const data = character.data as any;
+  const data = character.data as DnD5eFormData;
+
 
   // Form state - initialize with character data
-  const [formData, setFormData] = useState<any>(() => ({
-    ...data,
-    // Ensure nested objects exist
-    stats: data.stats || {},
-    savingThrows: data.savingThrows || {},
-    skills: data.skills || {},
+  const [formData, setFormData] = useState<DnD5eFormData>(() => ({
+    ...withoutOrphanFeatures(data),
+    // Ensure nested objects exist.
+    //
+    // TODO(typing): `{}` is not a valid container — none of these has its keys,
+    // and the effects below read `.score` / `.proficient` off each entry. A
+    // sheet stored without one of these blocks therefore reads `undefined`
+    // where a number is expected. Pre-existing; the casts keep the behaviour
+    // exactly as it was rather than changing what a malformed sheet does.
+    stats: (data.stats || {}) as DnD5eStats,
+    savingThrows: (data.savingThrows || {}) as DnD5eSavingThrows,
+    skills: (data.skills || {}) as DnD5eSkills,
     hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
     deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    spellcasting: data.spellcasting || {
+    // Same TODO(typing) as the containers above: this default omits `class`
+    // and its `slots` has none of the nine levels, both of which the type
+    // requires and the sheet below reads. Cast rather than corrected.
+    spellcasting: (data.spellcasting || {
       ability: '',
       spellSaveDC: 0,
       spellAttackBonus: 0,
       cantrips: [],
       slots: {},
       spells: [],
-    },
+    }) as DnD5eSpellcasting,
     currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: data.inventory || [],
     attacks: data.attacks || [],
     hitDice: data.hitDice || [],
     conditions: data.conditions || [],
     proficienciesAndLanguages: data.proficienciesAndLanguages || [],
-    // Always use a structured object for proficiencies so the textarea fields work correctly.
-    // If legacy data stored proficiencies as an array, ignore it and start with empty strings.
-    proficiencies: (data.proficiencies && !Array.isArray(data.proficiencies))
-      ? { armor: '', weapons: '', tools: '', languages: '', ...data.proficiencies }
-      : { armor: '', weapons: '', tools: '', languages: '' },
-    featuresAndTraits: data.featuresAndTraits || [],
-    appearance: data.appearance || {},
-    personality: data.personality || {},
+    // Always four strings, so the textareas are controlled from the first
+    // render. The shared reader settles where they come from: the stored boxes
+    // when the sheet has them, otherwise a one-time guess from the flat list a
+    // sheet written before the boxes existed carries.
+    proficiencies: readProficiencyGroups(data),
+    // featuresAndTraits is not defaulted here: the spread above has already
+    // settled it, folding in the template-era `features` field. Re-reading
+    // `data` would throw that away.
+    // Same TODO(typing) as the containers above.
+    appearance: (data.appearance || {}) as DnD5eAppearance,
+    personality: (data.personality || {}) as DnD5ePersonality,
     alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
   }));
 
@@ -245,7 +323,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedStats = { ...formData.stats };
       let hasChanges = false;
 
-      Object.keys(updatedStats).forEach(ability => {
+      (Object.keys(updatedStats) as (keyof DnD5eStats)[]).forEach(ability => {
         const score = updatedStats[ability].score;
         const newModifier = calculateModifier(score);
         if (updatedStats[ability].modifier !== newModifier) {
@@ -255,7 +333,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (hasChanges) {
-        setFormData((prev: any) => ({ ...prev, stats: updatedStats }));
+        setFormData((prev) => ({ ...prev, stats: updatedStats }));
       }
     }
   }, [
@@ -273,7 +351,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSavingThrows = { ...formData.savingThrows };
       let hasChanges = false;
 
-      Object.keys(updatedSavingThrows).forEach(ability => {
+      (Object.keys(updatedSavingThrows) as (keyof DnD5eSavingThrows)[]).forEach(ability => {
         const abilityMod = formData.stats[ability]?.modifier || 0;
         const proficient = updatedSavingThrows[ability].proficient;
         const newBonus = abilityMod + (proficient ? formData.proficiencyBonus : 0);
@@ -285,7 +363,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (hasChanges) {
-        setFormData((prev: any) => ({ ...prev, savingThrows: updatedSavingThrows }));
+        setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
       }
     }
   }, [
@@ -305,7 +383,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   ]);
 
   // Skill-to-ability mapping
-  const skillAbilities: Record<string, string> = {
+  const skillAbilities: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
     acrobatics: 'dexterity',
     animalHandling: 'wisdom',
     arcana: 'intelligence',
@@ -332,7 +410,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSkills = { ...formData.skills };
       let needsUpdate = false;
 
-      Object.keys(skillAbilities).forEach((skill) => {
+      (Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).forEach((skill) => {
         if (!updatedSkills[skill]) {
           updatedSkills[skill] = { proficient: false, expertise: false, bonus: 0 };
           needsUpdate = true;
@@ -340,7 +418,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       });
 
       if (needsUpdate) {
-        setFormData((prev: any) => ({ ...prev, skills: updatedSkills }));
+        setFormData((prev) => ({ ...prev, skills: updatedSkills }));
       }
     }
   }, []); // Run once on mount
@@ -351,7 +429,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const updatedSkills = { ...formData.skills };
       let hasChanges = false;
 
-      Object.keys(updatedSkills).forEach(skill => {
+      (Object.keys(updatedSkills) as (keyof DnD5eSkills)[]).forEach(skill => {
         const ability = skillAbilities[skill];
         const abilityMod = formData.stats[ability]?.modifier || 0;
         const proficient = updatedSkills[skill].proficient;
@@ -395,7 +473,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         formData.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
 
       if (hasChanges || passiveChanged) {
-        setFormData((prev: any) => ({
+        setFormData((prev) => ({
           ...prev,
           skills: updatedSkills,
           passivePerceptionBonus: passiveBonus,
@@ -412,7 +490,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.wisdom?.modifier,
     formData.stats?.charisma?.modifier,
     // Explicitly depend on each skill's proficient and expertise flags
-    ...Object.keys(skillAbilities).flatMap(skill => [
+    ...(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).flatMap(skill => [
       formData.skills?.[skill]?.proficient,
       formData.skills?.[skill]?.expertise,
     ]),
@@ -424,6 +502,28 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    * is always what will be rolled.
    */
   const initiativeModifier = dnd5eInitiativeModifier(formData);
+
+  // Spell save DC and attack bonus, derived the way the rules define them.
+  // Both were hand-typed boxes, which is why the templates could ship DC 8 —
+  // a number no character can legitimately have, since the lowest at level 1
+  // is 10.
+  const exhaustion = exhaustionLevel(formData.exhaustionLevel);
+  const spellAbilityModifier = spellcastingAbilityModifier(formData);
+  const spellSaveDC = dnd5eSpellSaveDC(formData);
+  const spellAttackBonus = dnd5eSpellAttackBonus(formData);
+
+  /**
+   * The feature rows, straight from form state.
+   *
+   * Deliberately not derived: `withoutOrphanFeatures` has already settled both
+   * stored shapes into this one list when the form was created, so what is here
+   * is exactly what the user is editing — including rows they have added and
+   * not yet named. Blank rows are dropped on save, not while typing.
+   */
+  const featureRows = useMemo(
+    () => readFeatureEntriesForEditing(formData.featuresAndTraits),
+    [formData.featuresAndTraits]
+  );
 
   /**
    * Convert a character saved before `initiativeBonus` existed, and keep the
@@ -448,7 +548,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     const needsTotal = formData.initiative !== total;
     if (!needsBonus && !needsTotal) return;
 
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       ...(needsBonus ? { initiativeBonus: bonus } : {}),
       initiative: total,
@@ -458,6 +558,62 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.dexterity?.modifier,
     formData.initiativeBonus,
     formData.initiative,
+  ]);
+
+  /**
+   * Keep the stored spell save DC and attack bonus in step with the formulas,
+   * and read an older hand-typed value back into its parts.
+   *
+   * The same arrangement as initiative above, for the same reason: both used to
+   * be typed by hand, so a caster with a Rod of the Pact Keeper had a DC one
+   * higher than the formula gives. Deriving without converting would take that
+   * point away silently. The conversion runs once, only where the adjustment
+   * field is absent.
+   */
+  useEffect(() => {
+    if (!formData.spellcasting) return;
+
+    const dcBackfill = dnd5eBackfilledSpellSaveDCBonus(formData);
+    const attackBackfill = dnd5eBackfilledSpellAttackBonus(formData);
+
+    const withBonuses = {
+      ...formData,
+      spellcasting: {
+        ...formData.spellcasting,
+        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
+        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
+      },
+    };
+
+    const dcTotal = dnd5eSpellSaveDC(withBonuses);
+    const attackTotal = dnd5eSpellAttackBonus(withBonuses);
+
+    const needsChange =
+      dcBackfill !== null ||
+      attackBackfill !== null ||
+      formData.spellcasting.spellSaveDC !== dcTotal ||
+      formData.spellcasting.spellAttackBonus !== attackTotal;
+    if (!needsChange) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      spellcasting: {
+        ...prev.spellcasting,
+        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
+        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
+        spellSaveDC: dcTotal,
+        spellAttackBonus: attackTotal,
+      } as DnD5eSpellcasting,
+    }));
+  }, [
+    formData.proficiencyBonus,
+    formData.level,
+    formData.stats,
+    formData.spellcasting?.ability,
+    formData.spellcasting?.spellSaveDCOtherBonus,
+    formData.spellcasting?.spellAttackOtherBonus,
+    formData.spellcasting?.spellSaveDC,
+    formData.spellcasting?.spellAttackBonus,
   ]);
 
   // Handle token image upload
@@ -497,7 +653,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
     // Validate ability scores (1-30)
     if (formData.stats) {
-      Object.entries(formData.stats).forEach(([ability, data]: [string, any]) => {
+      Object.entries(formData.stats).forEach(([ability, data]) => {
         if (!data.score || data.score < 1 || data.score > 30) {
           newErrors[`stats.${ability}`] = 'Ability score must be between 1 and 30';
         }
@@ -543,25 +699,30 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         themeColor: isCustomColor ? customColorHex : selectedColor.name,
       };
 
-      // Parse comma-separated strings into arrays for storage
-      // Proficiencies
-      if (updatedData.proficiencies && typeof updatedData.proficiencies === 'object') {
-        const armorArray = parseCommaSeparated(updatedData.proficiencies.armor);
-        const weaponsArray = parseCommaSeparated(updatedData.proficiencies.weapons);
-        const toolsArray = parseCommaSeparated(updatedData.proficiencies.tools);
-        const languagesArray = parseCommaSeparated(updatedData.proficiencies.languages);
+      // Proficiencies.
+      //
+      // The four boxes are stored as typed, under `proficiencies`, and that is
+      // what both this editor and the read-only view display. The flattened
+      // array is written alongside purely for older readers — it loses which
+      // box an entry came from, which is what used to leave a player's
+      // Thieves' Cant filed under Weapons.
+      const proficiencyGroups = readProficiencyGroups(updatedData);
+      updatedData.proficiencies = proficiencyGroups;
+      updatedData.proficienciesAndLanguages = flattenProficiencyGroups(proficiencyGroups);
 
-        // Flatten to backwards-compatible array
-        updatedData.proficienciesAndLanguages = [
-          ...armorArray,
-          ...weaponsArray,
-          ...toolsArray,
-          ...languagesArray,
-        ];
-      }
-
-      // Features & Traits
-      updatedData.featuresAndTraits = parseCommaSeparated(updatedData.featuresAndTraits);
+      // Features & Traits.
+      //
+      // Normalised through the shared reader rather than split on commas, so a
+      // sheet that arrives holding strings, or holding the separate field the
+      // built-in templates used to write, is saved back as one list of named
+      // entries. Rows left completely blank are dropped rather than saved as
+      // nameless features.
+      //
+      // `features` goes with it: the templates' copy has been folded into the
+      // list above, and leaving it behind would mean the same features were
+      // recorded twice, in two shapes, drifting apart from here on.
+      updatedData.featuresAndTraits = collectSheetFeatures(updatedData);
+      delete (updatedData as Record<string, unknown>).features;
 
       // Cantrips
       if (updatedData.spellcasting) {
@@ -590,9 +751,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
           // Store the new token URL to pass separately to onSave
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: uploadError.response?.data?.message || 'Failed to upload token image' });
+          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
           setIsSaving(false);
           return;
         }
@@ -609,25 +770,70 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     }
   };
 
-  // Update form field
-  const updateField = (path: string, value: any) => {
-    setFormData((prev: any) => {
-      const newData = { ...prev };
+  /**
+   * Set a value at a dotted path, cloning each level on the way down.
+   *
+   * The walk is untyped on purpose: the path is a runtime string, so no type
+   * can describe what it lands on. The `Record<string, unknown>` view says
+   * exactly that — this is indexing an object by a name only known at runtime —
+   * rather than `any`, which would also have silenced the *call sites*.
+   */
+  /**
+   * What has been typed into each attack's "add your own property" box, keyed
+   * by that attack's index. Draft text only — nothing reaches the sheet until
+   * it is committed, so a half-typed word is never stored.
+   */
+  const [customPropertyDrafts, setCustomPropertyDrafts] = useState<Record<number, string>>({});
+
+  /** Move a typed property onto the attack and clear the box. */
+  const commitCustomProperty = (index: number, properties: string[]) => {
+    const draft = customPropertyDrafts[index] ?? '';
+    const next = addCustomWeaponProperty(properties, draft);
+    // Refused (blank, too long, already there) — leave the text so it can be
+    // corrected rather than silently discarding what was typed.
+    if (next.length === properties.length) return;
+    updateField(`attacks.${index}.properties`, next);
+    setCustomPropertyDrafts((prev) => ({ ...prev, [index]: '' }));
+  };
+
+  /**
+   * Drop one attack's draft and shift the rest down.
+   *
+   * The drafts are keyed by position in the attacks array, so deleting a weapon
+   * renumbers every weapon after it. Without this, half-typed text moved to
+   * whichever weapon inherited the deleted one's index.
+   */
+  const removeCustomPropertyDraft = (removed: number) => {
+    setCustomPropertyDrafts((prev) => {
+      const next: Record<number, string> = {};
+      for (const [key, draft] of Object.entries(prev)) {
+        const at = Number(key);
+        if (at === removed) continue;
+        next[at > removed ? at - 1 : at] = draft;
+      }
+      return next;
+    });
+  };
+
+  const updateField = (path: string, value: unknown) => {
+    setFormData((prev) => {
+      const newData = { ...prev } as unknown as Record<string, unknown>;
       const keys = path.split('.');
       let current = newData;
       for (let i = 0; i < keys.length - 1; i++) {
         // CRITICAL: Preserve array types when cloning nested structures
-        if (Array.isArray(current[keys[i]])) {
-          current[keys[i]] = [...current[keys[i]]];
-        } else if (typeof current[keys[i]] === 'object' && current[keys[i]] !== null) {
-          current[keys[i]] = { ...current[keys[i]] };
+        const branch = current[keys[i]];
+        if (Array.isArray(branch)) {
+          current[keys[i]] = [...branch];
+        } else if (typeof branch === 'object' && branch !== null) {
+          current[keys[i]] = { ...(branch as Record<string, unknown>) };
         } else {
           current[keys[i]] = {};
         }
-        current = current[keys[i]];
+        current = current[keys[i]] as Record<string, unknown>;
       }
       current[keys[keys.length - 1]] = value;
-      return newData;
+      return newData as unknown as DnD5eFormData;
     });
   };
 
@@ -946,7 +1152,7 @@ min={2}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-4">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-          {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+          {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const abilityData = formData.stats?.[ability] || { score: 10, modifier: 0 };
             const error = errors[`stats.${ability}`];
 
@@ -999,7 +1205,7 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
         <div className="grid grid-cols-2 gap-2">
-          {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+          {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
             return (
               <div key={ability} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded">
@@ -1030,7 +1236,7 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-          {Object.keys(skillAbilities).map((skill) => {
+          {(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).map((skill) => {
             const skillData = formData.skills?.[skill] || { proficient: false, expertise: false, bonus: 0 };
             const skillLabel = skill
               .replace(/([A-Z])/g, ' $1')
@@ -1091,6 +1297,134 @@ min={1}
         </div>
       </div>
 
+      {/* Skills of your own.
+          Tool proficiencies mostly: "proficiency with a tool allows you to add
+          your proficiency bonus to any ability check you make using that tool"
+          (Basic Rules p. 51). Same arithmetic as a skill, so the bonus is
+          derived here too rather than typed in. */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
+          <button
+            type="button"
+            onClick={() =>
+              updateField('customSkills', [
+                ...(formData.customSkills || []),
+                { name: '', ability: 'dexterity', proficient: true, expertise: false },
+              ])
+            }
+            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+          >
+            + Add Skill
+          </button>
+        </div>
+        <p className="text-xs text-stone-500 mb-3">
+          Tool proficiencies, or anything your table made up. Pick the ability it uses
+          and the bonus is worked out for you.
+        </p>
+
+        <div className="space-y-2">
+          {(formData.customSkills || []).map((custom, index) => {
+            const bonus = dnd5eCustomSkillBonus(formData, {
+              name: custom.name,
+              ability: custom.ability,
+              proficient: !!custom.proficient,
+              expertise: !!custom.expertise,
+              ...(custom.otherBonus !== undefined ? { otherBonus: custom.otherBonus } : {}),
+            });
+
+            return (
+              <div key={index} className="flex flex-wrap items-center gap-2 bg-white border border-stone-300 rounded-lg p-2">
+                <input
+                  type="text"
+                  value={custom.name || ''}
+                  onChange={(e) => updateField(`customSkills.${index}.name`, e.target.value)}
+                  placeholder="e.g. Thieves' Tools"
+                  maxLength={60}
+                  className="flex-1 min-w-[9rem] px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+
+                <select
+                  value={custom.ability}
+                  onChange={(e) => updateField(`customSkills.${index}.ability`, e.target.value)}
+                  aria-label={`Ability used by ${custom.name || 'this skill'}`}
+                  className="px-2 py-1 text-sm border border-stone-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  {DND5E_ABILITY_NAMES.map((ability) => (
+                    <option key={ability} value={ability}>
+                      {ability.slice(0, 3).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="flex items-center gap-1 text-xs text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={!!custom.proficient}
+                    onChange={(e) => {
+                      updateField(`customSkills.${index}.proficient`, e.target.checked);
+                      if (!e.target.checked) {
+                        updateField(`customSkills.${index}.expertise`, false);
+                      }
+                    }}
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                  />
+                  Prof
+                </label>
+
+                <label className="flex items-center gap-1 text-xs text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={!!custom.expertise}
+                    disabled={!custom.proficient}
+                    onChange={(e) => updateField(`customSkills.${index}.expertise`, e.target.checked)}
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-full focus:ring-2 focus:ring-red-500 disabled:opacity-30"
+                    title="Expertise (double proficiency)"
+                  />
+                  Exp
+                </label>
+
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-stone-500">Other</label>
+                  <NumberField
+                    value={custom.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`customSkills.${index}.otherBonus`, v)}
+                    className="w-14 px-1 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                </div>
+
+                <span
+                  className={`text-sm font-semibold w-10 text-right ${
+                    custom.expertise ? 'text-purple-700' : custom.proficient ? 'text-red-700' : 'text-stone-600'
+                  }`}
+                >
+                  {formatModifier(bonus)}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(
+                      'customSkills',
+                      (formData.customSkills || []).filter((_, i) => i !== index)
+                    )
+                  }
+                  aria-label={`Remove ${custom.name || 'skill'}`}
+                  className="px-2 text-red-600 hover:text-red-800 font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+
+          {(formData.customSkills || []).length === 0 && (
+            <p className="text-sm text-stone-500 italic">None yet</p>
+          )}
+        </div>
+      </div>
+
       {/* Passive Perception — derived from the Perception bonus plus anything
           that is not the skill itself, never from the stored field, so this
           matches the view exactly. */}
@@ -1122,12 +1456,13 @@ min={1}
     </div>
   );
 
-  // D&D 5e conditions list
-  const conditions = [
-    'Blinded', 'Charmed', 'Deafened', 'Exhausted', 'Frightened', 'Grappled',
-    'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned',
-    'Prone', 'Restrained', 'Stunned', 'Unconscious'
-  ];
+  // The 5e conditions, shared with the token editor so the two cannot drift.
+  //
+  // Exhaustion is left out of the checkboxes here because this sheet tracks it
+  // properly, in its six levels, just below. A tick box beside the level picker
+  // would be the same fact recorded twice and free to disagree with itself. The
+  // token editor keeps it in its list, since a token has no level to track.
+  const conditions = DND5E_CONDITIONS.filter((c) => c !== 'Exhausted');
 
   // Render Combat tab
   const renderCombatTab = () => (
@@ -1248,7 +1583,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-2">
-          {(formData.hitDice || []).map((die: any, index: number) => (
+          {(formData.hitDice || []).map((die, index) => (
             <div key={index} className="flex items-center space-x-2">
               <input
                 type="text"
@@ -1274,7 +1609,7 @@ min={0}
               />
               <button
                 onClick={() => {
-                  const newHitDice = formData.hitDice.filter((_: any, i: number) => i !== index);
+                  const newHitDice = formData.hitDice!.filter((_, i) => i !== index);
                   updateField('hitDice', newHitDice);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1361,6 +1696,51 @@ min={0}
         </div>
       </div>
 
+      {/* Exhaustion.
+          Basic Rules, Appendix A: six cumulative levels, not something you
+          either have or do not. It used to be one checkbox in the list above,
+          which could not tell disadvantage on ability checks apart from death. */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Exhaustion</h3>
+        <p className="text-xs text-stone-600 mb-3">
+          Six levels, and each one carries every level below it. A long rest with food
+          and drink removes one.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {[0, 1, 2, 3, 4, 5, 6].map((level) => {
+            const active = exhaustion === level;
+            return (
+              <button
+                key={level}
+                onClick={() => updateField('exhaustionLevel', level)}
+                aria-label={level === 0 ? 'No exhaustion' : `Exhaustion level ${level}`}
+                aria-pressed={active}
+                className={`px-3 py-1 rounded-cozy border text-sm transition-all ${
+                  active
+                    ? 'bg-red-700 text-white border-red-800 font-semibold'
+                    : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+                }`}
+              >
+                {level === 0 ? 'None' : level}
+              </button>
+            );
+          })}
+        </div>
+        {exhaustionEffects(exhaustion).length > 0 && (
+          <ul className="text-sm text-stone-700 space-y-0.5">
+            {exhaustionEffects(exhaustion).map((effect, idx) => (
+              <li key={idx} className="flex items-start space-x-2">
+                <span className="text-red-600">•</span>
+                <span>
+                  <span className="text-stone-500 mr-1">{idx + 1}.</span>
+                  {effect}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* Attacks */}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
@@ -1379,7 +1759,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-4">
-          {(formData.attacks || []).map((attack: any, index: number) => (
+          {(formData.attacks || []).map((attack, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
@@ -1391,8 +1771,9 @@ min={0}
                 />
                 <button
                   onClick={() => {
-                    const newAttacks = formData.attacks.filter((_: any, i: number) => i !== index);
+                    const newAttacks = formData.attacks!.filter((_, i) => i !== index);
                     updateField('attacks', newAttacks);
+                    removeCustomPropertyDraft(index);
                   }}
                   className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
                 >
@@ -1440,13 +1821,174 @@ min={0}
                   />
                 </div>
               </div>
+              {/* Properties.
+                  These draw as badges on the read-only sheet, but until now
+                  only the built-in templates could set them — the editor's only
+                  offer was a note reading "e.g., Versatile, Finesse", which
+                  stored prose nothing could read. */}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Properties/Notes</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Properties</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DND5E_WEAPON_PROPERTIES.map((property) => {
+                    const on = hasWeaponProperty(attack.properties || [], property);
+                    return (
+                      <button
+                        key={property}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          updateField(
+                            `attacks.${index}.properties`,
+                            toggleWeaponProperty(attack.properties || [], property)
+                          )
+                        }
+                        className={`px-2 py-0.5 text-xs rounded-full border capitalize transition-colors ${
+                          on
+                            ? 'bg-red-700 border-red-700 text-white'
+                            : 'bg-white border-stone-300 text-stone-600 hover:border-red-400'
+                        }`}
+                      >
+                        {property}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Anything the rules do not name — homebrew, or whatever an
+                    import brought in. Shown so it is visible and removable
+                    rather than silently kept. */}
+                {customWeaponProperties(attack.properties || []).length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {customWeaponProperties(attack.properties || []).map((property) => (
+                      <button
+                        key={property}
+                        type="button"
+                        onClick={() =>
+                          updateField(
+                            `attacks.${index}.properties`,
+                            toggleWeaponProperty(attack.properties || [], property)
+                          )
+                        }
+                        title={`Remove "${property}"`}
+                        className="px-2 py-0.5 text-xs rounded-full border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      >
+                        {property} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* The eleven are the common case, not the limit. A homebrew
+                    game may name any number more, and both storage and the
+                    sheet's badges have always allowed them. */}
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    type="text"
+                    value={customPropertyDrafts[index] ?? ''}
+                    onChange={(e) =>
+                      setCustomPropertyDrafts((prev) => ({ ...prev, [index]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitCustomProperty(index, attack.properties || []);
+                      }
+                    }}
+                    maxLength={MAX_WEAPON_PROPERTY_LENGTH}
+                    placeholder="Add your own property"
+                    aria-label="Add a custom weapon property"
+                    className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => commitCustomProperty(index, attack.properties || [])}
+                    className="px-3 py-1 text-sm font-medium text-red-700 hover:text-red-900"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              {/* Further damage lines.
+                  A spear is 1d6 in one hand and 1d8 in two; one damage box
+                  cannot say that, so the two-handed die used to be typed into
+                  the note where nothing could roll it. */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-stone-600">
+                    Other Damage Rolls
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateField(`attacks.${index}.additionalDamage`, [
+                        ...(attack.additionalDamage || []),
+                        { label: '', damageRoll: '', damageType: '' },
+                      ])
+                    }
+                    className="px-2 py-0.5 text-xs font-medium text-red-700 hover:text-red-900"
+                  >
+                    + Add Damage Roll
+                  </button>
+                </div>
+                {(attack.additionalDamage || []).map((entry, dmgIndex) => (
+                  <div key={dmgIndex} className="flex gap-2 mb-1">
+                    <input
+                      type="text"
+                      value={entry.label || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.label`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="When (e.g. Two-handed)"
+                      className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <input
+                      type="text"
+                      value={entry.damageRoll || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.damageRoll`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="1d10+3"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <input
+                      type="text"
+                      value={entry.damageType || ''}
+                      onChange={(e) =>
+                        updateField(
+                          `attacks.${index}.additionalDamage.${dmgIndex}.damageType`,
+                          e.target.value
+                        )
+                      }
+                      placeholder="slashing"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateField(
+                          `attacks.${index}.additionalDamage`,
+                          (attack.additionalDamage || []).filter((_, i) => i !== dmgIndex)
+                        )
+                      }
+                      aria-label={`Remove damage roll ${dmgIndex + 1}`}
+                      className="px-2 text-red-600 hover:text-red-800 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
                 <input
                   type="text"
                   value={attack.notes || ''}
                   onChange={(e) => updateField(`attacks.${index}.notes`, e.target.value)}
-                  placeholder="e.g., Versatile, Finesse"
+                  placeholder="e.g., silvered, returns when thrown"
                   className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
@@ -1463,8 +2005,23 @@ min={0}
   // Render Spells tab
   const renderSpellsTab = () => (
     <div className="space-y-6">
-      {/* Spellcasting Ability */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Spellcasting class and ability */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Class</label>
+          <input
+            type="text"
+            value={formData.spellcasting?.class || ''}
+            onChange={(e) => updateField('spellcasting.class', e.target.value)}
+            placeholder="e.g., Wizard — leave blank if you don't cast"
+            aria-label="Spellcasting Class"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <p className="mt-1 text-xs text-stone-600">
+            Shown as the heading on your sheet. There was no field for this, so every
+            character read &quot;Wizard Spellcasting&quot; whatever they were.
+          </p>
+        </div>
         <div>
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Ability</label>
           <input
@@ -1472,29 +2029,58 @@ min={0}
             value={formData.spellcasting?.ability || ''}
             onChange={(e) => updateField('spellcasting.ability', e.target.value)}
             placeholder="e.g., Intelligence"
+            aria-label="Spellcasting Ability"
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
-        <div>
+      </div>
+
+      {/* Save DC and attack bonus, both derived. Basic Rules, "Spellcasting
+          Ability": DC is 8 + proficiency + ability modifier, attack is the same
+          without the 8. Each keeps a manual box for the things that change it
+          without changing either input — and they are separate, because a Wand
+          of the War Mage raises the attack roll and not the DC. */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Save DC</label>
+          <div
+            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            title={`8 + proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
+          >
+            {spellSaveDC}
+          </div>
+          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
-min={0}
-            value={formData.spellcasting?.spellSaveDC}
-            onChange={(v: number) => updateField('spellcasting.spellSaveDC', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
-          fallback={0}
+            value={formData.spellcasting?.spellSaveDCOtherBonus}
+            onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
+            aria-label="Spell save DC other bonus"
+            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            fallback={0}
           />
         </div>
-        <div>
+        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
           <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Attack Bonus</label>
+          <div
+            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            title={`proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
+          >
+            {formatModifier(spellAttackBonus)}
+          </div>
+          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
-value={formData.spellcasting?.spellAttackBonus}
-            onChange={(v: number) => updateField('spellcasting.spellAttackBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
-          fallback={0}
+            value={formData.spellcasting?.spellAttackOtherBonus}
+            onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
+            aria-label="Spell attack other bonus"
+            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            fallback={0}
           />
         </div>
       </div>
+      <p className="text-xs text-stone-600 -mt-3">
+        Both are worked out from your proficiency bonus and spellcasting ability. Use
+        &quot;Other bonus&quot; for anything else that changes them — a Rod of the Pact
+        Keeper, a Robe of the Archmagi. They are separate because some items raise only one.
+      </p>
 
       {/* Cantrips */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
@@ -1514,7 +2100,7 @@ value={formData.spellcasting?.spellAttackBonus}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Spell Slots</h3>
         <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((level) => {
+          {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((level) => {
             const slotData = formData.spellcasting?.slots?.[level] || { total: 0, expended: 0 };
             return (
               <div key={level} className="bg-white border border-stone-300 rounded-lg p-3">
@@ -1565,7 +2151,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-2">
-          {(formData.spellcasting?.spells || []).map((spell: any, index: number) => (
+          {(formData.spellcasting?.spells || []).map((spell, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
               <NumberField
 min={1}
@@ -1612,7 +2198,7 @@ min={1}
               </label>
               <button
                 onClick={() => {
-                  const newSpells = formData.spellcasting.spells.filter((_: any, i: number) => i !== index);
+                  const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1636,13 +2222,13 @@ min={1}
       <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Currency</h3>
         <div className="grid grid-cols-5 gap-3">
-          {[
+          {([
             { key: 'cp', label: 'Copper (CP)', color: 'text-amber-700' },
             { key: 'sp', label: 'Silver (SP)', color: 'text-stone-500' },
             { key: 'ep', label: 'Electrum (EP)', color: 'text-green-600' },
             { key: 'gp', label: 'Gold (GP)', color: 'text-yellow-600' },
             { key: 'pp', label: 'Platinum (PP)', color: 'text-slate-300' },
-          ].map((currency) => (
+          ] as const).map((currency) => (
             <div key={currency.key}>
               <label className={`block text-xs font-semibold ${currency.color} mb-1`}>
                 {currency.label}
@@ -1687,7 +2273,7 @@ min={0}
           </button>
         </div>
         <div className="space-y-3">
-          {(formData.inventory || []).map((item: any, index: number) => (
+          {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
@@ -1699,7 +2285,7 @@ min={0}
                 />
                 <button
                   onClick={() => {
-                    const newInventory = formData.inventory.filter((_: any, i: number) => i !== index);
+                    const newInventory = formData.inventory!.filter((_, i) => i !== index);
                     updateField('inventory', newInventory);
                   }}
                   className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
@@ -1794,36 +2380,16 @@ min={0}
     </div>
   );
 
-  // Helper to get proficiencies by category from flat array (backwards compatibility)
-  const getProficienciesByCategory = () => {
-    // If using new structured format with strings (not arrays)
-    if (formData.proficiencies && typeof formData.proficiencies === 'object' && !Array.isArray(formData.proficiencies)) {
-      return {
-        armor: formData.proficiencies.armor || '',
-        weapons: formData.proficiencies.weapons || '',
-        tools: formData.proficiencies.tools || '',
-        languages: formData.proficiencies.languages || '',
-      };
-    }
-
-    // Backwards compatibility: parse from flat array
-    const all = formData.proficienciesAndLanguages || [];
-    const languages = ['Common', 'Elvish', 'Dwarvish', 'Draconic', 'Giant', 'Gnomish', 'Goblin', 'Halfling', 'Orc', 'Abyssal', 'Celestial', 'Deep Speech', 'Infernal', 'Primordial', 'Sylvan', 'Undercommon'];
-    const armorKeywords = ['Armor', 'Shield'];
-    const toolKeywords = ['Tools', 'Supplies', 'Kit', 'Instruments', 'Vehicles', 'Vehicle'];
-
-    const armorList = all.filter((p: string) => armorKeywords.some(k => p.includes(k)));
-    const weaponsList = all.filter((p: string) => !armorKeywords.some(k => p.includes(k)) && !toolKeywords.some(k => p.includes(k)) && !languages.includes(p) && (p.includes('Weapon') || ['Dagger', 'Sword', 'Bow', 'Axe', 'Mace', 'Staff', 'Crossbow', 'Spear', 'Hammer'].some(w => p.includes(w))));
-    const toolsList = all.filter((p: string) => toolKeywords.some(k => p.includes(k)));
-    const languagesList = all.filter((p: string) => languages.includes(p));
-
-    return {
-      armor: armorList.join(', '),
-      weapons: weaponsList.join(', '),
-      tools: toolsList.join(', '),
-      languages: languagesList.join(', '),
-    };
-  };
+  /**
+   * The four proficiency boxes, as the player typed them.
+   *
+   * This used to hold a second, separately-written copy of the read-only view's
+   * guess-the-category heuristic — with a different list of language names, so
+   * the two disagreed about where an entry belonged. Both now read the same
+   * function, and neither guesses unless the sheet predates the boxes being
+   * stored separately.
+   */
+  const getProficienciesByCategory = () => readProficiencyGroups(formData);
 
   // Render Features tab
   const renderFeaturesTab = () => {
@@ -1888,17 +2454,75 @@ min={0}
 
         {/* Features & Traits */}
         <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Features & Traits</h3>
-          <p className="text-xs text-stone-600 mb-3">Class features, racial traits, and feats (comma-separated)</p>
-          <textarea
-            value={typeof formData.featuresAndTraits === 'string'
-              ? formData.featuresAndTraits
-              : (formData.featuresAndTraits || []).join(', ')}
-            onChange={(e) => updateField('featuresAndTraits', e.target.value)}
-            placeholder="Darkvision, Fey Ancestry, Sneak Attack, Rage, Spellcasting, Action Surge"
-            rows={5}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-stone-800">Features &amp; Traits</h3>
+            <button
+              onClick={() =>
+                updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
+              }
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+            >
+              + Add Feature
+            </button>
+          </div>
+          <p className="text-xs text-stone-600 mb-3">
+            Class features, racial traits and feats. A description is optional — leave it blank
+            for anything that is just a name.
+          </p>
+          {featureRows.length === 0 ? (
+            <p className="text-sm text-stone-500 italic">No features added yet</p>
+          ) : (
+            <div className="space-y-3">
+              {featureRows.map((feature, index) => (
+                <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <input
+                      type="text"
+                      value={feature.name}
+                      onChange={(e) =>
+                        updateField(
+                          'featuresAndTraits',
+                          featureRows.map((f, i) =>
+                            i === index ? { ...f, name: e.target.value } : f
+                          )
+                        )
+                      }
+                      placeholder="Feature name, e.g. Darkvision"
+                      aria-label={`Feature ${index + 1} name`}
+                      className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <button
+                      onClick={() =>
+                        updateField(
+                          'featuresAndTraits',
+                          featureRows.filter((_, i) => i !== index)
+                        )
+                      }
+                      aria-label={`Remove ${feature.name || 'feature'}`}
+                      className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <textarea
+                    value={feature.description}
+                    onChange={(e) =>
+                      updateField(
+                        'featuresAndTraits',
+                        featureRows.map((f, i) =>
+                          i === index ? { ...f, description: e.target.value } : f
+                        )
+                      )
+                    }
+                    placeholder="Description (optional)"
+                    aria-label={`Feature ${index + 1} description`}
+                    rows={2}
+                    className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Additional Features & Traits */}

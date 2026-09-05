@@ -14,6 +14,7 @@ import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
 import type { VibePeriod, VibeSettings } from '@/types';
 import { Button, Modal } from '@/components/ui';
+import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
 // Default presets (mirrors backend vibe-presets.ts)
@@ -342,9 +343,9 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
       updateVibeSettings(result.vibeSettings);
       showToast('Vibe periods saved!', 'success');
       setTimeout(onClose, 900);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save vibe settings:', err);
-      showToast(err.response?.data?.message || 'Failed to save vibe settings', 'error');
+      showToast(apiErrorMessage(err) || 'Failed to save vibe settings', 'error');
     } finally {
       setIsSaving(false);
     }

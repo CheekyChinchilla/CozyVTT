@@ -1,3 +1,4 @@
+import type { CharacterHpInfo } from '@/utils/characterHp';
 // ============================================
 // CozyVTT Frontend Type Definitions
 // Mirrors backend API models (Prisma schema)
@@ -473,6 +474,15 @@ export interface Campaign {
   lastPlayedAt: string | null;
   memberships?: CampaignMembership[];
   /**
+   * The requesting user's role in this campaign.
+   *
+   * Sent by `GET /campaigns` and `GET /campaigns/:id` (see `userRole: m.role`
+   * in backend/src/routes/campaigns.ts), but it was missing from this interface
+   * — code that needed it annotated the value as `any` to get at it, which is
+   * how the omission survived.
+   */
+  userRole?: CampaignRole;
+  /**
    * NOTE: from `GET /campaigns/:id` these are METADATA ONLY — the
    * `tokens`/`wallSegments`/`fogData`/`lights`/`annotations` map blobs and the
    * character `data` sheet are NOT included. Fetch the active map via
@@ -488,7 +498,7 @@ export interface Campaign {
 
 export interface VibeSettings {
   periods: VibePeriod[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface VibePeriod {
@@ -541,6 +551,39 @@ export interface Session {
   notes: string | null;
 }
 
+/**
+ * One of the caller's own notes, as the list returns it.
+ *
+ * No `content`: a note runs to tens of thousands of characters and the list
+ * would otherwise move megabytes every time the panel opened. The body arrives
+ * from `getNote`, one note at a time.
+ */
+export interface PersonalNoteSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A note with its Markdown source. */
+export interface PersonalNote extends PersonalNoteSummary {
+  content: string;
+}
+
+/**
+ * A past session as the history list returns it.
+ *
+ * Deliberately without `savedState`: that is a large blob of token positions
+ * kept for resuming a session, and the server does not send it here.
+ */
+export interface SessionSummary {
+  id: string;
+  sessionNumber: number;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string | null;
+}
+
 export interface SessionState {
   sessionId: string;
   savedAt: string;
@@ -575,7 +618,11 @@ export type CharacterData =
   | import('./game-systems').DnD5eCharacterData
   | import('./game-systems').PF2eCharacterData
   | import('./game-systems').SR6CharacterData
-  | import('./game-systems').CoC7eCharacterData;
+  | import('./game-systems').CoC7eCharacterData
+  // A character with no game system stores a flexible sheet here. The union
+  // omitted it, so `Character.data` never admitted a shape it demonstrably
+  // holds — invisible while the flexible editor's props were `any`.
+  | import('./flexible-character-sheet').FlexibleCharacterData;
 
 // ============================================
 // Map & Tokens
@@ -615,7 +662,7 @@ export interface Token {
   controlledBy: string | null;
   rotation: number;
   conditions: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   // Token type system
   type:        TokenType;
   disposition: TokenDisposition | null;
@@ -648,7 +695,30 @@ export interface Annotation {
   type: 'circle' | 'line' | 'rectangle' | 'polygon';
   position: Position;
   color: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+/**
+ * One member of a campaign roster, from `GET /campaigns/:id/characters`.
+ *
+ * The characters here are deliberately not `Character`: the endpoint strips the
+ * `data` sheet and returns a derived `hp` in its place, so that no campaign
+ * member can read another player's sheet off the roster.
+ */
+export interface RosterMember {
+  userId: string;
+  userName: string;
+  userAvatar: string | null;
+  role: CampaignRole;
+  joinedAt: string;
+  characters: {
+    id: string;
+    name: string;
+    tokenImageUrl: string | null;
+    gameSystem: GameSystem | null;
+    userId: string;
+    hp: CharacterHpInfo | null;
+  }[];
 }
 
 // ============================================
@@ -704,7 +774,13 @@ export interface Message {
 }
 
 export interface MessageMetadata {
-  [key: string]: any;
+  /**
+   * Free-form per-message payload — a dice breakdown, a `user.joined` action,
+   * whatever the sender attached. `unknown` rather than `any` so a reader has to
+   * check what it found before using it; the shape genuinely varies by message
+   * type and is not worth a discriminated union while only a few types set it.
+   */
+  [key: string]: unknown;
 }
 
 // ============================================
@@ -778,10 +854,10 @@ export interface ApiError {
   message: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   message?: string;
   data?: T;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Login
@@ -893,7 +969,7 @@ export interface CreateTokenRequest {
   controlledBy?: string | null;
   rotation?: number;
   conditions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   // Token type system
   type?: TokenType;
   disposition?: TokenDisposition | null;
@@ -913,7 +989,7 @@ export interface UpdateTokenRequest {
   controlledBy?: string | null;
   rotation?: number;
   conditions?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   // Token type system
   type?: TokenType;
   disposition?: TokenDisposition | null;
@@ -927,7 +1003,7 @@ export interface UpdateTokenRequest {
 // WebSocket Event Types
 // ============================================
 
-export interface WebSocketEvent<T = any> {
+export interface WebSocketEvent<T = unknown> {
   type: string;
   data: T;
   timestamp: string;

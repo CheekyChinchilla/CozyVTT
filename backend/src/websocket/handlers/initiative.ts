@@ -14,6 +14,7 @@ import {
   DEFAULT_INITIATIVE_EXPRESSION,
 } from '../../utils/rules/initiative';
 import logger from '../../utils/logger';
+import { readTokens, toJson } from '../../utils/prisma-json';
 import {
   getState as getCombatState,
   setState as setCombatState,
@@ -46,8 +47,8 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const map = await prisma.map.findUnique({ where: { id: mapId } });
       if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
 
-      const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as any[];
-      const token = tokens.find((t: any) => t.id === tokenId);
+      const tokens = readTokens(map.tokens);
+      const token = tokens.find((t) => t.id === tokenId);
       if (!token) { socket.emit('error', { message: 'Token not found' }); return; }
 
       const state = getCombatState(socket.campaignId);
@@ -62,7 +63,17 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         tokenId,
         name: token.name,
         imageUrl: token.imageUrl || '',
-        initiative: token.initiative ?? null,
+        // Always null, never `token.initiative`.
+        //
+        // A rolled value is persisted onto the map token, and ending combat
+        // clears only the in-memory order — so the number outlives the fight it
+        // was rolled for. Seeding from it meant a token joining a *new* fight
+        // arrived carrying its result from the last one, already placed in the
+        // order before anyone had rolled.
+        //
+        // Joining the order and having a place in it are separate steps: a
+        // combatant sorts to the bottom as "—" until something rolls for it.
+        initiative: null,
         hp: token.hp ?? null,
         type: token.type ?? 'npc',
         disposition: token.disposition ?? null,
@@ -121,11 +132,11 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const map = await prisma.map.findUnique({ where: { id: mapId } });
       if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
 
-      const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as any[];
-      const tokenIndex = tokens.findIndex((t: any) => t.id === tokenId);
+      const tokens = readTokens(map.tokens);
+      const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
       if (tokenIndex !== -1) {
         tokens[tokenIndex] = { ...tokens[tokenIndex], initiative: value };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: tokens as any } });
+        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
       }
 
       // Update in-memory combat state
@@ -178,8 +189,8 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const map = await prisma.map.findUnique({ where: { id: mapId } });
       if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
 
-      const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as any[];
-      const tokenIndex = tokens.findIndex((t: any) => t.id === tokenId);
+      const tokens = readTokens(map.tokens);
+      const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
       if (tokenIndex === -1) { socket.emit('error', { message: 'Token not found' }); return; }
 
       const token = tokens[tokenIndex];
@@ -285,11 +296,11 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // in one field, so a token someone moved in the meantime would be silently
       // put back where it was.
       const freshMap = await prisma.map.findUnique({ where: { id: mapId }, select: { tokens: true } });
-      const freshTokens = (Array.isArray(freshMap?.tokens) ? freshMap!.tokens : tokens) as any[];
-      const freshIndex = freshTokens.findIndex((t: any) => t.id === tokenId);
+      const freshTokens = freshMap && Array.isArray(freshMap.tokens) ? readTokens(freshMap.tokens) : tokens;
+      const freshIndex = freshTokens.findIndex((t) => t.id === tokenId);
       if (freshIndex !== -1) {
         freshTokens[freshIndex] = { ...freshTokens[freshIndex], initiative: rolledValue };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: freshTokens as any } });
+        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(freshTokens) } });
       }
 
       // Update in-memory state — add to combatants if not already present.

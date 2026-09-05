@@ -181,8 +181,13 @@ export interface DnD5eSpell {
 export interface DnD5eSpellcasting {
   class: string;
   ability: string;
+  /** Derived: 8 + proficiency bonus + ability modifier + spellSaveDCOtherBonus. */
   spellSaveDC: number;
+  /** Derived: proficiency bonus + ability modifier + spellAttackOtherBonus. */
   spellAttackBonus: number;
+  /** Adjustments from items and features; separate, since some raise only one. */
+  spellSaveDCOtherBonus?: number;
+  spellAttackOtherBonus?: number;
   cantrips: string[];
   slots: DnD5eSpellSlots;
   spells: DnD5eSpell[];
@@ -241,13 +246,22 @@ export interface DnD5eCharacterData {
   speed: number;
   hp: DnD5eHitPoints;
   conditions: string[];
+  /** Exhaustion 0-6; six cumulative levels, not a yes/no condition. */
+  exhaustionLevel?: number;
   hitDice: DnD5eHitDice[];
   deathSaves: DnD5eDeathSaves;
   attacks: DnD5eAttack[];
   currency: DnD5eCurrency;
   inventory: DnD5eInventoryItem[];
   proficienciesAndLanguages: string[];
-  featuresAndTraits: string[];
+  /**
+   * Features and traits, each a name with an optional description.
+   *
+   * Strings are still accepted on the way in — every sheet written before this
+   * change holds them, and so does any exported JSON — and are read as a name
+   * with no description. See utils/featureEntries.
+   */
+  featuresAndTraits: Array<string | { name: string; description: string }>;
   spellcasting?: DnD5eSpellcasting;
   appearance: DnD5eAppearance;
   personality: DnD5ePersonality;

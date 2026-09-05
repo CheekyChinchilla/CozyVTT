@@ -58,6 +58,27 @@ HTTP status: `403 Forbidden`
 
 ---
 
+## Scope of this document
+
+This is a hand-written guide, not a complete catalogue. It covers the endpoints
+people ask about most, with worked examples; it does **not** cover every route,
+and it has drifted before — twelve endpoints in it described paths that no
+longer exist, and were removed rather than corrected.
+
+For the complete, checked list of every route the server mounts, see
+[`backend/docs/API_DOCUMENTATION.yaml`](../backend/docs/API_DOCUMENTATION.yaml).
+That file is verified against the code by `scripts/spec-coverage.py`, so it
+cannot silently fall behind the way this one did.
+
+These routes are also not a public API: they are not versioned and they carry no
+compatibility promise, so any of them may change shape in a point release.
+
+A program can still call them. There are no API keys or service accounts, but
+signing in with a user's own email and password returns a session cookie that
+authenticates both these routes and the Socket.io connection. A script doing
+that is acting as that user, with exactly that user's permissions — see
+[Authentication](#authentication) below.
+
 ## REST API Overview
 
 All endpoints are prefixed with `/api`. Requests and responses use JSON (`Content-Type: application/json`) unless noted otherwise (file uploads use multipart/form-data).
@@ -106,7 +127,7 @@ Authenticate a user and create a session.
   "mfaRequired": true
 }
 ```
-HTTP status: `200 OK` — client must follow up with `POST /api/mfa/verify-login`.
+HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login`.
 
 ---
 
@@ -258,7 +279,7 @@ Create a new campaign. The authenticated user becomes the DM.
 
 ### `GET /api/campaigns/:id`
 
-Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/maps/:id` and `GET /api/characters/:id`.
+Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/campaigns/:campaignId/maps/:id` and `GET /api/characters/:id`.
 
 ---
 
@@ -441,7 +462,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.2.2",
+    "exportedFrom": "CozyVTT v1.3.0",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,
@@ -548,40 +569,6 @@ Assign a character to a campaign.
 
 ---
 
-### `DELETE /api/characters/:id/assign`
-
-Unassign a character from its current campaign.
-
----
-
-### `GET /api/characters/templates/:gameSystem`
-
-Get character templates for a given game system.
-
-**URL example:** `GET /api/characters/templates/DND_5E`
-
-**Response:**
-```json
-{
-  "templates": [
-    {
-      "id": "DND_5E_blank",
-      "name": "Blank Character",
-      "description": "Empty character sheet",
-      "data": { ... }
-    },
-    {
-      "id": "DND_5E_example",
-      "name": "Example Hero",
-      "description": "A pre-filled example character",
-      "data": { ... }
-    }
-  ]
-}
-```
-
----
-
 ## Map & Token Endpoints
 
 ### `GET /api/campaigns/:id/maps`
@@ -601,48 +588,6 @@ Create a new map (DM only).
   "assetId": "cuid-of-map-asset"
 }
 ```
-
----
-
-### `PUT /api/maps/:id`
-
-Update a map's properties or token list (DM only).
-
----
-
-### `DELETE /api/maps/:id`
-
-Delete a map. Cannot delete the currently active map.
-
----
-
-### `POST /api/maps/:id/tokens`
-
-Place a new token on a map (DM only).
-
-**Request:**
-```json
-{
-  "name": "Goblin Archer",
-  "tokenType": "NPC",
-  "assetId": "cuid...",
-  "imageUrl": "/api/assets/tokens/uuid",
-  "position": { "x": 5, "y": 3 },
-  "hp": { "current": 7, "maximum": 7 },
-  "size": { "width": 1, "height": 1 },
-  "disposition": "hostile",
-  "displayMode": "pog",
-  "statBlock": { "ac": 15, "hpMax": 7, ... },
-  "creatureTemplateId": "cuid...",
-  "spiritLayer": false
-}
-```
-
-Additional fields:
-- `imageUrl` — Token image URL (use `/api/assets/tokens/:id` format). Set to `""` to clear.
-- `displayMode` — `"pog"`, `"top-down"`, or `"full-art"`
-- `statBlock` — NPC stat block (AC, HP, attacks, saves, skills). One shape shared across game systems — see [The `statBlock` object](#the-statblock-object)
-- `creatureTemplateId` — Links the token to a creature template for library integration
 
 ---
 
@@ -956,21 +901,9 @@ Get a single asset's metadata.
 
 ---
 
-### `GET /api/assets/:id/file`
-
-Serve the asset file. Returns the binary file with appropriate Content-Type.
-
----
-
 ### `GET /api/assets/avatars/:userId`
 
 Get the current avatar for a user. Returns the image file directly.
-
----
-
-### `PUT /api/assets/:id`
-
-Update asset metadata (name, tags, scope).
 
 ---
 
@@ -999,17 +932,6 @@ List pending invitations for the authenticated user.
 
 ---
 
-### `POST /api/campaigns/:id/invitations`
-
-Invite a user to a campaign (DM only).
-
-**Request:**
-```json
-{ "email": "player@example.com" }
-```
-
----
-
 ### `POST /api/invitations/:id/accept`
 
 Accept a campaign invitation and optionally assign characters.
@@ -1028,26 +950,6 @@ Decline a campaign invitation.
 ---
 
 ## User & Admin Endpoints
-
-### `GET /api/users/profile`
-
-Get the authenticated user's profile.
-
----
-
-### `PUT /api/users/profile`
-
-Update display name and bio.
-
-**Request:**
-```json
-{
-  "displayName": "Merric Thorngage",
-  "bio": "Professional dungeon delver."
-}
-```
-
----
 
 ### `GET /api/users` *(Admin only)*
 
@@ -1232,12 +1134,6 @@ Create a new database backup (pg_dump).
 
 ---
 
-### `GET /api/admin/backups/:filename` *(Admin only)*
-
-Download a database backup file.
-
----
-
 ### `DELETE /api/admin/backups/:filename` *(Admin only)*
 
 Delete a database backup file.
@@ -1289,198 +1185,13 @@ Check whether the setup wizard has been completed.
 
 ---
 
-### `POST /api/setup/complete`
-
-Complete the first-time setup wizard. Only works when setup has not been completed.
-
-**Request:**
-```json
-{
-  "adminEmail": "admin@example.com",
-  "adminPassword": "StrongPassword123!",
-  "adminDisplayName": "The Admin",
-  "instanceName": "The Hearthstone Tavern",
-  "timezone": "America/New_York",
-  "allowRegistration": false
-}
-```
-
----
-
 ## WebSocket Events
 
-CozyVTT uses Socket.io for real-time communication. See `backend/docs/WEBSOCKET_DOCUMENTATION.md` for protocol-level details.
-
-### Connection Sequence
-
-```
-Client → Server: socket.connect()
-Server → Client: emit('connected')
-Client → Server: emit('authenticate', { campaignId })
-Server → Client: emit('authenticated')   ← connection ready
-```
-
-### Client → Server Events
-
-| Event | Payload | Notes |
-|-------|---------|-------|
-| `authenticate` | `{ campaignId }` | Must be first event after `connected` |
-| `sync.request` | `{ lastEventId? }` | Request current campaign state |
-| `token.move.start` | `{ tokenId, position }` | Begin drag |
-| `token.move` | `{ tokenId, position }` | Throttled 60fps during drag |
-| `token.move.end` | `{ tokenId, position }` | End drag (persists position) |
-| `dice.roll` | `{ expression, isSecret }` | Roll dice |
-| `dice.clearHistory` | — | DM only — clear roll history |
-| `chat.message` | `{ content, type }` | Send a chat message |
-| `session.start` | `{ notes? }` | DM — start a session |
-| `session.pause` | — | DM — pause session |
-| `session.end` | `{ saveState }` | DM — end session |
-| `map.change` | `{ mapId }` | DM — switch active map |
-| `spirit_layer.toggle` | `{ enabled }` | DM — toggle spirit layer |
-| `spirit_layer.token.toggle` | `{ mapId, tokenId, visible }` | DM — toggle token spirit visibility |
-| `spirit_layer.style_change` | `{ style }` | DM — change spirit layer style |
-| `atmosphere.effect.set` | `{ effect }` | DM — set visual atmosphere effect |
-| `atmosphere.audio.set` | `{ assetId, volume, loop }` | DM — set ambient audio |
-| `vibe.update` | `{ periodId }` | DM — update vibe tracker |
-| `character.hp.update` | `{ tokenId, current, maximum, temp? }` | Update a token's HP |
-| `initiative.add` | `{ tokenId, mapId }` | DM — add a map token as a combatant |
-| `initiative.remove` | `{ tokenId }` | DM — remove combatant |
-| `initiative.set` | `{ tokenId, mapId, value }` | DM — set initiative value (persisted on the token) |
-| `initiative.roll` | `{ tokenId, mapId, expression?, characterName? }` | Roll initiative. DM — any token, adding it as a combatant if it is not one already. Player — only a token they control (`controlledBy`) that is **already** a combatant; a player's roll never adds one. **The server derives what is rolled** from the token's character sheet, else its stat block (see `utils/rules/initiative.ts`); `expression` is only a fallback for a combatant nothing can be derived for, and is ignored otherwise. `dice.rolled` is emitted only when dice were actually thrown — Call of Cthulhu takes the investigator's DEX with no roll, so it emits `initiative.state` alone |
-| `initiative.reorder` | `{ orderedTokenIds }` | DM — reorder combatants |
-| `initiative.start` | — | DM — start combat |
-| `initiative.next` | — | DM — advance to next turn |
-| `initiative.end` | — | DM — end combat |
-| `initiative.request_state` | — | Request current initiative state (any role) |
-| `map.ping` | `{ mapId, x, y }` | Point at a map location (any role). Coordinates are map pixels, not grid cells. Rate limited to 10 per 10s per user; excess is dropped silently |
-| `fog:operation` | `{ mapId, operation }` | DM — apply a fog operation (see below). Throttled to 10/second per socket; excess dropped silently |
-| `fog:request_state` | `{ mapId }` | Request current fog state (any role) |
-| `light:add` | `{ mapId, light: LightSource }` | DM — place a light source |
-| `light:update` | `{ mapId, light: LightSource }` | DM — update light properties |
-| `light:remove` | `{ mapId, lightId }` | DM — delete a light source |
-| `lights:replace` | `{ mapId, lights: LightSource[] }` | DM — bulk-replace all lights |
-| `lights:request` | `{ mapId }` | Request current light sources |
-| `ping` | — | Heartbeat |
-
----
-
-### Server → Client Events
-
-| Event | Payload | Who receives it |
-|-------|---------|----------------|
-| `connected` | — | Connecting client |
-| `authenticated` | — | Connecting client (on auth success) |
-| `sync.state` | Full campaign state | Requesting client |
-| `token.moved` | `{ tokenId, position, userId }` | All campaign members |
-| `dice.rolled` | `{ expression, result, rolls, userId, userName, type }` | All campaign members |
-| `dice.rolled.secret` | Same as above | DM only |
-| `dice.historyCleared` | — | All campaign members |
-| `chat.message` | `{ content, type, userId, userName, timestamp }` | All campaign members |
-| `chat.system` | `{ content, metadata, timestamp }` | All campaign members |
-| `map.changed` | `{ mapId, mapData }` | All campaign members (filtered per-client) |
-| `session.started` | `{ sessionId, startedAt }` | All campaign members |
-| `session.paused` | — | All campaign members |
-| `session.ended` | `{ message }` | All campaign members |
-| `session.resumed` | — | All campaign members |
-| `spirit_layer.toggled` | `{ enabled }` | All campaign members |
-| `spirit_layer.token.toggled` | `{ tokenId, visible }` | All campaign members |
-| `spirit_layer.style_changed` | `{ style }` | All campaign members |
-| `atmosphere.effect.updated` | `{ effect }` | All campaign members |
-| `atmosphere.audio.updated` | `{ assetId, volume, loop, url }` | All campaign members |
-| `vibe.updated` | `{ periodId, period }` | All campaign members |
-| `character.hp.updated` | `{ tokenId, current, maximum, temp }` | All campaign members |
-| `initiative.state` | Full `CombatState` object | All campaign members |
-| `map.pinged` | `{ mapId, x, y, userId }` | All campaign members (including the sender) |
-| `fog:updated` | `{ mapId, fogState }` | DM only — the full fog grid |
-| `fog:cells` | `{ mapId, revealedCells, fogCols, fogRows, cellPx }` | Players only — revealed cell indices, never the unrevealed ones |
-| `light:added` | `{ mapId, light: LightSource }` | All campaign members |
-| `light:updated` | `{ mapId, light: LightSource }` | All campaign members |
-| `light:removed` | `{ mapId, lightId }` | All campaign members |
-| `lights:replaced` | `{ mapId, lights: LightSource[] }` | All campaign members |
-| `pong` | — | Pinging client |
-| `error` | `{ message }` | Sending client |
-
-#### CombatState Object
-
-Held in memory per campaign and re-broadcast in full on every mutation — clients replace their copy
-rather than patching it. Not persisted: combat resets when the server restarts, though the per-token
-`initiative` values survive in the map's token data.
-
-```json
-{
-  "active": true,
-  "round": 2,
-  "currentTokenId": "uuid",
-  "combatants": [
-    {
-      "tokenId": "uuid",
-      "name": "Goblin",
-      "imageUrl": "/uploads/tokens/goblin.png",
-      "initiative": 14,
-      "hp": { "current": 5, "max": 7, "temp": 0 },
-      "type": "npc",
-      "disposition": "hostile"
-    }
-  ]
-}
-```
-
-`currentTokenId` identifies the acting combatant; clients use it to highlight both the tracker row
-and the token on the map. It is `null` before combat starts.
-
-#### Fog Operation
-
-```json
-{ "op": "reveal", "cells": [43, 44, 63, 64] }
-{ "op": "hide",   "cells": [43, 44] }
-{ "op": "reveal_all" }
-{ "op": "hide_all" }
-```
-
-`cells` are indices into the fog grid, row-major from the **top-left**: `row * fogCols + col`. One
-fog cell is one grid square — `cellPx` equals the map's `gridSize`, `fogCols` its width in squares
-and `fogRows` its height — so a fog cell and a visible grid square are always the same thing. Note
-this is the opposite Y convention from token grid coordinates, which are bottom-left origin; the
-frontend converts between them in `map/coords.ts`.
-
-Indices outside the grid are ignored rather than rejected, so a client that miscalculates cannot
-corrupt the fog array. If the stored fog no longer matches the map's dimensions (the grid size or
-map size changed), the server rebuilds it fully hidden rather than trying to remap it.
-
-The two outbound events are deliberately asymmetric: the DM receives the whole grid, while players
-receive only the list of cells that *are* revealed. An unrevealed cell is never sent to a player, so
-the client cannot leak what it has not been told.
-
-#### Map Ping
-
-Nothing is persisted — the ping is broadcast and forgotten, and each client expires its own copy
-after ~1.6s. Only the sender's `userId` is on the wire: clients already hold the campaign roster, so
-they resolve the display name and derive the identity colour locally rather than costing a database
-round-trip on a gesture people will repeat.
-
-Pings are **not** filtered by visibility. Unlike token rendering, a ping marks a location the sender
-deliberately chose to point at, so it renders for every member regardless of fog or lighting.
-
-#### LightSource Object
-
-```json
-{
-  "id": "uuid",
-  "x": 320,
-  "y": 480,
-  "brightRadius": 4,
-  "dimRadius": 8,
-  "color": "#ffcc66",
-  "enabled": true
-}
-```
-
-- `brightRadius` — grid squares of full visibility (strong glow)
-- `dimRadius` — grid squares of reduced visibility (faint glow); must be >= `brightRadius`
-- `color` — hex color (6-digit, e.g. `#ffcc66`)
-- `enabled` — `false` = extinguished (hidden from players, DM still sees icon)
-
----
+Described in one place rather than three:
+[`backend/docs/WEBSOCKET_DOCUMENTATION.md`](../backend/docs/WEBSOCKET_DOCUMENTATION.md)
+— the connection and authentication handshake, a worked example of the
+token-movement flow, and a generated inventory of every event the server
+listens for or emits.
 
 ## Error Responses
 
@@ -1533,14 +1244,28 @@ when it sees it.
 
 ## Rate Limits
 
-| Endpoint Group | Limit | Window |
-|----------------|-------|--------|
-| Login / Register | 5 requests | 15 minutes |
-| Password reset | 3 requests | 1 hour |
-| File upload | 20 requests | 1 minute |
-| General API | 300 requests | 1 minute |
-| Dice rolls (WebSocket) | 30 events | 1 minute |
-| Chat messages (WebSocket) | 10 events | 1 minute |
-| Token movement (WebSocket) | 60 events | 1 second |
+| Endpoint Group | Limit | Window | Counts |
+|----------------|-------|--------|--------|
+| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Register | 10 requests | 1 hour | Every request |
+| Forgot password | 5 requests | 15 minutes | Every request |
+| File upload | 30 requests | 1 minute | Every request |
+| General API | 300 requests | 1 minute | Every request |
+| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
+| Token movement (WebSocket) | 60 events | 1 second | Every event |
+
+The **Counts** column matters. Where only failures count, signing in correctly
+never uses up the allowance — otherwise a household sharing one address could
+lock itself out by logging in normally. Where every request counts, the success
+is the thing being limited: sending a password-reset email, or creating an
+account.
+
+Chat messages are not on this list because they are limited per campaign rather
+than globally: a DM can switch on a cooldown of between 1 and 300 seconds
+between messages, and it is **off by default**.
+
+The upload and general-API limits are configurable with the
+`ASSET_UPLOAD_RATE_LIMIT` and `RATE_LIMIT_MAX_REQUESTS` environment variables;
+the rest are fixed.
 
 Rate limit responses return HTTP `429` with a `Retry-After` header indicating when the limit resets.

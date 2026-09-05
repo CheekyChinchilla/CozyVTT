@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { CharacterSheetProps } from '../types';
+import type { CharacterData } from '../../../types';
 import { CallOfCthulhu7eCharacterView } from './CallOfCthulhu7eCharacterView';
 import { CallOfCthulhu7eCharacterEditor } from './CallOfCthulhu7eCharacterEditor';
 
@@ -24,7 +25,7 @@ export const CallOfCthulhu7eCharacterSheet: React.FC<CharacterSheetProps> = (pro
   };
 
   // Handle save - save data and return to view mode
-  const handleSave = async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+  const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }

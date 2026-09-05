@@ -28,9 +28,19 @@ import FeatsList from './components/FeatsList';
 import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
+import { readFeatureEntries } from '../../../utils/featureEntries';
+import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
+import { pf2eArmorClass, pf2eClassDC } from '../../../utils/rules/pathfinder2e';
+import type { Character } from '../../../types';
+import type {
+  PF2eCharacterData,
+  PF2eSkill,
+  PF2eSpellSlots,
+  SheetChrome,
+} from '../../../types/game-systems';
 
 interface Pathfinder2eCharacterViewProps {
-  character: any; // Full character object with data field
+  character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
@@ -86,7 +96,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   onEdit,
   onRoll,
 }) => {
-  const data = character.data;
+  const data = character.data as PF2eCharacterData & SheetChrome;
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -181,6 +191,18 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
                 {data.background}
               </span>
+              {/* Deity and alignment: on the sheet and in the schema, but shown
+                  nowhere in the app until now. */}
+              {data.deity && (
+                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                  {data.deity}
+                </span>
+              )}
+              {data.alignment && (
+                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                  {data.alignment}
+                </span>
+              )}
             </div>
             {data.playerName && (
               <div className="mt-2 text-sm opacity-80">
@@ -215,7 +237,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         Ability Scores
       </h3>
       <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-        {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+        {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
           const abilityData = data.attributes?.[ability] || { score: 10, modifier: 0 };
           const expr = abilityData.modifier >= 0 ? `1d20+${abilityData.modifier}` : `1d20${abilityData.modifier}`;
           const purpose = `${ability.charAt(0).toUpperCase() + ability.slice(1)} Check`;
@@ -260,7 +282,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         Saving Throws
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {['fortitude', 'reflex', 'will'].map((save) => {
+        {(['fortitude', 'reflex', 'will'] as const).map((save) => {
           const saveData = data.savingThrows?.[save] || {
             proficiencyRank: 'untrained',
             bonus: 0,
@@ -352,7 +374,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             rank={data.armorClass?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
           <span className="text-4xl font-bold text-blue-800">
-            {data.armorClass?.total || 10}
+            {/* Derived, like initiative below: the stored total was printed
+                as-is, and the built-in Fighter's was one too high. */}
+            {pf2eArmorClass(data)}
           </span>
         </div>
         {data.armorClass?.capDex !== null && data.armorClass?.capDex !== undefined && (
@@ -373,7 +397,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             rank={data.classDC?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
           <span className="text-4xl font-bold text-purple-800">
-            {data.classDC?.total || 10}
+            {pf2eClassDC(data)}
           </span>
         </div>
         {data.classDC?.keyAttribute && (
@@ -394,7 +418,12 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             {data.initiative?.usedStat || 'perception'}
           </span>
           <span className="text-4xl font-bold text-amber-800">
-            {formatModifier(data.initiative?.bonus || 0)}
+            {/* Derived rather than read from the stored `initiative.bonus`,
+                which nothing kept in step: a character with Perception +6 read
+                +0 here. The editor recalculates it on open, so only sheets
+                nobody had re-saved were wrong — which is most of them. This is
+                also the number the server rolls, so the two cannot disagree. */}
+            {formatModifier(pf2eInitiativeBonus(data))}
           </span>
         </div>
       </div>
@@ -459,9 +488,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Death and Dying */}
-      {(data.deathAndDying?.dying > 0 ||
-        data.deathAndDying?.wounded > 0 ||
-        data.deathAndDying?.doomed > 0) && (
+      {((data.deathAndDying?.dying ?? 0) > 0 ||
+        (data.deathAndDying?.wounded ?? 0) > 0 ||
+        (data.deathAndDying?.doomed ?? 0) > 0) && (
         <div className="mt-3 pt-3 border-t border-red-300">
           <div className="flex items-center space-x-4 text-sm">
             <div className="flex items-center space-x-1">
@@ -492,7 +521,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {Object.entries(skills).map(([skillName, skillData]: [string, any]) => {
+          {(Object.entries(skills) as [string, PF2eSkill][]).map(([skillName, skillData]) => {
             const displayName = skillName
               .replace(/([A-Z])/g, ' $1')
               .replace(/^./, (str) => str.toUpperCase())
@@ -529,7 +558,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <div className="mt-4">
             <h4 className="text-md font-semibold text-stone-700 mb-2">Lore Skills</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {loreSkills.map((lore: any, index: number) => {
+              {loreSkills.map((lore, index) => {
                 const expr = lore.bonus >= 0 ? `1d20+${lore.bonus}` : `1d20${lore.bonus}`;
                 const purpose = `${lore.name} Lore Check`;
                 return (
@@ -598,8 +627,82 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         inventory={data.inventory || []}
         bulk={data.bulk || { current: 0, encumbered: 5, maximum: 10 }}
       />
+
+      {/* Treasure — recorded on the sheet but never shown here before. */}
+      {data.treasure && (
+        <div className="bg-white border border-stone-200 rounded-lg p-3 mt-4">
+          <h4 className="text-sm font-semibold text-stone-700 mb-1">Treasure</h4>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.treasure}</p>
+        </div>
+      )}
     </div>
   );
+
+  /**
+   * Weapon and armour proficiencies, and any conditions currently on the
+   * character. Both are edited on the sheet and neither was shown here, so a
+   * player reading their own character could not see what they were trained in.
+   */
+  const renderProficienciesAndConditions = () => {
+    const weapons = Object.entries(data.proficiencies?.weapons ?? {});
+    const armor = Object.entries(data.proficiencies?.armor ?? {});
+    const conditions = data.conditions ?? [];
+    if (!weapons.length && !armor.length && !conditions.length) return null;
+
+    return (
+      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+          <Shield className="w-5 h-5 mr-2" />
+          Proficiencies &amp; Conditions
+        </h3>
+
+        {conditions.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-stone-700 mb-2">Conditions</h4>
+            <div className="flex flex-wrap gap-2">
+              {conditions.map((condition, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium"
+                >
+                  {condition}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {weapons.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-stone-700 mb-2">Weapons</h4>
+              <div className="space-y-1">
+                {weapons.map(([kind, rank]) => (
+                  <div key={kind} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-stone-700">{kind}</span>
+                    <ProficiencyIndicator rank={rank as ProficiencyRank} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {armor.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-stone-700 mb-2">Armor</h4>
+              <div className="space-y-1">
+                {armor.map(([kind, rank]) => (
+                  <div key={kind} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-stone-700">{kind}</span>
+                    <ProficiencyIndicator rank={rank as ProficiencyRank} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Render feats organized by category
   const renderFeats = () => (
@@ -614,18 +717,26 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render class features
   const renderClassFeatures = () => {
-    if (!data.classFeatures || data.classFeatures.length === 0) return null;
+    // Read through the shared reader so a sheet holding plain names displays
+    // the same as one whose features carry their rules text.
+    const features = readFeatureEntries(data.classFeatures);
+    if (features.length === 0) return null;
 
     return (
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Class Features</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {data.classFeatures.map((feature: string, index: number) => (
+          {features.map((feature, index) => (
             <div
               key={index}
-              className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm font-medium text-blue-800"
+              className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm text-blue-800"
             >
-              {feature}
+              <span className="font-medium">{feature.name}</span>
+              {feature.description && (
+                <p className="mt-1 text-xs text-blue-900/80 whitespace-pre-wrap">
+                  {feature.description}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -697,7 +808,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               Cantrips ({formatSpellRank(spellcasting.cantrips[0]?.rank || 0)})
             </h4>
             <div className="flex flex-wrap gap-2">
-              {spellcasting.cantrips.map((cantrip: any, index: number) => (
+              {spellcasting.cantrips.map((cantrip, index) => (
                 <span
                   key={index}
                   className="px-3 py-1 bg-purple-200 text-purple-800 rounded-full text-sm font-medium"
@@ -714,7 +825,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <h4 className="font-semibold text-purple-800 mb-2">Spell Slots</h4>
           <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const slot = spellcasting.slots?.[rank.toString()] || { total: 0, expended: 0 };
+              const slot = spellcasting.slots?.[rank.toString() as keyof PF2eSpellSlots] || { total: 0, expended: 0 };
               if (slot.total === 0) return null;
 
               const remaining = slot.total - slot.expended;
@@ -741,7 +852,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <div className="mb-4">
             <h4 className="font-semibold text-purple-800 mb-2">Spells</h4>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const rankSpells = spellcasting.spells.filter((s: any) => s.rank === rank);
+              const rankSpells = spellcasting.spells.filter((s) => s.rank === rank);
               if (rankSpells.length === 0) return null;
 
               return (
@@ -750,7 +861,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                     {formatSpellRank(rank)}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {rankSpells.map((spell: any, index: number) => (
+                    {rankSpells.map((spell, index) => (
                       <div
                         key={index}
                         className={`px-2 py-1 rounded text-sm ${
@@ -784,7 +895,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {spellcasting.focusSpells.spells.map((spell: any, index: number) => (
+              {spellcasting.focusSpells.spells.map((spell, index) => (
                 <span
                   key={index}
                   className="px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-sm font-medium"
@@ -796,12 +907,34 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           </div>
         )}
 
+        {/* Rituals. A stored ritual may be a bare name or a name with the rank
+            it is cast at — the schema accepts both, so read both. */}
+        {spellcasting.rituals && spellcasting.rituals.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-purple-800 mb-2">Rituals</h4>
+            <div className="space-y-2">
+              {spellcasting.rituals.map((ritual, index) => (
+                <div key={index} className="bg-white border border-purple-200 rounded p-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-purple-800">
+                      {typeof ritual === 'string' ? ritual : ritual.name}
+                    </span>
+                    {typeof ritual !== 'string' && (
+                      <span className="text-xs text-purple-600">Rank {ritual.rank}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Innate Spells */}
         {spellcasting.innateSpells && spellcasting.innateSpells.length > 0 && (
           <div>
             <h4 className="font-semibold text-purple-800 mb-2">Innate Spells</h4>
             <div className="space-y-2">
-              {spellcasting.innateSpells.map((spell: any, index: number) => (
+              {spellcasting.innateSpells.map((spell, index) => (
                 <div key={index} className="bg-white border border-purple-200 rounded p-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-purple-800">{spell.name}</span>
@@ -930,6 +1063,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {renderFeats()}
         {renderSpellcasting()}
         {renderInventory()}
+        {renderProficienciesAndConditions()}
         {renderBio()}
       </div>
 

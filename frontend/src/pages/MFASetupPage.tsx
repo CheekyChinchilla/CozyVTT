@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 type Step = 'loading' | 'scan' | 'backup-codes' | 'error';
 
@@ -50,8 +51,8 @@ export default function MFASetupPage() {
         setQrCodeUrl(data.qrCodeUrl);
         setSecret(data.secret);
         setStep('scan');
-      } catch (err: any) {
-        setInitError(err.response?.data?.message || 'Failed to initiate MFA setup');
+      } catch (err) {
+        setInitError(apiErrorMessage(err) || 'Failed to initiate MFA setup');
         setStep('error');
       }
     };
@@ -77,8 +78,8 @@ export default function MFASetupPage() {
       const result = await completeMFASetup(token);
       setBackupCodes(result.backupCodes);
       setStep('backup-codes');
-    } catch (err: any) {
-      setTokenError(err.response?.data?.message || 'Invalid code. Please try again.');
+    } catch (err) {
+      setTokenError(apiErrorMessage(err) || 'Invalid code. Please try again.');
     } finally {
       setVerifying(false);
     }

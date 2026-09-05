@@ -36,6 +36,9 @@ import type {
   Message,
   DiceRolledEvent,
   Session,
+  SessionSummary,
+  PersonalNote,
+  PersonalNoteSummary,
   CampaignInvitation,
   ApiError,
   SystemStats,
@@ -46,6 +49,8 @@ import type {
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
+  RosterMember,
+  CampaignMembership,
 } from '@/types';
 
 // ============================================
@@ -207,7 +212,14 @@ class ApiClient {
     return response.data;
   }
 
-  async initializeSetup(data: { email: string; password: string; displayName: string }): Promise<{ message: string; user: User }> {
+  async initializeSetup(data: {
+    email: string;
+    password: string;
+    displayName: string;
+    instanceName?: string;
+    timezone?: string;
+    allowRegistration?: boolean;
+  }): Promise<{ message: string; user: User }> {
     const response = await this.client.post('/api/setup/init', data);
     return response.data;
   }
@@ -476,7 +488,7 @@ class ApiClient {
     return response.data;
   }
 
-  async getCampaignCharacters(campaignId: string): Promise<{ roster: any[] }> {
+  async getCampaignCharacters(campaignId: string): Promise<{ roster: RosterMember[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/characters`);
     return response.data;
   }
@@ -490,7 +502,7 @@ class ApiClient {
     return response.data;
   }
 
-  async acceptInvitation(invitationId: string, characterIds: string[]): Promise<{ message: string; membership: any }> {
+  async acceptInvitation(invitationId: string, characterIds: string[]): Promise<{ message: string; membership: CampaignMembership }> {
     const response = await this.client.post(`/api/invitations/${invitationId}/accept`, { characterIds });
     return response.data;
   }
@@ -503,6 +515,67 @@ class ApiClient {
   // ============================================
   // Sessions
   // ============================================
+
+  // ============================================
+  // Personal notes
+  //
+  // Private to the signed-in user; the server scopes every one of these by the
+  // session's own id, so there is no user parameter to pass or to get wrong.
+  // ============================================
+
+  /** The caller's notes for a campaign, newest first. Titles only, no bodies. */
+  async listNotes(campaignId: string): Promise<{ notes: PersonalNoteSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/notes`);
+    return response.data;
+  }
+
+  /** One note, with its Markdown source. */
+  async getNote(campaignId: string, noteId: string): Promise<{ note: PersonalNote }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  async createNote(
+    campaignId: string,
+    title: string,
+    content = ''
+  ): Promise<{ note: PersonalNote }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/notes`, { title, content });
+    return response.data;
+  }
+
+  async updateNote(
+    campaignId: string,
+    noteId: string,
+    patch: { title?: string; content?: string }
+  ): Promise<{ note: PersonalNote }> {
+    const response = await this.client.put(`/api/campaigns/${campaignId}/notes/${noteId}`, patch);
+    return response.data;
+  }
+
+  async deleteNote(campaignId: string, noteId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  /** Past sessions and the notes recorded when each ended. Newest first. */
+  async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/sessions`);
+    return response.data;
+  }
+
+  /** Rewrite a past session's recap. An empty string clears it. DM only. */
+  async updateSessionNotes(
+    campaignId: string,
+    sessionId: string,
+    notes: string
+  ): Promise<{ session: SessionSummary }> {
+    const response = await this.client.put(
+      `/api/campaigns/${campaignId}/sessions/${sessionId}/notes`,
+      { notes }
+    );
+    return response.data;
+  }
 
   async startSession(campaignId: string): Promise<{ message: string; session: Session }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/sessions`);
@@ -658,7 +731,7 @@ class ApiClient {
     file: File,
     name?: string,
     gridSize?: number,
-  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number }> {
+  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);

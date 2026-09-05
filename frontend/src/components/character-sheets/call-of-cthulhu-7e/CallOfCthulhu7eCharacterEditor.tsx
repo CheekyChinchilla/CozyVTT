@@ -18,6 +18,35 @@ import {
   Palette,
 } from 'lucide-react';
 import { Character } from '../../../types';
+import type { CharacterData } from '../../../types';
+import type {
+  CoC7eCharacterData,
+  CoC7eCharacteristics,
+  CoC7eDerivedStats,
+  CoC7eSkills,
+  CoC7eCombat,
+  CoC7eWealth,
+  CoC7eBackstory,
+  CoC7eAppearance,
+  CoC7eConditions,
+  SheetChrome,
+} from '../../../types/game-systems';
+import { apiErrorMessage } from '@/utils/errors';
+
+/**
+ * The sheet as this editor holds it: `CoC7eCharacterData` plus `themeColor`,
+ * the header colour chosen in the editor. It is not part of the game system but
+ * it is saved with the sheet, because `PUT /characters/:id` validates the body
+ * and stores it as sent rather than storing Zod's parsed output.
+ */
+interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
+  /**
+   * Not declared by `CoC7eCharacterData`, which keeps the investigator's name
+   * at the top level as `investigatorName`. Only the token-upload filename
+   * reads this, so a sheet without it simply falls back to "Investigator".
+   */
+  personalDetails?: { name?: string };
+}
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
@@ -30,7 +59,7 @@ import NumberField from '../../ui/NumberField';
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
   character: Character;
-  onSave: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -68,6 +97,28 @@ const COLOR_PRESETS = [
  * Calculate damage bonus and build from STR + SIZ
  * Based on Call of Cthulhu 7e rules
  */
+/**
+ * The five conditions the sheet tracks, in the order the rulebook introduces
+ * them: the three that follow from hit points, then the two from Sanity.
+ */
+const COC_CONDITIONS: { key: keyof CoC7eConditions; label: string }[] = [
+  { key: 'majorWound', label: 'Major Wound' },
+  { key: 'dying', label: 'Dying' },
+  { key: 'unconscious', label: 'Unconscious' },
+  { key: 'temporaryInsanity', label: 'Temporary Insanity' },
+  { key: 'indefiniteInsanity', label: 'Indefinite Insanity' },
+];
+
+/** The appearance fields the official sheet records, in its own order. */
+const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
+  { key: 'age', label: 'Age' },
+  { key: 'height', label: 'Height' },
+  { key: 'weight', label: 'Weight' },
+  { key: 'eyes', label: 'Eyes' },
+  { key: 'hair', label: 'Hair' },
+  { key: 'skin', label: 'Skin' },
+];
+
 const calculateDamageBonusAndBuild = (str: number, siz: number): { damageBonus: string; build: number } => {
   const total = str + siz;
   if (total <= 64) return { damageBonus: '-2', build: -2 };
@@ -123,21 +174,24 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const data = character.data as any;
+  const data = character.data as CoC7eFormData;
 
   // Form state
-  const [formData, setFormData] = useState<any>(() => ({
+  const [formData, setFormData] = useState<CoC7eFormData>(() => ({
     ...data,
-    characteristics: data.characteristics || {},
-    derivedStats: data.derivedStats || {},
-    skills: data.skills || {},
-    combat: data.combat || { weapons: [] },
+    // TODO(typing): `{}` has none of the keys these types require, and the
+    // effects and inputs below read straight off them. Pre-existing; the casts
+    // keep the behaviour for a sheet stored without one exactly as it was.
+    characteristics: (data.characteristics || {}) as CoC7eCharacteristics,
+    derivedStats: (data.derivedStats || {}) as CoC7eDerivedStats,
+    skills: (data.skills || {}) as CoC7eSkills,
+    combat: (data.combat || { weapons: [] }) as CoC7eCombat,
     possessions: data.possessions || [],
-    wealth: data.wealth || {},
-    backstory: data.backstory || {},
-    appearance: data.appearance || {},
+    wealth: (data.wealth || {}) as CoC7eWealth,
+    backstory: (data.backstory || {}) as CoC7eBackstory,
+    appearance: (data.appearance || {}) as CoC7eAppearance,
     contacts: data.contacts || [],
-    conditions: data.conditions || {},
+    conditions: (data.conditions || {}) as CoC7eConditions,
   }));
 
   // Report the first edit up to whoever is hosting this sheet, so leaving with
@@ -198,9 +252,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     // Rebuild each entry rather than spreading one level and assigning into it:
     // a shallow copy shares the nested characteristic objects with state, so the
     // old version mutated `formData` in place.
-    const updated: Record<string, any> = {};
+    const updated: Partial<CoC7eCharacteristics> = {};
     let changed = false;
-    Object.keys(formData.characteristics).forEach((char) => {
+    (Object.keys(formData.characteristics) as (keyof CoC7eCharacteristics)[]).forEach((char) => {
       const entry = formData.characteristics[char];
       const regular = entry.regular || 0;
       const half = Math.floor(regular / 2);
@@ -212,7 +266,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     // Skip the update when the derived columns already agree, so simply opening
     // a sheet does not queue a state change.
     if (changed) {
-      setFormData((prev: any) => ({ ...prev, characteristics: updated }));
+      setFormData((prev) => ({ ...prev, characteristics: updated as CoC7eCharacteristics }));
     }
   }, [
     formData.characteristics?.STR?.regular,
@@ -257,7 +311,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       const cthulhuMythos = formData.skills?.cthulhuMythos?.currentValue || 0;
       const maxSanity = 99 - cthulhuMythos;
 
-      setFormData((prev: any) => ({
+      setFormData((prev) => ({
         ...prev,
         derivedStats: {
           ...prev.derivedStats,
@@ -292,16 +346,16 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       // Update dodge skill to match derived dodge
       if (formData.skills?.dodge) {
-        setFormData((prev: any) => ({
+        setFormData((prev) => ({
           ...prev,
           skills: {
             ...prev.skills,
             dodge: {
-              ...prev.skills.dodge,
+              ...prev.skills!.dodge,
               baseValue: dodge,
               currentValue: dodge,
             },
-          },
+          } as CoC7eSkills,
         }));
       }
     }
@@ -368,9 +422,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
           // Store the new token URL to pass separately to onSave
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: uploadError.response?.data?.message || 'Failed to upload token image' });
+          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
           setIsSaving(false);
           return;
         }
@@ -667,13 +721,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       <div>
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Characteristics</h3>
         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
-          {orderedCharacteristics(formData.characteristics).map((charKey) => (
+          {orderedCharacteristics(formData.characteristics as unknown as Record<string, unknown>).map((charKey) => (
             <CharacteristicBlock
               key={charKey}
               label={charKey}
-              regular={formData.characteristics[charKey].regular}
-              half={formData.characteristics[charKey].half}
-              fifth={formData.characteristics[charKey].fifth}
+              regular={formData.characteristics[charKey as keyof CoC7eCharacteristics].regular}
+              half={formData.characteristics[charKey as keyof CoC7eCharacteristics].half}
+              fifth={formData.characteristics[charKey as keyof CoC7eCharacteristics].fifth}
               editable
               onChange={(value) => {
                 setFormData({
@@ -681,7 +735,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                   characteristics: {
                     ...formData.characteristics,
                     [charKey]: {
-                      ...formData.characteristics[charKey],
+                      ...formData.characteristics[charKey as keyof CoC7eCharacteristics],
                       regular: value,
                     },
                   },
@@ -705,8 +759,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               ...formData,
               derivedStats: {
                 ...formData.derivedStats,
-                sanity: { ...formData.derivedStats.sanity, current: value },
-              },
+                sanity: { ...formData.derivedStats!.sanity, current: value },
+              } as CoC7eDerivedStats,
             });
           },
           starting: (value) => {
@@ -714,8 +768,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               ...formData,
               derivedStats: {
                 ...formData.derivedStats,
-                sanity: { ...formData.derivedStats.sanity, starting: value },
-              },
+                sanity: { ...formData.derivedStats!.sanity, starting: value },
+              } as CoC7eDerivedStats,
             });
           },
         }}
@@ -783,8 +837,8 @@ value={formData.derivedStats?.hp?.current}
                   ...formData,
                   derivedStats: {
                     ...formData.derivedStats,
-                    hp: { ...formData.derivedStats.hp, current: v },
-                  },
+                    hp: { ...formData.derivedStats!.hp, current: v },
+                  } as CoC7eDerivedStats,
                 });
               }}
               className="w-full text-center text-2xl font-bold text-red-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
@@ -801,10 +855,10 @@ value={formData.derivedStats?.magicPoints?.current}
                   derivedStats: {
                     ...formData.derivedStats,
                     magicPoints: {
-                      ...formData.derivedStats.magicPoints,
+                      ...formData.derivedStats!.magicPoints,
                       current: v,
                     },
-                  },
+                  } as CoC7eDerivedStats,
                 });
               }}
               className="w-full text-center text-2xl font-bold text-purple-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-500 rounded"
@@ -820,14 +874,42 @@ value={formData.derivedStats?.luck?.score}
                   ...formData,
                   derivedStats: {
                     ...formData.derivedStats,
-                    luck: { ...formData.derivedStats.luck, score: v },
-                  },
+                    luck: { ...formData.derivedStats!.luck, score: v },
+                  } as CoC7eDerivedStats,
                 });
               }}
               className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded"
             fallback={0}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Current Conditions.
+          Major Wound, Dying and Unconscious follow from hit points; Temporary
+          and Indefinite Insanity from Sanity. All five are core 7th-edition
+          mechanics and all five were readable on the sheet but had nowhere to
+          be set, so an investigator could never actually be marked as hurt or
+          mad through the app. */}
+      <div className="mt-6">
+        <h3 className="text-lg font-bold text-sepia-900 mb-3">Current Conditions</h3>
+        <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+          {COC_CONDITIONS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 text-sm text-sepia-900 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.conditions?.[key] ?? false}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    conditions: { ...formData.conditions, [key]: e.target.checked } as CoC7eConditions,
+                  });
+                }}
+                className="rounded border-sepia-400 text-red-700 focus:ring-red-500"
+              />
+              {label}
+            </label>
+          ))}
         </div>
       </div>
     </div>
@@ -846,10 +928,10 @@ value={formData.derivedStats?.luck?.score}
             skills: {
               ...formData.skills,
               [skillName]: {
-                ...formData.skills[skillName],
+                ...formData.skills![skillName as keyof CoC7eSkills],
                 [field]: value,
               },
-            },
+            } as CoC7eSkills,
           });
         }}
       />
@@ -887,7 +969,7 @@ value={formData.derivedStats?.luck?.score}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  wealth: { ...formData.wealth, spendingLevel: e.target.value },
+                  wealth: { ...formData.wealth, spendingLevel: e.target.value } as CoC7eWealth,
                 })
               }
               placeholder="e.g., Average, Wealthy"
@@ -900,7 +982,7 @@ value={formData.derivedStats?.luck?.score}
 value={formData.wealth?.cash}
               onChange={(v: number) => setFormData({
                   ...formData,
-                  wealth: { ...formData.wealth, cash: v },
+                  wealth: { ...formData.wealth, cash: v } as CoC7eWealth,
                 })
               }
               className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
@@ -915,7 +997,7 @@ value={formData.wealth?.cash}
             onChange={(e) =>
               setFormData({
                 ...formData,
-                wealth: { ...formData.wealth, assets: e.target.value },
+                wealth: { ...formData.wealth, assets: e.target.value } as CoC7eWealth,
               })
             }
             placeholder="Describe assets, property, investments..."
@@ -931,7 +1013,7 @@ value={formData.wealth?.cash}
         <textarea
           value={
             Array.isArray(formData.possessions)
-              ? formData.possessions.map((p: any) => `${p.name}${p.notes ? ` - ${p.notes}` : ''}`).join('\n')
+              ? formData.possessions.map((p) => `${p.name}${p.notes ? ` - ${p.notes}` : ''}`).join('\n')
               : ''
           }
           onChange={(e) => {
@@ -952,17 +1034,99 @@ value={formData.wealth?.cash}
 
   // Render Backstory tab
   const renderBackstoryTab = () => (
-    <div>
+    <div className="space-y-6">
       <BackstorySection
         backstory={formData.backstory || {}}
         editable
         onChange={(field, value) => {
           setFormData({
             ...formData,
-            backstory: { ...formData.backstory, [field]: value },
+            backstory: { ...formData.backstory, [field]: value } as CoC7eBackstory,
           });
         }}
       />
+
+      {/* Appearance. Shown on the sheet when reading it, but with no field to
+          type into — so these could only ever be empty. */}
+      <div>
+        <h3 className="text-lg font-bold text-sepia-900 mb-3">Appearance</h3>
+        <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+          {COC_APPEARANCE_FIELDS.map(({ key, label }) => (
+            <div key={key}>
+              <label className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
+              <input
+                type="text"
+                value={formData.appearance?.[key] ?? ''}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    appearance: { ...formData.appearance, [key]: e.target.value } as CoC7eAppearance,
+                  });
+                }}
+                className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Cthulhu Mythos rating and the spells the investigator knows. Both are
+          on the official sheet and neither had anywhere to live in the app. */}
+      <div>
+        <h3 className="text-lg font-bold text-sepia-900 mb-3">Spells &amp; Mythos</h3>
+        <div className="bg-white border border-sepia-400 rounded-md p-3 space-y-3">
+          <div>
+            <label className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            <NumberField
+              value={formData.spellsAndMythos?.cthulhuMythos}
+              min={0}
+              max={100}
+              fallback={0}
+              onChange={(v: number) => {
+                setFormData({
+                  ...formData,
+                  spellsAndMythos: {
+                    cthulhuMythos: v,
+                    spells: formData.spellsAndMythos?.spells ?? [],
+                  },
+                });
+              }}
+              className="w-24 px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-sepia-600 uppercase block mb-1">Spells (one per line)</label>
+            <textarea
+              rows={4}
+              value={(formData.spellsAndMythos?.spells ?? []).join('\n')}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  spellsAndMythos: {
+                    cthulhuMythos: formData.spellsAndMythos?.cthulhuMythos ?? 0,
+                    spells: e.target.value.split('\n').map((line) => line.trim()).filter(Boolean),
+                  },
+                });
+              }}
+              placeholder="Contact Nyarlathotep&#10;Elder Sign"
+              className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Keeper's Notes. The sheet has always displayed these when reading it;
+          there was no way to write them. */}
+      <div>
+        <h3 className="text-lg font-bold text-sepia-900 mb-3">Keeper&apos;s Notes</h3>
+        <textarea
+          rows={4}
+          value={formData.notes ?? ''}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          placeholder="Notes kept by the Keeper about this investigator"
+          className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+        />
+      </div>
     </div>
   );
 

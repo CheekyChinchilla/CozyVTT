@@ -9,6 +9,7 @@ import type { Character, Campaign } from '@/types';
 import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface AssignCharacterModalProps {
   isOpen: boolean;
@@ -48,8 +49,8 @@ export default function AssignCharacterModal({
     try {
       const response = await api.listCampaigns();
       setCampaigns(response.campaigns);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load campaigns');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to load campaigns');
     } finally {
       setLoadingCampaigns(false);
     }
@@ -64,8 +65,8 @@ export default function AssignCharacterModal({
     try {
       await onConfirm(character.id, selectedCampaignId);
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to assign character');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to assign character');
     } finally {
       setLoading(false);
     }

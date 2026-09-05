@@ -1,8 +1,14 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
-import { isSetupCompleted, markSetupCompleted, hasUsers } from '../services/systemSettings';
+import {
+  isSetupCompleted,
+  markSetupCompleted,
+  hasUsers,
+  updateSystemSettings,
+} from '../services/systemSettings';
 import { registerUser, sanitizeUser } from '../services/auth';
 import { validateEmail, validatePasswordStrength } from '../utils/validation';
+import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -98,6 +104,13 @@ router.post('/init', async (req: Request, res: Response) => {
       password,
       displayName,
     });
+
+    // Apply the wizard's system configuration step. See utils/setupConfig for
+    // why these were being dropped and how each field is treated.
+    const settings = systemConfigFromSetupBody(req.body);
+    if (Object.keys(settings).length > 0) {
+      await updateSystemSettings(settings);
+    }
 
     // Mark setup as completed
     await markSetupCompleted();

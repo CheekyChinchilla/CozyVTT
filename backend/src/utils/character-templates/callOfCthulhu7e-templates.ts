@@ -10,7 +10,8 @@ export interface CharacterTemplate {
   name: string;
   description: string;
   gameSystem: GameSystem;
-  data: any;
+  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
+  data: Record<string, unknown>;
 }
 
 /**
@@ -135,7 +136,6 @@ export const coc7ePrivateInvestigatorTemplate: CharacterTemplate = {
   gameSystem: GameSystem.CALL_OF_CTHULHU_7E,
   data: {
     investigatorName: 'Jack Morrison',
-    player: '',
     occupation: 'Private Investigator',
     era: 'Modern',
     age: 35,

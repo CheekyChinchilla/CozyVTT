@@ -9,6 +9,7 @@ import campaignService from '@/services/campaign.service';
 import type { Campaign, GameSystem } from '@/types';
 import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
 import { Button, Modal, Field, Input, Textarea, Select } from '@/components/ui';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface CreateCampaignModalProps {
   isOpen: boolean;
@@ -71,8 +72,8 @@ export default function CreateCampaignModal({
 
       // Close modal
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create campaign');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to create campaign');
     } finally {
       setLoading(false);
     }

@@ -53,11 +53,57 @@ npm run prisma:studio
 
 Migration files are located in `backend/prisma/migrations/`. Each migration is stored in a timestamped folder with SQL files.
 
-Current migrations:
+`backend/prisma/migrations/` is the authoritative list — the folder names are in
+order and `npx prisma migrate status` tells you what a given database has
+applied. The ones below are called out because they are the ones people ask
+about; the list is not exhaustive.
+
 - `20260211040616_init` - Initial database schema
 - `20260211043730_add_system_settings` - System settings table for setup wizard
 - `20260215000000_add_password_reset` - Password reset tokens
 - `20260220041038_add_game_system_support` - Game system support for characters
+- `20260902204427_add_personal_notes` - `PersonalNote` table for per-user
+  Markdown notes. Purely additive: one `CREATE TABLE` with two foreign keys and
+  an index, and no `ALTER` on any existing table, so upgrading cannot touch
+  data you already have. New installs and upgrades both start with it empty.
+
+## Data migrations (one-off scripts)
+
+Some changes move data around inside the JSON columns rather than altering the
+schema. Prisma does not run these — they are scripts you run once, by hand, and
+they are safe to run again.
+
+| Script | What it does |
+|---|---|
+| `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. |
+| `npm run migrate:characters` | Earlier character data migration. |
+| `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. |
+
+### `migrate:sheet-fields`
+
+The built-in character templates had been written against an older shape, so
+sheets created from them hold content in fields nothing displays: a D&D 5e
+Fighter's features, its armour and weapon proficiencies, a Pathfinder 2e
+character's strikes and class features.
+
+Reading is already fixed for D&D 5e — those sheets display correctly with no
+migration at all. **Pathfinder 2e sheets need this script** to show their
+strikes and class features, and running it also tidies the 5e duplicates away
+so the same fact is not stored twice.
+
+```bash
+# Report what would change, without writing anything
+docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+
+# Apply
+docker compose exec backend npm run migrate:sheet-fields
+```
+
+Safe to run more than once — a sheet already converted is skipped. Each
+character is written in its own transaction, so an interruption cannot leave one
+half-converted, and nothing is removed until its content has been merged into
+the field that replaces it. Text a player typed is moved verbatim and never
+parsed. Take a backup first anyway, as with any data change.
 
 ## Troubleshooting
 

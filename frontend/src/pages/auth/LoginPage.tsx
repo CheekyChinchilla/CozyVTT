@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
+import { apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
@@ -87,13 +88,14 @@ export default function LoginPage() {
 
       // If MFA is not required, user is logged in and will be redirected by auth check above
       // If MFA is required, mfaPending will be true and user will be redirected to MFA page
-    } catch (err: any) {
+    } catch (err) {
       // Handle specific error messages
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.status === 401) {
+      const serverError = apiErrorText(err);
+      if (serverError) {
+        setError(serverError);
+      } else if (apiErrorStatus(err) === 401) {
         setError('Invalid email or password');
-      } else if (err.response?.status === 429) {
+      } else if (apiErrorStatus(err) === 429) {
         setError('Too many login attempts. Please try again later.');
       } else {
         setError('An error occurred during login. Please try again.');

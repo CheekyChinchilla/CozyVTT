@@ -253,7 +253,12 @@ Templates you publish are visible to everyone on your instance. You can edit or 
 
 ### Assigning a Character to a Campaign
 
-Characters need to be assigned to a campaign before they show up in that campaign's roster. From the Characters page, click the **Assign** option on any character card and pick the campaign.
+A character has to belong to a campaign before it shows up in that campaign's roster. There are two ways:
+
+- **When you create it** — pick the campaign in the new character dialog. The character joins the roster straight away.
+- **Afterwards** — click **Assign** on any character card on the Characters page and pick the campaign.
+
+You can only choose a campaign you are already a member of.
 
 *GIF pending — Assigning a character to a campaign.*
 
@@ -391,7 +396,42 @@ The **Dice Roller** is right below chat. Click a die face to roll it, or type a 
 - `1d20+5` — Roll a d20 and add 5
 - `2d6-1` — Roll 2d6 and subtract 1
 
-Dice results are posted to chat so everyone can see them. DMs can also roll **secretly** — the result is only visible to them.
+Dice results are posted to chat so everyone can see them. The Dice panel keeps a
+running list of the rolls, oldest at the top and newest at the bottom, and it
+follows along as they come in unless you have scrolled up to read something
+earlier. The list survives a refresh.
+
+**Secret rolls.** Tick **Secret Roll** before rolling and the other players
+never see it. Your DM does — deliberately, so they can settle an argument about
+what was really rolled — and the checkbox says so. Your own secret rolls stay in
+your list marked **🔒 Secret**, so you can look back at them; the **Secret**
+button at the top of the panel hides them from your own view if you would rather
+keep the list to open rolls, which changes nothing for anyone else.
+
+### Your Own Notes
+
+The **Notes** tab is yours alone. Keep as many as you like for each campaign — a
+plan for next session, what the party has worked out about the villain, a
+running list of who owes whom money.
+
+Notes are written in **Markdown**, so headings, lists, bold, quotes and links
+all work, and the eye button switches to a laid-out preview. Pick between them
+from the dropdown, and **+** starts a new one. They save themselves a moment
+after you stop typing; the line underneath tells you whether everything is
+saved.
+
+**These are private.** Nobody else can read them — your DM included. That is
+enforced by the server, not just hidden in the page. A single note can run to
+100,000 characters, roughly fifty printed pages.
+
+### Past Sessions
+
+The **Session** tab has a **Past Sessions** list: every finished session,
+newest first, with its date, how long you played, and whatever the DM wrote
+about it when they ended it. It is the thing to read before the next game.
+
+Everyone in the campaign sees the same list. A session the DM wrote nothing for
+still appears, marked as having no notes.
 
 ### Moving Your Token
 
@@ -439,7 +479,9 @@ A campaign can have multiple maps loaded at once. The DM can switch the active m
 
 ### The Spirit Layer
 
-The Spirit Layer is a special visual overlay primarily used for Shadowrun and similar games where some characters can perceive things others can't. The DM can toggle the spirit layer on or off per-token, and choose the visual style.
+The Spirit Layer is a second plane for the map, used for games where some characters can perceive things others can't — astral space, the ethereal plane, the spirit world. It is a separate plane rather than a see-through overlay: a player viewing the spirit realm sees the tokens on that plane instead of the ordinary ones, including instead of their own. The DM chooses which tokens live on it, who can see it, and the visual style.
+
+If you are a player and the map has gone dark or your token has vanished, ask your DM whether the Spirit Layer is switched on — see [The Spirit Layer](DM_GUIDE.md#the-spirit-layer) in the DM guide.
 
 *Screenshot pending — Map with spirit layer overlay.*
 
@@ -457,6 +499,13 @@ When a DM enables dynamic lighting on a map, players only see what their token c
 - **Dim radius** — reduced visibility with a fainter glow (e.g. the outer 20 ft of a torch)
 
 Where two dim light zones overlap, the area is treated as bright light. This matches the light rules in D&D 5e, Pathfinder 2e, and most other TTRPG systems.
+
+**Light does not see for you.** A lit area is only visible to you if your token
+could actually see it — walls block sight as well as light, so a lamp burning
+inside a closed room shows you nothing from outside it, and the creatures in
+there stay hidden until you can see in. Your token's **sight radius** governs how
+far you make things out in the dark; it does not stop you noticing a lit room
+across a courtyard once you have a clear line to it.
 
 *Screenshot pending — Map with dynamic lighting and bright/dim zones.*
 

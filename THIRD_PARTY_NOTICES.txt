@@ -34,18 +34,18 @@ NOT bundled in this distribution. They are subject to their own licenses:
 SECTION 2: SRD / GAME CONTENT
 ================================================================================
 
-This application includes creature data from the System Reference Document 5.2.1
-("SRD 5.2.1") by Wizards of the Coast LLC, available at
-https://www.dndbeyond.com/srd
+This application includes material from the System Reference Document 5.1
+("SRD 5.1") by Wizards of the Coast LLC, available at
+https://dnd.wizards.com/resources/systems-reference-document
 
-The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0
-International License (CC-BY 4.0), available at
-https://creativecommons.org/licenses/by/4.0/legalcode
+The SRD 5.1 is dual-licensed under the Open Game License 1.0a and the Creative
+Commons Attribution 4.0 International License. CozyVTT uses it under CC-BY 4.0,
+available at https://creativecommons.org/licenses/by/4.0/legalcode
 
 SRD creature data is fetched via the Open5e API (https://open5e.com), a
 community project providing SRD content in a machine-readable format.
 
-See OGL_LICENSE.txt and OGL_ATTRIBUTION.md for full attribution details.
+See SRD_LICENSE.txt and SRD_ATTRIBUTION.md for full attribution details.
 
 
 ================================================================================

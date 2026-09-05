@@ -72,7 +72,17 @@ export async function updateSystemSettings(data: {
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   themeId?: string;
-  customThemeColors?: any;
+  // A `Json?` column: a map of theme token names to colour strings.
+  //
+  // Deliberately not `| null`. Prisma wants `Prisma.DbNull` rather than a plain
+  // `null` for a nullable Json column, so passing `null` here fails at runtime.
+  //
+  // This does not *prevent* that: the only caller, admin.ts, assigns straight
+  // from `req.body`, so a null can still arrive from a request and still throw.
+  // Closing that needs validation at the route, which is its own change. What
+  // the type does is stop new code being written against a signature that
+  // advertises a value Prisma will reject.
+  customThemeColors?: Record<string, string>;
   fontId?: string;
   customLogoUrl?: string | null;
   customFaviconUrl?: string | null;

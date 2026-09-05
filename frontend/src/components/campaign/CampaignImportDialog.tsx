@@ -21,6 +21,7 @@ import {
 import api from '@/services/api';
 import type { CampaignImportPreview, CampaignImportResult } from '@/types';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage, errorMessage as thrownMessage } from '@/utils/errors';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -77,8 +78,8 @@ export default function CampaignImportDialog({
       setPreview(previewData);
       setCampaignName(previewData.campaignName);
       setStep('preview');
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Failed to read archive.';
+    } catch (err) {
+      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Failed to read archive.';
       setErrorMessage(msg);
       setStep('error');
     } finally {
@@ -110,8 +111,8 @@ export default function CampaignImportDialog({
       setResult(importResult);
       setStep('done');
       onSuccess?.();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Import failed.';
+    } catch (err) {
+      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Import failed.';
       setErrorMessage(msg);
       setStep('error');
     }

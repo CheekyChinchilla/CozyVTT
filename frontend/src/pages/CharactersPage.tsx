@@ -21,6 +21,8 @@ import CharacterSheetViewerModal from '@/components/character/CharacterSheetView
 import EmptyState from '@/components/common/EmptyState';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
+import type { CharacterData } from '@/types';
 
 export default function CharactersPage() {
   const { logout } = useAuth();
@@ -45,7 +47,7 @@ export default function CharactersPage() {
   const loading = charactersQuery.isPending || campaignsQuery.isPending;
   const queryError = charactersQuery.error || campaignsQuery.error;
   const error = queryError
-    ? ((queryError as any).response?.data?.message || 'Failed to load characters')
+    ? (apiErrorMessage(queryError) || 'Failed to load characters')
     : '';
 
   const loadData = () => {
@@ -83,8 +85,8 @@ export default function CharactersPage() {
       const copiedCharacter = await characterService.copyCharacter(character.id);
       setCharactersData((prev) => [copiedCharacter, ...prev]);
       showSuccess(`${character.name} copied successfully`);
-    } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to copy character', 'error');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to copy character', 'error');
     }
   };
 
@@ -134,7 +136,7 @@ export default function CharactersPage() {
     showSuccess(`Exported ${character.name}`);
   };
 
-  const handleImport = async (data: { name: string; gameSystem: string | null; data: any }) => {
+  const handleImport = async (data: { name: string; gameSystem: string | null; data: CharacterData }) => {
     // Errors propagate to the modal, which handles the display
     const importedCharacter = await characterService.createCharacter({
       name: data.name,

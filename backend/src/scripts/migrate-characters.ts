@@ -31,14 +31,26 @@ interface MigrationReport {
 /**
  * Infer game system from character data structure
  */
-function inferGameSystem(data: any): {
+/**
+ * A JSON object probed only for the *presence* of nested keys.
+ *
+ * `inferGameSystem` sniffs the shape of a sheet written before game systems
+ * were recorded, and never reads a leaf's value -- so it is the nesting that
+ * needs describing, not the leaf types.
+ */
+interface ShapeProbe {
+  [key: string]: ShapeProbe | undefined;
+}
+
+function inferGameSystem(rawData: unknown): {
   system: GameSystem | null;
   confidence: 'high' | 'medium' | 'low';
   reason: string;
 } {
-  if (!data || typeof data !== 'object') {
+  if (!rawData || typeof rawData !== 'object') {
     return { system: null, confidence: 'low', reason: 'Invalid or empty data' };
   }
+  const data = rawData as ShapeProbe;
 
   // D&D 5e Detection
   // Look for: stats.strength.score, stats.dexterity, proficiencyBonus

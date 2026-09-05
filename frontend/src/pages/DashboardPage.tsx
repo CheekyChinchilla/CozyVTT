@@ -20,6 +20,7 @@ import CampaignCardSkeleton from '@/components/skeletons/CampaignCardSkeleton';
 import type { Campaign, CampaignInvitation } from '@/types';
 import { CampaignRole, PlatformRole } from '@/types';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
@@ -44,7 +45,7 @@ export default function DashboardPage() {
   const loading = campaignsQuery.isPending || charactersQuery.isPending || invitationsQuery.isPending;
   const queryError = campaignsQuery.error || charactersQuery.error || invitationsQuery.error;
   const error = queryError
-    ? ((queryError as any).response?.data?.message || 'Failed to load data')
+    ? (apiErrorMessage(queryError) || 'Failed to load data')
     : '';
 
   // Refresh button + post-invitation-response resync

@@ -33,9 +33,9 @@ export const generateId = (): string => {
  * Initialize data for characters with empty/missing data
  * Handles legacy flexible characters with raw JSON or empty data
  */
-export const initializeFlexibleData = (data: any): FlexibleCharacterData => {
+export const initializeFlexibleData = (data: unknown): FlexibleCharacterData => {
   // Check if data already has sections array
-  if (data && Array.isArray(data.sections)) {
+  if (data && Array.isArray((data as { sections?: unknown }).sections)) {
     return data as FlexibleCharacterData;
   }
 
@@ -56,7 +56,7 @@ export const formatModifier = (modifier: number): string => {
 /**
  * Validate section ID uniqueness
  */
-export const validateUniqueIds = (sections: any[]): boolean => {
+export const validateUniqueIds = (sections: { id: string }[]): boolean => {
   const ids = sections.map((s) => s.id);
   return new Set(ids).size === ids.length;
 };

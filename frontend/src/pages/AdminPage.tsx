@@ -76,6 +76,15 @@ import ThemePicker from '@/components/appearance/ThemePicker';
 import TableSkeleton from '@/components/skeletons/TableSkeleton';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
+
+/** The four colours the appearance form edits. */
+interface AppearanceColors {
+  primary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
 
 // ============================================
 // Helpers
@@ -227,7 +236,11 @@ export default function AdminPage() {
 
   // ---- Appearance ----
   const { refreshAppearance } = useTheme();
-  const [appearanceForm, setAppearanceForm] = useState({
+  const [appearanceForm, setAppearanceForm] = useState<{
+    themeId: string;
+    fontId: string;
+    customColors: AppearanceColors;
+  }>({
     themeId: 'cozy-default',
     fontId: 'default',
     customColors: {
@@ -412,7 +425,7 @@ export default function AdminPage() {
       setAppearanceForm({
         themeId: settings.themeId || 'cozy-default',
         fontId: settings.fontId || 'default',
-        customColors: settings.customThemeColors as any || {
+        customColors: (settings.customThemeColors as AppearanceColors | null) || {
           primary: '#4A5D4E',
           accent: '#D4A574',
           background: '#FFF9E6',
@@ -468,7 +481,7 @@ export default function AdminPage() {
       // Revert on error
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, templateEditor: !next } : x));
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to update permission', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to update permission', 'error');
     } finally {
       setTogglingTemplateEditor(null);
     }
@@ -487,7 +500,7 @@ export default function AdminPage() {
       // Revert on error
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, globalAssetManager: !next } : x));
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to update permission', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to update permission', 'error');
     } finally {
       setTogglingGlobalAssets(null);
     }
@@ -504,7 +517,7 @@ export default function AdminPage() {
       showToast(`Role updated to ${newRole}`, 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to change role', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to change role', 'error');
     } finally {
       setRoleChangingId(null);
     }
@@ -519,7 +532,7 @@ export default function AdminPage() {
       setTempPassword(pwd);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setResetError(e.response?.data?.message ?? 'Failed to reset password');
+      setResetError(apiErrorMessage(e) ?? 'Failed to reset password');
     } finally {
       setIsResetting(false);
     }
@@ -534,7 +547,7 @@ export default function AdminPage() {
       setResetLinkSent(true);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setResetLinkError(e.response?.data?.message ?? 'Failed to send reset link');
+      setResetLinkError(apiErrorMessage(e) ?? 'Failed to send reset link');
     } finally {
       setIsSendingResetLink(false);
     }
@@ -553,7 +566,7 @@ export default function AdminPage() {
       showToast(`User "${deletedName}" deleted`, 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setDeleteError(e.response?.data?.message ?? 'Failed to delete user');
+      setDeleteError(apiErrorMessage(e) ?? 'Failed to delete user');
     } finally {
       setIsDeleting(false);
     }
@@ -632,7 +645,7 @@ export default function AdminPage() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setCreateUserError(
-        e.response?.data?.message ??
+        apiErrorMessage(e) ??
           (createUserMode === 'invite' ? 'Failed to send invitation' : 'Failed to create user')
       );
     } finally {
@@ -650,7 +663,7 @@ export default function AdminPage() {
       const e = err as { response?: { data?: { message?: string } } };
       setResendInviteResult({
         id: userId,
-        message: e.response?.data?.message ?? 'Failed to resend invitation',
+        message: apiErrorMessage(e) ?? 'Failed to resend invitation',
       });
     } finally {
       setResendingInviteId(null);
@@ -675,7 +688,7 @@ export default function AdminPage() {
       setResetMfaConfirmId(null);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setResetMfaError(e.response?.data?.message ?? 'Failed to reset MFA');
+      setResetMfaError(apiErrorMessage(e) ?? 'Failed to reset MFA');
     } finally {
       setIsResettingMfa(false);
     }
@@ -689,7 +702,7 @@ export default function AdminPage() {
       showToast('User approved!', 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to approve user', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to approve user', 'error');
     } finally {
       setApprovingUserId(null);
     }
@@ -723,7 +736,7 @@ export default function AdminPage() {
       setAdminAssetsTotal(prev => prev - 1);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to delete asset', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to delete asset', 'error');
     } finally {
       setAssetDeleting(null);
     }
@@ -741,7 +754,7 @@ export default function AdminPage() {
       setSmtpTestResult({ ok: true, message });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setSmtpTestResult({ ok: false, message: e.response?.data?.message ?? 'Test failed' });
+      setSmtpTestResult({ ok: false, message: apiErrorMessage(e) ?? 'Test failed' });
     } finally {
       setSmtpTesting(false);
     }
@@ -759,7 +772,7 @@ export default function AdminPage() {
       setBackups(prev => [backup, ...prev]);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setBackupCreateError(e.response?.data?.message ?? 'Failed to create backup');
+      setBackupCreateError(apiErrorMessage(e) ?? 'Failed to create backup');
     } finally {
       setCreatingBackup(false);
     }
@@ -772,7 +785,7 @@ export default function AdminPage() {
       setBackups(prev => prev.filter(b => b.filename !== filename));
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      showToast(e.response?.data?.message ?? 'Failed to delete backup', 'error');
+      showToast(apiErrorMessage(e) ?? 'Failed to delete backup', 'error');
     } finally {
       setDeletingBackupFile(null);
     }
@@ -794,7 +807,7 @@ export default function AdminPage() {
       setRestoreFile(null);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setRestoreError(e.response?.data?.message ?? 'Restore failed. Check server logs for details.');
+      setRestoreError(apiErrorMessage(e) ?? 'Restore failed. Check server logs for details.');
     } finally {
       setRestoring(false);
     }
@@ -813,7 +826,7 @@ export default function AdminPage() {
       showToast('Settings saved!', 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setSettingsError(e.response?.data?.message ?? 'Failed to save settings');
+      setSettingsError(apiErrorMessage(e) ?? 'Failed to save settings');
     } finally {
       setSettingsSaving(false);
     }
@@ -2137,7 +2150,7 @@ export default function AdminPage() {
                     setAppearanceSaving(true);
                     setAppearanceError('');
                     try {
-                    const updateData: Record<string, any> = {
+                    const updateData: Record<string, unknown> = {
                     themeId: appearanceForm.themeId,
                     fontId: appearanceForm.fontId,
                     };
@@ -2147,8 +2160,8 @@ export default function AdminPage() {
                     await adminService.updateSettings(updateData);
                     await refreshAppearance();
                     showToast('Appearance saved!', 'success');
-                    } catch (err: any) {
-                    setAppearanceError(err.response?.data?.message || 'Failed to save appearance');
+                    } catch (err: unknown) {
+                    setAppearanceError(apiErrorMessage(err) || 'Failed to save appearance');
                     } finally {
                     setAppearanceSaving(false);
                     }

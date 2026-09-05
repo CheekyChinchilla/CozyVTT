@@ -635,7 +635,31 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 **Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage.
 
+### Via the included scripts
+
+Run these from the folder you installed CozyVTT into, with the stack running:
+
+```bash
+# Create a backup — written to ./backups/cozyvtt_YYYYMMDD_HHMMSS.sql.gz
+./backend/scripts/backup.sh
+
+# Restore one (this REPLACES the current database — it asks you to confirm)
+./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+```
+
+Both notice that you are running under Docker and do the work inside the
+database container, so you do **not** need PostgreSQL installed on the host.
+Backups older than 30 days are pruned; set `BACKUP_RETAIN_DAYS` to change that.
+
+If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
+
+```bash
+DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
+```
+
 ### Via Command Line
+
+The same thing by hand, if you would rather not use the scripts:
 
 ```bash
 # Create a backup
@@ -781,6 +805,26 @@ docker compose logs backend | grep -i migrat
 
 Database migrations run automatically via `prisma migrate deploy` on every startup. Downtime is typically under 30 seconds while containers restart.
 
+> **Back up before you upgrade.** See [Database Backups](#database-backups) — one `pg_dump` command, and back up `backend/uploads/` alongside it.
+
+### One-off data migration for this release
+
+If you have **Pathfinder 2e** characters made from the built-in templates, run
+this once after upgrading so their strikes and class features appear on the
+sheet. It also tidies up D&D 5e sheets, whose features already display without
+it.
+
+```bash
+# See what would change, without writing anything
+docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+
+# Apply
+docker compose exec backend npm run migrate:sheet-fields
+```
+
+Running it twice is harmless. Details in
+[backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).
+
 ### Without Docker
 
 ```bash
@@ -808,7 +852,7 @@ Before going live:
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
-- [ ] **Registration** — `allowRegistration` is **off** for private instances (configure in **Admin → Settings** after setup)
+- [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
 - [ ] **Admin MFA** — Admin account has MFA enabled
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
@@ -930,7 +974,7 @@ Keep the spec in the repo and reference it from a separate docs site (e.g. `cozy
 Whichever option you pick, do **not** rely on hiding the spec as a security measure. Real protection comes from:
 
 - Per-endpoint authentication and RBAC checks (built in — see `backend/src/middleware/`)
-- Rate limiting (auth 5/15min, uploads 30/min, general API 300/min)
+- Rate limiting (sign-in 5 failures/15min, new accounts 10/hour, uploads 30/min, general API 300/min)
 - Magic-byte file validation (not MIME header)
 - Strong session secrets and Argon2id password hashing
 - Helmet.js CSP headers in production

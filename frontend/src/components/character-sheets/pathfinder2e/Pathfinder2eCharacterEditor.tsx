@@ -5,7 +5,7 @@
  * auto-calculation, validation, color customization, and token upload.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Target,
   Swords,
@@ -23,15 +23,92 @@ import {
 import { ProficiencyRank, calculateProficiencyBonus } from './components/ProficiencyIndicator';
 import { api } from '../../../services/api';
 import { AssetType } from '../../../types';
+import type { Character, CharacterData } from '../../../types';
+import type {
+  PF2eCharacterData,
+  PF2eInventoryItem,
+  PF2eSkills,
+  PF2eSpellcasting,
+  PF2eCantrip,
+  PF2eAttributes,
+  PF2eSavingThrows,
+  PF2ePerception,
+  PF2eArmorClass,
+  PF2eInitiative,
+  PF2eClassDC,
+  PF2eHitPoints,
+  PF2eFeats,
+  PF2eFeat,
+  PF2eSpellSlots,
+  PF2eAppearance,
+  PF2ePersonality,
+  SheetChrome,
+} from '../../../types/game-systems';
+import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
+import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
+import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
+
+/**
+ * The sheet as this editor holds it.
+ *
+ * `PF2eCharacterData` plus `themeColor`, the header colour chosen in the
+ * editor. It is not part of the game system, but it is saved with the sheet:
+ * `PUT /characters/:id` validates the body and stores it as sent, rather than
+ * storing Zod's parsed output, so a key the schema does not declare survives.
+ */
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'>, SheetChrome {
+  spellcasting?: PF2eEditorSpellcasting | null;
+  feats?: Record<keyof PF2eFeats, PF2eEditorFeat[]>;
+}
+
+/**
+ * Spellcasting as this editor manipulates it, which is not what the shared type
+ * or the backend schema declare.
+ *
+ * `cantrips` is widened because the rendering reads `cantrip.name || cantrip`,
+ * tolerating a bare string. The schema wants objects, so that defence only ever
+ * mattered for sheets written before the shape settled.
+ */
+interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips' | 'slots'> {
+  /**
+   * Objects only. A stored ritual may be a bare name — that is all the schema
+   * allowed until recently — so the initializer below normalises one into
+   * `{ name, rank: 1 }` and the rest of the editor works with a single shape.
+   * The name survives, so the upgrade costs nothing.
+   */
+  rituals?: { name: string; rank: number }[];
+  cantrips?: (PF2eCantrip | string)[];
+  /**
+   * TODO(typing) — `used` vs `expended`. The slot boxes read and write `used`,
+   * but both the shared type and the schema call the field `expended`. On a
+   * character made from the blank template the save still succeeds, because
+   * the template seeds all ten ranks with `{ total, expended }` and `used`
+   * rides along as an extra key — but nothing else ever reads it, and
+   * `expended` stays at whatever it was. Verified against the validator.
+   */
+  slots?: Partial<Record<keyof PF2eSpellSlots, { total: number; expended?: number; used?: number }>>;
+}
+
+/**
+ * A feat as the editor edits it.
+ *
+ * `description` is not declared by the shared type or by the backend schema.
+ * It survives a save regardless: an undeclared key is stripped by Zod's parse,
+ * but the route stores the body as sent rather than the parsed output. Verified
+ * against the validator — a feat carrying one is accepted.
+ */
+interface PF2eEditorFeat extends PF2eFeat {
+  description?: string;
+}
 
 interface Pathfinder2eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
-  character: any;
-  onSave: (data: any, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
+  character: Character;
+  onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -77,7 +154,7 @@ const shouldUseWhiteText = (hexColor: string): boolean => {
   return luminance < 0.5;
 };
 
-const calculateTotalBulk = (inventory: any[]): number => {
+const calculateTotalBulk = (inventory: PF2eInventoryItem[]): number => {
   return inventory.reduce((total, item) => {
     let itemBulk = 0;
     if (typeof item.bulk === 'number') itemBulk = item.bulk;
@@ -99,9 +176,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { data: serverConfig } = useServerConfigQuery();
 
-  const data = character.data as any;
+  const data = character.data as PF2eFormData;
 
-  const [formData, setFormData] = useState<any>(() => ({
+  const [formData, setFormData] = useState<PF2eFormData>(() => ({
     ...data,
     attributes: data.attributes || {
       strength: { score: 10, modifier: 0 },
@@ -167,15 +244,34 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       spells: data.spellcasting.spells || [],
       focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
       innateSpells: data.spellcasting.innateSpells || [],
-      rituals: data.spellcasting.rituals || [],
+      rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
+        typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
     } : null,
-    appearance: data.appearance || {},
-    personality: data.personality || {},
+    // TODO(typing): `{}` has none of the keys these types require, and the
+    // inputs below read straight off them. Pre-existing; cast so the
+    // behaviour for a sheet stored without one is exactly what it was.
+    appearance: (data.appearance || {}) as PF2eAppearance,
+    personality: (data.personality || {}) as PF2ePersonality,
     backstory: data.backstory || '',
     alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
     notes: data.notes || '',
     treasure: data.treasure || '',
   }));
+
+  /**
+   * Class features as editable rows, whatever shape the sheet holds them in.
+   *
+   * Sheets saved before features gained descriptions hold plain names, and the
+   * built-in Fighter kept "Attack of Opportunity" and "Shield Block" — with
+   * their rules text — in a field nothing read. Both are read here.
+   */
+  const classFeatureRows = useMemo(
+    // For editing, so a row added and not yet named survives to be typed into —
+    // the storage reader drops nameless entries, which made "Add Feature"
+    // look like it did nothing. Blanks are dropped on save.
+    () => readFeatureEntriesForEditing(formData.classFeatures),
+    [formData.classFeatures]
+  );
 
   // Report the first edit up to whoever is hosting this sheet, so leaving with
   // unsaved work can be caught. One effect on the whole form rather than a call
@@ -256,7 +352,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     const updatedAttributes = { ...formData.attributes };
     let changed = false;
-    ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].forEach((ability) => {
+    (['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).forEach((ability) => {
       const score = updatedAttributes[ability]?.score || 10;
       const newModifier = calculateModifier(score);
       if (updatedAttributes[ability]?.modifier !== newModifier) {
@@ -265,7 +361,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       }
     });
     if (changed) {
-      setFormData((prev: any) => ({ ...prev, attributes: updatedAttributes }));
+      setFormData((prev) => ({ ...prev, attributes: updatedAttributes }));
     }
   }, [
     formData.attributes?.strength?.score,
@@ -280,9 +376,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.savingThrows || !formData.level) return;
     const updatedSavingThrows = { ...formData.savingThrows };
-    const saveAttributes = { fortitude: 'constitution', reflex: 'dexterity', will: 'wisdom' };
+    const saveAttributes: Record<keyof PF2eSavingThrows, keyof PF2eAttributes> = { fortitude: 'constitution', reflex: 'dexterity', will: 'wisdom' };
     let hasChanges = false;
-    Object.entries(saveAttributes).forEach(([save, attribute]) => {
+    (Object.entries(saveAttributes) as [keyof PF2eSavingThrows, keyof PF2eAttributes][]).forEach(([save, attribute]) => {
       const abilityMod = formData.attributes[attribute]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSavingThrows[save]?.proficiencyRank || 'untrained');
       const itemBonus = updatedSavingThrows[save]?.itemBonus || 0;
@@ -293,7 +389,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       }
     });
     if (hasChanges) {
-      setFormData((prev: any) => ({ ...prev, savingThrows: updatedSavingThrows }));
+      setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
     }
   }, [formData.level, formData.attributes?.constitution?.modifier, formData.attributes?.dexterity?.modifier, formData.attributes?.wisdom?.modifier, formData.savingThrows?.fortitude?.proficiencyRank, formData.savingThrows?.fortitude?.itemBonus, formData.savingThrows?.reflex?.proficiencyRank, formData.savingThrows?.reflex?.itemBonus, formData.savingThrows?.will?.proficiencyRank, formData.savingThrows?.will?.itemBonus]);
 
@@ -301,9 +397,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.perception || !formData.level) return;
     const wisdomMod = formData.attributes.wisdom?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.perception.proficiencyRank || 'untrained');
+    const profBonus = calculateProficiencyBonus(formData.level, formData.perception!.proficiencyRank || 'untrained');
     const itemBonus = formData.perception.itemBonus || 0;
-    setFormData((prev: any) => ({ ...prev, perception: { ...prev.perception, bonus: wisdomMod + profBonus + itemBonus } }));
+    setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus: wisdomMod + profBonus + itemBonus } as PF2ePerception }));
   }, [formData.level, formData.attributes?.wisdom?.modifier, formData.perception?.proficiencyRank, formData.perception?.itemBonus]);
 
   // Auto-calculate skills
@@ -311,10 +407,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.attributes || !formData.skills || !formData.level) return;
     const updatedSkills = { ...formData.skills };
     let hasChanges = false;
-    Object.keys(updatedSkills).forEach((skill) => {
+    (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
       const attribute = updatedSkills[skill].attribute;
-      const abilityMod = formData.attributes[attribute]?.modifier || 0;
+      const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
       const itemBonus = updatedSkills[skill].itemBonus || 0;
       const armorPenalty = updatedSkills[skill].armorPenalty || 0;
@@ -325,7 +421,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       }
     });
     if (hasChanges) {
-      setFormData((prev: any) => ({ ...prev, skills: updatedSkills }));
+      setFormData((prev) => ({ ...prev, skills: updatedSkills }));
     }
   }, [
     formData.level,
@@ -389,8 +485,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.loreSkills || !formData.level) return;
     let hasChanges = false;
-    const updatedLoreSkills = formData.loreSkills.map((lore: any) => {
-      const abilityMod = formData.attributes[lore.attribute]?.modifier || 0;
+    const updatedLoreSkills = formData.loreSkills.map((lore) => {
+      const abilityMod = formData.attributes[lore.attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, lore.proficiencyRank || 'untrained');
       const itemBonus = lore.itemBonus || 0;
       const newBonus = abilityMod + profBonus + itemBonus;
@@ -400,7 +496,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       return { ...lore, bonus: newBonus };
     });
     if (hasChanges) {
-      setFormData((prev: any) => ({ ...prev, loreSkills: updatedLoreSkills }));
+      setFormData((prev) => ({ ...prev, loreSkills: updatedLoreSkills }));
     }
   }, [
     formData.level,
@@ -413,19 +509,17 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     // Can't easily depend on specific lore skill properties since they're dynamic
     // but the hasChanges check prevents infinite loops
     formData.loreSkills?.length,
-    JSON.stringify(formData.loreSkills?.map((l: any) => ({ proficiencyRank: l.proficiencyRank, itemBonus: l.itemBonus, attribute: l.attribute }))),
+    JSON.stringify(formData.loreSkills?.map((l) => ({ proficiencyRank: l.proficiencyRank, itemBonus: l.itemBonus, attribute: l.attribute }))),
   ]);
 
   // Auto-calculate AC
   useEffect(() => {
     if (!formData.attributes || !formData.armorClass || !formData.level) return;
-    const dexMod = formData.attributes.dexterity?.modifier || 0;
-    const capDex = formData.armorClass.capDex;
-    const effectiveDexMod = capDex !== null && capDex !== undefined ? Math.min(dexMod, capDex) : dexMod;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.armorClass.proficiencyRank || 'untrained');
-    const itemBonus = formData.armorClass.itemBonus || 0;
-    const total = 10 + effectiveDexMod + profBonus + itemBonus;
-    setFormData((prev: any) => ({ ...prev, armorClass: { ...prev.armorClass, total } }));
+    // Shared with the read-only sheet, so the two cannot disagree about a
+    // character's AC — which is how the built-in Fighter came to show 18 where
+    // its own stored components give 17.
+    const total = pf2eArmorClass(formData);
+    setFormData((prev) => ({ ...prev, armorClass: { ...prev.armorClass, total } as PF2eArmorClass }));
   }, [formData.level, formData.attributes?.dexterity?.modifier, formData.armorClass?.proficiencyRank, formData.armorClass?.itemBonus, formData.armorClass?.capDex]);
 
   /**
@@ -444,7 +538,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.initiative) return;
     const bonus = pf2eInitiativeBonus(formData);
     if (formData.initiative.bonus !== bonus) {
-      setFormData((prev: any) => ({ ...prev, initiative: { ...prev.initiative, bonus } }));
+      setFormData((prev) => ({ ...prev, initiative: { ...prev.initiative, bonus } as PF2eInitiative }));
     }
   }, [
     formData.initiative?.usedStat,
@@ -459,12 +553,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate Class DC
   useEffect(() => {
     if (!formData.attributes || !formData.classDC || !formData.level) return;
-    const keyAttr = formData.classDC.keyAttribute || 'intelligence';
-    const attrMod = formData.attributes[keyAttr]?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.classDC.proficiencyRank || 'untrained');
-    const total = 10 + attrMod + profBonus;
+    const total = pf2eClassDC(formData);
     if (formData.classDC.total !== total) {
-      setFormData((prev: any) => ({ ...prev, classDC: { ...prev.classDC, total } }));
+      setFormData((prev) => ({ ...prev, classDC: { ...prev.classDC, total } as PF2eClassDC }));
     }
   }, [
     formData.level,
@@ -483,7 +574,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.inventory) return;
     const currentBulk = calculateTotalBulk(formData.inventory);
     const strMod = formData.attributes?.strength?.modifier || 0;
-    setFormData((prev: any) => ({ ...prev, bulk: { current: currentBulk, encumbered: 5 + strMod, maximum: 10 + strMod } }));
+    setFormData((prev) => ({ ...prev, bulk: { current: currentBulk, encumbered: 5 + strMod, maximum: 10 + strMod } }));
   }, [formData.inventory, formData.attributes?.strength?.modifier]);
 
   // Auto-calculate maximum HP
@@ -493,26 +584,26 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     const classHpPerLevel = formData.hp.classHpPerLevel || 6;
     const conMod = formData.attributes?.constitution?.modifier || 0;
     const maximum = ancestryHp + (classHpPerLevel * formData.level) + (conMod * formData.level);
-    setFormData((prev: any) => ({ ...prev, hp: { ...prev.hp, maximum } }));
+    setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 
   // Auto-calculate spellcasting
   useEffect(() => {
     if (!formData.spellcasting || !formData.attributes || !formData.level) return;
-    const keyAttr = formData.spellcasting.keyAttribute || 'intelligence';
-    const attrMod = formData.attributes[keyAttr]?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.spellcasting.spellAttackBonus?.proficiencyRank || 'untrained');
-    const itemBonus = formData.spellcasting.spellAttackBonus?.itemBonus || 0;
+    const keyAttr = formData.spellcasting!.keyAttribute || 'intelligence';
+    const attrMod = formData.attributes[keyAttr as keyof PF2eAttributes]?.modifier || 0;
+    const profBonus = calculateProficiencyBonus(formData.level, formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained');
+    const itemBonus = formData.spellcasting!.spellAttackBonus?.itemBonus || 0;
     const newBonus = attrMod + profBonus + itemBonus;
     const newDC = 10 + attrMod + profBonus + itemBonus;
-    if (formData.spellcasting.spellAttackBonus?.bonus !== newBonus || formData.spellcasting.spellDC?.dc !== newDC) {
-      setFormData((prev: any) => ({
+    if (formData.spellcasting!.spellAttackBonus?.bonus !== newBonus || formData.spellcasting!.spellDC?.dc !== newDC) {
+      setFormData((prev) => ({
         ...prev,
         spellcasting: {
           ...prev.spellcasting,
-          spellAttackBonus: { ...prev.spellcasting.spellAttackBonus, bonus: newBonus },
-          spellDC: { ...prev.spellcasting.spellDC, dc: newDC },
-        },
+          spellAttackBonus: { ...prev.spellcasting!.spellAttackBonus, bonus: newBonus },
+          spellDC: { ...prev.spellcasting!.spellDC, dc: newDC },
+        } as PF2eEditorSpellcasting,
       }));
     }
   }, [
@@ -548,23 +639,32 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     }
   };
 
-  const updateField = (path: string, value: any) => {
-    setFormData((prev: any) => {
-      const newData = { ...prev };
+  /**
+   * Set a value at a dotted path, cloning each level on the way down.
+   *
+   * The walk is untyped on purpose: the path is a runtime string, so no type
+   * can describe what it lands on. The `Record<string, unknown>` view says
+   * exactly that, rather than `any`, which would also have silenced the
+   * *call sites*.
+   */
+  const updateField = (path: string, value: unknown) => {
+    setFormData((prev) => {
+      const newData = { ...prev } as unknown as Record<string, unknown>;
       const keys = path.split('.');
       let current = newData;
       for (let i = 0; i < keys.length - 1; i++) {
-        if (Array.isArray(current[keys[i]])) {
-          current[keys[i]] = [...current[keys[i]]];
-        } else if (typeof current[keys[i]] === 'object' && current[keys[i]] !== null) {
-          current[keys[i]] = { ...current[keys[i]] };
+        const branch = current[keys[i]];
+        if (Array.isArray(branch)) {
+          current[keys[i]] = [...branch];
+        } else if (typeof branch === 'object' && branch !== null) {
+          current[keys[i]] = { ...(branch as Record<string, unknown>) };
         } else {
           current[keys[i]] = {};
         }
-        current = current[keys[i]];
+        current = current[keys[i]] as Record<string, unknown>;
       }
       current[keys[keys.length - 1]] = value;
-      return newData;
+      return newData as unknown as PF2eFormData;
     });
   };
 
@@ -594,7 +694,16 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!validateForm()) return;
     setIsSaving(true);
     try {
-      const updatedData = { ...formData, themeColor: isCustomColor ? customColorHex : selectedColor.name };
+      // Cast at the boundary: the sheet is saved exactly as the editor holds
+      // it, which includes the fields `PF2eCharacterData` does not declare —
+      // see PF2eFormData above for which those are and why they survive.
+      const updatedData = {
+        ...formData,
+        // Drop class-feature rows left blank. The editor keeps them while you
+        // type; storage should not.
+        classFeatures: readFeatureEntries(formData.classFeatures),
+        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+      } as CharacterData;
 
       // Upload token image if a new one was selected
       let newTokenImageUrl: string | undefined = undefined;
@@ -617,9 +726,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
 
           // Store the new token URL to pass separately to onSave
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
-        } catch (uploadError: any) {
+        } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: uploadError.response?.data?.message || 'Failed to upload token image' });
+          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
           setIsSaving(false);
           return;
         }
@@ -752,6 +861,11 @@ min={1} max={20} value={formData.level} onChange={(v: number) => updateField('le
                 <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
                 <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} placeholder="Heritage" className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
                 <input type="text" value={formData.background || ''} onChange={(e) => updateField('background', e.target.value)} placeholder="Background" className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
+                {/* Deity and alignment are part of the sheet the schema
+                    describes, and matter for a cleric, champion or oracle, but
+                    had no field anywhere in the app until now. */}
+                <input type="text" value={formData.deity || ''} onChange={(e) => updateField('deity', e.target.value)} placeholder="Deity" className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
+                <input type="text" value={formData.alignment || ''} onChange={(e) => updateField('alignment', e.target.value)} placeholder="Alignment" className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
               </div>
             </div>
           </div>
@@ -790,7 +904,7 @@ min={0} max={3} value={formData.heroPoints} onChange={(v: number) => updateField
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-4">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-          {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((ability) => {
+          {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const abilityData = formData.attributes?.[ability] || { score: 10, modifier: 0 };
             return (
               <div key={ability} className="flex flex-col items-center">
@@ -810,7 +924,7 @@ min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Saving Throws</h3>
         <div className="space-y-3">
-          {['fortitude', 'reflex', 'will'].map((save) => {
+          {(['fortitude', 'reflex', 'will'] as const).map((save) => {
             const saveData = formData.savingThrows?.[save] || { proficiencyRank: 'untrained', bonus: 0, itemBonus: 0 };
             return (
               <div key={save} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-3">
@@ -854,8 +968,8 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {Object.keys(formData.skills).map((skillName) => {
-            const skillData = formData.skills[skillName];
+          {(Object.keys(formData.skills ?? {}) as (keyof PF2eSkills)[]).map((skillName) => {
+            const skillData = formData.skills![skillName];
             const displayName = skillName.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
             return (
               <div key={skillName} className="bg-white border border-stone-200 rounded-lg p-2">
@@ -886,11 +1000,11 @@ value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${sk
           </button>
         </div>
         <div className="space-y-2">
-          {(formData.loreSkills || []).map((lore: any, index: number) => (
+          {(formData.loreSkills || []).map((lore, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
               <div className="flex items-center justify-between mb-2">
                 <input type="text" value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newLoreSkills = formData.loreSkills.filter((_: any, i: number) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold">
+                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -940,7 +1054,7 @@ value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('arm
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-32">Key Attribute:</label>
               <select value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((attr) => (
+                {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
               </select>
@@ -1064,7 +1178,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-bold text-stone-800 mb-3">Weapon Proficiencies</h3>
           <div className="space-y-2">
-            {['simple', 'martial', 'advanced', 'unarmed'].map((weapon) => (
+            {(['simple', 'martial', 'advanced', 'unarmed'] as const).map((weapon) => (
               <div key={weapon} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-stone-800 capitalize">{weapon}</span>
                 {renderProficiencySelector(`proficiencies.weapons.${weapon}`, formData.proficiencies?.weapons?.[weapon] as ProficiencyRank || 'untrained')}
@@ -1076,7 +1190,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-bold text-stone-800 mb-3">Armor Proficiencies</h3>
           <div className="space-y-2">
-            {['unarmored', 'light', 'medium', 'heavy'].map((armor) => (
+            {(['unarmored', 'light', 'medium', 'heavy'] as const).map((armor) => (
               <div key={armor} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-stone-800 capitalize">{armor}</span>
                 {renderProficiencySelector(`proficiencies.armor.${armor}`, formData.proficiencies?.armor?.[armor] as ProficiencyRank || 'untrained')}
@@ -1096,11 +1210,11 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
           </button>
         </div>
         <div className="space-y-3">
-          {(formData.strikes || []).map((strike: any, index: number) => (
+          {(formData.strikes || []).map((strike, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <input type="text" value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newStrikes = formData.strikes.filter((_: any, i: number) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1148,7 +1262,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Tradition</label>
-              <select value={formData.spellcasting.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {['arcane', 'divine', 'primal', 'occult'].map((t) => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
@@ -1156,14 +1270,14 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
             </div>
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Type</label>
-              <select value={formData.spellcasting.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select value={formData.spellcasting!.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="prepared">Prepared</option>
                 <option value="spontaneous">Spontaneous</option>
               </select>
             </div>
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Key Attribute</label>
-              <select value={formData.spellcasting.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select value={formData.spellcasting!.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {['intelligence', 'wisdom', 'charisma'].map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
@@ -1177,15 +1291,15 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Attack</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellAttackBonus.proficiencyRank', formData.spellcasting.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained')}
+              {renderProficiencySelector('spellcasting.spellAttackBonus.proficiencyRank', formData.spellcasting!.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-value={formData.spellcasting.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total Attack</div>
-                <div className="text-4xl font-bold text-purple-800">{formatModifier(formData.spellcasting.spellAttackBonus?.bonus || 0)}</div>
+                <div className="text-4xl font-bold text-purple-800">{formatModifier(formData.spellcasting!.spellAttackBonus?.bonus || 0)}</div>
               </div>
             </div>
           </div>
@@ -1193,15 +1307,15 @@ value={formData.spellcasting.spellAttackBonus?.itemBonus} onChange={(v: number) 
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell DC</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellDC.proficiencyRank', formData.spellcasting.spellDC?.proficiencyRank as ProficiencyRank || 'untrained')}
+              {renderProficiencySelector('spellcasting.spellDC.proficiencyRank', formData.spellcasting!.spellDC?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-value={formData.spellcasting.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total DC</div>
-                <div className="text-4xl font-bold text-purple-800">{formData.spellcasting.spellDC?.dc || 10}</div>
+                <div className="text-4xl font-bold text-purple-800">{formData.spellcasting!.spellDC?.dc || 10}</div>
               </div>
             </div>
           </div>
@@ -1211,21 +1325,21 @@ value={formData.spellcasting.spellDC?.itemBonus} onChange={(v: number) => update
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Cantrips</h3>
-            <button onClick={() => { const newCantrips = [...(formData.spellcasting.cantrips || []), { name: 'New Cantrip', tradition: formData.spellcasting.tradition }]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), { name: 'New Cantrip', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Cantrip</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.spellcasting.cantrips || []).map((cantrip: any, index: number) => (
+            {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={cantrip.name || cantrip} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newCantrips = formData.spellcasting.cantrips.filter((_: any, i: number) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <input type="text" value={typeof cantrip === 'string' ? cantrip : cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
-            {(!formData.spellcasting.cantrips || formData.spellcasting.cantrips.length === 0) && (
+            {(!formData.spellcasting!.cantrips || formData.spellcasting!.cantrips.length === 0) && (
               <div className="text-sm text-stone-500 italic text-center py-4">No cantrips added yet</div>
             )}
           </div>
@@ -1236,7 +1350,7 @@ value={formData.spellcasting.spellDC?.itemBonus} onChange={(v: number) => update
           <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Slots (Rank 1-10)</h3>
           <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const slots = formData.spellcasting.slots?.[rank] || { total: 0, used: 0 };
+              const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] || { total: 0, used: 0 };
               return (
                 <div key={rank} className="bg-white border border-stone-200 rounded-lg p-2">
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
@@ -1255,18 +1369,18 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
         {/* Spells Known/Prepared */}
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
-            <button onClick={() => { const newSpells = [...(formData.spellcasting.spells || []), { name: 'New Spell', rank: 1, tradition: formData.spellcasting.tradition, prepared: formData.spellcasting.type === 'prepared' }]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
+            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), { name: 'New Spell', rank: 1, tradition: formData.spellcasting!.tradition, prepared: formData.spellcasting!.type === 'prepared' }]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Spell</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.spellcasting.spells || []).map((spell: any, index: number) => (
+            {(formData.spellcasting!.spells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newSpells = formData.spellcasting.spells.filter((_: any, i: number) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1276,7 +1390,7 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
                       <option key={r} value={r}>Rank {r}</option>
                     ))}
                   </select>
-                  {formData.spellcasting.type === 'prepared' && (
+                  {formData.spellcasting!.type === 'prepared' && (
                     <label className="flex items-center text-sm">
                       <input type="checkbox" checked={spell.prepared || false} onChange={(e) => updateField(`spellcasting.spells.${index}.prepared`, e.target.checked)} className="mr-1" />
                       Prepared
@@ -1285,7 +1399,7 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
                 </div>
               </div>
             ))}
-            {(!formData.spellcasting.spells || formData.spellcasting.spells.length === 0) && (
+            {(!formData.spellcasting!.spells || formData.spellcasting!.spells.length === 0) && (
               <div className="text-sm text-stone-500 italic text-center py-4">No spells added yet</div>
             )}
           </div>
@@ -1299,25 +1413,25 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
               <div className="flex items-center space-x-2">
                 <label className="text-sm font-semibold text-stone-700">Focus Points:</label>
                 <NumberField
-min={0} max={3} value={formData.spellcasting.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" fallback={0} />
+min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" fallback={0} />
                 <span className="text-sm text-stone-600">/ 3</span>
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting.focusSpells?.spells || []), { name: 'New Focus Spell', tradition: formData.spellcasting.tradition }]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), { name: 'New Focus Spell', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>
             </div>
           </div>
           <div className="space-y-2">
-            {(formData.spellcasting.focusSpells?.spells || []).map((spell: any, index: number) => (
+            {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
                 <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newFocusSpells = formData.spellcasting.focusSpells.spells.filter((_: any, i: number) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newFocusSpells = formData.spellcasting!.focusSpells.spells.filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
-            {(!formData.spellcasting.focusSpells?.spells || formData.spellcasting.focusSpells.spells.length === 0) && (
+            {(!formData.spellcasting!.focusSpells?.spells || formData.spellcasting!.focusSpells.spells.length === 0) && (
               <div className="text-sm text-stone-500 italic text-center py-4">No focus spells added yet</div>
             )}
           </div>
@@ -1327,24 +1441,24 @@ min={0} max={3} value={formData.spellcasting.focusSpells?.focusPoints?.current} 
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Innate Spells</h3>
-            <button onClick={() => { const newInnateSpells = [...(formData.spellcasting.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Innate Spell</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.spellcasting.innateSpells || []).map((spell: any, index: number) => (
+            {(formData.spellcasting!.innateSpells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newInnateSpells = formData.spellcasting.innateSpells.filter((_: any, i: number) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newInnateSpells = formData.spellcasting!.innateSpells.filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <input type="text" value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
               </div>
             ))}
-            {(!formData.spellcasting.innateSpells || formData.spellcasting.innateSpells.length === 0) && (
+            {(!formData.spellcasting!.innateSpells || formData.spellcasting!.innateSpells.length === 0) && (
               <div className="text-sm text-stone-500 italic text-center py-4">No innate spells added yet</div>
             )}
           </div>
@@ -1354,13 +1468,13 @@ min={0} max={3} value={formData.spellcasting.focusSpells?.focusPoints?.current} 
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Rituals</h3>
-            <button onClick={() => { const newRituals = [...(formData.spellcasting.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Ritual</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.spellcasting.rituals || []).map((ritual: any, index: number) => (
+            {(formData.spellcasting!.rituals || []).map((ritual, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
                 <input type="text" value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 <select value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
@@ -1368,12 +1482,12 @@ min={0} max={3} value={formData.spellcasting.focusSpells?.focusPoints?.current} 
                     <option key={r} value={r}>Rank {r}</option>
                   ))}
                 </select>
-                <button onClick={() => { const newRituals = formData.spellcasting.rituals.filter((_: any, i: number) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
-            {(!formData.spellcasting.rituals || formData.spellcasting.rituals.length === 0) && (
+            {(!formData.spellcasting!.rituals || formData.spellcasting!.rituals.length === 0) && (
               <div className="text-sm text-stone-500 italic text-center py-4">No rituals added yet</div>
             )}
           </div>
@@ -1388,7 +1502,7 @@ min={0} max={3} value={formData.spellcasting.focusSpells?.focusPoints?.current} 
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Currency</h3>
         <div className="grid grid-cols-4 gap-4">
-          {[{ key: 'pp', label: 'Platinum' }, { key: 'gp', label: 'Gold' }, { key: 'sp', label: 'Silver' }, { key: 'cp', label: 'Copper' }].map((currency) => (
+          {([{ key: 'pp', label: 'Platinum' }, { key: 'gp', label: 'Gold' }, { key: 'sp', label: 'Silver' }, { key: 'cp', label: 'Copper' }] as const).map((currency) => (
             <div key={currency.key}>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">{currency.label}</label>
               <NumberField
@@ -1416,11 +1530,11 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
           </button>
         </div>
         <div className="space-y-3">
-          {(formData.inventory || []).map((item: any, index: number) => (
+          {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <input type="text" value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newInventory = formData.inventory.filter((_: any, i: number) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1453,7 +1567,7 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
   );
 
   const renderFeatsTab = () => {
-    const featCategories: { key: string; label: string; color: string }[] = [
+    const featCategories: { key: keyof PF2eFeats; label: string; color: string }[] = [
       { key: 'ancestryAndHeritage', label: 'Ancestry & Heritage Feats', color: 'green' },
       { key: 'class', label: 'Class Feats', color: 'blue' },
       { key: 'skill', label: 'Skill Feats', color: 'amber' },
@@ -1467,21 +1581,41 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Class Features</h3>
-            <button onClick={() => { const newFeatures = [...(formData.classFeatures || []), 'New Class Feature']; updateField('classFeatures', newFeatures); }} className="px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} className="px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Feature</span>
             </button>
           </div>
           <div className="space-y-2">
-            {(formData.classFeatures || []).map((feature: string, index: number) => (
-              <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={feature} onChange={(e) => updateField(`classFeatures.${index}`, e.target.value)} placeholder="Class Feature Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <button onClick={() => { const newFeatures = formData.classFeatures.filter((_: string, i: number) => i !== index); updateField('classFeatures', newFeatures); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            {/* Read through the shared reader, so a sheet still holding plain
+                names — every sheet saved before descriptions existed — opens
+                the same as one that has them. */}
+            {classFeatureRows.map((feature, index) => (
+              <div key={index} className="bg-white border border-stone-200 rounded-lg p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <input
+                    type="text"
+                    value={feature.name}
+                    onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, name: e.target.value } : f))}
+                    placeholder="Class Feature Name"
+                    aria-label={`Class feature ${index + 1} name`}
+                    className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={feature.description}
+                  onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, description: e.target.value } : f))}
+                  placeholder="Description (optional)"
+                  aria-label={`Class feature ${index + 1} description`}
+                  rows={2}
+                  className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
             ))}
-            {(!formData.classFeatures || formData.classFeatures.length === 0) && (
+            {classFeatureRows.length === 0 && (
               <div className="text-sm text-stone-500 italic text-center py-4">No class features added yet</div>
             )}
           </div>
@@ -1498,7 +1632,7 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
               </button>
             </div>
             <div className="space-y-3">
-              {(formData.feats?.[key] || []).map((feat: any, index: number) => (
+              {(formData.feats?.[key] || []).map((feat, index) => (
                 <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <input type="text" value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -1507,14 +1641,14 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
                       <NumberField
 min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={1} />
                     </div>
-                    <button onClick={() => { const newFeats = formData.feats[key].filter((_: any, i: number) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                   <textarea value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               ))}
-              {(!formData.feats?.[key] || formData.feats[key].length === 0) && (
+              {(!formData.feats?.[key] || formData.feats![key].length === 0) && (
                 <div className="text-sm text-stone-500 italic text-center py-4">No {label.toLowerCase()} added yet</div>
               )}
             </div>
@@ -1534,7 +1668,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Age</label>
             <input type="text" value={formData.appearance?.age || ''} onChange={(e) => updateField('appearance.age', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          {['height', 'weight', 'eyes', 'skin', 'hair'].map((field) => (
+          {(['height', 'weight', 'eyes', 'skin', 'hair'] as const).map((field) => (
             <div key={field}>
               <label className="text-xs font-semibold text-stone-600 mb-1 block capitalize">{field}</label>
               <input type="text" value={formData.appearance?.[field] || ''} onChange={(e) => updateField(`appearance.${field}`, e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -1547,7 +1681,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Personality</h3>
         <div className="space-y-3">
-          {['traits', 'ideals', 'bonds', 'flaws'].map((field) => (
+          {(['traits', 'ideals', 'bonds', 'flaws'] as const).map((field) => (
             <div key={field}>
               <label className="text-sm font-semibold text-stone-700 mb-1 block capitalize">{field}</label>
               <textarea value={formData.personality?.[field] || ''} onChange={(e) => updateField(`personality.${field}`, e.target.value)} rows={2} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />

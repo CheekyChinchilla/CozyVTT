@@ -147,10 +147,14 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
 
   describe('clearing', () => {
     it('hides rolls older than the clear, and keeps newer ones', async () => {
-      await addRoll(playerId, 'before-clear', false);
+      const before = await addRoll(playerId, 'before-clear', false);
+      // Derived from the row rather than `new Date()`. `rolledAt` is stamped by
+      // Postgres and the watermark by Node, and under load those two clocks are
+      // far enough apart to put the roll *after* its own clear — which is what
+      // made this test fail once in a full run and pass on its own.
       await prisma.campaign.update({
         where: { id: campaignId },
-        data: { rollHistoryClearedAt: new Date() },
+        data: { rollHistoryClearedAt: new Date(before.rolledAt.getTime() + 1) },
       });
       // Ensure the next roll is strictly after the watermark.
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -161,10 +165,10 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     });
 
     it('keeps the cleared rows in the table for audit', async () => {
-      await addRoll(dmId, 'secret-before-clear', true);
+      const cleared = await addRoll(dmId, 'secret-before-clear', true);
       await prisma.campaign.update({
         where: { id: campaignId },
-        data: { rollHistoryClearedAt: new Date() },
+        data: { rollHistoryClearedAt: new Date(cleared.rolledAt.getTime() + 1) },
       });
 
       const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);

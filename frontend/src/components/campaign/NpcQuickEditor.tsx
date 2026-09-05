@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { DND5E_CONDITIONS } from '@/utils/conditions';
 import api from '@/services/api';
 import type { Token, TokenHp, NpcStatBlock, Asset } from '@/types';
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
@@ -33,20 +34,9 @@ import AssetGrid from '@/components/assets/AssetGrid';
 // Constants
 // ============================================
 
-const COMMON_CONDITIONS = [
-  'Blinded',
-  'Charmed',
-  'Exhausted',
-  'Frightened',
-  'Incapacitated',
-  'Invisible',
-  'Paralyzed',
-  'Poisoned',
-  'Prone',
-  'Restrained',
-  'Stunned',
-  'Unconscious',
-];
+// Conditions come from utils/conditions. This file used to keep its own
+// hand-picked twelve, which left a DM unable to mark an NPC Deafened, Grappled
+// or Petrified while a player character could be.
 
 // ============================================
 // Props
@@ -880,9 +870,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 </div>
               )}
 
-              {/* Common conditions grid */}
+              {/* Conditions grid */}
               <div className="flex flex-wrap gap-1">
-                {COMMON_CONDITIONS.map((c) => {
+                {DND5E_CONDITIONS.map((c) => {
                   const active = conditions.includes(c);
                   return (
                     <button

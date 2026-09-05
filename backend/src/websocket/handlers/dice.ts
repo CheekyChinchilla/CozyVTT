@@ -8,6 +8,7 @@ import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import logger from '../../utils/logger';
 import { diceRollLimiter } from '../shared';
+import { toJson } from '../../utils/prisma-json';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -70,7 +71,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
           userId: socket.userId!,
           expression,
           result: rollResult.total,
-          breakdown: rollResult as any, // Store full RollResult
+          breakdown: toJson(rollResult), // Store full RollResult
           characterName: characterName || null,
           purpose: purpose || null,
           secret: secret || false, // Mark as secret for visibility filtering
@@ -85,7 +86,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
           userId: socket.userId,
           type: 'DICE_ROLL',
           content: `${user.displayName}${characterName ? ` (${characterName})` : ''} rolled ${expression}${purpose ? ` for ${purpose}` : ''}${secret ? ' (SECRET)' : ''}`,
-          metadata: {
+          metadata: toJson({
             diceRollId: diceRoll.id,
             expression,
             result: rollResult.total,
@@ -93,7 +94,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
             characterName: characterName || null,
             purpose: purpose || null,
             secret: secret || false, // Mark in metadata for client filtering
-          } as any,
+          }),
         },
       });
 

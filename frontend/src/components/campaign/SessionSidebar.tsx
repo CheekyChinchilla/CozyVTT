@@ -12,7 +12,7 @@
 // ============================================
 
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Dices, ListOrdered, PlayCircle, type LucideIcon } from 'lucide-react';
+import { MessageCircle, Dices, ListOrdered, PlayCircle, NotebookPen, type LucideIcon } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/cn';
@@ -21,9 +21,11 @@ import DiceRoller from './DiceRoller';
 import VibeTracker from './VibeTracker';
 import InitiativeTracker from './InitiativeTracker';
 import SessionControls from './SessionControls';
+import SessionHistory from './SessionHistory';
+import PersonalNotes from './PersonalNotes';
 import type { ChatMessageBroadcast } from '@/types';
 
-type RailTab = 'chat' | 'dice' | 'initiative' | 'session';
+type RailTab = 'chat' | 'dice' | 'initiative' | 'notes' | 'session';
 
 const TAB_STORAGE_KEY = 'cozyvtt-session-tab';
 
@@ -31,6 +33,9 @@ const TABS: { key: RailTab; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Chat', icon: MessageCircle },
   { key: 'dice', label: 'Dice', icon: Dices },
   { key: 'initiative', label: 'Initiative', icon: ListOrdered },
+  // Its own tab rather than a widget under Session: long-form writing needs the
+  // full height of the rail, and people come back to it constantly during play.
+  { key: 'notes', label: 'Notes', icon: NotebookPen },
   { key: 'session', label: 'Session', icon: PlayCircle },
 ];
 
@@ -164,6 +169,18 @@ export default function SessionSidebar() {
         </div>
 
         <div
+          id="session-tabpanel-notes"
+          role="tabpanel"
+          aria-labelledby="session-tab-notes"
+          className={cn(
+            'absolute inset-0 p-3',
+            activeTab === 'notes' ? 'animate-fade-in' : 'invisible'
+          )}
+        >
+          <PersonalNotes />
+        </div>
+
+        <div
           id="session-tabpanel-session"
           role="tabpanel"
           aria-labelledby="session-tab-session"
@@ -175,6 +192,8 @@ export default function SessionSidebar() {
           <VibeTracker />
           {/* SessionControls renders nothing for players */}
           <SessionControls />
+          {/* Everyone: the notes the DM wrote when each session ended */}
+          <SessionHistory />
         </div>
       </div>
     </aside>

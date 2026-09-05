@@ -69,13 +69,13 @@ interface DmLightControlsProps {
  * `delay` ms of inactivity. Used to throttle socket emissions during slider drags.
  */
  
-function useDebouncedCallback<T extends (...args: any[]) => any>(
+function useDebouncedCallback<T extends (...args: never[]) => unknown>(
   fn: T,
   delay: number
 ): T {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
    
-  const fnRef = useRef<any>(fn);
+  const fnRef = useRef<T>(fn);
   fnRef.current = fn;
 
   useEffect(() => {
@@ -83,7 +83,7 @@ function useDebouncedCallback<T extends (...args: any[]) => any>(
   }, []);
 
    
-  return useCallback((...args: any[]) => {
+  return useCallback((...args: never[]) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => fnRef.current(...args), delay);
   }, [delay]) as T;

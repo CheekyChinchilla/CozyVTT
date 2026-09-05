@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
+import type { Prisma } from '@prisma/client';
 import { seedSrdCreatures, getSrdSeedStatus } from '../services/creatureSeed';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
@@ -99,7 +100,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
       scopes.push({ OR: [{ gameSystem: gameSystem as string }, { gameSystem: null }] });
     }
 
-    const where: Record<string, unknown> = { AND: scopes };
+    const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };
 
     if (search) {
       where.name = { contains: search as string, mode: 'insensitive' };
@@ -113,12 +114,12 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
 
     const [templates, total] = await Promise.all([
       prisma.creatureTemplate.findMany({
-        where: where as any,
+        where,
         orderBy: { name: 'asc' },
         take,
         skip,
       }),
-      prisma.creatureTemplate.count({ where: where as any }),
+      prisma.creatureTemplate.count({ where }),
     ]);
 
     return res.json({

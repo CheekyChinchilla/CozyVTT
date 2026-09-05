@@ -34,6 +34,7 @@ function makeAuthState(overrides: Partial<AuthContextType> = {}): AuthContextTyp
     disableMFA: vi.fn(),
     changePassword: vi.fn(),
     refreshUser: vi.fn(),
+    adoptSession: vi.fn(),
     ...overrides,
   };
 }

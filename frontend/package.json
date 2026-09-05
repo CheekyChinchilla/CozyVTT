@@ -1,6 +1,6 @@
 {
   "name": "cozyvtt-frontend",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "type": "module",
   "description": "CozyVTT Frontend - Self-hosted Virtual Tabletop",
   "private": true,

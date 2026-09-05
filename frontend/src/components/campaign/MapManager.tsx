@@ -29,6 +29,7 @@ import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import { extractAssetId } from '@/utils/assetUrl';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface MapManagerProps {
   isOpen: boolean;
@@ -365,8 +366,8 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to export map.');
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err) || 'Failed to export map.');
     }
   };
 
@@ -381,8 +382,8 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       await mapService.deleteMap(campaign.id, map.id);
       setMaps((prev) => prev.filter((m) => m.id !== map.id));
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete map.');
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err) || 'Failed to delete map.');
     }
   };
 
@@ -402,12 +403,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       setMaps((prev) => [result.map, ...prev]);
       const parts = [`${result.totalSegments} wall segments`];
       if (result.portalCount > 0) parts.push(`${result.portalCount} doors`);
-      if ((result as any).lightCount > 0) parts.push(`${(result as any).lightCount} lights`);
+      if (result.lightCount > 0) parts.push(`${result.lightCount} lights`);
       setImportSuccess(`Imported "${result.map.name}" with ${parts.join(', ')}`);
       // Auto-clear success message after 5 seconds
       setTimeout(() => setImportSuccess(null), 5000);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to import UVTT file.';
+    } catch (err: unknown) {
+      const msg = apiErrorMessage(err) || 'Failed to import UVTT file.';
       setError(msg);
     } finally {
       setIsImportingUVTT(false);
@@ -509,8 +510,8 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       if (socket) {
         socket.emitMapChange(targetMap.id);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to switch map. Please try again.');
+    } catch (err: unknown) {
+      setError(apiErrorMessage(err) || 'Failed to switch map. Please try again.');
     } finally {
       setIsSwitching(false);
     }

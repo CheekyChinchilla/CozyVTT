@@ -9,7 +9,8 @@ export interface FlexibleCharacterTemplate {
   name: string;
   description: string;
   gameSystem: null;
-  data: any;
+  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
+  data: Record<string, unknown>;
 }
 
 /**

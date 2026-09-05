@@ -1,18 +1,11 @@
 import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
+import { TokenSizeSchema, TokenHpSchema } from './tokens';
 
 // ── Shared sub-schemas ──────────────────────────────────────────────────────
 
-const TokenSizeSchema = z.object({
-  width: z.number().int().min(1).max(10),
-  height: z.number().int().min(1).max(10),
-});
-
-const TokenHpSchema = z.object({
-  current: z.number().int().min(0).max(99999),
-  max: z.number().int().min(1).max(99999),
-  temp: z.number().int().min(0).max(99999),
-});
+// Shared with the map-token routes — see validators/tokens. They used to live
+// here alone, which is why a token placed on a map was never checked.
 
 // The stat block schema lives in ./statBlock so the creature routes, token
 // templates and campaign import all validate against one definition. The limits

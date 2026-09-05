@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { jsonOrNull } from '../utils/prisma-json';
 
 /**
  * WebSocket Utility Functions
@@ -32,7 +33,7 @@ export function getSocketInstance(): Server {
  * @param event - Event name
  * @param data - Event data
  */
-export function broadcastToCampaign(campaignId: string, event: string, data: any): void {
+export function broadcastToCampaign(campaignId: string, event: string, data: unknown): void {
   const io = getSocketInstance();
   io.to(campaignId).emit(event, data);
 }
@@ -43,7 +44,7 @@ export function broadcastToCampaign(campaignId: string, event: string, data: any
  * @param event - Event name
  * @param data - Event data
  */
-export function broadcastToUser(userId: string, event: string, data: any): void {
+export function broadcastToUser(userId: string, event: string, data: unknown): void {
   const io = getSocketInstance();
   io.to(userId).emit(event, data);
 }
@@ -144,7 +145,7 @@ export async function disconnectUser(userId: string, reason: string): Promise<vo
 export async function sendSystemMessage(
   campaignId: string,
   content: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   try {
     // Save to database
@@ -154,7 +155,12 @@ export async function sendSystemMessage(
         userId: null, // System messages have no user
         type: 'SYSTEM',
         content,
-        metadata: metadata ? (metadata as any) : null,
+        // `jsonOrNull` rather than a bare `null`: Prisma types a nullable Json
+        // column as needing an explicit null sentinel, and the previous `as any`
+        // was only hiding that. Verified against Postgres that a bare `null`
+        // stores the JSON `null` literal — the same thing `Prisma.JsonNull`
+        // stores, and *not* SQL NULL — so this is the equivalent spelling.
+        metadata: jsonOrNull(metadata),
       },
     });
 

@@ -11,6 +11,7 @@ import { getSpiritVisibility, getSpiritVisibilityBatch, filterTokensByLighting }
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
+import { toJson } from '../../utils/prisma-json';
 
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -258,7 +259,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       await prisma.map.update({
         where: { id: mapId },
-        data: { tokens: updatedTokens as any },
+        data: { tokens: toJson(updatedTokens) },
       });
 
       // Role-filtered broadcast for spirit tokens
@@ -288,6 +289,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           if (!authedSocket.userId) continue;
 
           // Compute which tokens are visible for this player after the move
+          //
+          // TODO(spirit-layer): this applies the lighting filter but never
+          // filterTokensByRole, which is the only thing that enforces the
+          // material/spirit plane split. A player in the spirit realm is sent
+          // material token positions here, and they persist until the next
+          // refresh — at which point filterMapData applies the plane filter and
+          // they vanish again. The two paths should share one decision;
+          // filterMapData is the one that is right.
           const allVisible = filterTokensByLighting(
             updatedTokens,
             authedSocket.userId,

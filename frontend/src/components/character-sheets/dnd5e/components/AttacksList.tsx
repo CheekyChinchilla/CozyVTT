@@ -6,16 +6,14 @@
 
 import React from 'react';
 import { Sword, Zap, Dices } from 'lucide-react';
+import type { DnD5eAttack } from '@/types/game-systems/dnd5e';
 
-interface Attack {
-  name: string;
-  attackBonus: number;
-  damageRoll: string;
-  damageType: string;
-  range: number;
-  properties: string[];
-  notes: string;
-}
+/**
+ * The attack shape was declared again here, a copy of `DnD5eAttack` that had to
+ * be kept in step by hand. It is imported now, so a field added to the sheet
+ * cannot go missing from the list that displays it.
+ */
+type Attack = DnD5eAttack;
 
 interface AttacksListProps {
   attacks: Attack[];
@@ -120,6 +118,43 @@ const AttackRow: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* Further damage lines — a versatile weapon's two-handed die, a spell's
+          higher-level damage. Each rolls on its own, like the primary one. */}
+      {(attack.additionalDamage ?? []).some((entry) => entry.damageRoll?.trim()) && (
+        <div className="mt-2 space-y-1">
+          {(attack.additionalDamage ?? [])
+            .filter((entry) => entry.damageRoll?.trim())
+            .map((entry, idx) => {
+              const roll = entry.damageRoll.trim();
+              const label = entry.label?.trim() || 'Alternate';
+              const rollable = isClickable;
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-baseline gap-2 text-sm ${
+                    rollable ? 'cursor-pointer hover:text-red-700' : ''
+                  }`}
+                  onClick={
+                    rollable
+                      ? (e) => {
+                          e.stopPropagation();
+                          onRoll?.(roll, `${attack.name} — ${label}`);
+                        }
+                      : undefined
+                  }
+                  title={rollable ? `Click to roll ${label}: ${roll}` : undefined}
+                >
+                  <span className="text-xs text-stone-500">{label}</span>
+                  <span className="font-semibold text-stone-700">{roll}</span>
+                  {entry.damageType && (
+                    <span className="text-xs text-stone-500 capitalize">{entry.damageType}</span>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* Properties */}
       {attack.properties && attack.properties.length > 0 && (

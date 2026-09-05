@@ -35,6 +35,11 @@ interface SkillsListProps {
     survival: Skill;
   };
   passivePerception?: number;
+  /**
+   * Checks the eighteen skills do not cover — tool proficiencies and homebrew.
+   * Already carries a derived bonus, so this row draws exactly like the rest.
+   */
+  customSkills?: { name: string; proficient: boolean; expertise: boolean; bonus: number }[];
   /** Left-click to roll. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
   /** Right-click for Advantage / Disadvantage popup. */
@@ -118,7 +123,7 @@ const SkillRow: React.FC<{
 /**
  * SkillsList - Displays all skills with proficiency indicators
  */
-export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerception, onRoll, onRollContext }) => {
+export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerception, customSkills, onRoll, onRollContext }) => {
   return (
     <div className="space-y-2">
       {/* Skills Grid */}
@@ -127,6 +132,27 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
           <SkillRow key={key} name={SKILL_NAMES[key]} skill={skill} onRoll={onRoll} onRollContext={onRollContext} />
         ))}
       </div>
+
+      {/* The player's own — separated so it is obvious which are the standard
+          eighteen and which this character added. */}
+      {customSkills && customSkills.length > 0 && (
+        <div className="pt-2 border-t border-stone-200">
+          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide px-2 mb-1">
+            Your Own Skills
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+            {customSkills.map((custom, index) => (
+              <SkillRow
+                key={`${custom.name}-${index}`}
+                name={custom.name}
+                skill={custom}
+                onRoll={onRoll}
+                onRollContext={onRollContext}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Passive Perception */}
       {passivePerception !== undefined && (

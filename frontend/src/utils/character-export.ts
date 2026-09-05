@@ -5,7 +5,7 @@
  * and importing characters from JSON files.
  */
 
-import type { Character } from '@/types';
+import type { Character, CharacterData } from '@/types';
 
 export interface ExportMetadata {
   cozyVttVersion: string;
@@ -13,7 +13,7 @@ export interface ExportMetadata {
   character: {
     name: string;
     gameSystem: string | null;
-    data: any;
+    data: CharacterData;
     createdAt?: string;
     updatedAt?: string;
   };
@@ -64,13 +64,13 @@ export function downloadCharacterJSON(character: Character): void {
 /**
  * Validate imported character JSON structure
  */
-export function validateImportedCharacter(data: any): {
+export function validateImportedCharacter(data: unknown): {
   valid: boolean;
   error?: string;
   character?: {
     name: string;
     gameSystem: string | null;
-    data: any;
+    data: CharacterData;
   };
 } {
   // Check basic structure
@@ -78,31 +78,39 @@ export function validateImportedCharacter(data: any): {
     return { valid: false, error: 'Invalid JSON format' };
   }
 
+  // The argument is a file someone chose off disk, so nothing about its shape
+  // can be assumed. Everything below is a check; this names what is being
+  // checked for, and leaves the values `unknown` so each one still has to be.
+  const candidate = data as {
+    cozyVttVersion?: unknown;
+    character?: { name?: unknown; gameSystem?: unknown; data?: unknown };
+  };
+
   // Check for cozyVttVersion
-  if (!data.cozyVttVersion) {
+  if (!candidate.cozyVttVersion) {
     return { valid: false, error: 'Missing cozyVttVersion field' };
   }
 
   // Check version compatibility
   const supportedVersions = ['1.0'];
-  if (!supportedVersions.includes(data.cozyVttVersion)) {
+  if (typeof candidate.cozyVttVersion !== 'string' || !supportedVersions.includes(candidate.cozyVttVersion)) {
     return {
       valid: false,
-      error: `Unsupported cozyVttVersion: ${data.cozyVttVersion}. Supported versions: ${supportedVersions.join(', ')}`,
+      error: `Unsupported cozyVttVersion: ${candidate.cozyVttVersion}. Supported versions: ${supportedVersions.join(', ')}`,
     };
   }
 
   // Check for character object
-  if (!data.character || typeof data.character !== 'object') {
+  if (!candidate.character || typeof candidate.character !== 'object') {
     return { valid: false, error: 'Missing or invalid character data' };
   }
 
   // Check required fields
-  if (!data.character.name || typeof data.character.name !== 'string') {
+  if (!candidate.character.name || typeof candidate.character.name !== 'string') {
     return { valid: false, error: 'Character name is required' };
   }
 
-  if (!data.character.data || typeof data.character.data !== 'object') {
+  if (!candidate.character.data || typeof candidate.character.data !== 'object') {
     return { valid: false, error: 'Character data is required' };
   }
 
@@ -110,9 +118,9 @@ export function validateImportedCharacter(data: any): {
   return {
     valid: true,
     character: {
-      name: data.character.name,
-      gameSystem: data.character.gameSystem || null,
-      data: data.character.data,
+      name: candidate.character.name as string,
+      gameSystem: (candidate.character.gameSystem as string | null) || null,
+      data: candidate.character.data as CharacterData,
     },
   };
 }
@@ -120,7 +128,7 @@ export function validateImportedCharacter(data: any): {
 /**
  * Read and parse a JSON file
  */
-export function readJSONFile(file: File): Promise<any> {
+export function readJSONFile(file: File): Promise<unknown> {
   return new Promise((resolve, reject) => {
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {

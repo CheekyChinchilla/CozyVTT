@@ -210,14 +210,18 @@ export interface CoC7eSkills {
  */
 export interface CoC7eWeapon {
   name: string;
-  skill: string;
-  skillValue: number;
-  damage: string;
-  range: string;
-  attacks: number;
-  ammo: number | null;
-  malfunction: number | null;
-  notes: string;
+  // Everything but the name is optional in the backend schema, which is what
+  // actually decides whether a sheet saves. This interface used to require all
+  // of them, making it stricter than the validator and than the WeaponsList
+  // component that builds these — which is how it came to disagree with both.
+  skill?: string;
+  skillValue?: number;
+  damage?: string;
+  range?: string;
+  attacks?: number;
+  ammo?: number | null;
+  malfunction?: number | null;
+  notes?: string;
 }
 
 /**

@@ -120,9 +120,13 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
                     {token.type ?? 'npc'}{token.disposition ? ` · ${token.disposition}` : ''}
                   </div>
                 </div>
-                {token.initiative !== null && (
-                  <span className="text-xs font-bold text-warm-amber">Init {token.initiative}</span>
-                )}
+                {/*
+                  No initiative is shown here on purpose. A token keeps its last
+                  rolled value, but adding it to the order no longer carries that
+                  value in — a combatant joins as "—" and takes its place when
+                  something rolls. Advertising the old number on the button that
+                  adds it promised something the tracker would not deliver.
+                */}
               </button>
             ))
           )}

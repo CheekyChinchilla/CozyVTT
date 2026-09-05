@@ -4,7 +4,7 @@ Prisma schema and migrations for CozyVTT. PostgreSQL 14+.
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 16 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA
@@ -22,6 +22,12 @@ The schema is in [`schema.prisma`](./schema.prisma) — 16 models grouped by dom
 - `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global)
 - `CreatureFavorite` — DM's per-campaign starred creatures
 - `TokenTemplate` — reusable token configurations copyable across campaigns
+- `CharacterTemplate` — shareable starter sheets any signed-in user can copy
+- `PersonalNote` — a player's own Markdown notes for one campaign. **Private to
+  the author, the DM included** — every route scopes its query by the session's
+  own user id, and a note that is not yours answers 404 rather than 403 so the
+  response cannot confirm the id exists. Not to be confused with
+  `Session.notes`, which the whole campaign reads.
 
 **Assets & messages**
 - `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN
@@ -52,7 +58,8 @@ Note: `AssetType` includes `DOCUMENT` and `OTHER`, but the upload route rejects 
 
 - **Email uniqueness** — `User.email` unique index, case-folded to lowercase before insert
 - **One DM per user per campaign** — enforced by application logic, not DB constraint, because the DM role is part of the membership row
-- **Cascade deletions** — deleting a campaign cascades to its memberships, maps, sessions, messages, dice rolls, creature templates, token templates, and (campaign-scoped) assets
+- **Cascade deletions** — deleting a campaign cascades to its memberships, maps, sessions, messages, dice rolls, creature templates, token templates, personal notes, and (campaign-scoped) assets
+- **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
 
 ## JSON columns

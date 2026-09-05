@@ -10,7 +10,8 @@ export interface CharacterTemplate {
   name: string;
   description: string;
   gameSystem: GameSystem;
-  data: any;
+  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
+  data: Record<string, unknown>;
 }
 
 /**
@@ -95,10 +96,14 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
     },
     inventory: [],
     spellcasting: {
-      class: 'Wizard',
-      ability: 'Intelligence',
-      spellSaveDC: 8,
-      spellAttackBonus: 0,
+      // Left blank rather than seeded. Every 5e character got class "Wizard"
+      // and ability "Intelligence" — so a Fighter's sheet announced "Wizard
+      // Spellcasting" — and DC 8 with attack +0, which no character can
+      // legitimately have; the lowest legal DC at level 1 is 10. Both numbers
+      // are derived now, and a sheet with nothing filled in shows no
+      // spellcasting panel at all.
+      class: '',
+      ability: '',
       cantrips: [],
       slots: {
         '1': { total: 0, expended: 0 },
@@ -113,15 +118,11 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
       },
       spells: [],
     },
-    languages: [],
-    proficiencies: [],
-    features: [],
-    personalityTraits: '',
-    ideals: '',
-    bonds: '',
-    flaws: '',
+    proficienciesAndLanguages: [],
+    featuresAndTraits: [],
+    personality: { traits: '', ideals: '', bonds: '', flaws: '' },
     backstory: '',
-    allies: '',
+    alliesAndOrganizations: { name: '', description: '' },
     treasure: '',
     additionalFeaturesAndTraits: '',
   },
@@ -209,7 +210,13 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
         damageType: 'slashing',
         range: 5,
         properties: ['versatile'],
-        notes: 'Two-handed: 1d10+3',
+        // A longsword is "versatile (1d10)" in the Weapons table (Basic Rules
+        // p. 48). This used to be a free-text note, which read as prose and
+        // could not be rolled.
+        additionalDamage: [
+          { label: 'Two-handed', damageRoll: '1d10+3', damageType: 'slashing' },
+        ],
+        notes: '',
       },
       {
         name: 'Shield Bash',
@@ -275,10 +282,14 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
       },
     ],
     spellcasting: {
-      class: 'Wizard',
-      ability: 'Intelligence',
-      spellSaveDC: 8,
-      spellAttackBonus: 0,
+      // Left blank rather than seeded. Every 5e character got class "Wizard"
+      // and ability "Intelligence" — so a Fighter's sheet announced "Wizard
+      // Spellcasting" — and DC 8 with attack +0, which no character can
+      // legitimately have; the lowest legal DC at level 1 is 10. Both numbers
+      // are derived now, and a sheet with nothing filled in shows no
+      // spellcasting panel at all.
+      class: '',
+      ability: '',
       cantrips: [],
       slots: {
         '1': { total: 0, expended: 0 },
@@ -293,9 +304,14 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
       },
       spells: [],
     },
-    languages: ['Common'],
-    proficiencies: ['All armor', 'All shields', 'Simple weapons', 'Martial weapons'],
-    features: [
+    proficienciesAndLanguages: [
+      'All armor',
+      'All shields',
+      'Simple weapons',
+      'Martial weapons',
+      'Common',
+    ],
+    featuresAndTraits: [
       {
         name: 'Second Wind',
         description: 'You have a limited well of stamina that you can draw on to protect yourself from harm. On your turn, you can use a bonus action to regain hit points equal to 1d10 + your fighter level. Once you use this feature, you must finish a short or long rest before you can use it again.',
@@ -305,12 +321,17 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
         description: 'While you are wearing armor, you gain a +1 bonus to AC.',
       },
     ],
-    personalityTraits: 'I can stare down a hell hound without flinching.',
-    ideals: 'Greater Good: Our lot is to lay down our lives in defense of others.',
-    bonds: 'I would still lay down my life for the people I served with.',
-    flaws: 'I have little respect for anyone who is not a proven warrior.',
+    personality: {
+      traits: 'I can stare down a hell hound without flinching.',
+      ideals: 'Greater Good: Our lot is to lay down our lives in defense of others.',
+      bonds: 'I would still lay down my life for the people I served with.',
+      flaws: 'I have little respect for anyone who is not a proven warrior.',
+    },
     backstory: 'A veteran soldier who served with distinction in the recent war.',
-    allies: 'Former members of the military unit',
+    alliesAndOrganizations: {
+      name: 'Former members of the military unit',
+      description: '',
+    },
     treasure: 'A trophy from a fallen enemy',
     additionalFeaturesAndTraits: '',
   },

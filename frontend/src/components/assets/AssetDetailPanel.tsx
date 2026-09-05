@@ -24,6 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import campaignService from '../../services/campaign.service';
 import Button from '@/components/ui/Button';
+import { apiErrorText } from '@/utils/errors';
 
 interface AssetDetailPanelProps {
   asset: Asset;
@@ -184,8 +185,8 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
       setMoveScope(null);
       setMoveCampaignId('');
       onUpdate?.(updated);
-    } catch (err: any) {
-      setMoveError(err?.response?.data?.error ?? 'Failed to move asset. Please try again.');
+    } catch (err) {
+      setMoveError(apiErrorText(err) ?? 'Failed to move asset. Please try again.');
     } finally {
       setMoving(false);
     }

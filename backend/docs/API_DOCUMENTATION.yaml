@@ -1,8 +1,28 @@
 openapi: 3.0.3
 info:
-  title: CozyVTT API
+  title: CozyVTT Backend Route Reference
   description: |
-    RESTful API for CozyVTT — a self-hosted, browser-based Virtual Tabletop platform.
+    The HTTP routes CozyVTT's own web client calls, described for people working
+    on CozyVTT itself.
+
+    ## No stability guarantee
+    This is an internal surface, not a public API. It is **not versioned**, it
+    carries **no compatibility promise**, and any route here may change shape or
+    disappear in a point release without notice or a deprecation period.
+
+    There are no API keys, no bearer tokens and no service accounts. The only
+    credential is the session cookie described below — but a program can obtain
+    one exactly as the web client does, by posting a user's own email and
+    password to `/api/auth/login` and keeping the cookie it returns. That cookie
+    also authenticates the Socket.io connection, which shares the same session.
+
+    So scripting CozyVTT is possible, and people have done it. What it does not
+    come with is a promise: a script authenticates **as a specific user** and can
+    do only what that user could do in the browser, the session expires after an
+    hour of inactivity (refreshed by activity), an account with MFA enabled needs
+    the second step, and any route here may change shape in a point release
+    without notice. Treat this document as a map of the current code rather than
+    a contract.
 
     ## Authentication
     All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
@@ -18,7 +38,13 @@ info:
 
     ## Rate Limiting
     - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
-    - Authentication endpoints: 5 requests per 15 minutes
+    - Credential endpoints (login, register, reset-password, MFA login verify):
+      5 **failed** requests per 15 minutes. Successful requests are not counted,
+      so getting your password right never moves you towards a lockout.
+    - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
+      or not they succeed. That endpoint answers identically for a known and an
+      unknown address, so successes cannot be skipped without removing the limit
+      on the mail it sends
     - MFA setup verification: 5 attempts per 15 minutes
     - MFA login verification: 5 attempts per 15 minutes (separate limit)
     - Asset uploads: 30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
@@ -40,7 +66,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     See the WebSocket section at the bottom of this document for the full event reference.
 
-  version: 1.2.2
+  version: 1.3.0
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
@@ -223,6 +249,25 @@ paths:
                   minLength: 12
                 displayName:
                   type: string
+                instanceName:
+                  type: string
+                  maxLength: 100
+                  default: CozyVTT
+                  description: >-
+                    Shown in browser tabs and page titles. Blank, missing or
+                    non-string values leave the default in place rather than
+                    failing setup, which can only be run once.
+                timezone:
+                  type: string
+                  maxLength: 50
+                  default: UTC
+                  description: IANA timezone name, used for timestamps.
+                allowRegistration:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Whether people may create their own accounts. Changeable
+                    afterwards from Admin → Settings.
       responses:
         '201':
           description: Setup completed successfully
@@ -1797,10 +1842,281 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   # ============================================
+  # PERSONAL NOTES
+  #
+  # Private to the signed-in user. Every route scopes its query by the session's
+  # own user id as well as the campaign, never by an id from the request, and a
+  # note belonging to somebody else answers 404 rather than 403 — a 403 would
+  # confirm the id exists. The DM has no access to a player's notes.
+  # ============================================
+
+  /api/campaigns/{campaignId}/notes:
+    get:
+      tags:
+        - Notes
+      summary: List your own notes
+      description: >
+        The caller's notes for this campaign, most recently edited first.
+        **Titles only** — `content` is deliberately not returned. A note may run
+        to 100,000 characters, and a list carrying every body would move
+        megabytes each time the panel opened; fetch one note to read it.
+      operationId: listPersonalNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Your notes, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonalNoteSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Notes
+      summary: Create a note
+      description: >
+        Starts a note. `content` may be omitted — notes are usually created
+        empty and written into afterwards. Refused once you hold 200 notes in
+        this campaign.
+      operationId: createPersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  maxLength: 120
+                content:
+                  type: string
+                  maxLength: 100000
+                  description: Markdown source.
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '400':
+          description: Invalid title or content, or the per-campaign limit reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/notes/{noteId}:
+    get:
+      tags:
+        - Notes
+      summary: Read one of your notes
+      description: >
+        The note with its Markdown source. Answers 404 for a note that is not
+        yours — including to the campaign's DM — rather than 403, so the
+        response does not confirm that the id exists.
+      operationId: getPersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags:
+        - Notes
+      summary: Rename a note, replace its body, or both
+      operationId: updatePersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: At least one of the two must be present.
+              properties:
+                title:
+                  type: string
+                  maxLength: 120
+                content:
+                  type: string
+                  maxLength: 100000
+      responses:
+        '200':
+          description: The updated note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '400':
+          description: Invalid values, or a body that changes nothing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags:
+        - Notes
+      summary: Delete a note
+      operationId: deletePersonalNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: No such note of yours in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ============================================
   # SESSIONS
   # ============================================
 
   /api/campaigns/{campaignId}/sessions:
+    get:
+      tags:
+        - Sessions
+      summary: List past sessions
+      description: >
+        Sessions for the campaign, newest first, with the notes the DM recorded
+        when each one ended. Any campaign member may read them — the notes
+        describe what happened at the table, which is what the session history
+        panel shows a player before the next game.
+
+
+        `savedState` is deliberately not returned: it is a large blob of token
+        positions kept for resuming a session, and nothing reading history needs
+        it. Capped at the 50 most recent sessions.
+      operationId: listSessions
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Sessions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        sessionNumber:
+                          type: integer
+                        startedAt:
+                          type: string
+                          format: date-time
+                        endedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        notes:
+                          type: string
+                          nullable: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Sessions
@@ -1900,6 +2216,59 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/campaigns/{campaignId}/sessions/{sessionId}/notes:
+    put:
+      tags:
+        - Sessions
+      summary: Edit or clear a past session's notes
+      description: >-
+        Rewrite the recap recorded for a session, or clear it by sending an
+        empty string. DM only. The session must belong to the campaign in the
+        path; one that does not answers 404 rather than 403, so the response
+        cannot be used to discover which session ids exist.
+      operationId: updateSessionNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notes
+              properties:
+                notes:
+                  type: string
+                  maxLength: 2000
+                  description: >-
+                    The recap. Empty, or only whitespace, clears it and stores
+                    null.
+      responses:
+        '200':
+          description: Notes updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/campaigns/{campaignId}/resume:
     put:
       tags:
@@ -1969,6 +2338,12 @@ paths:
         - If `gameSystem` is provided, character data is validated against that
           system's Zod schema.
         - If `gameSystem` is null, no validation occurs (flexible character).
+        - If `campaignId` is provided, the caller must already be a member of
+          that campaign; a non-member gets 403 and nothing is created. The
+          character is added to the caller's membership as well as carrying the
+          `campaignId` column, in one transaction — both are needed, because the
+          campaign roster and the token permission checks read the membership,
+          not the column.
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -2033,6 +2408,12 @@ paths:
                           type: string
                         code:
                           type: string
+        '403':
+          description: >
+            The caller is not a member of the campaign named by `campaignId`.
+            Nothing is created.
+        '404':
+          description: No campaign exists with the id given in `campaignId`
 
   /api/characters/{id}:
     get:
@@ -5291,6 +5672,12 @@ paths:
 # character.hp.updated:
 #   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
 #   description: A character's HP was updated. Broadcast to all campaign members.
+#                Emitted from two places: the 'character.hp.update' socket handler
+#                (the roster's +/- control) and PUT /api/characters/:id, which
+#                sends it after a sheet save when the hit points actually changed.
+#                Both matter — the campaign screen's HP cache, which feeds the
+#                roster cards and the HP bars on map tokens, is filled by this
+#                event alone.
 #
 # character.updated:
 #   payload: { characterId: string, character: object }
@@ -5327,6 +5714,293 @@ paths:
 # ============================================
 # COMPONENTS
 # ============================================
+
+  # ---------------------------------------------------------------------------
+  # Shared character sheets ("character templates")
+  #
+  # Server-wide starter sheets any signed-in user can copy. Creating, editing and
+  # deleting one requires the `templateEditor` flag on the user, or platform
+  # ADMIN. That check reads the database rather than the session, because
+  # templateEditor is not carried in the session.
+  # ---------------------------------------------------------------------------
+  /api/character-templates:
+    get:
+      tags: [Character Templates]
+      summary: List shared character sheets
+      operationId: listCharacterTemplates
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Templates visible to the caller
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Character Templates]
+      summary: Publish a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: createCharacterTemplate
+      security:
+        - cookieAuth: []
+      responses:
+        '201':
+          description: Template created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/character-templates/{id}:
+    get:
+      tags: [Character Templates]
+      summary: Get one shared character sheet
+      operationId: getCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The template
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Character Templates]
+      summary: Update a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: updateCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Character Templates]
+      summary: Delete a shared character sheet
+      description: Requires the `templateEditor` flag or platform ADMIN.
+      operationId: deleteCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/characters/templates/{gameSystem}/{templateName}:
+    get:
+      tags: [Characters]
+      summary: Get a blank starter sheet for a game system
+      description: >
+        The factory templates built into the server, as distinct from the
+        user-published sheets under /api/character-templates.
+      operationId: getBuiltInCharacterTemplate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: gameSystem
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: templateName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The blank sheet
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/campaigns/{campaignId}/dice-rolls:
+    get:
+      tags: [Campaigns]
+      summary: Roll history for a campaign
+      description: >
+        Newest first. Secret rolls are filtered server-side before anything is
+        sent: a player receives public rolls plus their own secret ones, a DM
+        receives everything. Rolls older than the last history clear are
+        omitted; the rows themselves are kept, so a DM can still audit them.
+      operationId: getCampaignDiceRolls
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: The rolls this caller is entitled to see
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/messages/join-leave:
+    delete:
+      tags: [Campaigns]
+      summary: Clear the old join and leave chat messages
+      description: >
+        DM only. Those notices are no longer written, and nothing is removed on
+        upgrade, so this is how a campaign clears the ones it already has.
+      operationId: clearJoinLeaveMessages
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Messages removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/maps/import-uvtt:
+    post:
+      tags: [Maps]
+      summary: Create a map from a Universal VTT file
+      description: >
+        DM only. Accepts .uvtt, .dd2vtt and .df2vtt, bringing in the image along
+        with its wall segments, doors and lights.
+      operationId: importUvttMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                gridSize:
+                  type: integer
+      responses:
+        '201':
+          description: Map created, with counts of what was imported
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/maps/{id}/export-uvtt:
+    get:
+      tags: [Maps]
+      summary: Export a map as a Universal VTT file
+      description: DM only.
+      operationId: exportUvttMap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The .uvtt payload
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/backups/restore:
+    post:
+      tags: [Admin]
+      summary: Restore the instance from a backup archive
+      description: >
+        Platform ADMIN only. Replaces the database and the uploaded files from
+        an archive downloaded earlier. Needs psql present in the backend image.
+      operationId: restoreBackup
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [backup]
+              properties:
+                backup:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Restore completed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Restore failed, or psql is not available in the image
 
 components:
   securitySchemes:
@@ -5592,6 +6266,36 @@ components:
         joinedAt:
           type: string
           format: date-time
+
+    PersonalNoteSummary:
+      type: object
+      description: >
+        A note in a listing. Carries no `content` on purpose — see the list
+        endpoint.
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PersonalNote:
+      allOf:
+        - $ref: '#/components/schemas/PersonalNoteSummary'
+        - type: object
+          properties:
+            content:
+              type: string
+              description: >
+                Markdown source, stored exactly as typed. Rendered on the client
+                with raw HTML disabled, so markup in a note is shown as text
+                rather than executed.
 
     Session:
       type: object

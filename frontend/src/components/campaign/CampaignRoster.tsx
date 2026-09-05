@@ -7,9 +7,12 @@
 import { useState, useEffect } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useGameStore } from '@/stores/gameStore';
+import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { Users, Crown, Gamepad2, Eye, Edit, UserPlus, X, Minus, Plus, Dices } from 'lucide-react';
+import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import CharacterSheetViewerModal from '../character/CharacterSheetViewerModal';
 import CharacterSheetEditorModal from '../character/CharacterSheetEditorModal';
@@ -17,26 +20,11 @@ import CharacterContextMenu from './CharacterContextMenu';
 import CharacterRollPicker from './CharacterRollPicker';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignRole, GameSystem, Character } from '@/types';
-
-interface RosterMember {
-  userId: string;
-  userName: string;
-  userAvatar: string | null;
-  role: CampaignRole;
-  joinedAt: string;
-  characters: {
-    id: string;
-    name: string;
-    tokenImageUrl: string | null;
-    gameSystem: GameSystem | null;
-    userId: string;
-    hp: CharacterHpInfo | null;
-  }[];
-}
+import type { CampaignRole, GameSystem, Character, RosterMember } from '@/types';
+import { TokenLayer } from '@/types';
 
 export default function CampaignRoster() {
-  const { campaign, userRole, characterHpCache, seedCharacterHpCache } = useCampaign();
+  const { campaign, currentMap, userRole, characterHpCache, seedCharacterHpCache } = useCampaign();
   const { socket } = useWebSocket();
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
@@ -61,7 +49,7 @@ export default function CampaignRoster() {
       setRoster(response.roster);
 
       // Seed the HP cache in CampaignContext so MapCanvas can render player HP bars
-      const hpEntries = response.roster.flatMap((m: RosterMember) =>
+      const hpEntries = response.roster.flatMap((m) =>
         m.characters.map((c) => ({ id: c.id, hp: c.hp }))
       );
       seedCharacterHpCache(hpEntries);
@@ -188,8 +176,49 @@ export default function CampaignRoster() {
     socket?.emitCharacterHpUpdate({ characterId, delta });
   };
 
-  const handleReassignCharacter = async () => {
-    showToast('Character reassignment is not yet available', 'info');
+  /**
+   * Put a character on the map from the roster.
+   *
+   * The drag works too, but only if you can see both the roster and the map at
+   * once — and it is the only way there was, so a DM with the roster open over
+   * the map had no way to place anyone. Placed at the centre of the map, the
+   * same as the creature library, because a menu click has no cursor position.
+   */
+  const handleAddTokenToMap = async () => {
+    if (!contextMenu || !campaign || !currentMap) return;
+    const character = roster
+      .flatMap((member) => member.characters)
+      .find((c) => c.id === contextMenu.characterId);
+    handleCloseContextMenu();
+    if (!character) return;
+
+    const position = {
+      x: Math.floor(currentMap.width / 2),
+      y: Math.floor(currentMap.height / 2),
+    };
+
+    try {
+      const result = await api.addToken(
+        campaign.id,
+        currentMap.id,
+        characterTokenRequest(
+          characterTokenDrag({
+            id: character.id,
+            name: character.name,
+            tokenImageUrl: character.tokenImageUrl,
+            userId: character.userId,
+          }),
+          position,
+          TokenLayer.TOKEN,
+        ),
+      );
+      useGameStore.getState().addToken(result.token);
+      socket?.emitMapChange(currentMap.id);
+      showToast(`${character.name} placed on the map`, 'success');
+    } catch (error) {
+      console.error('Failed to place character on map:', error);
+      showToast('Could not place that character on the map', 'error');
+    }
   };
 
   const handleRemoveFromCampaign = () => {
@@ -364,11 +393,16 @@ export default function CampaignRoster() {
               visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
             },
             {
-              icon: UserPlus,
-              label: 'Reassign to Player',
-              onClick: handleReassignCharacter,
-              visible: userMembership.role === 'DM',
+              icon: MapPin,
+              label: 'Add to Map',
+              onClick: handleAddTokenToMap,
+              visible: userMembership.role === 'DM' && !!currentMap,
             },
+            // "Reassign to Player" used to sit here. It never did anything —
+            // it popped "not yet available" — and there is no endpoint behind
+            // it either: /characters/:id/assign moves a character between
+            // *campaigns*, not between owners. Better absent than advertised.
+            // It comes back when the endpoint does.
             {
               icon: X,
               label: 'Remove from Campaign',
@@ -420,7 +454,7 @@ export default function CampaignRoster() {
 
 interface MemberCardProps {
   member: RosterMember;
-  getRoleIcon: (role: CampaignRole) => any;
+  getRoleIcon: (role: CampaignRole) => LucideIcon;
   getSystemBadgeColor: (gameSystem: GameSystem | null) => string;
   getSystemShortName: (gameSystem: GameSystem | null) => string;
   onCharacterClick: (characterId: string) => void;
@@ -485,7 +519,12 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
       {member.characters.length > 0 && (
         <div className="ml-9 space-y-1">
           {member.characters.map((character) => {
-            const canDrag = isDM && !!character.tokenImageUrl;
+            // The DM may place any character. This used to also require a token
+            // picture, which meant the handle only existed on characters that
+            // had one — and the handle was the picture, so a character without
+            // one could not be dragged at all. The canvas draws an imageless
+            // token as a lettered circle, so there is nothing to gate on.
+            const canDrag = isDM;
             return (
             <div
               key={character.id}
@@ -494,27 +533,26 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
               <div
                 onClick={() => onCharacterClick(character.id)}
                 onContextMenu={(e) => onCharacterRightClick(e, character.id, character.userId)}
-                className="flex items-center gap-2 p-1.5 cursor-pointer"
+                draggable={canDrag}
+                onDragStart={canDrag ? (e) => {
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setData('text/plain', JSON.stringify(characterTokenDrag({
+                    id: character.id,
+                    name: character.name,
+                    tokenImageUrl: character.tokenImageUrl,
+                    userId: character.userId,
+                  })));
+                } : undefined}
+                title={canDrag ? `Drag ${character.name} onto the map` : undefined}
+                className={`flex items-center gap-2 p-1.5 cursor-pointer ${canDrag ? 'active:cursor-grabbing' : ''}`}
               >
               {/* Character Token — draggable by DM onto map */}
               {character.tokenImageUrl ? (
                 <img
                   src={character.tokenImageUrl}
                   alt={character.name}
-                  draggable={canDrag}
-                  onDragStart={canDrag ? (e) => {
-                    e.stopPropagation();
-                    e.dataTransfer.effectAllowed = 'copy';
-                    e.dataTransfer.setData('text/plain', JSON.stringify({
-                      type: 'character-token',
-                      characterId: character.id,
-                      name: character.name,
-                      imageUrl: character.tokenImageUrl,
-                      userId: character.userId,
-                    }));
-                  } : undefined}
-                  className={`w-6 h-6 rounded-full object-cover border border-moss-green/20 ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                  title={canDrag ? `Drag ${character.name} onto the map` : character.name}
+                  className="w-6 h-6 rounded-full object-cover border border-moss-green/20"
+                  title={character.name}
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-moss-green/10 border border-moss-green/20 flex items-center justify-center">

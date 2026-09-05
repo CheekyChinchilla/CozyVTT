@@ -16,6 +16,8 @@ import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import type { CharacterData } from '@/types';
 
 export default function CharacterEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -77,9 +79,9 @@ export default function CharacterEditorPage() {
             // Not critical - continue without campaign data
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to fetch character:', err);
-        setError(err.message || 'Failed to load character');
+        setError(errorMessage(err) || 'Failed to load character');
       } finally {
         setLoading(false);
       }
@@ -120,7 +122,7 @@ export default function CharacterEditorPage() {
   // ============================================
 
   const handleSave = useCallback(
-    async (data: any, doShowToast = true, tokenImageUrl?: string) => {
+    async (data: CharacterData, doShowToast = true, tokenImageUrl?: string) => {
       if (!character) return;
 
       try {
@@ -147,18 +149,17 @@ export default function CharacterEditorPage() {
         if (doShowToast) {
           showToast('Character saved!', 'success');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to save character:', err);
-        console.error('Error response:', err.response?.data);
 
         // Show detailed validation errors if available
-        if (err.response?.data?.validationErrors) {
-          const validationErrors = err.response.data.validationErrors;
-          const errorMessages = validationErrors.map((e: any) => `${e.path}: ${e.message}`).join('\n');
+        const validationErrors = apiValidationIssues(err);
+        if (validationErrors) {
+          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('\n');
           setError(`Validation errors:\n${errorMessages}`);
           console.error('Validation errors:', validationErrors);
         } else {
-          setError(err.response?.data?.message || err.message || 'Failed to save character');
+          setError(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character');
         }
       } finally {
         setSaving(false);
@@ -172,7 +173,7 @@ export default function CharacterEditorPage() {
   // ============================================
 
   const handleSheetSave = useCallback(
-    async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+    async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
       // Log the data being saved for debugging
       console.log('Saving character data:', data);
 

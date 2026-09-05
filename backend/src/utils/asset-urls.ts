@@ -72,9 +72,30 @@ export function extractAssetId(url: string | null | undefined): string | null {
 }
 
 /**
+ * The URL-bearing fields each normalizer rewrites.
+ *
+ * The index signature is what lets a caller pass a whole map, token or
+ * character through: every other field rides along untouched, which is what the
+ * spread in each function does. Those fields come back as `unknown`, so a
+ * caller that wants one has to check it -- that is the difference from the
+ * `any` this replaces, which let any property be read off the result.
+ */
+interface MapUrlFields extends Record<string, unknown> {
+  imageUrl?: string | null;
+  baseLayerUrl?: string | null;
+  spiritLayerUrl?: string | null;
+}
+interface TokenUrlFields extends Record<string, unknown> {
+  imageUrl?: string | null;
+}
+interface CharacterUrlFields extends Record<string, unknown> {
+  tokenImageUrl?: string | null;
+}
+
+/**
  * Normalize a map's asset URLs
  */
-export function normalizeMapUrls(mapData: any): any {
+export function normalizeMapUrls(mapData: MapUrlFields): MapUrlFields {
   const normalized = { ...mapData };
 
   if (normalized.imageUrl) {
@@ -95,7 +116,7 @@ export function normalizeMapUrls(mapData: any): any {
 /**
  * Normalize a token's asset URLs
  */
-export function normalizeTokenUrls(tokenData: any): any {
+export function normalizeTokenUrls(tokenData: TokenUrlFields): TokenUrlFields {
   const normalized = { ...tokenData };
 
   if (normalized.imageUrl) {
@@ -108,7 +129,7 @@ export function normalizeTokenUrls(tokenData: any): any {
 /**
  * Normalize a character's asset URLs
  */
-export function normalizeCharacterUrls(characterData: any): any {
+export function normalizeCharacterUrls(characterData: CharacterUrlFields): CharacterUrlFields {
   const normalized = { ...characterData };
 
   if (normalized.tokenImageUrl) {

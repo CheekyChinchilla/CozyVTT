@@ -8,6 +8,7 @@ import campaignService from '../../services/campaign.service';
 import { Button, Modal } from '@/components/ui';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { apiErrorMessage } from '@/utils/errors';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -251,8 +252,8 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
         resetForm();
         onClose();
       }, 500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to upload asset');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to upload asset');
       setUploadProgress(0);
     } finally {
       setUploading(false);
@@ -270,7 +271,10 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
   // Scope descriptions shown below the selector
   const scopeDescriptions: Record<AssetScope, string> = {
-    [AssetScope.USER]: 'Only you can see this asset. Available in all your campaigns.',
+    // Not "only you" any more: access follows use. Once a map or token in one
+    // of your campaigns points at this asset, that campaign's members can see
+    // it — otherwise players got a blank battlemap and placeholder token art.
+    [AssetScope.USER]: 'Yours, and usable in all your campaigns. Anyone in a campaign can see it once you use it there.',
     [AssetScope.CAMPAIGN]: 'Shared with all members of the selected campaign.',
     [AssetScope.GLOBAL]: 'Available to all users across all campaigns on this platform.',
   };

@@ -14,7 +14,7 @@ export interface UpdateProfileData {
 class ProfileService {
   /** Update display name and/or bio */
   async updateProfile(userId: string, data: UpdateProfileData): Promise<User> {
-    const response = await api.updateUser(userId, data as any);
+    const response = await api.updateUser(userId, data);
     return response.user;
   }
 
@@ -26,7 +26,7 @@ class ProfileService {
     formData.append('scope', 'USER');
     formData.append('name', `${displayName}'s Avatar`);
     await api.uploadAsset(formData);
-    await api.updateUser(userId, { avatarUrl: `/api/assets/avatars/${userId}` } as any);
+    await api.updateUser(userId, { avatarUrl: `/api/assets/avatars/${userId}` });
   }
 
   /** Change the current user's password */

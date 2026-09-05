@@ -8,14 +8,19 @@ import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
 import { broadcastToCampaign } from '../websocket/utils';
-import { normalizeAssetUrl } from '../utils/asset-urls';
+import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
+import { canReadAssetById } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
+import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
 import { getFilePath, ensureDirectory } from '../utils/fileUtils';
 import sharp from 'sharp';
 import logger from '../utils/logger';
+import { toJson } from '../utils/prisma-json';
+import type { Prisma } from '@prisma/client';
+import type { Token } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -33,31 +38,8 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-// Token type definition
-interface Token {
-  id: string;
-  characterId?: string | null;
-  name: string;
-  imageUrl: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  layer: 'token' | 'spirit';
-  visible: boolean;
-  controlledBy?: string | null;
-  rotation: number;
-  conditions: string[];
-  metadata: Record<string, any>;
-  type?: 'player' | 'npc' | 'object';
-  disposition?: 'friendly' | 'neutral' | 'hostile' | null;
-  hp?: { current: number; max: number; temp: number } | null;
-  showHpBar?: boolean;
-  notes?: string;
-  initiative?: number | null;
-  sightRadius?: number;
-  displayMode?: 'pog' | 'top-down' | 'full-art';
-  statBlock?: Record<string, any> | null;
-  creatureTemplateId?: string | null;
-}
+// The token shape lives in websocket/shared.ts — see the note there on why this
+// file no longer keeps its own copy.
 
 const VALID_TOKEN_TYPES = ['player', 'npc', 'object'];
 const VALID_TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
@@ -129,6 +111,29 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         error: 'Validation Error',
         message: 'Invalid map imageUrl',
       });
+    }
+
+    // SECURITY: you may only point a map at a picture you can already see.
+    //
+    // Normalising a URL formats it; it does not check anything. Storing an
+    // unchecked reference is what let someone read a stranger's private asset —
+    // they created a campaign of their own, made a map naming the asset id, and
+    // the read rule then saw a legitimate-looking reference and allowed it.
+    // Refusing the reference is the half of that fix that stops it being
+    // created in the first place.
+    const referenced = [normalizedImageUrl, normalizedSpiritLayerUrl].filter(
+      (url): url is string => typeof url === 'string' && url.length > 0
+    );
+    const isAdmin = req.session.platformRole === 'ADMIN';
+    for (const url of referenced) {
+      const assetId = extractAssetId(url);
+      if (!assetId) continue;
+      if (!(await canReadAssetById(assetId, req.session.userId!, isAdmin))) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not have access to that image',
+        });
+      }
     }
 
     // Create the map
@@ -271,8 +276,8 @@ router.post(
           gridSize: gridSizePx,
           tokens: [],
           annotations: [],
-          wallSegments: parsed.wallSegments as any,
-          lights: parsed.lightSources as any,
+          wallSegments: toJson(parsed.wallSegments),
+          lights: toJson(parsed.lightSources),
           lightingEnabled: parsed.wallSegments.length > 0, // auto-enable if walls present
         },
       });
@@ -434,8 +439,13 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     // Get spirit layer visibility for this user
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
 
-    // Filter map data based on role and spirit visibility
-    const responseMap = filterMapData(map, membership.role, spiritVisible);
+    // Filter map data based on role, spirit visibility and dynamic lighting.
+    //
+    // `userId` is what enables the lighting filter, and this call used to omit
+    // it — so on a lit map the two WebSocket paths filtered tokens by what the
+    // player could see while this one, the fetch the client makes on opening a
+    // map, handed over every token on it.
+    const responseMap = filterMapData(map, membership.role, spiritVisible, userId);
 
     return res.status(200).json({ map: responseMap, spiritVisible });
   } catch (error) {
@@ -476,8 +486,12 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // Build update data object
-    const updateData: any = {};
+    // Build update data object.
+    //
+    // Typed rather than `any` because it is assembled field by field from
+    // request body values: with `any`, a typo in one of these names compiled
+    // and silently dropped that field from the update instead of saving it.
+    const updateData: Prisma.MapUpdateInput = {};
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -824,6 +838,15 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: 'Invalid display mode' });
     }
 
+    // The JSON fields. Hand-checking stopped short of these, so anything at all
+    // could be written into the column and every reader then had to cope — HP
+    // sent in the character-sheet shape stored happily and rendered as
+    // "8/undefined" everywhere. Same schemas the token-template route uses.
+    const shapes = validateTokenShapes(tokenData);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
     // Normalize token imageUrl to full path (optional for placeholder tokens)
     const normalizedTokenImageUrl = tokenData.imageUrl
       ? normalizeAssetUrl(tokenData.imageUrl, 'tokens')
@@ -839,21 +862,21 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
         x: tokenData.position.x,
         y: tokenData.position.y,
       },
-      size: tokenData.size || { width: 1, height: 1 },
+      size: shapes.value.size ?? { width: 1, height: 1 },
       layer,
       visible: tokenData.visible !== undefined ? tokenData.visible : true,
       controlledBy: tokenData.controlledBy || null,
       rotation: tokenData.rotation || 0,
-      conditions: tokenData.conditions || [],
-      metadata: tokenData.metadata || {},
+      conditions: shapes.value.conditions ?? [],
+      metadata: shapes.value.metadata ?? {},
       type: tokenType,
       disposition: disposition,
-      hp: tokenData.hp || null,
+      hp: shapes.value.hp ?? null,
       showHpBar: tokenData.showHpBar !== undefined ? tokenData.showHpBar : false,
       notes: typeof tokenData.notes === 'string' ? tokenData.notes : '',
       initiative: tokenData.initiative !== undefined ? tokenData.initiative : null,
       displayMode: displayMode,
-      statBlock: tokenData.statBlock || null,
+      statBlock: shapes.value.statBlock ?? null,
       creatureTemplateId: tokenData.creatureTemplateId || null,
     };
 
@@ -866,7 +889,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // Update the map with new tokens array
     const updatedMap = await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(201).json({
@@ -1008,11 +1031,41 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // Players may only update position, rotation, and conditions on tokens they control
     // All stat fields (hp, notes, showHpBar, type, disposition, initiative) require DM role
     if (!isDM) {
-      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId'];
+      // `metadata` is here because nothing reads it structurally and nothing
+      // player-facing writes it: leaving it open gave every campaign member a
+      // write-only channel into the map's JSON that served no purpose. The
+      // create route, which is the only place the app sends metadata at all, is
+      // DM-only already.
+      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
           return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });
         }
+      }
+    }
+
+    // The JSON-valued fields, checked against the same schemas the create route
+    // and the token templates use. Only what the request actually carries is
+    // checked, so a position-only move is unaffected.
+    const shapes = validateTokenShapes(updates);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
+    // Metadata is merged into what the token already holds, so the size limit
+    // has to be checked against the result. Checking only the incoming patch
+    // bounded each request and not the column: a sequence of small updates
+    // carrying different keys grew the stored object without limit.
+    const mergedMetadata = shapes.value.metadata
+      ? { ...existingToken.metadata, ...shapes.value.metadata }
+      : undefined;
+    if (mergedMetadata) {
+      const merged = TokenMetadataSchema.safeParse(mergedMetadata);
+      if (!merged.success) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}`,
+        });
       }
     }
 
@@ -1022,21 +1075,25 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       ...(updates.name && { name: updates.name }),
       ...(updates.imageUrl !== undefined && { imageUrl: updates.imageUrl ? (normalizeAssetUrl(updates.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
       ...(updates.position && { position: updates.position }),
-      ...(updates.size && { size: updates.size }),
+      ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
       ...(updates.visible !== undefined && { visible: updates.visible }),
       ...(updates.controlledBy !== undefined && { controlledBy: updates.controlledBy }),
       ...(updates.rotation !== undefined && { rotation: updates.rotation }),
-      ...(updates.conditions && { conditions: updates.conditions }),
-      ...(updates.metadata && { metadata: { ...existingToken.metadata, ...updates.metadata } }),
+      ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
+      ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
-      ...(updates.hp !== undefined && { hp: updates.hp }),
+      ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
       ...(updates.showHpBar !== undefined && { showHpBar: updates.showHpBar }),
       ...(updates.notes !== undefined && { notes: updates.notes }),
       ...(updates.initiative !== undefined && { initiative: updates.initiative }),
       ...(updates.displayMode !== undefined && { displayMode: updates.displayMode }),
-      ...(updates.statBlock !== undefined && { statBlock: updates.statBlock }),
+      // The parsed value, not the raw one: Zod drops keys the schema does not
+      // declare, and storing what arrived instead of what was checked is how
+      // undeclared fields survived into sheets and then drifted. The create
+      // route above has always stored the parsed value.
+      ...(updates.statBlock !== undefined && { statBlock: shapes.value.statBlock ?? null }),
       ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: updates.creatureTemplateId }),
     };
 
@@ -1047,7 +1104,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(200).json({
@@ -1111,7 +1168,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     // Update the map
     await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: updatedTokens as any },
+      data: { tokens: toJson(updatedTokens) },
     });
 
     return res.status(200).json({
@@ -1239,7 +1296,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { wallSegments: parsed.data as any },
+      data: { wallSegments: toJson(parsed.data) },
     });
 
     return res.status(200).json({ segments: updated.wallSegments });
@@ -1273,7 +1330,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { wallSegments: [...existing, parsed.data] as any },
+      data: { wallSegments: toJson([...existing, parsed.data]) },
     });
 
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
@@ -1300,7 +1357,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
       return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
     }
 
-    await prisma.map.update({ where: { id }, data: { wallSegments: filtered as any } });
+    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
     logger.error('Error deleting wall segment', { err: error });
@@ -1332,7 +1389,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     }
 
     existing[segIndex] = { ...existing[segIndex], type: req.body.type };
-    await prisma.map.update({ where: { id }, data: { wallSegments: existing as any } });
+    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
@@ -1380,7 +1437,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { lights: parsed.data as any },
+      data: { lights: toJson(parsed.data) },
     });
 
     broadcastToCampaign(campaignId, 'lights:replaced', { mapId: id, lights: updated.lights });
@@ -1415,7 +1472,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { lights: [...existing, parsed.data] as any },
+      data: { lights: toJson([...existing, parsed.data]) },
     });
 
     broadcastToCampaign(campaignId, 'light:added', { mapId: id, light: parsed.data });
@@ -1449,7 +1506,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     }
 
     existing[idx] = { ...existing[idx], ...parsed.data };
-    await prisma.map.update({ where: { id }, data: { lights: existing as any } });
+    await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
     broadcastToCampaign(campaignId, 'light:updated', { mapId: id, light: existing[idx] });
     return res.status(200).json({ light: existing[idx] });
@@ -1476,7 +1533,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
       return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
     }
 
-    await prisma.map.update({ where: { id }, data: { lights: filtered as any } });
+    await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
 
     broadcastToCampaign(campaignId, 'light:removed', { mapId: id, lightId });
     return res.status(200).json({ message: 'Light source deleted' });
@@ -1530,7 +1587,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
     const updated = await prisma.map.update({
       where: { id },
-      data: { fogData: fog as any },
+      data: { fogData: toJson(fog) },
     });
 
     return res.status(200).json({ fogState: updated.fogData });

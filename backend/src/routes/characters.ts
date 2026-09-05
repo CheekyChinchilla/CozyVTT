@@ -9,6 +9,30 @@ import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../va
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
+import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
+
+/**
+ * The `issues` array off a thrown Zod-shaped error.
+ *
+ * Duck-typed rather than `instanceof z.ZodError` because that is what the code
+ * this replaces checked, and the two differ for an error that merely looks
+ * like one.
+ */
+interface ZodLikeIssue {
+  path: Array<string | number>;
+  message: string;
+  code?: string;
+}
+function zodLikeIssues(error: unknown): ZodLikeIssue[] | undefined {
+  if (error && typeof error === 'object' && 'errors' in error) {
+    const { errors } = error as { errors: unknown };
+    if (Array.isArray(errors)) return errors as ZodLikeIssue[];
+  }
+  return undefined;
+}
+
 
 const router = Router();
 
@@ -38,14 +62,42 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // Determine final gameSystem value
     let finalGameSystem = gameSystem;
 
-    // If creating for a campaign and no gameSystem provided, inherit from campaign
-    if (campaignId && !gameSystem) {
+    // Creating straight into a campaign. The membership has to be checked here
+    // and updated below, because campaign membership is recorded in two places:
+    // `Character.campaignId`, and the `characterIds` array on the member's
+    // `CampaignMembership`. Nearly everything a player sees reads the second —
+    // the roster is built from it, and services/permissions.ts asks it whether
+    // a player may move a token. Writing only the column left a character that
+    // was in the campaign but invisible in it, and whose own owner could not
+    // move its token. POST /:id/assign has always written both; this mirrors it.
+    let membershipToJoin: { characterIds: string[] } | null = null;
+
+    if (campaignId) {
       const campaign = await prisma.campaign.findUnique({
         where: { id: campaignId },
         select: { gameSystem: true },
       });
 
-      if (campaign) {
+      if (!campaign) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Campaign not found',
+        });
+      }
+
+      membershipToJoin = await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { characterIds: true },
+      });
+
+      if (!membershipToJoin) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You must be a member of the campaign to create a character in it',
+        });
+      }
+
+      if (!gameSystem) {
         // Prisma's GameSystem is a string-literal union; cast to the local enum
         // type finalGameSystem was inferred from (identical string values).
         finalGameSystem = campaign.gameSystem as GameSystem | null;
@@ -103,15 +155,29 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // Normalize tokenImageUrl to full path if provided
     const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
 
-    const character = await prisma.character.create({
-      data: {
-        userId,
-        name,
-        data: dataWithIdentity as Prisma.InputJsonValue,
-        tokenImageUrl: normalizedTokenImageUrl,
-        campaignId: campaignId || null,
-        gameSystem: finalGameSystem || null,
-      },
+    // Both halves in one transaction. Written separately, a failure between
+    // them would produce exactly the state this fixes: a character carrying a
+    // campaignId that the campaign itself does not know about.
+    const character = await prisma.$transaction(async (tx) => {
+      const created = await tx.character.create({
+        data: {
+          userId,
+          name,
+          data: dataWithIdentity as Prisma.InputJsonValue,
+          tokenImageUrl: normalizedTokenImageUrl,
+          campaignId: campaignId || null,
+          gameSystem: finalGameSystem || null,
+        },
+      });
+
+      if (campaignId && membershipToJoin && !membershipToJoin.characterIds.includes(created.id)) {
+        await tx.campaignMembership.update({
+          where: { userId_campaignId: { userId, campaignId } },
+          data: { characterIds: [...membershipToJoin.characterIds, created.id] },
+        });
+      }
+
+      return created;
     });
 
     return res.status(201).json({
@@ -348,15 +414,21 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
 
     // Validate character data
     try {
-      validateCharacterData(character.gameSystem as any, character.data);
+      validateCharacterData(character.gameSystem as GameSystem, character.data);
 
       return res.status(200).json({
         isValid: true,
       });
-    } catch (error: any) {
-      // Validation failed - return detailed errors
-      if (error.errors) {
-        const formattedErrors = error.errors.map((err: any) => ({
+    } catch (error: unknown) {
+      // TODO(typing): this catch cannot fire on a validation failure.
+      // `validateCharacterData` *returns* `{ success: false, errors }` rather
+      // than throwing, and the call above discards its return value — so this
+      // endpoint answers `isValid: true` for every character, valid or not.
+      // Left exactly as it was: a typing pass must not change what an endpoint
+      // returns. Logged separately to be fixed with a test that fails first.
+      const issues = zodLikeIssues(error);
+      if (issues) {
+        const formattedErrors = issues.map((err) => ({
           path: err.path.join('.') || 'root',
           message: err.message,
           code: err.code,
@@ -373,7 +445,7 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
         isValid: false,
         errors: [{
           path: 'unknown',
-          message: error.message || 'Unknown validation error',
+          message: errorMessage(error) || 'Unknown validation error',
           code: 'unknown',
         }],
       });
@@ -475,9 +547,13 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: {
+      name?: string;
+      data?: Prisma.InputJsonValue;
+      tokenImageUrl?: string | null;
+    } = {};
     if (name !== undefined) updateData.name = name;
-    if (data !== undefined) updateData.data = data;
+    if (data !== undefined) updateData.data = toJson(data);
 
     // Keep the `name` column in step with the name typed on the sheet.
     //
@@ -524,19 +600,36 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // DM may have renamed it ("Aldra (charmed)", or A/B for duplicates) and
     // silently overwriting that on the player's next save would be its own bug.
     let tokensChanged = false;
+    const campaignsWithChangedTokens = new Set<string>();
     if (
       updateData.tokenImageUrl !== undefined &&
-      updateData.tokenImageUrl !== character.tokenImageUrl &&
-      updatedCharacter.campaignId
+      updateData.tokenImageUrl !== character.tokenImageUrl
     ) {
       try {
-        const maps = await prisma.map.findMany({
-          where: { campaignId: updatedCharacter.campaignId },
-          select: { id: true, tokens: true },
-        });
+        // Maps are found by the binding itself — a token carrying this
+        // `characterId` — rather than by the character's own `campaignId`.
+        //
+        // Scoping by campaignId silently missed most of the cases it needed to
+        // cover, because a character reaches a mismatched state easily:
+        // unassigning it nulls `campaignId` and leaves its tokens where they
+        // were, a character with tokens in two campaigns can only point at one
+        // of them, and a DM placing a player's character writes the token's
+        // `characterId` without touching the character. In every one of those
+        // the player saw their new picture on the sheet while the token kept the
+        // old one, and only removing and re-adding the token helped.
+        //
+        // `@>` is jsonb containment, so this is one indexable query rather than
+        // reading every map in the campaign.
+        const boundMaps = await prisma.$queryRaw<
+          Array<{ id: string; campaignId: string; tokens: Prisma.JsonValue }>
+        >`
+          SELECT id, "campaignId", tokens
+          FROM "Map"
+          WHERE tokens @> ${JSON.stringify([{ characterId: updatedCharacter.id }])}::jsonb
+        `;
 
-        for (const map of maps) {
-          const tokens = Array.isArray(map.tokens) ? (map.tokens as any[]) : [];
+        for (const map of boundMaps) {
+          const tokens = readTokens(map.tokens);
           let mapChanged = false;
 
           const nextTokens = tokens.map((token) => {
@@ -546,8 +639,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           });
 
           if (mapChanged) {
-            await prisma.map.update({ where: { id: map.id }, data: { tokens: nextTokens } });
+            await prisma.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
             tokensChanged = true;
+            campaignsWithChangedTokens.add(map.campaignId);
           }
         }
       } catch (error) {
@@ -568,10 +662,58 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           // than on every sheet save — HP edits broadcast through here too.
           tokensChanged,
         });
+
+        // Hit points additionally go out as `character.hp.updated`, the narrow
+        // event the campaign screen's HP cache is built on — it feeds both the
+        // roster cards and the HP bars drawn on map tokens.
+        //
+        // Until this was added, only the roster's own +/- control emitted it,
+        // from a WebSocket handler. Editing HP on the sheet took this route
+        // instead, so the new value reached the database and the broadcast above
+        // but never the cache, and the campaign screen went on showing the old
+        // number until the page was refreshed and the roster refetched.
+        //
+        // Sent only when the value really moved: every roster card and token bar
+        // re-renders on this, and most sheet saves do not touch hit points.
+        const previousHp = extractCharacterHp(
+          updatedCharacter.gameSystem,
+          readJsonObject(character.data)
+        );
+        const currentHp = extractCharacterHp(
+          updatedCharacter.gameSystem,
+          readJsonObject(updatedCharacter.data)
+        );
+        if (currentHp && !sameCharacterHp(previousHp, currentHp)) {
+          broadcastToCampaign(updatedCharacter.campaignId, 'character.hp.updated', {
+            characterId: updatedCharacter.id,
+            hp: currentHp,
+          });
+        }
       } catch (error) {
         logger.error('Failed to broadcast character update', { err: error });
         // Don't fail the request if broadcast fails
       }
+    }
+
+    // A campaign whose map holds a token for this character still needs to
+    // repaint it, even when the character does not belong to that campaign —
+    // which is the ordinary case once `campaignId` is null, and the reason the
+    // token used to sit on the old picture until it was removed and re-added.
+    //
+    // The sheet itself is deliberately NOT sent here. Membership of the
+    // character's campaign is what entitles someone to read it, and these
+    // campaigns are by definition not that one; they get the id and the fact
+    // that a token moved on, which is all a repaint needs.
+    try {
+      for (const affectedCampaignId of campaignsWithChangedTokens) {
+        if (affectedCampaignId === updatedCharacter.campaignId) continue;
+        broadcastToCampaign(affectedCampaignId, 'character.updated', {
+          characterId: updatedCharacter.id,
+          tokensChanged: true,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to broadcast token repaint', { err: error });
     }
 
     return res.status(200).json({
@@ -897,7 +1039,7 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       data: {
         userId,
         name: `${originalCharacter.name} (Copy)`,
-        data: originalCharacter.data as any, // Type assertion for Prisma JSON compatibility
+        data: toJson(originalCharacter.data),
         tokenImageUrl: originalCharacter.tokenImageUrl,
         gameSystem: originalCharacter.gameSystem,
         campaignId: null, // Copies are unassigned by default

@@ -29,6 +29,7 @@ import {
   Move,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -386,8 +387,8 @@ export default function ProfilePage() {
       await refreshUser();
       setProfileSuccess('Profile updated!');
       setTimeout(() => { setProfileSuccess(''); setEditingProfile(false); }, 1500);
-    } catch (err: any) {
-      setProfileError(err.response?.data?.message || 'Failed to update profile');
+    } catch (err) {
+      setProfileError(apiErrorMessage(err) || 'Failed to update profile');
     } finally {
       setProfileSaving(false);
     }
@@ -442,8 +443,8 @@ export default function ProfilePage() {
       await refreshUser();
       setAvatarSuccess('Avatar updated!');
       setTimeout(() => setAvatarSuccess(''), 3000);
-    } catch (err: any) {
-      setAvatarError(err.response?.data?.message || 'Failed to upload avatar');
+    } catch (err) {
+      setAvatarError(apiErrorMessage(err) || 'Failed to upload avatar');
       setAvatarPreview(null);
     } finally {
       setAvatarUploading(false);
@@ -472,8 +473,8 @@ export default function ProfilePage() {
       setPwNew('');
       setPwConfirm('');
       setTimeout(() => setPwSuccess(''), 4000);
-    } catch (err: any) {
-      setPwError(err.response?.data?.message || 'Failed to change password');
+    } catch (err) {
+      setPwError(apiErrorMessage(err) || 'Failed to change password');
     } finally {
       setPwSaving(false);
     }
@@ -492,8 +493,8 @@ export default function ProfilePage() {
         if (cancelled) return;
         clearLegacyPrefs();
         setPrefs(fetched ?? {});
-      } catch (err: any) {
-        if (!cancelled) setPrefsError(err?.response?.data?.message || 'Failed to load preferences');
+      } catch (err) {
+        if (!cancelled) setPrefsError(apiErrorMessage(err) || 'Failed to load preferences');
       } finally {
         if (!cancelled) setPrefsLoaded(true);
       }
@@ -530,8 +531,8 @@ export default function ProfilePage() {
         setPrefsSaved(true);
         if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
         savedTimerRef.current = setTimeout(() => setPrefsSaved(false), 2000);
-      } catch (err: any) {
-        setPrefsError(err?.response?.data?.message || 'Failed to save preferences');
+      } catch (err) {
+        setPrefsError(apiErrorMessage(err) || 'Failed to save preferences');
       } finally {
         setPrefsSaving(false);
       }
@@ -565,8 +566,8 @@ export default function ProfilePage() {
       await profileService.deleteAccount(deletePassword);
       await logout();
       navigate('/auth/login');
-    } catch (err: any) {
-      setDeleteError(err.response?.data?.message || 'Failed to delete account');
+    } catch (err) {
+      setDeleteError(apiErrorMessage(err) || 'Failed to delete account');
     } finally {
       setDeleting(false);
     }

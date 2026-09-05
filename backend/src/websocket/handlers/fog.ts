@@ -9,6 +9,7 @@ import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices } from '../shared';
+import { toJson } from '../../utils/prisma-json';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -50,7 +51,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
       const fog: FogState = loadFogState(map, map.fogData as FogState | null);
       applyWsFogOperation(fog, parsed.data);
 
-      await prisma.map.update({ where: { id: mapId }, data: { fogData: fog as any } });
+      await prisma.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
 
       // Broadcast: DM gets full state; all others get revealed-cell indices + grid metadata
       const campaignSockets = await io.in(socket.campaignId).fetchSockets();

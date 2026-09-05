@@ -3,6 +3,8 @@
  * Mirrors backend types from backend/src/game-systems/pathfinder2e.ts
  */
 
+import type { FeatureEntry } from '@/utils/featureEntries';
+
 /**
  * Ability score with modifier
  */
@@ -287,6 +289,14 @@ export interface PF2eSpellSlots {
 /**
  * Cantrip
  */
+/**
+ * A ritual, as either a bare name or a name with the rank it is cast at.
+ *
+ * The editor writes the second; the backend schema accepts both, so a sheet
+ * written when only the bare name was allowed still loads.
+ */
+export type PF2eRitual = string | { name: string; rank: number };
+
 export interface PF2eCantrip {
   rank: number;
   name: string;
@@ -358,7 +368,7 @@ export interface PF2eSpellcasting {
   spells: PF2eSpell[];
   focusSpells: PF2eFocusSpells;
   innateSpells: PF2eInnateSpell[];
-  rituals: string[];
+  rituals: PF2eRitual[];
 }
 
 /**
@@ -437,7 +447,11 @@ export interface PF2eCharacterData {
   bulk?: PF2eBulk;
   languages?: string[];
   feats?: PF2eFeats;
-  classFeatures?: string[];
+  /**
+   * Class features: a name with optional rules text. Strings are still read,
+   * meaning a feature with no description. See utils/featureEntries.
+   */
+  classFeatures?: Array<string | FeatureEntry>;
   spellcasting?: PF2eSpellcasting;
   appearance?: PF2eAppearance;
   personality?: PF2ePersonality;

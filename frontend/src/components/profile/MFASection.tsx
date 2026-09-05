@@ -21,6 +21,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
 // Inline Disable Form
@@ -59,8 +60,8 @@ function DisableForm({ onClose }: { onClose: () => void }) {
       await disableMFA(password, token);
       setSuccess(true);
       setTimeout(onClose, 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to disable MFA');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to disable MFA');
     } finally {
       setSubmitting(false);
     }
@@ -152,8 +153,8 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
       const { api } = await import('@/services/api');
       const result = await api.mfaRegenerateBackupCodes(password);
       setNewCodes(result.backupCodes);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to regenerate backup codes');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to regenerate backup codes');
     } finally {
       setSubmitting(false);
     }

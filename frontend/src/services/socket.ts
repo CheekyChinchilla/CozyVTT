@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import type {
+  MessageMetadata,
+  Map as CampaignMap,
   TokenMoveStartEvent,
   TokenMoveEvent,
   TokenMoveEndEvent,
@@ -11,6 +13,7 @@ import type {
   ChatMessageBroadcast,
   SessionStartEvent,
   SessionStartedBroadcast,
+  SessionPausedBroadcast,
   VibeUpdateEvent,
   VibeUpdatedBroadcast,
   SpiritLayerToggleEvent,
@@ -42,7 +45,27 @@ import type {
 // Vite dev server proxies in development)
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
 
-type EventCallback<T = any> = (data: T) => void;
+type EventCallback<T = unknown> = (data: T) => void;
+
+/**
+ * A listener as the registry holds it, once its payload type has been erased.
+ *
+ * The registry stores handlers for every event together, so it cannot name one
+ * payload type. `never` is what makes that sound rather than a fiction: a
+ * parameter is contravariant, so `(data: DiceRolledEvent) => void` is assignable
+ * to `(data: never) => void` while `(data: unknown) => void` is not — and unlike
+ * `any` it does not hand callers a free pass to read anything off the payload.
+ */
+type StoredCallback = (data: never) => void;
+
+/**
+ * socket.io's own listener signature. Handing it a `StoredCallback` needs one
+ * cast, because socket.io types its payload as `any[]` and nothing is assignable
+ * to `never`. This is the real boundary — past this point the payload is
+ * whatever arrived over the wire — so the cast is confined to the three places
+ * that touch it rather than spread through the registry.
+ */
+type SocketIoListener = (...args: unknown[]) => void;
 
 class SocketClient {
   private socket: Socket | null = null;
@@ -67,21 +90,21 @@ class SocketClient {
    * Keeping the registry here rather than asking each component to re-subscribe
    * means a component added later cannot reintroduce the bug.
    */
-  private listeners = new Map<string, Set<EventCallback>>();
+  private listeners = new Map<string, Set<StoredCallback>>();
 
   constructor() {
     // Socket will be initialized when connect() is called
   }
 
   /** Record a listener and attach it to the current socket, if there is one. */
-  private addListener(event: string, callback: EventCallback): void {
+  private addListener(event: string, callback: StoredCallback): void {
     let forEvent = this.listeners.get(event);
     if (!forEvent) {
       forEvent = new Set();
       this.listeners.set(event, forEvent);
     }
     forEvent.add(callback);
-    this.socket?.on(event, callback);
+    this.socket?.on(event, callback as SocketIoListener);
   }
 
   /** Attach every recorded listener to a freshly created socket. */
@@ -89,7 +112,7 @@ class SocketClient {
     if (!this.socket) return;
     for (const [event, callbacks] of this.listeners) {
       for (const callback of callbacks) {
-        this.socket.on(event, callback);
+        this.socket.on(event, callback as SocketIoListener);
       }
     }
   }
@@ -268,7 +291,12 @@ class SocketClient {
     });
   }
 
-  onSyncState(callback: EventCallback) {
+  // `never` rather than the `unknown` default: this event has no payload type
+  // declared yet, and `EventCallback<unknown>` would reject a handler that names
+  // its own payload — forcing the next subscriber into a cast. Same
+  // contravariance the registry relies on. Replace with a real payload type when
+  // `sync.state` gains one.
+  onSyncState(callback: EventCallback<never>) {
     this.addListener('sync.state', callback);
   }
 
@@ -348,7 +376,7 @@ class SocketClient {
     this.addListener('chat.message', callback);
   }
 
-  onChatSystem(callback: EventCallback<{ content: string; metadata?: any; timestamp: string }>) {
+  onChatSystem(callback: EventCallback<{ content: string; metadata?: MessageMetadata; timestamp: string }>) {
     this.addListener('chat.system', callback);
   }
 
@@ -360,7 +388,7 @@ class SocketClient {
     this.socket?.emit('map.change', { mapId });
   }
 
-  onMapChanged(callback: EventCallback<{ mapId: string; mapData: any }>) {
+  onMapChanged(callback: EventCallback<{ mapId: string; mapData: CampaignMap; spiritVisible?: boolean }>) {
     this.addListener('map.changed', callback);
   }
 
@@ -384,7 +412,7 @@ class SocketClient {
     this.addListener('session.started', callback);
   }
 
-  onSessionPaused(callback: EventCallback) {
+  onSessionPaused(callback: EventCallback<SessionPausedBroadcast>) {
     this.addListener('session.paused', callback);
   }
 
@@ -392,7 +420,7 @@ class SocketClient {
     this.addListener('session.ended', callback);
   }
 
-  onSessionResumed(callback: EventCallback) {
+  onSessionResumed(callback: EventCallback<SessionStartedBroadcast>) {
     this.addListener('session.resumed', callback);
   }
 
@@ -550,14 +578,14 @@ class SocketClient {
   // Event Cleanup
   // ============================================
 
-  on(event: string, callback: EventCallback) {
+  on(event: string, callback: StoredCallback) {
     this.addListener(event, callback);
   }
 
-  off(event: string, callback?: EventCallback) {
+  off(event: string, callback?: StoredCallback) {
     if (callback) {
       this.listeners.get(event)?.delete(callback);
-      this.socket?.off(event, callback);
+      this.socket?.off(event, callback as SocketIoListener);
     } else {
       this.listeners.delete(event);
       this.socket?.off(event);

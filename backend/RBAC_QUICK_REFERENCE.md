@@ -1,5 +1,7 @@
 # RBAC Quick Reference Guide
 
+_Last verified against the code on 2026-09-01._
+
 ## Middleware Cheat Sheet
 
 ### Import Statement
@@ -76,6 +78,22 @@ if (!canMove) {
   return res.status(403).json({ error: 'Cannot move this token' });
 }
 ```
+
+#### Which token fields a player may change
+
+`PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` is mounted on
+`campaignMember`, so the route guard alone does **not** decide this. A player who
+controls the token may change only where it is and how it looks in play:
+
+| A player controlling the token may set | Everything else is DM-only |
+|---|---|
+| `position`, `rotation`, `size`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata` |
+
+The DM-only list is `restrictedFields` in `routes/maps.ts`. **Adding a token field
+means adding it there too** unless a player is meant to write it — the list is
+deny-based, so a new field is player-writable by default. That is how `metadata`
+came to be writable by any campaign member: it was added to the token shape and
+never added to the list.
 
 #### Check Campaign Deletion Permission
 ```typescript
@@ -157,6 +175,56 @@ router.put('/api/characters/:characterId', authenticated, async (req: Authentica
   // ... proceed with update
 });
 ```
+
+---
+
+## Per-user permission flags
+
+Four booleans on `User` gate things the role system does not. None is carried in
+the session, so each is read from the database at the point of use — do not
+assume `req.session` knows about them.
+
+| Flag | Default | What it gates |
+|---|---|---|
+| `globalAssetManager` | `false` | Uploading or managing GLOBAL-scope assets. Checked in `routes/assets.ts` alongside `platformRole === 'ADMIN'`; either is sufficient. |
+| `templateEditor` | `false` | Publishing, editing and deleting shared character sheets (`/api/character-templates`). Checked in `routes/characterTemplates.ts`; platform ADMIN also passes. |
+| `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
+| `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
+
+## Reading an asset: access follows use
+
+The four asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
+`/audio/:id`, `/avatars/:userId`) decide read access from the asset's **scope**.
+`GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that campaign's members,
+and `USER` by its uploader.
+
+Scope alone is not enough for maps and tokens, because an asset can be *used*
+somewhere its scope does not describe. A DM picking a map out of their own
+library — which the picker offers, listing personal assets with no campaign
+filter — leaves every player at that table 403ing on the battlemap. So
+`routes/assets.ts` funnels both image routes through one `canReadAssetFile`,
+which falls back to `assetUsedInUserCampaign(assetId, userId)`: true when a map
+layer, a token placed on a map, a character, a creature template or a token
+template in one of the caller's campaigns points at that asset.
+
+Three things this deliberately does **not** do:
+
+- **It does not re-scope the asset.** `Asset.scope` carries a single
+  `campaignId`, and one map is commonly shared by several campaigns at once, so
+  promoting it on use would break the others.
+- **It grants read only.** Deleting and editing are decided by their own routes
+  and are unchanged — seeing the battlemap must not mean being able to delete it.
+- **It does not cover audio or avatars.** Those have their own reference paths
+  and were left alone.
+
+Two things to get right when adding a check of this kind:
+
+- **Read the flag, do not trust the session.** `templateEditor` and
+  `globalAssetManager` are deliberately not session fields, so a permission
+  change takes effect immediately rather than after the next sign-in.
+- **Branch on `code`, not on the message.** The password-change gate answers with
+  a machine-readable `code`; clients route on that, and changing the wording must
+  not change behaviour.
 
 ---
 

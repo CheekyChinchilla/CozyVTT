@@ -38,9 +38,15 @@ If you become a collaborator, here's what the codebase expects:
 
 ### Code Quality
 
-- **TypeScript strict mode** — no `any`, no implicit nulls
-- **Tests** — new features should include tests; bug fixes should include a regression test
-- **No new linter warnings** — `npm run lint` in the frontend must pass cleanly
+- **TypeScript strict mode** — no implicit nulls, and **no `any`**. This is not a
+  style preference: `@typescript-eslint/no-explicit-any` is an *error* in both
+  packages, so a diff containing one will not lint. Reach for `unknown` and a
+  narrowing helper instead — `frontend/src/utils/errors.ts` and
+  `backend/src/utils/prisma-json.ts` cover the two common cases
+- **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix
+- **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
+- **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), and CI runs the same commands
+- **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit
 
 ### Security
 

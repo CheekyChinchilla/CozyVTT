@@ -131,6 +131,7 @@ model User {
   creatureFavorites   CreatureFavorite[]
   tokenTemplates      TokenTemplate[]
   characterTemplates  CharacterTemplate[]    @relation("CharacterTemplateAuthor")
+  personalNotes       PersonalNote[]
 
   @@index([email])
 }
@@ -211,6 +212,7 @@ model Campaign {
   creatureTemplates  CreatureTemplate[]
   creatureFavorites  CreatureFavorite[]
   tokenTemplates     TokenTemplate[]
+  personalNotes      PersonalNote[]
 
   @@index([ownerId])
   @@index([status])
@@ -256,6 +258,41 @@ model CampaignInvitation {
 // ============================================
 // SESSION MANAGEMENT
 // ============================================
+
+/// Notes a player or DM keeps for themselves, written in Markdown.
+///
+/// Private to whoever wrote them — including from the DM. Not to be confused
+/// with `Session.notes`, which is a shared recap the whole campaign reads, or
+/// with `TokenTemplate.notes`. Secret dice rolls are visible to the DM because
+/// disputes need settling; nothing here needs that, so "personal" means it, and
+/// every route scopes its query by the session's own user id.
+///
+/// `content` is Markdown source exactly as typed. Postgres TEXT has no
+/// practical ceiling; the limit that matters is in the validator, so the column
+/// never has to change if that limit is revisited. The list endpoint
+/// deliberately does not select it — a panel that shipped every body would
+/// transfer megabytes each time it opened.
+model PersonalNote {
+  id String @id @default(uuid())
+
+  /// Cascade: a personal note has no meaning without its author.
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Notes belong to the campaign they were written in, and go with it.
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  title   String
+  content String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The only query shape there is: this user's notes in this campaign, most
+  /// recently edited first.
+  @@index([userId, campaignId, updatedAt])
+}
 
 model Session {
   id            String   @id @default(uuid())

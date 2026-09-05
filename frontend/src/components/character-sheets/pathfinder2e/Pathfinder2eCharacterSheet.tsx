@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import { CharacterSheetProps } from '../types';
+import type { CharacterData } from '../../../types';
 import Pathfinder2eCharacterView from './Pathfinder2eCharacterView';
 import Pathfinder2eCharacterEditor from './Pathfinder2eCharacterEditor';
 
@@ -14,7 +15,7 @@ export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props)
   const { mode, character, onSave, onDirtyChange } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
-  const handleSave = async (data: any, showToast?: boolean, tokenImageUrl?: string) => {
+  const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }

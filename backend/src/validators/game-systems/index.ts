@@ -142,14 +142,6 @@ const SHEET_NAME_FIELD: Record<GameSystem, string> = {
   [GameSystem.CALL_OF_CTHULHU_7E]: 'investigatorName',
 };
 
-/** Placeholders the blank-sheet factories ship with; safe to overwrite. */
-const FACTORY_NAME_DEFAULTS = new Set([
-  'New Character',
-  'New Runner',
-  'New Investigator',
-  'Blank Investigator',
-]);
-
 /**
  * The name written on a sheet, whichever field that system keeps it in.
  *
@@ -170,9 +162,17 @@ export function sheetNameFor(
 /**
  * Stamp the character's name and its owner's display name into the sheet.
  *
- * Only fills a field that is absent or still a factory placeholder — a name
- * somebody deliberately typed is never clobbered. Returns a new object; the
- * input is not mutated.
+ * Called from character creation and nowhere else, where the caller has just
+ * supplied a name for the character being made — so that name wins outright.
+ *
+ * It used to overwrite only a blank field or one of four known factory
+ * placeholders, which meant a character started from an *example* template kept
+ * the template's name: type "Grimtooth Ashfang", pick the Level 1 Fighter, and
+ * get a sheet headed "Brave Fighter". Worse, `PUT /characters/:id` takes the
+ * sheet as authoritative for the name, so the first save copied that back over
+ * the character record and renamed the character permanently.
+ *
+ * Returns a new object; the input is not mutated.
  */
 export function applyIdentityToSheet(
   gameSystem: GameSystem | null | undefined,
@@ -185,9 +185,11 @@ export function applyIdentityToSheet(
 
   const nameField = SHEET_NAME_FIELD[gameSystem];
   if (nameField) {
-    const current = sheet[nameField];
-    if (typeof current !== 'string' || current.trim() === '' || FACTORY_NAME_DEFAULTS.has(current)) {
-      sheet[nameField] = characterName;
+    // Only when one was actually supplied: an empty name would blank the sheet
+    // rather than leave it as it is.
+    const supplied = typeof characterName === 'string' ? characterName.trim() : '';
+    if (supplied) {
+      sheet[nameField] = supplied;
     }
   }
 

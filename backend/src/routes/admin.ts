@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
+import { errorCode, errorMessage, errorStderr } from '../utils/errors';
 import {
   getSystemSettings,
   updateSystemSettings,
@@ -692,9 +693,9 @@ router.post('/smtp/test', async (req, res) => {
     await writeAdminLog(req.session.userId!, `Sent SMTP test email to ${admin.email}`, 'INFO');
 
     return res.json({ message: `Test email sent to ${admin.email}` });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('SMTP test error', { err: error });
-    return res.status(500).json({ error: 'SMTP Error', message: error.message || 'Failed to send test email' });
+    return res.status(500).json({ error: 'SMTP Error', message: errorMessage(error) || 'Failed to send test email' });
   }
 });
 
@@ -722,14 +723,14 @@ router.post('/backups', async (req, res) => {
     // --clean --if-exists adds DROP statements so the restore works on an existing DB
     try {
       await execFileAsync('pg_dump', ['--dbname', dbUrl, '--file', sqlPath, '--clean', '--if-exists']);
-    } catch (execError: any) {
-      if (execError.code === 'ENOENT') {
+    } catch (execError: unknown) {
+      if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
           error: 'Tool Not Available',
           message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('pg_dump error:', execError.stderr || execError.message);
+      logger.error('pg_dump error:', errorStderr(execError) || errorMessage(execError));
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
 
@@ -877,14 +878,14 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     // 3. Restore the database
     try {
       await execFileAsync('psql', ['--dbname', dbUrl, '--file', sqlPath]);
-    } catch (execError: any) {
-      if (execError.code === 'ENOENT') {
+    } catch (execError: unknown) {
+      if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
           error: 'Tool Not Available',
           message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('psql restore error:', execError.stderr || execError.message);
+      logger.error('psql restore error:', errorStderr(execError) || errorMessage(execError));
       return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
     }
 

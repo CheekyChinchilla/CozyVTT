@@ -10,6 +10,7 @@ import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/wal
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { mapEditLimiter } from '../shared';
+import { toJson } from '../../utils/prisma-json';
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -45,7 +46,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await prisma.map.update({ where: { id: mapId }, data: { lights: [...existing, parsed.data] as any } });
+      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson([...existing, parsed.data]) } });
 
       io.to(socket.campaignId).emit('light:added', { mapId, light: parsed.data });
     } catch (error) {
@@ -78,7 +79,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
       const filtered = existing.filter((l) => l.id !== lightId);
 
-      await prisma.map.update({ where: { id: mapId }, data: { lights: filtered as any } });
+      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(filtered) } });
 
       io.to(socket.campaignId).emit('light:removed', { mapId, lightId });
     } catch (error) {
@@ -122,7 +123,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       existing[idx] = parsed.data;
-      await prisma.map.update({ where: { id: mapId }, data: { lights: existing as any } });
+      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(existing) } });
 
       io.to(socket.campaignId).emit('light:updated', { mapId, light: parsed.data });
     } catch (error) {
@@ -158,7 +159,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await prisma.map.update({ where: { id: mapId }, data: { lights: parsed.data as any } });
+      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(parsed.data) } });
 
       io.to(socket.campaignId).emit('lights:replaced', { mapId, lights: parsed.data });
     } catch (error) {

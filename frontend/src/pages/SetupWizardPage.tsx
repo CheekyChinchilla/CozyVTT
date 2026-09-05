@@ -17,6 +17,7 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -41,7 +42,7 @@ interface SystemConfigData {
 
 export default function SetupWizardPage() {
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
+  const { adoptSession } = useAuth();
   const { mascotUrl } = useTheme();
 
   // Step management
@@ -187,24 +188,35 @@ export default function SetupWizardPage() {
     setLoading(true);
 
     try {
-      // Call setup initialization endpoint
-      await setupService.initializeSetup({
+      // Call setup initialization endpoint.
+      //
+      // The system configuration step travels with the admin's details: it was
+      // collected and shown back on the review screen but never sent, so every
+      // instance came up with the defaults no matter what was chosen.
+      const { user } = await setupService.initializeSetup({
         email: adminData.email,
         password: adminData.password,
         displayName: adminData.displayName,
+        instanceName: systemConfig.instanceName,
+        timezone: systemConfig.timezone,
+        allowRegistration: systemConfig.enableRegistration,
       });
 
-      // Refresh auth context to get the new admin user
-      await refreshUser();
+      // Take up the session the server just created. `refreshUser()` cannot do
+      // this — it returns early while the context still thinks nobody is signed
+      // in, which is exactly the state we are in here, so the navigation below
+      // used to hit the route guard and bounce the new admin to the login page.
+      adoptSession(user);
 
       // Redirect to dashboard
       navigate('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Setup error:', err);
 
-      if (err.response?.data?.error) {
-        setError(err.response.data.message || err.response.data.error);
-      } else if (err.response?.status === 400) {
+      const serverError = apiErrorText(err);
+      if (serverError) {
+        setError(apiErrorMessage(err) || serverError);
+      } else if (apiErrorStatus(err) === 400) {
         setError('Setup has already been completed');
       } else {
         setError('An error occurred during setup. Please try again.');

@@ -7,18 +7,12 @@
 import React from 'react';
 import { Swords, Plus, Trash2, Dices } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import type { CoC7eWeapon } from '@/types/game-systems';
 
-interface Weapon {
-  name: string;
-  skill: string;
-  skillValue: number;
-  damage: string;
-  range: string;
-  attacks: number;
-  ammo: number | null;
-  malfunction: number | null;
-  notes?: string;
-}
+// The weapon shape lives in types/game-systems. This file used to keep its own
+// copy, which required `skill`, `damage` and the rest that the backend schema
+// makes optional — so the two disagreed about what a saved weapon has to carry.
+type Weapon = CoC7eWeapon;
 
 interface WeaponsListProps {
   /** Array of weapons from character data */
@@ -43,7 +37,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
   onChange,
   onRoll,
 }) => {
-  const handleWeaponChange = (index: number, field: keyof Weapon, value: any) => {
+  const handleWeaponChange = <K extends keyof Weapon>(index: number, field: K, value: Weapon[K]) => {
     if (!onChange) return;
     const updated = [...weapons];
     updated[index] = { ...updated[index], [field]: value };
@@ -177,7 +171,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                   {/* Damage — click to roll damage separately */}
                   <td
                     className={`px-3 py-2 text-center ${isClickable && weapon.damage ? 'cursor-pointer hover:text-red-700 font-semibold' : ''}`}
-                    onClick={isClickable && weapon.damage ? (e) => { e.stopPropagation(); onRoll!(weapon.damage, `${weapon.name} Damage`); } : undefined}
+                    onClick={isClickable && weapon.damage ? (e) => { e.stopPropagation(); onRoll!(weapon.damage!, `${weapon.name} Damage`); } : undefined}
                     title={isClickable && weapon.damage ? `Click to roll damage: ${weapon.damage}` : undefined}
                   >
                     {editable ? (

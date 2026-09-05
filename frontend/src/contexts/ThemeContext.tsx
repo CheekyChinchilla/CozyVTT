@@ -28,6 +28,9 @@ import {
 } from '@/themes';
 import type { ThemeColors } from '@/themes';
 
+/** The named colours `buildCustomThemeColors` requires. */
+type CustomThemeInput = Parameters<typeof buildCustomThemeColors>[0];
+
 // localStorage key for flash-prevention cache. Keep stable across releases —
 // changing it would force a one-time flash for every existing user on upgrade.
 const USER_THEME_CACHE_KEY = 'cozyvtt_user_theme';
@@ -111,7 +114,12 @@ function resolveColors(
   customColors: UserThemeCache['customThemeColors'] | Record<string, string> | null | undefined
 ): ThemeColors {
   if (themeId === 'custom' && customColors) {
-    return buildCustomThemeColors(customColors as any);
+    // Stored custom colours are a loose `Record<string, string>`, while the
+    // builder wants named keys. This asserts the stored record has that shape,
+    // which is what the code has always assumed — but it names the shape, so
+    // the assertion follows the builder's signature if that changes, and a
+    // number or a string can no longer be passed here the way `any` allowed.
+    return buildCustomThemeColors(customColors as CustomThemeInput);
   }
   const theme = getThemeById(themeId || '') || PRESET_THEMES[0];
   return theme.colors;
@@ -202,7 +210,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         prefs.themeId === 'custom'
           ? prefs.customThemeColors ?? null
           : appearance?.themeId === 'custom'
-          ? (appearance?.customThemeColors as any) ?? null
+          ? appearance?.customThemeColors ?? null
           : null;
       applyThemeColors(resolveColors(themeId, customColors));
 

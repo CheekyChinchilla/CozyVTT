@@ -133,4 +133,15 @@ export interface AuthContextType {
   disableMFA: (password: string, token: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
+  /**
+   * Take up a session the server established outside the login form.
+   *
+   * `refreshUser` cannot do this: it returns early unless the context already
+   * believes it is authenticated, which is the whole point — an anonymous
+   * visitor should not poll `/api/auth/me` on every render. The setup wizard is
+   * the case that breaks: `POST /api/setup/init` creates the admin, signs them
+   * in server-side and hands the user back, at which point the browser holds a
+   * valid session the context knows nothing about.
+   */
+  adoptSession: (user: User) => void;
 }

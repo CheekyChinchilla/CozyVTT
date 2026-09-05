@@ -71,7 +71,11 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 ### The Campaign Roster
 
-The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. This is a quick-reference during sessions for names, character names, and party composition.
+The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. It is a quick reference during sessions for names, character names and party composition — and it is also how you get a player's character onto the map.
+
+**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves.
+
+**Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
 **Who's actually here.** A small dot on each person's icon shows whether they're connected right now — green for in session, grey for not. It updates as people arrive and leave, so you can tell at a glance whether the quiet player is thinking or has dropped off. Someone with the campaign open in two tabs stays green until they close the last one.
 
@@ -154,7 +158,11 @@ The **Token Roster** (visible only to you, in the left sidebar) lists all tokens
 
 ### Placing Tokens on the Map
 
-Tokens aren't automatically placed on the map — you drag them from the Token Manager onto the canvas.
+Tokens aren't automatically placed on the map. Where you drag them from depends on what they are:
+
+- **Player characters** — from the **Campaign Roster**, or right-click a character there and choose **Add to Map**.
+- **NPCs and monsters** — from the **Creature Library**, or the **Place on Map** button on a creature.
+- **Anything you built yourself** — from the **Token Manager**.
 
 *GIF pending — Dragging a token from the manager onto the map.*
 
@@ -181,7 +189,7 @@ Click any token on the map to open the **Quick Editor**. From here you can:
 - View and edit the stat block (for NPC tokens with creature template data)
 - **Change the token image** — click the token avatar in the Quick Editor header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
-- Apply or remove conditions. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+- Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
 *Screenshot pending — NPC quick editor popup with image picker.*
 
@@ -240,6 +248,10 @@ If a token doesn't have a stat block, or you're running one of the systems above
 The **Dice** tab keeps the rolls made in your campaign, newest first, with arrows to step back through them. It's stored on the server, so it survives a refresh, a navigation away and back, and a dropped connection — yours and your players'. Come back the next evening and last session's rolls are still there.
 
 **What each person sees.** Players see the open rolls plus their own secret ones. You see everything, including your players' secret rolls, marked as such — the same oversight you have live. That filtering happens on the server, so a player reloading the page never picks up a roll they weren't meant to see.
+
+**Personal notes are the exception.** The **Notes** tab gives every member their own Markdown notes for the campaign, and those you cannot see — not through the interface, and not by any request the app will answer. It is the one place a player has that you have no window into, deliberately: unlike a secret roll, nothing about a player's private planning needs settling by you. You get the same tab for your own notes, equally private from them.
+
+Your players are told this plainly now. The secret-roll checkbox used to read "only you can see", which was not true and set an expectation you could not keep; it reads "hidden from other players" instead, and the confirmation says your DM can still see it. Nobody is going to be surprised later that you were watching.
 
 **Clearing it.** Only you can, using the trash icon on the Dice panel. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
 
@@ -560,7 +572,30 @@ Click **Resume Session** when you're ready to continue.
 
 Click **End Session** when the adventure is done for the night. CozyVTT will save the session state — token positions, chat history, initiative order — so everything is ready for next time.
 
+The dialog also offers a **Session Notes** box. Whatever you write there is kept with that session and shown to **everyone in the campaign** under **Session → Past Sessions**, newest first, with the date and how long you played. It is the recap your players read before the next game, so write it for them rather than as a private reminder — there is nowhere here that hides notes from the table.
+
+Leaving it blank is fine; the session still appears in the list, marked as having no notes.
+
 *Screenshot pending — End session confirmation dialog.*
+
+### Editing or clearing a past session's notes
+
+Under **Session → Past Sessions**, each entry has a **pencil** button that only
+you can see. Click it to rewrite that session's notes, then the **tick** to save
+or the **cross** to cancel.
+
+**To delete a recap entirely, clear the box and save.** The entry stays in the
+list — it is a record that the session happened — but it goes back to reading
+"No notes were written."
+
+This exists for a specific reason. CozyVTT saved session notes long before
+anything displayed them, so the first time you open Past Sessions you may find
+recaps going back months that nobody has ever seen — including any you wrote as
+private reminders to yourself, back when nothing showed them to anyone. Read
+through them and clear anything you would rather the table did not see.
+
+Notes are limited to 2,000 characters, the same as the box in the end-session
+dialog.
 
 ### The Chat Panel (DM View)
 
@@ -595,7 +630,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **+ Add** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant carries its token's name, portrait and HP across automatically. Set an initiative value by clicking the number beside a combatant, or use the dice button on a row to roll one. Initiative values are saved on the token, so they survive ending and restarting combat.
+Each combatant carries its token's name, portrait and HP across automatically, but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in chat.
 
@@ -698,6 +733,10 @@ The panel's **Reveal all** and **Hide all** buttons apply to the entire map. Bot
 ### Fog and Tokens
 
 A token standing in an unrevealed area is hidden from players entirely, even if the token itself is set to visible. That is what makes fog useful for staging: you can place a room full of monsters in advance and your players will not see them until you reveal the square they are standing in.
+
+**Entirely** means the details panel too. Pointing at an unrevealed square tells a player nothing — no name, no picture, no hit points, no conditions. A player's own token is the one exception, and is always shown to them wherever it stands.
+
+Worth knowing what fog does *not* do: it hides tokens from view, but the map still sends them to the player's browser, because revealing a square has to be instant. A token you want kept secret from a determined player should be set **hidden** rather than merely left in the dark — a hidden token is never sent at all.
 
 ---
 
@@ -828,6 +867,34 @@ Place light sources on the map to illuminate areas for players. Each light has t
 
 When two dim zones from different light sources overlap, the combined area is treated as bright light.
 
+#### A light does not see for your players
+
+A light shows a player something only where their own character could already
+have seen it. Walls block sight as well as light, so a lamp burning inside a
+closed room reveals nothing to someone standing outside it, and the creatures in
+that room are not sent to their browser at all until they can see in. This is how
+dynamic lighting works in every virtual tabletop that has it, and it is what lets
+you light a building in advance without spoiling what is inside.
+
+A token's **sight radius** governs how far it makes things out in the dark. It
+does not limit how far it can notice something that is lit: a character with a
+short sight radius still sees a bonfire across a field, provided nothing solid is
+in the way.
+
+Two practical consequences when you are building a map:
+
+- **A room stays dark until someone can see into it.** If you want a lit room
+  visible from the corridor, leave a door or a gap — a sealed room reads as
+  darkness, which is usually what you want.
+- **Windows are not walls.** A window segment passes light and sight, so a lit
+  room behind one *is* visible from outside. That is the tool for "you can see
+  the lamp burning through the shutters".
+
+> **If you are upgrading from 1.2.2**, this is a change. Lit rooms used to be
+> visible to everyone whether or not they could see in, so maps built against
+> that behaviour may now be darker than you expect until a character gets line of
+> sight.
+
 #### Placing Lights
 
 1. Open the **Lights** panel in the wall/lighting controls
@@ -866,15 +933,28 @@ As DM you always see all walls and the full map. To preview what a player is act
 
 ## The Spirit Layer
 
-The Spirit Layer is an alternate visual overlay for your map — useful for games where some characters can perceive things others can't (astral space in Shadowrun, ethereal plane in D&D, spirit world in various systems).
+The Spirit Layer is a second plane for your map — useful for games where some characters can perceive things others can't (astral space in Shadowrun, the ethereal plane in D&D, the spirit world in various systems).
 
-### Toggling the Spirit Layer
+It is a **separate plane, not a see-through overlay.** Someone viewing the spirit realm sees the tokens on that plane *instead of* the ordinary ones, not as well as them. You, as DM, always see both.
 
-Click the **Spirit Layer** button in the campaign header to open the Spirit Layer controls.
+### Sending players to the spirit realm
+
+There are two ways a player ends up there:
+
+- **The whole table at once.** Click the **Spirit Layer** button in the campaign header and toggle it **on**. Every player is in the spirit realm until you toggle it back off.
+- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane.
 
 *Screenshot pending — Spirit Layer control panel.*
 
-Toggle the spirit layer **on** to activate the overlay on the map. Toggle it **off** to return to the normal view.
+Players in the spirit realm see a pulsing **Spirit Realm** badge in the corner of the map, so they know why the view changed.
+
+> **A player in the spirit realm cannot see ordinary tokens — including their own.** That is the point: they have left the material plane. It has one surprising consequence, below.
+
+### The Spirit Layer and dynamic lighting
+
+On a map with **dynamic lighting** switched on, a player sees by their own token's line of sight. A player who is in the spirit realm but has no spirit-layer token has nothing to see with — so the map renders **completely black** for them.
+
+If a player reports a black map, check whether the Spirit Layer is toggled on in the campaign header. Either switch it off, or give that player a spirit-layer token to look through.
 
 ### Spirit Layer Styles
 
@@ -889,7 +969,7 @@ Two style options are available:
 
 ### Token Visibility in the Spirit Layer
 
-Each token can be set as visible or hidden within the spirit layer independently of its normal-world visibility. This lets you show astral/spiritual entities only to characters with the perception to see them.
+Every token sits on exactly one plane: the material one, or the spirit layer. Moving a token to the spirit layer is what makes it visible to players in the spirit realm — and hides it from everyone still on the material plane. This is how you show astral or spiritual entities only to the characters with the perception to see them.
 
 In the Token Manager, toggle **Spirit Layer Visibility** for each token as needed.
 

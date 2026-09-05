@@ -12,6 +12,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { readTokens } from '../utils/prisma-json';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ export async function exportCampaign(
     const spiritLayerRef = map.spiritLayerUrl ? await registerAsset(map.spiritLayerUrl) : null;
 
     // Register token image assets
-    const tokens = (includeTokens ? (map.tokens as any[]) || [] : []);
+    const tokens = includeTokens ? readTokens(map.tokens) : [];
     for (const token of tokens) {
       if (token.imageUrl) {
         const tokenAssetRef = await registerAsset(token.imageUrl);
@@ -197,7 +198,7 @@ export async function exportCampaign(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.2.2'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.3.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,

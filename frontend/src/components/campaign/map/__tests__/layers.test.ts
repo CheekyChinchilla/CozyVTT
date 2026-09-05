@@ -16,6 +16,7 @@ import { drawWalls } from '../layers/drawWalls';
 import { drawFogSelection, type FogSelectionState } from '../layers/drawOverlays';
 import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
 import { drawSpiritLayer } from '../layers/drawBackground';
+import { drawDynamicLighting } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
@@ -534,6 +535,88 @@ describe('computeVisionState', () => {
     expect(vision.all).toHaveLength(2);
     expect(vision.all[0]).toBe(vision.tokenVision[0]);
     expect(vision.all[1]).toBe(vision.lightVision[0]);
+  });
+});
+
+/**
+ * Dynamic lighting: what a light is allowed to reveal.
+ *
+ * Each light is clipped to its own visibility polygon, which gives it wall
+ * shadows — but that only says where the light falls, not who can see where it
+ * falls. Adding it straight to the coverage mask meant every lit patch anywhere
+ * was subtracted from the fog, so a lamp inside a sealed room lit that room for
+ * a player standing outside it, and the server sent them the creatures in it.
+ *
+ * The light layer is therefore intersected with the viewer's line of sight
+ * before it joins the mask. These pin that the intersection happens at all,
+ * which a refactor could otherwise drop in silence.
+ */
+describe('drawDynamicLighting', () => {
+  interface OpCall { method: string; op: string }
+
+  /** A context that records the composite operation in force at each call. */
+  function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[] } {
+    const ops: OpCall[] = [];
+    const gradient = { addColorStop: () => {} };
+    const ctx = {
+      globalCompositeOperation: 'source-over',
+      fillStyle: '', filter: 'none', globalAlpha: 1,
+      createRadialGradient: () => gradient,
+    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string };
+    for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+      'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage']) {
+      (ctx as unknown as Record<string, unknown>)[m] = () =>
+        ops.push({ method: m, op: ctx.globalCompositeOperation });
+    }
+    return { ctx, ops };
+  }
+
+  /** A holder whose canvas is already the right size, so ensureCanvas reuses it. */
+  const holderFor = (ctx: CanvasRenderingContext2D, w: number, h: number) => ({
+    current: { width: w, height: h, getContext: () => ctx } as unknown as HTMLCanvasElement,
+  });
+
+  const viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 3, mapHeight: 3 };
+  const W = 150, H = 150;
+  const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
+
+  function run(opts: { withLight: boolean }) {
+    const main = makeOpRecorder();
+    const lighting = makeOpRecorder();
+    const coverage = makeOpRecorder();
+    const lightOnly = makeOpRecorder();
+
+    const token = makeToken('a', { sightRadius: 0 } as Partial<Token>);
+    const vision = computeVisionState([token], opts.withLight ? [light] : [], [], viewport);
+
+    drawDynamicLighting(main.ctx, {
+      myTokens: [token],
+      enabledLights: opts.withLight ? [light] : [],
+      tokenVision: vision.tokenVision,
+      tokenSight: vision.tokenSight,
+      lightVision: vision.lightVision,
+      lightingCanvas: holderFor(lighting.ctx, W, H),
+      coverageCanvas: holderFor(coverage.ctx, W, H),
+      lightCanvas: holderFor(lightOnly.ctx, W, H),
+    }, viewport);
+
+    return { lightOnly, coverage };
+  }
+
+  it('intersects the light layer with the viewer line of sight', () => {
+    const { lightOnly } = run({ withLight: true });
+    // The sight-mask union is composited in with the intersection operator.
+    expect(lightOnly.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
+  });
+
+  it('composites the clipped light layer into the coverage mask', () => {
+    const { coverage } = run({ withLight: true });
+    expect(coverage.ops.some((c) => c.method === 'drawImage')).toBe(true);
+  });
+
+  it('leaves the light layer alone when there are no lights', () => {
+    const { lightOnly } = run({ withLight: false });
+    expect(lightOnly.ops.some((c) => c.method === 'arc')).toBe(false);
   });
 });
 

@@ -8,7 +8,7 @@
  *   npm run validate:characters -- --verbose (show full error details)
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
@@ -45,7 +45,7 @@ interface ValidationReport {
  * Format Zod error for readable output
  */
 function formatZodError(error: ZodError): Array<{ path: string; message: string; code: string }> {
-  return error.issues.map((err: any) => ({
+  return error.issues.map((err) => ({
     path: err.path.join('.') || 'root',
     message: err.message,
     code: err.code,
@@ -77,7 +77,7 @@ async function validateCharacters(options: {
 
   try {
     // Build query filter
-    const where: any = {};
+    const where: Prisma.CharacterWhereInput = {};
     if (options.gameSystem) {
       where.gameSystem = options.gameSystem;
     }

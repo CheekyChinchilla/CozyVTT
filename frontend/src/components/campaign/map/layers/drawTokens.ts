@@ -10,8 +10,12 @@ import type { Token } from '@/types';
 import { TokenLayer, TokenType, TokenDisposition } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import type { TokenAnimation, Viewport } from './types';
-import { gridYToTopPx, gridYToFogRow, gridXToFogCol, fogCellIndex } from '../coords';
+import { gridYToTopPx } from '../coords';
 import { conditionAbbreviation, MAX_CONDITION_BADGES } from '@/utils/conditions';
+import { isTokenDowned, isTokenVisibleTo, visibleTokenHp } from '../tokenHitTest';
+
+/** How much of its opacity a token at zero hit points keeps. */
+export const DOWNED_TOKEN_ALPHA = 0.45;
 
 export interface TokenDrawState {
   tokens: readonly Token[];
@@ -111,7 +115,13 @@ function traceTokenOutline(
   }
 }
 
-function placeholderColor(token: Token): string {
+/**
+ * Colour of the lettered circle drawn for a token with no art.
+ *
+ * Exported because the hover panel shows the same placeholder, and a second
+ * copy of this would drift into showing a different colour for the same token.
+ */
+export function placeholderColor(token: Token): string {
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
   return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
     token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
@@ -128,25 +138,19 @@ export function drawTokens(
   const { zoom, gridSize, mapWidth, mapHeight } = viewport;
   const { isDM } = state;
 
+  // Who can see what — shared with hit testing, so the lower-left panel can no
+  // longer name a token this viewer cannot see.
+  const view = {
+    isDM,
+    revealedCells: state.revealedCells,
+    isOwnToken: state.isOwnToken,
+    dmShowSpiritTokens: state.dmShowSpiritTokens,
+    mapWidth,
+    mapHeight,
+  };
+
   for (const token of state.tokens) {
-    // Non-DM clients: skip hidden tokens (server already filters, this is a safeguard)
-    if (!token.visible && !isDM) continue;
-
-    // Non-DM clients: skip tokens whose center is in a fogged (unrevealed) cell.
-    // Exception: players always see their OWN tokens (you know where you are).
-    // revealedCells === null means fog data hasn't been received yet — show everything.
-    if (!isDM && state.revealedCells) {
-      if (!state.isOwnToken(token)) {
-        // Token grid Y is bottom-left origin; fog rows are top-left. See map/coords.ts.
-        const fogRow = gridYToFogRow(token.position.y, token.size.height, mapHeight);
-        const fogCol = gridXToFogCol(token.position.x, token.size.width);
-        const fogIdx = fogCellIndex(fogCol, fogRow, { fogCols: mapWidth });
-        if (!state.revealedCells.has(fogIdx)) continue;
-      }
-    }
-
-    // DM: skip spirit tokens if the DM has hidden them from view
-    if (isDM && !state.dmShowSpiritTokens && token.layer === TokenLayer.SPIRIT) continue;
+    if (!isTokenVisibleTo(token, view)) continue;
 
     const tokenImg = state.tokenImages.get(token.id);
 
@@ -189,6 +193,14 @@ export function drawTokens(
     // Spirit tokens seen by DM get reduced alpha so they don't overwhelm material tokens
     if (isDM && token.layer === TokenLayer.SPIRIT) {
       ctx.globalAlpha = state.dmViewBothPlanes ? 0.80 : 1.0;
+    }
+    // A token at zero hit points is drawn faded. It still marks where the body
+    // fell, but reads as scenery rather than a combatant — which matches what
+    // movement allows, since a downed token no longer holds its square.
+    // Multiplied in rather than assigned, so a hidden or spirit-layer token
+    // keeps its own reduction as well.
+    if (isTokenDowned(token, state.characterHpCache)) {
+      ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
 
     if (tokenImg) {
@@ -326,10 +338,10 @@ export function drawTokens(
       }
     }
 
-    // HP bar — NPC tokens use token.hp (DM-controlled visibility);
-    // player tokens always show HP sourced from the character HP cache.
-    const playerHp = token.characterId ? (state.characterHpCache[token.characterId] ?? null) : null;
-    const hpSource = playerHp ?? (token.hp && token.hp.max > 0 && (isDM || token.showHpBar) ? token.hp : null);
+    // HP bar — NPC tokens use token.hp (DM-controlled visibility); player
+    // tokens follow the character sheet. Shared with the hover panel so the
+    // two cannot disagree about what a viewer may see.
+    const hpSource = visibleTokenHp(token, state.characterHpCache, isDM);
     if (hpSource) {
       const pct = Math.max(0, Math.min(1, hpSource.current / hpSource.max));
       const barW = displayMode === 'full-art' ? tokenWidth : radius * 2;

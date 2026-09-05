@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Sparkles, Circle, CircleDot, BookOpen, Zap } from 'lucide-react';
+import { dnd5eSpellSaveDC, dnd5eSpellAttackBonus } from '@/utils/rules/dnd5e';
 
 interface SpellSlot {
   total: number;
@@ -42,6 +43,12 @@ interface Spellcasting {
 
 interface SpellcastingBlockProps {
   spellcasting: Spellcasting;
+  /**
+   * The whole sheet, so the save DC and attack bonus can be derived rather than
+   * read from the stored copy. Both used to be typed in by hand and could sit
+   * out of step with the proficiency bonus and ability that define them.
+   */
+  character?: unknown;
 }
 
 /**
@@ -101,10 +108,21 @@ const SpellRow: React.FC<{ spell: Spell }> = ({ spell }) => {
 /**
  * SpellcastingBlock - Complete spellcasting display
  */
-export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({ spellcasting }) => {
+export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
+  spellcasting,
+  character,
+}) => {
   const formatBonus = (bonus: number): string => {
     return bonus >= 0 ? `+${bonus}` : `${bonus}`;
   };
+
+  // Derived where the whole sheet is available, so the numbers cannot drift
+  // from the proficiency bonus and ability that define them. Falls back to the
+  // stored copy for the few callers that pass only the spellcasting block.
+  const saveDC = character ? dnd5eSpellSaveDC(character) : spellcasting.spellSaveDC;
+  const attackBonus = character
+    ? dnd5eSpellAttackBonus(character)
+    : spellcasting.spellAttackBonus;
 
   // Group spells by level
   const spellsByLevel = spellcasting.spells.reduce((acc, spell) => {
@@ -122,7 +140,10 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({ spellcasti
         <div className="flex items-center space-x-2 mb-3">
           <Sparkles className="w-5 h-5 text-blue-600" />
           <h4 className="font-semibold text-stone-800">
-            {spellcasting.class} Spellcasting
+            {/* Without a class recorded this used to render " Spellcasting"
+                with a leading gap — or, from the templates, "Wizard" on a sheet
+                belonging to anything but a wizard. */}
+            {spellcasting.class ? `${spellcasting.class} Spellcasting` : 'Spellcasting'}
           </h4>
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
@@ -132,12 +153,12 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({ spellcasti
           </div>
           <div>
             <div className="text-xs text-stone-500">Spell Save DC</div>
-            <div className="text-lg font-bold text-blue-700">{spellcasting.spellSaveDC}</div>
+            <div className="text-lg font-bold text-blue-700">{saveDC}</div>
           </div>
           <div>
             <div className="text-xs text-stone-500">Spell Attack</div>
             <div className="text-lg font-bold text-blue-700">
-              {formatBonus(spellcasting.spellAttackBonus)}
+              {formatBonus(attackBonus)}
             </div>
           </div>
         </div>
