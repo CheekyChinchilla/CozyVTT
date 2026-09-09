@@ -4,6 +4,7 @@
   "type": "module",
   "description": "CozyVTT Frontend - Self-hosted Virtual Tabletop",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
