@@ -30,8 +30,15 @@ interface CharacterRollPickerProps {
   character?: Character;
   /** If character is not supplied, fetch by ID */
   characterId?: string;
-  /** Called with the final dice expression and purpose when the player clicks a roll button */
-  onRoll: (expression: string, purpose: string) => void;
+  /**
+   * Called with the final dice expression, purpose, and the name of the
+   * character the roll is for, when the player clicks a roll button.
+   *
+   * The name comes from here rather than from each caller because this is the
+   * component that already holds the character; three call sites looking it up
+   * for themselves is how the roll menu got its ownership check wrong.
+   */
+  onRoll: (expression: string, purpose: string, characterName?: string) => void;
   /**
    * Roll initiative for the token this picker was opened from, sending the
    * result to the initiative tracker rather than only to the dice log.
@@ -181,7 +188,7 @@ export default function CharacterRollPicker({
       purpose = `${purpose} (${modeLabel})`;
     }
 
-    onRoll(expr, purpose);
+    onRoll(expr, purpose, character?.name);
     onClose();
   };
 

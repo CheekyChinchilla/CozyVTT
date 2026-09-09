@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, X } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -138,6 +138,16 @@ export default function DiceRoller() {
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
   const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'DM';
+
+  /**
+   * Which campaign members are DMs, so a roll made on someone else's behalf can
+   * say so. Taken from the campaign's membership list rather than sent with the
+   * roll — the roller does not get to assert their own role.
+   */
+  const dmUserIds = useMemo(
+    () => new Set((campaign?.memberships ?? []).filter((m) => m.role === 'DM').map((m) => m.userId)),
+    [campaign?.memberships]
+  );
 
   // Form state
   const [expression, setExpression] = useState('');
@@ -647,6 +657,7 @@ export default function DiceRoller() {
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
+                rollerIsDM={dmUserIds.has(roll.userId)}
               />
             ))}
             {shownRolls.length === 0 && (

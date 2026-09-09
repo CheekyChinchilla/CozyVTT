@@ -425,8 +425,8 @@ export default function CampaignRoster() {
           characterId={rollPicker.characterId}
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose) => {
-            socket?.emitDiceRoll({ expression, purpose });
+          onRoll={(expression, purpose, characterName) => {
+            socket?.emitDiceRoll({ expression, purpose, characterName });
           }}
           onClose={() => setRollPicker(null)}
         />

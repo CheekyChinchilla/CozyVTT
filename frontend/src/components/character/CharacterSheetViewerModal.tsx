@@ -141,7 +141,9 @@ export default function CharacterSheetViewerModal({
   // Handle click-to-roll — emit dice roll via WebSocket
   const handleRoll = (expression: string, purpose: string) => {
     if (socket) {
-      socket.emitDiceRoll({ expression, purpose });
+      // Named so the panel heads the entry with the character whose sheet this
+      // is, not with whoever happens to be reading it.
+      socket.emitDiceRoll({ expression, purpose, characterName: character.name });
     }
   };
 

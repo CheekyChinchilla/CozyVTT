@@ -3927,7 +3927,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           characterId={rollPicker.characterId}
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose) => socket?.emitDiceRoll({ expression, purpose })}
+          onRoll={(expression, purpose, characterName) =>
+            socket?.emitDiceRoll({ expression, purpose, characterName })
+          }
           // Only offered when this token is already in the initiative order and
           // this viewer may roll for it — the DM for anyone, a player for a
           // token they control. The server checks the same thing.
@@ -3950,7 +3952,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             gameSystem={campaign?.gameSystem ?? 'DND_5E'}
             anchorX={npcRollPicker.x}
             anchorY={npcRollPicker.y}
-            onRoll={(expression, purpose) => socket?.emitDiceRoll({ expression, purpose })}
+            onRoll={(expression, purpose, characterName) =>
+            socket?.emitDiceRoll({ expression, purpose, characterName })
+          }
             onClose={() => setNpcRollPicker(null)}
           />
         );

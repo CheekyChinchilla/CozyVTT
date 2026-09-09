@@ -25,7 +25,13 @@ interface NpcRollPickerProps {
   token: Token;
   /** Optional game system override. Defaults to "DND_5E" for advantage UI. */
   gameSystem?: string | null;
-  onRoll: (expression: string, purpose: string) => void;
+  /**
+   * Called with the expression, purpose, and the token's name. The name used to
+   * be prefixed onto the purpose because the roll had nowhere else to carry it;
+   * it now travels as the roll's subject instead, so the panel heads the entry
+   * with the creature rather than with whoever pressed the button.
+   */
+  onRoll: (expression: string, purpose: string, characterName?: string) => void;
   onClose: () => void;
   anchorX: number;
   anchorY: number;
@@ -159,7 +165,7 @@ export default function NpcRollPicker({
       expr = mode === 'advantage' ? withAdvantage(expr) : withDisadvantage(expr);
       purpose = `${purpose} (${modeLabels[mode]})`;
     }
-    onRoll(expr, `${token.name}: ${purpose}`);
+    onRoll(expr, purpose, token.name);
     onClose();
   };
 
@@ -167,10 +173,8 @@ export default function NpcRollPicker({
     const expr = customExpr.trim();
     if (!expr) { setCustomError('Enter a dice expression'); return; }
     if (!isValidDiceExpression(expr)) { setCustomError('Invalid dice expression'); return; }
-    const purpose = customLabel.trim()
-      ? `${token.name}: ${customLabel.trim()}`
-      : `${token.name}: Custom Roll`;
-    onRoll(expr, purpose);
+    const purpose = customLabel.trim() || 'Custom Roll';
+    onRoll(expr, purpose, token.name);
     onClose();
   };
 
