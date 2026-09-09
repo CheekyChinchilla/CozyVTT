@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The backup script runs on Linux and macOS.** `backend/scripts/backup.sh` is what the upgrade instructions, the README and the deployment guide all tell you to run before upgrading — and it was stored in the repository without its executable permission, so `./backend/scripts/backup.sh` answered `Permission denied` on any system that enforces one. Windows ignores file permissions entirely, which is why this went unnoticed for so long: the command worked for whoever last touched it. Running it as `bash backend/scripts/backup.sh` was the workaround, and it now runs exactly as documented. `restore.sh` had the same problem. `start.sh` is marked alongside them for consistency, though it was never affected — the container image sets the permission itself when it builds
+
+---
+
 ## [1.3.0] — 2026-09-04
 
 ### Added
