@@ -76,7 +76,10 @@ export function canViewCharacter(
  */
 export function canRollAsCharacter(
   user: User,
-  character: Character,
+  // Only ownership is read, and the roster's context menu holds the owner id
+  // without the character object — so this takes the narrowest thing that
+  // answers the question rather than making callers fetch a whole Character.
+  character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
   // User owns the character

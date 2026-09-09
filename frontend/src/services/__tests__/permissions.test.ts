@@ -14,13 +14,13 @@ import { describe, it, expect } from 'vitest';
 
 import { canRollAsCharacter } from '../permissions';
 import { CampaignRole } from '@/types';
-import type { User, Character, CampaignMembership } from '@/types';
+import type { User, CampaignMembership } from '@/types';
 
 const OWNER = 'user-owner';
 const OTHER = 'user-other';
 
 const user = (id: string) => ({ id }) as unknown as User;
-const character = (userId: string) => ({ userId }) as unknown as Character;
+const character = (userId: string) => ({ userId });
 const membership = (role: CampaignRole) => ({ role }) as unknown as CampaignMembership;
 
 describe('canRollAsCharacter', () => {
