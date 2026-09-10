@@ -155,13 +155,12 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      // Verify user is DM
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: socket.campaignId },
-        select: { ownerId: true },
-      });
-
-      if (!campaign || campaign.ownerId !== socket.userId) {
+      // Who is running the game, not who owns the campaign. These are separate
+      // facts — `Campaign.ownerId` never moves, while the DM seat can — and they
+      // only coincide in a campaign whose creator still runs it. Reading
+      // ownership here refused the actual DM after a handover and let the former
+      // DM, now a player, keep clearing the panel for everyone.
+      if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only the DM can clear roll history' });
         return;
       }
