@@ -19,7 +19,7 @@ import { MessageType, PlatformRole } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage } from '@/utils/errors';
-import type { MessageMetadata } from '@/types';
+import type { ChatSystemBroadcast } from '@/types';
 
 /** Messages per page. The server caps this at 100. */
 const PAGE_SIZE = 50;
@@ -280,11 +280,13 @@ export default function ChatPanel() {
       }
     };
 
-    const handleSystemMessage = (data: { content: string; metadata?: MessageMetadata; timestamp: string }) => {
+    const handleSystemMessage = (data: ChatSystemBroadcast) => {
       console.log('[ChatPanel] Received system message:', data);
 
       const systemMessage: Message = {
-        id: `system-${Date.now()}`,
+        // The server's own id, not one made up here. A fabricated id can never
+        // match the row when history replays it, so the notice appeared twice.
+        id: data.id,
         campaignId: campaignId!,
         userId: null,
         type: MessageType.SYSTEM,
@@ -293,7 +295,7 @@ export default function ChatPanel() {
         createdAt: data.timestamp,
       };
 
-      setMessages((prev) => [...prev, systemMessage]);
+      setMessages((prev) => mergeMessages(prev, [systemMessage]));
 
       if (wasAtBottomRef.current) {
         setTimeout(() => scrollToBottom(true), 50);

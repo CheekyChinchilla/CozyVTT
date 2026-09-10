@@ -1074,6 +1074,18 @@ export interface ChatMessageEvent {
   type: MessageType;
 }
 
+/**
+ * A system notice. The server sends the row's real id, which is what lets a
+ * notice received live be recognised as the same message when history replays
+ * it — see ChatPanel's merge.
+ */
+export interface ChatSystemBroadcast {
+  id: string;
+  content: string;
+  metadata?: MessageMetadata;
+  timestamp: string;
+}
+
 export interface ChatMessageBroadcast {
   id: string;
   userId: string;
