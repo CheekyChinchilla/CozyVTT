@@ -107,8 +107,9 @@ CozyVTT does yet.
 > **Getting it back.** The new DM can hand it back the same way. And if the
 > campaign is yours — you created it — you keep a way in regardless: an **Owner
 > Settings** button appears in the sidebar, holding the two things that stay
-> yours, deleting the campaign and taking the DM seat back. So handing the game
-> over can never lock you out of your own campaign. If you are *not* the owner,
+> yours, deleting the campaign and taking the DM seat back. It sits in the top
+> bar, in the same place the DM's own settings button occupies. So handing the
+> game over can never lock you out of your own campaign. If you are *not* the owner,
 > ask the new DM, or your instance's administrator can move it for you.
 
 ---

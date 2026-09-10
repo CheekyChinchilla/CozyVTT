@@ -330,6 +330,26 @@ function CampaignPageContent() {
             </>
           )}
 
+          {/* An owner who has handed the game over keeps two powers — deleting
+              the campaign and taking the seat back — and this is their way to
+              them. It sits here, beside where the DM's own settings gear would
+              be, because that is where somebody goes looking for it; tucked in
+              the sidebar it read as missing. */}
+          {isOwner && userRole !== 'DM' && (
+            <>
+              <div className="h-6 w-px bg-moss-green/20" />
+              <Tooltip content="Owner settings — delete, or take back the DM role" side="bottom">
+                <Button
+                  variant="ghost"
+                  iconOnly
+                  icon={Settings}
+                  aria-label="Owner Settings"
+                  onClick={() => setIsSettingsOpen(true)}
+                />
+              </Tooltip>
+            </>
+          )}
+
           {/* Sidebar collapse toggles (all roles) */}
           <div className="h-6 w-px bg-moss-green/20" />
           <div className="flex items-center gap-1">
@@ -385,20 +405,6 @@ function CampaignPageContent() {
           >
             <aside className="h-full overflow-y-auto p-4 space-y-4 bg-parchment/30 border-r border-moss-green/20">
               <CampaignInfo />
-              {/* The DM reaches settings from the session toolbar; an owner who
-                  has handed the game over has no toolbar, and still needs the
-                  two things that remain theirs. */}
-              {isOwner && userRole !== 'DM' && (
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-cozy border border-moss-green/30 text-ink hover:bg-surface transition-colors"
-                  aria-label="Campaign Settings"
-                >
-                  <Settings className="w-4 h-4" />
-                  Owner Settings
-                </button>
-              )}
               <CampaignRoster />
               {/* Token Roster — DM only */}
               {userRole === 'DM' && (
