@@ -212,6 +212,26 @@ _Nothing in progress._
   checks on `dev` and `main`, which is a repository setting rather than a file.
   Worth doing the first time the workflow actually runs.
 
+- **Serving the frontend from a folder, like `example.com/cozyvtt/`.** Asked for
+  in #36 by a Traefik user; a subdomain works today and is what the deployment
+  guide now points people at. The easy 10% is Vite's `base` and a router
+  `basename`. The other 90% is that asset addresses are *stored in the database*
+  as `/api/assets/{type}/{id}` (`backend/src/utils/asset-urls.ts`) and read raw at
+  roughly 35 render sites. Writing the prefix into storage puts deployment
+  configuration into user data — a backup restored onto a root-mounted instance
+  would have every picture broken — and it breaks `normalizeAssetUrl`'s
+  `startsWith('/api/assets/')` guard. Adding it at render time instead leaves a
+  rule spread across 35 places that can only be violated silently, on a layout
+  nobody here runs. Note also that `base` is **build-time**, so the runtime env
+  var the issue asked for cannot do it, and the path would end up recorded in
+  four or five places that fail as a blank page whenever two disagree. Roughly
+  4-6 days including a browser test harness the project does not have and would
+  then maintain. **Revisit if** more people ask, or if asset storage is reworked
+  for another reason — the prerequisite is storing bare UUIDs rather than URLs,
+  for which `extractAssetId` already exists on both sides and
+  `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
+  direction.
+
 ---
 
 ## Won't Do
