@@ -20,6 +20,7 @@ import {
   Edit,
   Dices,
 } from 'lucide-react';
+import { hitDieSize, hitDieRoll, canSpendHitDie } from '@/utils/hitDice';
 import { Character } from '../../../types';
 import type {
   DnD5eCharacterData,
@@ -49,6 +50,11 @@ interface DnD5eCharacterViewProps {
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
+  /**
+   * Called when a hit die is spent, with the position of the pool. Omit and
+   * the dice still roll but nothing is decremented.
+   */
+  onSpendHitDie?: (index: number) => void;
 }
 
 interface RollPopupState {
@@ -94,7 +100,7 @@ const COLOR_PRESETS = [
 /**
  * DnD5eCharacterView - Read-only D&D 5e character sheet
  */
-export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll }) => {
+export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, onSpendHitDie }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const data = character.data as DnD5eCharacterData & SheetChrome;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
@@ -411,14 +417,32 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-stone-800 mb-3">Hit Dice</h3>
           <div className="flex flex-wrap gap-3">
-            {data.hitDice!.map((hd, idx) => (
-              <div key={idx} className="px-4 py-2 bg-white border border-stone-300 rounded-lg">
-                <div className="text-xs text-stone-500 capitalize">{hd.class}</div>
-                <div className="font-semibold text-stone-800">
-                  {hd.remaining}/{hd.total}
+            {data.hitDice!.map((hd, idx) => {
+              // `total` is the pool ("5d10"), so spending rolls one die plus
+              // Constitution — never the stored string, which would roll all
+              // five. A pool with nothing left, or a total that is not a die,
+              // stays as plain text rather than offering a roll it cannot make.
+              const size = hitDieSize(hd.total);
+              const spendable = !!onRoll && canSpendHitDie(hd);
+              const expr = size === null ? '' : hitDieRoll(size, data.stats?.constitution?.modifier ?? 0);
+              const purpose = `Spend a Hit Die${hd.class ? ` (${hd.class})` : ''}`;
+              return (
+                <div
+                  key={idx}
+                  className={`px-4 py-2 bg-white border border-stone-300 rounded-lg group ${
+                    spendable ? 'cursor-pointer hover:bg-red-50 select-none' : ''
+                  }`}
+                  onClick={spendable ? () => { handleRoll(expr, purpose); onSpendHitDie?.(idx); } : undefined}
+                  title={spendable ? `Spend one hit die: roll ${expr}` : undefined}
+                >
+                  <div className="text-xs text-stone-500 capitalize">{hd.class}</div>
+                  <div className="font-semibold text-stone-800 flex items-center gap-1">
+                    {hd.remaining}/{hd.total}
+                    {spendable && <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

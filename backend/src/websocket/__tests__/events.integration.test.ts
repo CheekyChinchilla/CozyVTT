@@ -1029,12 +1029,12 @@ describe('hit dice', () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const dm = await server.connectAndAuth(dmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ characterId: string; index: number; remaining: number }>(dm, 'character.hitdice.spent');
+    const dmSees = waitForEvent<{ characterId: string; character: { data: any } }>(dm, 'character.updated');
     player.emit('character.hitdice.spend', { characterId, index: 0 });
 
     const update = await dmSees;
     expect(update.characterId).toBe(characterId);
-    expect(update.remaining).toBe(2);
+    expect(update.character.data.hitDice[0].remaining).toBe(2);
 
     // Persisted, not just broadcast.
     const row = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
@@ -1076,9 +1076,9 @@ describe('hit dice', () => {
     const characterId = await giveHitDice(3);
     const dm = await server.connectAndAuth(dmCookie, campaignId);
 
-    const spent = waitForEvent<{ remaining: number }>(dm, 'character.hitdice.spent');
+    const spent = waitForEvent<{ character: { data: any } }>(dm, 'character.updated');
     dm.emit('character.hitdice.spend', { characterId, index: 0 });
-    expect((await spent).remaining).toBe(2);
+    expect((await spent).character.data.hitDice[0].remaining).toBe(2);
 
     dm.disconnect();
   });

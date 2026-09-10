@@ -423,6 +423,9 @@ export default function CampaignRoster() {
       {rollPicker && (
         <CharacterRollPicker
           characterId={rollPicker.characterId}
+          onSpendHitDie={(index) =>
+            socket?.emitHitDiceSpend({ characterId: rollPicker.characterId, index })
+          }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
           onRoll={(expression, purpose, characterName) => {

@@ -151,11 +151,17 @@ export default function CharacterSheetViewerModal({
   // stats render as plain text rather than clickable rolls.
   const rollHandler = canRoll ? handleRoll : undefined;
 
+  // Spending follows the same rule as rolling. The server checks it again —
+  // owner or DM — so this only decides whether the control is offered.
+  const spendHitDie = canRoll
+    ? (index: number) => socket?.emitHitDiceSpend({ characterId: character.id, index })
+    : undefined;
+
   // Render appropriate character sheet view based on game system
   const renderCharacterSheet = () => {
     switch (character.gameSystem) {
       case 'DND_5E':
-        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} />;
+        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} onSpendHitDie={spendHitDie} />;
       case 'PATHFINDER_2E':
         return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} />;
       case 'SHADOWRUN_6E':

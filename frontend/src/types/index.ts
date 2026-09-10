@@ -1172,6 +1172,12 @@ export interface SpiritLayerTokenToggledBroadcast {
 // Character HP Events
 // ============================================
 
+export interface HitDiceSpendEvent {
+  characterId: string;
+  /** Which pool it comes out of — a multiclass character has several. */
+  index: number;
+}
+
 export interface CharacterHpUpdateEvent {
   characterId: string;
   delta: number;

@@ -335,6 +335,18 @@ The bonus is worked out for you from that ability and your proficiency bonus, so
 
 Your own skills show up with the rest on your sheet and in the right-click roll menu, so rolling them is one click.
 
+### Spending a hit die on a short rest (D&D 5e)
+
+At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5d10` means you have five d10 hit dice and three of them are unspent.
+
+**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**.
+
+It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
+
+**Add the hit points yourself.** CozyVTT rolls the die and keeps count of what you have left, but it doesn't change your HP for you — use the **+** button on your roster card for the amount you rolled. (If your Constitution modifier is negative and the total comes out below zero, you regain nothing rather than losing hit points.)
+
+Once the pool is empty the number stops being clickable. Your DM can also spend one on your behalf if you're not at the table, and it comes off your sheet the same way.
+
 ### Weapons that do more than one thing
 
 **Properties** — Finesse, Light, Thrown and the rest — are buttons on each weapon in the Combat tab. Tap the ones that apply and they appear as labels on your sheet.

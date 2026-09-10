@@ -195,15 +195,20 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
 
       entry.remaining = remaining - 1;
 
-      await prisma.character.update({
+      const updated = await prisma.character.update({
         where: { id: characterId },
         data: { data: toJson(charData) },
       });
 
-      io.to(socket.campaignId).emit('character.hitdice.spent', {
+      // The sheet blob changed, so this goes out as `character.updated` — the
+      // event an open character sheet already refreshes on — rather than a
+      // narrow one of its own that nothing would listen to. No token art or
+      // name changed, so nothing needs to repaint the map.
+      io.to(socket.campaignId).emit('character.updated', {
         characterId,
-        index,
-        remaining: entry.remaining,
+        character: updated,
+        userId: socket.userId,
+        tokensChanged: false,
       });
 
     } catch (error) {

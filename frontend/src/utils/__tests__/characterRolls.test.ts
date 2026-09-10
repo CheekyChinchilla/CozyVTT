@@ -199,13 +199,68 @@ describe('D&D 5e', () => {
   });
 });
 
+describe('D&D 5e hit dice', () => {
+  /**
+   * `total` is the pool, so a spend is one die plus Constitution — never the
+   * stored string, which would roll the whole pool at once.
+   */
+  const sheet = (hitDice: unknown, conModifier = 2) => ({
+    stats: {
+      strength:     { score: 10, modifier: 0 },
+      dexterity:    { score: 10, modifier: 0 },
+      constitution: { score: 14, modifier: conModifier },
+      intelligence: { score: 10, modifier: 0 },
+      wisdom:       { score: 10, modifier: 0 },
+      charisma:     { score: 10, modifier: 0 },
+    },
+    hitDice,
+  } as unknown as CharacterData);
+
+  it('offers one die plus Constitution, not the whole pool', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([{ class: 'fighter', total: '5d10', remaining: 3 }]));
+    expect(hitDice).toHaveLength(1);
+    expect(hitDice[0].expression).toBe('1d10+2');
+    expect(hitDice[0].expression).not.toContain('5d10');
+    expect(hitDice[0].purpose).toMatch(/hit die/i);
+  });
+
+  it('carries the pool position so the spend can be recorded', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([
+      { class: 'fighter', total: '5d10', remaining: 3 },
+      { class: 'rogue',   total: '2d8',  remaining: 2 },
+    ]));
+    expect(hitDice.map((h) => h.hitDiceIndex)).toEqual([0, 1]);
+    expect(hitDice[1].expression).toBe('1d8+2');
+  });
+
+  it('offers nothing once the pool is spent', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([{ class: 'fighter', total: '5d10', remaining: 0 }]));
+    expect(hitDice).toHaveLength(0);
+  });
+
+  it('offers nothing for a total that is not a die', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([{ class: 'fighter', total: '', remaining: 3 }]));
+    expect(hitDice).toHaveLength(0);
+  });
+
+  it('keeps a negative Constitution modifier in the roll', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([{ class: 'wizard', total: '3d6', remaining: 1 }], -1));
+    expect(hitDice[0].expression).toBe('1d6-1');
+  });
+
+  it('is empty, not missing, for a system without hit dice', () => {
+    expect(getCharacterRolls('PATHFINDER_2E', {} as CharacterData).hitDice).toEqual([]);
+    expect(getCharacterRolls(null, null).hitDice).toEqual([]);
+  });
+});
+
 describe('an unknown or absent system', () => {
   it('offers nothing rather than throwing', () => {
     expect(getCharacterRolls(null, null)).toEqual({
-      abilities: [], skills: [], savingThrows: [], combat: [],
+      abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [],
     });
     expect(getCharacterRolls('SHADOWRUN_6E', {} as CharacterData)).toEqual({
-      abilities: [], skills: [], savingThrows: [], combat: [],
+      abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [],
     });
   });
 });

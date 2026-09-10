@@ -41,6 +41,11 @@ interface CharacterRollPickerProps {
    */
   onRoll: (expression: string, purpose: string, characterName?: string) => void;
   /**
+   * Called when the chosen roll spends a hit die, with the position of the
+   * pool. The roll itself still goes through `onRoll`; this is the decrement.
+   */
+  onSpendHitDie?: (index: number) => void;
+  /**
    * Roll initiative for the token this picker was opened from, sending the
    * result to the initiative tracker rather than only to the dice log.
    *
@@ -118,6 +123,7 @@ export default function CharacterRollPicker({
   character: initialCharacter,
   characterId,
   onRoll,
+  onSpendHitDie,
   onRollInitiative,
   onClose,
   anchorX,
@@ -190,6 +196,9 @@ export default function CharacterRollPicker({
     }
 
     onRoll(expr, purpose, character?.name);
+    // Spending is recorded after the roll, so a failure to decrement cannot
+    // swallow the roll the player just made.
+    if (opt.hitDiceIndex !== undefined) onSpendHitDie?.(opt.hitDiceIndex);
     onClose();
   };
 
@@ -326,6 +335,7 @@ export default function CharacterRollPicker({
               <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} />
             )}
             <Section title="Combat" rolls={rolls.combat} mode={mode} onRoll={handleRollOption} />
+            <Section title="Hit Dice" rolls={rolls.hitDice} mode={mode} onRoll={handleRollOption} />
           </div>
         )}
       </div>

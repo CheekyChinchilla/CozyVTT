@@ -1,4 +1,5 @@
 import type { CharacterData } from '@/types';
+import { hitDieSize, hitDieRoll, canSpendHitDie } from './hitDice';
 import { readCustomSkills, dnd5eCustomSkillBonus } from '@/utils/rules/dnd5e';
 import type {
   DnD5eCharacterData,
@@ -49,6 +50,12 @@ export interface RollOption {
    * "2d20kh1" (advantage) or "2d20kl1" (disadvantage) in place of "1d20".
    */
   supportsAdvantage: boolean;
+  /**
+   * Set when rolling this spends a hit die: the position of the pool it comes
+   * out of. The host tells the server, so the count is decremented once and
+   * server-side rather than trusted from whoever rolled.
+   */
+  hitDiceIndex?: number;
 }
 
 export interface CharacterRolls {
@@ -56,6 +63,7 @@ export interface CharacterRolls {
   skills:        RollOption[];   // Skill checks
   savingThrows:  RollOption[];   // Saving throws / resistance rolls
   combat:        RollOption[];   // Attack rolls and damage rolls
+  hitDice:       RollOption[];   // Spending a hit die on a short rest (D&D 5e)
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +235,30 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
     }
   }
 
-  return { abilities, skills, savingThrows: saves, combat };
+  // Hit dice — spending one on a short rest.
+  //
+  // `total` is the pool ("5d10" is five d10), so the stored string is not the
+  // roll: one die plus Constitution is. An entry with nothing left, or a total
+  // that is not a die, offers nothing rather than a roll that cannot be made.
+  const hitDice: RollOption[] = [];
+  if (Array.isArray(data.hitDice)) {
+    const con = data.stats?.constitution?.modifier ?? 0;
+    data.hitDice.forEach((hd, index) => {
+      if (!canSpendHitDie(hd)) return;
+      const size = hitDieSize(hd.total);
+      if (size === null) return;
+      const label = hd.class ? `${hd.class} d${size}` : `d${size}`;
+      hitDice.push({
+        label:             `${label} (${hd.remaining} left)`,
+        expression:        hitDieRoll(size, con),
+        purpose:           `Spend a Hit Die${hd.class ? ` (${hd.class})` : ''}`,
+        supportsAdvantage: false,
+        hitDiceIndex:      index,
+      });
+    });
+  }
+
+  return { abilities, skills, savingThrows: saves, combat, hitDice };
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +401,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
     }
   }
 
-  return { abilities, skills, savingThrows: saves, combat };
+  return { abilities, skills, savingThrows: saves, combat, hitDice: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -576,7 +607,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
     }
   }
 
-  return { abilities, skills, savingThrows: saves, combat };
+  return { abilities, skills, savingThrows: saves, combat, hitDice: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -598,7 +629,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
  * @returns           Structured roll options grouped by category
  */
 export function getCharacterRolls(gameSystem: string | null, data: CharacterData | null | undefined): CharacterRolls {
-  if (!data) return { abilities: [], skills: [], savingThrows: [], combat: [] };
+  if (!data) return { abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [] };
 
   // The system decides which shape `data` is in, which is exactly what the
   // switch below is establishing — so each branch asserts the one it selected.
@@ -610,6 +641,6 @@ export function getCharacterRolls(gameSystem: string | null, data: CharacterData
     case 'CALL_OF_CTHULHU_7E':
       return extractCocRolls(data as CoC7eCharacterData);
     default:
-      return { abilities: [], skills: [], savingThrows: [], combat: [] };
+      return { abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [] };
   }
 }

@@ -978,8 +978,8 @@ right-hand column.
 | `atmosphere.audio.updated` | `atmosphere.ts` |
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
-| `character.hitdice.spent` | `characters.ts` |
 | `character.hp.updated` | `characters.ts` |
+| `character.updated` | `characters.ts` |
 | `chat.message` | `chat.ts` |
 | `chat.system` | `utils.ts` |
 | `connected` | `events.ts` |

@@ -28,7 +28,9 @@ import {
   skillLabel,
 } from './rules/dnd5e';
 
-const EMPTY_ROLLS: CharacterRolls = { abilities: [], skills: [], savingThrows: [], combat: [] };
+// A creature's stat block carries a `hitDice` string for working out its hit
+// points, not a pool it spends on a short rest, so there is nothing to offer.
+const EMPTY_ROLLS: CharacterRolls = { abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [] };
 
 /** D&D 5e ability modifier: floor((score - 10) / 2). */
 export { abilityModifier as abilityMod };
@@ -174,7 +176,7 @@ function buildDnd5eRolls(statBlock: NpcStatBlock): CharacterRolls {
     });
   }
 
-  return { abilities, skills, savingThrows, combat: buildCombatRolls(statBlock) };
+  return { abilities, skills, savingThrows, combat: buildCombatRolls(statBlock), hitDice: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +244,7 @@ function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
     });
   }
 
-  return { abilities, skills, savingThrows, combat: buildCombatRolls(statBlock) };
+  return { abilities, skills, savingThrows, combat: buildCombatRolls(statBlock), hitDice: [] };
 }
 
 // ---------------------------------------------------------------------------
