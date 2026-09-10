@@ -347,6 +347,10 @@ It rolls **one** die, not the whole pool — spending is one die at a time, and 
 
 Once the pool is empty the number stops being clickable. Your DM can also spend one on your behalf if you're not at the table, and it comes off your sheet the same way.
 
+**Getting them back.** A short rest is when you *spend* hit dice — it doesn't give any back. A **long rest** does: you regain all your lost hit points, plus spent hit dice up to **half your total, rounded down, and always at least one**. So a level 5 fighter with `5d10` gets two back, not five, and a level 1 character gets their single die back.
+
+CozyVTT doesn't apply that for you yet. After a long rest, click **Edit** on your sheet and set the **Remaining** number for each pool yourself.
+
 ### Weapons that do more than one thing
 
 **Properties** — Finesse, Light, Thrown and the rest — are buttons on each weapon in the Combat tab. Tap the ones that apply and they appear as labels on your sheet.
