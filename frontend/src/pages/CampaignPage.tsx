@@ -7,6 +7,8 @@
 // ============================================
 
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { isCampaignOwner } from '@/utils/campaignRoles';
+import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
@@ -20,8 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
-  PanelRightOpen,
-} from 'lucide-react';
+  PanelRightOpen, Settings } from 'lucide-react';
 import {
   Group,
   Panel,
@@ -63,6 +64,18 @@ import Tooltip from '@/components/ui/Tooltip';
 function CampaignPageContent() {
   const navigate = useNavigate();
   const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap } = useCampaign();
+  const { user } = useAuth();
+
+  /**
+   * Owning a campaign and running it are different things once the DM seat can
+   * move. The owner keeps the powers that are theirs — deleting the campaign,
+   * and taking the seat back — so they need a way into the settings panel even
+   * when somebody else is the DM. Without this, handing the game over left the
+   * campaign with nobody able to delete it: the owner had the permission and no
+   * route to it, the new DM had the route and no permission.
+   */
+  const isOwner = isCampaignOwner(campaign, user?.id);
+  const canOpenSettings = userRole === 'DM' || isOwner;
   const { socket, reconnectCount, status } = useWebSocket();
 
   // Mirror combat/initiative state into the game store. Owned here rather than
@@ -372,6 +385,20 @@ function CampaignPageContent() {
           >
             <aside className="h-full overflow-y-auto p-4 space-y-4 bg-parchment/30 border-r border-moss-green/20">
               <CampaignInfo />
+              {/* The DM reaches settings from the session toolbar; an owner who
+                  has handed the game over has no toolbar, and still needs the
+                  two things that remain theirs. */}
+              {isOwner && userRole !== 'DM' && (
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-cozy border border-moss-green/30 text-ink hover:bg-surface transition-colors"
+                  aria-label="Campaign Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                  Owner Settings
+                </button>
+              )}
               <CampaignRoster />
               {/* Token Roster — DM only */}
               {userRole === 'DM' && (
@@ -490,8 +517,9 @@ function CampaignPageContent() {
         />
       )}
 
-      {/* Campaign Settings slide-over panel (DM only) */}
-      {userRole === 'DM' && (
+      {/* Campaign Settings slide-over panel — the DM, or the owner, who sees
+          only the parts that are theirs (see CampaignSettingsModal). */}
+      {canOpenSettings && (
         <CampaignSettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}

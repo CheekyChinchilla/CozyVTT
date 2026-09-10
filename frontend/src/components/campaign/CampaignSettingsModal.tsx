@@ -48,7 +48,19 @@ export default function CampaignSettingsModal({
   isOpen,
   onClose,
 }: CampaignSettingsModalProps) {
-  const { campaign, refreshCampaign } = useCampaign();
+  const { campaign, refreshCampaign, userRole } = useCampaign();
+
+  /**
+   * The panel is open to the DM and to the campaign's owner, who are not always
+   * the same person once the game has been handed over.
+   *
+   * An owner who is no longer the DM keeps exactly two powers, and the server
+   * agrees with this list: they can delete the campaign, and they can take the
+   * DM seat back. Everything else here — renaming, chat settings, exporting,
+   * inviting, removing members — is gated on being the DM, so offering it would
+   * only produce refusals.
+   */
+  const isDmViewer = userRole === 'DM';
   const { showToast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -90,7 +102,7 @@ export default function CampaignSettingsModal({
       setChatCooldownEnabled(campaign.chatCooldownEnabled);
       setChatCooldownSeconds(campaign.chatCooldownSeconds);
       setDeleteConfirmName('');
-      setActiveTab('general');
+      setActiveTab(isDmViewer ? 'general' : 'members');
     }
   }, [isOpen, campaign]);
 
@@ -261,12 +273,17 @@ export default function CampaignSettingsModal({
                 {/* ── Tabs ── */}
                 <div className="flex gap-1 mt-4">
                   {(
-                    [
-                      { id: 'general', label: 'General' },
-                      { id: 'chat', label: 'Chat' },
-                      { id: 'members', label: 'Members' },
-                      { id: 'danger', label: 'Danger Zone' },
-                    ] as { id: SettingsTab; label: string }[]
+                    (isDmViewer
+                      ? [
+                          { id: 'general', label: 'General' },
+                          { id: 'chat', label: 'Chat' },
+                          { id: 'members', label: 'Members' },
+                          { id: 'danger', label: 'Danger Zone' },
+                        ]
+                      : [
+                          { id: 'members', label: 'Members' },
+                          { id: 'danger', label: 'Danger Zone' },
+                        ]) as { id: SettingsTab; label: string }[]
                   ).map((tab) => (
                     <button
                       key={tab.id}
@@ -505,6 +522,7 @@ export default function CampaignSettingsModal({
                         <Users className="w-4 h-4" />
                         <span>{memberships.length} member{memberships.length !== 1 ? 's' : ''}</span>
                       </div>
+                      {isDmViewer && (
                       <Button
                         type="button"
                         onClick={() => setShowInviteModal(true)}
@@ -513,6 +531,7 @@ export default function CampaignSettingsModal({
                         <UserPlus className="w-4 h-4" />
                         Invite Player
                       </Button>
+                      )}
                     </div>
 
                     {/* Member list */}
@@ -587,7 +606,7 @@ export default function CampaignSettingsModal({
                               )}
 
                               {/* Remove button — DM and self cannot be removed */}
-                              {!isDmSelf(membership) && (
+                              {isDmViewer && !isDmSelf(membership) && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveMemberClick(membership)}

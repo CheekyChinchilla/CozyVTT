@@ -4,6 +4,7 @@
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
+import { isCampaignDm } from '@/utils/campaignRoles';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucide-react';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
@@ -102,11 +103,15 @@ export default function CharacterEditorPage() {
       return true;
     }
 
-    // Character is assigned to a campaign - check if user is the DM
+    // Character is assigned to a campaign — the DM of that campaign may edit it.
+    // That is the person currently running the game, not the person who created
+    // the campaign: after a handover those are different people, and asking for
+    // the owner let the previous DM keep an edit they should have lost while
+    // denying it to the DM who should have gained it.
     if (char.campaignId) {
       try {
         const camp = await campaignService.getCampaign(char.campaignId);
-        if (camp.ownerId === user.id) {
+        if (isCampaignDm(camp, user.id)) {
           return true;
         }
       } catch (err) {

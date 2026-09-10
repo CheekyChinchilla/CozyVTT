@@ -104,9 +104,12 @@ What happens:
 addition. If you want two people running a game at once, that is not something
 CozyVTT does yet.
 
-> **Getting it back.** The new DM can hand it back the same way. Since the
-> Settings panel is DM-only, do ask them first — if they leave without handing it
-> back, your instance's administrator can move it for you.
+> **Getting it back.** The new DM can hand it back the same way. And if the
+> campaign is yours — you created it — you keep a way in regardless: an **Owner
+> Settings** button appears in the sidebar, holding the two things that stay
+> yours, deleting the campaign and taking the DM seat back. So handing the game
+> over can never lock you out of your own campaign. If you are *not* the owner,
+> ask the new DM, or your instance's administrator can move it for you.
 
 ---
 

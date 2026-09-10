@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { isCampaignDm } from '@/utils/campaignRoles';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
@@ -85,8 +86,10 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   // User can move if they own the asset or are admin
   const canMove = !isScopeFixed && (isOwner || isAdmin);
 
-  // Campaigns where the current user is DM (owns the campaign)
-  const dmCampaigns = userCampaigns.filter((c) => c.ownerId === user?.id);
+  // Campaigns the current user runs. Owning a campaign is a different thing —
+  // after a handover the owner is an ordinary player there, and it is the new
+  // DM who needs campaign scope offered to them.
+  const dmCampaigns = userCampaigns.filter((c) => isCampaignDm(c, user?.id));
 
   // Available scopes to move to (exclude current)
   const availableMoveScopes: AssetScope[] = [];
