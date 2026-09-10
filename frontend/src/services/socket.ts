@@ -26,6 +26,7 @@ import type {
   AtmosphereAudioUpdatedBroadcast,
   CharacterHpUpdateEvent,
   CharacterHpUpdatedBroadcast,
+  DmTransferredBroadcast,
   HitDiceSpendEvent,
   CombatState,
   InitiativeAddEvent,
@@ -503,6 +504,14 @@ class SocketClient {
 
   onCharacterHpUpdated(callback: EventCallback<CharacterHpUpdatedBroadcast>) {
     this.addListener('character.hp.updated', callback);
+  }
+
+  /**
+   * The DM seat moved. Everyone in the campaign hears this, because everyone's
+   * view of who may do what changes with it — not just the two people involved.
+   */
+  onDmTransferred(callback: EventCallback<DmTransferredBroadcast>) {
+    this.addListener('campaign.dm.transferred', callback);
   }
 
   /**

@@ -481,6 +481,18 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Hand the DM role to another member. The outgoing DM becomes a player in the
+   * same action, and campaign ownership does not move.
+   */
+  async transferDM(
+    campaignId: string,
+    userId: string,
+  ): Promise<{ message: string; memberships: import('@/types').CampaignMembership[] }> {
+    const response = await this.client.put(`/api/campaigns/${campaignId}/dm`, { userId });
+    return response.data;
+  }
+
   async updateVibeSettings(
     campaignId: string,
     vibeSettings: import('@/types').VibeSettings,

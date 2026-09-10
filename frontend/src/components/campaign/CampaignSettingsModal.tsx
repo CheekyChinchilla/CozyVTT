@@ -18,6 +18,7 @@ import {
   UserPlus,
   AlertTriangle,
   ShieldCheck,
+  Crown,
   MessageCircle,
   Download,
 } from 'lucide-react';
@@ -68,6 +69,8 @@ export default function CampaignSettingsModal({
   // ── Members ──────────────────────────────────
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<CampaignMembership | null>(null);
+  const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
+  const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   // ── Export ────────────────────────────────────
@@ -150,6 +153,29 @@ export default function CampaignSettingsModal({
       showToast(apiErrorMessage(err) ?? 'Failed to remove member', 'error');
     } finally {
       setRemovingMemberId(null);
+    }
+  };
+
+  /**
+   * Hand the game to someone else. One action on the server: they become DM and
+   * you become a player. Ownership of the campaign does not move, so if you own
+   * it you still do.
+   */
+  const handleConfirmMakeDm = async () => {
+    if (!memberToPromote) return;
+    const promoted = memberToPromote;
+    setPromotingMemberId(promoted.userId);
+    setMemberToPromote(null);
+    try {
+      await api.transferDM(campaign.id, promoted.userId);
+      await refreshCampaign();
+      showToast(`${promoted.user?.displayName ?? 'They'} is now the DM`, 'success');
+      // This panel is DM-only, and the caller has just stopped being the DM.
+      onClose();
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to transfer the DM role', 'error');
+    } finally {
+      setPromotingMemberId(null);
     }
   };
 
@@ -541,6 +567,25 @@ export default function CampaignSettingsModal({
                                 )}
                               </span>
 
+                              {/* Hand over the game. Offered on anyone who is
+                                  not already the DM, including a spectator. */}
+                              {!isDm && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMemberToPromote(membership)}
+                                  disabled={promotingMemberId === membership.userId}
+                                  title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
+                                  className="p-1.5 rounded-lg text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
+                                  aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
+                                >
+                                  {promotingMemberId === membership.userId ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Crown className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
+
                               {/* Remove button — DM and self cannot be removed */}
                               {!isDmSelf(membership) && (
                                 <button
@@ -641,6 +686,17 @@ export default function CampaignSettingsModal({
         variant="danger"
         onConfirm={handleConfirmRemoveMember}
         onCancel={() => setMemberToRemove(null)}
+      />
+
+      {/* Transfer DM confirm dialog */}
+      <ConfirmDialog
+        isOpen={!!memberToPromote}
+        title="Hand over the DM role"
+        message={`Make ${memberToPromote?.user?.displayName ?? 'this player'} the DM of "${campaign.name}"? They get the DM's controls and you become a player. You stay in the campaign, and this does not change who owns it — you can be made DM again later.`}
+        confirmLabel="Make them DM"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmMakeDm}
+        onCancel={() => setMemberToPromote(null)}
       />
 
       {/* Final delete confirm dialog */}
