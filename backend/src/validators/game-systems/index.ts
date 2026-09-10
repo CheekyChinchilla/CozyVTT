@@ -269,7 +269,7 @@ function createBlankDnD5eCharacter(): DnD5eCharacterData {
     speed: 30,
     hp: { maximum: 10, current: 10, temporary: 0 },
     conditions: [],
-    hitDice: [{ class: 'fighter', total: '1d10', remaining: 1 }],
+    hitDice: [{ class: 'fighter', die: 'd10', maximum: 1, remaining: 1 }],
     deathSaves: { successes: 0, failures: 0 },
     attacks: [],
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },

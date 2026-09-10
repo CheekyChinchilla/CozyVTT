@@ -248,6 +248,22 @@ describe('D&D 5e hit dice', () => {
     expect(hitDice[0].expression).toBe('1d6-1');
   });
 
+  it('rolls a compound hit die as written, not as a single die', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([{ class: 'brawler', die: '2d6', maximum: 4, remaining: 4 }]));
+    expect(hitDice).toHaveLength(1);
+    expect(hitDice[0].expression).toBe('2d6+2');
+    expect(hitDice[0].label).toContain('2d6');
+    expect(hitDice[0].label).toContain('4/4');
+  });
+
+  it('prefers the die field over an older pool string', () => {
+    const { hitDice } = getCharacterRolls('DND_5E', sheet([
+      { class: 'fighter', die: 'd12', maximum: 5, total: '5d10', remaining: 2 },
+    ]));
+    expect(hitDice[0].expression).toBe('d12+2');
+    expect(hitDice[0].label).toContain('2/5');
+  });
+
   it('is empty, not missing, for a system without hit dice', () => {
     expect(getCharacterRolls('PATHFINDER_2E', {} as CharacterData).hitDice).toEqual([]);
     expect(getCharacterRolls(null, null).hitDice).toEqual([]);

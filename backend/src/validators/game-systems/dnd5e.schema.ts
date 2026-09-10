@@ -122,7 +122,14 @@ const hitPointsSchema = z.object({
  */
 const hitDiceSchema = z.object({
   class: z.string().min(1),
-  total: z.string(),
+  // The older field, packing count and die into one string ("5d10"). Optional
+  // now that `die` and `maximum` carry those separately; still accepted so
+  // sheets written before them keep saving.
+  total: z.string().optional(),
+  /** One hit die's roll — "d10", or "2d6" for a pool that is not a single die. */
+  die: z.string().max(50).optional(),
+  /** How many dice the pool holds at full. */
+  maximum: z.number().int().min(0).optional(),
   remaining: z.number().int().min(0),
 });
 

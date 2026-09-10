@@ -337,11 +337,15 @@ Your own skills show up with the rest on your sheet and in the right-click roll 
 
 ### Spending a hit die on a short rest (D&D 5e)
 
-At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5d10` means you have five d10 hit dice and three of them are unspent.
+At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5 d10` means you have five d10 hit dice and three of them are unspent.
 
 **Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**.
 
 It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
+
+**Setting your pool up.** In **Edit**, each row has three boxes after the class name: the **die**, how many you have at **Max**, and how many are left. Put a single die in the die box — `d10` for a fighter, `d6` for a wizard — and the number of them in Max. You don't repeat the count in the die box; that's what Max is for.
+
+**A hit die that isn't a plain die.** If your game uses something else — a homebrew class whose hit die is `2d6`, or one with a flat bonus like `1d10+1` — type that in the die box and it rolls exactly as written, with your Constitution added on top. Anything the dice roller understands works here.
 
 **Add the hit points yourself.** CozyVTT rolls the die and keeps count of what you have left, but it doesn't change your HP for you — use the **+** button on your roster card for the amount you rolled. (If your Constitution modifier is negative and the total comes out below zero, you regain nothing rather than losing hit points.)
 
@@ -349,7 +353,7 @@ Once the pool is empty the number stops being clickable. Your DM can also spend 
 
 **Getting them back.** A short rest is when you *spend* hit dice — it doesn't give any back. A **long rest** does: you regain all your lost hit points, plus spent hit dice up to **half your total, rounded down, and always at least one**. So a level 5 fighter with `5d10` gets two back, not five, and a level 1 character gets their single die back.
 
-CozyVTT doesn't apply that for you yet. After a long rest, click **Edit** on your sheet and set the **Remaining** number for each pool yourself.
+CozyVTT doesn't apply that for you yet. After a long rest, click **Edit** on your sheet and set the remaining number for each pool yourself — **Max** is there so you can see what you're counting back up towards.
 
 ### Weapons that do more than one thing
 

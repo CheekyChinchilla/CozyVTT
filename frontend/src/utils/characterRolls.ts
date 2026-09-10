@@ -1,5 +1,9 @@
 import type { CharacterData } from '@/types';
-import { hitDieSize, hitDieRoll, canSpendHitDie } from './hitDice';
+import { hitDieExpression, hitDiceMaximum, spendRoll, canSpendHitDie } from './hitDice';
+import { isValidDiceExpression } from './diceExpression';
+
+// Re-exported so the many callers that reach for it here keep working.
+export { isValidDiceExpression };
 import { readCustomSkills, dnd5eCustomSkillBonus } from '@/utils/rules/dnd5e';
 import type {
   DnD5eCharacterData,
@@ -74,11 +78,7 @@ function fmt(mod: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`;
 }
 
-/** Returns true if the string looks like a valid dice expression the server can evaluate. */
-export function isValidDiceExpression(expr: string): boolean {
-  if (!expr || !expr.trim()) return false;
-  return /^[\dd+\-*/khldisavw\s]+$/i.test(expr.trim());
-}
+
 
 /**
  * Converts a normal-roll expression beginning with "1d20" to an advantage
@@ -245,12 +245,13 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
     const con = data.stats?.constitution?.modifier ?? 0;
     data.hitDice.forEach((hd, index) => {
       if (!canSpendHitDie(hd)) return;
-      const size = hitDieSize(hd.total);
-      if (size === null) return;
-      const label = hd.class ? `${hd.class} d${size}` : `d${size}`;
+      const die = hitDieExpression(hd);
+      if (die === null) return;
+      const max = hitDiceMaximum(hd);
+      const left = max === null ? `${hd.remaining} left` : `${hd.remaining}/${max}`;
       hitDice.push({
-        label:             `${label} (${hd.remaining} left)`,
-        expression:        hitDieRoll(size, con),
+        label:             `${hd.class ? `${hd.class} ` : ''}${die} (${left})`,
+        expression:        spendRoll(die, con),
         purpose:           `Spend a Hit Die${hd.class ? ` (${hd.class})` : ''}`,
         supportsAdvantage: false,
         hitDiceIndex:      index,

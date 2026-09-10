@@ -20,7 +20,7 @@ import {
   Edit,
   Dices,
 } from 'lucide-react';
-import { hitDieSize, hitDieRoll, canSpendHitDie } from '@/utils/hitDice';
+import { hitDieExpression, hitDiceMaximum, spendRoll, canSpendHitDie } from '@/utils/hitDice';
 import { Character } from '../../../types';
 import type {
   DnD5eCharacterData,
@@ -422,9 +422,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               // Constitution — never the stored string, which would roll all
               // five. A pool with nothing left, or a total that is not a die,
               // stays as plain text rather than offering a roll it cannot make.
-              const size = hitDieSize(hd.total);
+              const die = hitDieExpression(hd);
+              const max = hitDiceMaximum(hd);
               const spendable = !!onRoll && canSpendHitDie(hd);
-              const expr = size === null ? '' : hitDieRoll(size, data.stats?.constitution?.modifier ?? 0);
+              const expr = die === null ? '' : spendRoll(die, data.stats?.constitution?.modifier ?? 0);
               const purpose = `Spend a Hit Die${hd.class ? ` (${hd.class})` : ''}`;
               return (
                 <div
@@ -437,7 +438,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 >
                   <div className="text-xs text-stone-500 capitalize">{hd.class}</div>
                   <div className="font-semibold text-stone-800 flex items-center gap-1">
-                    {hd.remaining}/{hd.total}
+                    {hd.remaining}{max === null ? '' : `/${max}`}
+                    {die && <span className="ml-1 font-normal text-stone-500">{die}</span>}
                     {spendable && <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />}
                   </div>
                 </div>

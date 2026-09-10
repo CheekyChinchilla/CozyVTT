@@ -1,3 +1,4 @@
+import { hitDieExpression, hitDiceMaximum } from '@/utils/hitDice';
 /**
  * DnD5eCharacterEditor Component
  *
@@ -1573,7 +1574,7 @@ min={0}
             onClick={() => {
               const newHitDice = [
                 ...(formData.hitDice || []),
-                { class: '', total: '1d6', remaining: 1 },
+                { class: '', die: 'd6', maximum: 1, remaining: 1 },
               ];
               updateField('hitDice', newHitDice);
             }}
@@ -1594,10 +1595,19 @@ min={0}
               />
               <input
                 type="text"
-                value={die.total || ''}
-                onChange={(e) => updateField(`hitDice.${index}.total`, e.target.value)}
-                placeholder="e.g., 5d8"
+                value={die.die ?? (die.total ? hitDieExpression(die) ?? '' : '')}
+                onChange={(e) => updateField(`hitDice.${index}.die`, e.target.value)}
+                placeholder="e.g., d10"
+                title="One hit die. A plain die like d10, or something like 2d6 if your game uses it."
                 className="w-24 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <NumberField
+min={0}
+                value={die.maximum ?? hitDiceMaximum(die) ?? 0}
+                onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
+                placeholder="Max"
+                className="w-20 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+              fallback={0}
               />
               <NumberField
 min={0}
