@@ -4,25 +4,28 @@
 // ============================================
 
 import apiClient from './api';
-import type { Message } from '@/types';
+import type { MessageHistoryPage } from '@/types';
 
 /**
- * Get message history for a campaign
- * @param campaignId - Campaign ID
- * @param limit - Number of messages to fetch (default 50, max 100)
- * @param before - Cursor for pagination (get messages before this timestamp)
- * @returns Array of messages, ordered newest first
+ * A page of chat history, newest first.
+ *
+ * Returns the whole page rather than just the messages: the panel needs the
+ * server's `hasMore` and `nextCursor`. It used to unwrap and discard them, which
+ * left the panel guessing whether more history existed from the page's length —
+ * and a short page is exactly what a campaign full of dice rolls produced.
+ *
+ * @param cursor - From the previous page's `pagination.nextCursor`. Omit for the
+ *                 newest page. Opaque: pass it back untouched.
  */
 export async function getMessages(
   campaignId: string,
   limit: number = 50,
-  before?: string
-): Promise<Message[]> {
-  const params: { limit?: number; before?: string } = { limit };
-  if (before) {
-    params.before = before;
+  cursor?: string
+): Promise<MessageHistoryPage> {
+  const params: { limit?: number; cursor?: string } = { limit };
+  if (cursor) {
+    params.cursor = cursor;
   }
 
-  const response = await apiClient.getMessages(campaignId, params);
-  return response.messages;
+  return apiClient.getMessages(campaignId, params);
 }

@@ -51,7 +51,6 @@ _Nothing in progress._
   field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
   needs a moment's thought about whether any field is meant to be dropped.
 
-
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with
   `{ error: 'Authentication Failed', message: 'Invalid email or password' }` —
@@ -68,7 +67,6 @@ _Nothing in progress._
   something a user should read. Note the 429
   path is fine: the rate limiter replies with a bare string rather than JSON, so
   the status branch handles it and the wording is already correct.
-
 
 - **Map events still die on a reconnect.** `frontend/src/services/socket.ts` keeps
   a listener registry so subscriptions survive the socket being replaced, and the
@@ -104,17 +102,6 @@ _Nothing in progress._
   pools and limits for Shadowrun, plus their own stat block editors and viewers.
   Neither has SRD seed data to test against. See the "Creature and NPC stat
   blocks" section of `docs/GAME_SYSTEMS.md` for where the branch points are.
-
-- **Chat "load more" refetches the same 50 messages.** Two separate faults in one
-  path, found while adding roll-history persistence in 1.2.2. The client sends a
-  `before` cursor that `GET /api/campaigns/:campaignId/messages` never reads, so scrolling back
-  returns the newest page every time. And that route applies `take` *before*
-  filtering `DICE_ROLL` rows out, so a campaign with a lot of rolls returns fewer
-  than `limit` chat messages — occasionally none at all, which looks like empty
-  history. Fixing the cursor properly means keyset pagination on `createdAt`;
-  fixing the filter means excluding the type in the `where` clause rather than
-  afterwards. Neither is urgent while chat fits in one page, and both were left
-  alone in 1.2.2 to keep that change to its reported scope.
 
 - **A shared character-sheet header / action bar.** Each per-system editor
   copy-pastes its own header: the Save and Cancel cluster, the palette button,

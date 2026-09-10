@@ -33,7 +33,8 @@ import type {
   TokenTemplate,
   CampaignImportPreview,
   CampaignImportResult,
-  Message,
+
+  MessageHistoryPage,
   DiceRolledEvent,
   Session,
   SessionSummary,
@@ -950,8 +951,14 @@ class ApiClient {
   // Messages
   // ============================================
 
-  async getMessages(campaignId: string, params?: { limit?: number; before?: string }): Promise<{ messages: Message[] }> {
-    const response = await this.client.get<{ messages: Message[] }>(`/api/campaigns/${campaignId}/messages`, { params });
+  async getMessages(
+    campaignId: string,
+    params?: { limit?: number; cursor?: string }
+  ): Promise<MessageHistoryPage> {
+    const response = await this.client.get<MessageHistoryPage>(
+      `/api/campaigns/${campaignId}/messages`,
+      { params }
+    );
     return response.data;
   }
 

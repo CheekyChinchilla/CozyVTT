@@ -1172,6 +1172,19 @@ export interface SpiritLayerTokenToggledBroadcast {
 // Character HP Events
 // ============================================
 
+/** Where a page of chat history stopped, and whether there is more behind it. */
+export interface MessagePageInfo {
+  limit: number;
+  hasMore: boolean;
+  /** Send back as `cursor` for the page before this one. Opaque — do not build one. */
+  nextCursor: string | null;
+}
+
+export interface MessageHistoryPage {
+  messages: Message[];
+  pagination: MessagePageInfo;
+}
+
 export interface HitDiceSpendEvent {
   characterId: string;
   /** Which pool it comes out of — a multiclass character has several. */

@@ -10,6 +10,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getMessages } from '@/services/message.service';
+import { mergeMessages } from '@/utils/messageMerge';
 import { api } from '@/services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
@@ -19,6 +20,9 @@ import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage } from '@/utils/errors';
 import type { MessageMetadata } from '@/types';
+
+/** Messages per page. The server caps this at 100. */
+const PAGE_SIZE = 50;
 
 export default function ChatPanel() {
   const { id: campaignId } = useParams<{ id: string }>();
@@ -61,6 +65,8 @@ export default function ChatPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  /** Where the last page stopped. Minted by the server; passed back untouched. */
+  const [cursor, setCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Rate limiting state (10 messages per minute = 1 per 6 seconds)
@@ -125,10 +131,12 @@ export default function ChatPanel() {
         setIsLoading(true);
         setError(null);
 
-        const fetchedMessages = await getMessages(campaignId, 50);
+        const page = await getMessages(campaignId, PAGE_SIZE);
 
-        setMessages(fetchedMessages.reverse()); // API returns newest first, we want oldest first
-        setHasMore(fetchedMessages.length === 50);
+        // The server sends newest first; the panel reads oldest first.
+        setMessages(mergeMessages([], page.messages));
+        setHasMore(page.pagination.hasMore);
+        setCursor(page.pagination.nextCursor);
 
         // Scroll to bottom after initial load (without smooth)
         setTimeout(() => scrollToBottom(false), 100);
@@ -161,24 +169,12 @@ export default function ChatPanel() {
 
     const resync = async () => {
       try {
-        const fetched = await getMessages(campaignId, 50);
-        const fresh = fetched.reverse(); // API returns newest first
+        const page = await getMessages(campaignId, PAGE_SIZE);
+        const fresh = page.messages;
 
-        setMessages((prev) => {
-          const seen = new Set(prev.map((m) => m.id));
-          const merged = [...prev];
-          for (const msg of fresh) {
-            if (!seen.has(msg.id)) {
-              merged.push(msg);
-            }
-          }
-          // Re-sort by createdAt to keep order correct if a gap was filled
-          merged.sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-          return merged;
-        });
+        // mergeMessages already orders and dedupes; sorting again here on the
+        // timestamp alone would undo the id tiebreak it applies.
+        setMessages((prev) => mergeMessages(prev, fresh));
       } catch (err) {
         console.error('[ChatPanel] Failed to resync messages after reconnect:', err);
         // Non-fatal — user will still see new messages going forward
@@ -192,25 +188,20 @@ export default function ChatPanel() {
    * Load more messages (pagination)
    */
   const loadMoreMessages = async () => {
-    if (!campaignId || isLoadingMore || !hasMore || messages.length === 0) return;
+    if (!campaignId || isLoadingMore || !hasMore) return;
 
     try {
       setIsLoadingMore(true);
 
-      // Get the oldest message timestamp for cursor-based pagination
-      const oldestMessage = messages[0];
-      const before = oldestMessage.createdAt;
+      // Hand back exactly what the server gave us. It decides what a position
+      // in the history is; the panel does not construct one.
+      const page = await getMessages(campaignId, PAGE_SIZE, cursor ?? undefined);
 
-      const fetchedMessages = await getMessages(campaignId, 50, before);
-
-      if (fetchedMessages.length === 0) {
-        setHasMore(false);
-        return;
-      }
-
-      // Add older messages to the beginning
-      setMessages((prev) => [...fetchedMessages.reverse(), ...prev]);
-      setHasMore(fetchedMessages.length === 50);
+      // Merged rather than prepended: a page that overlaps what is on screen
+      // would otherwise show its messages twice, duplicate keys and all.
+      setMessages((prev) => mergeMessages(prev, page.messages));
+      setHasMore(page.pagination.hasMore);
+      setCursor(page.pagination.nextCursor);
     } catch (err) {
       console.error('[ChatPanel] Failed to load more messages:', err);
       setError(errorMessage(err) || 'Failed to load more messages');
