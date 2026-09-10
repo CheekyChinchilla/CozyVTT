@@ -343,7 +343,7 @@ At the end of a short rest you can spend hit dice to get hit points back. Your p
 
 It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
 
-**Setting your pool up.** In **Edit**, each row has three boxes after the class name: the **die**, how many you have at **Max**, and how many are left. Put a single die in the die box — `d10` for a fighter, `d6` for a wizard — and the number of them in Max. You don't repeat the count in the die box; that's what Max is for.
+**Setting your pool up.** In **Edit**, each row is labelled: **Class**, **Die**, **Left** and **Max**. Put a single die under Die — `d10` for a fighter, `d6` for a wizard — and how many you have at your level under Max. Left is how many are unspent, and it reads `Left / Max` the same way the sheet shows `3/5`. You don't repeat the count in the Die box; that's what Max is for.
 
 **A hit die that isn't a plain die.** If your game uses something else — a homebrew class whose hit die is `2d6`, or one with a flat bonus like `1d10+1` — type that in the die box and it rolls exactly as written, with your Constitution added on top. Anything the dice roller understands works here.
 

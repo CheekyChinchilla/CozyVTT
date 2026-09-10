@@ -1583,55 +1583,77 @@ min={0}
             + Add Hit Die
           </button>
         </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
+          <label className="text-xs font-semibold text-stone-600">Class</label>
+          <label className="text-xs font-semibold text-stone-600 text-center">Die</label>
+          <label className="text-xs font-semibold text-stone-600 text-center">Left</label>
+          <span aria-hidden="true" />
+          <label className="text-xs font-semibold text-stone-600 text-center">Max</label>
+          <span aria-hidden="true" />
+        </div>
         <div className="space-y-2">
           {(formData.hitDice || []).map((die, index) => (
-            <div key={index} className="flex items-center space-x-2">
+            <div key={index} className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center">
               <input
                 type="text"
                 value={die.class || ''}
                 onChange={(e) => updateField(`hitDice.${index}.class`, e.target.value)}
-                placeholder="Class"
-                className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="Fighter"
+                aria-label="Class"
+                className="min-w-0 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <input
                 type="text"
                 value={die.die ?? (die.total ? hitDieExpression(die) ?? '' : '')}
                 onChange={(e) => updateField(`hitDice.${index}.die`, e.target.value)}
-                placeholder="e.g., d10"
-                title="One hit die. A plain die like d10, or something like 2d6 if your game uses it."
-                className="w-24 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="d10"
+                aria-label="Hit die"
+                title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
+                className="min-w-0 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <NumberField
-min={0}
-                value={die.maximum ?? hitDiceMaximum(die) ?? 0}
-                onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
-                placeholder="Max"
-                className="w-20 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-              fallback={0}
-              />
-              <NumberField
-min={0}
+                min={0}
                 value={die.remaining}
                 onChange={(v: number) => updateField(`hitDice.${index}.remaining`, v)}
-                placeholder="Remaining"
-                className="w-20 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-              fallback={0}
+                aria-label="Hit dice left"
+                title="How many are unspent right now"
+                className="min-w-0 px-1 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                fallback={0}
+              />
+              <span className="text-stone-400 select-none" aria-hidden="true">/</span>
+              <NumberField
+                min={0}
+                value={die.maximum ?? hitDiceMaximum(die) ?? 0}
+                onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
+                aria-label="Hit dice at full"
+                title="How many this pool holds when nothing is spent"
+                className="min-w-0 px-1 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                fallback={0}
               />
               <button
                 onClick={() => {
                   const newHitDice = formData.hitDice!.filter((_, i) => i !== index);
                   updateField('hitDice', newHitDice);
                 }}
-                className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                aria-label={`Remove ${die.class || 'this'} hit dice`}
+                title="Remove"
+                className="text-red-600 hover:text-red-800 font-bold leading-none"
               >
                 ×
               </button>
             </div>
           ))}
           {(!formData.hitDice || formData.hitDice.length === 0) && (
-            <div className="text-sm text-stone-500 italic">No hit dice added yet</div>
+            <div className="text-sm text-stone-500 italic">
+              No hit dice yet. Add one for each class you have levels in.
+            </div>
           )}
         </div>
+        <p className="mt-2 text-xs text-stone-500">
+          One row per class. <strong>Die</strong> is a single hit die — a fighter's is
+          d10 — and <strong>Max</strong> is how many of them you have at your level.{' '}
+          <strong>Left</strong> counts down as you spend them on a short rest.
+        </p>
       </div>
 
       {/* Death Saves */}
