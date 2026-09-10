@@ -112,8 +112,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: ""        # Empty = use relative URLs; Nginx proxies /api/* to backend
-        VITE_SOCKET_URL: ""     # Empty = use relative URLs; Nginx proxies /socket.io/* to backend
+        # Taken from .env, which offers both and ships them empty. Empty means
+        # relative URLs, and the bundled nginx proxies /api/* and /socket.io/*
+        # to the backend — the setup nearly everyone wants. These were pinned to
+        # "" here, so anything set in .env was silently discarded.
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest
     container_name: cozyvtt-frontend
     restart: unless-stopped

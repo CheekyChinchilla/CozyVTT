@@ -779,6 +779,27 @@ class ApiClient {
   // GET /api/characters/templates/:system/:name, which serves the hardcoded
   // presets compiled into the backend.
 
+  /**
+   * One of the starter sheets compiled into the backend — the blank for a game
+   * system, or a named preset like the level 1 fighter.
+   *
+   * Here rather than fetched directly so it goes through the same base URL and
+   * credentials as everything else; two dialogs used to call `fetch` and so
+   * ignored `VITE_API_URL` entirely.
+   *
+   * @param gameSystem - A GameSystem value, or 'null' for the flexible sheet.
+   * @param templateName - 'blank', or a preset name such as 'fighter'.
+   */
+  async getStarterSheet(
+    gameSystem: string,
+    templateName: string
+  ): Promise<{ name: string; description: string; gameSystem: string | null; data: Record<string, unknown> }> {
+    const response = await this.client.get(
+      `/api/characters/templates/${gameSystem}/${templateName}`
+    );
+    return response.data;
+  }
+
   async listCharacterTemplates(params?: {
     search?: string;
     /** A GameSystem value, or 'flexible' for the system-agnostic ones. */

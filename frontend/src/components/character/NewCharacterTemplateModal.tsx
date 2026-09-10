@@ -61,11 +61,8 @@ export default function NewCharacterTemplateModal({
       // every required field is present, exactly as character creation does.
       if (data === undefined) {
         const systemParam = gameSystem || 'null';
-        const res = await fetch(`/api/characters/templates/${systemParam}/blank`, {
-          credentials: 'include',
-        });
-        if (!res.ok) throw new Error('Failed to load a blank sheet');
-        data = (await res.json()).data ?? {};
+        const starter = await api.getStarterSheet(systemParam, 'blank');
+        data = starter.data ?? {};
       }
 
       await api.createCharacterTemplate({
