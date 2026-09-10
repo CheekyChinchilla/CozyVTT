@@ -38,7 +38,7 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
   };
 
   return (
-    <div className="border-t border-moss-green/20 bg-parchment/30 px-3 py-2 space-y-1.5">
+    <div className="flex-shrink-0 border-t border-moss-green/20 bg-parchment/30 px-3 py-2 space-y-1.5">
       <div className="text-xs font-semibold uppercase tracking-wider text-warm-gray">
         Custom Roll
       </div>

@@ -214,7 +214,7 @@ export default function CharacterRollPicker({
   return (
     <div
       ref={pickerRef}
-      className="fixed z-[60] bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden"
+      className="fixed z-[60] bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
       style={{
         left:       pos ? pos.x : anchorX,
         top:        pos ? pos.y : anchorY,
@@ -225,7 +225,7 @@ export default function CharacterRollPicker({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
+      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
         <div className="flex items-center gap-2">
           <Dices className="w-4 h-4 text-brand-ink" />
           <span className="text-sm font-semibold text-stone-gray truncate">
@@ -239,7 +239,7 @@ export default function CharacterRollPicker({
 
       {/* Roll Mode Selector (d20 systems only) */}
       {hasAdvantage && !loading && hasAnyRolls && (
-        <div className="px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
+        <div className="flex-shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
           <div className="text-xs text-warm-gray mb-1">Roll mode</div>
           <div className="relative">
             <button
@@ -271,7 +271,7 @@ export default function CharacterRollPicker({
       )}
 
       {/* Content */}
-      <div className="overflow-y-auto" style={{ maxHeight: 400 }}>
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading && (
           <div className="flex items-center justify-center py-8 text-warm-gray text-sm">
             Loading rolls…
