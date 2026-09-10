@@ -38,7 +38,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Platform
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
-- **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles
+- **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign
 - **Setup wizard** — guided first-run initialization; no manual database seeding required
 - **Admin dashboard** — user management, system settings, activity logs, database backups
 

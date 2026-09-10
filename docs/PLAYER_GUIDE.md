@@ -160,6 +160,24 @@ When you first load the campaign page, CozyVTT connects to the live session. Loo
 
 If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, a message appears and you can refresh the page to reconnect manually.
 
+### If your DM hands you the game
+
+A campaign has one DM, but that can be passed on — when a DM steps back, hands
+over to a co-DM, or wants someone else to run a session. If it is passed to you,
+your screen changes on the spot: you do not need to reload, and nothing about
+your character changes. You keep it, and you can still play it.
+
+What you gain is the DM's side of the campaign — the map, token, creature and
+settings controls appear in the top bar, and the campaign's roster shows you as
+the Dungeon Master. The person who handed it over becomes an ordinary player.
+
+**Handing it back** is the same action in reverse: **Campaign Settings →
+Members**, then the crown beside their name. If the campaign was originally
+theirs they can also take it back themselves, so nobody is ever stranded.
+
+If this happens unexpectedly, it is worth asking your DM — it is a deliberate
+action somebody took, not something that happens on its own.
+
 ---
 
 ## Chat and Dice

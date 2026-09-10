@@ -424,6 +424,30 @@ if (!membership || membership.role !== CampaignRole.DM) {
 }
 ```
 
+### Ownership is a separate axis from the DM role
+
+`Campaign.ownerId` and `CampaignMembership.role === 'DM'` are different facts.
+They name the same person in a campaign whose creator still runs it, which is
+most of them — and that coincidence is why five call sites independently worked
+out "the DM" by looking up the owner, and only diverged once the DM seat became
+movable (`PUT /api/campaigns/:id/dm`).
+
+Decide **"is this user the DM?"** from the membership, never from `ownerId`.
+Ownership gates exactly one thing, deleting the campaign, so that the
+destructive power stays with whoever created it and a handover can never lock an
+owner out. The frontend asks `src/utils/campaignRoles.ts`, which exists so the
+answer has one home rather than five.
+
+### Roles are a snapshot on an open socket
+
+`socket.role` is read once, when the socket authenticates to a campaign, and
+trusted by every gated handler thereafter — the right place to read it from,
+since a handler must never take a role off the wire, but it means the value
+goes stale if the role changes underneath it. A DM transfer therefore updates
+connected sockets in place (`applyRoleToLiveSockets`) and broadcasts
+`campaign.dm.transferred`, rather than waiting for a reconnect. REST needs no
+equivalent: `loadCampaignMembership` reads the membership per request.
+
 ### MFA (TOTP)
 
 MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Backup codes are SHA-256 hashed before storage and shown to the user only once.
