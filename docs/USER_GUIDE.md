@@ -387,7 +387,7 @@ Type your message in the input field and press **Enter** to send. Messages show 
 
 The **Dice Roller** is right below chat. Click a die face to roll it, or type a custom expression.
 
-*GIF pending — Rolling dice and seeing result in chat.*
+*GIF pending — Rolling dice and seeing the result in the Dice panel.*
 
 **Supported dice notation:**
 - `d20` — Roll a single d20
@@ -396,7 +396,7 @@ The **Dice Roller** is right below chat. Click a die face to roll it, or type a 
 - `1d20+5` — Roll a d20 and add 5
 - `2d6-1` — Roll 2d6 and subtract 1
 
-Dice results are posted to chat so everyone can see them. The Dice panel keeps a
+Dice results go to the **Dice** panel, where everyone can see them. It keeps a
 running list of the rolls, oldest at the top and newest at the bottom, and it
 follows along as they come in unless you have scrolled up to read something
 earlier. The list survives a refresh.
@@ -602,9 +602,9 @@ CozyVTT will automatically try to reconnect if you lose connection briefly. Your
 
 Only you (the character owner) and the DM of an assigned campaign can edit a character. If you think someone else has access they shouldn't, contact your platform administrator.
 
-### My dice rolls aren't showing in chat
+### My dice rolls aren't showing up
 
-Make sure the session is active (you see the "Live" indicator). Dice rolls require an active WebSocket connection to the campaign. If you're not in the campaign page, navigate there first.
+Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversation itself. If the panel is empty, make sure the session is active (you see the "Live" indicator): rolls need a live connection to the campaign. If you're not on the campaign page, navigate there first.
 
 ### How do I change my email address?
 

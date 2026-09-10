@@ -176,14 +176,14 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 
 **Chat tips:**
 - **System messages** (gray, slightly different style) announce session events like "Session started" or "Initiative started"
-- **Dice results** appear in chat automatically when you roll
+- **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
 
 ### The Dice Roller
 
 *Screenshot pending — Dice roller panel.*
 
-Click any die icon to roll it. Your result appears in chat immediately.
+Click any die icon to roll it. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
 
 **Rolling custom expressions:**
 Type directly into the expression input. Supported notation:
@@ -198,9 +198,9 @@ Type directly into the expression input. Supported notation:
 | `4d6kh3` | Four d6s, keep highest three |
 | `4d6kl3` | Four d6s, keep lowest three |
 
-*GIF pending — Typing a dice expression and seeing the result in chat.*
+*GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
-**Why my roll showed up in chat:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
+**Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
@@ -312,7 +312,7 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 - **In the tracker** — a dice icon 🎲 appears beside your own name. You'll only ever see it on your own row; you can't roll for other players or for the DM's monsters
 - **On the map** — right-click your token, choose **Roll...**, and pick **Roll Initiative** at the top of the menu
 
-Either way the result drops straight into the turn order and the roll appears in chat, so everyone can see what you got.
+Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 

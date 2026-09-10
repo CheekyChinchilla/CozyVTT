@@ -78,25 +78,19 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         },
       });
 
-      // Create system message for dice roll
-      // Secret rolls are marked differently in chat
-      await prisma.message.create({
-        data: {
-          campaignId: socket.campaignId,
-          userId: socket.userId,
-          type: 'DICE_ROLL',
-          content: `${user.displayName}${characterName ? ` (${characterName})` : ''} rolled ${expression}${purpose ? ` for ${purpose}` : ''}${secret ? ' (SECRET)' : ''}`,
-          metadata: toJson({
-            diceRollId: diceRoll.id,
-            expression,
-            result: rollResult.total,
-            breakdown: JSON.parse(JSON.stringify(rollResult)),
-            characterName: characterName || null,
-            purpose: purpose || null,
-            secret: secret || false, // Mark in metadata for client filtering
-          }),
-        },
-      });
+      // A roll is not a chat message, and no second row is written for it.
+      //
+      // One used to be: a Message of type DICE_ROLL whose metadata repeated the
+      // expression, result, breakdown, character name, purpose and secret flag
+      // that the DiceRoll row above already holds. Nothing ever read it — the
+      // chat panel does not listen for rolls, and the history endpoint filters
+      // the type out — so the rows accumulated with no way to reach or clear
+      // them, and their presence starved the chat page they were filtered from.
+      //
+      // The copy was also the unsafe one: `secret` lived only inside unindexed
+      // metadata, where the chat query does not filter on it. The DiceRoll table
+      // is the record, with `secret` as a real column and a clear-history
+      // watermark. Rolls are read from there, by the Dice panel.
 
       // Broadcast result with role-based filtering.
       //

@@ -601,7 +601,7 @@ dialog.
 
 ### The Chat Panel (DM View)
 
-As the DM, chat works the same as it does for players — type and hit Enter to send. However, you have one extra option: **Secret Dice Rolls**. When you roll dice, you can choose to roll secretly. Only you see the result in chat; players see a "DM rolled secretly" notice.
+As the DM, chat works the same as it does for players — type and hit Enter to send. However, you have one extra option: **Secret Dice Rolls**. When you roll dice, you can choose to roll secretly. Only you see the result in the **Dice** panel; players see a "DM rolled secretly" notice.
 
 This is perfect for behind-the-screen perception checks, wandering monster rolls, and dramatic reveals.
 
@@ -634,7 +634,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 
 Each combatant carries its token's name, portrait and HP across automatically, but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
-**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in chat.
+**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
 
 You keep everything else: only you decide who is in the fight, drag the order around, type a value in by hand, advance the turn, or end combat. You can still roll for any combatant, players included — useful when someone is away from the keyboard as the fight starts. A player who isn't in the tracker yet has nothing to roll: the option doesn't appear until you add them.
 
