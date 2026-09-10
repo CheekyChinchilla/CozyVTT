@@ -1569,6 +1569,58 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/campaigns/{campaignId}/dm:
+    put:
+      tags:
+        - Campaigns
+      summary: Transfer the DM role
+      description: >-
+        Hand the Dungeon Master seat to another member of the campaign. The
+        outgoing DM becomes a PLAYER and the named member becomes DM, as a single
+        atomic change, so the campaign is never observable with two DMs or none.
+        The campaign's owner is NOT changed: ownership and the DM role are
+        separate, which lets an owner hand the game to someone else and remain at
+        the table as a player. Callable by the sitting DM, the campaign owner
+        (even when they are not the DM), or a platform admin.
+      operationId: transferDM
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  description: The campaign member who should become DM
+      responses:
+        '200':
+          description: DM role transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  memberships:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/campaigns/{campaignId}/vibe:
     put:
       tags:

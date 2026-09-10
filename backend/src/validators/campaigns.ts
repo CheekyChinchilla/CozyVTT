@@ -16,3 +16,10 @@ export const CreateCampaignSchema = z.object({
 });
 
 export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>;
+
+/** PUT /api/campaigns/:campaignId/dm */
+export const TransferDMSchema = z.object({
+  userId: z.string().uuid('A campaign member must be named by their user id'),
+});
+
+export type TransferDMInput = z.infer<typeof TransferDMSchema>;

@@ -219,6 +219,51 @@ export async function canDeleteCampaign(
 }
 
 /**
+ * Check whether a user may hand the DM seat to another member.
+ *
+ * Three people can, and they are not the same person by necessity:
+ * - the sitting DM, handing off deliberately;
+ * - the campaign owner, who keeps this even while playing as a player, so a
+ *   campaign they own cannot be locked away from them by whoever holds the seat;
+ * - a platform admin, the escape hatch for a DM who left without handing over.
+ *
+ * Ownership and the DM role are separate facts and a transfer moves only the
+ * role, so the owner check reads `ownerId` and the DM check reads the
+ * membership. Deliberately not the `campaignDM` middleware: that loads the
+ * caller's membership first and refuses a non-member outright, which would shut
+ * out an admin who is not at the table.
+ */
+export async function canTransferDM(
+  userId: string,
+  campaignId: string,
+  platformRole: PlatformRole
+): Promise<boolean> {
+  if (isAdmin(platformRole)) {
+    return true;
+  }
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: { ownerId: true },
+  });
+
+  if (!campaign) {
+    return false;
+  }
+
+  if (campaign.ownerId === userId) {
+    return true;
+  }
+
+  const membership = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId, campaignId } },
+    select: { role: true },
+  });
+
+  return membership?.role === 'DM';
+}
+
+/**
  * Check if user can send chat messages
  * DM and Players can chat, Spectators cannot
  */

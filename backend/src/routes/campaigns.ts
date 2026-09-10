@@ -3,7 +3,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign } from '../services/permissions';
+import { canDeleteCampaign, canTransferDM } from '../services/permissions';
 import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign } from '../websocket/utils';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
@@ -11,7 +11,7 @@ import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, VibeSettin
 import { GameSystem } from '../game-systems';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
-import { CreateCampaignSchema } from '../validators/campaigns';
+import { CreateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
 import {
   CreatePersonalNoteSchema,
   UpdatePersonalNoteSchema,
@@ -934,6 +934,132 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to update member role',
+    });
+  }
+});
+
+/**
+ * PUT /api/campaigns/:campaignId/dm
+ * Hand the DM seat to another member of the campaign.
+ * Requires: the sitting DM, the campaign owner, or a platform admin
+ *
+ * A dedicated route rather than a loosening of the role endpoint above, which
+ * still refuses to touch a DM. Promoting one member and demoting the other are
+ * one action, not two: done separately the campaign is briefly observable with
+ * two DMs or none, and a failure between them would strand it that way.
+ *
+ * The campaign's `ownerId` is deliberately untouched. Ownership and the DM role
+ * are separate, and keeping them separate is what lets an owner hand the game to
+ * somebody else — a co-host, or an automated DM account — and stay at the table
+ * as a player without giving away the campaign itself.
+ */
+router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+    const callerId = req.session.userId!;
+    const platformRole = req.session.platformRole!;
+
+    const parsed = TransferDMSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid transfer request',
+      });
+    }
+    const { userId: incomingId } = parsed.data;
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true },
+    });
+
+    if (!campaign) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Campaign not found',
+      });
+    }
+
+    if (!(await canTransferDM(callerId, campaignId, platformRole))) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only the DM, the campaign owner, or an admin can transfer the DM role',
+      });
+    }
+
+    const incoming = await prisma.campaignMembership.findUnique({
+      where: { userId_campaignId: { userId: incomingId, campaignId } },
+      select: { role: true },
+    });
+
+    if (!incoming) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'That user is not a member of this campaign',
+      });
+    }
+
+    if (incoming.role === 'DM') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'That member is already the Dungeon Master',
+      });
+    }
+
+    const outgoing = await prisma.campaignMembership.findFirst({
+      where: { campaignId, role: 'DM' },
+      select: { userId: true },
+    });
+
+    // Both writes or neither, so the one-DM rule cannot be caught half-applied.
+    await prisma.$transaction([
+      // A campaign with no DM row is not supposed to happen, but it is
+      // recoverable and this route is how you would recover it, so the demotion
+      // is skipped rather than the whole transfer refused.
+      ...(outgoing
+        ? [
+            prisma.campaignMembership.update({
+              where: { userId_campaignId: { userId: outgoing.userId, campaignId } },
+              data: { role: 'PLAYER' },
+            }),
+          ]
+        : []),
+      prisma.campaignMembership.update({
+        where: { userId_campaignId: { userId: incomingId, campaignId } },
+        data: { role: 'DM' },
+      }),
+    ]);
+
+    const memberships = await prisma.campaignMembership.findMany({
+      where: { campaignId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            // SECURITY: never embed `email` — same reasoning as the role route.
+          },
+        },
+      },
+    });
+
+    logger.info('campaign.dm.transferred', {
+      campaignId,
+      from: outgoing?.userId ?? null,
+      to: incomingId,
+      by: callerId,
+    });
+
+    return res.status(200).json({
+      message: 'Dungeon Master role transferred successfully',
+      memberships,
+    });
+  } catch (error) {
+    logger.error('Error transferring DM role', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to transfer the Dungeon Master role',
     });
   }
 });
