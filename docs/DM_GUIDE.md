@@ -1042,7 +1042,7 @@ When you're ready to play again, navigate to the campaign and click **Start Sess
 
 - **Use the map notes / description** to leave yourself reminders about where the party is and what's happening. The campaign description field in Campaign Settings is a good place for this.
 - **Update token HP** at session end so it reflects the party's state going into the next session
-- **Clear chat history** if you want a fresh start for a new chapter (optional — old history doesn't affect gameplay, just scrollback)
+- **Tidy up old join/leave notices** if your campaign is old enough to have them — the eraser at the top of the chat panel removes those and nothing else (see [The Campaign Roster](#the-campaign-roster)). There's no way to clear the conversation itself, and no need to: old chat doesn't affect gameplay, and you can scroll back through it whenever you want
 
 ---
 
