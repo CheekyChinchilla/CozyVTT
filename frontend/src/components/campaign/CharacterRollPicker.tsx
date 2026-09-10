@@ -20,6 +20,7 @@ import {
   type CharacterRolls,
 } from '@/utils/characterRolls';
 import { resolveCharacterInitiative } from '@/utils/rules/initiative';
+import CustomRollFooter from './CustomRollFooter';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -328,6 +329,18 @@ export default function CharacterRollPicker({
           </div>
         )}
       </div>
+
+      {/* Not everything a character rolls comes off the sheet. Pinned below the
+          list rather than inside it, so it is reachable without scrolling past
+          a long skill list — the same place the creature picker keeps it.
+
+          Only shown once the character has loaded: the roll is filed under
+          their name, and there is nothing to file it under until then. */}
+      {!loading && !error && character && (
+        <CustomRollFooter
+          onRoll={(expression, purpose) => { onRoll(expression, purpose, character.name); onClose(); }}
+        />
+      )}
     </div>
   );
 }
