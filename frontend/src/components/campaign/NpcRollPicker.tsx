@@ -241,6 +241,9 @@ export default function NpcRollPicker({
             <Section title="Saving Throws" rolls={rolls.savingThrows} onRoll={handleRollOption} />
             <Section title="Skills"        rolls={rolls.skills}       onRoll={handleRollOption} />
             <Section title="Combat"        rolls={rolls.combat}       onRoll={handleRollOption} />
+            {/* Always empty for a creature — a stat block has no pool to spend —
+                but listed so the two pickers show the same categories. */}
+            <Section title="Hit Dice"      rolls={rolls.hitDice}      onRoll={handleRollOption} />
           </div>
         )}
       </div>

@@ -78,7 +78,8 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
     hitDice: [
       {
         class: 'Fighter',
-        total: '1d8',
+        die: 'd8',
+        maximum: 1,
         remaining: 1,
       },
     ],
@@ -194,7 +195,8 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
     hitDice: [
       {
         class: 'fighter',
-        total: '1d10',
+        die: 'd10',
+        maximum: 1,
         remaining: 1,
       },
     ],

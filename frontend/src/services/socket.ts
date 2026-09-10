@@ -25,6 +25,7 @@ import type {
   AtmosphereAudioUpdatedBroadcast,
   CharacterHpUpdateEvent,
   CharacterHpUpdatedBroadcast,
+  HitDiceSpendEvent,
   CombatState,
   InitiativeAddEvent,
   InitiativeRemoveEvent,
@@ -494,6 +495,15 @@ class SocketClient {
 
   onCharacterHpUpdated(callback: EventCallback<CharacterHpUpdatedBroadcast>) {
     this.addListener('character.hp.updated', callback);
+  }
+
+  /**
+   * Spend one hit die. The roll goes through emitDiceRoll like any other; this
+   * is only the decrement, which the server applies so the count cannot be
+   * kept up by a client that declines to send it.
+   */
+  emitHitDiceSpend(data: HitDiceSpendEvent) {
+    this.socket?.emit('character.hitdice.spend', data);
   }
 
   // ============================================

@@ -933,6 +933,7 @@ right-hand column.
 | `atmosphere.audio.set` | DM only | DM queues or stops ambient audio for all players. |
 | `atmosphere.effect.set` | DM only | DM sets a visual particle overlay on the map canvas. |
 | `authenticate` | Any member | — |
+| `character.hitdice.spend` | Any member | spend one D&D 5e hit die. |
 | `character.hp.update` | Any member | — |
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
@@ -978,11 +979,12 @@ right-hand column.
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
 | `character.hp.updated` | `characters.ts` |
+| `character.updated` | `characters.ts` |
 | `chat.message` | `chat.ts` |
 | `chat.system` | `utils.ts` |
 | `connected` | `events.ts` |
 | `dice.historyCleared` | `dice.ts` |
-| `dice.rolled` | `dice.ts` |
+| `dice.rolled` | `initiative.ts` |
 | `dice.rolled.secret` | `dice.ts` |
 | `dm:editing` | `walls.ts` |
 | `fog:cells` | `fog.ts` |
@@ -995,7 +997,7 @@ right-hand column.
 | `map.changed` | `maps.ts` |
 | `map.pinged` | `pings.ts` |
 | `pong` | `events.ts` |
-| `presence.state` | `events.ts` |
+| `presence.state` | `utils.ts` |
 | `spirit_layer.style_changed` | `spirit.ts` |
 | `spirit_layer.toggled` | `spirit.ts` |
 | `spirit_layer.token.toggled` | `spirit.ts` |

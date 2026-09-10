@@ -102,7 +102,15 @@ export interface DnD5eHitPoints {
  */
 export interface DnD5eHitDice {
   class: string;
-  total: string;
+  /**
+   * The older pool string, e.g. "5d10" — count and die packed together. Read
+   * so existing sheets keep working; never written any more. `die` wins.
+   */
+  total?: string;
+  /** One hit die's roll: "d10", or "2d6" / "1d10+1" for a homebrew pool. */
+  die?: string;
+  /** How many dice the pool holds at full. */
+  maximum?: number;
   remaining: number;
 }
 

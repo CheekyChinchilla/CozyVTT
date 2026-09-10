@@ -1,6 +1,6 @@
 // ============================================
-// Character handler: character.hp.update
-// Players update their own HP; DM can update any character's HP.
+// Character handlers: character.hp.update, character.hitdice.spend
+// Players act on their own characters; the DM may act on any of them.
 // ============================================
 
 import { Server } from 'socket.io';
@@ -14,6 +14,16 @@ interface HpBlock {
   current?: unknown;
   maximum?: unknown;
   temporary?: unknown;
+}
+/** One hit dice pool: `total` is the pool ("5d8"), `remaining` how many are left. */
+interface HitDiceEntry {
+  class?: unknown;
+  total?: unknown;
+  remaining?: unknown;
+}
+interface CharacterHitDiceData {
+  hitDice?: unknown;
+  [key: string]: unknown;
 }
 interface CharacterHpData {
   /** D&D 5e and Pathfinder 2e keep HP at the top level. */
@@ -120,6 +130,90 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
     } catch (error) {
       logger.error('character.hp.update failed', { err: error });
       socket.emit('error', { message: 'Failed to update character HP' });
+    }
+  });
+
+  /**
+   * CHARACTER.HITDICE.SPEND — spend one D&D 5e hit die.
+   *
+   * The roll itself goes through `dice.roll` like every other roll; this only
+   * decrements the pool, so the count cannot be inflated by a client that
+   * simply declines to send it. Same permission rule as HP: the character's
+   * owner, or the DM covering for an absent player.
+   */
+  socket.on('character.hitdice.spend', async (data: { characterId: string; index: number }) => {
+    try {
+      if (!socket.campaignId) {
+        socket.emit('error', { message: 'Not authenticated to a campaign' });
+        return;
+      }
+
+      const { characterId, index } = data ?? {};
+
+      if (!characterId || typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+        socket.emit('error', { message: 'characterId (string) and index (integer) are required' });
+        return;
+      }
+
+      const character = await prisma.character.findUnique({ where: { id: characterId } });
+      if (!character) {
+        socket.emit('error', { message: 'Character not found' });
+        return;
+      }
+
+      const membership = await prisma.campaignMembership.findFirst({
+        where: { campaignId: socket.campaignId, characterIds: { has: characterId } },
+      });
+      if (!membership) {
+        socket.emit('error', { message: 'Character is not in this campaign' });
+        return;
+      }
+
+      if (character.userId !== socket.userId && socket.role !== 'DM') {
+        socket.emit('error', { message: 'You do not have permission to spend this character\'s hit dice' });
+        return;
+      }
+
+      if (character.gameSystem !== 'DND_5E') {
+        socket.emit('error', { message: 'Hit dice are not tracked for this game system' });
+        return;
+      }
+
+      const charData = character.data as unknown as CharacterHitDiceData;
+      const pools = Array.isArray(charData.hitDice) ? (charData.hitDice as HitDiceEntry[]) : null;
+      if (!pools || !pools[index]) {
+        socket.emit('error', { message: 'No hit dice pool at that position' });
+        return;
+      }
+
+      const entry = pools[index];
+      const remaining = typeof entry.remaining === 'number' ? entry.remaining : 0;
+      if (remaining <= 0) {
+        socket.emit('error', { message: 'No hit dice remaining to spend' });
+        return;
+      }
+
+      entry.remaining = remaining - 1;
+
+      const updated = await prisma.character.update({
+        where: { id: characterId },
+        data: { data: toJson(charData) },
+      });
+
+      // The sheet blob changed, so this goes out as `character.updated` — the
+      // event an open character sheet already refreshes on — rather than a
+      // narrow one of its own that nothing would listen to. No token art or
+      // name changed, so nothing needs to repaint the map.
+      io.to(socket.campaignId).emit('character.updated', {
+        characterId,
+        character: updated,
+        userId: socket.userId,
+        tokensChanged: false,
+      });
+
+    } catch (error) {
+      logger.error('character.hitdice.spend failed', { err: error });
+      socket.emit('error', { message: 'Failed to spend hit die' });
     }
   });
 }
