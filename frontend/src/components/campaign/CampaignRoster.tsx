@@ -11,6 +11,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
+import { canRollAsCharacter } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -384,7 +385,10 @@ export default function CampaignRoster() {
                 setRollPicker({ x: contextMenu.x, y: contextMenu.y, characterId: contextMenu.characterId });
                 handleCloseContextMenu();
               },
-              visible: true,
+              // Rolling uses the sheet's modifiers, so it follows character
+              // ownership the same way Edit below does — not `true`, which let
+              // any member roll anyone's character.
+              visible: canRollAsCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
             },
             {
               icon: Edit,
@@ -421,8 +425,8 @@ export default function CampaignRoster() {
           characterId={rollPicker.characterId}
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose) => {
-            socket?.emitDiceRoll({ expression, purpose });
+          onRoll={(expression, purpose, characterName) => {
+            socket?.emitDiceRoll({ expression, purpose, characterName });
           }}
           onClose={() => setRollPicker(null)}
         />

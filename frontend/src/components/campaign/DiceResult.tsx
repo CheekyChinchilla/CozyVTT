@@ -5,13 +5,43 @@ import type { DiceRolledEvent } from '@/types';
 interface DiceResultProps {
   roll: DiceRolledEvent;
   isCurrentUser: boolean;
+  /**
+   * Whether the person who rolled is a DM of this campaign. Read from the
+   * campaign's own membership list rather than sent with the roll, so it
+   * cannot be claimed by whoever is rolling.
+   */
+  rollerIsDM?: boolean;
 }
 
 /**
  * Display a single dice roll result with breakdown and animations
  */
-export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
+export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResultProps) {
   const { userName, characterName, expression, result, breakdown, purpose, timestamp, secret } = roll;
+
+  /**
+   * A roll is about a character or a creature; the person who pressed the
+   * button is context for it. Heading every entry with the roller meant a DM
+   * covering for an absent player, or working through a room of NPCs, produced
+   * a list that read as though the DM had rolled for themselves throughout.
+   *
+   * Whoever rolled is still named — the point is to show both, in the order
+   * that answers "who is this roll for?" first.
+   */
+  const subject = characterName || userName;
+  const attribution = characterName
+    // Once the heading is a character, "(You)" would read as *being* them, so
+    // the tag names the action instead: who pressed the button, not who it is.
+    ? isCurrentUser
+      ? '(you rolled)'
+      : rollerIsDM
+        ? '(DM rolled)'
+        : `(rolled by ${userName})`
+    // A plain dice-panel roll still heads with the person, where "(You)" is
+    // about identity and reads correctly.
+    : isCurrentUser
+      ? '(You)'
+      : null;
 
   /**
    * `breakdown` is a JSON column, so its type is a promise rather than a
@@ -82,8 +112,7 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
           <div className="flex items-center gap-2 mb-1">
             <User className="w-4 h-4 flex-shrink-0 text-ink-secondary" />
             <span className="font-medium text-sm text-ink truncate">
-              {userName}
-              {isCurrentUser && <span className="ml-1 text-xs opacity-60">(You)</span>}
+              {subject}
               {/* Every secret roll in the list is labelled, whoever is looking.
                   It used to be marked only on someone *else's* roll — the DM's
                   audit view — which left your own secret rolls indistinguishable
@@ -105,9 +134,9 @@ export default function DiceResult({ roll, isCurrentUser }: DiceResultProps) {
                 </span>
               )}
             </span>
-            {characterName && (
-              <span className="text-xs text-ink-secondary truncate">
-                as {characterName}
+            {attribution && (
+              <span className="text-xs text-ink-secondary truncate opacity-70">
+                {attribution}
               </span>
             )}
           </div>
