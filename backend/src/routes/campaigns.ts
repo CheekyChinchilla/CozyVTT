@@ -23,6 +23,7 @@ import { errorMessage } from '../utils/errors';
 import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
+import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 
 const router = Router();
 
@@ -982,11 +983,12 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
 router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { limit = '50', offset = '0' } = req.query;
+    // `before` was once sent by the client and never read here. It is still
+    // ignored rather than rejected, so an older client keeps working — it simply
+    // gets the newest page, which is what it got before.
+    const { limit = '50', cursor: rawCursor } = req.query;
 
-    // Parse and validate pagination parameters
     const limitNum = parseInt(limit as string, 10);
-    const offsetNum = parseInt(offset as string, 10);
 
     if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
       return res.status(400).json({
@@ -995,21 +997,45 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
       });
     }
 
-    if (isNaN(offsetNum) || offsetNum < 0) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Offset must be a non-negative number',
-      });
+    // A cursor names where the last page stopped. Anything this server did not
+    // mint is refused rather than quietly restarting from the newest message,
+    // which would read as history that loops.
+    let cursor: { createdAt: Date; id: string } | null = null;
+    if (rawCursor !== undefined) {
+      cursor = decodeMessageCursor(rawCursor);
+      if (!cursor) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Invalid cursor',
+        });
+      }
     }
 
-    // Get total message count
-    const totalCount = await prisma.message.count({
-      where: { campaignId },
-    });
-
-    // Fetch messages with pagination (newest first)
-    const messages = await prisma.message.findMany({
-      where: { campaignId },
+    // One row beyond the page: its presence is what says there is more, exactly,
+    // where a count of all messages cannot — the count would include the dice
+    // rows this endpoint filters out.
+    const rows = await prisma.message.findMany({
+      where: {
+        campaignId,
+        // `not` rather than a list of the types to keep: a MessageType added
+        // later then shows up in chat by default instead of silently vanishing.
+        //
+        // Dice rolls are not chat. They are served from the DiceRoll table,
+        // which has `secret` as a real column and a clear-history watermark;
+        // these rows carry the flag only inside unindexed metadata, so serving
+        // them here would leak hidden rolls.
+        type: { not: 'DICE_ROLL' },
+        ...(cursor
+          ? {
+              // (createdAt, id) < (cursor.createdAt, cursor.id), spelled out
+              // because Prisma cannot express a row-value comparison.
+              OR: [
+                { createdAt: { lt: cursor.createdAt } },
+                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+              ],
+            }
+          : {}),
+      },
       include: {
         user: {
           select: {
@@ -1018,17 +1044,19 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc', // Newest first
-      },
-      take: limitNum,
-      skip: offsetNum,
+      // createdAt alone is not unique — a burst of system messages lands in one
+      // millisecond — and paging needs a total order or rows on the boundary are
+      // skipped or repeated. The existing [campaignId, createdAt] index carries
+      // this; the id tiebreak is resolved without one.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limitNum + 1,
     });
 
-    // Format messages for response (exclude DICE_ROLL messages from chat)
-    const formattedMessages = messages
-      .filter((msg) => msg.type !== 'DICE_ROLL')
-      .map((msg) => ({
+    const hasMore = rows.length > limitNum;
+    const page = hasMore ? rows.slice(0, limitNum) : rows;
+    const last = page[page.length - 1];
+
+    const formattedMessages = page.map((msg) => ({
         id: msg.id,
         userId: msg.userId,
         userName: msg.user?.displayName || null,
@@ -1039,16 +1067,15 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
         content: msg.content,
         type: msg.type,
         metadata: msg.metadata || null,
-        createdAt: msg.createdAt.toISOString(), // Changed from 'timestamp' to 'createdAt'
+        createdAt: msg.createdAt.toISOString(),
       }));
 
     return res.status(200).json({
       messages: formattedMessages,
       pagination: {
-        total: totalCount,
         limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + limitNum < totalCount,
+        hasMore,
+        nextCursor: hasMore && last ? encodeMessageCursor(last.createdAt, last.id) : null,
       },
     });
   } catch (error) {

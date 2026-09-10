@@ -1808,7 +1808,21 @@ paths:
       tags:
         - Messages
       summary: Get message history
-      description: Get paginated message history for a campaign (campaign member required). DICE_ROLL messages are excluded from chat history.
+      description: >
+        Chat history for a campaign, newest first, for a campaign member.
+
+        Paging is by keyset, not offset: take `pagination.nextCursor` from one
+        response and send it back as `cursor` to get the page before it. Repeat
+        until `hasMore` is false to reach the first message in the campaign.
+        Messages arriving while someone pages back cannot shift the window,
+        which is what an offset would allow.
+
+        Do not construct a cursor. It is opaque and its shape is not part of
+        this contract.
+
+        Dice rolls are not chat messages and are never returned here — they are
+        served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
+        only path that applies the secret-roll rules.
       operationId: getMessages
       security:
         - cookieAuth: []
@@ -1818,17 +1832,17 @@ paths:
           in: query
           schema:
             type: integer
-            default: 50
+            minimum: 1
             maximum: 100
-        - name: before
+            default: 50
+        - name: cursor
           in: query
+          description: From the previous response's `pagination.nextCursor`. Omit for the newest page.
           schema:
             type: string
-            format: date-time
-            description: Cursor-based pagination - get messages before this timestamp
       responses:
         '200':
-          description: Message history
+          description: A page of chat history
           content:
             application/json:
               schema:
@@ -1838,6 +1852,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Message'
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      hasMore:
+                        type: boolean
+                      nextCursor:
+                        type: string
+                        nullable: true
+                        description: Send as `cursor` for the next page. Null when the history is exhausted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
 
