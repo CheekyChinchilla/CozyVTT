@@ -1000,3 +1000,97 @@ describe('spirit layer filtering', () => {
     player.disconnect();
   });
 });
+
+// ── 10. Hit dice ─────────────────────────────────────────────────────────────
+
+describe('hit dice', () => {
+  /** A 5e character with one hit dice pool, owned by player 1 and in the campaign. */
+  async function giveHitDice(remaining: number, total = '5d10') {
+    const character = await prisma.character.create({
+      data: {
+        userId: player1Id,
+        campaignId,
+        name: 'Hit Dice Test',
+        gameSystem: 'DND_5E' as any,
+        data: { hitDice: [{ class: 'fighter', total, remaining }] } as any,
+      },
+    });
+    // The handler looks the character up through the membership, the same way
+    // character.hp.update does.
+    await prisma.campaignMembership.updateMany({
+      where: { campaignId, userId: player1Id },
+      data: { characterIds: [character.id] },
+    });
+    return character.id;
+  }
+
+  it('spends one die and tells the campaign', async () => {
+    const characterId = await giveHitDice(3);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+
+    const dmSees = waitForEvent<{ characterId: string; index: number; remaining: number }>(dm, 'character.hitdice.spent');
+    player.emit('character.hitdice.spend', { characterId, index: 0 });
+
+    const update = await dmSees;
+    expect(update.characterId).toBe(characterId);
+    expect(update.remaining).toBe(2);
+
+    // Persisted, not just broadcast.
+    const row = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
+    expect((row.data as any).hitDice[0].remaining).toBe(2);
+
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('refuses to spend a die that is not there', async () => {
+    const characterId = await giveHitDice(0);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const denial = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('character.hitdice.spend', { characterId, index: 0 });
+    expect((await denial).message).toMatch(/no hit dice remaining/i);
+
+    const row = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
+    expect((row.data as any).hitDice[0].remaining).toBe(0);
+
+    player.disconnect();
+  });
+
+  it('refuses a player spending another player’s hit die', async () => {
+    const characterId = await giveHitDice(3);
+    const other = await server.connectAndAuth(player2Cookie, campaignId);
+
+    const denial = waitForEvent<{ message: string }>(other, 'error');
+    other.emit('character.hitdice.spend', { characterId, index: 0 });
+    expect((await denial).message).toMatch(/permission/i);
+
+    const row = await prisma.character.findUniqueOrThrow({ where: { id: characterId } });
+    expect((row.data as any).hitDice[0].remaining).toBe(3);
+
+    other.disconnect();
+  });
+
+  it('lets the DM spend for a player, to cover an absent one', async () => {
+    const characterId = await giveHitDice(3);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+
+    const spent = waitForEvent<{ remaining: number }>(dm, 'character.hitdice.spent');
+    dm.emit('character.hitdice.spend', { characterId, index: 0 });
+    expect((await spent).remaining).toBe(2);
+
+    dm.disconnect();
+  });
+
+  it('refuses an index that is not in the pool', async () => {
+    const characterId = await giveHitDice(3);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const denial = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('character.hitdice.spend', { characterId, index: 7 });
+    expect((await denial).message).toMatch(/hit dice/i);
+
+    player.disconnect();
+  });
+});
