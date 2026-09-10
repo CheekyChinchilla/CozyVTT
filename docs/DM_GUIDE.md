@@ -81,6 +81,33 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 This replaced the "X has joined the campaign" messages that used to appear in chat. Those fired on every page load and every momentary disconnect, so a player with a patchy connection could bury the conversation without saying a word. If your campaign still has a backlog of them, the **eraser button** at the top of the chat panel clears them for everyone — it only removes those notices, and leaves the rest of the conversation alone. Nothing was deleted automatically when you upgraded.
 
+### Handing the game to someone else
+
+Sometimes the person running the game needs to change: you are handing a
+campaign to a co-DM, you are stepping back but the group plays on, or you want
+someone else to narrate while you play a character for a session.
+
+Open **Campaign Settings → Members** and click the **crown** next to whoever
+should take over. You will be asked to confirm, because it takes effect at once.
+
+What happens:
+
+- **They become the DM** and get the DM's controls — maps, tokens, fog, the lot.
+- **You become a player** in the same campaign. You keep your characters and
+  stay at the table; you simply stop having the DM's controls.
+- **It happens live.** Nobody has to reload. If you are both in the session when
+  you do it, the controls move between you there and then.
+- **Owning the campaign does not move.** If you created it, you still own it —
+  which means you can still delete it, and you can be made DM again later.
+
+**A campaign has exactly one DM**, so handing it over is a swap rather than an
+addition. If you want two people running a game at once, that is not something
+CozyVTT does yet.
+
+> **Getting it back.** The new DM can hand it back the same way. Since the
+> Settings panel is DM-only, do ask them first — if they leave without handing it
+> back, your instance's administrator can move it for you.
+
 ---
 
 ## Preparing Your Maps
