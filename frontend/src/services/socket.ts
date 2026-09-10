@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { socketTarget } from '@/utils/socketTarget';
 import type {
   Map as CampaignMap,
   TokenMoveStartEvent,
@@ -40,11 +41,17 @@ import type {
 // WebSocket Client Configuration
 // ============================================
 
-// Use relative URL in development to leverage Vite's proxy (Docker support)
-// Use absolute URL in production
-// Empty string = relative URLs (Nginx proxies /socket.io/* to backend in production,
-// Vite dev server proxies in development)
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
+// Where the live connection lives.
+//
+// Empty means the page's own origin, which is the shipped default — nginx
+// proxies /socket.io/* in production, and the Vite dev server does in
+// development. A configured value is split into an origin and a path, because
+// socket.io reads a URL's pathname as a *namespace* rather than a location:
+// passing one straight to `io()` asks for a namespace the server never
+// registered. See utils/socketTarget.
+const { origin: SOCKET_ORIGIN, path: SOCKET_PATH } = socketTarget(
+  import.meta.env.VITE_SOCKET_URL
+);
 
 type EventCallback<T = unknown> = (data: T) => void;
 
@@ -156,7 +163,8 @@ class SocketClient {
         reject(new Error('Connection timeout - server did not respond'));
       }, 10000);
 
-      this.socket = io(SOCKET_URL, {
+      this.socket = io(SOCKET_ORIGIN, {
+        path: SOCKET_PATH,
         withCredentials: true,
         transports: ['websocket', 'polling'],
         reconnection: true,
