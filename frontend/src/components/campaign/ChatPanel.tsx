@@ -3,7 +3,7 @@
 // Real-time chat with message history and WebSocket integration
 // ============================================
 
-import { useState, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { MessageCircle, Send, Loader, AlertCircle, Eraser } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -76,6 +76,8 @@ export default function ChatPanel() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  /** Distance from the bottom to restore once an older page has been added. */
+  const restoreScrollRef = useRef<number | null>(null);
   const wasAtBottomRef = useRef(true);
 
   // ============================================
@@ -100,6 +102,24 @@ export default function ChatPanel() {
    * Uses scrollTo on the container directly to avoid scrollIntoView
    * propagating up to parent scrollable elements (e.g. the sidebar).
    */
+  /**
+   * Put the reader back where they were after older messages are added above.
+   *
+   * Laid out before paint rather than after, so the list does not visibly jump.
+   * Measured from the bottom because that distance is what the new content does
+   * not change.
+   */
+  useLayoutEffect(() => {
+    const offsetFromBottom = restoreScrollRef.current;
+    if (offsetFromBottom === null) return;
+    restoreScrollRef.current = null;
+
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight - offsetFromBottom;
+    }
+  }, [messages]);
+
   const scrollToBottom = (smooth = true) => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -192,6 +212,14 @@ export default function ChatPanel() {
 
     try {
       setIsLoadingMore(true);
+
+      // Older messages are added above what is on screen, which would otherwise
+      // push the reader's place down by the height of the new page and make a
+      // second Load More impossible to aim at. Remember where the bottom was.
+      const container = messagesContainerRef.current;
+      restoreScrollRef.current = container
+        ? container.scrollHeight - container.scrollTop
+        : null;
 
       // Hand back exactly what the server gave us. It decides what a position
       // in the history is; the panel does not construct one.
