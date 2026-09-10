@@ -197,19 +197,8 @@ export default function NewCharacterModal({
       let templateData: Record<string, unknown> = {};
       if (selectedTemplate) {
         const systemParam = gameSystem || 'null';
-        const templateResponse = await fetch(
-          `/api/characters/templates/${systemParam}/${selectedTemplate}`,
-          { credentials: 'include' }
-        );
-
-        if (!templateResponse.ok) {
-          const errorText = await templateResponse.text();
-          console.error('Template fetch failed:', errorText);
-          throw new Error(`Failed to fetch character template: ${templateResponse.status} ${templateResponse.statusText}`);
-        }
-
-        const templateJson = await templateResponse.json();
-        templateData = templateJson.data || {};
+        const starter = await api.getStarterSheet(systemParam, selectedTemplate);
+        templateData = starter.data || {};
       }
 
       // Create character using the api client
