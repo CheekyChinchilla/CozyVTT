@@ -5,7 +5,12 @@ import { authenticated, campaignMember, campaignDM, adminOnly } from '../middlew
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM } from '../services/permissions';
 import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign } from '../websocket/utils';
+import {
+  sendSystemMessage,
+  broadcastToUser,
+  broadcastToCampaign,
+  applyRoleToLiveSockets,
+} from '../websocket/utils';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, VibeSettings } from '../utils/vibe-presets';
 import { GameSystem } from '../game-systems';
@@ -1043,6 +1048,29 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         },
       },
     });
+
+    // Bring any live connections into line before telling anyone the seat has
+    // moved. Sockets cache the role from when they authenticated, so until this
+    // runs the outgoing DM still holds DM powers over an open connection and the
+    // incoming one cannot use theirs. Best-effort: a socket layer that is not up
+    // must not fail a transfer that is already committed.
+    try {
+      if (outgoing) {
+        await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
+      }
+      await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
+
+      broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
+        campaignId,
+        previousDmId: outgoing?.userId ?? null,
+        newDmId: incomingId,
+      });
+    } catch (error) {
+      logger.error('DM transfer committed but live sockets were not updated', {
+        err: error,
+        campaignId,
+      });
+    }
 
     logger.info('campaign.dm.transferred', {
       campaignId,
