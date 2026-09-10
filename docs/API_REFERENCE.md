@@ -314,11 +314,21 @@ Get all characters assigned to this campaign, with their assigned players.
 
 ### `GET /api/campaigns/:id/messages`
 
-Get chat history for a campaign. Supports cursor-based pagination.
+Get chat history for a campaign, newest first. Paging is by keyset, so new
+messages arriving while someone scrolls back cannot shift the window.
 
 **Query params:**
 - `limit` — number of messages to return (default: 50, max: 100)
-- `before` — message ID to paginate before (for "load more" scrollback)
+- `cursor` — from the previous response's `pagination.nextCursor`. Omit for the
+  newest page. It is opaque; do not build one.
+
+**Response `200`:** `{ messages, pagination }`, where `pagination` is
+`{ limit, hasMore, nextCursor }`. Follow `nextCursor` until `hasMore` is false to
+reach the first message in the campaign.
+
+Dice rolls are not chat messages and never appear here — see
+`GET /api/campaigns/:id/dice-rolls`, which is the only path that applies the
+secret-roll rules.
 
 ### `POST /api/campaigns/:campaignId/invite`
 

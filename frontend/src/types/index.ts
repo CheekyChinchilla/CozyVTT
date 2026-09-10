@@ -1074,6 +1074,18 @@ export interface ChatMessageEvent {
   type: MessageType;
 }
 
+/**
+ * A system notice. The server sends the row's real id, which is what lets a
+ * notice received live be recognised as the same message when history replays
+ * it — see ChatPanel's merge.
+ */
+export interface ChatSystemBroadcast {
+  id: string;
+  content: string;
+  metadata?: MessageMetadata;
+  timestamp: string;
+}
+
 export interface ChatMessageBroadcast {
   id: string;
   userId: string;
@@ -1171,6 +1183,19 @@ export interface SpiritLayerTokenToggledBroadcast {
 // ============================================
 // Character HP Events
 // ============================================
+
+/** Where a page of chat history stopped, and whether there is more behind it. */
+export interface MessagePageInfo {
+  limit: number;
+  hasMore: boolean;
+  /** Send back as `cursor` for the page before this one. Opaque — do not build one. */
+  nextCursor: string | null;
+}
+
+export interface MessageHistoryPage {
+  messages: Message[];
+  pagination: MessagePageInfo;
+}
 
 export interface HitDiceSpendEvent {
   characterId: string;

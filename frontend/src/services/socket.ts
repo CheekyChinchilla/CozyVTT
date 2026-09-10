@@ -1,6 +1,5 @@
 import { io, Socket } from 'socket.io-client';
 import type {
-  MessageMetadata,
   Map as CampaignMap,
   TokenMoveStartEvent,
   TokenMoveEvent,
@@ -11,6 +10,7 @@ import type {
   DiceRolledSecretEvent,
   ChatMessageEvent,
   ChatMessageBroadcast,
+  ChatSystemBroadcast,
   SessionStartEvent,
   SessionStartedBroadcast,
   SessionPausedBroadcast,
@@ -377,7 +377,7 @@ class SocketClient {
     this.addListener('chat.message', callback);
   }
 
-  onChatSystem(callback: EventCallback<{ content: string; metadata?: MessageMetadata; timestamp: string }>) {
+  onChatSystem(callback: EventCallback<ChatSystemBroadcast>) {
     this.addListener('chat.system', callback);
   }
 

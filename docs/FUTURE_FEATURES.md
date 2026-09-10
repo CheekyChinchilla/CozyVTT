@@ -24,7 +24,7 @@ _Nothing in progress._
 
 - **Sound effects** — dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications** — desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
-- **Per-user default dice color** — surface a color in the dice picker so a player's rolls visually stand apart in chat. Needs: pass the color into the dice renderer (`DicePanel`, roll display in chat, socket roll payload metadata), then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
+- **Per-user default dice color** — surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice renderer (`DicePanel`, the roll list, socket roll payload metadata), then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
 - **Bulk character export as a ZIP** — exporting multiple characters currently downloads each one as a separate file. Bundling them into a single ZIP (e.g. via JSZip) would be tidier. See the multi-character export path in `frontend/src/utils/character-export.ts`.
 - **Merge the hardcoded starter templates into the character template library** — `backend/src/utils/character-templates/` holds four presets per system as source constants, served by `GET /api/characters/templates/:system/:name`, while user-published templates now live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. Note `getTemplatesForGameSystem`, `getAllTemplates` and `getBlankTemplate` in that directory are already dead code with no callers; `getBlankCharacterTemplate` in `validators/game-systems/index.ts` is the one still in use.
 - **Shadowrun 6E character sheet** — the backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
@@ -51,7 +51,6 @@ _Nothing in progress._
   field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
   needs a moment's thought about whether any field is meant to be dropped.
 
-
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with
   `{ error: 'Authentication Failed', message: 'Invalid email or password' }` —
@@ -68,7 +67,6 @@ _Nothing in progress._
   something a user should read. Note the 429
   path is fine: the rate limiter replies with a bare string rather than JSON, so
   the status branch handles it and the wording is already correct.
-
 
 - **Map events still die on a reconnect.** `frontend/src/services/socket.ts` keeps
   a listener registry so subscriptions survive the socket being replaced, and the
@@ -104,17 +102,6 @@ _Nothing in progress._
   pools and limits for Shadowrun, plus their own stat block editors and viewers.
   Neither has SRD seed data to test against. See the "Creature and NPC stat
   blocks" section of `docs/GAME_SYSTEMS.md` for where the branch points are.
-
-- **Chat "load more" refetches the same 50 messages.** Two separate faults in one
-  path, found while adding roll-history persistence in 1.2.2. The client sends a
-  `before` cursor that `GET /api/campaigns/:campaignId/messages` never reads, so scrolling back
-  returns the newest page every time. And that route applies `take` *before*
-  filtering `DICE_ROLL` rows out, so a campaign with a lot of rolls returns fewer
-  than `limit` chat messages — occasionally none at all, which looks like empty
-  history. Fixing the cursor properly means keyset pagination on `createdAt`;
-  fixing the filter means excluding the type in the `where` clause rather than
-  afterwards. Neither is urgent while chat fits in one page, and both were left
-  alone in 1.2.2 to keep that change to its reported scope.
 
 - **A shared character-sheet header / action bar.** Each per-system editor
   copy-pastes its own header: the Save and Cancel cluster, the palette button,
