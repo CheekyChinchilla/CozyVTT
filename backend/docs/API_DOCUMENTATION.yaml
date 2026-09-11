@@ -119,6 +119,8 @@ tags:
     description: Export and import campaigns as portable `.cozyvtt` archives
   - name: Messages
     description: Chat message history
+  - name: Dice Macros
+    description: A player's own saved dice rolls for one campaign, private to whoever saved them
   - name: Admin
     description: Admin-only platform management endpoints (requires ADMIN platform role)
   - name: WebSocket
@@ -1928,6 +1930,195 @@ paths:
   # note belonging to somebody else answers 404 rather than 403 — a 403 would
   # confirm the id exists. The DM has no access to a player's notes.
   # ============================================
+
+  /api/campaigns/{campaignId}/macros:
+    get:
+      tags:
+        - Dice Macros
+      summary: List your own saved macros
+      description: >
+        The caller's macros for this campaign, **oldest first** — so a macro keeps
+        its place in the row of buttons. These are things people aim at without
+        looking, and ordering by last edit would move one every time it changed.
+        Private to the caller; a DM sees only their own.
+      operationId: listDiceMacros
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Your macros, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macros:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiceMacro'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+        - Dice Macros
+      summary: Save a macro
+      description: >
+        The expression is rolled once and the result discarded, to prove it can be
+        rolled at all. An expression that only looks like dice — `2d6+`, `dddd` —
+        is refused here rather than becoming a button that fails every time it is
+        pressed. Limited to 50 per campaign per player.
+      operationId: createDiceMacro
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - expression
+              properties:
+                name:
+                  type: string
+                  maxLength: 60
+                expression:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Macro saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macro:
+                    $ref: '#/components/schemas/DiceMacro'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/macros/{macroId}:
+    get:
+      tags:
+        - Dice Macros
+      summary: Read one of your macros
+      description: >
+        A macro belonging to someone else answers `404`, not `403`, so the
+        response cannot be used to confirm that an id exists.
+      operationId: getDiceMacro
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: macroId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The macro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macro:
+                    $ref: '#/components/schemas/DiceMacro'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Dice Macros
+      summary: Rename a macro or correct its expression
+      description: >
+        Either field alone is a valid edit; a body with neither is refused so a
+        mistake is visible rather than silent. A new expression is checked the
+        same way it was on creation, so an edit cannot make a macro unrollable.
+      operationId: updateDiceMacro
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: macroId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 60
+                expression:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Macro updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  macro:
+                    $ref: '#/components/schemas/DiceMacro'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Dice Macros
+      summary: Delete a macro
+      operationId: deleteDiceMacro
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: macroId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Macro deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/campaigns/{campaignId}/notes:
     get:
@@ -6375,6 +6566,38 @@ components:
                 Markdown source, stored exactly as typed. Rendered on the client
                 with raw HTML disabled, so markup in a note is shown as text
                 rather than executed.
+
+    DiceMacro:
+      type: object
+      description: >
+        A player's saved dice roll for one campaign — a name and an expression,
+        shown as a one-click button in the dice panel. Private to whoever saved
+        it, the DM included. The expression is validated when written against the
+        same code that rolls it, so a stored macro can always be rolled.
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 60
+          example: Wild magic surge
+        expression:
+          type: string
+          maxLength: 200
+          example: 4d6kh3
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     Session:
       type: object
