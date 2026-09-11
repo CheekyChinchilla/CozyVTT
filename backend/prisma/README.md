@@ -28,6 +28,11 @@ The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by dom
   own user id, and a note that is not yours answers 404 rather than 403 so the
   response cannot confirm the id exists. Not to be confused with
   `Session.notes`, which the whole campaign reads.
+- `DiceMacro` — a player's saved dice rolls for one campaign, shown as buttons in
+  the dice panel. **Private to whoever saved them**, scoped and answered exactly
+  the way `PersonalNote` is. The `expression` column is checked against the real
+  dice parser when it is written, so a stored macro is always one that can be
+  rolled — see `validators/diceMacros.ts`
 
 **Assets & messages**
 - `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN
