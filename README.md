@@ -70,6 +70,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Real-time results** — rolls appear in the campaign chat log for all players
 - **Secret rolls** — hidden from the other players; your DM can still see them, and they stay in your own list marked as secret
 - **Dice history** — a running log of the session's rolls that survives a refresh, filtered per person by the server
+- **Saved rolls** — name a dice expression and it becomes a one-click button in the dice panel; private to you and scoped to one campaign, with the expression checked when you save it so a saved roll always works
 
 ### Communication
 - **Campaign chat** — in-session messaging between all members
