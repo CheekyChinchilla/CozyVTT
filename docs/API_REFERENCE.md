@@ -343,6 +343,31 @@ Invite a user to the campaign. **Requires DM role.**
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
+### `PUT /api/campaigns/:campaignId/dm`
+
+Hand the Dungeon Master role to another member of the campaign. **Requires the
+sitting DM, the campaign owner, or a platform admin.**
+
+**Body:**
+- `userId` *(required)* — the member who should become DM. They must already be in the campaign; any role qualifies, including a spectator
+
+**Response `200`:** `{ message, memberships }` — the full membership list, so a client can re-derive everyone's role in one step
+
+The named member becomes `DM` and the sitting DM becomes `PLAYER`, in a single
+transaction: a campaign is never observable with two DMs or none. A campaign
+still has exactly one DM — the seat moves rather than being shared.
+
+**The campaign's owner does not change.** Ownership and the DM role are separate
+facts, which is what allows an owner to hand the game to a co-DM or to an
+automated account and remain at the table as an ordinary player. Deleting a
+campaign stays with the owner; everything else a DM does follows the role.
+
+Rejected with `400` if the named member is already the DM, `404` if they are not
+a member of the campaign, and `403` if the caller is none of the three above.
+Note the generic role endpoint still refuses to change a DM's role or create a
+second one — this is the only supported way to move the seat, so that there is
+one atomic path rather than two.
+
 ### `DELETE /api/campaigns/:campaignId/messages/join-leave`
 
 Remove the legacy "X has joined / has left the campaign" system messages from a campaign's chat. **Requires DM role.**

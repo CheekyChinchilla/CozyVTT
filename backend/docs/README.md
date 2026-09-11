@@ -39,8 +39,13 @@ directions, and `docs/API_REFERENCE.md`, a hand-written guide that is allowed to
 be partial but must not describe routes that do not exist — twelve of those had
 accumulated, all wrong paths rather than removed features.
 
-The second fails when an event exists in the handlers with no line in the
-generated inventory. Refresh it with `--write`.
+The second fails when an event exists in the code with no line in the generated
+inventory. Refresh it with `--write`. It reads both `backend/src/websocket/` and
+`backend/src/routes/`, and matches `socket.emit` alongside the
+`broadcastToCampaign` / `broadcastToUser` helpers — a route pushing an event
+through a helper reaches a client just as surely as a handler emitting one, and
+while the scan covered only handlers the table called itself complete while
+omitting seven such events.
 
 ### Validate
 

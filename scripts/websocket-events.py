@@ -25,17 +25,27 @@ import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-HANDLERS = 'backend/src/websocket/**/*.ts'
+# Sockets are wired up under websocket/, but a route can also push an event by
+# calling one of the broadcast helpers, and those were invisible here — the
+# table reported itself complete while omitting every event sent from a route.
+HANDLERS = [
+    'backend/src/websocket/**/*.ts',
+    'backend/src/routes/**/*.ts',
+]
 DOC = 'backend/docs/WEBSOCKET_DOCUMENTATION.md'
 BEGIN = '<!-- BEGIN GENERATED EVENTS -->'
 END = '<!-- END GENERATED EVENTS -->'
 
 
 def sources():
-    for path in glob.glob(HANDLERS, recursive=True):
-        if '__tests__' in path.replace('\\', '/'):
-            continue
-        yield path, io.open(path, encoding='utf-8').read()
+    seen = set()
+    for pattern in HANDLERS:
+        for path in glob.glob(pattern, recursive=True):
+            normalised = path.replace('\\', '/')
+            if '__tests__' in normalised or normalised in seen:
+                continue
+            seen.add(normalised)
+            yield path, io.open(path, encoding='utf-8').read()
 
 
 def describe(text, index):
@@ -67,11 +77,19 @@ def collect():
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
-        for m in re.finditer(r"\.emit\(\s*'([^']+)'", text):
-            name = m.group(1)
-            if name in ('error',):
-                continue
-            outbound.setdefault(name, {'file': os.path.basename(path)})
+        # Direct emits, plus the helpers in websocket/utils.ts that wrap them —
+        # `broadcastToCampaign(id, 'event', data)` reaches a client just as
+        # surely as `socket.emit`, so it belongs in the same table.
+        patterns = (
+            r"\.emit\(\s*'([^']+)'",
+            r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*'([^']+)'",
+        )
+        for pattern in patterns:
+            for m in re.finditer(pattern, text):
+                name = m.group(1)
+                if name in ('error',):
+                    continue
+                outbound.setdefault(name, {'file': os.path.basename(path)})
     return inbound, outbound
 
 

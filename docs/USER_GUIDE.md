@@ -162,6 +162,13 @@ To invite someone:
 3. Enter the email address of the user on your platform
 4. They'll see a pending invitation on their dashboard
 
+**Handing the campaign to someone else.** A campaign has one DM, and that seat
+can be passed to another member — useful when you are handing off to a co-DM or
+stepping back from a game that carries on without you. It does not change who
+*owns* the campaign, so if you created it you can still delete it and can take
+the seat back later. See
+[Handing the game to someone else](DM_GUIDE.md#handing-the-game-to-someone-else).
+
 ---
 
 ### Tokens

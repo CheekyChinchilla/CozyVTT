@@ -17,7 +17,7 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
@@ -300,6 +300,39 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     socketClient.onCharacterHpUpdated(handleHpUpdated);
     return () => {
       socketClient.off('character.hp.updated', handleHpUpdated);
+    };
+  }, []);
+
+  /**
+   * The DM seat moved.
+   *
+   * `userRole` is derived from the membership list, and everything that asks
+   * "am I the DM?" reads it, so patching the list here brings the whole page
+   * into line — the controls a DM gets appear, and the ones a former DM had
+   * disappear, without a reload. The server has already changed what it will
+   * accept, so a page still offering the old controls would only produce
+   * refusals.
+   */
+  useEffect(() => {
+    const handleDmTransferred = (data: DmTransferredBroadcast) => {
+      setCampaign((prev) => {
+        if (!prev || prev.id !== data.campaignId || !prev.memberships) return prev;
+        return {
+          ...prev,
+          memberships: prev.memberships.map((m) =>
+            m.userId === data.newDmId
+              ? { ...m, role: 'DM' as CampaignRole }
+              : m.userId === data.previousDmId
+                ? { ...m, role: 'PLAYER' as CampaignRole }
+                : m
+          ),
+        };
+      });
+    };
+
+    socketClient.onDmTransferred(handleDmTransferred);
+    return () => {
+      socketClient.off('campaign.dm.transferred', handleDmTransferred);
     };
   }, []);
 

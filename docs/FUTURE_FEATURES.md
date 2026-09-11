@@ -38,6 +38,19 @@ _Nothing in progress._
 
 ### Polish / tech debt
 
+- **Two or more DMs in one campaign at the same time.** Raised alongside #33,
+  which asked to *move* the DM seat and got that; sharing it is a different and
+  much larger job. The schema already permits it — nothing enforces one DM but
+  route code — so the cheap part is removing a guard. The expensive part is that
+  "the DM" is assumed to be singular in roughly 32 socket checks and ~168
+  frontend branches, and in places where singular is load-bearing rather than
+  incidental: who controls initiative, who secret rolls are revealed to, who the
+  fog is drawn for, and which single person a "DM rolled" attribution names.
+  Ownership would need rethinking too, since `Campaign.ownerId` is what a
+  transfer deliberately leaves alone. **Revisit if** people actually ask to
+  co-run games — the handover added for #33 covers the cases reported so far
+  (handing off, stepping back, an agent DM narrating while the owner plays).
+
 - **Saving a flexible character discards every top-level field except
   `sections`.** `FlexibleCharacterSheetEdit.tsx:99` calls
   `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than

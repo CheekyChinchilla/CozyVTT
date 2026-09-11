@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
@@ -179,4 +180,50 @@ export async function sendSystemMessage(
     // (e.g. when the campaign was deleted just before the disconnect fires).
     logger.error('❌ Error sending system message', { err: error });
   }
+}
+
+/**
+ * Point a user's live sockets at their new campaign role.
+ *
+ * `socket.role` is read from the session once, when the socket authenticates to
+ * a campaign, and then trusted by every handler that gates on it. That is the
+ * right place to read it from — a handler must never take a role off the wire —
+ * but it means the value is a snapshot. When a role changes underneath a
+ * connected socket the snapshot is simply wrong, and wrong in the dangerous
+ * direction: a demoted DM keeps DM powers over that connection until they
+ * happen to reload.
+ *
+ * REST has no equivalent problem because its middleware reads the membership per
+ * request. This closes the same gap for sockets rather than waiting for a
+ * reconnect, so a handover does not interrupt play.
+ *
+ * Only sockets attached to this campaign are touched: the same person may have
+ * another tab open on a different campaign, where this role means nothing.
+ *
+ * Returns how many sockets were updated, which is 0 when the user is offline —
+ * the ordinary case, and not a failure.
+ */
+export async function applyRoleToLiveSockets(
+  userId: string,
+  campaignId: string,
+  role: CampaignRole
+): Promise<number> {
+  const io = getSocketInstance();
+  // Sockets join a room named for their user (see events.ts), which is how a
+  // specific person's connections are addressed.
+  const sockets = await io.in(userId).fetchSockets();
+
+  let updated = 0;
+  for (const socket of sockets) {
+    // The default in-memory adapter hands back the real sockets, so the fields
+    // set during authentication are both readable and writable — the same
+    // approach getOnlineUserIds and the secret dice-roll fan-out rely on.
+    const authed = socket as unknown as { campaignId?: string; role?: string };
+    if (authed.campaignId === campaignId) {
+      authed.role = role;
+      updated += 1;
+    }
+  }
+
+  return updated;
 }
