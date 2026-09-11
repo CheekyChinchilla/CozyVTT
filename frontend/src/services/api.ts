@@ -537,6 +537,37 @@ class ApiClient {
   // ============================================
 
   /** The caller's notes for a campaign, newest first. Titles only, no bodies. */
+  /**
+   * Your own saved dice macros for this campaign, oldest first — the order they
+   * appear as buttons, which stays put when one is edited.
+   */
+  async listDiceMacros(campaignId: string): Promise<{ macros: import('@/types').DiceMacro[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/macros`);
+    return response.data;
+  }
+
+  async createDiceMacro(
+    campaignId: string,
+    body: { name: string; expression: string },
+  ): Promise<{ macro: import('@/types').DiceMacro }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/macros`, body);
+    return response.data;
+  }
+
+  async updateDiceMacro(
+    campaignId: string,
+    macroId: string,
+    body: { name?: string; expression?: string },
+  ): Promise<{ macro: import('@/types').DiceMacro }> {
+    const response = await this.client.put(`/api/campaigns/${campaignId}/macros/${macroId}`, body);
+    return response.data;
+  }
+
+  async deleteDiceMacro(campaignId: string, macroId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/macros/${macroId}`);
+    return response.data;
+  }
+
   async listNotes(campaignId: string): Promise<{ notes: PersonalNoteSummary[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/notes`);
     return response.data;

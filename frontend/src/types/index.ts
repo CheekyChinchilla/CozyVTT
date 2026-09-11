@@ -565,6 +565,24 @@ export interface PersonalNoteSummary {
   updatedAt: string;
 }
 
+/**
+ * A saved dice roll, shown as a button in the dice panel.
+ *
+ * Private to whoever saved it and scoped to one campaign, so a table's homebrew
+ * rolls do not follow you into an unrelated game. The expression is checked when
+ * it is saved against the code that rolls it, so a stored macro can always be
+ * rolled.
+ */
+export interface DiceMacro {
+  id: string;
+  userId: string;
+  campaignId: string;
+  name: string;
+  expression: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A note with its Markdown source. */
 export interface PersonalNote extends PersonalNoteSummary {
   content: string;
