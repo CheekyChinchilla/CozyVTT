@@ -38,6 +38,27 @@ _Nothing in progress._
 
 ### Polish / tech debt
 
+- **One dice grammar for both sides.** The server owns the real parser
+  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
+  — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept
+  things the server refuses, such as `2d6+` and `dddd`. That is survivable for a
+  roll about to be sent, because the server answers immediately and the person is
+  still looking at the box, and saved macros close the dangerous half by
+  validating server-side before anything is stored. But three implementations of
+  one grammar is two too many. The fix is extracting the parser into something
+  both sides import, which today means introducing a shared package where none
+  exists — the reason it has not been done yet. **Revisit** when a second thing
+  needs shared logic, or if the checks disagree in a way a user notices.
+
+- **Dice macros shared by the DM.** #47 asked for personal saved rolls and got
+  them. A DM may well want a table-wide one — "Wild Magic Surge, d100" — that
+  everyone can click without each person saving it themselves. The storage would
+  take it: a nullable `userId` for campaign-wide, or an explicit `shared` flag on
+  `DiceMacro`. What it really adds is a visibility axis and the permission
+  question that comes with it, plus deciding what happens to a shared macro when
+  the DM seat moves. **Revisit if** people ask; the personal version covers the
+  cases in the original request.
+
 - **Two or more DMs in one campaign at the same time.** Raised alongside #33,
   which asked to *move* the DM seat and got that; sharing it is a different and
   much larger job. The schema already permits it — nothing enforces one DM but

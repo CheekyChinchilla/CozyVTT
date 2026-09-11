@@ -396,6 +396,13 @@ The **Dice Roller** is right below chat. Click a die face to roll it, or type a 
 
 *GIF pending — Rolling dice and seeing the result in the Dice panel.*
 
+**Saving a roll you use often.** Press **Saved** below the dice buttons to keep a
+named roll — a house rule, a homebrew subsystem, `4d6kh3` for rolling up a
+character. It becomes a one-click button beside the dice. Saved rolls are private
+to you and belong to the one campaign, and the same button is where you rename,
+edit or delete them. See the
+[Player Guide](PLAYER_GUIDE.md#the-dice-roller) for the full description.
+
 **Supported dice notation:**
 - `d20` — Roll a single d20
 - `2d6` — Roll two d6s and sum them

@@ -326,6 +326,15 @@ erDiagram
         datetime updatedAt
     }
 
+    DiceMacro {
+        string id PK
+        string userId FK
+        string campaignId FK
+        string name
+        string expression
+        datetime createdAt
+    }
+
     CreatureTemplate {
         string id PK
         string name
@@ -360,6 +369,8 @@ erDiagram
     Campaign ||--o{ Session : "has"
     Campaign ||--o{ PersonalNote : "has"
     User ||--o{ PersonalNote : "writes"
+    Campaign ||--o{ DiceMacro : "has"
+    User ||--o{ DiceMacro : "saves"
     User ||--o{ Asset : "uploaded"
     Campaign ||--o{ Asset : "scoped to"
     Map ||--o{ Asset : "uses"
@@ -376,6 +387,7 @@ erDiagram
 - **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas but stored untyped in Postgres. This allows flexible incremental saves.
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
+- **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
 - **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
 

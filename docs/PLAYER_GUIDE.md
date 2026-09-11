@@ -218,6 +218,23 @@ Type directly into the expression input. Supported notation:
 
 *GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
+**Saved rolls.** Some rolls aren't on your character sheet and never will be — a
+homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
+`4d6kh3` for rolling up a new character, an attack the sheet can't describe.
+Rather than retyping those every session, save them: press **Saved** under the
+dice buttons, give the roll a name and an expression, and it becomes a button of
+its own. Click it and it rolls exactly as if you had typed it.
+
+If you have just typed something into the expression box, opening **Saved**
+carries it across, so naming it is the only thing left to do.
+
+Saved rolls are **yours alone** — not even your DM can see them — and they stay
+with the campaign you made them in, so one table's homebrew doesn't clutter
+another game. You can rename, edit or delete them from the same **Saved** button,
+and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVTT
+says so when you save it rather than letting you find out later with a button
+that never works.
+
 **Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.

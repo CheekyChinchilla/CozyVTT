@@ -274,87 +274,28 @@ export function rollDice(expression: string): RollResult {
 }
 
 /**
- * Parse dice expression without rolling (for validation)
+ * Would this expression roll?
+ *
+ * Answers by rolling it and throwing the result away, rather than by
+ * re-implementing the rules. It used to have its own copy of the token loop,
+ * which checked each token in isolation and never checked that the tokens formed
+ * a usable expression — so `2d6+`, `2d6*`, `2d6+-` and `/2d6` all passed
+ * validation and then threw the moment they were rolled.
+ *
+ * Every caller validates and then rolls, so that gap let an expression clear the
+ * gate and fail immediately afterwards. It was worse for anything that *stores* a
+ * validated expression — a saved dice macro, an initiative fallback — where the
+ * failure arrives long after the mistake was made and with nothing to connect
+ * the two.
+ *
+ * Two functions answering one question will drift; this is the cheap fix, and
+ * `dice-parser.test.ts` pins the two verdicts together so they cannot part again.
+ * The wasted roll costs nothing: the expression is capped at 100 dice.
+ *
  * @param expression Dice expression
- * @returns true if valid, throws error if invalid
+ * @returns true if valid; throws DiceParserError if not
  */
 export function parseDiceExpression(expression: string): boolean {
-  // Validation
-  if (!expression || expression.trim().length === 0) {
-    throw new DiceParserError('Empty expression');
-  }
-
-  if (expression.length > MAX_EXPRESSION_LENGTH) {
-    throw new DiceParserError(`Expression too long. Maximum ${MAX_EXPRESSION_LENGTH} characters.`);
-  }
-
-  try {
-    const tokens = tokenize(expression);
-
-    if (tokens.length === 0) {
-      throw new DiceParserError('Invalid expression');
-    }
-
-    let totalDiceCount = 0;
-
-    // Validate tokens
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-
-      // Check if token is a dice expression
-      if (/d\d+/i.test(token)) {
-        const regex = /^(\d+)?d(\d+)(kh\d+|kl\d+|dl\d+)?$/i;
-        const match = token.match(regex);
-
-        if (!match) {
-          throw new DiceParserError(`Invalid dice notation: ${token}`);
-        }
-
-        const count = match[1] ? parseInt(match[1], 10) : 1;
-        const sides = parseInt(match[2], 10);
-
-        if (count > MAX_DICE) {
-          throw new DiceParserError(`Too many dice. Maximum ${MAX_DICE} per roll.`);
-        }
-
-        if (sides > MAX_DIE_SIZE) {
-          throw new DiceParserError(`Die size too large. Maximum d${MAX_DIE_SIZE}.`);
-        }
-
-        if (sides < 1) {
-          throw new DiceParserError(`Invalid die size: d${sides}. Must be at least 1.`);
-        }
-
-        totalDiceCount += count;
-      }
-      // Check if token is an operator
-      else if (['+', '-', '*', '/'].includes(token)) {
-        // Valid operator
-      }
-      // Check if token is a number (modifier)
-      else if (/^\d+$/.test(token)) {
-        const value = parseInt(token, 10);
-
-        if (value > MAX_MODIFIER) {
-          throw new DiceParserError(`Modifier too large. Maximum ±${MAX_MODIFIER}.`);
-        }
-      }
-      // Invalid token
-      else {
-        throw new DiceParserError(`Invalid token: ${token}`);
-      }
-    }
-
-    // Check total dice count
-    if (totalDiceCount > MAX_DICE) {
-      throw new DiceParserError(`Too many dice. Maximum ${MAX_DICE} per expression.`);
-    }
-
-    return true;
-  } catch (error) {
-    if (error instanceof DiceParserError) {
-      throw error;
-    }
-    throw new DiceParserError(`Failed to parse expression: ${expression}`);
-  }
+  rollDice(expression);
+  return true;
 }
