@@ -422,3 +422,45 @@ describe('Dice Parser', () => {
     });
   });
 });
+
+/**
+ * The validator and the roller must answer the same question.
+ *
+ * `parseDiceExpression` exists so callers can ask "would this roll?" without
+ * rolling. That is only useful if its answer matches what `rollDice` actually
+ * does — and it did not. The validator checked each token in isolation and
+ * never checked that the tokens formed a usable expression, so `2d6+` passed
+ * validation and then threw when rolled.
+ *
+ * Every caller validates and then rolls, so the gap meant an expression could
+ * clear the gate and fail immediately afterwards. Worse for anything that
+ * *stores* a validated expression — a saved dice macro, an initiative
+ * fallback — where the failure arrives long after the mistake.
+ *
+ * This pins the two together. It is a property, not a list: whatever either one
+ * decides, the other must decide the same.
+ */
+describe('parseDiceExpression agrees with rollDice', () => {
+  const expressions = [
+    // Ordinary things people roll
+    '1d20', '2d6+3', '4d6kh3', '1d20+5', '2d20kh1', '2d20kl1', '1d100', '3d8-1',
+    '1d12*2', '10d6', '1d6+1d8', '5', '1d20 + 5',
+    // Malformed in various ways
+    '2d6+', '+2d6', '2d6++3', 'dddd', 'invalid', '', '   ', 'd', '2d', 'd6',
+    '2d6+-', '()', '2d6*', '/2d6',
+    // Past the limits
+    '101d20', '50d6+51d6', '1d1001', '1d0', '1d20+10000',
+  ];
+
+  it.each(expressions)('gives the same verdict for %j', (expression) => {
+    const validatorAccepts = (() => {
+      try { parseDiceExpression(expression); return true; } catch { return false; }
+    })();
+
+    const rollerAccepts = (() => {
+      try { rollDice(expression); return true; } catch { return false; }
+    })();
+
+    expect(validatorAccepts).toBe(rollerAccepts);
+  });
+});

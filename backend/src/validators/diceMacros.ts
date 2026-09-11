@@ -15,17 +15,17 @@
  * cannot be rolled means a button failing every time it is pressed, with the
  * mistake made long ago and nowhere in sight.
  *
- * So the gate is `rollDice` itself — the macro is rolled once and the result
- * thrown away. `parseDiceExpression` is not enough, and this is not theoretical:
- * it accepts `2d6+`, which `rollDice` then refuses, so a macro validated only by
- * the parser could still be unrollable. Asking the question the button will ask
- * is the only answer that cannot drift from it. The parser's own message is
- * handed back verbatim — it already explains itself ("Too many dice. Maximum 100
- * per roll.").
+ * So the gate is `parseDiceExpression`, which answers by rolling the expression
+ * and discarding the result — the same question the button will ask, so the two
+ * cannot disagree. It used to validate tokens separately and accepted `2d6+`,
+ * which the roller refuses; that is fixed at the source in `dice-parser.ts`
+ * rather than worked around here. The parser's own message is handed back
+ * verbatim, since it already explains itself ("Too many dice. Maximum 100 per
+ * expression.").
  */
 
 import { z } from 'zod';
-import { rollDice, DiceParserError } from '../utils/dice-parser';
+import { parseDiceExpression, DiceParserError } from '../utils/dice-parser';
 
 /** Long enough to name a homebrew subsystem, short enough to sit on a button. */
 export const MAX_MACRO_NAME_LENGTH = 60;
@@ -50,9 +50,9 @@ export const MAX_MACROS_PER_CAMPAIGN = 50;
 /**
  * A dice expression the server would actually roll.
  *
- * Rolls it once and discards the result, converting any failure into a Zod issue
- * so it comes back through the same `{ error, message }` shape as every other
- * validation failure rather than as a 500.
+ * Converts a parser failure into a Zod issue, so a bad expression comes back
+ * through the same `{ error, message }` shape as every other validation failure
+ * rather than as a 500.
  */
 const rollableExpression = z
   .string()
@@ -61,7 +61,7 @@ const rollableExpression = z
   .max(MAX_MACRO_EXPRESSION_LENGTH, `Expression too long. Maximum ${MAX_MACRO_EXPRESSION_LENGTH} characters.`)
   .superRefine((expression, ctx) => {
     try {
-      rollDice(expression);
+      parseDiceExpression(expression);
     } catch (error) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
