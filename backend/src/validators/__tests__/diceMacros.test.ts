@@ -132,6 +132,43 @@ describe('CreateDiceMacroSchema', () => {
   });
 });
 
+describe('what the person typing is told', () => {
+  /**
+   * The parser explains limits well and syntax badly. A player naming a button
+   * they will press for months should not be handed "Invalid token: helloworld".
+   */
+  const messageFor = (expression: string) => {
+    const result = CreateDiceMacroSchema.safeParse({ name: 'T', expression });
+    return result.success ? null : result.error.issues[0]?.message ?? '';
+  };
+
+  it('keeps the limit messages, which already say what to change', () => {
+    expect(messageFor('101d20')).toMatch(/maximum 100/i);
+    expect(messageFor('1d1001')).toMatch(/maximum d1000/i);
+  });
+
+  it('rewrites "Failed to evaluate expression" into something actionable', () => {
+    const message = messageFor('2d6+');
+    expect(message).not.toMatch(/failed to evaluate/i);
+    expect(message).toMatch(/2d6\+/);
+    expect(message).toMatch(/stray \+ or -|missing number/i);
+  });
+
+  it('rewrites "Invalid token" without repeating the jargon', () => {
+    const message = messageFor('helloworld');
+    expect(message).not.toMatch(/invalid token/i);
+    expect(message).toMatch(/could not read/i);
+    // Shows an example of the thing being asked for.
+    expect(message).toMatch(/1d20\+5|2d6\+3|4d6kh3/);
+  });
+
+  it('never leaks the word "token" to someone saving a button', () => {
+    for (const expression of ['dddd', 'invalid', 'hello world', '2d6*', '2d6+']) {
+      expect(messageFor(expression) ?? '').not.toMatch(/token/i);
+    }
+  });
+});
+
 describe('UpdateDiceMacroSchema', () => {
   it('accepts a rename on its own', () => {
     expect(UpdateDiceMacroSchema.safeParse({ name: 'Renamed' }).success).toBe(true);

@@ -20,8 +20,8 @@
  * cannot disagree. It used to validate tokens separately and accepted `2d6+`,
  * which the roller refuses; that is fixed at the source in `dice-parser.ts`
  * rather than worked around here. The parser's own message is handed back
- * verbatim, since it already explains itself ("Too many dice. Maximum 100 per
- * expression.").
+ * through when it is already clear ("Too many dice. Maximum 100 per roll."), and
+ * rewritten when it is not — see explainRefusal.
  */
 
 import { z } from 'zod';
@@ -54,6 +54,35 @@ export const MAX_MACROS_PER_CAMPAIGN = 50;
  * through the same `{ error, message }` shape as every other validation failure
  * rather than as a 500.
  */
+/**
+ * Turn a parser complaint into something the person typing can act on.
+ *
+ * The parser's limit messages are already good — "Too many dice. Maximum 100 per
+ * roll." says exactly what to change — so they are passed through untouched. Its
+ * syntax messages are not: "Failed to evaluate expression" and "Invalid token:
+ * helloworld" are written for whoever is reading a stack trace, and a player
+ * naming a button they will press for months deserves better than that.
+ *
+ * Only the unhelpful shapes are rewritten, so a better message from the parser
+ * keeps reaching the surface rather than being flattened into a generic one.
+ */
+function explainRefusal(message: string, expression: string): string {
+  if (/^Failed to (evaluate|parse) expression/i.test(message)) {
+    return `CozyVTT could not read "${expression}" as a roll. Check for a stray + or -, or a missing number — try something like 2d6+3.`;
+  }
+
+  const token = message.match(/^Invalid token:\s*(.+)$/i);
+  if (token) {
+    return `CozyVTT could not read "${token[1]}" as dice. Expressions look like 1d20+5, 2d6+3 or 4d6kh3.`;
+  }
+
+  if (/^Invalid dice notation/i.test(message)) {
+    return `CozyVTT could not read "${expression}" as dice. Expressions look like 1d20+5, 2d6+3 or 4d6kh3.`;
+  }
+
+  return message;
+}
+
 const rollableExpression = z
   .string()
   .trim()
@@ -67,8 +96,8 @@ const rollableExpression = z
         code: z.ZodIssueCode.custom,
         message:
           error instanceof DiceParserError
-            ? error.message
-            : `That is not a dice expression CozyVTT can roll: ${expression}`,
+            ? explainRefusal(error.message, expression)
+            : `CozyVTT could not read "${expression}" as a roll.`,
       });
     }
   });
