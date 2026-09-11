@@ -330,6 +330,30 @@ Dice rolls are not chat messages and never appear here — see
 `GET /api/campaigns/:id/dice-rolls`, which is the only path that applies the
 secret-roll rules.
 
+### `GET|POST /api/campaigns/:campaignId/macros`
+
+A player's saved dice rolls for one campaign. **Requires campaign membership.**
+
+`GET` returns your own macros, **oldest first** — that is the order they appear
+as buttons, and people aim at those without looking, so an edit must not move
+one. `POST` takes `{ name, expression }`.
+
+**They are private to whoever saved them, the DM included.** Every query is
+scoped by the session's own user id; a macro belonging to someone else answers
+`404` rather than `403`, so the reply cannot be used to confirm an id exists.
+
+The expression is **rolled once when it is saved** and the result discarded. An
+expression that merely looks like dice — `2d6+`, `dddd` — is refused at that
+point rather than becoming a button that fails every time it is pressed. Limited
+to 50 per campaign per player.
+
+### `GET|PUT|DELETE /api/campaigns/:campaignId/macros/:macroId`
+
+Read, edit or delete one of your own. `PUT` accepts `name`, `expression` or both;
+a body changing neither is refused so a mistake is visible. A new expression is
+checked exactly as it was on creation, so an edit cannot leave a macro
+unrollable.
+
 ### `POST /api/campaigns/:campaignId/invite`
 
 Invite a user to the campaign. **Requires DM role.**
