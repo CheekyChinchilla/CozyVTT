@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Character sheets keep only the fields the sheet defines.** A sheet saved through the API could carry extra keys the game system never defined, and they were stored untouched. The server now stores exactly what the sheet schema accepts. The header colour chosen on a sheet is part of that, so it is kept.
+
 - **Campaign settings are checked before they are saved.** Updating a campaign accepted any value for any field: a name of any length, an unknown status, atmosphere settings that were not even an object. Each field is now validated and a bad one is refused with a message saying which.
 
 - **Names and descriptions typed by a user no longer render as HTML in emails.** A display name, campaign name or campaign description containing HTML tags was pasted into the invitation, welcome and password-reset emails as markup. Every such value is now shown exactly as typed.

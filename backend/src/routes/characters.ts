@@ -120,6 +120,9 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       name,
       owner?.displayName ?? ''
     );
+    // What gets stored: the schema's parsed output once validated, so a key
+    // the sheet does not declare never reaches the database.
+    let sheetData: unknown = dataWithIdentity;
 
     // Validate gameSystem if provided
     if (finalGameSystem !== undefined && finalGameSystem !== null) {
@@ -149,6 +152,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
           })),
         });
       }
+      sheetData = validationResult.data;
     }
 
     // Create character with flexible JSON data field
@@ -163,7 +167,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         data: {
           userId,
           name,
-          data: dataWithIdentity as Prisma.InputJsonValue,
+          data: toJson(sheetData),
           tokenImageUrl: normalizedTokenImageUrl,
           campaignId: campaignId || null,
           gameSystem: finalGameSystem || null,
@@ -530,7 +534,10 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Validate data update if character has gameSystem
+    // Validate data update if character has gameSystem. What gets stored is
+    // the schema's parsed output, so a key the sheet does not declare never
+    // reaches the database.
+    let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
       const validationResult = validateCharacterData(character.gameSystem as GameSystem, data);
       if (!validationResult.success) {
@@ -544,6 +551,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           })),
         });
       }
+      sheetData = validationResult.data;
     }
 
     // Build update data
@@ -553,7 +561,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       tokenImageUrl?: string | null;
     } = {};
     if (name !== undefined) updateData.name = name;
-    if (data !== undefined) updateData.data = toJson(data);
+    if (data !== undefined) updateData.data = toJson(sheetData);
 
     // Keep the `name` column in step with the name typed on the sheet.
     //
@@ -564,7 +572,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // the character was created with. The sheet is the thing the user typed
     // into, so it wins; an explicit `name` in the request still takes priority.
     if (name === undefined && data !== undefined && character.gameSystem) {
-      const sheetName = sheetNameFor(character.gameSystem as GameSystem, data as Record<string, unknown>);
+      const sheetName = sheetNameFor(character.gameSystem as GameSystem, sheetData as Record<string, unknown>);
       if (sheetName && sheetName !== character.name) {
         updateData.name = sheetName;
       }

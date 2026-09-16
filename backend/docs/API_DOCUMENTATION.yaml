@@ -2788,7 +2788,8 @@ paths:
                   description: Optional campaign to assign character to immediately
                 data:
                   type: object
-                  description: Flexible JSON data for character stats (validated if gameSystem is set)
+                  description: |
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` (a preset name or `#RRGGBB`) is accepted on every system.
                 tokenImageUrl:
                   type: string
       responses:
@@ -2895,7 +2896,8 @@ paths:
                   type: string
                 data:
                   type: object
-                  description: Character data (validated if gameSystem is set)
+                  description: |
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` (a preset name or `#RRGGBB`) is accepted on every system.
                 tokenImageUrl:
                   type: string
                 gameSystem:

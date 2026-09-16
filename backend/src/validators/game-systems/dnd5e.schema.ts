@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { themeColorSchema } from './sheetChrome';
 import { featureEntrySchema } from './featureEntry.schema';
 
 /**
@@ -307,6 +308,7 @@ const alliesAndOrganizationsSchema = z.object({
  * - All other fields can be omitted and added progressively
  */
 export const dnd5eCharacterDataSchema = z.object({
+  themeColor: themeColorSchema,
   // Required: Core identity
   characterName: z.string().min(1),
   class: z.string().min(1),

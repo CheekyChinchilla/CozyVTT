@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { themeColorSchema } from './sheetChrome';
 
 /**
  * Characteristic
@@ -321,6 +322,7 @@ const appearanceSchema = z.object({
  * - All other fields can be omitted and added progressively
  */
 export const callOfCthulhu7eCharacterDataSchema = z.object({
+  themeColor: themeColorSchema,
   // Required: Core identity
   investigatorName: z.string().min(1),
   occupation: z.string().min(1),

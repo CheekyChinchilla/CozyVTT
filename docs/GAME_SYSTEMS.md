@@ -357,6 +357,7 @@ Create `backend/src/validators/game-systems/mySystem.schema.ts`. This is the **r
 ```typescript
 // backend/src/validators/game-systems/mySystem.schema.ts
 import { z } from 'zod';
+import { themeColorSchema } from './sheetChrome';
 
 const mySystemSkillSchema = z.object({
   name: z.string().min(1),
@@ -365,6 +366,7 @@ const mySystemSkillSchema = z.object({
 });
 
 export const mySystemCharacterDataSchema = z.object({
+  themeColor: themeColorSchema,
   characterName: z.string().min(1).max(100),
   playerName: z.string().max(100).optional(),
 
@@ -386,6 +388,8 @@ export const mySystemCharacterDataSchema = z.object({
 export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 ```
 
+> Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
+>
 > Match the permissiveness of the existing schemas. Look at `shadowrun6e.schema.ts` before finalizing — the shipped schemas are intentionally lenient so partial and in-progress sheets save cleanly.
 
 ---
