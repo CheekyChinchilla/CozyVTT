@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import logger from '../utils/logger';
+import { escapeHtml } from '../utils/html';
 
 /**
  * Email Service
@@ -52,9 +53,9 @@ function getInstanceName(): string {
  * All styles are inlined for broad email client compatibility.
  */
 function emailLayout(content: string, previewText?: string): string {
-  const instanceName = getInstanceName();
+  const instanceName = escapeHtml(getInstanceName());
   const preview = previewText
-    ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#FDFAF4;">${previewText}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`
+    ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#FDFAF4;">${escapeHtml(previewText)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`
     : '';
 
   return `<!DOCTYPE html>
@@ -112,7 +113,7 @@ function ctaButton(text: string, href: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
     <tr>
       <td style="border-radius:8px;background-color:#B45309;">
-        <a href="${href}" target="_blank" rel="noopener noreferrer"
+        <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"
            style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:bold;color:#FDFAF4;text-decoration:none;border-radius:8px;font-family:Georgia,'Times New Roman',serif;letter-spacing:0.3px;">
           ${text}
         </a>
@@ -166,7 +167,7 @@ export async function sendTestEmail(toEmail: string, toName: string): Promise<vo
 
   const content =
     h2('SMTP Test Successful') +
-    p(`Hello <strong>${toName}</strong>,`) +
+    p(`Hello <strong>${escapeHtml(toName)}</strong>,`) +
     p('This is a test email from your CozyVTT instance. If you received this, your SMTP configuration is working correctly.') +
     divider +
     p('<em style="color:#8B7355;font-size:13px;">No action is required. This email was triggered from the Admin Dashboard.</em>');
@@ -194,13 +195,13 @@ export async function sendWelcomeEmail(
   const instanceName = getInstanceName();
 
   const content =
-    h2(`Welcome to ${instanceName}!`) +
-    p(`Hello <strong>${displayName}</strong>,`) +
+    h2(`Welcome to ${escapeHtml(instanceName)}!`) +
+    p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
     p('An administrator has created an account for you on CozyVTT. You can sign in using the credentials below.') +
     infoBox(
       `<strong>Your login details</strong><br>` +
-      `<span style="display:block;margin-top:8px;">Email: <code style="font-family:monospace;background:#E8DFCE;padding:1px 6px;border-radius:3px;">${toEmail}</code></span>` +
-      `<span style="display:block;margin-top:4px;">Temporary password: <code style="font-family:monospace;background:#E8DFCE;padding:1px 6px;border-radius:3px;">${temporaryPassword}</code></span>`
+      `<span style="display:block;margin-top:8px;">Email: <code style="font-family:monospace;background:#E8DFCE;padding:1px 6px;border-radius:3px;">${escapeHtml(toEmail)}</code></span>` +
+      `<span style="display:block;margin-top:4px;">Temporary password: <code style="font-family:monospace;background:#E8DFCE;padding:1px 6px;border-radius:3px;">${escapeHtml(temporaryPassword)}</code></span>`
     ) +
     warningBox('You will be required to choose a new password the first time you sign in. Do not share this temporary password with anyone.') +
     ctaButton('Sign In Now', `${appUrl}/auth/login`) +
@@ -237,16 +238,16 @@ export async function sendInvitationEmail(
   const inviteLink = `${appUrl}/accept-invite?token=${token}`;
 
   const content =
-    h2(`You're invited to ${instanceName}`) +
-    p(`Hello <strong>${displayName}</strong>,`) +
-    p(`<strong>${invitedByName}</strong> has invited you to join ${instanceName}, a cozy virtual tabletop for online tabletop RPG campaigns. Click below to choose a password and finish setting up your account.`) +
+    h2(`You're invited to ${escapeHtml(instanceName)}`) +
+    p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
+    p(`<strong>${escapeHtml(invitedByName)}</strong> has invited you to join ${escapeHtml(instanceName)}, a cozy virtual tabletop for online tabletop RPG campaigns. Click below to choose a password and finish setting up your account.`) +
     ctaButton('Accept Invitation', inviteLink) +
     infoBox(
       `Or copy and paste this link into your browser:<br>` +
-      `<span style="word-break:break-all;font-family:monospace;font-size:12px;color:#5C4A2A;">${inviteLink}</span>`
+      `<span style="word-break:break-all;font-family:monospace;font-size:12px;color:#5C4A2A;">${escapeHtml(inviteLink)}</span>`
     ) +
     warningBox(
-      `<strong>This invitation expires in ${expiryDays} days.</strong> If it expires, ask ${invitedByName} to send a new one. ` +
+      `<strong>This invitation expires in ${expiryDays} days.</strong> If it expires, ask ${escapeHtml(invitedByName)} to send a new one. ` +
       'If you were not expecting this invitation, you can safely ignore this email — no account can be used until someone sets a password with this link.'
     );
 
@@ -275,12 +276,12 @@ export async function sendPasswordResetEmail(
 
   const content =
     h2('Password Reset Request') +
-    p(`Hello <strong>${displayName}</strong>,`) +
+    p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
     p('We received a request to reset the password for your CozyVTT account. Click the button below to set a new password.') +
     ctaButton('Reset My Password', resetLink) +
     infoBox(
       `Or copy and paste this link into your browser:<br>` +
-      `<span style="word-break:break-all;font-family:monospace;font-size:12px;color:#5C4A2A;">${resetLink}</span>`
+      `<span style="word-break:break-all;font-family:monospace;font-size:12px;color:#5C4A2A;">${escapeHtml(resetLink)}</span>`
     ) +
     warningBox('<strong>This link expires in 1 hour.</strong> If you did not request a password reset, you can safely ignore this email — your password will not change.');
 
@@ -309,18 +310,18 @@ export async function sendCampaignInvitationEmail(
   const instanceName = getInstanceName();
 
   const descriptionBlock = campaignDescription
-    ? infoBox(`<strong>About this campaign:</strong><br><em style="color:#6B5035;">${campaignDescription}</em>`)
+    ? infoBox(`<strong>About this campaign:</strong><br><em style="color:#6B5035;">${escapeHtml(campaignDescription)}</em>`)
     : '';
 
   const content =
     h2("You've Been Invited!") +
-    p(`Hello <strong>${displayName}</strong>,`) +
-    p(`<strong>${dmName}</strong> has invited you to join their campaign on ${instanceName}:`) +
+    p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
+    p(`<strong>${escapeHtml(dmName)}</strong> has invited you to join their campaign on ${escapeHtml(instanceName)}:`) +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px;">
       <tr>
         <td style="background-color:#F0EAD8;border:1px solid #C9B99A;border-radius:8px;padding:20px 24px;text-align:center;">
-          <div style="font-size:20px;font-weight:bold;color:#3D6B4F;font-family:Georgia,'Times New Roman',serif;">${campaignName}</div>
-          <div style="font-size:13px;color:#8B7355;margin-top:4px;font-family:Georgia,'Times New Roman',serif;">Dungeon Master: ${dmName}</div>
+          <div style="font-size:20px;font-weight:bold;color:#3D6B4F;font-family:Georgia,'Times New Roman',serif;">${escapeHtml(campaignName)}</div>
+          <div style="font-size:13px;color:#8B7355;margin-top:4px;font-family:Georgia,'Times New Roman',serif;">Dungeon Master: ${escapeHtml(dmName)}</div>
         </td>
       </tr>
     </table>` +

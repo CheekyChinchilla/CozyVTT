@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Names and descriptions typed by a user no longer render as HTML in emails.** A display name, campaign name or campaign description containing HTML tags was pasted into the invitation, welcome and password-reset emails as markup. Every such value is now shown exactly as typed.
+
 - **The two-factor endpoints now have their own attempt limits.** Confirming a code when setting up two-factor authentication, turning it off, and regenerating backup codes were only covered by the general request cap. Each now shuts off after several failed attempts, the same protection the login screen already had.
 
 - **Signing in starts a fresh session each time.** CozyVTT now issues a new session identifier whenever you log in, finish two-factor verification, or register, so a session cannot be carried across the moment you authenticate. This is a standard hardening step and changes nothing you will notice.
