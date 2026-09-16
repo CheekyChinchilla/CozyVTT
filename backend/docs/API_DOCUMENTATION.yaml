@@ -1296,10 +1296,10 @@ paths:
         - Campaigns
       summary: Update campaign
       description: |
-        Update campaign settings (DM only). Supports name, description, status,
-        vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem.
+        Update campaign settings (DM only). Every field is optional and is
+        validated when present; a bad value is a 400 with a message naming it.
         Note: Changing `gameSystem` after characters have been created logs a
-        warning and returns it in the response, but the change is still allowed.
+        warning, but the change is still allowed.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -1314,11 +1314,15 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
                 description:
                   type: string
+                  maxLength: 5000
+                  nullable: true
                 status:
                   type: string
-                  enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+                  enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED]
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -1331,7 +1335,14 @@ paths:
                   type: boolean
                 spiritLayerStyle:
                   type: string
-                  enum: [wispy, ethereal, shadow, custom]
+                  maxLength: 100
+                  description: A preset name, or `custom:#RRGGBB:<effect>` for a custom colour
+                chatCooldownEnabled:
+                  type: boolean
+                chatCooldownSeconds:
+                  type: integer
+                  minimum: 1
+                  maximum: 300
       responses:
         '200':
           description: Campaign updated
@@ -1344,6 +1355,8 @@ paths:
                     type: string
                   campaign:
                     $ref: '#/components/schemas/Campaign'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '403':
           $ref: '#/components/responses/Forbidden'
 

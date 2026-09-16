@@ -14,10 +14,9 @@ import {
 } from '../websocket/utils';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
-import { GameSystem } from '../game-systems';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
-import { CreateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
+import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
 import {
   CreatePersonalNoteSchema,
   UpdatePersonalNoteSchema,
@@ -379,7 +378,14 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = req.body;
+    const parsed = UpdateCampaignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
+      });
+    }
+    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = parsed.data;
 
     const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
@@ -397,33 +403,11 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (spiritLayerEnabled !== undefined) updateData.spiritLayerEnabled = spiritLayerEnabled;
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
-    if (chatCooldownSeconds !== undefined) {
-      const secs = Number(chatCooldownSeconds);
-      if (!Number.isInteger(secs) || secs < 1 || secs > 300) {
-        return res.status(400).json({ error: 'Validation Error', message: 'chatCooldownSeconds must be an integer between 1 and 300' });
-      }
-      updateData.chatCooldownSeconds = secs;
-    }
+    if (chatCooldownSeconds !== undefined) updateData.chatCooldownSeconds = chatCooldownSeconds;
 
     // Handle gameSystem update
     if (gameSystem !== undefined) {
-      // Validate gameSystem if not null
-      if (gameSystem !== null) {
-        const validSystems: string[] = [
-          GameSystem.DND_5E,
-          GameSystem.PATHFINDER_2E,
-          GameSystem.SHADOWRUN_6E,
-          GameSystem.CALL_OF_CTHULHU_7E,
-        ];
-        if (!validSystems.includes(gameSystem as string)) {
-          return res.status(400).json({
-            error: 'Validation Error',
-            message: `Invalid game system. Must be one of: ${validSystems.join(', ')}`,
-          });
-        }
-      }
-
-      // Check if campaign has characters - log warning if changing gameSystem
+      // Changing the system under existing characters is allowed, but logged.
       const characterCount = await prisma.character.count({
         where: { campaignId },
       });
@@ -432,7 +416,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         logger.warn('campaign game system changed with existing characters', { campaignId, characterCount });
       }
 
-      updateData.gameSystem = gameSystem as GameSystem | null;
+      updateData.gameSystem = gameSystem;
     }
 
     const campaign = await prisma.campaign.update({

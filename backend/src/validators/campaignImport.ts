@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { VibeSettingsSchema } from './campaigns';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
@@ -63,20 +64,11 @@ export const ManifestSchema = z.object({
 
 // ── Campaign settings ───────────────────────────────────────────────────────
 
-const VibePeriodSchema = z.object({
-  name: z.string().max(100),
-  hue: z.string().max(50),
-  filter: z.string().max(200),
-  audio: z.string().max(500).nullable().optional(),
-}).strip();
-
 export const CampaignSettingsSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).nullable().optional(),
   gameSystem: z.string().max(50).nullable().optional(),
-  vibeSettings: z.object({
-    periods: z.array(VibePeriodSchema).max(20),
-  }).passthrough().optional(),
+  vibeSettings: VibeSettingsSchema.optional(),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
   spiritLayerStyle: z.string().max(100).optional(),
