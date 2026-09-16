@@ -57,7 +57,7 @@ import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } fro
 import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
-import { translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
@@ -417,15 +417,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     );
     return types.size === 1 ? [...types][0] : null;
   })();
-
-  const distToSegment = (px: number, py: number, seg: WallSegment): number => {
-    const dx = seg.x2 - seg.x1;
-    const dy = seg.y2 - seg.y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return Math.hypot(px - seg.x1, py - seg.y1);
-    const t = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
-    return Math.hypot(px - (seg.x1 + t * dx), py - (seg.y1 + t * dy));
-  };
 
   /**
    * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
