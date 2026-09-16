@@ -309,7 +309,7 @@ export async function importCampaign(
     const tokens = importTokens ? mapData.tokens.map((t) => ({
       ...t,
       id: randomUUID(),
-      imageUrl: remapAsset(t.imageUrl) || t.imageUrl || '',
+      imageUrl: remapAsset(t.imageUrl) || '',
       characterId: null,
       controlledBy: null,
     })) : [];
