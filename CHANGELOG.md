@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Only the DM's messages are shown as DM messages.** A player could send a chat message marked as coming from the DM, and it appeared with the DM's gold styling and badge. Who sent it is now taken from the sender's role in the campaign, not from the message.
+
 - **Character sheets keep only the fields the sheet defines.** A sheet saved through the API could carry extra keys the game system never defined, and they were stored untouched. The server now stores exactly what the sheet schema accepts. The header colour chosen on a sheet is part of that, so it is kept.
 
 - **Campaign settings are checked before they are saved.** Updating a campaign accepted any value for any field: a name of any length, an unknown status, atmosphere settings that were not even an object. Each field is now validated and a bad one is refused with a message saying which.

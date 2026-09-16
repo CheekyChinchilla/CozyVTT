@@ -12,17 +12,18 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
   /**
    * CHAT.MESSAGE - User sends chat message.
    * Validates content, saves to database, and broadcasts to campaign.
+   * The message type comes from the sender's role, never from the payload.
    * Rate limited per the campaign's chatCooldown settings.
-   * SECURITY: Uses server-authenticated socket.campaignId only.
+   * SECURITY: Uses server-authenticated socket.campaignId and socket.role only.
    */
-  socket.on('chat.message', async (data: { content: string; type: 'PLAYER' | 'DM' }) => {
+  socket.on('chat.message', async (data: { content: string; type?: 'PLAYER' | 'DM' }) => {
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
 
-      const { content, type } = data;
+      const { content } = data;
 
       // Validate content is provided
       if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -36,11 +37,16 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      // Validate message type
-      if (type !== 'PLAYER' && type !== 'DM') {
+      // Validate the message type's shape, when one is given
+      if (data.type !== undefined && data.type !== 'PLAYER' && data.type !== 'DM') {
         socket.emit('error', { message: 'Invalid message type. Must be PLAYER or DM.' });
         return;
       }
+
+      // The type is decided by the sender's role on the session, not by the
+      // payload: a player's message is always PLAYER. The DM's is DM unless
+      // they ask to speak as a player (out of character).
+      const type: 'PLAYER' | 'DM' = socket.role === 'DM' ? (data.type ?? 'DM') : 'PLAYER';
 
       // Rate limiting: respect campaign's chatCooldown settings
       const campaignSettings = await prisma.campaign.findUnique({

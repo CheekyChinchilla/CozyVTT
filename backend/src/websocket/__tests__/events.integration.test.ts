@@ -876,6 +876,38 @@ describe('chat', () => {
     player.disconnect();
   });
 
+  it('marks a player\'s message PLAYER even when the payload claims DM', async () => {
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+
+    const dmSees = waitForEvent<{ id: string; type: string }>(dm, 'chat.message');
+    player.emit('chat.message', { content: 'You all take 4d6 damage.', type: 'DM' });
+
+    const msg = await dmSees;
+    expect(msg.type).toBe('PLAYER');
+    const row = await prisma.message.findUnique({ where: { id: msg.id } });
+    expect(row?.type).toBe('PLAYER');
+
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('marks the DM\'s message DM, and PLAYER when the DM asks for it', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const first = waitForEvent<{ type: string }>(player, 'chat.message');
+    dm.emit('chat.message', { content: 'The door creaks open.', type: 'DM' });
+    expect((await first).type).toBe('DM');
+
+    const second = waitForEvent<{ type: string }>(player, 'chat.message');
+    dm.emit('chat.message', { content: '(ooc) back in five', type: 'PLAYER' });
+    expect((await second).type).toBe('PLAYER');
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
   it('enforces the campaign chat cooldown', async () => {
     await prisma.campaign.update({
       where: { id: campaignId },
