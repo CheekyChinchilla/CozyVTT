@@ -21,7 +21,7 @@ import express, { Request, Response } from 'express';
 import request from 'supertest';
 
 import { credentialLimiter, emailDispatchLimiter, accountCreationLimiter } from '../auth';
-import { mfaLoginLimiter, mfaSetupLimiter } from '../mfa';
+import { mfaLoginLimiter, mfaSetupLimiter } from '../auth';
 
 type Limiter = typeof credentialLimiter;
 

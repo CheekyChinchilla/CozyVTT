@@ -83,6 +83,33 @@ export const accountCreationLimiter = rateLimit({
 });
 
 /**
+ * MFA setup verification: 5 failed codes per 15 minutes. `skipSuccessfulRequests`
+ * so entering the right code never counts against you. Its own window, separate
+ * from login, so enrolling does not spend a login budget.
+ */
+export const mfaSetupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Rate Limited', message: 'Too many MFA verification attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+});
+
+/**
+ * MFA login verification: 5 failed codes per 15 minutes, on its own window.
+ * Same reasoning: a correct code is not an attack and does not spend the budget.
+ */
+export const mfaLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Rate Limited', message: 'Too many MFA login attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+});
+
+/**
  * POST /api/auth/register
  * Register a new user account
  * First user automatically becomes ADMIN
@@ -624,7 +651,7 @@ router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
  * Verify TOTP token to complete MFA setup. Generates and returns backup codes (shown once).
  * Requires: Authentication + mfaSecret stored on user
  */
-router.post('/mfa/verify', requireAuth, async (req: Request, res: Response) => {
+router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const { token } = req.body;
@@ -692,7 +719,7 @@ router.post('/mfa/verify', requireAuth, async (req: Request, res: Response) => {
  * Verify TOTP or backup code during login MFA flow.
  * Requires: mfaPending session state (set by /login when user has MFA enabled)
  */
-router.post('/mfa/verify-login', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Response) => {
   try {
     if (!req.session.mfaPending || !req.session.mfaPendingUserId) {
       return res.status(401).json({
@@ -810,7 +837,7 @@ router.post('/mfa/verify-login', credentialLimiter, async (req: Request, res: Re
  * Admins cannot disable MFA
  * Requires: Authentication
  */
-router.post('/mfa/disable', requireAuth, async (req: Request, res: Response) => {
+router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const { password, token } = req.body;
@@ -884,7 +911,7 @@ router.post('/mfa/disable', requireAuth, async (req: Request, res: Response) => 
  * Regenerate backup codes. Requires current password.
  * Requires: Authentication + MFA enabled
  */
-router.post('/mfa/backup-codes', requireAuth, async (req: Request, res: Response) => {
+router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const { password } = req.body;
