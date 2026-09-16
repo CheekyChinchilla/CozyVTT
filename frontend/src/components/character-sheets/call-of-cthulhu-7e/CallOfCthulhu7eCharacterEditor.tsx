@@ -55,6 +55,7 @@ import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -447,7 +448,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       if (savedColor) {
         setThemeColor(savedColor);
         setIsCustomColor(false);
-      } else if (formData.themeColor.startsWith('#')) {
+      } else if (isHexColor(formData.themeColor)) {
         // Custom hex color
         setCustomColorHex(formData.themeColor);
         setIsCustomColor(true);

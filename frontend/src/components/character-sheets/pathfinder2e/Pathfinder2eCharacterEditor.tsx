@@ -51,6 +51,7 @@ import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 /**
  * The sheet as this editor holds it.
@@ -330,7 +331,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);
       }

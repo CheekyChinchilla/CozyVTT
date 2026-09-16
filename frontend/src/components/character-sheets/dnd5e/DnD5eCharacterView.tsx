@@ -44,6 +44,7 @@ import {
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
 import { readProficiencyGroups } from '../../../utils/proficiencies';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -138,7 +139,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       if (savedColor) {
         setThemeColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         // Custom hex color
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);

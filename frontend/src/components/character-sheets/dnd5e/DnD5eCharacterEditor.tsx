@@ -63,6 +63,7 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 /**
  * The sheet as this editor holds it.
@@ -297,7 +298,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         // Custom hex color
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);

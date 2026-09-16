@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A character sheet's header colour is checked the same way before it is drawn.** Only a preset name or a `#RRGGBB` colour is used.
+
 - **Atmosphere filters and the spirit realm's custom colour are checked before they are used.** Both settings end up in the page's styling. The server now accepts only what the editors can produce (the four filter sliders; a preset look or a `#RRGGBB` colour), the browser checks them again before applying them, and a campaign archive carrying anything else imports with the default instead of being refused.
 
 - **Only the DM's messages are shown as DM messages.** A player could send a chat message marked as coming from the DM, and it appeared with the DM's gold styling and badge. Who sent it is now taken from the sender's role in the campaign, not from the message.

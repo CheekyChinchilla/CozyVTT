@@ -30,6 +30,7 @@ import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 interface CallOfCthulhu7eCharacterViewProps {
   character: Character;
@@ -90,7 +91,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       if (savedColor) {
         setThemeColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         // Custom hex color
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);
