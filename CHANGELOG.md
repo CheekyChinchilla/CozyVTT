@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A fresh install can no longer end up with two administrators.** On a brand
+  new instance the first person to register becomes the administrator. If two
+  people registered at the very same moment, before anyone had opened the setup
+  wizard, both could be made administrators. Registration is now serialised so
+  exactly one first administrator is ever created.
+
+---
+
 ## [1.4.0] — 2026-09-14
 
 ### Upgrading from 1.3.0
