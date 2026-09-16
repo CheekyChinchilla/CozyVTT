@@ -72,8 +72,9 @@ export function sanitizeInput(input: string): string {
  * picture would not appear anyway.
  *
  * A single leading slash and no scheme. `//host/x` is rejected along with the
- * rest: the browser reads it as another origin, not as a path.
+ * rest: the browser reads it as another origin, not as a path. So is any
+ * backslash: browsers read `/\\host/x` the same way.
  */
 export function isSameOriginPath(value: string): boolean {
-  return value.startsWith('/') && !value.startsWith('//');
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\');
 }

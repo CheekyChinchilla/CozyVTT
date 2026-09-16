@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Branding image paths containing a backslash are refused.** Browsers read a backslash after the first slash as another host, which the same-origin check missed.
+
 - **Imported tokens whose image was not in the archive now import with no image.** They used to keep a path from the instance the archive came from, which pointed at nothing on the new one.
 
 - **A character sheet's header colour is checked the same way before it is drawn.** Only a preset name or a `#RRGGBB` colour is used.
