@@ -8,6 +8,7 @@ import { rememberMeMaxAge } from '../config/session';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
@@ -17,20 +18,6 @@ import logger from '../utils/logger';
 // ============================================
 // MFA Helpers
 // ============================================
-
-/** Generate 10 random 8-character alphanumeric backup codes */
-function generateBackupCodes(): string[] {
-  const codes: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    codes.push(crypto.randomBytes(4).toString('hex').toUpperCase()); // 8 hex chars
-  }
-  return codes;
-}
-
-/** Hash a backup code (SHA-256, non-password — just needs to be irreversible for storage) */
-function hashBackupCode(code: string): string {
-  return crypto.createHash('sha256').update(code).digest('hex');
-}
 
 const router = Router();
 
@@ -672,7 +659,7 @@ router.post('/mfa/verify', requireAuth, async (req: Request, res: Response) => {
 
     // Generate 10 backup codes
     const plainCodes = generateBackupCodes();
-    const hashedCodes = plainCodes.map(hashBackupCode);
+    const hashedCodes = await hashBackupCodes(plainCodes);
 
     // Enable MFA and save hashed backup codes
     await prisma.user.update({
@@ -743,11 +730,8 @@ router.post('/mfa/verify-login', credentialLimiter, async (req: Request, res: Re
         });
       }
     } else {
-      // Verify backup code
-      const cleanedCode = backupCode.replace(/[-\s]/g, '').toUpperCase();
-      const hashedInput = hashBackupCode(cleanedCode);
-
-      const matchIndex = user.mfaBackupCodes.findIndex((h) => h === hashedInput);
+      // Verify backup code against the Argon2 hashes on record.
+      const matchIndex = await verifyBackupCode(backupCode, user.mfaBackupCodes);
       if (matchIndex === -1) {
         return res.status(401).json({
           error: 'Invalid Code',
@@ -917,7 +901,7 @@ router.post('/mfa/backup-codes', requireAuth, async (req: Request, res: Response
 
     // Generate new backup codes
     const plainCodes = generateBackupCodes();
-    const hashedCodes = plainCodes.map(hashBackupCode);
+    const hashedCodes = await hashBackupCodes(plainCodes);
 
     await prisma.user.update({
       where: { id: userId },
