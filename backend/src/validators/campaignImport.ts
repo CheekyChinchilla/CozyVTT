@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { VibeSettingsSchema } from './campaigns';
+import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
@@ -68,10 +69,12 @@ export const CampaignSettingsSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).nullable().optional(),
   gameSystem: z.string().max(50).nullable().optional(),
-  vibeSettings: VibeSettingsSchema.optional(),
+  // Both fall back to the default when an archive carries a value outside the
+  // allowlist, so one bad field does not refuse the whole campaign.
+  vibeSettings: VibeSettingsSchema.optional().catch(undefined),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
-  spiritLayerStyle: z.string().max(100).optional(),
+  spiritLayerStyle: z.string().max(100).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
 }).strip();
 
 // ── Wall segment ────────────────────────────────────────────────────────────

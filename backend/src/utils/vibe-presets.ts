@@ -1,3 +1,5 @@
+import { isSafeVibeFilter } from './styleAllowlists';
+
 /**
  * Vibe Tracker Presets & Validation
  * Vibe Tracker Details
@@ -138,6 +140,12 @@ export function validateVibeSettings(settings: unknown): string | null {
 
     if (period.filter.length > 200) {
       return `vibeSettings.periods[${i}].filter cannot exceed 200 characters`;
+    }
+
+    // Only the functions the atmosphere editor produces. A filter is CSS, and
+    // url() in it would have every visitor fetch whatever the DM named.
+    if (!isSafeVibeFilter(period.filter)) {
+      return `vibeSettings.periods[${i}].filter may only use brightness(), saturate(), contrast() and hue-rotate()`;
     }
 
     if (period.audio !== null && typeof period.audio !== 'string') {

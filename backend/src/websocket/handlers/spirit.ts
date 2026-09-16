@@ -9,6 +9,7 @@ import { prisma } from '../../config/database';
 import { getSpiritVisibilityBatch, filterMapData } from '../../utils/spirit-layer';
 import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
+import { isValidSpiritStyle } from '../../utils/styleAllowlists';
 import { Token } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 
@@ -114,6 +115,12 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
     if (!socket.campaignId) return;
     if (socket.role !== 'DM') {
       socket.emit('error', { message: 'Only DMs can change spirit layer style' });
+      return;
+    }
+    // Same allowlist as the REST write path: a named look or custom:#RRGGBB.
+    // Every client renders the value as CSS.
+    if (typeof data?.style !== 'string' || !isValidSpiritStyle(data.style)) {
+      socket.emit('error', { message: 'Invalid spirit layer style' });
       return;
     }
     io.to(socket.campaignId).emit('spirit_layer.style_changed', { style: data.style });

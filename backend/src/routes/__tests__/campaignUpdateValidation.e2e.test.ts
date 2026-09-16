@@ -59,6 +59,11 @@ describe('rejected bodies', () => {
     ['chatCooldownSeconds over 300', { chatCooldownSeconds: 301 }],
     ['chatCooldownSeconds that is not a number', { chatCooldownSeconds: 'soon' }],
     ['chatCooldownEnabled that is not a boolean', { chatCooldownEnabled: 1 }],
+    ['a vibe period filter outside the allowlist', { vibeSettings: { periods: [{ name: 'Day', hue: '#ffffff', filter: 'url(https://evil.example/f.svg#x)' }] } }],
+    ['a vibe period hue that is not a hex colour', { vibeSettings: { periods: [{ name: 'Day', hue: 'url(x)', filter: 'none' }] } }],
+    ['a spiritLayerStyle outside the allowlist', { spiritLayerStyle: 'custom:url(https://evil.example/x.svg):wispy' }],
+    ['a spiritLayerStyle with a short hex colour', { spiritLayerStyle: 'custom:#abc:wispy' }],
+    ['an unknown spiritLayerStyle preset', { spiritLayerStyle: 'sparkly' }],
   ])('refuses %s with a 400', async (_label, body) => {
     const res = await put(body);
     expect(res.status).toBe(400);
@@ -76,7 +81,7 @@ describe('accepted bodies', () => {
       gameSystem: 'DND_5E',
       spiritLayerEnabled: true,
       spiritLayerStyle: 'custom:#7c3aed:wispy',
-      vibeSettings: { periods: [{ name: 'Day', hue: '#fff', filter: 'none' }], currentPeriod: 'Day' },
+      vibeSettings: { periods: [{ name: 'Day', hue: '#ffffff', filter: 'brightness(0.9) saturate(1.1)' }], currentPeriod: 'Day' },
       chatCooldownEnabled: true,
       chatCooldownSeconds: 30,
       // A mass-assignment attempt: neither is a field the route updates.

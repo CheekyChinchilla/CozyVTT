@@ -13,6 +13,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import campaignService from '@/services/campaign.service';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
+import { parseSpiritStyle } from '@/utils/styleAllowlists';
 
 // ============================================
 // Spirit Layer Style Options
@@ -68,7 +69,6 @@ const CUSTOM_EFFECTS: { id: CustomEffectId; label: string; description: string }
   { id: 'dream',    label: 'Rainbow',   description: 'Colour shift' },
 ];
 
-const VALID_CUSTOM_EFFECTS: CustomEffectId[] = ['wispy', 'ethereal', 'shadow', 'dream'];
 
 // ============================================
 // Helpers
@@ -80,26 +80,11 @@ const VALID_CUSTOM_EFFECTS: CustomEffectId[] = ['wispy', 'ethereal', 'shadow', '
  * Custom style: "custom:#hexcolor" (legacy) or "custom:#hexcolor:effectId"
  */
 function parseStyle(raw: string): { styleId: SpiritStyleId; customColor: string; customEffect: CustomEffectId } {
-  if (raw.startsWith('custom:')) {
-    const rest = raw.slice(7); // e.g. "#7c3aed" or "#7c3aed:wispy"
-    const lastColon = rest.lastIndexOf(':');
-    if (lastColon !== -1) {
-      const color  = rest.slice(0, lastColon);
-      const effect = rest.slice(lastColon + 1) as CustomEffectId;
-      return {
-        styleId: 'custom',
-        customColor: color,
-        customEffect: VALID_CUSTOM_EFFECTS.includes(effect) ? effect : 'wispy',
-      };
-    }
-    return { styleId: 'custom', customColor: rest, customEffect: 'wispy' };
-  }
-  const known = SPIRIT_STYLES.map((s) => s.id) as string[];
-  return {
-    styleId: known.includes(raw) ? (raw as SpiritStyleId) : 'wispy',
-    customColor: '#9370DB',
-    customEffect: 'wispy',
-  };
+  // The same parser the map renders with, so the editor and the overlay can
+  // never disagree about what a stored style means.
+  const { effect, customColor } = parseSpiritStyle(raw);
+  if (customColor) return { styleId: 'custom', customColor, customEffect: effect };
+  return { styleId: effect, customColor: '#9370DB', customEffect: 'wispy' };
 }
 
 function encodeStyle(styleId: SpiritStyleId, customColor: string, customEffect: CustomEffectId = 'wispy'): string {

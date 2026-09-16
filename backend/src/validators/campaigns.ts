@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { CampaignStatus } from '@prisma/client';
 import { GameSystem } from '../game-systems';
+import { HEX_COLOR_PATTERN, VIBE_FILTER_PATTERN, SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 
 /** POST /api/campaigns */
 export const CreateCampaignSchema = z.object({
@@ -28,8 +29,8 @@ export type TransferDMInput = z.infer<typeof TransferDMSchema>;
 /** One atmosphere period: a named hue and filter, with optional audio. */
 export const VibePeriodSchema = z.object({
   name: z.string().max(100),
-  hue: z.string().max(50),
-  filter: z.string().max(200),
+  hue: z.string().regex(HEX_COLOR_PATTERN, 'A period hue must be a #RRGGBB colour'),
+  filter: z.string().max(200).regex(VIBE_FILTER_PATTERN, 'A period filter may only use brightness(), saturate(), contrast() and hue-rotate()'),
   audio: z.string().max(500).nullable().optional(),
 }).strip();
 
@@ -57,7 +58,9 @@ export const UpdateCampaignSchema = z.object({
   }).nullish(),
   vibeSettings: VibeSettingsSchema.optional(),
   spiritLayerEnabled: z.boolean({ error: 'spiritLayerEnabled must be true or false' }).optional(),
-  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100).optional(),
+  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100)
+    .regex(SPIRIT_STYLE_PATTERN, 'spiritLayerStyle must be wispy, ethereal, shadow, dream, or custom:#RRGGBB with an optional :<look>')
+    .optional(),
   chatCooldownEnabled: z.boolean({ error: 'chatCooldownEnabled must be true or false' }).optional(),
   chatCooldownSeconds: z.number({ error: COOLDOWN_MESSAGE }).int(COOLDOWN_MESSAGE).min(1, COOLDOWN_MESSAGE).max(300, COOLDOWN_MESSAGE).optional(),
 });

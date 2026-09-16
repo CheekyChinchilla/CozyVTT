@@ -961,6 +961,32 @@ describe('dice', () => {
 // ── 9. Spirit layer filtering ────────────────────────────────────────────────
 
 describe('spirit layer filtering', () => {
+  it('refuses a spirit style outside the allowlist and broadcasts nothing', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const denial = waitForEvent<{ message: string }>(dm, 'error');
+    const nothing = expectNoEvent(player, 'spirit_layer.style_changed');
+    dm.emit('spirit_layer.style_change', { style: 'custom:url(https://evil.example/x.svg):wispy' });
+
+    expect((await denial).message).toMatch(/style/i);
+    await nothing;
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('broadcasts a valid custom spirit style', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const seen = waitForEvent<{ style: string }>(player, 'spirit_layer.style_changed');
+    dm.emit('spirit_layer.style_change', { style: 'custom:#7c3aed:dream' });
+    expect((await seen).style).toBe('custom:#7c3aed:dream');
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
   it('spirit token movement is hidden from players without spirit visibility', async () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);

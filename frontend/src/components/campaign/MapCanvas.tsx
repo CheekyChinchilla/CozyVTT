@@ -58,6 +58,7 @@ import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
@@ -78,15 +79,11 @@ import '@/styles/spirit-effects.css';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
-  if (!style) return '#9370DB';
-  if (style.startsWith('custom:')) {
-    const rest = style.slice(7);
-    const lastColon = rest.lastIndexOf(':');
-    return lastColon !== -1 ? rest.slice(0, lastColon) : rest;
-  }
-  if (style === 'ethereal') return '#c8deff';
-  if (style === 'shadow') return '#9b6dcc';
-  if (style === 'dream') return '#d4a0f0';
+  const { effect, customColor } = parseSpiritStyle(style);
+  if (customColor) return customColor;
+  if (effect === 'ethereal') return '#c8deff';
+  if (effect === 'shadow') return '#9b6dcc';
+  if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
 }
 
@@ -3027,7 +3024,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         ref={layersRef}
         className="absolute inset-0"
         style={{
-          filter: activeVibeEffect?.filter ?? undefined,
+          // Re-checked here as well as on the server: a filter is CSS.
+          filter: activeVibeEffect && isSafeVibeFilter(activeVibeEffect.filter) ? activeVibeEffect.filter : undefined,
           transition: 'filter 3s ease',
         }}
       >
@@ -3073,7 +3071,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundColor: activeVibeEffect.hue,
+            backgroundColor: isHexColor(activeVibeEffect.hue) ? activeVibeEffect.hue : undefined,
             opacity: 0.12,
             mixBlendMode: 'multiply',
             transition: 'background-color 3s ease, opacity 3s ease',
@@ -3096,28 +3094,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // DM in single-plane material view: no overlay (they're not perceiving the spirit realm)
           if (isDM && !dmViewBothPlanes && !spiritActive) return null;
 
-          const rawStyle = campaign?.spiritLayerStyle ?? 'wispy';
-          let overlayClass = 'spirit-overlay-wispy';
-          let inlineStyle: React.CSSProperties = {};
-
-          if (rawStyle === 'ethereal') overlayClass = 'spirit-overlay-ethereal';
-          else if (rawStyle === 'shadow') overlayClass = 'spirit-overlay-shadow';
-          else if (rawStyle === 'dream') overlayClass = 'spirit-overlay-dream';
-          else if (rawStyle.startsWith('custom:')) {
-            // Format: "custom:#hexcolor:effectId" (effectId optional, legacy = wispy)
-            const rest = rawStyle.slice(7);
-            const lastColon = rest.lastIndexOf(':');
-            const customColor  = lastColon !== -1 ? rest.slice(0, lastColon) : rest;
-            const customEffect = lastColon !== -1 ? rest.slice(lastColon + 1) : 'wispy';
-            const validEffects = ['wispy', 'ethereal', 'shadow', 'dream'];
-            const effectClass  = validEffects.includes(customEffect) ? customEffect : 'wispy';
-            // Apply the chosen effect class for its animations + ::before/::after particles/shimmer.
-            // The inline background overrides the named class's base colour with the custom hue.
-            overlayClass = `spirit-overlay-${effectClass}`;
-            inlineStyle = {
-              background: `${customColor}44`, // custom hue at ~27% alpha as base tint
-            };
-          }
+          // The style is validated on both write paths and re-checked here:
+          // anything outside the allowlist reads as plain wispy.
+          const { effect, customColor } = parseSpiritStyle(campaign?.spiritLayerStyle);
+          // The named class carries the animations and ::before/::after particles;
+          // a custom colour only overrides its base tint.
+          const overlayClass = `spirit-overlay-${effect}`;
+          const inlineStyle: React.CSSProperties = customColor
+            ? { background: `${customColor}44` } // custom hue at ~27% alpha as base tint
+            : {};
 
           // When DM views spirit realm that's hidden from most players, reduce overlay intensity
           // Full opacity when fully active (global toggle or personal crossover)

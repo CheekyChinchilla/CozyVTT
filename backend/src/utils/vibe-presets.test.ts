@@ -7,7 +7,7 @@
  * through this helper instead.
  */
 
-import { preserveAtmosphereAudio } from './vibe-presets';
+import { preserveAtmosphereAudio, validateVibeSettings } from './vibe-presets';
 
 const settings = (extra: Record<string, unknown> = {}) => ({
   enabled: true,
@@ -60,5 +60,34 @@ describe('preserveAtmosphereAudio', () => {
     expect(preserveAtmosphereAudio(null)).toBeNull();
     expect(preserveAtmosphereAudio('nope')).toBe('nope');
     expect(preserveAtmosphereAudio([1, 2])).toEqual([1, 2]);
+  });
+});
+
+describe('validateVibeSettings filter allowlist', () => {
+  const withFilter = (filter: string) => ({
+    enabled: true,
+    periods: [{ name: 'Day', hue: '#FF9966', filter, audio: null }],
+  });
+
+  it.each([
+    'none',
+    '',
+    'brightness(0.9) saturate(1.1)',
+    'brightness(0.85) saturate(1.3) hue-rotate(10deg)',
+    'brightness(0.6) saturate(0.7) contrast(1.1)',
+    'hue-rotate(-15deg)',
+    'brightness(1.05)',
+  ])('accepts the filter %j, as the presets and the editor produce it', (filter) => {
+    expect(validateVibeSettings(withFilter(filter))).toBeNull();
+  });
+
+  it.each([
+    'url(https://evil.example/f.svg#x)',
+    'brightness(1) url(x)',
+    'blur(5px)',
+    'brightness(1);background:url(x)',
+    'expression(alert(1))',
+  ])('refuses the filter %j', (filter) => {
+    expect(validateVibeSettings(withFilter(filter))).toMatch(/filter/);
   });
 });
