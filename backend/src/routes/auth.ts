@@ -9,6 +9,7 @@ import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
+import { regenerateSession } from '../utils/session';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
@@ -129,7 +130,8 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
         });
       }
 
-      // Auto-approved registration — create session and log in
+      // Auto-approved registration — create session and log in, on a fresh id.
+      await regenerateSession(req);
       req.session.userId = user.id;
       req.session.email = user.email;
       req.session.displayName = user.displayName;
@@ -144,6 +146,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
     // First user — no restrictions, register as normal
     const user = await registerUser({ email, password, displayName });
 
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.displayName = user.displayName;
@@ -207,6 +210,9 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
     }
 
     if (user.mfaEnabled) {
+      // A privilege transition: a fresh id before the session carries any weight.
+      await regenerateSession(req);
+
       // Set pending MFA state — do NOT fully authenticate yet
       req.session.mfaPending = true;
       req.session.mfaPendingUserId = user.id;
@@ -218,7 +224,8 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       });
     }
 
-    // No MFA - create full session
+    // No MFA - create full session on a fresh id (session fixation).
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.displayName = user.displayName;
@@ -750,8 +757,10 @@ router.post('/mfa/verify-login', credentialLimiter, async (req: Request, res: Re
       remainingBackupCodes = updatedCodes.length;
     }
 
-    // MFA passed — create full session
+    // MFA passed — create full session. rememberMe is captured before the
+    // regenerate clears the pending session.
     const rememberMe = req.session.mfaRememberMe;
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.displayName = user.displayName;

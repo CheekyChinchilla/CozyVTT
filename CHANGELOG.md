@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Signing in starts a fresh session each time.** CozyVTT now issues a new session identifier whenever you log in, finish two-factor verification, or register, so a session cannot be carried across the moment you authenticate. This is a standard hardening step and changes nothing you will notice.
+
 - **MFA backup codes are stored far more securely, and existing ones must be regenerated.** The recovery codes shown when you set up two-factor authentication were generated from too small a range and stored with a fast, unsalted hash, so a leaked database could have exposed them. They are now longer and hashed the same strong way as passwords. **After upgrading, your existing backup codes no longer work:** sign in with your authenticator and regenerate them from **Security → Regenerate backup codes**. Your authenticator app itself is unaffected.
 
 - **A fresh install can no longer end up with two administrators.** On a brand

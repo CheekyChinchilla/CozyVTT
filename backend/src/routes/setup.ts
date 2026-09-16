@@ -7,6 +7,7 @@ import {
   updateSystemSettings,
 } from '../services/systemSettings';
 import { registerUser, sanitizeUser } from '../services/auth';
+import { regenerateSession } from '../utils/session';
 import { validateEmail, validatePasswordStrength } from '../utils/validation';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import logger from '../utils/logger';
@@ -115,7 +116,8 @@ router.post('/init', async (req: Request, res: Response) => {
     // Mark setup as completed
     await markSetupCompleted();
 
-    // Create session for the new admin user
+    // Create the admin session on a fresh id (session fixation).
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.displayName = user.displayName;
