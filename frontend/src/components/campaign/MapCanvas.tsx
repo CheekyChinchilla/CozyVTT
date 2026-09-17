@@ -1163,14 +1163,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     // Dynamic lighting toggle broadcast from DM
-    const handleLightingUpdated = (data: { mapId: string; lightingEnabled: boolean }) => {
+    // Every per-map flag arrives on one event, so a DM changing any of them
+    // in Edit Map or a control panel reaches every client at once.
+    const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean }) => {
       if (!currentMap || data.mapId !== currentMap.id) return;
-      setCurrentMap({ ...currentMap, lightingEnabled: data.lightingEnabled });
+      setCurrentMap({ ...currentMap, lightingEnabled: data.lightingEnabled, fogEnabled: data.fogEnabled });
     };
 
     socketInstance.on('token:appeared', handleTokenAppeared);
     socketInstance.on('token:disappeared', handleTokenDisappeared);
-    socketInstance.on('map:lighting:updated', handleLightingUpdated);
+    socketInstance.on('map:settings:updated', handleSettingsUpdated);
 
     // Light source events
     const handleLightAdded = (data: { mapId: string; light: LightSource }) => {
@@ -1209,7 +1211,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socketInstance.off('token:appeared', handleTokenAppeared);
       socketInstance.off('token:disappeared', handleTokenDisappeared);
-      socketInstance.off('map:lighting:updated', handleLightingUpdated);
+      socketInstance.off('map:settings:updated', handleSettingsUpdated);
       socketInstance.off('wall:added', handleWallAdded);
       socketInstance.off('wall:removed', handleWallRemoved);
       socketInstance.off('wall:updated', handleWallUpdated);

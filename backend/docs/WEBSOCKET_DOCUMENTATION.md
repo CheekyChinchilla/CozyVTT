@@ -1010,7 +1010,7 @@ right-hand column.
 | `lights:replaced` | `lights.ts` |
 | `map.changed` | `maps.ts` |
 | `map.pinged` | `pings.ts` |
-| `map:lighting:updated` | `maps.ts` |
+| `map:settings:updated` | `maps.ts` |
 | `pong` | `events.ts` |
 | `presence.state` | `utils.ts` |
 | `roster.updated` | `characters.ts` |

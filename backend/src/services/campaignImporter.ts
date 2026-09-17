@@ -334,6 +334,9 @@ export async function importCampaign(
         wallSegments: (mapData.wallSegments || []) as unknown as Prisma.InputJsonValue,
         fogData: mapData.fogData ? (mapData.fogData as Prisma.InputJsonValue) : Prisma.JsonNull,
         lightingEnabled: mapData.lightingEnabled ?? false,
+        // Absent in archives from before 1.5.0: leave the column default, which
+        // keeps fog on, as those maps always had it.
+        ...(mapData.fogEnabled !== undefined ? { fogEnabled: mapData.fogEnabled } : {}),
         lights: (mapData.lights || []) as unknown as Prisma.InputJsonValue,
       },
     });

@@ -3895,6 +3895,12 @@ paths:
                 spiritLayerUrl:
                   type: string
                   nullable: true
+                lightingEnabled:
+                  type: boolean
+                  description: Dynamic lighting on this map
+                fogEnabled:
+                  type: boolean
+                  description: Manual fog of war on this map. Off means players see the whole map (dynamic lighting still applies). New maps are created with it off.
       responses:
         '200':
           description: Map updated
@@ -7227,6 +7233,12 @@ components:
           type: array
           items:
             type: object
+        lightingEnabled:
+          type: boolean
+          description: Dynamic lighting on this map (default off)
+        fogEnabled:
+          type: boolean
+          description: Manual fog of war on this map. Off means players see the whole map. Maps from before 1.5.0 have it on; new maps start with it off.
         createdAt:
           type: string
           format: date-time

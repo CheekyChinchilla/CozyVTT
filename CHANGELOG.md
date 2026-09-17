@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
+
 ### Fixed
 
 - **Branding image paths containing a backslash are refused.** Browsers read a backslash after the first slash as another host, which the same-origin check missed.

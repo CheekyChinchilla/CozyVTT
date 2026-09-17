@@ -691,6 +691,8 @@ export interface Map {
   wallSegments?: import('./walls').WallSegment[];
   fogData?: import('./walls').FogState | null;
   lightingEnabled?: boolean;
+  /** Manual fog of war on this map. Absent on older payloads means on. */
+  fogEnabled?: boolean;
   lights?: import('./walls').LightSource[];
   createdAt: string;
   updatedAt: string;
@@ -1001,6 +1003,7 @@ export interface UpdateMapRequest {
   imageUrl?: string;
   spiritLayerUrl?: string | null;
   lightingEnabled?: boolean;
+  fogEnabled?: boolean;
 }
 
 // Token

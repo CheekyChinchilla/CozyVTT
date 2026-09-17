@@ -136,6 +136,7 @@ export async function exportCampaign(
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
+      fogEnabled: map.fogEnabled,
       lights: map.lights || [],
     });
   }

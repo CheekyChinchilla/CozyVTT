@@ -160,6 +160,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         spiritLayerUrl: normalizedSpiritLayerUrl,
         tokens: [], // Initialize empty tokens array
         annotations: [], // Initialize empty annotations array
+        // New maps start with manual fog off; the DM turns it on when a map
+        // needs it. The column defaults to on so maps from before the flag
+        // existed keep the fog they always had.
+        fogEnabled: false,
       },
     });
 
@@ -194,6 +198,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         feetPerSquare: true,
         diagonalRule: true,
         lightingEnabled: true,
+        fogEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -367,6 +372,7 @@ router.post(
           // player until they found the setting: walls block sight, and with
           // nothing lighting the room there is nothing to see.
           lightingEnabled: parsed.lightSources.length > 0,
+          fogEnabled: false,
         },
       });
 
@@ -553,7 +559,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled } = req.body;
+    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled } = req.body;
 
     // Fetch the map to verify it exists and belongs to campaign
     const existingMap = await prisma.map.findUnique({
@@ -679,18 +685,27 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.lightingEnabled = lightingEnabled;
     }
 
+    if (fogEnabled !== undefined) {
+      if (typeof fogEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'fogEnabled must be a boolean' });
+      }
+      updateData.fogEnabled = fogEnabled;
+    }
+
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id },
       data: updateData,
     });
 
-    // Broadcast lighting change so all connected clients update immediately
-    if (updateData.lightingEnabled !== undefined) {
+    // Any per-map flag change reaches every connected client at once, as one
+    // event carrying all of them, so a client never holds a stale flag.
+    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined) {
       try {
-        broadcastToCampaign(campaignId, 'map:lighting:updated', {
+        broadcastToCampaign(campaignId, 'map:settings:updated', {
           mapId: id,
           lightingEnabled: updatedMap.lightingEnabled,
+          fogEnabled: updatedMap.fogEnabled,
         });
       } catch { /* non-fatal */ }
     }
@@ -1707,9 +1722,10 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
 
     // Broadcast to all clients in this campaign so they don't need to reload
     try {
-      broadcastToCampaign(campaignId, 'map:lighting:updated', {
+      broadcastToCampaign(campaignId, 'map:settings:updated', {
         mapId: id,
         lightingEnabled: updated.lightingEnabled,
+        fogEnabled: updated.fogEnabled,
       });
     } catch {
       // Socket may not be initialized in tests — log and continue

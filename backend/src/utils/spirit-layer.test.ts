@@ -217,6 +217,7 @@ describe('filterTokensByLighting', () => {
       tokens,
       annotations: [],
       lightingEnabled: true,
+      fogEnabled: true,
       wallSegments: [makeWall('w', 500, 0, 500, 1000)],
       lights: [{ id: 'l1', x: 750, y: 550, brightRadius: 3, dimRadius: 6, enabled: true }],
       width: MAP_WIDTH,
@@ -242,6 +243,12 @@ describe('filterTokensByLighting', () => {
       const out = filterMapData(litMap([player, behindWall]) as never, 'DM', true, 'dm-user');
 
       expect(out.tokens.some((t: { id: string }) => t.id === 'behind')).toBe(true);
+    });
+
+    it('passes the fog flag through to every role, so a client knows whether to draw fog', () => {
+      const map = { ...litMap([]), fogEnabled: false };
+      expect(filterMapData(map as never, 'PLAYER', false, 'user1').fogEnabled).toBe(false);
+      expect(filterMapData(map as never, 'DM', true, 'dm-user').fogEnabled).toBe(false);
     });
   });
 

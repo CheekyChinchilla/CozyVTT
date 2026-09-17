@@ -79,6 +79,7 @@ async function resetGameState() {
       tokens: seedTokens() as any,
       wallSegments: seedWalls() as any,
       fogData: null as any,
+      fogEnabled: true,
       lights: [] as any,
     },
   });
@@ -349,6 +350,28 @@ describe('fog of war', () => {
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
     expect((map.fogData as any).revealed[1]).toBe(true);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('refuses fog operations and sends no fog state while fog is off for the map', async () => {
+    await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+
+    const denial = waitForEvent<{ message: string }>(dm, 'error');
+    const playerSeesNothing = expectNoEvent(player, 'fog:cells');
+    dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
+    expect((await denial).message).toBe('Fog of war is off for this map');
+    await playerSeesNothing;
+
+    const noState = expectNoEvent(player, 'fog:cells');
+    player.emit('fog:request_state', { mapId });
+    await noState;
+
+    const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
+    expect(map.fogData).toBeNull();
 
     dm.disconnect();
     player.disconnect();

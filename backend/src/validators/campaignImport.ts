@@ -141,6 +141,7 @@ export const MapDataSchema = z.object({
   wallSegments: z.array(WallSegmentSchema).max(5000).optional(),
   fogData: z.record(z.string(), z.unknown()).nullable().optional(),
   lightingEnabled: z.boolean().optional(),
+  fogEnabled: z.boolean().optional(),
   lights: z.array(LightSourceSchema).max(200).optional(),
 }).strip();
 

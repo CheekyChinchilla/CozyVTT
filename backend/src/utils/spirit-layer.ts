@@ -34,6 +34,8 @@ interface MapData {
   wallSegments: unknown;
   fogData: unknown;
   lightingEnabled: boolean;
+  /** Manual fog of war applies on this map. Off: players see the whole map (lighting still applies). */
+  fogEnabled: boolean;
   lights: unknown;
   createdAt: Date;
   updatedAt: Date;

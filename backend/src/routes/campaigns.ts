@@ -247,6 +247,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
             baseLayerUrl: true,
             spiritLayerUrl: true,
             lightingEnabled: true,
+            fogEnabled: true,
             createdAt: true,
             updatedAt: true,
           },

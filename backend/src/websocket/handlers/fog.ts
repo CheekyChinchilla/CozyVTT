@@ -41,10 +41,15 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, fogData: true, width: true, height: true, gridSize: true },
+        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
       });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      // The map's flag is the single source of truth for whether fog applies.
+      if (!map.fogEnabled) {
+        socket.emit('error', { message: 'Fog of war is off for this map' });
         return;
       }
 
@@ -87,9 +92,11 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, fogData: true, width: true, height: true, gridSize: true },
+        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // Fog off: nothing to send. A client that receives no reply draws no fog.
+      if (!map.fogEnabled) return;
 
       const fog: FogState = loadFogState(map, map.fogData as FogState | null);
 

@@ -475,6 +475,7 @@ model Map {
   wallSegments    Json    @default("[]") // Array of WallSegment objects
   fogData         Json?                  // FogState object (null = not initialized)
   lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting
+  fogEnabled      Boolean @default(true)  // Manual fog of war on this map; off = players see the whole map
   lights          Json    @default("[]") // Array of LightSource objects
 
   // Metadata

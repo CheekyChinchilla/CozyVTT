@@ -73,6 +73,9 @@ about; the list is not exhaustive.
   document asset to a campaign, so a DM can share a rulebook with one table
   without making it visible to the whole instance. One `CREATE TABLE`, three
   indexes and three foreign keys. Nothing existing is altered.
+- `add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
+  One `ALTER TABLE ... ADD COLUMN` with a default, so every existing map keeps
+  fog of war exactly as it was; only maps created afterwards start with it off.
 
 ## Data migrations (one-off scripts)
 
