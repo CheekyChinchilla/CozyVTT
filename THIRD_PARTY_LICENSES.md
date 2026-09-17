@@ -67,3 +67,4 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
+| [sharp](https://github.com/lovell/sharp) | Lovell Fuller and contributors | Apache-2.0 |
