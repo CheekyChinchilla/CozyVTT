@@ -24,7 +24,8 @@ import {
   cleanupCampaigns,
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
-import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { createWsTestServer, waitForEvent, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { toJson } from '../../utils/prisma-json';
 
 jest.setTimeout(20000);
 
@@ -133,6 +134,69 @@ describe('updating the flags', () => {
     const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}/lighting`).send({ enabled: true });
     expect(res.status).toBe(200);
     expect(await seen).toEqual({ mapId: map.id, lightingEnabled: true, fogEnabled: false, globalIllumination: false, explorationEnabled: false });
+    client.disconnect();
+  });
+});
+
+describe('a change that alters what players can see', () => {
+  const HERO = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const GOBLIN = 'aaaaaaaa-0000-4000-8000-000000000002';
+  type Resync = { mapId: string; mapData: { tokens: Array<{ name: string }> } };
+  const names = (r: Resync) => r.mapData.tokens.map((t) => t.name).sort();
+
+  /**
+   * A lit map with no lights and no walls. The hero has no darkvision, so
+   * the goblin across the map is in line of sight but dark: sent only when
+   * Global Illumination is on or lighting is off altogether.
+   */
+  async function createLitMap(): Promise<string> {
+    const map = await createMap();
+    const base = { imageUrl: '', size: { width: 1, height: 1 }, visible: true, rotation: 0, conditions: [] as string[], metadata: {} as Record<string, unknown>, layer: 'token' };
+    await prisma.map.update({
+      where: { id: map.id },
+      data: {
+        lightingEnabled: true,
+        tokens: toJson([
+          { ...base, id: HERO, name: 'Hero', type: 'player', position: { x: 1, y: 1 }, controlledBy: playerId, sightRadius: 0 },
+          { ...base, id: GOBLIN, name: 'Goblin', type: 'npc', position: { x: 8, y: 8 }, controlledBy: null },
+        ]),
+      },
+    });
+    return map.id;
+  }
+
+  it('re-sends each player the map as they can now see it when Global Illumination changes', async () => {
+    const mapId = await createLitMap();
+    const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+
+    const lit = waitForEvent<Resync>(client, 'map.changed');
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ globalIllumination: true })).status).toBe(200);
+    expect(names(await lit)).toEqual(['Goblin', 'Hero']);
+
+    const dark = waitForEvent<Resync>(client, 'map.changed');
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ globalIllumination: false })).status).toBe(200);
+    expect(names(await dark)).toEqual(['Hero']);
+    client.disconnect();
+  });
+
+  it('the lighting toggle route re-sends too', async () => {
+    const mapId = await createLitMap();
+    const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const all = waitForEvent<Resync>(client, 'map.changed');
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${mapId}/lighting`).send({ enabled: false })).status).toBe(200);
+    expect(names(await all)).toEqual(['Goblin', 'Hero']);
+    client.disconnect();
+  });
+
+  it('a change that leaves sight alone sends the flags and nothing more', async () => {
+    const mapId = await createLitMap();
+    const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const flags = waitForEvent(client, 'map:settings:updated');
+    const quiet = expectNoEvent(client, 'map.changed', 500);
+    // Global Illumination is already off, so naming it changes nothing.
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ fogEnabled: true, explorationEnabled: true, globalIllumination: false })).status).toBe(200);
+    await flags;
+    await quiet;
     client.disconnect();
   });
 });

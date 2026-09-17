@@ -29,7 +29,7 @@ import sharp from 'sharp';
 import logger from '../utils/logger';
 import { toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import { loadFogState, applyWsFogOperation, broadcastFogState, type Token } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -729,6 +729,16 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
           globalIllumination: updatedMap.globalIllumination,
           explorationEnabled: updatedMap.explorationEnabled,
         });
+      } catch { /* non-fatal */ }
+    }
+
+    // Lighting and Global Illumination decide which tokens each player is
+    // sent, so when either changes every client gets the map again as they
+    // can now see it. The flags alone would leave a player holding a token the
+    // server would no longer send, or missing one it now would.
+    if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
+      try {
+        await broadcastMapData(getSocketInstance(), campaignId, updatedMap);
       } catch { /* non-fatal */ }
     }
 
@@ -1714,6 +1724,13 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
       });
     } catch {
       // Socket may not be initialized in tests — log and continue
+    }
+
+    // See PUT /:id: a lighting change alters which tokens players are sent.
+    if (updated.lightingEnabled !== map.lightingEnabled) {
+      try {
+        await broadcastMapData(getSocketInstance(), campaignId, updated);
+      } catch { /* non-fatal */ }
     }
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });

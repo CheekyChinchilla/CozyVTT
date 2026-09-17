@@ -9,6 +9,7 @@
 import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
+import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -215,4 +216,25 @@ export function revealedCellIndices(fog: FogState): number[] {
 export interface HandlerContext {
   io: import('socket.io').Server;
   socket: import('./auth').AuthenticatedSocket;
+}
+
+/**
+ * Send every connected member the map as they are allowed to see it: the DM
+ * everything, each player only what their role, plane and sight permit. One
+ * resync path for a map switch, a spirit-realm crossing, and a lighting or
+ * Global Illumination change, so a player is never left holding a token the
+ * server would no longer send them, or missing one it now would.
+ */
+export async function broadcastMapData(io: Server, campaignId: string, map: MapData): Promise<void> {
+  const members = await io.in(campaignId).fetchSockets();
+  const visibility = await getSpiritVisibilityBatch(
+    campaignId,
+    members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
+  );
+  for (const s of members) {
+    const member = s as unknown as AuthenticatedSocket;
+    const spiritVisible = member.role === 'DM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
+    const mapData = filterMapData(map, member.role || 'PLAYER', spiritVisible, member.userId);
+    s.emit('map.changed', { mapId: map.id, mapData, spiritVisible });
+  }
 }

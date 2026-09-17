@@ -5,7 +5,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibilityBatch, filterMapData } from '../../utils/spirit-layer';
+import { broadcastMapData } from '../shared';
 import logger from '../../utils/logger';
 
 export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -36,34 +36,9 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
-      // Broadcast role-filtered map data to each connected campaign member.
-      // spiritVisible is included in the payload so the client knows whether
-      // to show the spirit overlay for this specific viewer.
-      const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-      const visibility = await getSpiritVisibilityBatch(
-        socket.campaignId,
-        campaignSockets.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-      );
-      for (const s of campaignSockets) {
-        const authedSocket = s as unknown as AuthenticatedSocket;
-        const spiritVisible =
-          authedSocket.role === 'DM'
-            ? true
-            : authedSocket.userId
-              ? (visibility.get(authedSocket.userId) ?? false)
-              : false;
-        const filteredMap = filterMapData(
-          {
-            ...map,
-            tokens: map.tokens,
-            annotations: map.annotations,
-          },
-          authedSocket.role || 'PLAYER',
-          spiritVisible,
-          authedSocket.userId
-        );
-        s.emit('map.changed', { mapId, mapData: filteredMap, spiritVisible });
-      }
+      // Each member gets the map as they may see it; the payload says whether
+      // the spirit overlay applies to that viewer.
+      await broadcastMapData(io, socket.campaignId, map);
 
       logger.info('map.change', { mapId, userId: socket.userId, campaignId: socket.campaignId });
     } catch (error) {

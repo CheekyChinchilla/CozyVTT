@@ -18,7 +18,7 @@ import type { Token } from '../websocket/shared';
 // strings). See the note there.
 
 // Map data as returned from Prisma
-interface MapData {
+export interface MapData {
   id: string;
   campaignId: string;
   name: string;

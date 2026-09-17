@@ -3863,7 +3863,12 @@ paths:
       tags:
         - Maps
       summary: Update map
-      description: Update map settings (DM only)
+      description: |
+        Update map settings (DM only). A change to any per-map flag is
+        broadcast as `map:settings:updated`; a change to `lightingEnabled` or
+        `globalIllumination` also re-sends every member the map as they can
+        now see it (`map.changed`), since those two decide which tokens a
+        player is sent.
       operationId: updateMap
       security:
         - cookieAuth: []
@@ -4646,8 +4651,10 @@ paths:
         light data to compute visibility. When disabled, fog is the
         manual brush-controlled layer. DM only.
 
-        Also broadcasts `map:lighting:updated` to all connected campaign
-        clients so they refresh without a reload.
+        Also broadcasts `map:settings:updated`, carrying every per-map flag,
+        to all connected clients. Because this flag decides which tokens
+        players are sent, a change also re-sends each member the map as they
+        can now see it (`map.changed`), so nothing needs a reload.
       operationId: setLightingEnabled
       security:
         - cookieAuth: []

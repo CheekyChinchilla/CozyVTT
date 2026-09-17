@@ -6,11 +6,11 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibilityBatch, filterMapData } from '../../utils/spirit-layer';
+import { getSpiritVisibilityBatch } from '../../utils/spirit-layer';
 import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
 import { isValidSpiritStyle } from '../../utils/styleAllowlists';
-import { Token } from '../shared';
+import { Token, broadcastMapData } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -63,31 +63,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         });
 
         if (currentMap) {
-          const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-          const visibility = await getSpiritVisibilityBatch(
-            socket.campaignId,
-            campaignSockets.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-          );
-          for (const s of campaignSockets) {
-            const authedSocket = s as unknown as AuthenticatedSocket;
-            const spiritVisible =
-              authedSocket.role === 'DM'
-                ? true
-                : authedSocket.userId
-                  ? (visibility.get(authedSocket.userId) ?? false)
-                  : false;
-            const filteredMap = filterMapData(
-              {
-                ...currentMap,
-                tokens: currentMap.tokens,
-                annotations: currentMap.annotations,
-              },
-              authedSocket.role || 'PLAYER',
-              spiritVisible,
-              authedSocket.userId
-            );
-            s.emit('map.changed', { mapId: currentMap.id, mapData: filteredMap, spiritVisible });
-          }
+          await broadcastMapData(io, socket.campaignId, currentMap);
         }
       }
 
