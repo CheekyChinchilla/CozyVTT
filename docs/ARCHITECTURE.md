@@ -536,6 +536,8 @@ The rule, in order: walls first, always (nothing outside a viewer's line of sigh
 
 Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
+A fourth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
+
 ### WebSocket Event Reference
 
 See [API_REFERENCE.md](API_REFERENCE.md#websocket-events) for the full event listing.

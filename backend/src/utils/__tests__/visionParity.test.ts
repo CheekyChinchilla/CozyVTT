@@ -7,7 +7,7 @@ import path from 'path';
  * which doors to show. If the copies drift, one side is trusting the other,
  * and a token can be drawn that was never sent, or sent that is never drawn.
  */
-describe.each(['raycasting.ts', 'spatialIndex.ts', 'visibilityRule.ts'])('%s', (file) => {
+describe.each(['raycasting.ts', 'spatialIndex.ts', 'visibilityRule.ts', '__fixtures__/vision-scenarios.json'])('%s', (file) => {
   it('is byte-for-byte identical in backend/src/utils and frontend/src/utils', () => {
     const backendCopy = readFileSync(path.resolve(__dirname, '..', file), 'utf8');
     const frontendCopy = readFileSync(path.resolve(__dirname, '../../../../frontend/src/utils', file), 'utf8');

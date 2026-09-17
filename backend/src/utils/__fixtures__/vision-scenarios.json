@@ -1,0 +1,509 @@
+{
+  "_comment": "Shared vision scenarios. Tokens are in grid units (x from the left, y from the bottom row); walls, lights and samples are map pixels (y from the top). Both packages run every scenario; the backend checks which tokens are sent, the frontend checks the tier at each sample and that a token is seen exactly when it is sent. Keep both copies identical.",
+  "map": {
+    "width": 20,
+    "height": 20,
+    "gridSize": 100
+  },
+  "viewer": "p1",
+  "scenarios": [
+    {
+      "name": "no light, no darkvision: only the token you control, and its square is dim",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 5,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "npc",
+          "x": 6,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "me"
+      ],
+      "samples": [
+        {
+          "x": 550,
+          "y": 1450,
+          "tier": "dim"
+        },
+        {
+          "x": 650,
+          "y": 1450,
+          "tier": "dark"
+        }
+      ]
+    },
+    {
+      "name": "darkvision 12 makes things out to 12 squares and not beyond",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 0,
+          "y": 5,
+          "controlledBy": "p1",
+          "sightRadius": 12
+        },
+        {
+          "id": "near",
+          "x": 10,
+          "y": 5
+        },
+        {
+          "id": "far",
+          "x": 14,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "near"
+      ],
+      "samples": [
+        {
+          "x": 1050,
+          "y": 1450,
+          "tier": "dim"
+        },
+        {
+          "x": 1450,
+          "y": 1450,
+          "tier": "dark"
+        }
+      ]
+    },
+    {
+      "name": "a torch (bright 4, dim 8): bright inside, dim in the ring, dark beyond",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [
+        {
+          "id": "torch",
+          "x": 1000,
+          "y": 1450,
+          "brightRadius": 4,
+          "dimRadius": 8,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 2,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "inBright",
+          "x": 12,
+          "y": 5
+        },
+        {
+          "id": "inDim",
+          "x": 17,
+          "y": 5
+        },
+        {
+          "id": "beyond",
+          "x": 19,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "inBright",
+        "inDim"
+      ],
+      "samples": [
+        {
+          "x": 1300,
+          "y": 1450,
+          "tier": "bright"
+        },
+        {
+          "x": 1700,
+          "y": 1450,
+          "tier": "dim"
+        },
+        {
+          "x": 1900,
+          "y": 1450,
+          "tier": "dark"
+        }
+      ]
+    },
+    {
+      "name": "two dim reaches overlapping make bright",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [
+        {
+          "id": "a",
+          "x": 600,
+          "y": 1450,
+          "brightRadius": 1,
+          "dimRadius": 4,
+          "enabled": true
+        },
+        {
+          "id": "b",
+          "x": 1000,
+          "y": 1450,
+          "brightRadius": 1,
+          "dimRadius": 4,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 2,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "mid",
+          "x": 7,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "mid"
+      ],
+      "samples": [
+        {
+          "x": 800,
+          "y": 1450,
+          "tier": "bright"
+        }
+      ]
+    },
+    {
+      "name": "global illumination: everything in line of sight is bright",
+      "globalIllumination": true,
+      "walls": [],
+      "lights": [],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 0,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "far",
+          "x": 19,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "far"
+      ],
+      "samples": [
+        {
+          "x": 1950,
+          "y": 1450,
+          "tier": "bright"
+        }
+      ]
+    },
+    {
+      "name": "a lit sealed room shows nothing to someone outside it",
+      "globalIllumination": false,
+      "walls": [
+        {
+          "id": "n",
+          "x1": 1000,
+          "y1": 1000,
+          "x2": 1400,
+          "y2": 1000,
+          "type": "wall"
+        },
+        {
+          "id": "e",
+          "x1": 1400,
+          "y1": 1000,
+          "x2": 1400,
+          "y2": 1400,
+          "type": "wall"
+        },
+        {
+          "id": "s",
+          "x1": 1000,
+          "y1": 1400,
+          "x2": 1400,
+          "y2": 1400,
+          "type": "wall"
+        },
+        {
+          "id": "w",
+          "x1": 1000,
+          "y1": 1000,
+          "x2": 1000,
+          "y2": 1400,
+          "type": "wall"
+        }
+      ],
+      "lights": [
+        {
+          "id": "lamp",
+          "x": 1200,
+          "y": 1200,
+          "brightRadius": 3,
+          "dimRadius": 5,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 2,
+          "y": 7,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "inRoom",
+          "x": 12,
+          "y": 7
+        }
+      ],
+      "expectVisible": [
+        "me"
+      ],
+      "samples": [
+        {
+          "x": 1250,
+          "y": 1250,
+          "tier": "dark"
+        }
+      ]
+    },
+    {
+      "name": "the same room through an open door",
+      "globalIllumination": false,
+      "walls": [
+        {
+          "id": "n",
+          "x1": 1000,
+          "y1": 1000,
+          "x2": 1400,
+          "y2": 1000,
+          "type": "wall"
+        },
+        {
+          "id": "e",
+          "x1": 1400,
+          "y1": 1000,
+          "x2": 1400,
+          "y2": 1400,
+          "type": "wall"
+        },
+        {
+          "id": "s",
+          "x1": 1000,
+          "y1": 1400,
+          "x2": 1400,
+          "y2": 1400,
+          "type": "wall"
+        },
+        {
+          "id": "door",
+          "x1": 1000,
+          "y1": 1000,
+          "x2": 1000,
+          "y2": 1400,
+          "type": "door-open"
+        }
+      ],
+      "lights": [
+        {
+          "id": "lamp",
+          "x": 1200,
+          "y": 1200,
+          "brightRadius": 3,
+          "dimRadius": 5,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 2,
+          "y": 7,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "inRoom",
+          "x": 12,
+          "y": 7
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "inRoom"
+      ],
+      "samples": [
+        {
+          "x": 1250,
+          "y": 1250,
+          "tier": "bright"
+        }
+      ]
+    },
+    {
+      "name": "straight out from a light, just inside its dim reach: dim, and sent",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [
+        {
+          "id": "torch",
+          "x": 500,
+          "y": 500,
+          "brightRadius": 4,
+          "dimRadius": 8,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 2,
+          "y": 14,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "edge",
+          "x": 12,
+          "y": 14
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "edge"
+      ],
+      "samples": [
+        {
+          "x": 1250,
+          "y": 550,
+          "tier": "dim"
+        }
+      ]
+    },
+    {
+      "name": "two controlled tokens combine what they see",
+      "globalIllumination": false,
+      "walls": [
+        {
+          "id": "mid",
+          "x1": 1000,
+          "y1": 0,
+          "x2": 1000,
+          "y2": 2000,
+          "type": "wall"
+        }
+      ],
+      "lights": [
+        {
+          "id": "l",
+          "x": 300,
+          "y": 1450,
+          "brightRadius": 1,
+          "dimRadius": 4,
+          "enabled": true
+        },
+        {
+          "id": "r",
+          "x": 1700,
+          "y": 1450,
+          "brightRadius": 1,
+          "dimRadius": 4,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "left",
+          "x": 2,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "right",
+          "x": 17,
+          "y": 5,
+          "controlledBy": "p1"
+        },
+        {
+          "id": "lnpc",
+          "x": 5,
+          "y": 5
+        },
+        {
+          "id": "rnpc",
+          "x": 14,
+          "y": 5
+        }
+      ],
+      "expectVisible": [
+        "left",
+        "right",
+        "lnpc",
+        "rnpc"
+      ],
+      "samples": [
+        {
+          "x": 550,
+          "y": 1450,
+          "tier": "dim"
+        },
+        {
+          "x": 1450,
+          "y": 1450,
+          "tier": "dim"
+        }
+      ]
+    },
+    {
+      "name": "no controlled token: nothing is seen or sent, lights or not",
+      "globalIllumination": false,
+      "walls": [],
+      "lights": [
+        {
+          "id": "torch",
+          "x": 550,
+          "y": 1450,
+          "brightRadius": 4,
+          "dimRadius": 8,
+          "enabled": true
+        }
+      ],
+      "tokens": [
+        {
+          "id": "npc",
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "expectVisible": [],
+      "samples": [
+        {
+          "x": 550,
+          "y": 1450,
+          "tier": "dark"
+        }
+      ]
+    }
+  ]
+}
