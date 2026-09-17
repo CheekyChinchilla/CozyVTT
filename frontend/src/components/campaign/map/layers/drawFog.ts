@@ -1,7 +1,8 @@
 // ============================================
 // Manual fog-of-war layer (the non-dynamic-lighting fog).
-// DM sees semi-transparent fog from the full fogState; players see
-// near-opaque fog everywhere outside their revealed cell set.
+// DM sees semi-transparent fog from the full fogState; players see opaque
+// fog everywhere outside their revealed cell set: nothing under an
+// unrevealed cell shows through, not the artwork and not what stands on it.
 // Pure: no React, no component closures.
 // ============================================
 
@@ -46,7 +47,7 @@ export function drawFog(
     ctx.restore();
   }
 
-  // Player fog (near-opaque, from revealedCells; cells are one per grid square)
+  // Player fog (opaque, from revealedCells; cells are one per grid square)
   if (!state.isDM && state.revealedCells) {
     const cellPx = viewport.gridSize;
     const fogCols = viewport.mapWidth;
@@ -58,8 +59,8 @@ export function drawFog(
         if (!state.revealedCells.has(idx)) {
           const fadeOpacity = state.revealOpacity.get(idx);
           ctx.fillStyle = fadeOpacity !== undefined
-            ? `rgba(15, 12, 25, ${0.95 * fadeOpacity})`
-            : 'rgba(15, 12, 25, 0.95)';
+            ? `rgba(15, 12, 25, ${fadeOpacity})`
+            : 'rgba(15, 12, 25, 1)';
           ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
         }
       }

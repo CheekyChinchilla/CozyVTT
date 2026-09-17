@@ -28,6 +28,8 @@ import type { FogState, WallSegment } from '@/types/walls';
 interface RecordedCall {
   method: string;
   args: unknown[];
+  /** The fillStyle in force when a fillRect was recorded. */
+  fillStyle?: string;
 }
 
 type MockCtx = CanvasRenderingContext2D & { calls: RecordedCall[] };
@@ -63,7 +65,7 @@ function makeMockCtx(): MockCtx {
     stroke: record('stroke'),
     fill: record('fill'),
     clip: record('clip'),
-    fillRect: record('fillRect'),
+    fillRect(this: { fillStyle: unknown }, ...args: unknown[]) { calls.push({ method: 'fillRect', args, fillStyle: String(this.fillStyle) }); },
     strokeRect: record('strokeRect'),
     clearRect: record('clearRect'),
     drawImage: record('drawImage'),
@@ -172,6 +174,25 @@ describe('drawFog', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, { isDM: false, fogState: null, revealedCells: null, revealOpacity: new Map() }, viewport3x3);
     expect(ctx.calls).toHaveLength(0);
+  });
+
+  it('paints a player\'s unrevealed cells fully opaque, so nothing under them shows through', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
+    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
+    expect(fills).toHaveLength(8);
+    for (const f of fills) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
+  });
+
+  it('keeps the DM\'s fog translucent, so the DM can still work under it', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: true,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 0.55)');
   });
 
   it('DM fog uses the full fog grid, not revealedCells', () => {

@@ -59,6 +59,9 @@ import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
+
+/** A player's revealed set before the server has answered: nothing revealed. */
+const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
@@ -220,6 +223,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
   const revealOpacityRef = useFogRevealAnimation(() => markDirty('terrain'), fogState, revealedCells);
+
+  // Whether manual fog applies on this map. Absent on an older payload means
+  // on, matching the column default. When fog is on and the player's revealed
+  // set has not arrived yet, everything is fogged: over-fogging for a moment
+  // beats flashing the whole map before the server answers. When fog is off,
+  // every consumer sees `null`, which has always meant "no fog".
+  const fogEnabled = currentMap?.fogEnabled ?? true;
+  const effectiveRevealedCells = useMemo<Set<number> | null>(
+    () => (fogEnabled ? revealedCells ?? EMPTY_REVEALED : null),
+    [fogEnabled, revealedCells]
+  );
+  const effectiveFogState = fogEnabled ? fogState : null;
   // Cache invalidation flag for the wall layer.
   const wallCacheValidRef = useRef(false);
 
@@ -1060,10 +1075,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     replaceWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
-    // DMs: request full fog state; players: request revealed cells
     const socketInstance = socket?.getSocket();
     if (socketInstance) {
-      socketInstance.emit('fog:request_state', { mapId: currentMap.id });
       socketInstance.emit('walls:request', { mapId: currentMap.id });
       socketInstance.emit('lights:request', { mapId: currentMap.id });
     }
@@ -1074,6 +1087,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
   }, [currentMap?.id]);  
+
+  // Fog state is requested whenever the map changes or fog is switched on for
+  // it (DMs get the full grid, players their revealed cells). Off: nothing to
+  // ask for, and the server would answer nothing anyway.
+  useEffect(() => {
+    if (!currentMap || !fogEnabled) return;
+    socket?.getSocket()?.emit('fog:request_state', { mapId: currentMap.id });
+  }, [currentMap?.id, fogEnabled]);
 
   // ============================================
   // Wall & Fog WebSocket Listeners
@@ -1523,8 +1544,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     //    appear above fog)
     drawFog(ctx, {
       isDM: renderIsDM,
-      fogState,
-      revealedCells,
+      fogState: effectiveFogState,
+      revealedCells: effectiveRevealedCells,
       revealOpacity: revealOpacityRef.current,
     }, viewport);
 
@@ -1541,7 +1562,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, effectiveRevealedCells, spiritLayerImage, spiritLayerOpacity]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1579,7 +1600,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       dragOffset,
       hoverCoords,
       hoverTokenId: hoverToken?.id ?? null,
-      revealedCells,
+      revealedCells: effectiveRevealedCells,
       isDM: renderIsDM,
       dmShowSpiritTokens,
       dmViewBothPlanes,
@@ -1593,7 +1614,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, revealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, effectiveRevealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1796,7 +1817,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, effectiveRevealedCells, spiritLayerImage, spiritLayerOpacity]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -1857,13 +1878,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const tokenView = useMemo(
     () => ({
       isDM: userRole === 'DM',
-      revealedCells,
+      revealedCells: effectiveRevealedCells,
       isOwnToken,
       dmShowSpiritTokens,
       mapWidth: currentMap?.width ?? 0,
       mapHeight: currentMap?.height ?? 0,
     }),
-    [userRole, revealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
+    [userRole, effectiveRevealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
   );
 
   /**
