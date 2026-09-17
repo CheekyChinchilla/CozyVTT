@@ -7,7 +7,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
-import { broadcastToCampaign } from '../websocket/utils';
+import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
@@ -29,7 +29,7 @@ import sharp from 'sharp';
 import logger from '../utils/logger';
 import { toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import type { Token } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -1312,59 +1312,6 @@ async function findMapInCampaign(
 }
 
 /**
- * Helper: build a default all-hidden FogState from map dimensions.
- * One cell per grid square so fog aligns with the visible grid.
- */
-function buildDefaultFogState(map: { width: number; height: number; gridSize: number }): FogState {
-  const cellPx = map.gridSize; // one fog cell = one grid square
-  const fogCols = map.width;   // grid columns
-  const fogRows = map.height;  // grid rows
-  return {
-    fogCols,
-    fogRows,
-    cellPx,
-    revealed: new Array(fogCols * fogRows).fill(false),
-  };
-}
-
-/**
- * Load fog from DB, rebuilding if the stored cell size doesn't match the current grid.
- */
-function loadFogState(map: { width: number; height: number; gridSize: number }, stored: FogState | null): FogState {
-  const expected = buildDefaultFogState(map);
-  if (!stored || stored.cellPx !== expected.cellPx || stored.fogCols !== expected.fogCols || stored.fogRows !== expected.fogRows) {
-    return expected;
-  }
-  return stored;
-}
-
-/**
- * Helper: apply a FogOperation to an existing FogState, mutating revealed in-place.
- * Out-of-bounds indices are silently ignored.
- */
-function applyFogOperation(fog: FogState, operation: { op: string; cells?: number[] }): void {
-  const total = fog.fogCols * fog.fogRows;
-  switch (operation.op) {
-    case 'reveal_all':
-      fog.revealed.fill(true);
-      break;
-    case 'hide_all':
-      fog.revealed.fill(false);
-      break;
-    case 'reveal':
-      for (const idx of (operation.cells ?? [])) {
-        if (idx >= 0 && idx < total) fog.revealed[idx] = true;
-      }
-      break;
-    case 'hide':
-      for (const idx of (operation.cells ?? [])) {
-        if (idx >= 0 && idx < total) fog.revealed[idx] = false;
-      }
-      break;
-  }
-}
-
-/**
  * GET /api/campaigns/:campaignId/maps/:id/walls
  * Return the map's wall segments array (all roles).
  */
@@ -1679,19 +1626,29 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
     const map = await findMapInCampaign(campaignId, id, res);
     if (!map) return;
 
+    // The map's flag is the single source of truth, here as on the socket.
+    if (!map.fogEnabled) {
+      return res.status(409).json({ error: 'Conflict', message: 'Fog of war is off for this map' });
+    }
+
     const parsed = FogOperationSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid fog operation' });
     }
 
     const fog: FogState = loadFogState(map, map.fogData as FogState | null);
-
-    applyFogOperation(fog, parsed.data);
+    applyWsFogOperation(fog, parsed.data);
 
     const updated = await prisma.map.update({
       where: { id },
       data: { fogData: toJson(fog) },
     });
+
+    // Same broadcast as the socket path, so a reveal made here reaches the
+    // table at once. No socket server (some tests) means nobody to tell.
+    try {
+      await broadcastFogState(getSocketInstance(), campaignId, id, fog);
+    } catch { /* non-fatal */ }
 
     return res.status(200).json({ fogState: updated.fogData });
   } catch (error) {

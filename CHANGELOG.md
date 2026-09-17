@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A fog change made through the API now reaches connected players at once.** It used to land only in the database, showing up for players on their next reload.
+
 - **Fog of war hides the map from players.** Unrevealed areas were drawn as a dark tint that left the map artwork visible underneath, and every map load had a moment where the whole map showed before the fog arrived. Unrevealed areas are now fully opaque for players, from the first frame, and the walls, doors and light glows under them are hidden too; only a player's own token still shows. The DM still sees a translucent tint so they can work under it.
 
 - **Branding image paths containing a backslash are refused.** Browsers read a backslash after the first slash as another host, which the same-origin check missed.

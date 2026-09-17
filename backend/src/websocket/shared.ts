@@ -7,6 +7,8 @@
 // ============================================
 
 import type { FogState, FogOperation } from '../types/walls';
+import type { Server } from 'socket.io';
+import type { AuthenticatedSocket } from './auth';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -170,6 +172,30 @@ export function applyWsFogOperation(fog: FogState, operation: FogOperation): voi
         if (idx >= 0 && idx < total) fog.revealed[idx] = false;
       }
       break;
+  }
+}
+
+/**
+ * Send a map's fog to every socket in the campaign, by role: the DM gets the
+ * full grid, everyone else their revealed cells. The socket handler and the
+ * REST route both go through this, so a reveal reaches the table the same
+ * way whichever path made it.
+ */
+export async function broadcastFogState(io: Server, campaignId: string, mapId: string, fog: FogState): Promise<void> {
+  const sockets = await io.in(campaignId).fetchSockets();
+  for (const s of sockets) {
+    const role = (s as unknown as AuthenticatedSocket).role;
+    if (role === 'DM') {
+      s.emit('fog:updated', { mapId, fogState: fog });
+    } else {
+      s.emit('fog:cells', {
+        mapId,
+        revealedCells: revealedCellIndices(fog),
+        fogCols: fog.fogCols,
+        fogRows: fog.fogRows,
+        cellPx: fog.cellPx,
+      });
+    }
   }
 }
 

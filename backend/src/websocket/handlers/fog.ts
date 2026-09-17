@@ -8,7 +8,7 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices } from '../shared';
+import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -58,22 +58,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       await prisma.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
 
-      // Broadcast: DM gets full state; all others get revealed-cell indices + grid metadata
-      const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-      for (const s of campaignSockets) {
-        const authed = s as unknown as AuthenticatedSocket;
-        if (authed.role === 'DM') {
-          s.emit('fog:updated', { mapId, fogState: fog });
-        } else {
-          s.emit('fog:cells', {
-            mapId,
-            revealedCells: revealedCellIndices(fog),
-            fogCols: fog.fogCols,
-            fogRows: fog.fogRows,
-            cellPx: fog.cellPx,
-          });
-        }
-      }
+      await broadcastFogState(io, socket.campaignId, mapId, fog);
     } catch (error) {
       logger.error('fog:operation failed', { err: error });
       socket.emit('error', { message: 'Failed to apply fog operation' });

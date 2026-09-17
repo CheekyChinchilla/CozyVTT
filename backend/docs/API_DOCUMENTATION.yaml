@@ -4577,8 +4577,10 @@ paths:
       description: |
         Mutate the fog state by either revealing/hiding a list of cell indices
         (`reveal` / `hide` with `cells: number[]`) or by revealing/hiding the
-        entire map (`reveal_all` / `hide_all`). Returns the updated fog state.
-        DM only.
+        entire map (`reveal_all` / `hide_all`). Returns the updated fog state
+        and broadcasts it to every connected client, exactly as the socket
+        `fog:operation` event does. Refused with 409 while fog of war is off
+        for the map. DM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -4612,6 +4614,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':

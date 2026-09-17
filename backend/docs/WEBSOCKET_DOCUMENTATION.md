@@ -1000,8 +1000,8 @@ right-hand column.
 | `dice.rolled` | `initiative.ts` |
 | `dice.rolled.secret` | `dice.ts` |
 | `dm:editing` | `walls.ts` |
-| `fog:cells` | `fog.ts` |
-| `fog:updated` | `fog.ts` |
+| `fog:cells` | `shared.ts` |
+| `fog:updated` | `shared.ts` |
 | `initiative.state` | `initiative.ts` |
 | `invitation.received` | `campaigns.ts` |
 | `light:added` | `lights.ts` |
