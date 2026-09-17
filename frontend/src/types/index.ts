@@ -695,6 +695,8 @@ export interface Map {
   fogEnabled?: boolean;
   /** Everything in line of sight is lit. Absent on older payloads means on. */
   globalIllumination?: boolean;
+  /** Explored areas are remembered per player. Absent on older payloads means on. */
+  explorationEnabled?: boolean;
   lights?: import('./walls').LightSource[];
   createdAt: string;
   updatedAt: string;
@@ -1011,6 +1013,7 @@ export interface UpdateMapRequest {
   lightingEnabled?: boolean;
   fogEnabled?: boolean;
   globalIllumination?: boolean;
+  explorationEnabled?: boolean;
 }
 
 // Token

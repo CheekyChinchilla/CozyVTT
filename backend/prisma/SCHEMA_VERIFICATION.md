@@ -108,6 +108,14 @@
 - ✅ lightingEnabled: boolean (default false)
 - ✅ fogEnabled: boolean (default true; the create route sets false for new maps)
 - ✅ globalIllumination: boolean (default true; the create route sets false for new maps)
+- ✅ explorationEnabled: boolean (default true; the create route sets false for new maps)
+
+### MapExploration Model
+- ✅ id: uuid (primary key)
+- ✅ mapId: foreign key to Map with cascade delete
+- ✅ userId: foreign key to User with cascade delete
+- ✅ explored: JSON (FogState shape)
+- ✅ unique (mapId, userId); index on mapId
 
 ### Asset Model
 - ✅ id: uuid (primary key)

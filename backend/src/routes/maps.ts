@@ -165,6 +165,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         // maps from before the flags existed keep the behaviour they had.
         fogEnabled: false,
         globalIllumination: false,
+        explorationEnabled: false,
       },
     });
 
@@ -201,6 +202,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         lightingEnabled: true,
         fogEnabled: true,
         globalIllumination: true,
+        explorationEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -376,6 +378,7 @@ router.post(
           lightingEnabled: parsed.lightSources.length > 0,
           fogEnabled: false,
           globalIllumination: false,
+          explorationEnabled: false,
         },
       });
 
@@ -562,7 +565,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled, globalIllumination } = req.body;
+    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled, globalIllumination, explorationEnabled } = req.body;
 
     // Fetch the map to verify it exists and belongs to campaign
     const existingMap = await prisma.map.findUnique({
@@ -702,6 +705,13 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.globalIllumination = globalIllumination;
     }
 
+    if (explorationEnabled !== undefined) {
+      if (typeof explorationEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'explorationEnabled must be a boolean' });
+      }
+      updateData.explorationEnabled = explorationEnabled;
+    }
+
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id },
@@ -710,13 +720,14 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     // Any per-map flag change reaches every connected client at once, as one
     // event carrying all of them, so a client never holds a stale flag.
-    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined || updateData.globalIllumination !== undefined) {
+    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined || updateData.globalIllumination !== undefined || updateData.explorationEnabled !== undefined) {
       try {
         broadcastToCampaign(campaignId, 'map:settings:updated', {
           mapId: id,
           lightingEnabled: updatedMap.lightingEnabled,
           fogEnabled: updatedMap.fogEnabled,
           globalIllumination: updatedMap.globalIllumination,
+          explorationEnabled: updatedMap.explorationEnabled,
         });
       } catch { /* non-fatal */ }
     }
@@ -1699,6 +1710,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
         lightingEnabled: updated.lightingEnabled,
         fogEnabled: updated.fogEnabled,
         globalIllumination: updated.globalIllumination,
+        explorationEnabled: updated.explorationEnabled,
       });
     } catch {
       // Socket may not be initialized in tests — log and continue

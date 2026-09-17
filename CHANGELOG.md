@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Maps remember what each player has explored.** On a map with dynamic lighting, the areas a player's tokens have seen stay on their map, greyed and darkened, until they can see them again. Each player has their own memory, kept on the server, so it survives a reload and a change of device. A per-map setting (on for existing maps, off for new ones) controls it, and the DM can forget everyone's memory of a map at any time.
+
 - **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.
 
 - **Fog of war can be turned on or off per map.** A checkbox at the top of the Fog of War panel, and one in Edit Map, switches it. Off, players see the whole map; what you had revealed is kept for when you turn it back on.

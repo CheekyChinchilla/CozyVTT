@@ -70,3 +70,14 @@ export const FogOperationSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('reveal_all') }),
   z.object({ op: z.literal('hide_all') }),
 ]);
+
+// ── Explored memory ──────────────────────────────────────────────────────────
+
+/**
+ * A player's vision covered these fog cells. Bounded so a client cannot push
+ * a whole large map every frame; the handler unions it with what is stored.
+ */
+export const ExplorationRevealSchema = z.object({
+  mapId: z.string().uuid(),
+  cells: z.array(z.number().int().nonnegative()).max(20000),
+});

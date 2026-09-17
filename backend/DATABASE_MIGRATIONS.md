@@ -80,6 +80,11 @@ about; the list is not exhaustive.
   to `true`. Same shape: one `ALTER TABLE ... ADD COLUMN` with a default. Every
   existing lit map keeps showing players everything in line of sight, as it
   always did; new maps start with it off so lights and darkvision decide.
+- `add_map_exploration` - `Map.explorationEnabled` (boolean, default `true`)
+  and a new `MapExploration` table holding what each player has explored on a
+  map, one row per map and user, cascading on delete of either. One `ALTER
+  TABLE ... ADD COLUMN` with a default, one `CREATE TABLE`, two indexes and two
+  foreign keys. Nothing existing is altered; the table starts empty.
 
 ## Data migrations (one-off scripts)
 

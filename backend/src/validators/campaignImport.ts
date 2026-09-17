@@ -143,6 +143,7 @@ export const MapDataSchema = z.object({
   lightingEnabled: z.boolean().optional(),
   fogEnabled: z.boolean().optional(),
   globalIllumination: z.boolean().optional(),
+  explorationEnabled: z.boolean().optional(),
   lights: z.array(LightSourceSchema).max(200).optional(),
 }).strip();
 

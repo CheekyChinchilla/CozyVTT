@@ -229,6 +229,7 @@ describe('filterTokensByLighting', () => {
       lightingEnabled: true,
       fogEnabled: true,
       globalIllumination: false,
+      explorationEnabled: true,
       wallSegments: [makeWall('w', 500, 0, 500, 1000)],
       lights: [{ id: 'l1', x: 750, y: 550, brightRadius: 3, dimRadius: 6, enabled: true }],
       width: MAP_WIDTH,

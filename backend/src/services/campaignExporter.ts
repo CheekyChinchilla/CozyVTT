@@ -138,6 +138,7 @@ export async function exportCampaign(
       lightingEnabled: map.lightingEnabled,
       fogEnabled: map.fogEnabled,
       globalIllumination: map.globalIllumination,
+      explorationEnabled: map.explorationEnabled,
       lights: map.lights || [],
     });
   }

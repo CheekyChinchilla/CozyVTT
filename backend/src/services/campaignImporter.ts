@@ -338,6 +338,7 @@ export async function importCampaign(
         // keeps fog on, as those maps always had it.
         ...(mapData.fogEnabled !== undefined ? { fogEnabled: mapData.fogEnabled } : {}),
         ...(mapData.globalIllumination !== undefined ? { globalIllumination: mapData.globalIllumination } : {}),
+        ...(mapData.explorationEnabled !== undefined ? { explorationEnabled: mapData.explorationEnabled } : {}),
         lights: (mapData.lights || []) as unknown as Prisma.InputJsonValue,
       },
     });

@@ -10,6 +10,7 @@
 3. [Authentication](#authentication)
 4. [Event Reference](#event-reference)
 5. [Token Movement — a worked example](#token-movement--a-worked-example)
+5. [Fog, lighting and explored memory](#fog-lighting-and-explored-memory)
 6. [Error Handling](#error-handling)
 7. [Client Examples](#client-examples)
 8. [Testing](#testing)
@@ -563,6 +564,16 @@ socket.on('token.move.end', (data) => {
 
 ---
 
+## Fog, lighting and explored memory
+
+Three things decide what a player's map shows, and each has one source of truth.
+
+**Manual fog of war** is per map, switched by `Map.fogEnabled`. While it is on, `fog:request_state` answers a DM with `fog:updated` (the full grid) and everyone else with `fog:cells` (their revealed cell indices plus the grid dimensions). A `fog:cells` payload with an empty `revealedCells` means fog is on and nothing is revealed. While fog is off the handlers answer nothing and refuse `fog:operation`; a client that gets no reply draws no fog. The REST fog operation broadcasts through the same code as the socket one, so a reveal reaches the table the same way whichever path made it.
+
+**Dynamic lighting** decides which tokens a player is *sent*. The rule lives in `utils/visibilityRule.ts`, shared byte for byte with the client: walls first (nothing outside a controlled token's line of sight is sent, lit or not), then the map's `globalIllumination` flag, then darkvision, the token's own square and light. Token moves apply the same plane and hidden-token rules as the map fetch before line of sight, so a player never receives on a move what opening the map would not have given them. Any per-map flag change is broadcast as one `map:settings:updated` event carrying every flag.
+
+**Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and echoes the user's whole memory as `exploration:state` to every socket of that user. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview), and `exploration:reset` lets the DM forget everyone's memory of a map. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
+
 ## Error Handling
 
 ### Connection Errors
@@ -951,6 +962,9 @@ right-hand column.
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
 | `dice.roll` | Any member | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
 | `dm:editing` | DM only | — |
+| `exploration:request` | Any member | what this user has explored on a map. |
+| `exploration:reset` | DM only | DM forgets every player's explored areas on a map. |
+| `exploration:reveal` | Any member | a player's vision covered these cells; remember them. |
 | `fog:operation` | DM only | DM applies a fog operation (reveal/hide cells). |
 | `fog:request_state` | Any member | Any campaign member requests current fog state on (re)join. |
 | `initiative.add` | DM only | DM adds a token to the combatant list. |
@@ -1000,6 +1014,7 @@ right-hand column.
 | `dice.rolled` | `initiative.ts` |
 | `dice.rolled.secret` | `dice.ts` |
 | `dm:editing` | `walls.ts` |
+| `exploration:state` | `exploration.ts` |
 | `fog:cells` | `shared.ts` |
 | `fog:updated` | `shared.ts` |
 | `initiative.state` | `initiative.ts` |

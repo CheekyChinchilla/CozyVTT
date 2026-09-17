@@ -39,6 +39,8 @@ interface MapData {
   fogEnabled: boolean;
   /** Everything in line of sight is lit. Off: lights and darkvision decide what a player sees. */
   globalIllumination: boolean;
+  /** Players' explored areas are remembered and greyed in on this map. */
+  explorationEnabled: boolean;
   lights: unknown;
   createdAt: Date;
   updatedAt: Date;

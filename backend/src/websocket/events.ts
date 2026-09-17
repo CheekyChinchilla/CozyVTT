@@ -13,6 +13,7 @@ import { registerCharacterHandlers } from './handlers/characters';
 import { registerInitiativeHandlers } from './handlers/initiative';
 import { registerWallHandlers } from './handlers/walls';
 import { registerFogHandlers } from './handlers/fog';
+import { registerExplorationHandlers } from './handlers/exploration';
 import { registerLightHandlers } from './handlers/lights';
 import { registerPingHandlers } from './handlers/pings';
 
@@ -160,6 +161,7 @@ export function registerEventHandlers(io: Server): void {
     registerInitiativeHandlers(io, socket);
     registerWallHandlers(io, socket);
     registerFogHandlers(io, socket);
+    registerExplorationHandlers(io, socket);
     registerLightHandlers(io, socket);
     registerPingHandlers(io, socket);
 

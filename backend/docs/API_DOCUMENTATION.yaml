@@ -3904,6 +3904,9 @@ paths:
                 globalIllumination:
                   type: boolean
                   description: With dynamic lighting on, everything in a token's line of sight counts as lit. Off, a player sees only what their tokens' sight radius reaches or a light source lights. Maps from before 1.5.0 have it on; new maps start with it off.
+                explorationEnabled:
+                  type: boolean
+                  description: Remember the areas each player has seen on this map and grey them in when out of sight. Maps from before 1.5.0 have it on; new maps start with it off.
       responses:
         '200':
           description: Map updated
@@ -7254,6 +7257,9 @@ components:
         globalIllumination:
           type: boolean
           description: Everything in line of sight counts as lit. Maps from before 1.5.0 have it on; new maps start with it off.
+        explorationEnabled:
+          type: boolean
+          description: Explored areas are remembered per player and greyed in when out of sight. Maps from before 1.5.0 have it on; new maps start with it off.
         createdAt:
           type: string
           format: date-time

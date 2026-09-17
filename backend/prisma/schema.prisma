@@ -133,6 +133,7 @@ model User {
   characterTemplates  CharacterTemplate[]    @relation("CharacterTemplateAuthor")
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
+  mapExplorations     MapExploration[]
   documentLinks       CampaignDocument[]
 
   @@index([email])
@@ -477,6 +478,7 @@ model Map {
   lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting
   fogEnabled      Boolean @default(true)  // Manual fog of war on this map; off = players see the whole map
   globalIllumination Boolean @default(true) // Everything in line of sight is lit; off = lights and darkvision decide
+  explorationEnabled Boolean @default(true) // Players' explored areas are remembered (greyed in) on this map
   lights          Json    @default("[]") // Array of LightSource objects
 
   // Metadata
@@ -485,8 +487,27 @@ model Map {
 
   // Relations
   activeCampaigns Campaign[] @relation("CurrentMap")
+  explorations    MapExploration[]
 
   @@index([campaignId])
+}
+
+/// What one player has explored on one map: the cells their vision has
+/// covered, kept in the FogState shape so the fog helpers apply unchanged.
+/// Never read when deciding which tokens to send; it only greys in map
+/// artwork the client already holds.
+model MapExploration {
+  id     String @id @default(uuid())
+  mapId  String
+  map    Map    @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  explored  Json     // FogState: { fogCols, fogRows, cellPx, revealed: boolean[] }
+  updatedAt DateTime @updatedAt
+
+  @@unique([mapId, userId])
+  @@index([mapId])
 }
 
 // ============================================

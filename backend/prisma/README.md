@@ -86,6 +86,8 @@ Several models use Prisma's `Json` type for flexibility:
 | `Map.fogData` | Fog-of-war reveal state |
 | `Map.fogEnabled` | Whether manual fog of war applies on this map (default on; new maps are created with it off) |
 | `Map.globalIllumination` | With dynamic lighting on, everything in line of sight counts as lit (default on; new maps are created with it off) |
+| `Map.explorationEnabled` | Players' explored areas are remembered and greyed in when out of sight (default on; new maps are created with it off) |
+| `MapExploration.explored` | One player's explored cells on one map, in the fog grid's shape; never read when deciding which tokens to send |
 | `Character.data` | Per-game-system sheet (validated by Zod at the route layer) |
 | `Message.metadata` | Optional context (e.g. character ID for character actions) |
 | `DiceRoll.breakdown` | Full roll math — individual dice, kept/dropped, modifiers |
