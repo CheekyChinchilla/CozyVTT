@@ -231,6 +231,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [exploredCells, setExploredCells] = useState<Set<number> | null>(null);
   const exploredScratchRef = useRef<HTMLCanvasElement | null>(null);
   const lastExploredReportRef = useRef(0);
+  // The remembered cells as a raster, one pixel per grid square, rebuilt only
+  // when the set changes; the lighting layer scales it to the map.
+  const exploredRaster = useMemo<HTMLCanvasElement | null>(() => {
+    if (!currentMap || !exploredCells || exploredCells.size === 0) return null;
+    const raster = document.createElement('canvas');
+    raster.width = currentMap.width;
+    raster.height = currentMap.height;
+    const rctx = raster.getContext('2d');
+    if (!rctx) return null;
+    const img = rctx.createImageData(raster.width, raster.height);
+    for (const idx of exploredCells) {
+      if (idx >= 0 && idx < raster.width * raster.height) img.data[idx * 4 + 3] = 255;
+    }
+    rctx.putImageData(img, 0, 0);
+    return raster;
+  }, [exploredCells, currentMap?.width, currentMap?.height]);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
   const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
 
@@ -383,6 +399,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Light coverage is built here first so it can be intersected with the
   // viewer's line of sight before joining the coverage mask.
   const lightOnlyOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // Explored memory pass: two screen-sized scratch canvases, allocated on first use.
+  const memoryMaskOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const memoryOffscreenRef = useRef<HTMLCanvasElement | null>(null);
 
   // Raw map-pixel position from last mousemove — ghost line uses this when snap is off.
   // screenToGrid() quantises to integer grid coords, so hoverCoords can't be used for free-draw.
@@ -1799,6 +1818,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         lightingCanvas: lightingOffscreenRef,
         coverageCanvas: lightCoverageOffscreenRef,
         lightCanvas: lightOnlyOffscreenRef,
+        explored: explorationEnabled ? exploredRaster : null,
+        terrainCanvas: terrainCanvasRef.current,
+        memoryMaskCanvas: memoryMaskOffscreenRef,
+        memoryCanvas: memoryOffscreenRef,
       }, viewport);
 
       // Report what this player has just seen, at most every 300 ms, from the
@@ -1953,7 +1976,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploredCells, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -2007,7 +2030,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
 
   // ============================================
   // Token Hit Testing

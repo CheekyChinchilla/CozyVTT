@@ -39,6 +39,17 @@ export interface LightingDrawState {
   lightingCanvas: CanvasHolder;
   coverageCanvas: CanvasHolder;
   lightCanvas: CanvasHolder;
+  /**
+   * Explored memory: one pixel per grid cell, alpha 1 where the viewer has
+   * been, or null when there is nothing to remember. Remembered ground shows
+   * as a grey, darker copy of the terrain until it is in sight again.
+   */
+  explored: HTMLCanvasElement | null;
+  /** The terrain canvas, the same size as the screen, copied for the memory pass. */
+  terrainCanvas: HTMLCanvasElement | null;
+  /** Two screen-sized scratch canvases for the memory pass, allocated on first use. */
+  memoryMaskCanvas: CanvasHolder;
+  memoryCanvas: CanvasHolder;
 }
 
 function ensureCanvas(holder: CanvasHolder, w: number, h: number): HTMLCanvasElement {
@@ -195,11 +206,59 @@ export function drawDynamicLighting(
   covCtx.drawImage(lightLayer, 0, 0);
   covCtx.globalCompositeOperation = 'source-over';
 
+  // ── Explored memory: remembered ground as a grey, darker copy ───
+  // Canvas blend modes act within one canvas, and this overlay is transparent
+  // where the map is, so the remembered tier is a desaturated, darkened copy
+  // of the terrain canvas, kept only where the viewer has been and cannot
+  // see now. Screen-sized, in screen space; skipped when nothing is
+  // remembered, which is every DM view and every unlit map.
+  if (state.explored && state.terrainCanvas) {
+    const sw = state.terrainCanvas.width;
+    const sh = state.terrainCanvas.height;
+
+    const mask = ensureCanvas(state.memoryMaskCanvas, sw, sh);
+    const maskCtx = mask.getContext('2d')!;
+    maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    maskCtx.clearRect(0, 0, sw, sh);
+    maskCtx.imageSmoothingEnabled = false;
+    maskCtx.translate(viewport.panOffset.x, viewport.panOffset.y);
+    maskCtx.scale(viewport.zoom, viewport.zoom);
+    maskCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+    // What is in sight now is not memory. Dim areas are 0.5 alpha, so three
+    // subtractions leave 12.5%, visually nothing.
+    maskCtx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0);
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const memory = ensureCanvas(state.memoryCanvas, sw, sh);
+    const memCtx = memory.getContext('2d')!;
+    memCtx.setTransform(1, 0, 0, 1, 0, 0);
+    memCtx.clearRect(0, 0, sw, sh);
+    memCtx.drawImage(state.terrainCanvas, 0, 0);
+    memCtx.globalCompositeOperation = 'saturation';
+    memCtx.fillStyle = '#808080';
+    memCtx.fillRect(0, 0, sw, sh);
+    memCtx.globalCompositeOperation = 'source-over';
+    memCtx.fillStyle = 'rgba(15, 12, 25, 0.65)';
+    memCtx.fillRect(0, 0, sw, sh);
+    memCtx.globalCompositeOperation = 'destination-in';
+    memCtx.drawImage(mask, 0, 0);
+    memCtx.globalCompositeOperation = 'source-over';
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(memory, 0, 0);
+    ctx.restore();
+  }
+
   // ── Build fog with coverage subtracted ──────────────────────────
   offCtx.fillStyle = 'rgba(15, 12, 25, 1)';
   offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
   offCtx.globalCompositeOperation = 'destination-out';
   offCtx.drawImage(coverage, 0, 0);
+  // Remembered cells are dimmed by the pass above, not blacked out here.
+  if (state.explored) offCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
   offCtx.globalCompositeOperation = 'source-over';
 
   // Composite onto main canvas with soft blur edge

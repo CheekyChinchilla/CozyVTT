@@ -616,7 +616,7 @@ describe('drawDynamicLighting', () => {
       createRadialGradient: () => gradient,
     } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
-      'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage']) {
+      'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
       (ctx as unknown as Record<string, unknown>)[m] = () =>
         ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle) });
     }
@@ -632,11 +632,15 @@ describe('drawDynamicLighting', () => {
   const W = 150, H = 150;
   const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
 
-  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean }) {
+  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean }) {
     const main = makeOpRecorder();
     const lighting = makeOpRecorder();
     const coverage = makeOpRecorder();
     const lightOnly = makeOpRecorder();
+    const memoryMask = makeOpRecorder();
+    const memory = makeOpRecorder();
+    const explored = opts.withMemory ? ({ width: 3, height: 3 } as unknown as HTMLCanvasElement) : null;
+    const terrainCanvas = { width: W, height: H } as unknown as HTMLCanvasElement;
 
     const token = makeToken('a', { sightRadius: opts.sightRadius ?? 0 } as Partial<Token>);
     const myTokens = opts.noTokens ? [] : [token];
@@ -653,10 +657,40 @@ describe('drawDynamicLighting', () => {
       lightingCanvas: holderFor(lighting.ctx, W, H),
       coverageCanvas: holderFor(coverage.ctx, W, H),
       lightCanvas: holderFor(lightOnly.ctx, W, H),
+      explored,
+      terrainCanvas,
+      memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
+      memoryCanvas: holderFor(memory.ctx, W, H),
     }, viewport);
 
-    return { main, lighting, lightOnly, coverage };
+    return { main, lighting, lightOnly, coverage, memoryMask, memory };
   }
+
+  it('leaves remembered cells out of the darkness, so the memory pass can dim them instead', () => {
+    const { lighting } = run({ withLight: false, withMemory: true });
+    // The coverage mask and the explored raster are both cut out of the darkness.
+    expect(lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(2);
+  });
+
+  it('draws remembered ground as a grey, darker copy of the terrain, masked to what is out of sight', () => {
+    const { memoryMask, memory, main } = run({ withLight: false, withMemory: true });
+    // explored raster in, current coverage subtracted three times
+    expect(memoryMask.ops.filter((c) => c.method === 'drawImage' && c.op === 'source-over')).toHaveLength(1);
+    expect(memoryMask.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(3);
+    // terrain copy, desaturated, darkened, then kept only where the mask is
+    expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'source-over')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'saturation')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'source-over' && c.fillStyle === 'rgba(15, 12, 25, 0.65)')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
+    expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(2); // memory, then the darkness
+  });
+
+  it('runs no memory pass when nothing is remembered', () => {
+    const { memoryMask, memory, lighting } = run({ withLight: false });
+    expect(memoryMask.ops).toHaveLength(0);
+    expect(memory.ops).toHaveLength(0);
+    expect(lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(1);
+  });
 
   const fillsAt = (r: { ops: OpCall[] }, alpha: string) =>
     r.ops.filter((c) => c.method === 'fill' && c.op === 'lighter' && c.fillStyle === `rgba(255, 255, 255, ${alpha})`);
