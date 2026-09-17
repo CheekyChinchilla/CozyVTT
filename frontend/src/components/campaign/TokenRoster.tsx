@@ -64,8 +64,6 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
 
-  const tokenType = getEffectiveType(token);
-  const canEdit = tokenType === TokenType.NPC || tokenType === TokenType.OBJECT;
 
   const handleDuplicate = useCallback(async () => {
     if (!currentMap) return;
@@ -155,8 +153,8 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
       {/* Actions — shown on hover */}
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        {/* Edit (NPC/Object only) */}
-        {canEdit && onEditToken && (
+        {/* Edit — every token type */}
+        {onEditToken && (
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"

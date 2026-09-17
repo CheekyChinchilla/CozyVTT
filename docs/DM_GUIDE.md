@@ -968,13 +968,13 @@ Once enabled, players only see the areas their characters have line of sight to.
 
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
 
-### Token Sight Radius
+### Darkvision
 
-Each token has a **Sight Radius** property (in grid squares). This determines how far the token can see. A radius of 0 means unlimited sight (sees the entire map assuming no walls).
+Each token has a **Darkvision** value, in grid squares: how far it makes things out with no light at all. **0 means none**, which is what a new token starts with; 12 squares is 60 ft, the usual darkvision. It never limits how far a lit thing can be noticed.
 
-Update a token's sight radius in the Token Manager or the Quick Editor panel.
+Set it in the **Token Manager** when placing a token, or afterwards from **Edit Token** (right-click the token, or the pencil in the Token Roster), which now opens for player tokens too. Only you can change it: it decides what the server sends that token's player.
 
-> **Tip:** Set sight radius to match in-game values: 6 squares (30 ft) for a typical character, 12 squares (60 ft) for a character with Darkvision.
+> **Tip:** With no darkvision and no lights nearby, a player sees only the square their token stands on. If that is not what you want for a map, tick **Global Illumination** in the map's settings (see below).
 
 ### Light Sources
 

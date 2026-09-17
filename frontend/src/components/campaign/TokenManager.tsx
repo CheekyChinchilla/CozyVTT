@@ -26,6 +26,7 @@ import type { Asset, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
+import TokenVisionField from './TokenVisionField';
 
 // ============================================
 // Constants
@@ -79,6 +80,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [tokenNotes, setTokenNotes] = useState('');
   const [showHpBar, setShowHpBar] = useState(true);
   const [initiative, setInitiative] = useState<string>('');
+  const [sightRadius, setSightRadius] = useState(0);
   const [objectHidden, setObjectHidden] = useState(true);
 
   // ── Token list action state ──
@@ -185,6 +187,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           showHpBar: false,
           notes: '',
           initiative: null,
+          sightRadius,
         };
       } else if (tokenType === TokenType.NPC) {
         const hpValue = hpMax > 0 ? { current: hpMax, max: hpMax, temp: 0 } : null;
@@ -198,6 +201,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           showHpBar: hpMax > 0 ? showHpBar : false,
           notes: tokenNotes.trim(),
           initiative: initiative !== '' ? parseInt(initiative, 10) : null,
+          sightRadius,
         };
       } else {
         // Object
@@ -230,13 +234,14 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setTokenNotes('');
       setShowHpBar(true);
       setInitiative('');
+      setSightRadius(0);
       setObjectHidden(true);
     } catch {
       setError('Failed to add token to map');
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, objectHidden, socket]);
+  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, objectHidden, socket]);
 
   // ============================================
   // Token List Actions
@@ -703,6 +708,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {/* Darkvision (NPC and Player only; objects do not see) */}
+                {tokenType !== TokenType.OBJECT && (
+                  <TokenVisionField value={sightRadius} onChange={setSightRadius} />
                 )}
 
                 {/* Assign to player (NPC and Player only) */}

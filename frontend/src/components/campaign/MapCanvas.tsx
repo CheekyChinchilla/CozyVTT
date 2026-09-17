@@ -3896,7 +3896,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             const cmToken = contextMenu.token;
             const cmType = cmToken.type ?? (cmToken.characterId ? TokenType.PLAYER : TokenType.NPC);
             const isObject = cmType === TokenType.OBJECT;
-            const isNpcOrObject = cmType === TokenType.NPC || cmType === TokenType.OBJECT;
             return (
             <>
               {/* Roll... — NPC tokens only. The `characterId` check is what
@@ -3919,8 +3918,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Edit Token — NPC and Object tokens */}
-              {isNpcOrObject && (
+              {/* Edit Token — every token type. The editor shows a player token
+                  its name, image, darkvision and controller; the NPC-only
+                  sections stay hidden. */}
+              {(
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
                   onClick={() => {

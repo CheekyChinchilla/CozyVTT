@@ -29,6 +29,7 @@ import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
+import TokenVisionField from './TokenVisionField';
 
 // ============================================
 // Constants
@@ -848,6 +849,17 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 className="input-cozy input-cozy-number w-full text-sm"
               />
             </section>
+
+            {/* ── Darkvision (objects do not see) ── */}
+            {tokenType !== TokenType.OBJECT && (
+              <section>
+                <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
+                <TokenVisionField
+                  value={token.sightRadius ?? 0}
+                  onChange={(squares) => { void saveUpdate({ sightRadius: squares }); }}
+                />
+              </section>
+            )}
 
             {/* ── Conditions ── */}
             <section>

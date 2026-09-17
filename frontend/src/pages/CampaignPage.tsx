@@ -53,7 +53,7 @@ import CampaignDocumentsModal from '@/components/documents/CampaignDocumentsModa
 import SessionSidebar from '@/components/campaign/SessionSidebar';
 import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import ConnectionStatus from '@/components/ConnectionStatus';
-import { CampaignStatus, TokenType } from '@/types';
+import { CampaignStatus } from '@/types';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import Tooltip from '@/components/ui/Tooltip';
@@ -424,14 +424,7 @@ function CampaignPageContent() {
               <CampaignRoster />
               {/* Token Roster — DM only */}
               {userRole === 'DM' && (
-                <TokenRoster
-                  onEditToken={(token) => {
-                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                      setQuickEditToken(token);
-                    }
-                  }}
-                />
+                <TokenRoster onEditToken={setQuickEditToken} />
               )}
             </aside>
           </Panel>
@@ -448,14 +441,7 @@ function CampaignPageContent() {
                   </div>
                 }
               >
-                <MapCanvas
-                  onEditToken={(token) => {
-                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                      setQuickEditToken(token);
-                    }
-                  }}
-                />
+                <MapCanvas onEditToken={setQuickEditToken} />
               </Suspense>
             </section>
           </Panel>
