@@ -13,7 +13,7 @@ import type { User, Character, CampaignMembership } from '../types';
  */
 export function canEditCharacter(
   user: User,
-  character: Character,
+  character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
   // User owns the character
@@ -115,7 +115,7 @@ export function canReassignCharacter(membership?: CampaignMembership): boolean {
  */
 export function canRemoveCharacterFromCampaign(
   user: User,
-  character: Character,
+  character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
   // User owns the character

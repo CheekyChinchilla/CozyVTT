@@ -11,7 +11,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { canRollAsCharacter } from '@/services/permissions';
+import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -386,7 +386,7 @@ export default function CampaignRoster() {
                 handleCloseContextMenu();
               },
               // Rolling uses the sheet's modifiers, so it follows character
-              // ownership the same way Edit below does — not `true`, which let
+              // ownership, like Edit and Remove below — not `true`, which let
               // any member roll anyone's character.
               visible: canRollAsCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
             },
@@ -394,7 +394,7 @@ export default function CampaignRoster() {
               icon: Edit,
               label: 'Edit Character Sheet',
               onClick: handleEditCharacterSheet,
-              visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
+              visible: canEditCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
             },
             {
               icon: MapPin,
@@ -411,7 +411,7 @@ export default function CampaignRoster() {
               icon: X,
               label: 'Remove from Campaign',
               onClick: handleRemoveFromCampaign,
-              visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
+              visible: canRemoveCharacterFromCampaign(user, { userId: contextMenu.characterUserId }, userMembership),
               className: 'text-danger-ink hover:bg-danger/10',
             },
           ]}

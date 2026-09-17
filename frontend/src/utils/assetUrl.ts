@@ -40,8 +40,9 @@ export const ASSET_DIRECTORY: Record<AssetType, AssetDirectory> = {
   [AssetType.AUDIO]: 'audio',
   [AssetType.AVATAR]: 'avatars',
   [AssetType.DOCUMENT]: 'documents',
-  // Not uploadable. There is no route for it and never a stored asset of this
-  // type, so any lookup here is a bug worth seeing rather than a silent fallback.
+  // Not uploadable: there is no route for it and no stored asset of this type.
+  // The record has to be total, so it falls back to documents; a lookup here
+  // means a record that should not exist, and the directory listing shows it.
   [AssetType.OTHER]: 'documents',
 };
 
@@ -64,7 +65,7 @@ export const ASSET_SCOPE_LABEL: Record<AssetScope, string> = {
   [AssetScope.GLOBAL]: 'Global',
 };
 
-/** The label for a scope, falling back to the raw value for an unknown one. */
+/** The label for a scope. */
 export function assetScopeLabel(scope: AssetScope): string {
-  return ASSET_SCOPE_LABEL[scope] ?? scope;
+  return ASSET_SCOPE_LABEL[scope];
 }

@@ -7,6 +7,7 @@
  * it is text; the reader and the serving route make it harmless.
  */
 
+import { AssetScope } from '@/types';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NewDocumentDialog from '../NewDocumentDialog';
@@ -68,7 +69,7 @@ describe('NewDocumentDialog', () => {
   it('locks the scope and hides the picker when opened from a campaign', async () => {
     createDocument.mockResolvedValue({ asset: { id: 'a3', name: 'Table' } });
     render(
-      <NewDocumentDialog isOpen onClose={vi.fn()} onCreated={vi.fn()} lockedScope="CAMPAIGN" campaignId="c1" />
+      <NewDocumentDialog isOpen onClose={vi.fn()} onCreated={vi.fn()} lockedScope={AssetScope.CAMPAIGN} campaignId="c1" />
     );
     expect(screen.queryByRole('radiogroup', { name: /scope/i })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'Table' } });

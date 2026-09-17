@@ -18,16 +18,16 @@ import { Modal, Button, Input, Textarea } from '@/components/ui';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
-import { PlatformRole, type Asset } from '@/types';
-
-type Scope = 'USER' | 'CAMPAIGN' | 'GLOBAL';
+import { PlatformRole, AssetScope, type Asset } from '@/types';
+import { assetScopeLabel } from '@/utils/assetUrl';
+import { MAX_DOCUMENT_NAME_LENGTH, MAX_TYPED_DOCUMENT_BYTES } from '@/utils/documentLimits';
 
 interface NewDocumentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (asset: Asset) => void;
   /** Fix the scope, and hide the picker. Used from inside a campaign. */
-  lockedScope?: Scope;
+  lockedScope?: AssetScope;
   campaignId?: string;
 }
 
@@ -44,7 +44,7 @@ export default function NewDocumentDialog({
   const [name, setName] = useState('');
   const [format, setFormat] = useState<'md' | 'txt'>('md');
   const [content, setContent] = useState('');
-  const [scope, setScope] = useState<Scope>(lockedScope ?? 'USER');
+  const [scope, setScope] = useState<AssetScope>(lockedScope ?? AssetScope.USER);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export default function NewDocumentDialog({
     setName('');
     setFormat('md');
     setContent('');
-    setScope(lockedScope ?? 'USER');
+    setScope(lockedScope ?? AssetScope.USER);
     setError(null);
   }, [isOpen, lockedScope]);
 
@@ -113,7 +113,7 @@ export default function NewDocumentDialog({
             placeholder="Name, e.g. Session 3 notes"
             aria-label="Document name"
             className="flex-1"
-            maxLength={200}
+            maxLength={MAX_DOCUMENT_NAME_LENGTH}
           />
           <div className="flex rounded-lg border border-moss-green/30 overflow-hidden flex-shrink-0" role="radiogroup" aria-label="Format">
             {(['md', 'txt'] as const).map((f) => (
@@ -137,9 +137,9 @@ export default function NewDocumentDialog({
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Scope">
               {(
                 [
-                  { value: 'USER' as const, label: 'Personal', help: 'Yours alone until a DM shares it' },
-                  ...(campaignId ? [{ value: 'CAMPAIGN' as const, label: 'Campaign', help: 'Members of this campaign' }] : []),
-                  ...(canUploadGlobal ? [{ value: 'GLOBAL' as const, label: 'Global', help: 'Everyone on this instance' }] : []),
+                  { value: AssetScope.USER, label: assetScopeLabel(AssetScope.USER), help: 'Yours alone until a DM shares it' },
+                  ...(campaignId ? [{ value: AssetScope.CAMPAIGN, label: assetScopeLabel(AssetScope.CAMPAIGN), help: 'Members of this campaign' }] : []),
+                  ...(canUploadGlobal ? [{ value: AssetScope.GLOBAL, label: assetScopeLabel(AssetScope.GLOBAL), help: 'Everyone on this instance' }] : []),
                 ]
               ).map((opt) => (
                 <button
@@ -171,7 +171,7 @@ export default function NewDocumentDialog({
           className="w-full font-mono text-sm"
         />
         <p className="text-[11px] text-ink-secondary">
-          Up to about 900 KB of text. Anything larger is a file to upload instead.
+          Up to about {Math.round(MAX_TYPED_DOCUMENT_BYTES / 1024)} KB of text. Anything larger is a file to upload instead.
         </p>
       </div>
     </Modal>

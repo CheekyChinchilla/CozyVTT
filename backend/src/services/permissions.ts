@@ -494,7 +494,7 @@ export async function assetUsedInUserCampaign(
 /** The asset fields the read decision depends on. */
 export interface AssetAccessFacts {
   id: string;
-  scope: string;
+  scope: AssetScope;
   uploadedById: string | null;
   campaignId: string | null;
 }

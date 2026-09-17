@@ -295,7 +295,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
             isOpen={showNew}
             onClose={() => setShowNew(false)}
             onCreated={() => void load()}
-            lockedScope="CAMPAIGN"
+            lockedScope={AssetScope.CAMPAIGN}
             campaignId={campaignId}
           />
         </>

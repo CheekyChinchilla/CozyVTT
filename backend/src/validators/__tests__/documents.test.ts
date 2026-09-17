@@ -12,6 +12,7 @@ import {
   CreateDocumentSchema,
   UpdateDocumentContentSchema,
   MAX_TYPED_DOCUMENT_BYTES,
+  MAX_DOCUMENT_NAME_LENGTH,
 } from '../documents';
 
 const base = { name: 'House Rules', format: 'md' as const, content: '# Rules\n' };
@@ -88,5 +89,16 @@ describe('UpdateDocumentContentSchema', () => {
   it('applies the same content rules', () => {
     expect(UpdateDocumentContentSchema.safeParse({ content: 'fine' }).success).toBe(true);
     expect(UpdateDocumentContentSchema.safeParse({ content: 'a\x00b' }).success).toBe(false);
+  });
+});
+
+describe('parity with the frontend copy of the limits', () => {
+  // The dialog states the limits it will be held to; the numbers must match.
+  it('frontend/src/utils/documentLimits.ts carries the same numbers', () => {
+    const { readFileSync } = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const copy = readFileSync(path.resolve(__dirname, '../../../../frontend/src/utils/documentLimits.ts'), 'utf8');
+    expect(copy).toContain(`MAX_DOCUMENT_NAME_LENGTH = ${MAX_DOCUMENT_NAME_LENGTH};`);
+    expect(copy).toContain(`MAX_TYPED_DOCUMENT_BYTES = ${MAX_TYPED_DOCUMENT_BYTES / 1024} * 1024;`);
   });
 });
