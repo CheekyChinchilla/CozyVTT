@@ -3901,6 +3901,9 @@ paths:
                 fogEnabled:
                   type: boolean
                   description: Manual fog of war on this map. Off means players see the whole map (dynamic lighting still applies). New maps are created with it off.
+                globalIllumination:
+                  type: boolean
+                  description: With dynamic lighting on, everything in a token's line of sight counts as lit. Off, a player sees only what their tokens' sight radius reaches or a light source lights. Maps from before 1.5.0 have it on; new maps start with it off.
       responses:
         '200':
           description: Map updated
@@ -7243,6 +7246,9 @@ components:
         fogEnabled:
           type: boolean
           description: Manual fog of war on this map. Off means players see the whole map. Maps from before 1.5.0 have it on; new maps start with it off.
+        globalIllumination:
+          type: boolean
+          description: Everything in line of sight counts as lit. Maps from before 1.5.0 have it on; new maps start with it off.
         createdAt:
           type: string
           format: date-time

@@ -1211,9 +1211,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Dynamic lighting toggle broadcast from DM
     // Every per-map flag arrives on one event, so a DM changing any of them
     // in Edit Map or a control panel reaches every client at once.
-    const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean }) => {
+    const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean }) => {
       if (!currentMap || data.mapId !== currentMap.id) return;
-      setCurrentMap({ ...currentMap, lightingEnabled: data.lightingEnabled, fogEnabled: data.fogEnabled });
+      setCurrentMap({
+        ...currentMap,
+        lightingEnabled: data.lightingEnabled,
+        fogEnabled: data.fogEnabled,
+        globalIllumination: data.globalIllumination,
+      });
     };
 
     socketInstance.on('token:appeared', handleTokenAppeared);

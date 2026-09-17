@@ -36,6 +36,8 @@ interface MapData {
   lightingEnabled: boolean;
   /** Manual fog of war applies on this map. Off: players see the whole map (lighting still applies). */
   fogEnabled: boolean;
+  /** Everything in line of sight is lit. Off: lights and darkvision decide what a player sees. */
+  globalIllumination: boolean;
   lights: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -254,7 +256,14 @@ export function filterTokensByLighting(
   mapHeight: number,
   gridSize: number,
   lightingEnabled: boolean,
-  lights?: unknown
+  lights?: unknown,
+  /**
+   * Everything in line of sight counts as lit. Trailing and defaulted, because
+   * a required parameter cannot follow an optional one; the default errs safe.
+   * A caller that forgets it can only hide too much, never send too much,
+   * the opposite of what a forgotten `userId` once did to `filterMapData`.
+   */
+  globalIllumination = false
 ): Token[] {
   if (!lightingEnabled) return tokens;
 
@@ -265,11 +274,11 @@ export function filterTokensByLighting(
   // Find all tokens controlled by this player
   const myTokens = tokens.filter((t) => t.controlledBy === playerUserId);
 
-  // Nobody on the map to look through: the only thing to send is what the DM
-  // has left visible. Lights deliberately do not help here — a light is not a
-  // viewer, and treating one as a viewer is exactly the bug fixed below.
+  // Nobody on the map to look through: nothing is seen, so nothing is sent.
+  // Lights deliberately do not help here — a light is not a viewer, and a
+  // token-less player receiving every visible token was a position leak.
   if (myTokens.length === 0) {
-    return tokens.filter((t) => t.visible);
+    return [];
   }
 
   const startMs = Date.now();
@@ -295,7 +304,8 @@ export function filterTokensByLighting(
       poly: computeVisibility({ x: cx, y: cy }, wallSegs, mapWidthPx, mapHeightPx, 0),
       cx,
       cy,
-      // 0 means unlimited, which is what a token with no sight radius set has.
+      // 0 means none: a token with no sight radius makes nothing out in the
+      // dark and relies on light (or global illumination).
       radiusPx: (t.sightRadius ?? 0) * gridSize,
     };
   });
@@ -330,9 +340,12 @@ export function filterTokensByLighting(
     const withLineOfSight = sights.filter((s) => isPointVisible(point, s.poly));
     if (withLineOfSight.length === 0) return false;
 
-    // Inside a viewer's own vision radius: made out whether or not it is lit.
+    // Global illumination: everything in line of sight is as good as lit.
+    if (globalIllumination) return true;
+
+    // Inside a viewer's own sight radius: made out whether or not it is lit.
     const seenUnaided = withLineOfSight.some(
-      (s) => s.radiusPx <= 0 || Math.hypot(cx - s.cx, cy - s.cy) <= s.radiusPx
+      (s) => s.radiusPx > 0 && Math.hypot(cx - s.cx, cy - s.cy) <= s.radiusPx
     );
     if (seenUnaided) return true;
 
@@ -383,7 +396,8 @@ export function filterMapData(
       mapData.height,
       mapData.gridSize,
       true,
-      mapData.lights
+      mapData.lights,
+      mapData.globalIllumination
     );
   }
 

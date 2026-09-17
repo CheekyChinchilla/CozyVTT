@@ -476,6 +476,7 @@ model Map {
   fogData         Json?                  // FogState object (null = not initialized)
   lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting
   fogEnabled      Boolean @default(true)  // Manual fog of war on this map; off = players see the whole map
+  globalIllumination Boolean @default(true) // Everything in line of sight is lit; off = lights and darkvision decide
   lights          Json    @default("[]") // Array of LightSource objects
 
   // Metadata

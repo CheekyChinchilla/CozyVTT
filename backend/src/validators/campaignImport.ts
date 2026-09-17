@@ -142,6 +142,7 @@ export const MapDataSchema = z.object({
   fogData: z.record(z.string(), z.unknown()).nullable().optional(),
   lightingEnabled: z.boolean().optional(),
   fogEnabled: z.boolean().optional(),
+  globalIllumination: z.boolean().optional(),
   lights: z.array(LightSourceSchema).max(200).optional(),
 }).strip();
 

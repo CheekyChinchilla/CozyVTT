@@ -107,6 +107,7 @@
 - ✅ annotations: JSON array
 - ✅ lightingEnabled: boolean (default false)
 - ✅ fogEnabled: boolean (default true; the create route sets false for new maps)
+- ✅ globalIllumination: boolean (default true; the create route sets false for new maps)
 
 ### Asset Model
 - ✅ id: uuid (primary key)

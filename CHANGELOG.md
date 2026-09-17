@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Dynamic lighting now means what the guide always said it meant.** A player sees what their tokens' sight radius reaches in the dark, plus anything a light source lights, and nothing else. Every token used to see the whole map regardless of light, which made lights decorative. A new per-map setting, **Global Illumination**, restores the old behaviour (everything in line of sight is visible) for tables that want it; maps from before this release have it on, so they look exactly as before until the DM turns it off. A player with no token on a lit map is now sent no tokens at all.
+
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed

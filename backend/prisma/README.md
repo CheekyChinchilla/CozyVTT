@@ -85,6 +85,7 @@ Several models use Prisma's `Json` type for flexibility:
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
 | `Map.fogEnabled` | Whether manual fog of war applies on this map (default on; new maps are created with it off) |
+| `Map.globalIllumination` | With dynamic lighting on, everything in line of sight counts as lit (default on; new maps are created with it off) |
 | `Character.data` | Per-game-system sheet (validated by Zod at the route layer) |
 | `Message.metadata` | Optional context (e.g. character ID for character actions) |
 | `DiceRoll.breakdown` | Full roll math — individual dice, kept/dropped, modifiers |

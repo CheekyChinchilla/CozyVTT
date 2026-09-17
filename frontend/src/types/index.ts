@@ -693,6 +693,8 @@ export interface Map {
   lightingEnabled?: boolean;
   /** Manual fog of war on this map. Absent on older payloads means on. */
   fogEnabled?: boolean;
+  /** Everything in line of sight is lit. Absent on older payloads means on. */
+  globalIllumination?: boolean;
   lights?: import('./walls').LightSource[];
   createdAt: string;
   updatedAt: string;
@@ -1004,6 +1006,7 @@ export interface UpdateMapRequest {
   spiritLayerUrl?: string | null;
   lightingEnabled?: boolean;
   fogEnabled?: boolean;
+  globalIllumination?: boolean;
 }
 
 // Token

@@ -73,7 +73,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function createMap(): Promise<{ id: string; fogEnabled: boolean; lightingEnabled: boolean }> {
+async function createMap(): Promise<{ id: string; fogEnabled: boolean; lightingEnabled: boolean; globalIllumination: boolean }> {
   const res = await agent
     .post(`/api/campaigns/${campaignId}/maps`)
     .send({ name: `Map ${randomUUID().slice(0, 8)}`, imageUrl: assetId, width: 10, height: 10 });
@@ -82,10 +82,11 @@ async function createMap(): Promise<{ id: string; fogEnabled: boolean; lightingE
 }
 
 describe('creating a map', () => {
-  it('starts with fog and dynamic lighting off', async () => {
+  it('starts with fog, dynamic lighting and global illumination off', async () => {
     const map = await createMap();
     expect(map.fogEnabled).toBe(false);
     expect(map.lightingEnabled).toBe(false);
+    expect(map.globalIllumination).toBe(false);
   });
 
   it('is listed with its flags', async () => {
@@ -98,11 +99,11 @@ describe('creating a map', () => {
 });
 
 describe('updating the flags', () => {
-  it('refuses a fogEnabled that is not a boolean', async () => {
+  it.each([['fogEnabled'], ['globalIllumination'], ['lightingEnabled']])('refuses a %s that is not a boolean', async (flag) => {
     const map = await createMap();
-    const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: 'yes' });
+    const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ [flag]: 'yes' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/fogEnabled/);
+    expect(res.body.message).toContain(flag);
   });
 
   it('stores the change and tells every client about every flag at once', async () => {
@@ -110,12 +111,13 @@ describe('updating the flags', () => {
     const playerCookie = await server.loginAs(playerId);
     const client = await server.connectAndAuth(playerCookie, campaignId);
 
-    const seen = waitForEvent<{ mapId: string; lightingEnabled: boolean; fogEnabled: boolean }>(client, 'map:settings:updated');
-    const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: true });
+    const seen = waitForEvent<{ mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean }>(client, 'map:settings:updated');
+    const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: true, globalIllumination: true });
     expect(res.status).toBe(200);
     expect(res.body.map.fogEnabled).toBe(true);
+    expect(res.body.map.globalIllumination).toBe(true);
 
-    expect(await seen).toEqual({ mapId: map.id, lightingEnabled: false, fogEnabled: true });
+    expect(await seen).toEqual({ mapId: map.id, lightingEnabled: false, fogEnabled: true, globalIllumination: true });
     const stored = await prisma.map.findUniqueOrThrow({ where: { id: map.id }, select: { fogEnabled: true } });
     expect(stored.fogEnabled).toBe(true);
     client.disconnect();
@@ -126,10 +128,10 @@ describe('updating the flags', () => {
     const playerCookie = await server.loginAs(playerId);
     const client = await server.connectAndAuth(playerCookie, campaignId);
 
-    const seen = waitForEvent<{ mapId: string; lightingEnabled: boolean; fogEnabled: boolean }>(client, 'map:settings:updated');
+    const seen = waitForEvent<{ mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean }>(client, 'map:settings:updated');
     const res = await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}/lighting`).send({ enabled: true });
     expect(res.status).toBe(200);
-    expect(await seen).toEqual({ mapId: map.id, lightingEnabled: true, fogEnabled: false });
+    expect(await seen).toEqual({ mapId: map.id, lightingEnabled: true, fogEnabled: false, globalIllumination: false });
     client.disconnect();
   });
 });

@@ -76,6 +76,10 @@ about; the list is not exhaustive.
 - `add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
   One `ALTER TABLE ... ADD COLUMN` with a default, so every existing map keeps
   fog of war exactly as it was; only maps created afterwards start with it off.
+- `add_map_global_illumination` - `Map.globalIllumination`, a boolean defaulting
+  to `true`. Same shape: one `ALTER TABLE ... ADD COLUMN` with a default. Every
+  existing lit map keeps showing players everything in line of sight, as it
+  always did; new maps start with it off so lights and darkvision decide.
 
 ## Data migrations (one-off scripts)
 

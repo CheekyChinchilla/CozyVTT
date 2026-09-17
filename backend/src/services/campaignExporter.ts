@@ -137,6 +137,7 @@ export async function exportCampaign(
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
       fogEnabled: map.fogEnabled,
+      globalIllumination: map.globalIllumination,
       lights: map.lights || [],
     });
   }

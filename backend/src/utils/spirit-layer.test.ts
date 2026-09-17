@@ -50,14 +50,13 @@ describe('filterTokensByLighting', () => {
     expect(result).toHaveLength(2);
   });
 
-  it('returns only visible tokens when player has no controlled tokens', () => {
-    const tokens = [
-      makeToken('a', 2, 2),
-      { ...makeToken('b', 5, 5), visible: false },
-    ];
-    const result = filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('a');
+  it('sends nothing when the player has no controlled token on the map, whatever the lights', () => {
+    // Nobody on the map to look through, so nothing is seen: a light is not a
+    // viewer, and a token-less player learning positions was a leak.
+    const tokens = [makeToken('a', 2, 2), { ...makeToken('b', 5, 5), visible: false }];
+    const lights = [{ id: 'l', x: 250, y: 750, brightRadius: 3, dimRadius: 6, enabled: true }];
+    expect(filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, lights)).toEqual([]);
+    expect(filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, undefined, true)).toEqual([]);
   });
 
   it('always includes the player\'s own token regardless of sight', () => {
@@ -72,15 +71,22 @@ describe('filterTokensByLighting', () => {
     expect(result.some((t) => t.id === 'mine')).toBe(true);
   });
 
-  it('includes nearby token visible through open space', () => {
-    // Player at center (5,5 grid = 550,550 px center), sight covers whole map (0 = full)
+  it('includes nearby token visible through open space under global illumination', () => {
     const playerToken = makeToken('player', 4, 4, 'user1', 0);
     // Another token one square away — should be in polygon
     const nearbyToken = makeToken('nearby', 5, 4);
     const tokens = [playerToken, nearbyToken];
 
-    const result = filterTokensByLighting(tokens, 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+    const result = filterTokensByLighting(tokens, 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, undefined, true);
     expect(result.some((t) => t.id === 'nearby')).toBe(true);
+  });
+
+  it('with global illumination off, the same nearby token in the dark is not sent', () => {
+    const playerToken = makeToken('player', 4, 4, 'user1', 0);
+    const nearbyToken = makeToken('nearby', 5, 4);
+
+    const result = filterTokensByLighting([playerToken, nearbyToken], 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+    expect(result.some((t) => t.id === 'nearby')).toBe(false);
   });
 
   it('excludes token blocked behind a solid wall', () => {
@@ -99,7 +105,9 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
-      true
+      true,
+      undefined,
+      true // global illumination: the wall alone must do the hiding
     );
 
     expect(result.some((t) => t.id === 'blocked')).toBe(false);
@@ -121,6 +129,8 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
+      true,
+      undefined,
       true
     );
 
@@ -218,6 +228,7 @@ describe('filterTokensByLighting', () => {
       annotations: [],
       lightingEnabled: true,
       fogEnabled: true,
+      globalIllumination: false,
       wallSegments: [makeWall('w', 500, 0, 500, 1000)],
       lights: [{ id: 'l1', x: 750, y: 550, brightRadius: 3, dimRadius: 6, enabled: true }],
       width: MAP_WIDTH,
@@ -252,6 +263,47 @@ describe('filterTokensByLighting', () => {
     });
   });
 
+  /**
+   * What a viewer makes out in the dark. The rule the DM guide has always
+   * stated: the sight radius governs how far you make things out unlit; it
+   * does not limit how far you notice something that is lit.
+   */
+  describe('sight radius, light and global illumination', () => {
+    // A 20×20 map, so a token can stand further than 12 squares away.
+    const W = 20;
+    const H = 20;
+
+    it('sees within its sight radius and not beyond it', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 12);
+      const near = makeToken('near', 10, 5); // 10 squares off
+      const far = makeToken('far', 14, 5);   // 14 squares off
+      const out = filterTokensByLighting([viewer, near, far], 'user1', NO_WALLS, W, H, GRID_SIZE, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'near']);
+    });
+
+    it('a radius of 0 means none: nothing unlit is sent', () => {
+      const viewer = makeToken('viewer', 2, 2, 'user1', 0);
+      const next = makeToken('next', 3, 2);
+      const out = filterTokensByLighting([viewer, next], 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer']);
+    });
+
+    it('a lit token is seen beyond the sight radius', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 2);
+      const lit = makeToken('lit', 8, 5); // centre px (850, 1450) on a 20-high map
+      const light = [{ id: 'l', x: 850, y: 1450, brightRadius: 2, dimRadius: 3, enabled: true }];
+      const out = filterTokensByLighting([viewer, lit], 'user1', NO_WALLS, W, H, GRID_SIZE, true, light);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'lit']);
+    });
+
+    it('with global illumination on, everything in line of sight is sent', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 0);
+      const far = makeToken('far', 19, 5);
+      const out = filterTokensByLighting([viewer, far], 'user1', NO_WALLS, W, H, GRID_SIZE, true, undefined, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'far']);
+    });
+  });
+
   it('multiple controlled tokens combine sight areas', () => {
     // Two player tokens at opposite ends of map, each seeing their half
     const leftToken = makeToken('left', 1, 5, 'user1', 0);
@@ -270,6 +322,8 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
+      true,
+      undefined,
       true
     );
 

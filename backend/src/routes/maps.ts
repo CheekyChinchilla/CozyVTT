@@ -160,10 +160,11 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         spiritLayerUrl: normalizedSpiritLayerUrl,
         tokens: [], // Initialize empty tokens array
         annotations: [], // Initialize empty annotations array
-        // New maps start with manual fog off; the DM turns it on when a map
-        // needs it. The column defaults to on so maps from before the flag
-        // existed keep the fog they always had.
+        // New maps start with manual fog off and lights that matter; the DM
+        // turns either on when a map needs it. The columns default to on so
+        // maps from before the flags existed keep the behaviour they had.
         fogEnabled: false,
+        globalIllumination: false,
       },
     });
 
@@ -199,6 +200,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         diagonalRule: true,
         lightingEnabled: true,
         fogEnabled: true,
+        globalIllumination: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -373,6 +375,7 @@ router.post(
           // nothing lighting the room there is nothing to see.
           lightingEnabled: parsed.lightSources.length > 0,
           fogEnabled: false,
+          globalIllumination: false,
         },
       });
 
@@ -559,7 +562,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled } = req.body;
+    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled, globalIllumination } = req.body;
 
     // Fetch the map to verify it exists and belongs to campaign
     const existingMap = await prisma.map.findUnique({
@@ -692,6 +695,13 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.fogEnabled = fogEnabled;
     }
 
+    if (globalIllumination !== undefined) {
+      if (typeof globalIllumination !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'globalIllumination must be a boolean' });
+      }
+      updateData.globalIllumination = globalIllumination;
+    }
+
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id },
@@ -700,12 +710,13 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     // Any per-map flag change reaches every connected client at once, as one
     // event carrying all of them, so a client never holds a stale flag.
-    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined) {
+    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined || updateData.globalIllumination !== undefined) {
       try {
         broadcastToCampaign(campaignId, 'map:settings:updated', {
           mapId: id,
           lightingEnabled: updatedMap.lightingEnabled,
           fogEnabled: updatedMap.fogEnabled,
+          globalIllumination: updatedMap.globalIllumination,
         });
       } catch { /* non-fatal */ }
     }
@@ -1683,6 +1694,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
         mapId: id,
         lightingEnabled: updated.lightingEnabled,
         fogEnabled: updated.fogEnabled,
+        globalIllumination: updated.globalIllumination,
       });
     } catch {
       // Socket may not be initialized in tests — log and continue

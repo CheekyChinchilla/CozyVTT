@@ -344,7 +344,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             map.height,
             map.gridSize,
             true,
-            map.lights
+            map.lights,
+            map.globalIllumination
           );
           const visibleById = new Map(visible.map((t) => [t.id, t]));
 
