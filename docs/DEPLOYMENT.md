@@ -640,6 +640,8 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
+Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now.
+
 For large or multi-server deployments, consider mounting an S3-compatible object store (MinIO, AWS S3) as a FUSE filesystem at `backend/uploads/`. No code changes required.
 
 ---
@@ -661,7 +663,7 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage.
+**Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage. It is written to `backend/backups/` on the host (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
 
 ### Via the included scripts
 

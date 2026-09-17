@@ -29,11 +29,13 @@ import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail 
 import { buildRestoreArgs } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
+import { resolveBackupDir } from '../utils/backupDir';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
 const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
-const BACKUP_DIR = path.join(UPLOADS_DIR, 'backups');
+// Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
+const BACKUP_DIR = resolveBackupDir();
 const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip$/;
 
 // Guards for restoring an uploaded backup archive (see utils/archive.ts).

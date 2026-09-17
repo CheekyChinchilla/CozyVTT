@@ -64,6 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **Instance backups no longer live inside the uploads folder.** The Admin Dashboard wrote its backups, which hold every password hash and MFA secret, to `backend/uploads/backups/`, while the documentation told you to sync `backend/uploads/` off-site as your media. They now go to `backend/backups/`, beside it. **If you have backups from an earlier version, move them from `backend/uploads/backups/` to `backend/backups/`**; the dashboard only lists the new location.
+
 - **A production instance refuses to start on the placeholder database password.** `SESSION_SECRET` has always been checked this way; `DATABASE_PASSWORD` now is too. If your instance stops after this upgrade with a message about the placeholder password, set a real one in `.env` and, if you wrote `DATABASE_URL` by hand, update it to match.
 
 - **Dependencies with published advisories updated.** Every advisory `npm audit` reported against the running application is fixed by an in-range update. Two remaining advisories against the routing library need a major upgrade and do not apply here: no navigation target in this app comes from user input.

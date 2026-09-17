@@ -87,6 +87,8 @@ services:
     volumes:
       # Uploads persist on the host — back this directory up regularly
       - ./backend/uploads:/app/uploads
+      # Instance backups (full database dumps) live beside uploads, never inside it.
+      - ./backend/backups:/app/backups
       # Logs persist on the host
       - ./backend/logs:/app/logs
     # Backend is only accessible internally — Nginx terminates public traffic
