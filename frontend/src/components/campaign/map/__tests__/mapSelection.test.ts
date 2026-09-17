@@ -18,7 +18,7 @@ import {
   segmentIntersectsRect,
   segmentsInRect,
 } from '../mapSelection';
-import { distToSegment, translatePoint, translateWallSegments, gridSquaresToPx } from '../mapGeometry';
+import { distToSegment, translateWallSegments, gridSquaresToPx } from '../mapGeometry';
 
 const wall = (id: string, x1: number, y1: number, x2: number, y2: number): WallSegment => ({
   id,
@@ -141,9 +141,6 @@ describe('moving what was selected', () => {
     expect(original).toMatchObject({ x1: 10, y1: 20 });
   });
 
-  it('moves a point the same way', () => {
-    expect(translatePoint({ x: 1, y: 2 }, 10, 20)).toEqual({ x: 11, y: 22 });
-  });
 
   it('converts whole grid squares to pixels', () => {
     expect(gridSquaresToPx(2, 70)).toBe(140);

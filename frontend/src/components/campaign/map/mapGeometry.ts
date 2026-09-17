@@ -38,11 +38,6 @@ export function distToSegment(px: number, py: number, seg: WallSegment): number 
   return Math.hypot(px - (seg.x1 + t * dx), py - (seg.y1 + t * dy));
 }
 
-/** A point moved by an offset in pixels. */
-export function translatePoint(point: Point, dxPx: number, dyPx: number): Point {
-  return { x: point.x + dxPx, y: point.y + dyPx };
-}
-
 /**
  * Wall segments moved by an offset in pixels.
  *
