@@ -691,11 +691,6 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
 });
 
 /**
- * GET /api/assets/maps/:id
- * Serve a map image
- * Requires: Authentication + access to asset
- */
-/**
  * POST /api/assets/documents
  * Create a plain text or Markdown document from typed content.
  * Requires: authentication, and the same scope rules as uploading
@@ -817,15 +812,6 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 });
 
 /**
- * The content type a document is served with, decided from its extension.
- *
- * Never from `Asset.mimeType`: that value arrived with the upload, and handing
- * an uploader control of the served content type is how a file that is also
- * valid HTML gets rendered as a page. Markdown is served as plain text on
- * purpose. The reader fetches it and renders it itself with raw HTML disabled;
- * the browser is never asked to treat the file as a document in its own right.
- */
-/**
  * The content type an audio file is served with, decided from its validated
  * extension, never from the stored `mimeType`. That field is whatever the
  * uploading browser declared, and validation checks the bytes rather than it,
@@ -839,6 +825,15 @@ const AUDIO_CONTENT_TYPES: Record<string, string> = {
   '.wav': 'audio/wav',
 };
 
+/**
+ * The content type a document is served with, decided from its extension.
+ *
+ * Never from `Asset.mimeType`: that value arrived with the upload, and handing
+ * an uploader control of the served content type is how a file that is also
+ * valid HTML gets rendered as a page. Markdown is served as plain text on
+ * purpose. The reader fetches it and renders it itself with raw HTML disabled;
+ * the browser is never asked to treat the file as a document in its own right.
+ */
 const DOCUMENT_CONTENT_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.txt': 'text/plain; charset=utf-8',
@@ -971,6 +966,11 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
   }
 });
 
+/**
+ * GET /api/assets/maps/:id
+ * Serve a map image
+ * Requires: Authentication + access to asset
+ */
 router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;

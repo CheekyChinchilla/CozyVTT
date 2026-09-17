@@ -384,9 +384,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
   const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
 
-  // Token socket handlers read/write live token state synchronously via
-  // useGameStore.getState() — no stale-closure ref bookkeeping needed.
-
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
   const wallSegmentsRef = useRef<WallSegment[]>([]);

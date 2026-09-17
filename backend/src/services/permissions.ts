@@ -314,6 +314,15 @@ export async function canExportCampaign(
 }
 
 /**
+ * The answer also carries the campaign the asset may be filed under, because
+ * `campaignId` is what decides which campaign lists an asset and a caller's own
+ * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
+ */
+export type ScopeDecision =
+  | { allowed: true; campaignId: string | null }
+  | { allowed: false; status: 400 | 403; message: string };
+
+/**
  * Whether a user may place a new asset at a scope.
  *
  * The single rule for anything that creates an asset row, whether by uploading
@@ -328,15 +337,6 @@ export async function canExportCampaign(
  * Returns the refusal's status and message so a caller can answer exactly as
  * the upload route always has.
  */
-/**
- * The answer also carries the campaign the asset may be filed under, because
- * `campaignId` is what decides which campaign lists an asset and a caller's own
- * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
- */
-export type ScopeDecision =
-  | { allowed: true; campaignId: string | null }
-  | { allowed: false; status: 400 | 403; message: string };
-
 export async function canPlaceAssetAtScope(
   userId: string,
   type: AssetType,
