@@ -66,7 +66,6 @@ module.exports = {
       'src/routes/__tests__/game-systems.e2e.test.ts',
       'src/validators/__tests__/userPreferences.test.ts',
       'src/validators/game-systems/__tests__/validation.test.ts',
-      'src/websocket/__tests__/events.integration.test.ts',
       ],
       rules: { '@typescript-eslint/no-explicit-any': 'off' },
     },

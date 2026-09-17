@@ -8,6 +8,7 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { toJson } from '../../utils/prisma-json';
+import type { DnD5eHitDice } from '../../game-systems/dnd5e';
 
 /** The parts of a character blob this handler touches — see `charData` below. */
 interface HpBlock {
@@ -15,12 +16,8 @@ interface HpBlock {
   maximum?: unknown;
   temporary?: unknown;
 }
-/** One hit dice pool: `total` is the pool ("5d8"), `remaining` how many are left. */
-interface HitDiceEntry {
-  class?: unknown;
-  total?: unknown;
-  remaining?: unknown;
-}
+/** One hit dice pool as it sits in the blob, read loosely: only `remaining` is touched. */
+type HitDiceEntry = Partial<Record<keyof DnD5eHitDice, unknown>>;
 interface CharacterHitDiceData {
   hitDice?: unknown;
   [key: string]: unknown;
