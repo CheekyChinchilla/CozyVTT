@@ -195,6 +195,29 @@ describe('drawFog', () => {
     for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 0.55)');
   });
 
+  it('leaves the cells a player\'s own tokens stand on clear, even when unrevealed', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: false,
+      fogState: null,
+      revealedCells: new Set([0]),
+      exemptCells: new Set([4, 8]),
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    expect(count(ctx, 'fillRect')).toBe(6);
+  });
+
+  it('player fog never reads the full fog grid, only the revealed set', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: false,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
   it('DM fog uses the full fog grid, not revealedCells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {

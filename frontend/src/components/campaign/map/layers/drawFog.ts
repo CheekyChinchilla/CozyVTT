@@ -13,8 +13,14 @@ export interface FogDrawState {
   isDM: boolean;
   /** Full fog grid — DM only. */
   fogState: FogState | null;
-  /** Revealed cell indices — players only; null = fog data not received yet. */
+  /** Revealed cell indices — players only; null = no fog to draw. */
   revealedCells: Set<number> | null;
+  /**
+   * Cells left clear whatever the revealed set says — the ones a player's own
+   * tokens stand on. Players always see their own tokens; the fog that covers
+   * the overlay must not paint over them.
+   */
+  exemptCells?: ReadonlySet<number>;
   /** Per-cell reveal-fade opacity (1 = just revealed → 0 = faded in). */
   revealOpacity: ReadonlyMap<number, number>;
 }
@@ -56,7 +62,7 @@ export function drawFog(
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
-        if (!state.revealedCells.has(idx)) {
+        if (!state.revealedCells.has(idx) && !state.exemptCells?.has(idx)) {
           const fadeOpacity = state.revealOpacity.get(idx);
           ctx.fillStyle = fadeOpacity !== undefined
             ? `rgba(15, 12, 25, ${fadeOpacity})`

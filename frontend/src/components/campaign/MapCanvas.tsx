@@ -58,6 +58,7 @@ import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 
 /** A player's revealed set before the server has answered: nothing revealed. */
@@ -222,7 +223,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  const revealOpacityRef = useFogRevealAnimation(() => markDirty('terrain'), fogState, revealedCells);
+  const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
+
+  // Tokens this viewer controls, or that are bound to one of their characters.
+  const isOwnToken = useCallback(
+    (t: Token): boolean =>
+      t.controlledBy === user?.id ||
+      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id)),
+    [user?.id, campaign?.characters]
+  );
 
   // Whether manual fog applies on this map. Absent on an older payload means
   // on, matching the column default. When fog is on and the player's revealed
@@ -235,6 +244,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     [fogEnabled, revealedCells]
   );
   const effectiveFogState = fogEnabled ? fogState : null;
+
+  // The cells a player's own tokens stand on, by the same rule the token layer
+  // and hit testing use to decide which cell a token is in. Player fog on the
+  // overlay leaves these clear, so you can always see where you stand.
+  const ownTokenCells = useMemo<Set<number>>(() => {
+    const cells = new Set<number>();
+    if (!currentMap || !effectiveRevealedCells) return cells;
+    for (const t of tokens) {
+      if (!isOwnToken(t)) continue;
+      const fogRow = gridYToFogRow(t.position.y, t.size.height, currentMap.height);
+      const fogCol = gridXToFogCol(t.position.x, t.size.width);
+      cells.add(fogCellIndex(fogCol, fogRow, { fogCols: currentMap.width }));
+    }
+    return cells;
+  }, [currentMap, effectiveRevealedCells, tokens, isOwnToken]);
   // Cache invalidation flag for the wall layer.
   const wallCacheValidRef = useRef(false);
 
@@ -1540,14 +1564,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       drawGrid(ctx, { gridColor }, viewport);
     }
 
-    // 3. Manual fog of war (rendered before spirit layer and tokens so they
-    //    appear above fog)
-    drawFog(ctx, {
-      isDM: renderIsDM,
-      fogState: effectiveFogState,
-      revealedCells: effectiveRevealedCells,
-      revealOpacity: revealOpacityRef.current,
-    }, viewport);
+    // 3. The DM's translucent fog, under the spirit layer and tokens so they
+    //    stay visible through it. A player's fog is opaque and has to cover
+    //    walls, doors and light glows too, so it is drawn on the overlay.
+    if (renderIsDM) {
+      drawFog(ctx, {
+        isDM: true,
+        fogState: effectiveFogState,
+        revealedCells: null,
+        revealOpacity: revealOpacityRef.current,
+      }, viewport);
+    }
 
     // 4. Spirit layer image (the Ethereal Plane)
     if (spiritLayerImage) {
@@ -1789,13 +1816,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     //     so a ping into an unlit corner is still visible. (The turn ring
     //     makes the opposite trade on purpose: it lives on the token layer
     //     so a hidden token's ring stays hidden.)
+    // Manual fog for a player covers everything drawn so far on this layer
+    // and the layers beneath: artwork, tokens, walls, doors and light glows.
+    // Nothing under an unrevealed cell shows, except the cells the player's
+    // own tokens stand on. Pings stay above it: a ping is a deliberate
+    // signal from someone at the table, not a discovery.
+    if (!renderIsDM) {
+      drawFog(ctx, {
+        isDM: false,
+        fogState: null,
+        revealedCells: effectiveRevealedCells,
+        exemptCells: ownTokenCells,
+        revealOpacity: revealOpacityRef.current,
+      }, viewport);
+    }
+
     if (pings.length > 0) {
       drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
     }
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, effectiveRevealedCells, ownTokenCells, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1849,7 +1891,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, effectiveRevealedCells, ownTokenCells, pings]);
 
   // ============================================
   // Token Hit Testing
@@ -1862,13 +1904,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * vision source, and by the visibility context below. It was written out
    * twice, identically, in two draw callbacks; one definition now.
    */
-  const isOwnToken = useCallback(
-    (t: Token): boolean =>
-      t.controlledBy === user?.id ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id)),
-    [user?.id, campaign?.characters]
-  );
-
   /**
    * What this viewer can see — the same rule the token layer draws by.
    *

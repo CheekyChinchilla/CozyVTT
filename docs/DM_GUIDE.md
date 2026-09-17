@@ -762,6 +762,8 @@ Click **End Initiative** to close combat and hide the tracker. The order is pres
 
 Fog of war covers your map and lets you reveal it a piece at a time, so players discover a dungeon room by room instead of seeing the whole floor plan at once. You control it by hand — nothing is revealed until you say so.
 
+**Under fog, players see nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it.
+
 > 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
 
 ### Revealing and Hiding
