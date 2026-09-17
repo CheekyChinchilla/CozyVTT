@@ -1,7 +1,9 @@
 /**
- * Spatial Index for Wall Segments (server-side copy)
+ * Spatial Index for Wall Segments
  *
- * Mirrors frontend/src/utils/spatialIndex.ts for use in server-side raycasting.
+ * A simple uniform grid spatial index. Accelerates ray-segment intersection
+ * testing when a map has many wall segments (>200). For smaller maps, the
+ * linear scan in raycasting.ts is fast enough.
  */
 
 import type { WallSegment } from '../types/walls';
@@ -22,6 +24,7 @@ export class WallGrid {
   }
 
   private insert(wall: WallSegment): void {
+    // Mark all grid cells that the segment's AABB overlaps
     const minX = Math.floor(Math.min(wall.x1, wall.x2) / this.cellSize);
     const maxX = Math.floor(Math.max(wall.x1, wall.x2) / this.cellSize);
     const minY = Math.floor(Math.min(wall.y1, wall.y2) / this.cellSize);
@@ -40,6 +43,10 @@ export class WallGrid {
     }
   }
 
+  /**
+   * Query segments within a bounding box (x±radius, y±radius).
+   * Returns a de-duplicated list of candidate segments.
+   */
   query(x: number, y: number, radius: number): WallSegment[] {
     const minCX = Math.floor((x - radius) / this.cellSize);
     const maxCX = Math.floor((x + radius) / this.cellSize);

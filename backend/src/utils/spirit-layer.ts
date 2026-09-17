@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
-import { computeVisibility, isPointVisible } from './serverRaycasting';
+import { computeVisibility, isPointVisible } from './raycasting';
+import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
 import type { WallSegment, LightSource } from '../types/walls';
 import logger from './logger';
 import type { Token } from '../websocket/shared';
@@ -295,62 +296,55 @@ export function filterTokensByLighting(
    * than baked into the polygon, and the polygon answers only "is there a wall
    * in the way".
    */
-  const sights = myTokens.map((t) => {
+  const viewers: Viewer[] = myTokens.map((t) => {
     // Token grid coords use Y=0 at bottom (VTT standard); wall pixel coords use
     // Y=0 at top. Apply the Y-flip so both are in the same pixel space.
-    const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
+    const w = t.size?.width ?? 1;
+    const h = t.size?.height ?? 1;
+    const cx = (t.position.x + w / 2) * gridSize;
+    const cy = (mapHeight - 1 - t.position.y + h / 2) * gridSize;
     return {
-      poly: computeVisibility({ x: cx, y: cy }, wallSegs, mapWidthPx, mapHeightPx, 0),
       cx,
       cy,
+      sight: computeVisibility({ x: cx, y: cy }, wallSegs, mapWidthPx, mapHeightPx, 0),
       // 0 means none: a token with no sight radius makes nothing out in the
       // dark and relies on light (or global illumination).
-      radiusPx: (t.sightRadius ?? 0) * gridSize,
+      darkvisionPx: (t.sightRadius ?? 0) * gridSize,
+      selfPx: (Math.max(w, h) / 2) * gridSize,
     };
   });
 
   // What each light reaches, bounded by its own walls. Light positions are
   // already in map-space pixels (Y=0 at top), so no flip is needed.
-  const litAreas = enabledLights.map((light) => {
+  const lits: Lit[] = enabledLights.map((light) => {
     const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
-    return computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx);
+    return {
+      cx: light.x,
+      cy: light.y,
+      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      brightPx: (light.brightRadius ?? 0) * gridSize,
+      dimPx: dimRadiusPx,
+    };
   });
+  const inside: InsideFn = (p, poly) => isPointVisible(p, poly);
 
   const elapsed = Date.now() - startMs;
   if (elapsed > 50) {
     logger.warn(`[lighting] filterTokensByLighting took ${elapsed}ms for userId=${playerUserId} (${myTokens.length} tokens, ${enabledLights.length} lights)`);
   }
 
+  // The rule itself lives in visibilityRule.ts, shared byte for byte with the
+  // client, so what is sent and what is drawn can never disagree. Walls first,
+  // always: a light reveals what you could already have seen; it never sees on
+  // your behalf. Then Global Illumination, darkvision, the token's own square,
+  // and light.
   return tokens.filter((t) => {
     // Always include the player's own tokens
     if (t.controlledBy === playerUserId) return true;
 
     const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
     const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
-    const point = { x: cx, y: cy };
-
-    // Line of sight is required, always.
-    //
-    // Each light's polygon used to be pushed onto this same list and the test
-    // was "inside ANY of them", so a light could stand in for the player's own
-    // eyes: a creature in a lit room was sent to every player on the map,
-    // through walls, at any distance. A light reveals what you could already
-    // have seen; it never sees on your behalf.
-    const withLineOfSight = sights.filter((s) => isPointVisible(point, s.poly));
-    if (withLineOfSight.length === 0) return false;
-
-    // Global illumination: everything in line of sight is as good as lit.
-    if (globalIllumination) return true;
-
-    // Inside a viewer's own sight radius: made out whether or not it is lit.
-    const seenUnaided = withLineOfSight.some(
-      (s) => s.radiusPx > 0 && Math.hypot(cx - s.cx, cy - s.cy) <= s.radiusPx
-    );
-    if (seenUnaided) return true;
-
-    // Further off than that, it has to be standing in light.
-    return litAreas.some((poly) => isPointVisible(point, poly));
+    return isSeen({ x: cx, y: cy }, viewers, lits, globalIllumination, inside);
   });
 }
 

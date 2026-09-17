@@ -1711,7 +1711,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           brightPx: l.brightRadius * viewport.gridSize,
           dimPx: l.dimRadius * viewport.gridSize,
         }));
-        const inside: InsideFn = (p, poly) => poly.points.length >= 3 && isPointVisible(p, { x: 0, y: 0 }, poly);
+        const inside: InsideFn = (p, poly) => poly.points.length >= 3 && isPointVisible(p, poly);
         // Closed doors lie exactly on a sight polygon's boundary, so each viewer
         // tests the point nudged 2px toward itself, as the door filter always has.
         canSee = (x, y) => viewers.some((v) => {

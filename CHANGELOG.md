@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **What a player is shown and what the server sends now come from one rule.** The server and the browser each had their own copy of the sight calculation, and they disagreed about the shape of a light's reach, so a creature near the edge of a light could be drawn lit on screen while the server had never sent it, or the other way round. Both sides now run the same code.
+
 - **A fog change made through the API now reaches connected players at once.** It used to land only in the database, showing up for players on their next reload.
 
 - **Fog of war hides the map from players.** Unrevealed areas were drawn as a dark tint that left the map artwork visible underneath, and every map load had a moment where the whole map showed before the fog arrived. Unrevealed areas are now fully opaque for players, from the first frame, and the walls, doors and light glows under them are hidden too; only a player's own token still shows. The DM still sees a translucent tint so they can work under it.

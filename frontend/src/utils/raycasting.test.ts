@@ -44,7 +44,7 @@ describe('computeVisibility', () => {
     const blockingWall = wall(200, 0, 200, MAP_H);
     const result = computeVisibility(viewer, [blockingWall], MAP_W, MAP_H);
     const behindWall = { x: 50, y: 300 };
-    expect(isPointVisible(behindWall, viewer, result)).toBe(false);
+    expect(isPointVisible(behindWall, result)).toBe(false);
   });
 
   it('a point in front of a blocking wall is visible', () => {
@@ -52,7 +52,7 @@ describe('computeVisibility', () => {
     const blockingWall = wall(200, 0, 200, MAP_H);
     const result = computeVisibility(viewer, [blockingWall], MAP_W, MAP_H);
     const inFront = { x: 300, y: 300 };
-    expect(isPointVisible(inFront, viewer, result)).toBe(true);
+    expect(isPointVisible(inFront, result)).toBe(true);
   });
 
   it('an open door does not block vision', () => {
@@ -61,7 +61,7 @@ describe('computeVisibility', () => {
     const result = computeVisibility(viewer, [openDoor], MAP_W, MAP_H);
     // Point behind where the door is should be visible since door-open doesn't block
     const behindDoor = { x: 50, y: 300 };
-    expect(isPointVisible(behindDoor, viewer, result)).toBe(true);
+    expect(isPointVisible(behindDoor, result)).toBe(true);
   });
 
   it('a window does not block vision', () => {
@@ -69,7 +69,7 @@ describe('computeVisibility', () => {
     const windowSeg: WallSegment = { id: 'window', x1: 200, y1: 0, x2: 200, y2: MAP_H, type: 'window' };
     const result = computeVisibility(viewer, [windowSeg], MAP_W, MAP_H);
     const behindWindow = { x: 50, y: 300 };
-    expect(isPointVisible(behindWindow, viewer, result)).toBe(true);
+    expect(isPointVisible(behindWindow, result)).toBe(true);
   });
 
   it('a closed door blocks vision like a wall', () => {
@@ -77,7 +77,7 @@ describe('computeVisibility', () => {
     const closedDoor: WallSegment = { id: 'door', x1: 200, y1: 0, x2: 200, y2: MAP_H, type: 'door-closed' };
     const result = computeVisibility(viewer, [closedDoor], MAP_W, MAP_H);
     const behindDoor = { x: 50, y: 300 };
-    expect(isPointVisible(behindDoor, viewer, result)).toBe(false);
+    expect(isPointVisible(behindDoor, result)).toBe(false);
   });
 
   it('sight radius clamps visibility to a circle', () => {
@@ -95,7 +95,7 @@ describe('computeVisibility', () => {
     const viewer = { x: 400, y: 300 };
     const lockedDoor: WallSegment = { id: 'door', x1: 200, y1: 0, x2: 200, y2: MAP_H, type: 'door-locked' };
     const result = computeVisibility(viewer, [lockedDoor], MAP_W, MAP_H);
-    expect(isPointVisible({ x: 50, y: 300 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 50, y: 300 }, result)).toBe(false);
   });
 
   it('a closed room clips visibility to the room interior', () => {
@@ -110,13 +110,13 @@ describe('computeVisibility', () => {
     const result = computeVisibility(viewer, room, MAP_W, MAP_H);
 
     // Inside the room: visible
-    expect(isPointVisible({ x: 350, y: 250 }, viewer, result)).toBe(true);
-    expect(isPointVisible({ x: 450, y: 350 }, viewer, result)).toBe(true);
+    expect(isPointVisible({ x: 350, y: 250 }, result)).toBe(true);
+    expect(isPointVisible({ x: 450, y: 350 }, result)).toBe(true);
     // Outside the room in every direction: not visible
-    expect(isPointVisible({ x: 400, y: 100 }, viewer, result)).toBe(false);
-    expect(isPointVisible({ x: 400, y: 500 }, viewer, result)).toBe(false);
-    expect(isPointVisible({ x: 200, y: 300 }, viewer, result)).toBe(false);
-    expect(isPointVisible({ x: 600, y: 300 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 400, y: 100 }, result)).toBe(false);
+    expect(isPointVisible({ x: 400, y: 500 }, result)).toBe(false);
+    expect(isPointVisible({ x: 200, y: 300 }, result)).toBe(false);
+    expect(isPointVisible({ x: 600, y: 300 }, result)).toBe(false);
     // Every polygon point stays within the room bounds (small tolerance)
     for (const pt of result.points) {
       expect(pt.x).toBeGreaterThanOrEqual(299);
@@ -139,9 +139,9 @@ describe('computeVisibility', () => {
     const result = computeVisibility(viewer, roomWithGap, MAP_W, MAP_H);
 
     // Straight through the gap: visible well beyond the wall line
-    expect(isPointVisible({ x: 400, y: 100 }, viewer, result)).toBe(true);
+    expect(isPointVisible({ x: 400, y: 100 }, result)).toBe(true);
     // Behind the remaining solid wall pieces: still hidden
-    expect(isPointVisible({ x: 320, y: 100 }, viewer, result)).toBe(false);
-    expect(isPointVisible({ x: 480, y: 100 }, viewer, result)).toBe(false);
+    expect(isPointVisible({ x: 320, y: 100 }, result)).toBe(false);
+    expect(isPointVisible({ x: 480, y: 100 }, result)).toBe(false);
   });
 });

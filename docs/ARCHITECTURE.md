@@ -91,7 +91,10 @@ src/
 ├── utils/
 │   ├── dice-parser.ts    mathjs-based dice expression evaluator
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
-│   ├── serverRaycasting.ts  Server-side vision raycasting for lighting
+│   ├── visibilityRule.ts What a viewer makes out of a point (shared, see Vision model)
+│   ├── raycasting.ts     Line-of-sight polygons (shared, byte-identical with the client)
+│   ├── spatialIndex.ts   Wall grid for large maps (shared)
+│   ├── styleAllowlists.ts CSS-bound values the server accepts and the client re-checks (shared)
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
@@ -518,9 +521,20 @@ Sockets join two rooms, keyed by raw id (no prefix):
 Token data is filtered **per-client** before being broadcast. The server maintains two views of the token list:
 
 - **DM view** — all tokens, both layers, all metadata including DM notes
-- **Player view** — material-layer tokens only, plus tokens that belong to the player's own character if they have spirit crossover (and, when dynamic lighting is on, only tokens within line of sight)
+- **Player view** — material-layer tokens only, plus tokens that belong to the player's own character if they have spirit crossover (and, when dynamic lighting is on, only tokens the visibility rule says the player sees)
 
 This filtering lives in `src/utils/spirit-layer.ts` and is applied in the token, spirit, and `map.change` handlers before each client receives its payload. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
+
+### Vision model
+
+Dynamic lighting asks one question of every point on the map: how well does this viewer make it out? The answer is decided once, in `visibilityRule.ts`, and used on both sides:
+
+- the **server** (`filterTokensByLighting`) sends a player a token only if the rule says its centre is seen;
+- the **client** (`drawLights.ts`, `drawWalls.ts`) draws the coverage mask in the rule's tiers and shows a door only where the rule says the player can see it.
+
+The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
+
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
 ### WebSocket Event Reference
 

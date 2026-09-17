@@ -296,6 +296,18 @@ describe('filterTokensByLighting', () => {
       expect(out.map((t) => t.id)).toEqual(['viewer', 'lit']);
     });
 
+    it('a token straight out from a light, inside its dim reach, is lit', () => {
+      // A light's reach polygon used to be a fan through wall endpoints and map
+      // corners only, so in the open it was a quadrilateral inscribed in the
+      // dim circle: a token 7.5 squares straight east of a dim-8 light fell
+      // outside it on the server while the client drew it lit.
+      const viewer = makeToken('viewer', 2, 14, 'user1', 0);
+      const lit = makeToken('lit', 12, 14);
+      const light = [{ id: 'l', x: 500, y: 500, brightRadius: 4, dimRadius: 8, enabled: true }];
+      const out = filterTokensByLighting([viewer, lit], 'user1', NO_WALLS, W, H, GRID_SIZE, true, light);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'lit']);
+    });
+
     it('with global illumination on, everything in line of sight is sent', () => {
       const viewer = makeToken('viewer', 0, 5, 'user1', 0);
       const far = makeToken('far', 19, 5);
