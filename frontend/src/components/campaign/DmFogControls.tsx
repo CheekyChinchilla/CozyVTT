@@ -22,6 +22,11 @@ interface DmFogControlsProps {
   /** The DM ticked or unticked "Fog of war on this map". */
   onFogEnabledChange: (enabled: boolean) => void;
   /**
+   * Forget what every player has seen of this map. Absent when the map has
+   * no explored memory to forget (lighting off, or the setting off).
+   */
+  onResetExploration?: () => void;
+  /**
    * Called when the panel is folded away, so the tool it holds can be put
    * down with it. Leaving a fog tool armed behind a closed panel means the
    * next drag on the map reveals or hides ground with nothing on screen
@@ -37,10 +42,18 @@ export default function DmFogControls({
   onHideAll,
   fogEnabled,
   onFogEnabledChange,
+  onResetExploration,
   onCollapse,
 }: DmFogControlsProps) {
   const [confirmRevealAll, setConfirmRevealAll] = useState(false);
   const [confirmHideAll, setConfirmHideAll] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleResetExploration = () => {
+    if (!confirmReset) { setConfirmReset(true); return; }
+    setConfirmReset(false);
+    onResetExploration?.();
+  };
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
@@ -168,6 +181,29 @@ export default function DmFogControls({
         </button>
       </div>
       </>)}
+
+      {/* Explored memory is separate from fog: it is what players' own
+          vision has uncovered on a lit map, and only the DM can forget it. */}
+      {onResetExploration && (
+        <div className="pt-1 border-t border-stone-700/50">
+          <button
+            onClick={handleResetExploration}
+            className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+              confirmReset
+                ? 'bg-warning text-white animate-pulse'
+                : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
+            }`}
+            title={confirmReset ? 'Click again to confirm: forget what every player has seen' : 'Reset explored areas: players forget what they have seen of this map'}
+            aria-label="Reset explored areas"
+            onBlur={() => setConfirmReset(false)}
+          >
+            {confirmReset ? 'Confirm?' : 'Reset explored areas'}
+          </button>
+          <p className="px-1 mt-1 text-[10px] leading-snug text-stone-500">
+            Forgets what every player has seen of this map. Their view now is unchanged.
+          </p>
+        </div>
+      )}
     </div>
     )}
     </div>

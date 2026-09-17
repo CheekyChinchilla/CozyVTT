@@ -194,6 +194,7 @@ export default function EditMapModal({
   const [lightingEnabled, setLightingEnabled] = useState(false);
   const [fogEnabled, setFogEnabled] = useState(true);
   const [globalIllumination, setGlobalIllumination] = useState(true);
+  const [explorationEnabled, setExplorationEnabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -223,6 +224,7 @@ export default function EditMapModal({
       setLightingEnabled(map.lightingEnabled ?? false);
       setFogEnabled(map.fogEnabled ?? true);
       setGlobalIllumination(map.globalIllumination ?? true);
+      setExplorationEnabled(map.explorationEnabled ?? true);
       setPreviewZoom(1);
       setDetectedGrid(null);
       setIsDetecting(false);
@@ -292,6 +294,7 @@ export default function EditMapModal({
         lightingEnabled,
         fogEnabled,
         globalIllumination,
+        explorationEnabled,
       };
       const updatedMap = await mapService.updateMap(campaignId, map.id, data);
       onUpdated(updatedMap);
@@ -539,6 +542,26 @@ export default function EditMapModal({
                         Global Illumination
                       </span>
                       <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Explored memory */}
+                <div className="mt-3 pt-3 border-t border-stone-gray/20">
+                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={explorationEnabled}
+                      disabled={!lightingEnabled}
+                      onChange={(e) => setExplorationEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-moss-green"
+                      aria-label="Remember explored areas"
+                    />
+                    <div>
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                        Remember Explored Areas
+                      </span>
+                      <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
                     </div>
                   </label>
                 </div>

@@ -3447,6 +3447,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           <DmFogControls
             fogMode={fogMode}
             fogEnabled={fogEnabled}
+            onResetExploration={(currentMap.lightingEnabled ?? false) && explorationEnabled
+              ? () => { socket?.getSocket()?.emit('exploration:reset', { mapId: currentMap.id }); }
+              : undefined}
             onFogEnabledChange={async (enabled) => {
               if (!campaign || !currentMap) return;
               // Shown at once; the settings broadcast confirms it for every

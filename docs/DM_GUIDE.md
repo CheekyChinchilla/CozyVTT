@@ -974,6 +974,13 @@ Once enabled, players only see the areas their characters have line of sight to,
 
 New maps start with it off. Maps made before it existed have it on, which is exactly how lighting always worked for them, so nothing changes at your table until you untick it. When you do, the Lights panel warns you if there are no lights on the map yet: until you place one, or give the party darkvision, players see almost nothing.
 
+### Explored Areas
+
+On a map with dynamic lighting, the places a player's tokens have seen stay on that player's map, greyed and darkened, until they can see them again. Each player has their own memory of a map, kept on the server, so it survives a reload and a change of device, and it is never used to decide what the server sends them: it only greys in map artwork they already had. The DM view never shows it; use **Preview Player View** to see a player's.
+
+- **Remember Explored Areas** in **Edit Map** switches it per map. New maps start with it off; maps from before it existed have it on.
+- **Reset explored areas** at the bottom of the **Fog of War** panel forgets what every player has seen of the map (it asks for a second click). Their view right now is unchanged; only the grey memory goes.
+
 ### Darkvision
 
 Each token has a **Darkvision** value, in grid squares: how far it makes things out with no light at all. **0 means none**, which is what a new token starts with; 12 squares is 60 ft, the usual darkvision. It never limits how far a lit thing can be noticed.

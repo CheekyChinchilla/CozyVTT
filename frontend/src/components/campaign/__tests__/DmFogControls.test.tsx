@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import DmFogControls, { type FogToolMode } from '../DmFogControls';
 
-function renderPanel(over: Partial<{ fogMode: FogToolMode; fogEnabled: boolean }> = {}) {
+function renderPanel(over: Partial<{ fogMode: FogToolMode; fogEnabled: boolean; onResetExploration: () => void }> = {}) {
   const props = {
     fogMode: null as FogToolMode,
     onFogModeChange: vi.fn(),
@@ -47,6 +47,22 @@ describe('DmFogControls', () => {
     fireEvent.click(screen.getByLabelText('Fog of war on this map'));
     expect(props.onFogModeChange).toHaveBeenCalledWith(null);
     expect(props.onFogEnabledChange).toHaveBeenCalledWith(false);
+  });
+
+  it('offers to reset explored areas only when there is memory to forget, and asks twice', () => {
+    renderPanel();
+    expect(screen.queryByLabelText('Reset explored areas')).toBeNull();
+  });
+
+  it('resets explored areas on the second click', () => {
+    const onResetExploration = vi.fn();
+    renderPanel({ onResetExploration });
+    const button = screen.getByLabelText('Reset explored areas');
+    fireEvent.click(button);
+    expect(onResetExploration).not.toHaveBeenCalled();
+    expect(button.textContent).toMatch(/Confirm/);
+    fireEvent.click(button);
+    expect(onResetExploration).toHaveBeenCalledTimes(1);
   });
 
   it('turning fog on reports the change and leaves the tool alone', () => {
