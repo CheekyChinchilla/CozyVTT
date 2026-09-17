@@ -59,6 +59,7 @@ import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
+import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 
 /** A player's revealed set before the server has answered: nothing revealed. */
@@ -3307,6 +3308,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         <DmToolPanelContainer containerRef={containerRef}>
           <DmFogControls
             fogMode={fogMode}
+            fogEnabled={fogEnabled}
+            onFogEnabledChange={async (enabled) => {
+              if (!campaign || !currentMap) return;
+              // Shown at once; the settings broadcast confirms it for every
+              // client, this one included. Put back if the save fails.
+              const before = currentMap;
+              setCurrentMap({ ...currentMap, fogEnabled: enabled });
+              if (!enabled) { setFogMode(null); cancelFogDrag(); }
+              try {
+                await mapService.updateMap(campaign.id, currentMap.id, { fogEnabled: enabled });
+              } catch {
+                setCurrentMap(before);
+              }
+            }}
             onCollapse={() => {
               setFogMode(null);
               cancelFogDrag();

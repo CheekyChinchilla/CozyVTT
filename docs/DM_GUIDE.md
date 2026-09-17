@@ -766,6 +766,12 @@ Fog of war covers your map and lets you reveal it a piece at a time, so players 
 
 > 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
 
+### Turning Fog On or Off
+
+Fog is a per-map setting, and **a new map starts with it off**. Tick **Fog of war on this map** at the top of the **Fog of War** panel, or the **Fog of War** box in **Edit Map**, to turn it on; the map is fully covered until you reveal something. Untick it to switch fog off for that map: players see the whole map at once (dynamic lighting, if on, still applies). What you had revealed is kept, so turning fog back on shows the same areas as before.
+
+Maps made before this setting existed have fog on, exactly as they always did.
+
 ### Revealing and Hiding
 
 Click the **Fog** button in the campaign header to open the **Fog of War** panel, then pick a mode:
