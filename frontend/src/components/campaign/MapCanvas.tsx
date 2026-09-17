@@ -56,6 +56,7 @@ import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
 import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
+import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow, gridYToCentrePx } from './map/coords';
@@ -225,6 +226,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Player view: list of revealed fog cell indices (derived from server fog:cells event).
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
+  // Explored memory: the cells this viewer's vision has covered on this map,
+  // as the server remembers them (null until answered, or when off).
+  const [exploredCells, setExploredCells] = useState<Set<number> | null>(null);
+  const exploredScratchRef = useRef<HTMLCanvasElement | null>(null);
+  const lastExploredReportRef = useRef(0);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
   const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
 
@@ -1146,6 +1152,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socket?.getSocket()?.emit('fog:request_state', { mapId: currentMap.id });
   }, [currentMap?.id, fogEnabled]);
 
+  // Explored memory is asked for when the map changes or the setting flips
+  // on; a DM asks for the previewed player's. Off: nothing to ask for.
+  const explorationEnabled = currentMap?.explorationEnabled ?? true;
+  const exploringAs = previewing ? previewUserId : (isDM ? null : user?.id ?? null);
+  useEffect(() => {
+    setExploredCells(null);
+    if (!currentMap || !explorationEnabled || !(currentMap.lightingEnabled ?? false) || !exploringAs) return;
+    socket?.getSocket()?.emit('exploration:request', { mapId: currentMap.id, userId: exploringAs });
+  }, [currentMap?.id, currentMap?.lightingEnabled, explorationEnabled, exploringAs]);
+
   // ============================================
   // Wall & Fog WebSocket Listeners
   // ============================================
@@ -1214,6 +1230,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       });
     };
 
+    const handleExplorationState = (data: { mapId: string; userId: string | null; cells: number[] }) => {
+      if (!currentMap || data.mapId !== currentMap.id) return;
+      // A reset carries no user and empties everyone's memory; otherwise only
+      // the memory of whoever this canvas is exploring as is ours to keep.
+      if (data.userId !== null && data.userId !== exploringAs) return;
+      setExploredCells(new Set<number>(data.cells));
+    };
+
     const handleDmEditing = (_data: { mapId: string }) => {
       // Could show a transient indicator — handled by toolbar; canvas ignores for now
     };
@@ -1279,6 +1303,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socketInstance.on('walls:replaced', handleWallsReplaced);
     socketInstance.on('fog:updated', handleFogUpdated);
     socketInstance.on('fog:cells', handleFogCells);
+    socketInstance.on('exploration:state', handleExplorationState);
     socketInstance.on('dm:editing', handleDmEditing);
     socketInstance.on('light:added', handleLightAdded);
     socketInstance.on('light:removed', handleLightRemoved);
@@ -1295,6 +1320,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('walls:replaced', handleWallsReplaced);
       socketInstance.off('fog:updated', handleFogUpdated);
       socketInstance.off('fog:cells', handleFogCells);
+      socketInstance.off('exploration:state', handleExplorationState);
       socketInstance.off('dm:editing', handleDmEditing);
       socketInstance.off('light:added', handleLightAdded);
       socketInstance.off('light:removed', handleLightRemoved);
@@ -1774,6 +1800,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         coverageCanvas: lightCoverageOffscreenRef,
         lightCanvas: lightOnlyOffscreenRef,
       }, viewport);
+
+      // Report what this player has just seen, at most every 300 ms, from the
+      // coverage mask just built. A DM previewing a player only reads that
+      // player's memory; they never write to it.
+      const now = Date.now();
+      if (!previewing && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
+        && now - lastExploredReportRef.current >= 300) {
+        lastExploredReportRef.current = now;
+        const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
+        const fresh = seen ? diffNew(exploredCells, seen) : [];
+        if (fresh.length > 0) {
+          setExploredCells((prev) => new Set<number>([...(prev ?? []), ...fresh]));
+          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh });
+        }
+      }
     }
 
     // 7. DM light source icons (visible in player preview too, so DM can edit)
@@ -1912,7 +1953,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploredCells, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
