@@ -94,3 +94,17 @@ export function fogRectToPx(
     h: (rect.rowMax - rect.rowMin + 1) * cellPx,
   };
 }
+
+/**
+ * The revealed cells of a full fog grid, as the set a player's view is drawn
+ * from. Lets the DM's Player Preview draw fog the way a player sees it from
+ * the grid the DM already holds. No grid (or no fog) means nothing revealed.
+ */
+export function revealedSetFromFogState(fog: FogState | null): Set<number> {
+  const revealed = new Set<number>();
+  if (!fog) return revealed;
+  fog.revealed.forEach((isRevealed, idx) => {
+    if (isRevealed) revealed.add(idx);
+  });
+  return revealed;
+}

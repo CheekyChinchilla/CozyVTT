@@ -9,12 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  fogRectFromDrag,
-  fogCellsInRect,
-  fogRectSize,
-  fogRectToPx,
-} from '../fogSelection';
+import { fogRectFromDrag, fogCellsInRect, fogRectSize, fogRectToPx, revealedSetFromFogState } from '../fogSelection';
 import type { FogState } from '@/types/walls';
 
 /** 20 cols × 15 rows at 50px — the shape the test instance uses. */
@@ -133,5 +128,16 @@ describe('fogCellsInRect', () => {
   it('can select the whole map', () => {
     const rect = fogRectFromDrag(fog, 0, 0, 20 * 50 - 1, 15 * 50 - 1)!;
     expect(fogCellsInRect(fog, rect)).toHaveLength(300);
+  });
+});
+
+describe('revealedSetFromFogState', () => {
+  it('collects the indices of every revealed cell', () => {
+    const fog = { fogCols: 3, fogRows: 2, cellPx: 50, revealed: [true, false, false, false, true, true] };
+    expect([...revealedSetFromFogState(fog)].sort()).toEqual([0, 4, 5]);
+  });
+
+  it('is empty with no grid', () => {
+    expect(revealedSetFromFogState(null).size).toBe(0);
   });
 });
