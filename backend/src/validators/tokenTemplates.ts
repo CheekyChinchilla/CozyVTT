@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
-import { TokenSizeSchema, TokenHpSchema } from './tokens';
+import { TokenSizeSchema, TokenHpSchema, TokenSightRadiusSchema } from './tokens';
 
 // ── Shared sub-schemas ──────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export const CreateTokenTemplateSchema = z.object({
   hp: TokenHpSchema.nullable().optional(),
   showHpBar: z.boolean().default(false),
   statBlock: NpcStatBlockSchema.nullable().optional(),
-  sightRadius: z.number().min(0).max(200).nullable().optional(),
+  sightRadius: TokenSightRadiusSchema.nullable().optional(),
 });
 
 export const UpdateTokenTemplateSchema = z.object({
@@ -38,7 +38,7 @@ export const UpdateTokenTemplateSchema = z.object({
   hp: TokenHpSchema.nullable().optional(),
   showHpBar: z.boolean().optional(),
   statBlock: NpcStatBlockSchema.nullable().optional(),
-  sightRadius: z.number().min(0).max(200).nullable().optional(),
+  sightRadius: TokenSightRadiusSchema.nullable().optional(),
 }).refine(
   (obj) => Object.keys(obj).length > 0,
   { message: 'At least one field must be provided' }
@@ -56,7 +56,7 @@ export const SaveTokenAsTemplateSchema = z.object({
   hp: TokenHpSchema.nullable().optional(),
   showHpBar: z.boolean().default(false),
   statBlock: NpcStatBlockSchema.nullable().optional(),
-  sightRadius: z.number().min(0).max(200).nullable().optional(),
+  sightRadius: TokenSightRadiusSchema.nullable().optional(),
 });
 
 export type CreateTokenTemplateInput = z.infer<typeof CreateTokenTemplateSchema>;

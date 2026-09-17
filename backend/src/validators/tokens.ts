@@ -46,6 +46,13 @@ export const TokenConditionsSchema = z
   .max(50)
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 
+/**
+ * Darkvision, in grid squares: how far a token makes things out with no light.
+ * 0 means none. It never limits how far a lit thing can be noticed. The cap
+ * matches the token templates, which share this schema.
+ */
+export const TokenSightRadiusSchema = z.number().min(0).max(200);
+
 /** Arbitrary per-token data. Bounded, since nothing reads it structurally. */
 export const TokenMetadataSchema = z.record(z.string(), z.unknown()).refine(
   (value) => JSON.stringify(value).length <= 8000,
@@ -69,6 +76,7 @@ export type TokenShapes = {
   conditions?: string[];
   metadata?: Record<string, unknown>;
   statBlock?: unknown;
+  sightRadius?: number | null;
 };
 
 export function validateTokenShapes(
@@ -114,6 +122,10 @@ export function validateTokenShapes(
   const statBlock = check('statBlock', NpcStatBlockSchema, true);
   if ('failed' in statBlock) return { ok: false, message: statBlock.failed };
   value.statBlock = statBlock.parsed;
+
+  const sightRadius = check('sightRadius', TokenSightRadiusSchema, true);
+  if ('failed' in sightRadius) return { ok: false, message: sightRadius.failed };
+  value.sightRadius = sightRadius.parsed;
 
   return { ok: true, value };
 }

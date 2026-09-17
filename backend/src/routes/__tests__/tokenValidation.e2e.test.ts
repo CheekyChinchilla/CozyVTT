@@ -98,6 +98,44 @@ describe('map token validation', () => {
       ...body,
     });
 
+  /**
+   * Sight radius: how far a token makes things out in the dark, in grid
+   * squares. 0 means none. It decides what the server sends a player, so a
+   * player cannot set it on their own token; the DM can.
+   */
+  describe('sight radius', () => {
+    it('stores the radius the DM gives a new token', async () => {
+      const res = await place({ sightRadius: 12 });
+      expect(res.status).toBe(201);
+      expect(res.body.token.sightRadius).toBe(12);
+    });
+
+    it('defaults to 0 (none) when omitted', async () => {
+      const res = await place({});
+      expect(res.status).toBe(201);
+      expect(res.body.token.sightRadius).toBe(0);
+    });
+
+    it.each([['negative', -1], ['not a number', 'far'], ['over the cap', 201]])('rejects a radius that is %s', async (_label, sightRadius) => {
+      const res = await place({ sightRadius });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/sightRadius/);
+    });
+
+    it('lets the DM change it, and refuses a player', async () => {
+      const created = await place({ controlledBy: playerId, sightRadius: 0 });
+      expect(created.status).toBe(201);
+      const tokenId = created.body.token.id;
+
+      const byPlayer = await player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send({ sightRadius: 12 });
+      expect(byPlayer.status).toBe(403);
+
+      const byDm = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send({ sightRadius: 12 });
+      expect(byDm.status).toBe(200);
+      expect(byDm.body.token.sightRadius).toBe(12);
+    });
+  });
+
   describe('hit points', () => {
     it('accepts the token HP shape', async () => {
       const res = await place({ hp: { current: 7, max: 7, temp: 0 } });

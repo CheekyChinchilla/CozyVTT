@@ -149,7 +149,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         notes: template.notes || '',
         initiative: null,
         statBlock: template.statBlock || null,
-        sightRadius: template.sightRadius || undefined,
+        sightRadius: template.sightRadius ?? 0,
       };
 
       const result = await api.addToken(

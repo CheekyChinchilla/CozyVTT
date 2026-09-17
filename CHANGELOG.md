@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is now stored when a token is placed or edited, and only the DM can change it, since it decides what the server sends that token's player.
+
 - **Fog of war can be turned on or off per map.** A checkbox at the top of the Fog of War panel, and one in Edit Map, switches it. Off, players see the whole map; what you had revealed is kept for when you turn it back on.
 
 ### Changed

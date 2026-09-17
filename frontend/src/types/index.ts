@@ -720,7 +720,11 @@ export interface Token {
   showHpBar:   boolean;
   notes:       string;
   initiative:  number | null;
-  /** Sight radius in grid squares (0 = unlimited). Used by dynamic lighting. */
+  /**
+   * Darkvision, in grid squares: how far the token makes things out with no
+   * light (0 = none, 12 = 60 ft). It never limits how far a lit thing can be
+   * noticed. Decides what the server sends, so only the DM may change it.
+   */
   sightRadius?: number;
   /** Display mode: pog (circular + border), top-down (circular, no border), full-art (rectangular, alpha). Default: pog */
   displayMode?: TokenDisplayMode;
@@ -1029,6 +1033,8 @@ export interface CreateTokenRequest {
   showHpBar?: boolean;
   notes?: string;
   initiative?: number | null;
+  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  sightRadius?: number | null;
 }
 
 export interface UpdateTokenRequest {
@@ -1049,6 +1055,8 @@ export interface UpdateTokenRequest {
   showHpBar?: boolean;
   notes?: string;
   initiative?: number | null;
+  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  sightRadius?: number | null;
 }
 
 // ============================================

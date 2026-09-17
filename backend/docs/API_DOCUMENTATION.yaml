@@ -4095,6 +4095,11 @@ paths:
                     type: string
                 metadata:
                   type: object
+                sightRadius:
+                  type: number
+                  minimum: 0
+                  maximum: 200
+                  description: Darkvision in grid squares (0 = none). DM only; it decides what the server sends this token's player.
       responses:
         '200':
           description: Token updated
@@ -7348,6 +7353,11 @@ components:
           type: integer
           nullable: true
           description: Initiative roll result for combat turn ordering
+        sightRadius:
+          type: number
+          minimum: 0
+          maximum: 200
+          description: Darkvision in grid squares (0 = none, 12 = 60 ft). How far the token makes things out with no light; never limits how far a lit thing is noticed.
 
     TokenInput:
       type: object
@@ -7356,6 +7366,11 @@ components:
         - imageUrl
         - position
       properties:
+        sightRadius:
+          type: number
+          minimum: 0
+          maximum: 200
+          description: Darkvision in grid squares (0 = none); stored as 0 when omitted
         characterId:
           type: string
           format: uuid

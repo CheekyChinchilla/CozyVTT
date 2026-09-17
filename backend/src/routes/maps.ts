@@ -989,6 +989,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       showHpBar: tokenData.showHpBar !== undefined ? tokenData.showHpBar : false,
       notes: typeof tokenData.notes === 'string' ? tokenData.notes : '',
       initiative: tokenData.initiative !== undefined ? tokenData.initiative : null,
+      // Darkvision in squares; 0 = none. Decides what the server sends this
+      // token's owner, so it is set here and by the DM, never by a player.
+      sightRadius: shapes.value.sightRadius ?? 0,
       displayMode: displayMode,
       statBlock: shapes.value.statBlock ?? null,
       creatureTemplateId: tokenData.creatureTemplateId || null,
@@ -1150,7 +1153,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // write-only channel into the map's JSON that served no purpose. The
       // create route, which is the only place the app sends metadata at all, is
       // DM-only already.
-      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata'];
+      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
           return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });
@@ -1202,6 +1205,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       ...(updates.showHpBar !== undefined && { showHpBar: updates.showHpBar }),
       ...(updates.notes !== undefined && { notes: updates.notes }),
       ...(updates.initiative !== undefined && { initiative: updates.initiative }),
+      ...(updates.sightRadius !== undefined && { sightRadius: shapes.value.sightRadius ?? 0 }),
       ...(updates.displayMode !== undefined && { displayMode: updates.displayMode }),
       // The parsed value, not the raw one: Zod drops keys the schema does not
       // declare, and storing what arrived instead of what was checked is how
