@@ -193,6 +193,7 @@ export default function EditMapModal({
   const [diagonalRule, setDiagonalRule] = useState<'flat' | 'alternating'>('flat');
   const [lightingEnabled, setLightingEnabled] = useState(false);
   const [fogEnabled, setFogEnabled] = useState(true);
+  const [globalIllumination, setGlobalIllumination] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -221,6 +222,7 @@ export default function EditMapModal({
       setDiagonalRule((map.diagonalRule as 'flat' | 'alternating') ?? 'flat');
       setLightingEnabled(map.lightingEnabled ?? false);
       setFogEnabled(map.fogEnabled ?? true);
+      setGlobalIllumination(map.globalIllumination ?? true);
       setPreviewZoom(1);
       setDetectedGrid(null);
       setIsDetecting(false);
@@ -289,6 +291,7 @@ export default function EditMapModal({
         spiritLayerUrl: spiritAssetId ?? null,
         lightingEnabled,
         fogEnabled,
+        globalIllumination,
       };
       const updatedMap = await mapService.updateMap(campaignId, map.id, data);
       onUpdated(updatedMap);
@@ -516,6 +519,26 @@ export default function EditMapModal({
                         Fog of War
                       </span>
                       <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Global Illumination */}
+                <div className="mt-3 pt-3 border-t border-stone-gray/20">
+                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={globalIllumination}
+                      disabled={!lightingEnabled}
+                      onChange={(e) => setGlobalIllumination(e.target.checked)}
+                      className="w-4 h-4 accent-moss-green"
+                      aria-label="Global illumination"
+                    />
+                    <div>
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                        Global Illumination
+                      </span>
+                      <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
                     </div>
                   </label>
                 </div>

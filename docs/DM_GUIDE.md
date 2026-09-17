@@ -964,9 +964,15 @@ Dynamic lighting is off by default. To enable it:
 2. In the map settings, check **Enable Dynamic Lighting**
 3. Click **Save Map**
 
-Once enabled, players only see the areas their characters have line of sight to. The rest of the map is hidden beneath a deep fog overlay.
+Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
+
+### Global Illumination
+
+**Global Illumination** is a per-map switch, in **Edit Map** and at the top of the **Lights** panel. With it on, everything in a token's line of sight counts as lit, so walls are all that limit what a player sees; lights only add glow. With it off, lights and darkvision decide: a player sees what their tokens' darkvision reaches, plus whatever a light source lights, and the square they stand on.
+
+New maps start with it off. Maps made before it existed have it on, which is exactly how lighting always worked for them, so nothing changes at your table until you untick it. When you do, the Lights panel warns you if there are no lights on the map yet: until you place one, or give the party darkvision, players see almost nothing.
 
 ### Darkvision
 

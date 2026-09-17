@@ -58,6 +58,10 @@ interface DmLightControlsProps {
   onSelectedLightChange?: (light: LightSource) => void;
   onDeleteSelected?: () => void;
   lightingEnabled?: boolean;
+  /** The map's Global Illumination flag: everything in line of sight counts as lit. */
+  globalIllumination?: boolean;
+  /** The DM ticked or unticked Global Illumination. Absent: no switch is shown. */
+  onGlobalIlluminationChange?: (on: boolean) => void;
   /** Called when placement defaults change so parent can use them for new lights. */
   onDefaultsChange?: (defaults: LightPlacementDefaults) => void;
   /** Current placement defaults (parent is source of truth). */
@@ -99,6 +103,8 @@ export default function DmLightControls({
   onDeleteSelected,
   onCollapse,
   lightingEnabled = false,
+  globalIllumination = true,
+  onGlobalIlluminationChange,
   onDefaultsChange,
   placementDefaults = DEFAULT_PLACEMENT,
 }: DmLightControlsProps) {
@@ -190,6 +196,27 @@ export default function DmLightControls({
           {!lightingEnabled && (
             <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
               Dynamic lighting is off. Enable it in Map Settings for lights to affect player visibility.
+            </div>
+          )}
+
+          {/* Global Illumination: everything in line of sight counts as lit.
+              Off, lights and darkvision decide, which is when lights matter. */}
+          {onGlobalIlluminationChange && (
+            <label className="flex items-center gap-2 px-0.5 text-[11px] text-stone-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-3.5 h-3.5 accent-amber-400"
+                checked={globalIllumination}
+                disabled={!lightingEnabled}
+                onChange={(e) => onGlobalIlluminationChange(e.target.checked)}
+                aria-label="Global illumination"
+              />
+              Global illumination
+            </label>
+          )}
+          {lightingEnabled && !globalIllumination && lightCount === 0 && (
+            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
+              No lights placed and Global Illumination is off: players see only their darkvision.
             </div>
           )}
 

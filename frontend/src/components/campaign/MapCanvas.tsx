@@ -3551,6 +3551,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setSelectedLightId(null);
             }}
             lightingEnabled={currentMap.lightingEnabled ?? false}
+            globalIllumination={currentMap.globalIllumination ?? true}
+            onGlobalIlluminationChange={async (on) => {
+              if (!campaign) return;
+              const before = currentMap;
+              setCurrentMap({ ...currentMap, globalIllumination: on });
+              try {
+                await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
+              } catch {
+                setCurrentMap(before);
+              }
+            }}
             placementDefaults={lightPlacementDefaults}
             onDefaultsChange={setLightPlacementDefaults}
           />
