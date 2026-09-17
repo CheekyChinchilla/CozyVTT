@@ -52,7 +52,7 @@ import {
   type AoEAnchor,
   type Viewport,
 } from './map/layers';
-import { createVisionCache, type VisionSource } from './map/vision';
+import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
 import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
@@ -61,6 +61,8 @@ import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/map
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
+import { isSeen, type Viewer, type Lit, type InsideFn } from '@/utils/visibilityRule';
+import { isPointVisible } from '@/utils/raycasting';
 
 /** A player's revealed set before the server has answered: nothing revealed. */
 const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
@@ -1680,7 +1682,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     //    DM always sees all; "Preview player view" simulates player vision.
     //    The vision polygons also feed the walls layer's door LOS filter.
     const lightingEnabled = currentMap.lightingEnabled ?? false;
-    let visPolygons: VisionSource[] = [];
+    const globalIllumination = currentMap.globalIllumination ?? true;
+    // Whether this viewer can make out a point, by the shared visibility rule.
+    // Everything is seen until lighting says otherwise.
+    let canSee: (x: number, y: number) => boolean = () => true;
     if (lightingEnabled) {
       const renderAsPlayer = !renderIsDM || dmPreviewPlayerView;
       if (renderAsPlayer) {
@@ -1691,14 +1696,37 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const enabledLights = lightSources.filter((l) => l.enabled);
         // Memoized: only sources whose position/radius changed —
         // or all sources when a wall was edited — actually recompute.
-        const vision = visionCacheRef.current.compute(myTokens, enabledLights, wallSegments, viewport);
-        visPolygons = vision.all;
+        const vision = visionCacheRef.current.compute(myTokens, enabledLights, wallSegments, viewport, { globalIllumination });
+        const viewers: Viewer[] = myTokens.map((t, i) => ({
+          cx: vision.tokenSight[i].cx,
+          cy: vision.tokenSight[i].cy,
+          sight: vision.tokenSight[i].poly,
+          darkvisionPx: (t.sightRadius ?? 0) * viewport.gridSize,
+          selfPx: (Math.max(t.size.width, t.size.height) / 2) * viewport.gridSize,
+        }));
+        const lits: Lit[] = enabledLights.map((l, i) => ({
+          cx: l.x,
+          cy: l.y,
+          reach: vision.lightVision[i].poly,
+          brightPx: l.brightRadius * viewport.gridSize,
+          dimPx: l.dimRadius * viewport.gridSize,
+        }));
+        const inside: InsideFn = (p, poly) => poly.points.length >= 3 && isPointVisible(p, { x: 0, y: 0 }, poly);
+        // Closed doors lie exactly on a sight polygon's boundary, so each viewer
+        // tests the point nudged 2px toward itself, as the door filter always has.
+        canSee = (x, y) => viewers.some((v) => {
+          const dx = v.cx - x;
+          const dy = v.cy - y;
+          const d = Math.hypot(dx, dy) || 1;
+          return isSeen({ x: x + (dx / d) * 2, y: y + (dy / d) * 2 }, [v], lits, globalIllumination, inside);
+        });
         drawDynamicLighting(ctx, {
           myTokens,
           enabledLights,
           tokenVision: vision.tokenVision,
           tokenSight: vision.tokenSight,
           lightVision: vision.lightVision,
+          globalIllumination,
           lightingCanvas: lightingOffscreenRef,
           coverageCanvas: lightCoverageOffscreenRef,
           lightCanvas: lightOnlyOffscreenRef,
@@ -1729,7 +1757,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       dragEndpoint: wallDragEndpointRef.current?.point ?? null,
       selectedEndpoint,
       lightingEnabled,
-      visPolygons,
+      canSee,
     }, viewport);
 
     // 9. DM wall-tool overlays

@@ -500,7 +500,7 @@ describe('drawWalls', () => {
       dragEndpoint: null,
       selectedEndpoint: null,
       lightingEnabled: false,
-      visPolygons: [],
+      canSee: () => true,
       ...overrides,
     };
   }
@@ -513,14 +513,17 @@ describe('drawWalls', () => {
     expect(count(ctx, 'arc')).toBe(1); // closed-door center dot
   });
 
-  it('players with lighting ON and no vision see no doors (LOS filtered)', () => {
+  it('players with lighting ON see no doors they cannot see (the rule says so)', () => {
     const ctx = makeMockCtx();
-    drawWalls(ctx, wallsState({
-      lightingEnabled: true,
-      visPolygons: [{ poly: { points: [] }, cx: 0, cy: 0 }],
-    }), viewport3x3);
-    // Door filtered by empty polygon; walls not drawn under lighting
+    drawWalls(ctx, wallsState({ lightingEnabled: true, canSee: () => false }), viewport3x3);
+    // Door filtered by the rule; walls not drawn under lighting
     expect(count(ctx, 'moveTo')).toBe(0);
+  });
+
+  it('players with lighting ON see a door the rule says they can see', () => {
+    const ctx = makeMockCtx();
+    drawWalls(ctx, wallsState({ lightingEnabled: true, canSee: () => true }), viewport3x3);
+    expect(count(ctx, 'arc')).toBe(1); // the closed-door dot
   });
 
   it('DM sees all segments and endpoint nodes while a wall tool is active', () => {
@@ -572,13 +575,18 @@ describe('computeVisionState', () => {
     expect(vision.tokenVision[0].poly.points.length).toBeGreaterThan(2);
   });
 
-  it('orders sources tokens-first (the door LOS filter relies on it)', () => {
-    const token = makeToken('a', { sightRadius: 2 } as Partial<Token>);
-    const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
-    const vision = computeVisionState([token], [light], [], viewport3x3);
-    expect(vision.all).toHaveLength(2);
-    expect(vision.all[0]).toBe(vision.tokenVision[0]);
-    expect(vision.all[1]).toBe(vision.lightVision[0]);
+  it('keeps every per-token list index-aligned with the tokens it was given', () => {
+    // The canvas pairs tokens with their sight and vision entries by index to
+    // build the viewers the visibility rule reads.
+    const a = makeToken('a', { position: { x: 0, y: 0 }, sightRadius: 2 } as Partial<Token>);
+    const b = makeToken('b', { position: { x: 2, y: 2 }, sightRadius: 0 } as Partial<Token>);
+    const vision = computeVisionState([a, b], [], [], viewport3x3);
+    expect(vision.tokenSight).toHaveLength(2);
+    expect(vision.tokenVision).toHaveLength(2);
+    expect(vision.tokenSight[0].cx).toBe(vision.tokenVision[0].cx);
+    expect(vision.tokenSight[1].cx).toBe(vision.tokenVision[1].cx);
+    expect(vision.tokenVision[0].poly.points.length).toBeGreaterThan(2); // has darkvision
+    expect(vision.tokenVision[1].poly.points).toHaveLength(0);           // has none
   });
 });
 
@@ -596,9 +604,9 @@ describe('computeVisionState', () => {
  * which a refactor could otherwise drop in silence.
  */
 describe('drawDynamicLighting', () => {
-  interface OpCall { method: string; op: string }
+  interface OpCall { method: string; op: string; fillStyle: string }
 
-  /** A context that records the composite operation in force at each call. */
+  /** A context that records the composite operation and fill style in force at each call. */
   function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[] } {
     const ops: OpCall[] = [];
     const gradient = { addColorStop: () => {} };
@@ -606,11 +614,11 @@ describe('drawDynamicLighting', () => {
       globalCompositeOperation: 'source-over',
       fillStyle: '', filter: 'none', globalAlpha: 1,
       createRadialGradient: () => gradient,
-    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string };
+    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
       'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage']) {
       (ctx as unknown as Record<string, unknown>)[m] = () =>
-        ops.push({ method: m, op: ctx.globalCompositeOperation });
+        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle) });
     }
     return { ctx, ops };
   }
@@ -624,28 +632,67 @@ describe('drawDynamicLighting', () => {
   const W = 150, H = 150;
   const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
 
-  function run(opts: { withLight: boolean }) {
+  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean }) {
     const main = makeOpRecorder();
     const lighting = makeOpRecorder();
     const coverage = makeOpRecorder();
     const lightOnly = makeOpRecorder();
 
-    const token = makeToken('a', { sightRadius: 0 } as Partial<Token>);
-    const vision = computeVisionState([token], opts.withLight ? [light] : [], [], viewport);
+    const token = makeToken('a', { sightRadius: opts.sightRadius ?? 0 } as Partial<Token>);
+    const myTokens = opts.noTokens ? [] : [token];
+    const gi = opts.globalIllumination ?? false;
+    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], viewport, { globalIllumination: gi });
 
     drawDynamicLighting(main.ctx, {
-      myTokens: [token],
+      myTokens,
       enabledLights: opts.withLight ? [light] : [],
       tokenVision: vision.tokenVision,
       tokenSight: vision.tokenSight,
       lightVision: vision.lightVision,
+      globalIllumination: gi,
       lightingCanvas: holderFor(lighting.ctx, W, H),
       coverageCanvas: holderFor(coverage.ctx, W, H),
       lightCanvas: holderFor(lightOnly.ctx, W, H),
     }, viewport);
 
-    return { lightOnly, coverage };
+    return { main, lighting, lightOnly, coverage };
   }
+
+  const fillsAt = (r: { ops: OpCall[] }, alpha: string) =>
+    r.ops.filter((c) => c.method === 'fill' && c.op === 'lighter' && c.fillStyle === `rgba(255, 255, 255, ${alpha})`);
+
+  it('under global illumination, fills the whole line of sight as bright', () => {
+    const { coverage } = run({ withLight: false, globalIllumination: true });
+    expect(fillsAt(coverage, '1').length).toBeGreaterThan(0);
+    expect(fillsAt(coverage, '0.5')).toHaveLength(0);
+  });
+
+  it('with no darkvision, fills only the viewer\'s own square, and as dim', () => {
+    const { coverage } = run({ withLight: false });
+    expect(fillsAt(coverage, '1')).toHaveLength(0);
+    const dim = fillsAt(coverage, '0.5');
+    expect(dim).toHaveLength(1); // the own-square disc
+    expect(coverage.ops.some((c) => c.method === 'arc' && c.op === 'lighter')).toBe(true);
+  });
+
+  it('darkvision fills its reach as dim', () => {
+    const { coverage } = run({ withLight: false, sightRadius: 2 });
+    expect(fillsAt(coverage, '0.5').length).toBeGreaterThanOrEqual(2); // reach polygon + own square
+    expect(fillsAt(coverage, '1')).toHaveLength(0);
+  });
+
+  it('paints the darkness fully opaque', () => {
+    const { lighting } = run({ withLight: true });
+    expect(lighting.ops.some((c) => c.method === 'fillRect' && c.fillStyle === 'rgba(15, 12, 25, 1)')).toBe(true);
+    expect(lighting.ops.some((c) => c.fillStyle === 'rgba(15, 12, 25, 0.95)')).toBe(false);
+  });
+
+  it('with no viewer token, paints everything dark even when lights are on', () => {
+    const { main, coverage } = run({ withLight: true, noTokens: true });
+    expect(main.ops.filter((c) => c.method === 'fillRect' && c.fillStyle === 'rgba(15, 12, 25, 1)')).toHaveLength(1);
+    expect(main.ops.some((c) => c.method === 'drawImage')).toBe(false);
+    expect(coverage.ops).toHaveLength(0);
+  });
 
   it('intersects the light layer with the viewer line of sight', () => {
     const { lightOnly } = run({ withLight: true });

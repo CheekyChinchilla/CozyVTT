@@ -556,7 +556,7 @@ The track your DM chooses is fetched by your own browser from the instance, whic
 
 ### Dynamic Lighting
 
-When a DM enables dynamic lighting on a map, players only see what their token can. Light sources placed by the DM have two radii:
+When a DM enables dynamic lighting on a map, players only see what their tokens can make out: bright light shows clearly, dim light and the dark within a token's **darkvision** show half-dark, and everything else is black. A token's darkvision (in grid squares; 12 is 60 ft) is set by the DM and starts at none. A map's **Global Illumination** setting makes everything in line of sight count as lit; maps made before 1.5.0 have it on, which is how lighting always behaved. Light sources placed by the DM have two radii:
 
 - **Bright radius** — full visibility, strong glow (e.g. the inner 20 ft of a torch)
 - **Dim radius** — reduced visibility with a fainter glow (e.g. the outer 20 ft of a torch)
