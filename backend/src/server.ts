@@ -9,6 +9,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { sessionConfig } from './config/session';
+import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
 import { bodyParsers } from './middleware/bodyParsers';
@@ -31,6 +32,9 @@ import logger from './utils/logger';
 import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
+
+// A production instance on the placeholder database password stops here.
+enforceDatabaseCredential();
 
 const app = express();
 const httpServer = createServer(app);

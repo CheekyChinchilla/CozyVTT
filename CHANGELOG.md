@@ -64,6 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **A production instance refuses to start on the placeholder database password.** `SESSION_SECRET` has always been checked this way; `DATABASE_PASSWORD` now is too. If your instance stops after this upgrade with a message about the placeholder password, set a real one in `.env` and, if you wrote `DATABASE_URL` by hand, update it to match.
+
 - **Dependencies with published advisories updated.** Every advisory `npm audit` reported against the running application is fixed by an in-range update. Two remaining advisories against the routing library need a major upgrade and do not apply here: no navigation target in this app comes from user input.
 
 - **A token the DM has hidden no longer reaches players when it moves, and a moved token's DM notes are no longer sent.** On a map with dynamic lighting, moving a hidden token in a player's line of sight sent it to them with the DM's notes; on any map a hidden token's every move was broadcast. A player in the spirit realm was also sent material-plane tokens on moves. Moves now apply the same rules as opening the map.

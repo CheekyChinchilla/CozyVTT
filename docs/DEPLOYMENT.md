@@ -50,7 +50,7 @@ cd CozyVTT
 cp .env.example .env
 ```
 
-Edit `.env` and fill in all required values. At minimum:
+Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while either `DATABASE_PASSWORD` or `SESSION_SECRET` is still the placeholder from `.env.example`):
 
 ```env
 # Database
@@ -896,6 +896,7 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 Before going live:
 
 - [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`
+- [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
