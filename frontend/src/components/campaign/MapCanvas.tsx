@@ -57,7 +57,8 @@ import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } fro
 import { placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
-import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
+import { rectFromDrag, segmentsInRect } from './map/mapSelection';
+import { useWallSelection } from './map/useWallSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow, gridYToCentrePx } from './map/coords';
 import mapService from '@/services/map.service';
@@ -284,23 +285,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null); // for pointer cursor in pan mode
   const [wallColor, setWallColor] = useState('#f97316'); // default orange
-  /**
-   * Which walls are selected. A set because the DM can gather several: click,
-   * Shift+click, a dragged box, or Ctrl+A. Most of what follows works on the
-   * whole set; the properties panel is the exception, since a type belongs to
-   * one wall at a time.
-   */
-  const [selectedWallIds, setSelectedWallIds] = useState<ReadonlySet<string>>(() => new Set());
-  /** The box being dragged out over empty space, in map pixels. */
-  const [wallMarquee, setWallMarquee] = useState<SelectionRect | null>(null);
-  const wallMarqueeRef = useRef<{ startX: number; startY: number; additive: boolean } | null>(null);
-  /** A drag that moves the selection, holding where it began so it can be undone. */
-  const wallMoveRef = useRef<{
-    startX: number;
-    startY: number;
-    preDragState: WallSegment[];
-    hasDragged: boolean;
-  } | null>(null);
   const [splitHoverPoint, setSplitHoverPoint] = useState<{ x: number; y: number; wallId: string } | null>(null);
   const wallEraseBrushActiveRef = useRef(false);
   const wallErasedIdsRef = useRef<Set<string>>(new Set());
@@ -315,14 +299,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [brushSize, setBrushSize] = useState(20);
   const wallBrushActiveRef = useRef(false);
   const wallBrushPointsRef = useRef<Array<{ x: number; y: number }>>([]);
-  const wallDragEndpointRef = useRef<{
-    targets: Array<{ segId: string; end: 'start' | 'end' }>;
-    point: { x: number; y: number };
-    preDragState: WallSegment[] | null;
-    hasDragged: boolean;
-  } | null>(null);
   const [nearEndpoint, setNearEndpoint] = useState(false);
-  const [selectedEndpoint, setSelectedEndpoint] = useState<{ x: number; y: number } | null>(null);
   const { toast, showToast, hideToast } = useToast();
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
@@ -458,9 +435,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * Point-to-line-segment distance (for door/wall hover hit testing).
-   */
-  /**
    * Send the whole wall list to everyone and add it to the undo stack.
    *
    * Bulk edits all go out this way: one message that replaces the array, which
@@ -475,32 +449,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
   }, [pushWallHistory, socket, currentMap]);
 
-  /** Move everything selected by an offset in map pixels. */
-  const moveSelectedWalls = useCallback((dxPx: number, dyPx: number) => {
-    if (selectedWallIds.size === 0) return;
-    const moved = wallSegments.map((seg) =>
-      selectedWallIds.has(seg.id) ? translateWallSegments([seg], dxPx, dyPx)[0] : seg
-    );
-    commitWalls(moved);
-  }, [selectedWallIds, wallSegments, commitWalls]);
-
-  const deleteSelectedWalls = useCallback(() => {
-    if (selectedWallIds.size === 0 || !currentMap) return;
-    commitWalls(wallSegments.filter((seg) => !selectedWallIds.has(seg.id)));
-    setSelectedWallIds(new Set());
-  }, [selectedWallIds, wallSegments, commitWalls, currentMap]);
-
-  /**
-   * The type shown in the wall panel: only when everything selected agrees,
-   * since one dropdown cannot show two answers.
-   */
-  const selectedSegmentType = (() => {
-    if (selectedWallIds.size === 0) return null;
-    const types = new Set(
-      wallSegments.filter((seg) => selectedWallIds.has(seg.id)).map((seg) => seg.type)
-    );
-    return types.size === 1 ? [...types][0] : null;
-  })();
+  const {
+    selectedWallIds, setSelectedWallIds,
+    wallMarquee, setWallMarquee, wallMarqueeRef,
+    wallMoveRef,
+    wallDragEndpointRef,
+    selectedEndpoint, setSelectedEndpoint,
+    moveSelectedWalls, deleteSelectedWalls, selectedSegmentType,
+  } = useWallSelection({ wallSegments, commitWalls });
+  // TODO(maintainability): the wall pointer and keyboard handlers further down
+  // belong in useWallSelection too. They still read a dozen MapCanvas closures
+  // (viewport, tool mode, the socket), so they stay here until those are lifted.
 
   /**
    * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
