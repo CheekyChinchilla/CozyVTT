@@ -68,6 +68,8 @@ src/
 │   ├── auth.ts        Login, logout, register, password reset
 │   ├── users.ts       User CRUD (admin only)
 │   ├── campaigns.ts   Campaign CRUD + membership
+│   ├── campaignMacros.ts Saved dice macros per campaign
+│   ├── campaignDocuments.ts Documents shared with a campaign
 │   ├── characters.ts  Character CRUD + assignment
 │   ├── maps.ts        Map and token management
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites

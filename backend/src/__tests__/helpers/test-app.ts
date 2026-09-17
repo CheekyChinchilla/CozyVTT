@@ -26,6 +26,8 @@ import { bodyParsers } from '../../middleware/bodyParsers';
 import { errorHandler } from '../../middleware/errorHandler';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
+import campaignMacroRoutes from '../../routes/campaignMacros';
+import campaignDocumentRoutes from '../../routes/campaignDocuments';
 import characterRoutes from '../../routes/characters';
 import characterTemplateRoutes from '../../routes/characterTemplates';
 import assetRoutes from '../../routes/assets';
@@ -60,6 +62,8 @@ export function createTestApp(): express.Express {
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/campaigns', campaignRoutes);
+  app.use('/api/campaigns', campaignMacroRoutes);
+  app.use('/api/campaigns', campaignDocumentRoutes);
   // Mounted separately in server.ts too — the creature routes hang off a
   // campaign path rather than the campaigns router, so they need their own line.
   app.use('/api/campaigns/:campaignId/creatures', creatureRoutes);

@@ -17,6 +17,8 @@ import { errorHandler } from './middleware/errorHandler';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
+import campaignMacroRoutes from './routes/campaignMacros';
+import campaignDocumentRoutes from './routes/campaignDocuments';
 import userRoutes from './routes/users';
 import characterRoutes from './routes/characters';
 import characterTemplateRoutes from './routes/characterTemplates';
@@ -166,6 +168,8 @@ app.use('/api/admin', adminRoutes);
 
 // Campaigns
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/campaigns', campaignMacroRoutes);
+app.use('/api/campaigns', campaignDocumentRoutes);
 
 // Characters
 app.use('/api/characters', characterRoutes);
