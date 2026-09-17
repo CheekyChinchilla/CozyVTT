@@ -233,7 +233,7 @@ _Nothing in progress._
   three — the same one-fact-two-places shape the read side was consolidated to
   avoid.
 
-- **Token moves bypass the spirit-plane filter.** `filterTokensByRole` is what
+- **Token moves bypass the spirit-plane filter.** *Fixed in 1.5.0: the move fan-out now applies `filterTokensByRole` before line of sight, so hidden tokens, DM notes and the wrong plane never reach a player on a move.* `filterTokensByRole` is what
   splits the material and spirit planes, and `filterMapData` is its only caller.
   The token-move handler filters by lighting alone, so a player in the spirit
   realm is sent material token positions on every move; they persist until the

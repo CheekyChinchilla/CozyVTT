@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibility, getSpiritVisibilityBatch, filterTokensByLighting } from '../../utils/spirit-layer';
+import { getSpiritVisibility, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting } from '../../utils/spirit-layer';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
@@ -182,6 +182,15 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
           }
         }
+      } else if (!movingToken.visible) {
+        // A hidden token is the DM's secret; its drag frames reach DMs only.
+        const campaignSockets = await io.in(socket.campaignId).fetchSockets();
+        for (const s of campaignSockets) {
+          if (s.id === socket.id) continue; // Exclude sender
+          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+          }
+        }
       } else {
         // Normal token - broadcast to all campaign members (excluding sender)
         socket.to(socket.campaignId).emit('token.moved', {
@@ -303,8 +312,17 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           }
         }
       } else if (map.lightingEnabled) {
-        // Dynamic lighting: per-player visibility filtering
+        // Dynamic lighting: per-player visibility filtering. The plane and
+        // hidden-token rules (filterTokensByRole, the same call the map fetch
+        // makes) come first, then line of sight, so a player is never sent a
+        // token here that opening the map would not have given them, and the
+        // payloads carry no DM notes.
         const campaignSockets = await io.in(socket.campaignId).fetchSockets();
+        const playerIds = campaignSockets
+          .map((s) => s as unknown as AuthenticatedSocket)
+          .filter((a) => a.role !== 'DM' && a.userId)
+          .map((a) => a.userId as string);
+        const spiritVisibility = await getSpiritVisibilityBatch(socket.campaignId, playerIds);
         for (const s of campaignSockets) {
           const authedSocket = s as unknown as AuthenticatedSocket;
           if (authedSocket.role === 'DM') {
@@ -313,17 +331,13 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           }
           if (!authedSocket.userId) continue;
 
-          // Compute which tokens are visible for this player after the move
-          //
-          // TODO(spirit-layer): this applies the lighting filter but never
-          // filterTokensByRole, which is the only thing that enforces the
-          // material/spirit plane split. A player in the spirit realm is sent
-          // material token positions here, and they persist until the next
-          // refresh — at which point filterMapData applies the plane filter and
-          // they vanish again. The two paths should share one decision;
-          // filterMapData is the one that is right.
-          const allVisible = filterTokensByLighting(
+          const forRole = filterTokensByRole(
             updatedTokens,
+            authedSocket.role ?? 'PLAYER',
+            spiritVisibility.get(authedSocket.userId) ?? false
+          );
+          const visible = filterTokensByLighting(
+            forRole,
             authedSocket.userId,
             map.wallSegments as unknown as WallSegment[],
             map.width,
@@ -332,30 +346,40 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             true,
             map.lights
           );
-          const visibleIds = new Set(allVisible.map((t) => t.id));
+          const visibleById = new Map(visible.map((t) => [t.id, t]));
 
-          if (visibleIds.has(tokenId)) {
-            // Token is visible: send position update AND appeared (frontend deduplicates)
+          const moved = visibleById.get(tokenId);
+          if (moved) {
+            // Visible: position update AND the full token (frontend deduplicates),
+            // in case this player did not have it yet.
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-            // Also send full token data in case this player didn't have it yet
-            s.emit('token:appeared', { token: { ...token, position: { x, y } }, mapId });
+            s.emit('token:appeared', { token: moved, mapId });
           } else {
             s.emit('token:disappeared', { tokenId, mapId });
           }
 
-          // If a player moved their OWN token, their view frustum changed —
-          // re-sync all OTHER tokens so NPCs that left/entered view appear/disappear immediately.
+          // If a player moved their OWN token, their view changed: re-sync all
+          // OTHER tokens so those that left or entered view go at once.
           if (token.controlledBy === authedSocket.userId) {
             for (const otherToken of updatedTokens) {
               if (otherToken.id === tokenId) continue; // already handled above
               // Skip own tokens — always included by filterTokensByLighting
               if ((otherToken as Token).controlledBy === authedSocket.userId) continue;
-              if (visibleIds.has(otherToken.id)) {
-                s.emit('token:appeared', { token: otherToken, mapId });
+              const other = visibleById.get(otherToken.id);
+              if (other) {
+                s.emit('token:appeared', { token: other, mapId });
               } else {
                 s.emit('token:disappeared', { tokenId: otherToken.id, mapId });
               }
             }
+          }
+        }
+      } else if (!token.visible) {
+        // A hidden token is the DM's secret; its final position reaches DMs only.
+        const campaignSockets = await io.in(socket.campaignId).fetchSockets();
+        for (const s of campaignSockets) {
+          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
           }
         }
       } else {

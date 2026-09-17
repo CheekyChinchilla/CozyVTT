@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Security
+
+- **A token the DM has hidden no longer reaches players when it moves, and a moved token's DM notes are no longer sent.** On a map with dynamic lighting, moving a hidden token in a player's line of sight sent it to them with the DM's notes; on any map a hidden token's every move was broadcast. A player in the spirit realm was also sent material-plane tokens on moves. Moves now apply the same rules as opening the map.
+
 ## [1.4.0] — 2026-09-14
 
 ### Upgrading from 1.3.0
