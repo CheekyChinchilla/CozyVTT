@@ -4043,7 +4043,13 @@ paths:
       tags:
         - Maps
       summary: Update token
-      description: Update token (DM can update any, players only tokens they control)
+      description: |
+        Update a token. The DM may update any token and any field. A player may
+        update only a token that names them in `controlledBy`, and only its
+        `position`, `rotation` and `conditions`; every other field, `size` and
+        `sightRadius` included, answers 403 for a player. A spectator may not
+        update a token at all, even one that still names them from before they
+        were demoted.
       operationId: updateToken
       security:
         - cookieAuth: []

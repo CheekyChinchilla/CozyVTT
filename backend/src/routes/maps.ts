@@ -9,7 +9,7 @@ import { prisma } from '../config/database';
 import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById } from '../services/permissions';
+import { canReadAssetById, canControlToken } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -1109,11 +1109,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 
     const existingToken = tokensArray[tokenIndex];
 
-    // Permission check: DM can update any token, players can only update their own tokens
+    // The same rule the socket move handlers apply: the DM, or a player (never
+    // a spectator) whom the token names as its controller.
     const isDM = membership.role === 'DM';
-    const controlsToken = existingToken.controlledBy === userId;
-
-    if (!isDM && !controlsToken) {
+    if (!canControlToken(membership.role, existingToken.controlledBy, userId)) {
       return res.status(403).json({
         error: 'Forbidden',
         message: 'You can only update tokens you control',
@@ -1174,7 +1173,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // write-only channel into the map's JSON that served no purpose. The
       // create route, which is the only place the app sends metadata at all, is
       // DM-only already.
-      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius'];
+      // `size` and `sightRadius` are here because both decide what the server
+      // sends this player: a token always sees half its own footprint, so a
+      // player who could enlarge their token would enlarge their sight.
+      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius', 'size'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
           return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });

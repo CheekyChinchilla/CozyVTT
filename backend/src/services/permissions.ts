@@ -94,41 +94,22 @@ export async function canEditCharacter(
 }
 
 /**
- * Check if user can move a token
- * 
- * - Players can move their assigned character tokens
- * - DM can move any token
+ * May this member act on this token: move it, and change the fields a player
+ * is allowed to change.
+ *
+ * The DM always; a player only when the token names them in `controlledBy`;
+ * a spectator never. That last clause is why `controlledBy` alone is not the
+ * test: it is set once and not cleared when someone is demoted, so a spectator
+ * can still hold a token from before. One predicate for the REST update route
+ * and the three socket move handlers, so the channels cannot drift apart.
  */
-export async function canMoveToken(
-  userId: string,
-  characterId: string,
-  campaignId: string
-): Promise<boolean> {
-  const membership = await prisma.campaignMembership.findUnique({
-    where: {
-      userId_campaignId: {
-        userId,
-        campaignId,
-      },
-    },
-  });
-
-  if (!membership) {
-    return false;
-  }
-
-  // DM can move any token
-  if (isDM(membership.role)) {
-    return true;
-  }
-
-  // Player can move their assigned character tokens
-  if (isPlayer(membership.role)) {
-    return membership.characterIds.includes(characterId);
-  }
-
-  // Spectators cannot move tokens
-  return false;
+export function canControlToken(
+  role: string | undefined,
+  controlledBy: string | null | undefined,
+  userId: string | undefined
+): boolean {
+  if (role === 'DM') return true;
+  return role === 'PLAYER' && !!userId && controlledBy === userId;
 }
 
 /**

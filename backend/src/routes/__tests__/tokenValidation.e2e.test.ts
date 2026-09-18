@@ -38,8 +38,10 @@ describe('map token validation', () => {
   let playerId: string;
   let campaignId: string;
   let mapId: string;
+  let spectatorId: string;
   let dm: ReturnType<typeof request.agent>;
   let player: ReturnType<typeof request.agent>;
+  let spectator: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
     const dmUser = await createTestUser({ displayName: 'Token Validation DM' });
@@ -59,12 +61,24 @@ describe('map token validation', () => {
       data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     });
 
+    const spectatorUser = await createTestUser({ displayName: 'Token Validation Spectator' });
+    spectatorId = spectatorUser.id;
+    await prisma.campaignMembership.create({
+      data: { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
+    });
+
     dm = request.agent(app);
     await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
 
     player = request.agent(app);
     await player.post('/api/auth/login').send({
       email: playerUser.email,
+      password: TEST_PASSWORD,
+    });
+
+    spectator = request.agent(app);
+    await spectator.post('/api/auth/login').send({
+      email: spectatorUser.email,
       password: TEST_PASSWORD,
     });
 
@@ -87,7 +101,7 @@ describe('map token validation', () => {
   afterAll(async () => {
     await prisma.map.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([dmId, playerId, spectatorId]);
     await prisma.$disconnect();
   });
 
@@ -324,6 +338,51 @@ describe('map token validation', () => {
       const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId);
       expect(token.metadata).toEqual({});
+    });
+
+    // Size decides how far a token sees of its own accord: the visibility rule
+    // lights half the token's footprint around it, so a player who could set
+    // size 10 would grant themself a five-square sight disc the DM never gave.
+    it('may not resize it', async () => {
+      const res = await playerUpdate({ size: { width: 10, height: 10 } });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/size/);
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const token = after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId);
+      expect(token.size).toEqual({ width: 1, height: 1 });
+    });
+
+    it('the DM may resize it', async () => {
+      const res = await dm
+        .put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${ownedTokenId}`)
+        .send({ size: { width: 2, height: 2 } });
+      expect(res.status).toBe(200);
+      expect(res.body.token.size).toEqual({ width: 2, height: 2 });
+    });
+  });
+
+  /**
+   * controlledBy is set once and is not cleared when someone is demoted, so a
+   * spectator can still hold a token from before. The socket handlers refuse
+   * them; the REST route must too, or the two channels disagree about who may
+   * act.
+   */
+  describe('a spectator who still holds a token', () => {
+    let heldTokenId: string;
+
+    beforeAll(async () => {
+      const res = await place({ name: 'Held Token', controlledBy: spectatorId, position: { x: 7, y: 7 } });
+      heldTokenId = res.body.token.id;
+    });
+
+    it('may not move it', async () => {
+      const res = await spectator
+        .put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${heldTokenId}`)
+        .send({ position: { x: 8, y: 8 } });
+      expect(res.status).toBe(403);
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const token = after.body.map.tokens.find((t: { id: string }) => t.id === heldTokenId);
+      expect(token.position).toEqual({ x: 7, y: 7 });
     });
   });
 });

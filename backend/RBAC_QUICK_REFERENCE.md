@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-09-01._
+_Last verified against the code on 2026-09-18._
 
 ## Middleware Cheat Sheet
 
@@ -46,7 +46,7 @@ router.post('/api/campaigns/:campaignId/chat', campaignDMOrPlayer, handler);
 ```typescript
 import {
   canEditCharacter,
-  canMoveToken,
+  canControlToken,
   canManageMaps,
   canToggleSpiritLayer,
   canDeleteCampaign,
@@ -70,24 +70,35 @@ if (!hasPermission) {
 }
 ```
 
-#### Check Token Movement Permission
-```typescript
-const canMove = await canMoveToken(userId, characterId, campaignId);
+#### Who may act on a token
 
-if (!canMove) {
-  return res.status(403).json({ error: 'Cannot move this token' });
+```typescript
+// The DM; a player the token names in controlledBy; never a spectator.
+if (!canControlToken(role, token.controlledBy, userId)) {
+  return res.status(403).json({ error: 'Forbidden' });
 }
 ```
+
+`canControlToken` is synchronous and takes the role you already hold (from
+`req.campaignMembership` or `socket.role`). It is the one rule for
+`PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` and for the three
+`token.move*` socket events, so the two channels cannot disagree. The spectator
+clause matters: `controlledBy` is set once and is not cleared when someone is
+demoted, so a spectator can still hold a token from their time as a player.
 
 #### Which token fields a player may change
 
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` is mounted on
 `campaignMember`, so the route guard alone does **not** decide this. A player who
-controls the token may change only where it is and how it looks in play:
+controls the token may change only where it is and what it is doing:
 
 | A player controlling the token may set | Everything else is DM-only |
 |---|---|
-| `position`, `rotation`, `size`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata` |
+| `position`, `rotation`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata`, `sightRadius`, `size` |
+
+`size` and `sightRadius` are DM-only because both decide what the server sends
+that player: a token always sees half its own footprint, so a player who could
+enlarge their token would enlarge their sight.
 
 The DM-only list is `restrictedFields` in `routes/maps.ts`. **Adding a token field
 means adding it there too** unless a player is meant to write it — the list is

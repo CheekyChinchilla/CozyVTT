@@ -12,6 +12,11 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canControlToken } from '../../services/permissions';
+
+/** Why a socket may not move a token, in the words the client already shows. */
+const moveRefusal = (role: string | undefined): string =>
+  role === 'SPECTATOR' ? 'Spectators cannot move tokens' : 'You do not have permission to move this token';
 
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -51,15 +56,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Permission check: DM can move any token, players can only move their own
-      if (socket.role !== 'DM' && token.controlledBy !== socket.userId) {
-        socket.emit('error', { message: 'You do not have permission to move this token' });
-        return;
-      }
-
-      // Spectators cannot move tokens (already handled by controlledBy check, but explicit)
-      if (socket.role === 'SPECTATOR') {
-        socket.emit('error', { message: 'Spectators cannot move tokens' });
+      // The same rule the REST update route applies, so the channels cannot
+      // drift: the DM, or a player (never a spectator) who controls it.
+      if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
+        socket.emit('error', { message: moveRefusal(socket.role) });
         return;
       }
 
@@ -157,11 +157,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      if (socket.role !== 'DM' && movingToken.controlledBy !== socket.userId) {
-        return;
-      }
-
-      if (socket.role === 'SPECTATOR') {
+      if (!canControlToken(socket.role, movingToken.controlledBy, socket.userId)) {
         return;
       }
 
@@ -261,17 +257,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       const token = tokensArray[tokenIndex];
 
-      // Permission check: DM can move any token, players can only move their own
-      if (socket.role !== 'DM' && token.controlledBy !== socket.userId) {
-        socket.emit('error', { message: 'You do not have permission to move this token' });
-        return;
-      }
-
-      // Spectators cannot move tokens. controlledBy is set once and is not
-      // cleared when someone is demoted, so the check above can still pass for
-      // a spectator holding a token from before.
-      if (socket.role === 'SPECTATOR') {
-        socket.emit('error', { message: 'Spectators cannot move tokens' });
+      // See token.move.start: one rule, shared with the REST update route.
+      if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
+        socket.emit('error', { message: moveRefusal(socket.role) });
         return;
       }
 

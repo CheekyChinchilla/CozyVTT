@@ -68,6 +68,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **A spectator can no longer move or edit a token they once controlled, and only the DM can resize a token.** Demoting a player to spectator left their name on the tokens they had been given, and the API still let them move and change those tokens; live play on the map already refused. Token size is DM-only too: since this release a token always sees half its own footprint, so a player enlarging their token would have enlarged their sight.
+
 - **A connection that moves to another campaign now leaves the first one.** A client that authenticated one connection into a second campaign kept receiving everything the first table said and did, stayed on its online roster, and was treated in that room with the role it holds in the second campaign, so a player in one campaign who is the DM of another could be handed the first campaign's DM view of a map. The browser opens a fresh connection per campaign and was never affected; scripted clients were.
 
 - **Instance backups no longer live inside the uploads folder.** The Admin Dashboard wrote its backups, which hold every password hash and MFA secret, to `backend/uploads/backups/`, while the documentation told you to sync `backend/uploads/` off-site as your media. They now go to `backend/backups/`, beside it. **If you have backups from an earlier version, move them from `backend/uploads/backups/` to `backend/backups/`**; the dashboard only lists the new location.
