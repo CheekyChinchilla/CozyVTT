@@ -9,30 +9,8 @@ import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../va
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
-import { errorMessage } from '../utils/errors';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
-
-/**
- * The `issues` array off a thrown Zod-shaped error.
- *
- * Duck-typed rather than `instanceof z.ZodError` because that is what the code
- * this replaces checked, and the two differ for an error that merely looks
- * like one.
- */
-interface ZodLikeIssue {
-  path: Array<string | number>;
-  message: string;
-  code?: string;
-}
-function zodLikeIssues(error: unknown): ZodLikeIssue[] | undefined {
-  if (error && typeof error === 'object' && 'errors' in error) {
-    const { errors } = error as { errors: unknown };
-    if (Array.isArray(errors)) return errors as ZodLikeIssue[];
-  }
-  return undefined;
-}
-
 
 const router = Router();
 
@@ -416,44 +394,20 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       });
     }
 
-    // Validate character data
-    try {
-      validateCharacterData(character.gameSystem as GameSystem, character.data);
-
-      return res.status(200).json({
-        isValid: true,
-      });
-    } catch (error: unknown) {
-      // TODO(typing): this catch cannot fire on a validation failure.
-      // `validateCharacterData` *returns* `{ success: false, errors }` rather
-      // than throwing, and the call above discards its return value — so this
-      // endpoint answers `isValid: true` for every character, valid or not.
-      // Left exactly as it was: a typing pass must not change what an endpoint
-      // returns. Logged separately to be fixed with a test that fails first.
-      const issues = zodLikeIssues(error);
-      if (issues) {
-        const formattedErrors = issues.map((err) => ({
-          path: err.path.join('.') || 'root',
-          message: err.message,
-          code: err.code,
-        }));
-
-        return res.status(200).json({
-          isValid: false,
-          errors: formattedErrors,
-        });
-      }
-
-      // Unknown validation error
-      return res.status(200).json({
-        isValid: false,
-        errors: [{
-          path: 'unknown',
-          message: errorMessage(error) || 'Unknown validation error',
-          code: 'unknown',
-        }],
-      });
+    // The validator reports rather than throws; a bad sheet is a 200 with
+    // the reasons, as documented, since asking is not an error.
+    const result = validateCharacterData(character.gameSystem as GameSystem, character.data);
+    if (result.success) {
+      return res.status(200).json({ isValid: true });
     }
+    return res.status(200).json({
+      isValid: false,
+      errors: result.errors.issues.map((issue) => ({
+        path: issue.path.join('.') || 'root',
+        message: issue.message,
+        code: issue.code,
+      })),
+    });
   } catch (error) {
     logger.error('Error validating character', { err: error });
     return res.status(500).json({
