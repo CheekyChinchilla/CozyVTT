@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **A connection that moves to another campaign now leaves the first one.** A client that authenticated one connection into a second campaign kept receiving everything the first table said and did, stayed on its online roster, and was treated in that room with the role it holds in the second campaign, so a player in one campaign who is the DM of another could be handed the first campaign's DM view of a map. The browser opens a fresh connection per campaign and was never affected; scripted clients were.
+
 - **Instance backups no longer live inside the uploads folder.** The Admin Dashboard wrote its backups, which hold every password hash and MFA secret, to `backend/uploads/backups/`, while the documentation told you to sync `backend/uploads/` off-site as your media. They now go to `backend/backups/`, beside it. **If you have backups from an earlier version, move them from `backend/uploads/backups/` to `backend/backups/`**; the dashboard only lists the new location.
 
 - **A production instance refuses to start on the placeholder database password.** `SESSION_SECRET` has always been checked this way; `DATABASE_PASSWORD` now is too. If your instance stops after this upgrade with a message about the placeholder password, set a real one in `.env` and, if you wrote `DATABASE_URL` by hand, update it to match.

@@ -70,7 +70,10 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // Authenticate campaign membership
+        // Read before the membership check, which is why that check must not
+        // write the socket's campaign itself: this is the room to leave.
+        const previousCampaignId = socket.campaignId;
+
         const result = await authenticateCampaign(socket, data.campaignId);
 
         if (!result.success) {
@@ -78,10 +81,11 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // SECURITY: Enforce single campaign context per socket
-        // Leave previous campaign room if exists
-        if (socket.campaignId && socket.campaignId !== data.campaignId) {
-          const previousCampaignId = socket.campaignId;
+        // SECURITY: one campaign per socket. Leave the previous room before
+        // taking the new campaign's role, or a role-filtered fan-out in the old
+        // room would find this socket still there and answer it with the new
+        // role's view of the old campaign.
+        if (previousCampaignId && previousCampaignId !== data.campaignId) {
           await socket.leave(previousCampaignId);
 
           // Notify old campaign that user left
@@ -97,9 +101,11 @@ export function registerEventHandlers(io: Server): void {
           await broadcastPresence(previousCampaignId);
         }
 
-        // Join the campaign room
+        // Join the campaign room. Role is refreshed even when the campaign is
+        // the same, since a client re-authenticates after a reconnect.
         socket.join(data.campaignId);
-        socket.campaignId = data.campaignId; // Update stored campaign ID
+        socket.campaignId = data.campaignId;
+        socket.role = result.role;
 
         // Notify the user they've been authenticated
         socket.emit('authenticated', {
