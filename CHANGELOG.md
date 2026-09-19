@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.
 
+- **Preview the map through any token's eyes.** The Preview Player View picker now lists the tokens on the map as well as the players, plus **All player tokens** for the party's combined view. A table that projects one screen and moves every token itself, where there are no player accounts to preview as, can show the room exactly what one character sees, or what the party sees with the monsters' sight left out.
+
 - **Fog of war can be turned on or off per map.** A checkbox at the top of the Fog of War panel, and one in Edit Map, switches it. Off, players see the whole map; what you had revealed is kept for when you turn it back on.
 
 ### Changed

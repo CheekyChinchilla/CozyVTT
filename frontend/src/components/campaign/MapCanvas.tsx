@@ -59,6 +59,10 @@ import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
+import {
+  previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection,
+  encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
+} from './map/previewSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow, gridYToCentrePx } from './map/coords';
 import mapService from '@/services/map.service';
@@ -303,23 +307,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const { toast, showToast, hideToast } = useToast();
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
-  const [previewUserId, setPreviewUserId] = useState<string | null>(null);
+  const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
 
-  // Player Preview: the DM's canvas drawn as one chosen player would see it.
-  // That player's tokens supply the vision, their fog comes from the grid the
-  // DM already holds, and the same visibility rule decides what is drawn.
-  const previewPlayers = useMemo(
-    () => (campaign?.memberships ?? []).filter((m) => (m.role as string) === 'PLAYER'),
-    [campaign?.memberships]
-  );
-  const previewing = isDM && dmPreviewPlayerView && previewUserId !== null;
-  const previewOwn = useCallback(
-    (t: Token): boolean =>
-      t.controlledBy === previewUserId ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === previewUserId)),
-    [previewUserId, campaign?.characters]
+  // Player Preview: the DM's canvas drawn through chosen eyes, a player's, one
+  // token's, or the whole party's. Those tokens supply the vision, the fog
+  // comes from the grid the DM already holds, and the same visibility rule
+  // decides what is drawn.
+  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
+  const previewOwn = useMemo(
+    () => previewOwnFor(previewSelection, campaign?.characters ?? []),
+    [previewSelection, campaign?.characters]
   );
   const viewerOwn = previewing ? previewOwn : isOwnToken;
+  const previewChoices = useMemo(
+    () => previewOptions(campaign?.memberships ?? [], tokens),
+    [campaign?.memberships, tokens]
+  );
   const previewRevealed = useMemo<Set<number> | null>(
     () => (previewing && fogEnabled ? revealedSetFromFogState(fogState) : null),
     [previewing, fogEnabled, fogState]
@@ -1130,7 +1133,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Explored memory is asked for when the map changes or the setting flips
   // on; a DM asks for the previewed player's. Off: nothing to ask for.
   const explorationEnabled = currentMap?.explorationEnabled ?? true;
-  const exploringAs = previewing ? previewUserId : (isDM ? null : user?.id ?? null);
+  const exploringAs = previewing ? previewMemoryUser(previewSelection) : (isDM ? null : user?.id ?? null);
   useEffect(() => {
     setExploredCells(null);
     if (!currentMap || !explorationEnabled || !(currentMap.lightingEnabled ?? false) || !exploringAs) return;
@@ -1967,7 +1970,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, previewing, previewUserId]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, previewing, previewSelection]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -3637,21 +3640,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
           {dmPreviewPlayerView && (
             <select
-              value={previewUserId ?? ''}
-              onChange={(e) => setPreviewUserId(e.target.value || null)}
-              aria-label="Player to preview as"
+              value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
+              onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
+              aria-label="Player or token to preview as"
               className="px-2 py-1.5 rounded text-xs bg-ink/85 text-paper border border-ink/40"
             >
-              {previewPlayers.length === 0 && <option value="">No players yet</option>}
-              {previewPlayers.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.user?.displayName ?? 'Player'}</option>
-              ))}
+              {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
+              {(['players', 'tokens'] as const).map((group) => {
+                const entries = previewChoices.filter((o) => o.group === group);
+                if (entries.length === 0) return null;
+                return (
+                  <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
+                    {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                );
+              })}
             </select>
           )}
           <button
             onClick={() => {
               const next = !dmPreviewPlayerView;
-              if (next && previewUserId === null && previewPlayers.length > 0) setPreviewUserId(previewPlayers[0].userId);
+              if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
               setDmPreviewPlayerView(next);
             }}
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${

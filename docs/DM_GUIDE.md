@@ -1051,10 +1051,12 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
-- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on), then pick the player in the box beside it
-- Your canvas switches to that player's view: their tokens' darkvision, the lights they can see, the doors in their line of sight, and the fog exactly as it is revealed to them. Tokens they would not have been sent are not drawn
+- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
+- Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors in their line of sight, and the fog exactly as it is revealed. Tokens that view would not have been sent are not drawn
 - Your light icons and tool panels stay, so you can adjust things while watching the result
 - The preview shows the material plane only
+
+**Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Those two previews show current sight only; remembered explored areas belong to a player account, so only a player preview shows them.
 
 Click the button again to return to your own view.
 
