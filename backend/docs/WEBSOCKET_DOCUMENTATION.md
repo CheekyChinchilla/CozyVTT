@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-09-20
 **Protocol Version:** 2.0
 
 ## Table of Contents
@@ -10,11 +10,11 @@
 3. [Authentication](#authentication)
 4. [Event Reference](#event-reference)
 5. [Token Movement — a worked example](#token-movement--a-worked-example)
-5. [Fog, lighting and explored memory](#fog-lighting-and-explored-memory)
-6. [Error Handling](#error-handling)
-7. [Client Examples](#client-examples)
-8. [Testing](#testing)
-9. [Event Inventory](#event-inventory)
+6. [Fog, lighting and explored memory](#fog-lighting-and-explored-memory)
+7. [Error Handling](#error-handling)
+8. [Client Examples](#client-examples)
+9. [Testing](#testing)
+10. [Event Inventory](#event-inventory)
 
 ---
 
@@ -359,7 +359,9 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
    Client finishes dragging
    Server validates permission & bounds
    Server updates database
-   Server broadcasts final position to ALL (including sender)
+   Server sends the final position: to everyone on an unlit map; on a lit
+   map to each player as token:appeared or token:disappeared, by their sight;
+   a hidden token's position reaches DMs only
 ```
 
 ### token.move.start
@@ -463,6 +465,9 @@ socket.on('token.move', (data) => {
 ```
 
 **Client-Side Best Practice:**
+
+> A cancelled drag must send one more `token.move` back to the square the token was picked up from. The server writes nothing for a cancel, and without that frame every other client keeps showing the last position it received.
+
 ```javascript
 // Send updates on every mouse move
 function onMouseMove(event) {
@@ -519,7 +524,7 @@ socket.on('token.moved', (data) => {
 - Updates `Map.tokens` JSON array
 - Persists final position
 
-**Broadcast:** `token.move.end` to ALL campaign members (including sender)
+**Broadcast:** `token.moved` to campaign members, the sender included. On a lit map each player instead gets `token:appeared` (with the token) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only.
 **Broadcast Payload:**
 ```typescript
 {
@@ -556,7 +561,7 @@ function onMouseUp(event) {
 }
 
 // Receive confirmation
-socket.on('token.move.end', (data) => {
+socket.on('token.moved', (data) => {
   // Remove "Saving..." indicator
   hideSavingIndicator();
 
@@ -742,7 +747,7 @@ export function useTokenMovement(socket: Socket | null, mapId: string) {
       updateTokenPosition(data.tokenId, data.x, data.y);
     });
 
-    socket.on('token.move.end', (data) => {
+    socket.on('token.moved', (data) => {
       // Final position confirmed
       confirmTokenPosition(data.tokenId, data.x, data.y);
     });

@@ -4,7 +4,7 @@ Prisma schema and migrations for CozyVTT. PostgreSQL 14+.
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA
@@ -18,7 +18,8 @@ The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by dom
 
 **Game content**
 - `Character` — flexible JSON-backed character sheets, optionally bound to a campaign + game system
-- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations
+- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour)
+- `MapExploration` — one player's explored cells on one map; never read when deciding which tokens to send
 - `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global)
 - `CreatureFavorite` — DM's per-campaign starred creatures
 - `TokenTemplate` — reusable token configurations copyable across campaigns
@@ -84,9 +85,6 @@ Several models use Prisma's `Json` type for flexibility:
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
-| `Map.fogEnabled` | Whether manual fog of war applies on this map (default on; new maps are created with it off) |
-| `Map.globalIllumination` | With dynamic lighting on, everything in line of sight counts as lit (default on; new maps are created with it off) |
-| `Map.explorationEnabled` | Players' explored areas are remembered and greyed in when out of sight (default on; new maps are created with it off) |
 | `MapExploration.explored` | One player's explored cells on one map, in the fog grid's shape; never read when deciding which tokens to send |
 | `Character.data` | Per-game-system sheet (validated by Zod at the route layer) |
 | `Message.metadata` | Optional context (e.g. character ID for character actions) |

@@ -152,6 +152,13 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+                  services:
+                    type: object
+                    properties:
+                      api: { type: string, example: ok }
+                      database: { type: string, example: ok }
+        '503':
+          description: The database cannot be reached; the body carries `status: degraded`
 
   # ============================================
   # CLIENT CONFIG
@@ -1322,7 +1329,7 @@ paths:
                   nullable: true
                 status:
                   type: string
-                  enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED]
+                  enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -1676,7 +1683,9 @@ paths:
                       type: boolean
                     periods:
                       type: array
+                      minItems: 1
                       maxItems: 20
+                      description: At least one period; names must be unique.
                       items:
                         type: object
                         required: [name, hue, filter]
@@ -1783,7 +1792,7 @@ paths:
                         gameSystem: { type: string, nullable: true }
                         status:
                           type: string
-                          enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+                          enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
                         owner:
                           type: object
                           properties:
@@ -5949,7 +5958,7 @@ paths:
       tags: [Admin]
       summary: Download a backup file
       operationId: adminDownloadBackup
-      description: Streams a backup `.sql` file as a download. Filename is strictly validated against `backup-YYYY-MM-DDTHH-MM-SS.sql` pattern to prevent path traversal.
+      description: Streams a backup `.zip` (the database dump and every uploaded file) as a download. Filename is strictly validated against the `backup-YYYY-MM-DDTHH-MM-SS.zip` pattern to prevent path traversal.
       security:
         - cookieAuth: []
       parameters:
@@ -5958,7 +5967,7 @@ paths:
           required: true
           schema:
             type: string
-          example: backup-2026-03-04T10-30-00.sql
+          example: backup-2026-03-04T10-30-00.zip
       responses:
         '200':
           description: Backup file download
@@ -5981,7 +5990,7 @@ paths:
       tags: [Admin]
       summary: Delete a backup file
       operationId: adminDeleteBackup
-      description: Deletes a backup `.sql` file from the server. Filename is strictly validated. Action is logged to SystemLog.
+      description: Deletes a backup `.zip` from the server. Filename is strictly validated. Action is logged to SystemLog.
       security:
         - cookieAuth: []
       parameters:
@@ -6958,7 +6967,7 @@ components:
           format: uuid
         status:
           type: string
-          enum: [PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+          enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
           default: PREPARATION
         currentMapId:
           type: string

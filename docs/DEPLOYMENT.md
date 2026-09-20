@@ -663,7 +663,7 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
 
 ### Via the included scripts
 
@@ -861,9 +861,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**1.4.0 needs no manual step** — its migrations run automatically and change no
-existing data. This section applies only if you are coming from a version
-**before 1.3.0** and never ran it.
+**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has two things to know after the upgrade, both in the changelog's upgrade note: backups now live in `backend/backups/`, and MFA backup codes must be regenerated.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
 
 If you have **Pathfinder 2e** characters made from the built-in templates, run
 this once so their strikes and class features appear on the sheet. It also

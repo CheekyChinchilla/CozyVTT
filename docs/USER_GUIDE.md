@@ -566,7 +566,7 @@ Where two dim light zones overlap, the area is treated as bright light. This mat
 **Light does not see for you.** A lit area is only visible to you if your token
 could actually see it — walls block sight as well as light, so a lamp burning
 inside a closed room shows you nothing from outside it, and the creatures in
-there stay hidden until you can see in. Your token's **sight radius** governs how
+there stay hidden until you can see in. Your token's **darkvision** governs how
 far you make things out in the dark; it does not stop you noticing a lit room
 across a courtyard once you have a clear line to it.
 

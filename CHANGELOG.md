@@ -14,13 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.
 
-- **Preview the map through any token's eyes.** The Preview Player View picker now lists the tokens on the map as well as the players, plus **All player tokens** for the party's combined view. A table that projects one screen and moves every token itself, where there are no player accounts to preview as, can show the room exactly what one character sees, or what the party sees with the monsters' sight left out.
+- **Preview the map through any token's eyes.** The Preview Player View picker now lists the tokens on the map (the material plane) as well as the players, plus **All player tokens** for the party's combined view. A table that projects one screen and moves every token itself, where there are no player accounts to preview as, can show the room exactly what one character sees, or what the party sees with the monsters' sight left out.
 
 - **Fog of war can be turned on or off per map.** A checkbox at the top of the Fog of War panel, and one in Edit Map, switches it. Off, players see the whole map; what you had revealed is kept for when you turn it back on.
 
 ### Changed
 
-- **Preview Player View shows one chosen player's actual view.** It used to combine every token's vision and left the DM's fog and every token on screen. It now asks which player to preview as and draws exactly what they see: their darkvision, the lights and doors in their sight, their fog, and only the tokens they would have.
+- **Preview Player View shows one chosen player's actual view.** It used to combine every token's vision and left the DM's fog and every token on screen. It now asks which player to preview as and draws exactly what they see: their darkvision, the lights and doors in their sight, their fog, the areas they remember, and only the tokens they would have.
 
 - **Dynamic lighting now means what the guide always said it meant.** A player sees what their tokens' sight radius reaches in the dark, plus anything a light source lights, and nothing else. Every token used to see the whole map regardless of light, which made lights decorative. Bright light shows clearly; dim light, and the dark within a token's darkvision, show half-dark; a token's own square is always visible. A new per-map setting, **Global Illumination** (in Edit Map and at the top of the Lights panel), restores the old behaviour (everything in line of sight is visible) for tables that want it; maps from before this release have it on, so they look exactly as before until the DM turns it off. A player with no token on a lit map is now sent no tokens at all.
 
@@ -28,9 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- **A token picked up and put back down no longer stays where the cursor was on everyone else's screen.** Picking a token up and moving it shows the move live to the whole table; cancelling the move (right-click, or the cursor leaving the map) told nobody, so other players kept seeing the token wherever the cursor had last been until it next moved. The cancel now puts it back for everyone.
+- **A token picked up and put back down no longer stays where the cursor was on everyone else's screen.** Picking a token up and moving it shows the move live to the whole table; cancelling the move (right-click, the cursor leaving the map, or a square another creature already stands on) told nobody, so other players kept seeing the token wherever the cursor had last been until it next moved. The cancel now puts it back for everyone.
 
-- **The bundled web server now forwards `/health` to the backend.** An uptime check against the site's own address was answered by the web page, which returns 200 for any path it does not know, so a dead backend looked healthy. `/health` now reaches the backend and answers 503 when the database is unreachable, as documented. The API reference's session pause and end responses now describe what those routes return.
+- **The bundled web server now forwards `/health` to the backend.** An uptime check against the site's own address was answered by the web page, which returns 200 for any path it does not know, so a dead backend looked healthy. `/health` now reaches the backend and answers 503 when the database is unreachable, as documented. The route reference's session pause and end responses now describe what those routes return.
 
 - **The character validation check tells the truth.** Asking the API whether a character sheet is valid answered yes for every sheet, whatever it held. It now reports the fields the sheet's rules reject, as its documentation always said it would. Saving a sheet was never affected: a bad one was always refused.
 
@@ -64,13 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **MFA backup codes are stored far more securely, and existing ones must be regenerated.** The recovery codes shown when you set up two-factor authentication were generated from too small a range and stored with a fast, unsalted hash, so a leaked database could have exposed them. They are now longer and hashed the same strong way as passwords. **After upgrading, your existing backup codes no longer work:** sign in with your authenticator and regenerate them from **Security → Regenerate backup codes**. Your authenticator app itself is unaffected.
 
-- **A fresh install can no longer end up with two administrators.** On a brand
-  new instance the first person to register becomes the administrator. If two
-  people registered at the very same moment, before anyone had opened the setup
-  wizard, both could be made administrators. Registration is now serialised so
-  exactly one first administrator is ever created.
-
----
+- **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
 ### Security
 
@@ -89,6 +83,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Dependencies with published advisories updated.** Every advisory `npm audit` reported against the running application is fixed by an in-range update. Two remaining advisories against the routing library need a major upgrade and do not apply here: no navigation target in this app comes from user input.
 
 - **A token the DM has hidden no longer reaches players when it moves, and a moved token's DM notes are no longer sent.** On a map with dynamic lighting, moving a hidden token in a player's line of sight sent it to them with the DM's notes; on any map a hidden token's every move was broadcast. A player in the spirit realm was also sent material-plane tokens on moves. Moves now apply the same rules as opening the map.
+
+---
 
 ## [1.4.0] — 2026-09-14
 

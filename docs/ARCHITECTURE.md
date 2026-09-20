@@ -60,7 +60,7 @@ src/
 ├── server.ts          Entry point — creates Express app, attaches Socket.io
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
-│   ├── auth.ts        Passport.js session middleware, requireAuth guards
+│   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
 │   └── upload.ts      Multer configuration, magic byte validation
@@ -75,7 +75,6 @@ src/
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites
 │   ├── assets.ts      File upload and retrieval
 │   ├── invitations.ts Campaign invitation lifecycle
-│   ├── mfa.ts         TOTP setup, verify, disable, backup codes
 │   ├── setup.ts       First-run setup wizard
 │   ├── config.ts      Public client config (upload limits)
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
@@ -89,7 +88,7 @@ src/
 │   ├── utils.ts       System-message / broadcast helpers
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
 │                      vibe, maps, atmosphere, characters, initiative,
-│                      walls, fog, lights
+│                      walls, fog, lights, exploration, pings
 ├── utils/
 │   ├── dice-parser.ts    mathjs-based dice expression evaluator
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
@@ -150,7 +149,7 @@ src/
 ├── components/
 │   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
-│   │   └── map/       MapCanvas render layers, coordinate conversions, fog selection, vision cache, and animation/render-loop hooks
+│   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Admin panel tabs

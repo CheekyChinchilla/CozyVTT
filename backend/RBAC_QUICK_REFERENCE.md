@@ -143,6 +143,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission |
 | 404 | Not Found | Resource doesn't exist |
 | 400 | Bad Request | Invalid input data |
+| 409 | Conflict | The map's own setting refuses the action, such as a fog operation while fog is off |
 | 500 | Internal Server Error | Unexpected error |
 
 ---

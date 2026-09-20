@@ -1297,7 +1297,7 @@ List available database backups.
 
 ### `POST /api/admin/backups` *(Admin only)*
 
-Create a new database backup (pg_dump).
+Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
 
 ---
 

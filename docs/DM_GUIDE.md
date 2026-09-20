@@ -180,6 +180,7 @@ Click **+ New Token** and fill in:
 - **Type** — **PC** for player characters, **NPC** for monsters and allies, **Object** for environmental pieces
 - **HP** — Starting hit points (can be updated during play)
 - **Size** — How many grid squares the token covers (default: 1×1)
+- **Darkvision** — How far the token sees with no light, in grid squares (0 = none, 12 = 60 ft); not offered for Objects
 
 *Screenshot pending — Token creation form.*
 
@@ -207,18 +208,18 @@ Tokens support three display modes that control how they appear on the map:
 | **Top-Down** | Image rendered from above, no border | Overhead dungeon art, top-down tokens |
 | **Full-Art** | Full rectangular image shown at token size | Character portraits, scenic tokens |
 
-Set the display mode when creating a token, or change it later from the Token Manager or Quick Editor.
+Set the display mode when creating a token, or change it later from the Token Manager or Edit Token.
 
 **Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the creature's name. Hostile tokens use red, friendly use green, and neutral use blue — making it easy to distinguish dispositions at a glance.
 
 ### Editing Tokens During Play
 
-Click any token on the map to open the **Quick Editor**. From here you can:
+Right-click any token on the map and choose **Edit Token**, or click the pencil beside it in the Token Roster, to open the quick editor. It opens for player, NPC and object tokens; the HP, stat block and disposition sections are shown for NPCs. From here you can:
 
 - Update HP (current, max, and temporary)
 - Rename the token
 - View and edit the stat block (for NPC tokens with creature template data)
-- **Change the token image** — click the token avatar in the Quick Editor header to open the image picker
+- **Change the token image** — click the token avatar in the editor's header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
@@ -226,7 +227,7 @@ Click any token on the map to open the **Quick Editor**. From here you can:
 
 #### Changing a Token's Image
 
-1. Click the token on the map to open the Quick Editor
+1. Right-click the token on the map and choose **Edit Token**
 2. Click the token avatar (top-left of the editor) — a hover overlay with an image icon appears
 3. The **Image Picker** opens, showing every token image you have access to — platform-wide assets, your own uploads, and assets from campaigns you're a member of
 4. Select an image, or click **Upload New** to upload a fresh asset
@@ -987,7 +988,7 @@ Each token has a **Darkvision** value, in grid squares: how far it makes things 
 
 Set it in the **Token Manager** when placing a token, or afterwards from **Edit Token** (right-click the token, or the pencil in the Token Roster), which now opens for player tokens too. Only you can change it: it decides what the server sends that token's player.
 
-> **Tip:** With no darkvision and no lights nearby, a player sees only the square their token stands on. If that is not what you want for a map, tick **Global Illumination** in the map's settings (see below).
+> **Tip:** With no darkvision and no lights nearby, a player sees only the square their token stands on. If that is not what you want for a map, tick **Global Illumination** in the map's settings (see above).
 
 ### Light Sources
 
@@ -1007,10 +1008,10 @@ that room are not sent to their browser at all until they can see in. This is ho
 dynamic lighting works in every virtual tabletop that has it, and it is what lets
 you light a building in advance without spoiling what is inside.
 
-A token's **sight radius** governs how far it makes things out in the dark. It
-does not limit how far it can notice something that is lit: a character with a
-short sight radius still sees a bonfire across a field, provided nothing solid is
-in the way.
+A token's **Darkvision** governs how far it makes things out in the dark. It
+does not limit how far it can notice something that is lit: a character with
+little or no darkvision still sees a bonfire across a field, provided nothing
+solid is in the way.
 
 Two practical consequences when you are building a map:
 
