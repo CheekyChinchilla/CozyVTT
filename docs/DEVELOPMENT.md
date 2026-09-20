@@ -190,6 +190,11 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up
 ```
 
+> The dev stack runs the backend as an unprivileged user from the start, with no
+> root step to fix ownership, so create the two bind-mounted folders yourself before
+> the first `up`: `mkdir -p backend/uploads backend/backups`. Docker would otherwise
+> create a missing one as root and the backend could not write to it.
+
 Services (all exposed on localhost for easy debugging):
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:4000`

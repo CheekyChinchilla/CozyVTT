@@ -7,10 +7,12 @@ set -e
 # If running as root (production Docker with bind mounts), fix ownership of
 # mounted directories then drop to the unprivileged appuser via su-exec.
 # This is needed because Docker bind mounts are owned by the host (usually root),
-# which overrides the chown done in the Dockerfile image layer.
+# which overrides the chown done in the Dockerfile image layer. The backups
+# mount is included: Docker creates a missing host directory as root, and the
+# dashboard writes backups there as appuser.
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p /app/uploads/backups /app/logs
-  chown -R appuser:appgroup /app/uploads /app/logs
+  mkdir -p /app/uploads /app/logs /app/backups
+  chown -R appuser:appgroup /app/uploads /app/logs /app/backups
   exec su-exec appuser "$0" "$@"
 fi
 

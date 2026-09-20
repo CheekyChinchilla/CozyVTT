@@ -41,7 +41,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
 
 # Create directories; ownership will be set at container startup by start.sh
 # (bind mounts override Dockerfile chown, so we fix it at runtime via su-exec)
-RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appgroup /app
+RUN mkdir -p /app/uploads /app/logs /app/backups && chown -R appuser:appgroup /app
 
 # Run as root so start.sh can fix bind-mount permissions, then drops to appuser
 EXPOSE 4000

@@ -663,7 +663,7 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage. It is written to `backend/backups/` on the host (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
+**Admin Dashboard → Backups → Create Backup** generates a compressed `pg_dump` file you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
 
 ### Via the included scripts
 

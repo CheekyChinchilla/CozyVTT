@@ -26,7 +26,7 @@ COPY scripts/start.sh /usr/local/bin/start.sh
 RUN sed -i 's/\r$//' /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
 
 # Create uploads and logs dirs, hand ownership to appuser
-RUN mkdir -p /app/uploads /app/logs && chown -R appuser:appgroup /app
+RUN mkdir -p /app/uploads /app/logs /app/backups && chown -R appuser:appgroup /app
 
 USER appuser
 
