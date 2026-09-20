@@ -1,7 +1,7 @@
 /**
  * MFA backup codes.
  *
- * Each code is eight characters drawn from a 31-character alphabet (ambiguous
+ * Each code is eight characters drawn from a 32-character alphabet (ambiguous
  * I, O, 0 and 1 removed) built from eight random bytes, and stored hashed with
  * Argon2id through the same helpers passwords use. The earlier implementation
  * generated four random bytes — a 32-bit space — and stored an unsalted SHA-256

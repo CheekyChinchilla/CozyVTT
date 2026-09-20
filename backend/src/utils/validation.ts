@@ -73,8 +73,11 @@ export function sanitizeInput(input: string): string {
  *
  * A single leading slash and no scheme. `//host/x` is rejected along with the
  * rest: the browser reads it as another origin, not as a path. So is any
- * backslash: browsers read `/\\host/x` the same way.
+ * backslash: browsers read `/\\host/x` the same way. So is any control
+ * character: the URL parser strips tabs and newlines before it looks, so
+ * `/<tab>/host/x` would become `//host/x` on the way in.
  */
 export function isSameOriginPath(value: string): boolean {
-  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\');
+  // eslint-disable-next-line no-control-regex
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !/[\u0000-\u001f\u007f]/.test(value);
 }

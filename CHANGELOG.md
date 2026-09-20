@@ -42,7 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Fog of war hides the map from players.** Unrevealed areas were drawn as a dark tint that left the map artwork visible underneath, and every map load had a moment where the whole map showed before the fog arrived. Unrevealed areas are now fully opaque for players, from the first frame, and the walls, doors and light glows under them are hidden too; only a player's own token still shows. The DM still sees a translucent tint so they can work under it.
 
-- **Branding image paths containing a backslash are refused.** Browsers read a backslash after the first slash as another host, which the same-origin check missed.
+- **Branding image paths containing a backslash or a control character are refused.** Browsers read a backslash after the first slash as another host, and strip tabs and newlines before reading a path at all, so either could turn a same-origin path into another site's address; the same-origin check missed both.
 
 - **Imported tokens whose image was not in the archive now import with no image.** They used to keep a path from the instance the archive came from, which pointed at nothing on the new one.
 

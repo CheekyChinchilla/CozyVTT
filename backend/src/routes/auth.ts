@@ -736,6 +736,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Resp
         message: 'Either a TOTP token or backup code is required',
       });
     }
+    if ((token !== undefined && typeof token !== 'string') || (backupCode !== undefined && typeof backupCode !== 'string')) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'The TOTP token and backup code must be strings',
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: req.session.mfaPendingUserId },

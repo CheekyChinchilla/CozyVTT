@@ -69,3 +69,11 @@ it('lets a backup code complete a login and spends it', async () => {
   const replay = await replayAgent.post('/api/auth/mfa/verify-login').send({ backupCode: codes[0] });
   expect(replay.status).toBe(401);
 });
+
+it('refuses a second factor that is not a string, as a bad request', async () => {
+  const agent = request.agent(app);
+  const login = await agent.post('/api/auth/login').send({ email, password: TEST_PASSWORD });
+  expect(login.body.mfaRequired).toBe(true);
+  expect((await agent.post('/api/auth/mfa/verify-login').send({ backupCode: { any: 'thing' } })).status).toBe(400);
+  expect((await agent.post('/api/auth/mfa/verify-login').send({ token: 123456 })).status).toBe(400);
+});

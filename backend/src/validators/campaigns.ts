@@ -35,10 +35,12 @@ export const VibePeriodSchema = z.object({
 }).strip();
 
 /**
- * A campaign's atmosphere settings. `periods` is the part with a fixed shape.
- * The rest (the current period, atmosphere audio) is stored as sent, which is
- * why unknown keys pass through here. Shared with the campaign importer so
- * the two agree on what a period looks like.
+ * A campaign's atmosphere settings. `periods` is the part with a fixed shape;
+ * the rest (the current period name) is stored as sent, which is why unknown
+ * keys pass through here. Atmosphere audio is not among them: the route
+ * replaces whatever the client sent with what is stored, through
+ * `preserveAtmosphereAudio`. Shared with the campaign importer so the two
+ * agree on what a period looks like.
  */
 export const VibeSettingsSchema = z.object({
   periods: z.array(VibePeriodSchema).max(20),

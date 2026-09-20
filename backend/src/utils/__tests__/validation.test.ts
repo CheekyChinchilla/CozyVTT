@@ -14,6 +14,11 @@ describe('isSameOriginPath', () => {
     // this names another host too.
     '/\\evil.example/x.png',
     '/a\\b.png',
+    // The URL parser strips tabs and newlines before it looks, so these
+    // would become `//evil.example/...` on the way in.
+    '/\t/evil.example/x.png',
+    '/\n/evil.example/x.png',
+    '/a\rb.png',
   ])('refuses %j', (value) => {
     expect(isSameOriginPath(value)).toBe(false);
   });
