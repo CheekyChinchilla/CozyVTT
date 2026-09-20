@@ -6,7 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.5.0] — 2026-09-20
+
+### Upgrading from 1.4.0
+
+Nothing to do beyond the usual upgrade, and nothing you have is removed. Three things you will notice:
+
+- **Fog of war now hides the map.** Areas you have not revealed are solid black for players from the moment the map loads, where they used to show the artwork through a tint. Every map you already have keeps fog on with the same areas revealed; a map you create from now on starts with fog off.
+- **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player with no token on a lit map is now sent no tokens at all.
+- **Explored areas are remembered.** On a lit map, ground a player has seen stays on their map in grey once it is out of sight. It is on for existing maps; **Remember Explored Areas** in Edit Map turns it off for a map, and **Reset explored areas** in the Fog panel forgets it.
+
+And three things to do afterwards:
+
+- **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Security → Regenerate backup codes**. The authenticator app itself is unaffected.
+- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
+- **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If it stops after this upgrade with that message, set a real password, and update `DATABASE_URL` if you wrote it by hand.
+
+The upgrade adds three columns to the map table, each defaulting to today's behaviour, and one new empty table for explored memory. They are created automatically on the first startup after you pull, and no existing row is changed or removed. Back up first as always — see [Database Backups](docs/DEPLOYMENT.md#database-backups) — then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/backups`. There is no manual data migration for this release.
 
 ### Added
 

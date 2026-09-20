@@ -239,7 +239,7 @@ The map updates immediately for everyone at the table — no one needs to refres
 
 After setting a token's image, you can save it back to the creature template so every future placement of that creature uses the same image:
 
-1. In the Quick Editor, find the **"Save image to creature template"** section
+1. In the quick editor, find the **"Save image to creature template"** section
 2. Click **Save to Template**
 
 **SRD creatures are read-only.** If the token is based on an SRD creature (imported from Open5e), CozyVTT will automatically create a custom duplicate of that creature for your campaign:
@@ -342,8 +342,8 @@ Favorites appear in a collapsible **"Favorites"** section at the top of the Crea
 Click any creature in the library to expand its details, then click **Place on Map** (or drag it onto the canvas). A new NPC token is created with:
 
 - The creature's name
-- Its stat block (viewable and editable in the Quick Editor)
-- Its hit points, taken from the stat block's **HP Max** (creatures with no HP recorded start at 10 — adjust in the Quick Editor)
+- Its stat block (viewable and editable in the quick editor)
+- Its hit points, taken from the stat block's **HP Max** (creatures with no HP recorded start at 10 — adjust in the quick editor)
 - Its image (if one has been associated)
 - Default disposition from the template (hostile, friendly, or neutral)
 - Display mode from the template (pog, top-down, or full-art)
@@ -369,7 +369,7 @@ Custom creatures are scoped to your campaign and fully editable.
 
 Rather than typing a number for each save and skill, you tick what the creature is
 good at and CozyVTT works out the bonus. This applies everywhere a stat block is
-edited: the Creature Library, the Token Template editor, and the Quick Editor on a
+edited: the Creature Library, the Token Template editor, and the quick editor on a
 token already on the map.
 
 **In D&D 5e**, each row has two checkboxes:
@@ -436,7 +436,7 @@ The grid only ever shows images you have access to: platform-wide assets, your o
 
 *Screenshot pending — Creature editor with the token image picker expanded.*
 
-Whatever you choose here becomes the default image for every token placed from that creature. To change the image on a single token that's already on the map without touching the template, use the Quick Editor instead — see [Changing a Token's Image](#changing-a-tokens-image).
+Whatever you choose here becomes the default image for every token placed from that creature. To change the image on a single token that's already on the map without touching the template, use the quick editor instead — see [Changing a Token's Image](#changing-a-tokens-image).
 
 ### Duplicating SRD Creatures
 
