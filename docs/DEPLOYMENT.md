@@ -771,7 +771,13 @@ Returns `200 OK` when healthy:
 
 Returns `503` with `"status": "degraded"` if the database is unreachable. Useful for uptime monitors and load balancer health probes.
 
-This endpoint lives on the **backend**, which the bundled Nginx does not forward — so on a default install, check it from inside the stack:
+This endpoint lives on the **backend**. The bundled Nginx forwards it, so on a default install it answers on the site's own address, which is what to point an uptime monitor at:
+
+```bash
+curl -s http://localhost/health
+```
+
+It is also reachable from inside the stack, which works whatever proxy is in front:
 
 ```bash
 docker compose exec backend wget -qO- http://localhost:4000/health

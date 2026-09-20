@@ -2617,8 +2617,9 @@ paths:
                 properties:
                   message:
                     type: string
-                  session:
-                    $ref: '#/components/schemas/Session'
+                  stateSaved:
+                    type: boolean
+                    description: Whether the map's current state was written to the session record.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -2651,8 +2652,9 @@ paths:
                 properties:
                   message:
                     type: string
-                  session:
-                    $ref: '#/components/schemas/Session'
+                  stateSaved:
+                    type: boolean
+                    description: Whether the map's current state was written to the session record.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
