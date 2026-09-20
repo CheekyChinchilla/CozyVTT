@@ -737,9 +737,14 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // can now see it. The flags alone would leave a player holding a token the
     // server would no longer send, or missing one it now would.
     if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
-      try {
-        await broadcastMapData(getSocketInstance(), campaignId, updatedMap);
-      } catch { /* non-fatal */ }
+      // Only for the map the table is on. A map being edited in the library is
+      // nobody's canvas, and map.changed would put every client onto it.
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      if (campaign?.currentMapId === id) {
+        try {
+          await broadcastMapData(getSocketInstance(), campaignId, updatedMap);
+        } catch { /* non-fatal */ }
+      }
     }
 
     return res.status(200).json({ map: updatedMap });
@@ -1728,11 +1733,15 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
       // Socket may not be initialized in tests — log and continue
     }
 
-    // See PUT /:id: a lighting change alters which tokens players are sent.
+    // See PUT /:id: a lighting change alters which tokens players are sent,
+    // and only the map the table is on is anyone's canvas.
     if (updated.lightingEnabled !== map.lightingEnabled) {
-      try {
-        await broadcastMapData(getSocketInstance(), campaignId, updated);
-      } catch { /* non-fatal */ }
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      if (campaign?.currentMapId === id) {
+        try {
+          await broadcastMapData(getSocketInstance(), campaignId, updated);
+        } catch { /* non-fatal */ }
+      }
     }
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });

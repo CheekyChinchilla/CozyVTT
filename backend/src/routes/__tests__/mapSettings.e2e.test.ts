@@ -149,7 +149,7 @@ describe('a change that alters what players can see', () => {
    * the goblin across the map is in line of sight but dark: sent only when
    * Global Illumination is on or lighting is off altogether.
    */
-  async function createLitMap(): Promise<string> {
+  async function createLitMap(current = true): Promise<string> {
     const map = await createMap();
     const base = { imageUrl: '', size: { width: 1, height: 1 }, visible: true, rotation: 0, conditions: [] as string[], metadata: {} as Record<string, unknown>, layer: 'token' };
     await prisma.map.update({
@@ -162,6 +162,9 @@ describe('a change that alters what players can see', () => {
         ]),
       },
     });
+    // The re-send is for the map the table is on; a map being edited in the
+    // library is nobody's canvas.
+    if (current) await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: map.id } });
     return map.id;
   }
 
@@ -185,6 +188,19 @@ describe('a change that alters what players can see', () => {
     const all = waitForEvent<Resync>(client, 'map.changed');
     expect((await agent.put(`/api/campaigns/${campaignId}/maps/${mapId}/lighting`).send({ enabled: false })).status).toBe(200);
     expect(names(await all)).toEqual(['Goblin', 'Hero']);
+    client.disconnect();
+  });
+
+  it('a change to a map the table is not on sends the flags and nothing more', async () => {
+    const current = await createLitMap();
+    const other = await createLitMap(false);
+    const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const flags = waitForEvent<{ mapId: string }>(client, 'map:settings:updated');
+    const quiet = expectNoEvent(client, 'map.changed', 500);
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${other}`).send({ globalIllumination: true })).status).toBe(200);
+    expect((await flags).mapId).toBe(other);
+    await quiet;
+    expect(current).not.toBe(other);
     client.disconnect();
   });
 

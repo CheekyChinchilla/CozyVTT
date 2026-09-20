@@ -165,7 +165,12 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       for (const s of await io.in(socket.campaignId).fetchSockets()) {
         if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
       }
-      await broadcastMapData(io, socket.campaignId, { ...map, tokens: toJson(updatedTokens) });
+      // Only when this is the map the table is on: map.changed puts every
+      // client onto the map it carries.
+      const campaign = await prisma.campaign.findUnique({ where: { id: socket.campaignId }, select: { currentMapId: true } });
+      if (campaign?.currentMapId === mapId) {
+        await broadcastMapData(io, socket.campaignId, { ...map, tokens: toJson(updatedTokens) });
+      }
 
       logger.debug('spirit_layer.token.toggle', { tokenId, visible, userId: socket.userId, mapId });
     } catch (error) {
