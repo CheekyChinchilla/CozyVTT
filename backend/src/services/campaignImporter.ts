@@ -28,7 +28,7 @@ import {
   IMPORT_LIMITS,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
-import { preserveAtmosphereAudio } from '../utils/vibe-presets';
+import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { isSafeArchivePath } from '../utils/archive';
 import logger from '../utils/logger';
 
@@ -192,14 +192,9 @@ export async function importCampaign(
 
   // 6. Create Campaign first (assets have a FK to campaign)
   const newCampaignId = randomUUID();
-  const defaultVibeSettings = {
-    periods: [
-      { name: 'dawn', hue: '30', filter: 'sepia(0.1) brightness(0.9)' },
-      { name: 'day', hue: '0', filter: 'none' },
-      { name: 'dusk', hue: '280', filter: 'sepia(0.15) brightness(0.85)' },
-      { name: 'night', hue: '220', filter: 'brightness(0.5) contrast(1.2)' },
-    ],
-  };
+  // The same presets a new campaign gets, so an archive with no atmosphere
+  // settings imports with the atmosphere the allowlists accept.
+  const defaultVibeSettings = JSON.parse(JSON.stringify(DEFAULT_VIBE_SETTINGS)) as Prisma.InputJsonValue;
 
   const campaign = await prisma.campaign.create({
     data: {

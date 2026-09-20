@@ -7,7 +7,7 @@
  * through this helper instead.
  */
 
-import { preserveAtmosphereAudio, validateVibeSettings } from './vibe-presets';
+import { preserveAtmosphereAudio, validateVibeSettings, DEFAULT_VIBE_SETTINGS } from './vibe-presets';
 
 const settings = (extra: Record<string, unknown> = {}) => ({
   enabled: true,
@@ -17,6 +17,12 @@ const settings = (extra: Record<string, unknown> = {}) => ({
 
 const audioOf = (value: unknown): unknown =>
   (value as Record<string, unknown>).atmosphereAudio;
+
+describe('DEFAULT_VIBE_SETTINGS', () => {
+  it('passes the check every writer applies, so a new or imported campaign starts valid', () => {
+    expect(validateVibeSettings(DEFAULT_VIBE_SETTINGS)).toBeNull();
+  });
+});
 
 describe('preserveAtmosphereAudio', () => {
   it('drops an atmosphereAudio the caller sent', () => {
