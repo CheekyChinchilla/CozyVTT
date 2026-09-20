@@ -149,6 +149,11 @@ services:
       # Only substitute this one variable — without the filter, envsubst would
       # also blank Nginx's own $host / $scheme / $proxy_add_x_forwarded_for.
       NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE"
+      # Bump this whenever nginx/nginx.conf changes. The template is rendered
+      # when the container starts, and `docker compose up -d --build` leaves a
+      # running container alone unless its definition changed, so without a
+      # change here an upgrade keeps serving the previous config.
+      NGINX_CONF_STAMP: "1.5.0"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
