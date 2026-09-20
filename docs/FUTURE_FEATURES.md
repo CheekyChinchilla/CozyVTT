@@ -40,6 +40,14 @@ _Nothing in progress._
 
 ### Polish / tech debt
 
+- **Player fog as a cached raster.** A player's fog is drawn on the overlay
+  layer (so walls, doors and glows sit under it), one filled rectangle per
+  unrevealed cell, and the overlay repaints on every mouse move. On a very
+  large, mostly fogged map that is tens of thousands of rectangles per hover.
+  Not measured to be slow at the sizes maps here have; if it is, draw the fog
+  once into an offscreen canvas invalidated on reveal, as the lighting mask
+  already is, at one pixel per cell scaled with smoothing off.
+
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
   — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept

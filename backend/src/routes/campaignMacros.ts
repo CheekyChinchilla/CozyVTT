@@ -174,12 +174,4 @@ router.delete('/:campaignId/macros/:macroId', campaignMember, async (req: Authen
   }
 });
 
-/**
- * Documents shared with a campaign.
- *
- * A document asset is private to whoever uploaded it. Linking it here is what
- * lets the campaign's members read it, and `canReadAsset` is where that grant
- * is honoured. Only the DM links and unlinks; every member can list.
- */
-
 export default router;
