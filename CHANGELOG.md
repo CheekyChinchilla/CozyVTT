@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A token picked up and put back down no longer stays where the cursor was on everyone else's screen.** Picking a token up and moving it shows the move live to the whole table; cancelling the move (right-click, or the cursor leaving the map) told nobody, so other players kept seeing the token wherever the cursor had last been until it next moved. The cancel now puts it back for everyone.
+
 - **The bundled web server now forwards `/health` to the backend.** An uptime check against the site's own address was answered by the web page, which returns 200 for any path it does not know, so a dead backend looked healthy. `/health` now reaches the backend and answers 503 when the database is unreachable, as documented. The API reference's session pause and end responses now describe what those routes return.
 
 - **The character validation check tells the truth.** Asking the API whether a character sheet is valid answered yes for every sheet, whatever it held. It now reports the fields the sheet's rules reject, as its documentation always said it would. Saving a sheet was never affected: a bad one was always refused.

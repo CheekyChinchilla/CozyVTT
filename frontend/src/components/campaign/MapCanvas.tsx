@@ -64,6 +64,7 @@ import {
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
+import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow, gridYToCentrePx } from './map/coords';
 import mapService from '@/services/map.service';
@@ -415,6 +416,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const canEmit = (): boolean => {
     return socket !== null && socket !== undefined && socket.getSocket() !== null;
+  };
+
+  // Put a held token back where it was picked up. The per-frame moves told
+  // every other client where the cursor went; without this release they keep
+  // showing the last cursor position until the token next moves.
+  const cancelHold = () => {
+    if (draggedToken && currentMap && canEmit()) {
+      socket!.emitTokenMove(releaseHeldToken(draggedToken, currentMap.id));
+    }
+    setDraggedToken(null);
+    setDragOffset(null);
   };
 
   /**
@@ -2460,8 +2472,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         );
         if (blockedBy.length > 0) {
           showToast(`${blockedBy[0].name} is already standing there.`, 'info');
-          setDraggedToken(null);
-          setDragOffset(null);
+          cancelHold();
           markDirty('tokens');
           return;
         }
@@ -2920,10 +2931,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const handleMouseLeave = () => {
     // Cancel token drag if in progress
-    if (draggedToken) {
-      setDraggedToken(null);
-      setDragOffset(null);
-    }
+    if (draggedToken) cancelHold();
 
     // Stop map panning
     mapControls.stopDrag();
@@ -3055,10 +3063,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setDoorContextMenu(null);
 
     // Cancel any picked-up token (right-click cancels movement)
-    if (draggedToken) {
-      setDraggedToken(null);
-      setDragOffset(null);
-    }
+    if (draggedToken) cancelHold();
 
     // Get grid + screen coordinates of click
     const rect = canvasRef.current.getBoundingClientRect();
