@@ -470,7 +470,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 ? 'bg-stone-gray/10 text-stone-gray'
                 : 'bg-moss-green/10 text-brand-ink'
             }`}>
-              {tokenType === TokenType.OBJECT ? 'Object' : 'NPC'}
+              {tokenType === TokenType.OBJECT ? 'Object' : tokenType === TokenType.PLAYER ? 'Player' : 'NPC'}
             </span>
 
             {/* Close */}
@@ -856,7 +856,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
                 <TokenVisionField
                   value={token.sightRadius ?? 0}
-                  onChange={(squares) => { void saveUpdate({ sightRadius: squares }); }}
+                  onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
                 />
               </section>
             )}

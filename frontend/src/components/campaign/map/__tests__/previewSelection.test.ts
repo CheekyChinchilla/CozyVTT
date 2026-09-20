@@ -6,6 +6,7 @@ import {
   previewMemoryUser,
   previewOptions,
   defaultPreviewSelection,
+  reconcilePreviewSelection,
   type PreviewSelection,
 } from '../previewSelection';
 import type { CampaignMembership, Token } from '@/types';
@@ -101,6 +102,20 @@ describe('previewOptions', () => {
 
   it('offers no party entry without a player-type token', () => {
     expect(previewOptions([], [goblin]).map((o) => o.value)).toEqual(['token:goblin']);
+  });
+});
+
+describe('reconcilePreviewSelection', () => {
+  it('keeps a selection the picker still offers', () => {
+    const sel: PreviewSelection = { kind: 'token', tokenId: 'goblin' };
+    expect(reconcilePreviewSelection(sel, [], all)).toBe(sel);
+  });
+
+  it('falls back when the token is gone from the map', () => {
+    const sel: PreviewSelection = { kind: 'token', tokenId: 'goblin' };
+    expect(reconcilePreviewSelection(sel, [member('bob', 'PLAYER', 'Bob')], [hero])).toEqual({ kind: 'player', userId: 'bob' });
+    expect(reconcilePreviewSelection(sel, [], [])).toBeNull();
+    expect(reconcilePreviewSelection(null, [], all)).toBeNull();
   });
 });
 

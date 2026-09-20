@@ -117,6 +117,23 @@ export function previewOptions(
 }
 
 /**
+ * The selection to keep: the current one while the picker still offers it,
+ * else the default. A token that left the map (a switch, a deletion) would
+ * otherwise leave a preview with no viewer and a picker showing a value it
+ * does not hold.
+ */
+export function reconcilePreviewSelection(
+  selection: PreviewSelection | null,
+  memberships: ReadonlyArray<Pick<CampaignMembership, 'userId' | 'role' | 'user'>>,
+  tokens: ReadonlyArray<Token>
+): PreviewSelection | null {
+  if (!selection) return null;
+  const value = encodePreviewSelection(selection);
+  if (previewOptions(memberships, tokens).some((o) => o.value === value)) return selection;
+  return defaultPreviewSelection(memberships, tokens);
+}
+
+/**
  * What the preview starts on: the first player if there is one, else the
  * party, else the first token, else nothing to preview.
  */

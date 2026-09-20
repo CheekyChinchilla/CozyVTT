@@ -60,7 +60,7 @@ import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
 import {
-  previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection,
+  previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
@@ -304,6 +304,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     () => previewOptions(campaign?.memberships ?? [], tokens),
     [campaign?.memberships, tokens]
   );
+  // A token preview whose token left the map (a switch, a deletion) falls
+  // back to the default choice, so the preview never runs with no viewer.
+  useEffect(() => {
+    if (!previewSelection) return;
+    const kept = reconcilePreviewSelection(previewSelection, campaign?.memberships ?? [], tokens);
+    if (kept !== previewSelection) setPreviewSelection(kept);
+  }, [previewSelection, campaign?.memberships, tokens]);
   const previewRevealed = useMemo<Set<number> | null>(
     () => (previewing && fogEnabled ? revealedSetFromFogState(fogState) : null),
     [previewing, fogEnabled, fogState]
