@@ -54,20 +54,26 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       }
 
       const userId = socket.userId;
-      const row = await prisma.mapExploration.findUnique({
-        where: { mapId_userId: { mapId, userId } },
-        select: { explored: true },
+      // One writer per (map, user) at a time. Two tabs, or two reports in
+      // flight, would each read the row and write back only their own cells;
+      // the lock is released when the transaction ends.
+      const cellsNow = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}), hashtext(${userId}))`;
+        const row = await tx.mapExploration.findUnique({
+          where: { mapId_userId: { mapId, userId } },
+          select: { explored: true },
+        });
+        const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
+        applyWsFogOperation(explored, { op: 'reveal', cells });
+        await tx.mapExploration.upsert({
+          where: { mapId_userId: { mapId, userId } },
+          create: { mapId, userId, explored: toJson(explored) },
+          update: { explored: toJson(explored) },
+        });
+        return revealedCellIndices(explored);
       });
-      const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
-      applyWsFogOperation(explored, { op: 'reveal', cells });
 
-      await prisma.mapExploration.upsert({
-        where: { mapId_userId: { mapId, userId } },
-        create: { mapId, userId, explored: toJson(explored) },
-        update: { explored: toJson(explored) },
-      });
-
-      io.to(userId).emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
+      io.to(userId).emit('exploration:state', { mapId, userId, cells: cellsNow });
     } catch (error) {
       logger.error('exploration:reveal failed', { err: error });
     }
