@@ -861,7 +861,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has two things to know after the upgrade, both in the changelog's upgrade note: backups now live in `backend/backups/`, and MFA backup codes must be regenerated.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
+**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has three things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, and a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
 
 If you have **Pathfinder 2e** characters made from the built-in templates, run
 this once so their strikes and class features appear on the sheet. It also
