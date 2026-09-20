@@ -104,8 +104,23 @@ describe('on a lit map, in the player\'s line of sight', () => {
 
     const noAppear = expectNoEvent(player, 'token:appeared', 500);
     const noMove = expectNoEvent(player, 'token.moved', 500);
+    // Not even its id: a hidden token is the DM's secret, name included.
+    const noVanish = expectNoEvent(player, 'token:disappeared', 500);
     dm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
-    await Promise.all([noAppear, noMove]);
+    await Promise.all([noAppear, noMove, noVanish]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('a player moving their own token is not told the ids of tokens they may not see', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The re-sync after an own move names only tokens the player may have.
+    const noVanish = expectNoEvent(player, 'token:disappeared', 500);
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 4, y: 5 });
+    await noVanish;
 
     dm.disconnect();
     player.disconnect();

@@ -27,10 +27,17 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * clears it. A player who could not see the token learns where it ended
    * up, if they can see it there, from the end event's own fan-out.
    */
-  const dragRecipients = new Map<string, Set<string>>();
-  async function dragRecipientsFor(mapId: string, tokenId: string): Promise<Set<string>> {
+  const dragRecipients = new Map<string, Promise<Set<string>>>();
+  function dragRecipientsFor(mapId: string, tokenId: string): Promise<Set<string>> {
     const cached = dragRecipients.get(tokenId);
     if (cached) return cached;
+    // The promise is cached, not its result, so frames that arrive while the
+    // first one is still being decided wait for it instead of deciding again.
+    const deciding = decideDragRecipients(mapId, tokenId);
+    dragRecipients.set(tokenId, deciding);
+    return deciding;
+  }
+  async function decideDragRecipients(mapId: string, tokenId: string): Promise<Set<string>> {
     const ids = new Set<string>();
     const campaignId = socket.campaignId;
     if (!campaignId) return ids;
@@ -55,7 +62,6 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       );
       if (seen.some((t) => t.id === tokenId)) ids.add(s.id);
     }
-    dragRecipients.set(tokenId, ids);
     return ids;
   }
 
@@ -361,6 +367,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
           }
         }
+      } else if (!token.visible) {
+        // A hidden token is the DM's secret; its final position reaches DMs only.
+        const campaignSockets = await io.in(socket.campaignId).fetchSockets();
+        for (const s of campaignSockets) {
+          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+          }
+        }
       } else if (map.lightingEnabled) {
         // Dynamic lighting: per-player visibility filtering. The plane and
         // hidden-token rules (filterTokensByRole, the same call the map fetch
@@ -398,6 +412,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             map.globalIllumination
           );
           const visibleById = new Map(visible.map((t) => [t.id, t]));
+          // Only a token this player may have at all is ever named to them:
+          // hidden and off-plane tokens are not in forRole, so no
+          // token:disappeared carries their ids.
+          const mayHave = new Set(forRole.map((t) => t.id));
 
           const moved = visibleById.get(tokenId);
           if (moved) {
@@ -405,14 +423,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             // in case this player did not have it yet.
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
             s.emit('token:appeared', { token: moved, mapId });
-          } else {
+          } else if (mayHave.has(tokenId)) {
             s.emit('token:disappeared', { tokenId, mapId });
           }
 
           // If a player moved their OWN token, their view changed: re-sync all
           // OTHER tokens so those that left or entered view go at once.
           if (token.controlledBy === authedSocket.userId) {
-            for (const otherToken of updatedTokens) {
+            for (const otherToken of forRole) {
               if (otherToken.id === tokenId) continue; // already handled above
               // Skip own tokens — always included by filterTokensByLighting
               if ((otherToken as Token).controlledBy === authedSocket.userId) continue;
@@ -423,14 +441,6 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
                 s.emit('token:disappeared', { tokenId: otherToken.id, mapId });
               }
             }
-          }
-        }
-      } else if (!token.visible) {
-        // A hidden token is the DM's secret; its final position reaches DMs only.
-        const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-        for (const s of campaignSockets) {
-          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
           }
         }
       } else {
