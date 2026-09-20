@@ -74,6 +74,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **Dragging a token players cannot see no longer streams its position to them.** On a lit map, the position updates sent while a token is being dragged went to everyone at the table, so a player could read the exact path of a creature in the dark or behind a wall. They now go only to the DM and to players whose characters could see the token when the drag started; where it ends up is still sent to whoever can see it there.
+
 - **Revealing a token from the Spirit Layer panel no longer hands players its DM notes and position.** Toggling a token's visibility there sent every player the whole token, notes included, whether or not they could see it, and their screens did not even use it. Players now receive the map again as they may see it, the same as when the DM switches maps; the DM's own screen still gets the toggle.
 
 - **A spectator can no longer move or edit a token they once controlled, and only the DM can resize a token.** Demoting a player to spectator left their name on the tokens they had been given, and the API still let them move and change those tokens; live play on the map already refused. Token size is DM-only too: since this release a token always sees half its own footprint, so a player enlarging their token would have enlarged their sight.

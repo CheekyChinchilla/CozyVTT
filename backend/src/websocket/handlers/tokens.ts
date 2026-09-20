@@ -20,6 +20,46 @@ const moveRefusal = (role: string | undefined): string =>
 
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
+   * Who is sent a token's drag frames on a lit map: the DM's sockets, and the
+   * players whose tokens could see the token where its drag began. Frames
+   * arrive up to sixty times a second, so the line-of-sight check runs once,
+   * on the start event or the first frame, and is reused until token.move.end
+   * clears it. A player who could not see the token learns where it ended
+   * up, if they can see it there, from the end event's own fan-out.
+   */
+  const dragRecipients = new Map<string, Set<string>>();
+  async function dragRecipientsFor(mapId: string, tokenId: string): Promise<Set<string>> {
+    const cached = dragRecipients.get(tokenId);
+    if (cached) return cached;
+    const ids = new Set<string>();
+    const campaignId = socket.campaignId;
+    if (!campaignId) return ids;
+    const map = await prisma.map.findUnique({ where: { id: mapId } });
+    if (!map) return ids;
+    const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
+    const members = await io.in(campaignId).fetchSockets();
+    const playerIds = members
+      .map((s) => s as unknown as AuthenticatedSocket)
+      .filter((a) => a.role !== 'DM' && a.userId)
+      .map((a) => a.userId as string);
+    const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+    for (const s of members) {
+      if (s.id === socket.id) continue;
+      const member = s as unknown as AuthenticatedSocket;
+      if (member.role === 'DM') { ids.add(s.id); continue; }
+      if (!member.userId) continue;
+      const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false);
+      const seen = filterTokensByLighting(
+        forRole, member.userId, map.wallSegments as unknown as WallSegment[],
+        map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
+      );
+      if (seen.some((t) => t.id === tokenId)) ids.add(s.id);
+    }
+    dragRecipients.set(tokenId, ids);
+    return ids;
+  }
+
+  /**
    * TOKEN.MOVE.START - User begins dragging a token
    * Validates permission and broadcasts to campaign
    */
@@ -88,8 +128,19 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             s.emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
           }
         }
+      } else if (!token.visible) {
+        // A hidden token is the DM's secret, its id included.
+        for (const s of await io.in(socket.campaignId).fetchSockets()) {
+          if (s.id !== socket.id && (s as unknown as AuthenticatedSocket).role === 'DM') {
+            s.emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
+          }
+        }
+      } else if (map.lightingEnabled) {
+        for (const id of await dragRecipientsFor(mapId, tokenId)) {
+          io.to(id).emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
+        }
       } else {
-        // Normal token - broadcast to all campaign members (excluding sender)
+        // Unlit: every visible token is every player's to see.
         socket.to(socket.campaignId).emit('token.move.start', {
           tokenId,
           mapId,
@@ -131,7 +182,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // instead of two is the meaningful per-frame win).
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { width: true, height: true, campaignId: true, tokens: true },
+        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
@@ -187,8 +238,13 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
           }
         }
+      } else if (map.lightingEnabled) {
+        // Lit: only those who could see the token where the drag began.
+        for (const id of await dragRecipientsFor(mapId, tokenId)) {
+          io.to(id).emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+        }
       } else {
-        // Normal token - broadcast to all campaign members (excluding sender)
+        // Unlit: every visible token is every player's to see.
         socket.to(socket.campaignId).emit('token.moved', {
           tokenId,
           mapId,
@@ -256,6 +312,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       const token = tokensArray[tokenIndex];
+      // The drag is over; the next one is decided afresh.
+      dragRecipients.delete(tokenId);
 
       // See token.move.start: one rule, shared with the REST update route.
       if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
