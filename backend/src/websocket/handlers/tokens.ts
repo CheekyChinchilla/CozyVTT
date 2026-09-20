@@ -112,6 +112,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       }
 
+      // A new drag: whoever this token's frames went to last time is decided
+      // afresh, in case the last drag never reached token.move.end.
+      dragRecipients.delete(tokenId);
+
       // Role-filtered broadcast for spirit tokens
       if (token.layer === 'spirit') {
         const campaignSockets = await io.in(socket.campaignId).fetchSockets();
