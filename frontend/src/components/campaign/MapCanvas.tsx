@@ -65,6 +65,7 @@ import {
   tokensShownInPreview,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
+import { useFogStateRequest } from './map/useFogStateRequest';
 import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
@@ -129,7 +130,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // the one pointing — the blue hover outline already marks that case.
   const peekTokenId = useMapPeekTokenId();
   const prefersReducedMotion = useReducedMotion();
-  const { socket } = useWebSocket();
+  const { socket, status: socketStatus, reconnectCount } = useWebSocket();
+  // 'connected' is set only once the socket has authenticated into the campaign,
+  // which is when the server starts answering requests for map state.
+  const socketReady = socketStatus === 'connected';
   const { user } = useAuth();
   const isDM = userRole === 'DM';
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -1116,12 +1120,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [currentMap?.id]);  
 
   // Fog state is requested whenever the map changes or fog is switched on for
-  // it (DMs get the full grid, players their revealed cells). Off: nothing to
-  // ask for, and the server would answer nothing anyway.
-  useEffect(() => {
-    if (!currentMap || !fogEnabled) return;
-    socket?.getSocket()?.emit('fog:request_state', { mapId: currentMap.id });
-  }, [currentMap?.id, fogEnabled]);
+  // it (DMs get the full grid, players their revealed cells), once the socket
+  // can be answered and again after a reconnect. Off: nothing to ask for.
+  useFogStateRequest(socket, currentMap?.id, fogEnabled, socketReady, reconnectCount);
 
   // Explored memory: the cells this viewer's vision has covered on this map,
   // as the server remembers them. Whose memory depends on whose eyes: a
@@ -1133,7 +1134,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socket,
     currentMap?.id,
     explorationEnabled && (currentMap?.lightingEnabled ?? false),
-    exploringAs
+    exploringAs,
+    socketReady,
+    reconnectCount
   );
   const exploredScratchRef = useRef<HTMLCanvasElement | null>(null);
   const lastExploredReportRef = useRef(0);
@@ -1309,7 +1312,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id]);  
+  }, [socket, currentMap?.id, socketReady, reconnectCount]);
 
   // ============================================
   // Map pings — receive, name, and expire

@@ -732,6 +732,15 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       } catch { /* non-fatal */ }
     }
 
+    // Fog switched on: push the fog state at once. A client asks for it when
+    // its flag flips, but the flip it sees first is its own optimistic one,
+    // sent before this row was written, and the server had nothing to answer.
+    if (updatedMap.fogEnabled && !existingMap.fogEnabled) {
+      try {
+        await broadcastFogState(getSocketInstance(), campaignId, id, loadFogState(updatedMap, updatedMap.fogData as FogState | null));
+      } catch { /* non-fatal */ }
+    }
+
     // Lighting and Global Illumination decide which tokens each player is
     // sent, so when either changes every client gets the map again as they
     // can now see it. The flags alone would leave a player holding a token the

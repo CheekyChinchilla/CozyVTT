@@ -35,17 +35,22 @@ export function useExploredMemory(
   /** Lighting and explored memory are both on for this map. */
   active: boolean,
   /** Whose memory to hold; null when this canvas explores as nobody (the DM's own view). */
-  exploringAs: string | null
+  exploringAs: string | null,
+  /** The socket has authenticated; a request sent before that is dropped unanswered. */
+  ready: boolean,
+  /** Bumped on every reconnect, so the memory is asked for again on the new socket. */
+  epoch: number
 ) {
   const [exploredCells, setExploredCells] = useState<Set<number> | null>(null);
 
-  // Ask when the map, the setting, or whose memory it is changes. Off, or
-  // nobody to ask for: nothing to hold.
+  // Ask when the map, the setting, or whose memory it is changes, and again
+  // once the socket can answer or after it reconnects. Off, or nobody to ask
+  // for: nothing to hold.
   useEffect(() => {
     setExploredCells(null);
-    if (!mapId || !active || !exploringAs) return;
+    if (!mapId || !active || !exploringAs || !ready) return;
     socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
-  }, [socket, mapId, active, exploringAs]);
+  }, [socket, mapId, active, exploringAs, ready, epoch]);
 
   useEffect(() => {
     const live = socket?.getSocket();

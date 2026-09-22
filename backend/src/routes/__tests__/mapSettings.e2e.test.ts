@@ -125,6 +125,34 @@ describe('updating the flags', () => {
     client.disconnect();
   });
 
+  it('switching fog on pushes the fog state to every client, unasked', async () => {
+    // A client asks for fog state when its flag flips, but the flip it sees
+    // first is its own optimistic one, sent before this row is written, and
+    // the server has nothing to say to it. The route pushes the state itself.
+    const map = await createMap();
+    const dmClient = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const playerClient = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+
+    const grid = waitForEvent<{ mapId: string; fogState: { revealed: boolean[] } }>(dmClient, 'fog:updated');
+    const cells = waitForEvent<{ mapId: string; revealedCells: number[] }>(playerClient, 'fog:cells');
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: true })).status).toBe(200);
+    const dmSaw = await grid;
+    expect(dmSaw.mapId).toBe(map.id);
+    expect(dmSaw.fogState.revealed).toHaveLength(100);
+    expect(dmSaw.fogState.revealed.every((r) => r === false)).toBe(true);
+    expect(await cells).toEqual(expect.objectContaining({ mapId: map.id, revealedCells: [] }));
+
+    // Switching it off, or changing another flag, pushes nothing.
+    const quietOff = expectNoEvent(dmClient, 'fog:updated', 400);
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: false })).status).toBe(200);
+    await quietOff;
+    const quietOther = expectNoEvent(dmClient, 'fog:updated', 400);
+    expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ globalIllumination: true })).status).toBe(200);
+    await quietOther;
+    dmClient.disconnect();
+    playerClient.disconnect();
+  });
+
   it('the lighting toggle route reports both flags too', async () => {
     const map = await createMap();
     const playerCookie = await server.loginAs(playerId);
