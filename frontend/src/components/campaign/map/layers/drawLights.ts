@@ -352,14 +352,22 @@ export interface LightIconsDrawState {
   lights: readonly LightSource[];
   selectedLightId: string | null;
   lightMode: LightToolMode;
+  /** False in a player preview, which draws nothing here. */
+  isDM: boolean;
 }
 
-/** DM light-source icons (visible to DM always, including player preview). */
+/**
+ * The markers the DM selects and moves lights by. They are a DM tool, so they
+ * are drawn in the DM's own view only. A player preview leaves them out: at a
+ * table watching one projected screen, a marker would show where every light
+ * on the map is, lit or not, which is exactly what the darkness is hiding.
+ */
 export function drawLightIcons(
   ctx: CanvasRenderingContext2D,
   state: LightIconsDrawState,
   viewport: Viewport
 ): void {
+  if (!state.isDM) return;
   ctx.save();
   for (const light of state.lights) {
     const isSelected = state.selectedLightId === light.id;

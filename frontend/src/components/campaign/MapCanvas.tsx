@@ -1809,12 +1809,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // 7. DM light source icons (visible in player preview too, so DM can edit)
+    // 7. DM light source markers, in the DM's own view only: a preview is a
+    //    player's view, and a marker would give away every light on the map
     if (isDM) {
       drawLightIcons(ctx, {
         lights: lightSources,
         selectedLightId,
         lightMode,
+        isDM: renderIsDM,
       }, viewport);
     }
 

@@ -16,12 +16,12 @@ import { drawWalls } from '../layers/drawWalls';
 import { drawFogSelection, type FogSelectionState } from '../layers/drawOverlays';
 import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
 import { drawSpiritLayer } from '../layers/drawBackground';
-import { drawDynamicLighting } from '../layers/drawLights';
+import { drawDynamicLighting, drawLightIcons } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
-import type { FogState, WallSegment } from '@/types/walls';
+import type { FogState, LightSource, WallSegment } from '@/types/walls';
 
 // ── Recording mock 2D context ────────────────────────────────────────────────
 
@@ -941,5 +941,23 @@ describe('drawFogSelection', () => {
     }), viewport3x3);
     expect(count(ctx, 'fillRect')).toBe(0);
     expect(count(ctx, 'strokeRect')).toBe(0);
+  });
+});
+
+describe('drawLightIcons', () => {
+  const torch: LightSource = { id: 'l1', x: 100, y: 100, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+  const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 10, mapHeight: 10 };
+
+  it('draws a marker for each light in the DM view', () => {
+    const ctx = makeMockCtx();
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: null, lightMode: null, isDM: true }, viewport);
+    expect(ctx.calls.filter((c) => c.method === 'arc')).toHaveLength(1);
+  });
+
+  it('draws nothing in a player view, where a marker would give away every light on the map', () => {
+    // A DM previewing as a token at a projected table is showing the room a player's view.
+    const ctx = makeMockCtx();
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: 'l1', lightMode: 'light-select', isDM: false }, viewport);
+    expect(ctx.calls.filter((c) => ['arc', 'fill', 'stroke'].includes(c.method))).toHaveLength(0);
   });
 });
