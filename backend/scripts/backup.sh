@@ -47,7 +47,8 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     mkdir -p "$BACKUP_DIR"
 
     if docker compose exec -T "$DB_SERVICE" \
-        pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "$BACKUP_FILE"; then
+        pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-privileges \
+        | gzip > "$BACKUP_FILE"; then
       SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
       echo "✅ Backup complete: $BACKUP_FILE ($SIZE)"
     else
@@ -92,7 +93,10 @@ echo ""
 mkdir -p "$BACKUP_DIR"
 
 # Run pg_dump
+# --no-owner --no-privileges: the dump then restores under whatever database
+# user the instance it lands on has, instead of insisting on the name used here.
 if PGPASSWORD="$DB_PASS" pg_dump \
+    --no-owner --no-privileges \
     -h "$DB_HOST" \
     -p "$DB_PORT" \
     -U "$DB_USER" \

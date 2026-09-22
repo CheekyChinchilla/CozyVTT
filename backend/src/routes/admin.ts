@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildRestoreArgs, prepareDumpForRestore } from '../utils/pgRestore';
+import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir } from '../utils/backupDir';
@@ -725,10 +725,9 @@ router.post('/backups', async (req, res) => {
   const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
 
   try {
-    // 1. Dump database to a temp SQL file
-    // --clean --if-exists adds DROP statements so the restore works on an existing DB
+    // 1. Dump database to a temp SQL file (flags explained in utils/pgRestore.ts)
     try {
-      await execFileAsync('pg_dump', ['--dbname', dbUrl, '--file', sqlPath, '--clean', '--if-exists']);
+      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath));
     } catch (execError: unknown) {
       if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
@@ -736,7 +735,8 @@ router.post('/backups', async (req, res) => {
           message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('pg_dump error', { stderr: errorStderr(execError), message: errorMessage(execError) });
+      // stderr only: the error's message repeats the command line, database URL and password included.
+      logger.error('pg_dump error', { stderr: errorStderr(execError), code: errorCode(execError) });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
 
@@ -886,9 +886,9 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     // dump written by a newer pg_dump) is dropped from the header. See
     // utils/pgRestore.ts for why each matters.
     const restorePath = path.join(tempDir, 'restore.sql');
-    const { removed } = await prepareDumpForRestore(sqlPath, restorePath);
-    if (removed.length > 0) {
-      logger.info('Restore: skipped settings this server does not know', { removed });
+    const { skipped } = await prepareDumpForRestore(sqlPath, restorePath);
+    if (skipped.settings.length > 0 || skipped.ownership > 0 || skipped.privileges > 0) {
+      logger.info('Restore: skipped statements this server would reject', skipped);
     }
     try {
       await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath));
@@ -899,7 +899,8 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
           message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('psql restore error', { stderr: errorStderr(execError), message: errorMessage(execError) });
+      // stderr only: the error's message repeats the command line, database URL and password included.
+      logger.error('psql restore error', { stderr: errorStderr(execError), code: errorCode(execError) });
       return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
     }
 
@@ -918,7 +919,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     try {
       await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
     } catch (execError: unknown) {
-      logger.error('Migrations after restore failed', { stderr: errorStderr(execError), message: errorMessage(execError) });
+      logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:

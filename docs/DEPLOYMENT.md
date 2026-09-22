@@ -671,7 +671,7 @@ Grant these sparingly: both write content visible to every user on the instance.
 docker compose logs backend | grep -i restore
 ```
 
-Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:
+A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
@@ -711,7 +711,7 @@ The same thing by hand, if you would rather not use the scripts:
 ```bash
 # Create a backup
 docker compose exec database \
-  pg_dump -U cozyvtt cozyvtt | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+  pg_dump -U cozyvtt cozyvtt --no-owner --no-privileges | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
 
 # Check the backup file is complete before going near the database
 gzip -t backup_YYYYMMDD_HHMMSS.sql.gz && echo "archive is complete"
@@ -736,7 +736,7 @@ crontab -e
 
 # Daily at 3 AM, keep 30 days of history
 0 3 * * * cd /path/to/cozyvtt && \
-  docker compose exec -T database pg_dump -U cozyvtt cozyvtt \
+  docker compose exec -T database pg_dump -U cozyvtt cozyvtt --no-owner --no-privileges \
   | gzip > /backups/cozyvtt_$(date +\%Y\%m\%d).sql.gz && \
   find /backups -name "cozyvtt_*.sql.gz" -mtime +30 -delete
 ```

@@ -1,8 +1,9 @@
 /**
- * The psql arguments a restore runs with.
+ * How a backup is written and how a restore loads it.
  *
- * Lifted out of the admin route so the flags that make a restore safe are
- * stated in one place and can be checked by a test. Both of them matter:
+ * Lifted out of the admin route so the flags that make a backup portable and a
+ * restore safe are stated in one place and can be checked by a test. All of
+ * them matter:
  *
  * A backup is written with `pg_dump --clean --if-exists`, so the dump begins by
  * dropping every table it is about to recreate. Run without care, a file that
@@ -51,20 +52,50 @@ export function isSettingUnknownToServer(line: string): boolean {
   return UNKNOWN_SETTING_LINE.test(line);
 }
 
-/** The first statement of the dump body; the SET preamble ends before it. */
-const DUMP_BODY_LINE = /^(?:DROP|CREATE|ALTER|COPY|SELECT|INSERT) /;
+/**
+ * Ownership and privilege statements name the database user of the instance
+ * the backup came from. A backup made under one user name and restored on an
+ * instance whose `.env` names another, which is what moving to a new machine
+ * produces, failed with "role does not exist" on the first of them. Backups
+ * are now written without either (see buildDumpArgs), and a restore drops any
+ * it finds in an older backup: everything the dump creates is then owned by
+ * the user running the restore, which is the one the app connects as.
+ */
+const OWNERSHIP_LINE = /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/;
+const PRIVILEGE_LINE = /^(?:GRANT|REVOKE) /;
+
+/** Whether `line` is an `ALTER ... OWNER TO ...` statement. */
+export function isOwnershipStatement(line: string): boolean {
+  return OWNERSHIP_LINE.test(line);
+}
+
+/** Whether `line` is a GRANT or REVOKE statement. */
+export function isPrivilegeStatement(line: string): boolean {
+  return PRIVILEGE_LINE.test(line);
+}
+
+/** Table data in a dump sits between `COPY ... FROM stdin;` and a line holding `\.`. */
+const COPY_START = /^COPY .* FROM stdin;$/;
+const COPY_END = '\\.';
+
+/** What prepareDumpForRestore left out, for the log. */
+export interface SkippedStatements {
+  settings: string[];
+  ownership: number;
+  privileges: number;
+}
 
 /**
- * Write the file psql actually loads: the preamble, then the dump with the
- * settings the server would reject removed from its header. Streams line by
- * line, since a dump can be far larger than memory. Filtering stops at the
- * first statement of the body so a data row is never mistaken for a setting.
+ * Write the file psql actually loads: the preamble, then the dump without the
+ * statements this server would reject. Streams line by line, since a dump can
+ * be far larger than memory. Rows inside a COPY block are never inspected, so
+ * a row that happens to start like a statement is left exactly as it is.
  */
 export async function prepareDumpForRestore(
   sqlPath: string,
   outPath: string
-): Promise<{ removed: string[] }> {
-  const removed: string[] = [];
+): Promise<{ skipped: SkippedStatements }> {
+  const skipped: SkippedStatements = { settings: [], ownership: 0, privileges: 0 };
   const out = createWriteStream(outPath);
   const write = async (line: string) => {
     if (!out.write(line + '\n')) await once(out, 'drain');
@@ -72,18 +103,36 @@ export async function prepareDumpForRestore(
   for (const line of RESTORE_PREAMBLE) await write(line);
 
   const lines = readline.createInterface({ input: createReadStream(sqlPath), crlfDelay: Infinity });
-  let inHeader = true;
+  let inCopy = false;
   for await (const line of lines) {
-    if (inHeader && DUMP_BODY_LINE.test(line)) inHeader = false;
-    if (inHeader && isSettingUnknownToServer(line)) {
-      removed.push(line);
+    if (inCopy) {
+      if (line === COPY_END) inCopy = false;
+    } else if (COPY_START.test(line)) {
+      inCopy = true;
+    } else if (isSettingUnknownToServer(line)) {
+      skipped.settings.push(line);
+      continue;
+    } else if (isOwnershipStatement(line)) {
+      skipped.ownership++;
+      continue;
+    } else if (isPrivilegeStatement(line)) {
+      skipped.privileges++;
       continue;
     }
     await write(line);
   }
   out.end();
   await once(out, 'finish');
-  return { removed };
+  return { skipped };
+}
+
+/**
+ * Arguments for dumping the database at `dbUrl` to `sqlPath`. The dump drops
+ * each object before recreating it, and names no owner and no privilege, so
+ * it loads under whichever database user the restoring instance has.
+ */
+export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
+  return ['--dbname', dbUrl, '--file', sqlPath, '--clean', '--if-exists', '--no-owner', '--no-privileges'];
 }
 
 /** Arguments for restoring `sqlPath` into the database at `dbUrl`. */

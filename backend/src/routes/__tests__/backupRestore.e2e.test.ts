@@ -21,9 +21,11 @@ import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import logger from '../../utils/logger';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
+const errorSpy = jest.spyOn(logger, 'error');
 
 interface ToolCall {
   cmd: string;
@@ -88,6 +90,7 @@ const DUMP_FROM_NEWER_CLIENT = [
   '',
   'DROP TABLE IF EXISTS public."Note";',
   'CREATE TABLE public."Note" (id text NOT NULL, body text);',
+  'ALTER TABLE public."Note" OWNER TO "cozyvttAdmin";',
   'COPY public."Note" (id, body) FROM stdin;',
   'a1\tSET transaction_timeout = 0;',
   '\\.',
@@ -122,6 +125,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   execFileMock.mockReset();
+  errorSpy.mockClear();
 });
 
 const restore = (agent: ReturnType<typeof request.agent>, zip: Buffer) =>
@@ -144,6 +148,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(psql.sqlLoaded?.startsWith('DROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n')).toBe(true);
     expect(psql.sqlLoaded).not.toContain('\nSET transaction_timeout = 0;\n');
     expect(psql.sqlLoaded).toContain('CREATE TABLE public."Note"');
+    expect(psql.sqlLoaded).not.toContain('OWNER TO');
     expect(psql.sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
     expect(migrate.args).toEqual(['prisma', 'migrate', 'deploy']);
   });
@@ -161,6 +166,10 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Restore Failed');
     expect(calls.map((c) => c.cmd)).toEqual(['psql']);
+    // The log carries psql's own words and never the command line, which holds the database URL and its password.
+    const logged = JSON.stringify(errorSpy.mock.calls.filter((c) => String(c[0]).includes('psql restore error')));
+    expect(logged).toContain('unrecognized configuration parameter');
+    expect(logged).not.toContain('postgresql://');
     await expect(fs.access(path.join(process.env.UPLOAD_DIR || 'uploads', marker))).rejects.toBeDefined();
   });
 

@@ -6731,7 +6731,9 @@ paths:
         transaction that stops at the first failed statement, so an archive that
         cannot be applied in full leaves the existing database unchanged and
         answers 500. A SET line for a setting this server does not know (a dump
-        written by a newer pg_dump) is skipped. After a successful load the
+        written by a newer pg_dump) is skipped, as are the archive's ownership
+        and privilege statements, so it restores under this instance's database
+        user whatever user the archive came from. After a successful load the
         migrations run, so an archive from an older release comes up to date;
         if that step fails the response is 500 and says to restart the backend,
         which runs migrations on start.
