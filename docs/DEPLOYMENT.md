@@ -454,8 +454,8 @@ sudo apt-get install -y nodejs
 
 ```bash
 sudo apt-get install -y postgresql-15
-sudo -u postgres createdb cozyvtt
 sudo -u postgres createuser cozyvtt
+sudo -u postgres createdb -O cozyvtt cozyvtt
 sudo -u postgres psql -c "ALTER USER cozyvtt WITH PASSWORD 'your-db-password';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cozyvtt TO cozyvtt;"
 ```
@@ -664,6 +664,18 @@ Grant these sparingly: both write content visible to every user on the instance.
 ### Via Admin Dashboard
 
 **Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
+
+**Admin Dashboard → Backups → Restore** replaces the database and the uploaded files with the contents of a backup, then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own. A restore either works completely or changes nothing: if any part of the backup cannot be applied, your existing data is untouched and the reason is in the backend log:
+
+```bash
+docker compose logs backend | grep -i restore
+```
+
+Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:
+
+```bash
+sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
+```
 
 ### Via the included scripts
 

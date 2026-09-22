@@ -3,8 +3,9 @@
 FROM node:20-alpine
 
 # bash: required by start.sh (#!/bin/bash shebang); not included in alpine by default
-# postgresql-client: required for pg_dump (backup) and psql (restore)
-RUN apk add --no-cache bash postgresql-client openssl
+# postgresql16-client: pg_dump (backup) and psql (restore). Pinned to the major
+# nearest the postgres:15 image, for the reason given in Dockerfile.prod.
+RUN apk add --no-cache bash postgresql16-client openssl
 
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

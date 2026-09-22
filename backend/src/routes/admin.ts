@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildRestoreArgs } from '../utils/pgRestore';
+import { buildRestoreArgs, prepareDumpForRestore } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir } from '../utils/backupDir';
@@ -736,7 +736,7 @@ router.post('/backups', async (req, res) => {
           message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('pg_dump error:', errorStderr(execError) || errorMessage(execError));
+      logger.error('pg_dump error', { stderr: errorStderr(execError), message: errorMessage(execError) });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
 
@@ -881,9 +881,17 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
     }
 
-    // 3. Restore the database
+    // 3. Restore the database. psql loads a prepared copy of the dump: the
+    // schema is replaced first, and a setting this server would reject (a
+    // dump written by a newer pg_dump) is dropped from the header. See
+    // utils/pgRestore.ts for why each matters.
+    const restorePath = path.join(tempDir, 'restore.sql');
+    const { removed } = await prepareDumpForRestore(sqlPath, restorePath);
+    if (removed.length > 0) {
+      logger.info('Restore: skipped settings this server does not know', { removed });
+    }
     try {
-      await execFileAsync('psql', buildRestoreArgs(dbUrl, sqlPath));
+      await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath));
     } catch (execError: unknown) {
       if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
@@ -891,7 +899,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
           message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
         });
       }
-      logger.error('psql restore error:', errorStderr(execError) || errorMessage(execError));
+      logger.error('psql restore error', { stderr: errorStderr(execError), message: errorMessage(execError) });
       return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
     }
 
@@ -904,7 +912,22 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       // No uploads dir in backup — skip (DB-only backup is still valid)
     }
 
-    // 5. Log the restore (best-effort — DB just changed so this may use restored data)
+    // 5. Bring a backup from an older release up to this version's schema.
+    // start.sh runs the same command on every boot, so a failure here is
+    // recovered by a restart, and the response says so.
+    try {
+      await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
+    } catch (execError: unknown) {
+      logger.error('Migrations after restore failed', { stderr: errorStderr(execError), message: errorMessage(execError) });
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          'The backup was restored, but bringing its database up to this version failed. ' +
+          'Restart the backend (docker compose restart backend), which runs migrations on start, then check the server logs.',
+      });
+    }
+
+    // 6. Log the restore (best-effort — DB just changed so this may use restored data)
     await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {}).catch(() => {});
 
     return res.json({

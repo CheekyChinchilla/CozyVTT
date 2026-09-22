@@ -22,6 +22,8 @@ And three things to do afterwards:
 - **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
 - **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If it stops after this upgrade with that message, set a real password, and update `DATABASE_URL` if you wrote it by hand.
 
+**Backups you made from the Admin Dashboard on 1.4.0 could not be restored**, on 1.4.0 or anywhere else, because of the tool mismatch described under Fixed. They were never damaged, and they restore on 1.5.0, including into a freshly installed 1.5.0.
+
 The upgrade adds three columns to the map table, each defaulting to today's behaviour, and one new empty table for explored memory. They are created automatically on the first startup after you pull, and no existing row is changed or removed. Back up first as always — see [Database Backups](docs/DEPLOYMENT.md#database-backups) — then rebuild and restart:
 
 ```bash
@@ -50,6 +52,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed
+
+- **Backups made from the Admin Dashboard can be restored again.** Restoring one failed with "Database restore failed", and the log said nothing useful. The database tools inside the backend image had drifted to a newer PostgreSQL than the database itself, and a backup written by the newer tools opens with a setting the database does not recognise, so the restore stopped on its fourth line. Every dashboard backup made on 1.4.0 is affected, and none of them is damaged: a restore that fails changes nothing. The image now carries tools that match the database, a restore skips that setting so the backups you already have load, and the reason for any failure is written to the backend log. Restoring also now replaces the whole database with the backup and then runs this version's migrations, so a backup from an older CozyVTT restores into a newer one, including a freshly installed one, and comes up to date on its own; before, a table added since the backup was made stopped the restore. On an install without Docker the database role has to own the database for this; the deployment guide says how.
 
 - **A token picked up and put back down no longer stays where the cursor was on everyone else's screen.** Picking a token up and moving it shows the move live to the whole table; cancelling the move (right-click, the cursor leaving the map, or a square another creature already stands on) told nobody, so other players kept seeing the token wherever the cursor had last been until it next moved. The cancel now puts it back for everyone.
 

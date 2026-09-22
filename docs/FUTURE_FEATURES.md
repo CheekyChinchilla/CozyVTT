@@ -48,6 +48,20 @@ _Nothing in progress._
   once into an offscreen canvas invalidated on reveal, as the lighting mask
   already is, at one pixel per cell scaled with smoothing off.
 
+- **Move the database to a current PostgreSQL major.** The stack runs
+  `postgres:15`, chosen at 1.0.0 and supported upstream until November 2027.
+  Nothing in the app needs a newer server, and the client tools in the backend
+  image are pinned to the nearest major this Alpine packages so backups stay
+  restorable. What makes the move its own piece of work is the upgrade path: a
+  data directory is specific to its major, so a newer image refuses to start on
+  an existing volume and `docker compose up -d --build` would leave every
+  self-hoster down until they dumped and reloaded by hand. The move needs a
+  one-shot step at container start that notices a 15 data directory, dumps it,
+  initialises the new cluster, loads the dump, and deletes nothing until the new
+  cluster verifies, rehearsed on a seeded instance the way 1.5.0 was. Prisma's
+  supported server range has to be checked for the target major first.
+  **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
+
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
   — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept

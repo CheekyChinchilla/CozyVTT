@@ -6727,9 +6727,14 @@ paths:
       description: >
         Platform ADMIN only. Replaces the database and the uploaded files from
         an archive downloaded earlier. Needs psql present in the backend image.
-        The database load runs as a single transaction and stops at the first
-        failed statement, so an archive that cannot be applied in full leaves
-        the existing database unchanged and answers 500.
+        The public schema is dropped and recreated from the archive in a single
+        transaction that stops at the first failed statement, so an archive that
+        cannot be applied in full leaves the existing database unchanged and
+        answers 500. A SET line for a setting this server does not know (a dump
+        written by a newer pg_dump) is skipped. After a successful load the
+        migrations run, so an archive from an older release comes up to date;
+        if that step fails the response is 500 and says to restart the backend,
+        which runs migrations on start.
       operationId: restoreBackup
       security:
         - cookieAuth: []

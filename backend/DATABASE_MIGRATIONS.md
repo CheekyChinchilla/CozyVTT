@@ -14,6 +14,11 @@ When you start CozyVTT with Docker Compose, the backend container will automatic
 
 This ensures that your database schema is always up-to-date.
 
+A restore from the Admin Dashboard also runs `prisma migrate deploy` once the
+backup has loaded, so a backup taken on an older release is brought up to the
+running version without a restart. If that step fails the restore reports it
+and asks for a backend restart, which runs the same command.
+
 ## Manual Migration Commands
 
 If you need to run migrations manually, you can use these commands:

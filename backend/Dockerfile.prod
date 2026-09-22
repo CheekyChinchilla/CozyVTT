@@ -2,7 +2,7 @@
 # Stage 1: build TypeScript and generate Prisma client
 FROM node:20-alpine AS builder
 
-RUN apk add --no-cache bash postgresql-client openssl
+RUN apk add --no-cache bash postgresql16-client openssl
 
 WORKDIR /app
 
@@ -17,7 +17,14 @@ RUN npm run build
 # Stage 2: production image — only compiled output + production deps
 FROM node:20-alpine AS production
 
-RUN apk add --no-cache bash postgresql-client openssl su-exec
+# postgresql16-client, not postgresql-client: the unpinned name follows whatever
+# PostgreSQL this Alpine release ships (18 at the time of writing), and a dump
+# written by a client newer than the database opens with settings the database
+# rejects, so backups could not be restored. 16 is the closest major to the
+# postgres:15 image in docker-compose.yml that this Alpine still packages; a
+# restore also tolerates dumps from newer clients. Keep the two in step when
+# the database image moves.
+RUN apk add --no-cache bash postgresql16-client openssl su-exec
 
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
