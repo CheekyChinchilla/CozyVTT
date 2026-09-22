@@ -267,6 +267,7 @@ Your movement is visible to everyone in real time — your party can watch you c
 **When you can't move your token:**
 - If the session is **Paused**, token movement is disabled until the DM resumes
 - If your token hasn't been placed by the DM yet, it won't appear on the map
+- If the DM has handed control of your character's token to someone else, or to nobody, it is not yours to move until they set you as its controller in **Edit Token**
 - If the session hasn't started (status shows "Inactive"), movement is disabled
 
 *Screenshot pending — Paused session banner blocking movement.*

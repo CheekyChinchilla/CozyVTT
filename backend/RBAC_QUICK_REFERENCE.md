@@ -86,6 +86,12 @@ if (!canControlToken(role, token.controlledBy, userId)) {
 clause matters: `controlledBy` is set once and is not cleared when someone is
 demoted, so a spectator can still hold a token from their time as a player.
 
+`controlledBy` is the whole of what makes a token a player's, on the server
+and in the client alike; a token bound to one of their characters is not theirs
+by that alone. A token created with a `characterId` and no `controlledBy` is
+given the character's owner as controller, provided the character belongs to
+the campaign.
+
 #### Which token fields a player may change
 
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` is mounted on

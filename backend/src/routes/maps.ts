@@ -992,6 +992,20 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? normalizeAssetUrl(tokenData.imageUrl, 'tokens')
       : null;
 
+    // A token bound to a character is controlled by that character's owner
+    // unless the request names someone else. The controller is who the map is
+    // drawn for and who may move the token, on the server and in the client
+    // alike, so a client that omits it no longer creates a token its own
+    // player cannot use. A character from another campaign grants nothing.
+    let controlledBy: string | null = tokenData.controlledBy || null;
+    if (!controlledBy && typeof tokenData.characterId === 'string' && tokenData.characterId) {
+      const character = await prisma.character.findUnique({
+        where: { id: tokenData.characterId },
+        select: { userId: true, campaignId: true },
+      });
+      if (character && character.campaignId === campaignId) controlledBy = character.userId;
+    }
+
     // Build the new token with defaults
     const newToken = {
       id: randomUUID(),
@@ -1005,7 +1019,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       size: shapes.value.size ?? { width: 1, height: 1 },
       layer,
       visible: tokenData.visible !== undefined ? tokenData.visible : true,
-      controlledBy: tokenData.controlledBy || null,
+      controlledBy,
       rotation: tokenData.rotation || 0,
       conditions: shapes.value.conditions ?? [],
       metadata: shapes.value.metadata ?? {},

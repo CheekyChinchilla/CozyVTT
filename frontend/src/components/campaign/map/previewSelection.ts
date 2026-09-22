@@ -10,6 +10,7 @@
 
 import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
+import { controlsToken } from '@/utils/tokenControl';
 import { gridYToCentrePx } from './coords';
 
 /**
@@ -26,12 +27,6 @@ export type PreviewSelection =
   | { kind: 'player'; userId: string }
   | { kind: 'token'; tokenId: string }
   | { kind: 'party' };
-
-/** A character's owner, the one fact the player predicate needs. */
-export interface CharacterOwner {
-  id: string;
-  userId: string;
-}
 
 /** One entry in the preview picker. */
 export interface PreviewOption {
@@ -67,30 +62,22 @@ export function decodePreviewSelection(value: string): PreviewSelection | null {
 /**
  * Which tokens supply the previewed view.
  *
- * A player: the tokens they control, or that are bound to one of their
- * characters, the same two clauses as a real player's own view. One token:
- * that token only. The party: every player-type token, whoever controls it,
- * which is the union an in-person table wants on the projector.
+ * A player: the tokens they control, the same rule as a real player's own
+ * view and the server's. One token: that token only. The party: every
+ * player-type token, whoever controls it, which is the union an in-person
+ * table wants on the projector.
  */
-export function previewOwnFor(
-  selection: PreviewSelection | null,
-  characters: ReadonlyArray<CharacterOwner>
-): (t: Token) => boolean {
+export function previewOwnFor(selection: PreviewSelection | null): (t: Token) => boolean {
   if (!selection) return () => false;
-  const chosen = ownByKind(selection, characters);
+  const chosen = ownByKind(selection);
   return (t) => suppliesPreviewSight(t) && chosen(t);
 }
 
-function ownByKind(
-  selection: PreviewSelection,
-  characters: ReadonlyArray<CharacterOwner>
-): (t: Token) => boolean {
+function ownByKind(selection: PreviewSelection): (t: Token) => boolean {
   switch (selection.kind) {
     case 'player': {
       const { userId } = selection;
-      return (t) =>
-        t.controlledBy === userId ||
-        !!(t.characterId && characters.some((c) => c.id === t.characterId && c.userId === userId));
+      return (t) => controlsToken(t, userId);
     }
     case 'token': {
       const { tokenId } = selection;

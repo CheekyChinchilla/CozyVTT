@@ -4112,6 +4112,10 @@ paths:
                   type: string
                   format: uuid
                   nullable: true
+                  description: >
+                    Who controls the token. Omitted or null for a token with a
+                    characterId defaults to that character's owner, when the
+                    character belongs to this campaign.
                 rotation:
                   type: number
                 conditions:

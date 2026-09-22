@@ -78,6 +78,7 @@ const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
+import { controlsToken } from '@/utils/tokenControl';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -237,13 +238,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
   const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
 
-  // Tokens this viewer controls, or that are bound to one of their characters.
-  const isOwnToken = useCallback(
-    (t: Token): boolean =>
-      t.controlledBy === user?.id ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id)),
-    [user?.id, campaign?.characters]
-  );
+  // Tokens this viewer controls, by the server's definition (utils/tokenControl.ts).
+  const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id), [user?.id]);
 
   // Whether manual fog applies on this map. Absent on an older payload means
   // on, matching the column default. When fog is on and the player's revealed
@@ -296,10 +292,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // comes from the grid the DM already holds, and the same visibility rule
   // decides what is drawn.
   const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
-  const previewOwn = useMemo(
-    () => previewOwnFor(previewSelection, campaign?.characters ?? []),
-    [previewSelection, campaign?.characters]
-  );
+  const previewOwn = useMemo(() => previewOwnFor(previewSelection), [previewSelection]);
   const viewerOwn = previewing ? previewOwn : isOwnToken;
   const previewChoices = useMemo(
     () => previewOptions(campaign?.memberships ?? [], tokens),
@@ -2084,22 +2077,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         return false;
       }
 
-      // Player can move tokens they are assigned as controller (NPC tokens with controlledBy)
-      if (token.controlledBy && token.controlledBy === user?.id) {
-        return true;
-      }
-
-      // Player can only move their own character's token
-      if (token.characterId) {
-        // Find the character associated with this token
-        const character = campaign.characters?.find((c) => c.id === token.characterId);
-        if (character) {
-          // Check if current user owns this character
-          return character.userId === user?.id;
-        }
-      }
-
-      return false;
+      // A player moves the tokens they control, the same rule the server
+      // applies to the move; a character binding alone is not control.
+      return controlsToken(token, user?.id);
     },
     [campaign, userRole, user?.id]
   );

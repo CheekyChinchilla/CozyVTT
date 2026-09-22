@@ -32,12 +32,13 @@ const member = (userId: string, role: string, displayName: string): Pick<Campaig
   ({ userId, role, user: { displayName } } as unknown as Pick<CampaignMembership, 'userId' | 'role' | 'user'>);
 
 const hero = token({ id: 'hero', name: 'Hero', type: TokenType.PLAYER, controlledBy: 'alice' });
-const wizard = token({ id: 'wizard', name: 'Wizard', type: TokenType.PLAYER, characterId: 'char-bob' });
+const wizard = token({ id: 'wizard', name: 'Wizard', type: TokenType.PLAYER, characterId: 'char-bob', controlledBy: 'bob' });
+// Bound to Bob's character but controlled by nobody: not Bob's, as the server sees it.
+const orphan = token({ id: 'orphan', name: 'Orphan', type: TokenType.PLAYER, characterId: 'char-bob' });
 const goblin = token({ id: 'goblin', name: 'Goblin' });
 const ghost = token({ id: 'ghost', name: 'Ghost', layer: TokenLayer.SPIRIT });
 const chest = token({ id: 'chest', name: 'Chest', type: TokenType.OBJECT });
-const all = [goblin, hero, chest, wizard, ghost];
-const characters = [{ id: 'char-bob', userId: 'bob' }];
+const all = [goblin, hero, chest, wizard, ghost, orphan];
 
 // A player never looks through a token the server would not send them.
 const hiddenRogue = token({ id: 'rogue', name: 'Rogue', type: TokenType.PLAYER, controlledBy: 'alice', visible: false });
@@ -61,35 +62,35 @@ describe('encoding', () => {
 });
 
 describe('previewOwnFor', () => {
-  it('a player: the tokens they control or that are bound to their character', () => {
-    const own = previewOwnFor({ kind: 'player', userId: 'bob' }, characters);
+  it('a player: the tokens they control; a character binding alone is not control', () => {
+    const own = previewOwnFor({ kind: 'player', userId: 'bob' });
     expect(all.filter(own).map((t) => t.id)).toEqual(['wizard']);
-    const alice = previewOwnFor({ kind: 'player', userId: 'alice' }, characters);
+    const alice = previewOwnFor({ kind: 'player', userId: 'alice' });
     expect(all.filter(alice).map((t) => t.id)).toEqual(['hero']);
   });
 
   it('a token: that token only, whoever controls it', () => {
-    const own = previewOwnFor({ kind: 'token', tokenId: 'goblin' }, characters);
+    const own = previewOwnFor({ kind: 'token', tokenId: 'goblin' });
     expect(all.filter(own).map((t) => t.id)).toEqual(['goblin']);
   });
 
-  it('the party: every player-type token', () => {
-    const own = previewOwnFor({ kind: 'party' }, characters);
-    expect(all.filter(own).map((t) => t.id)).toEqual(['hero', 'wizard']);
+  it('the party: every player-type token, controlled or not', () => {
+    const own = previewOwnFor({ kind: 'party' });
+    expect(all.filter(own).map((t) => t.id)).toEqual(['hero', 'wizard', 'orphan']);
   });
 
   it('nothing selected: nobody', () => {
-    expect(all.filter(previewOwnFor(null, characters))).toEqual([]);
+    expect(all.filter(previewOwnFor(null))).toEqual([]);
   });
 
   it('a hidden or off-plane token never supplies sight, whichever way it is chosen', () => {
     // The DM's list holds every token; a real player's holds neither of these.
-    const alice = previewOwnFor({ kind: 'player', userId: 'alice' }, characters);
+    const alice = previewOwnFor({ kind: 'player', userId: 'alice' });
     expect(withUnseen.filter(alice).map((t) => t.id)).toEqual(['hero']);
-    const party = previewOwnFor({ kind: 'party' }, characters);
-    expect(withUnseen.filter(party).map((t) => t.id)).toEqual(['hero', 'wizard']);
-    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'rogue' }, characters))).toEqual([]);
-    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }, characters))).toEqual([]);
+    const party = previewOwnFor({ kind: 'party' });
+    expect(withUnseen.filter(party).map((t) => t.id)).toEqual(['hero', 'wizard', 'orphan']);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'rogue' }))).toEqual([]);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }))).toEqual([]);
   });
 });
 
@@ -98,7 +99,7 @@ describe('tokensShownInPreview', () => {
   const own = (t: Token) => t.id === 'hero';
 
   it('with lighting off: every visible token on the material plane', () => {
-    expect(tokensShownInPreview(withUnseen, own, null, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard']);
+    expect(tokensShownInPreview(withUnseen, own, null, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
   });
 
   it('with lighting on: the viewer\'s own tokens and whatever the rule says they can see', () => {
@@ -109,7 +110,7 @@ describe('tokensShownInPreview', () => {
   });
 
   it('never a hidden or off-plane token, even one the rule could see', () => {
-    expect(tokensShownInPreview(withUnseen, own, () => true, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard']);
+    expect(tokensShownInPreview(withUnseen, own, () => true, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
   });
 });
 
@@ -130,6 +131,7 @@ describe('previewOptions', () => {
       ['players', 'player:bob', 'Bob'],
       ['tokens', 'party', 'All player tokens'],
       ['tokens', 'token:hero', 'Hero'],
+      ['tokens', 'token:orphan', 'Orphan'],
       ['tokens', 'token:wizard', 'Wizard'],
       ['tokens', 'token:chest', 'Chest'],
       ['tokens', 'token:goblin', 'Goblin'],
