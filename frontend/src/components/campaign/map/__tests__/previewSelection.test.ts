@@ -7,6 +7,7 @@ import {
   previewOptions,
   defaultPreviewSelection,
   reconcilePreviewSelection,
+  tokensShownInPreview,
   type PreviewSelection,
 } from '../previewSelection';
 import type { CampaignMembership, Token } from '@/types';
@@ -37,6 +38,11 @@ const ghost = token({ id: 'ghost', name: 'Ghost', layer: TokenLayer.SPIRIT });
 const chest = token({ id: 'chest', name: 'Chest', type: TokenType.OBJECT });
 const all = [goblin, hero, chest, wizard, ghost];
 const characters = [{ id: 'char-bob', userId: 'bob' }];
+
+// A player never looks through a token the server would not send them.
+const hiddenRogue = token({ id: 'rogue', name: 'Rogue', type: TokenType.PLAYER, controlledBy: 'alice', visible: false });
+const spiritMonk = token({ id: 'monk', name: 'Monk', type: TokenType.PLAYER, controlledBy: 'alice', layer: TokenLayer.SPIRIT });
+const withUnseen = [...all, hiddenRogue, spiritMonk];
 
 describe('encoding', () => {
   it.each<PreviewSelection>([
@@ -75,6 +81,36 @@ describe('previewOwnFor', () => {
   it('nothing selected: nobody', () => {
     expect(all.filter(previewOwnFor(null, characters))).toEqual([]);
   });
+
+  it('a hidden or off-plane token never supplies sight, whichever way it is chosen', () => {
+    // The DM's list holds every token; a real player's holds neither of these.
+    const alice = previewOwnFor({ kind: 'player', userId: 'alice' }, characters);
+    expect(withUnseen.filter(alice).map((t) => t.id)).toEqual(['hero']);
+    const party = previewOwnFor({ kind: 'party' }, characters);
+    expect(withUnseen.filter(party).map((t) => t.id)).toEqual(['hero', 'wizard']);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'rogue' }, characters))).toEqual([]);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }, characters))).toEqual([]);
+  });
+});
+
+describe('tokensShownInPreview', () => {
+  const viewport = { gridSize: 50, mapHeight: 20 };
+  const own = (t: Token) => t.id === 'hero';
+
+  it('with lighting off: every visible token on the material plane', () => {
+    expect(tokensShownInPreview(withUnseen, own, null, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard']);
+  });
+
+  it('with lighting on: the viewer\'s own tokens and whatever the rule says they can see', () => {
+    // The goblin stands at the origin; everything else is placed out of sight.
+    const placed = withUnseen.map((t) => (t.id === 'goblin' ? t : { ...t, position: { x: 9, y: 9 } }));
+    const canSee = (cx: number, cy: number) => cx < 100 && cy > 900;
+    expect(tokensShownInPreview(placed, own, canSee, viewport).map((t) => t.id)).toEqual(['goblin', 'hero']);
+  });
+
+  it('never a hidden or off-plane token, even one the rule could see', () => {
+    expect(tokensShownInPreview(withUnseen, own, () => true, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard']);
+  });
 });
 
 describe('previewMemoryUser', () => {
@@ -103,12 +139,22 @@ describe('previewOptions', () => {
   it('offers no party entry without a player-type token', () => {
     expect(previewOptions([], [goblin]).map((o) => o.value)).toEqual(['token:goblin']);
   });
+
+  it('does not offer a hidden token, and no party entry when every player token is hidden', () => {
+    expect(previewOptions([], [goblin, hiddenRogue]).map((o) => o.value)).toEqual(['token:goblin']);
+    expect(previewOptions([], withUnseen).map((o) => o.value)).not.toContain('token:rogue');
+  });
 });
 
 describe('reconcilePreviewSelection', () => {
   it('keeps a selection the picker still offers', () => {
     const sel: PreviewSelection = { kind: 'token', tokenId: 'goblin' };
     expect(reconcilePreviewSelection(sel, [], all)).toBe(sel);
+  });
+
+  it('falls back when the chosen token is hidden from players', () => {
+    const sel: PreviewSelection = { kind: 'token', tokenId: 'rogue' };
+    expect(reconcilePreviewSelection(sel, [], withUnseen)).toEqual({ kind: 'party' });
   });
 
   it('falls back when the token is gone from the map', () => {

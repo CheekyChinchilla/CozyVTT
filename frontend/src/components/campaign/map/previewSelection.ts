@@ -10,6 +10,17 @@
 
 import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
+import { gridYToCentrePx } from './coords';
+
+/**
+ * Whether a token can supply a preview's sight at all. The DM's token list
+ * holds every token; a player is never sent one that is hidden or on the
+ * spirit plane, so a preview must not look through one either. Without this
+ * a hidden player token still lit its surroundings on the projector.
+ */
+function suppliesPreviewSight(t: Token): boolean {
+  return t.visible && t.layer === TokenLayer.TOKEN;
+}
 
 export type PreviewSelection =
   | { kind: 'player'; userId: string }
@@ -66,6 +77,14 @@ export function previewOwnFor(
   characters: ReadonlyArray<CharacterOwner>
 ): (t: Token) => boolean {
   if (!selection) return () => false;
+  const chosen = ownByKind(selection, characters);
+  return (t) => suppliesPreviewSight(t) && chosen(t);
+}
+
+function ownByKind(
+  selection: PreviewSelection,
+  characters: ReadonlyArray<CharacterOwner>
+): (t: Token) => boolean {
   switch (selection.kind) {
     case 'player': {
       const { userId } = selection;
@@ -83,6 +102,28 @@ export function previewOwnFor(
 }
 
 /**
+ * The tokens a preview draws and lets the pointer find: the viewer's own,
+ * plus whatever the visibility rule says the viewer can see, never one that
+ * is hidden or off the material plane. `canSee` is null when the map has no
+ * dynamic lighting, in which case every such token shows. One function, so
+ * the hover panel can never name a token the canvas does not draw.
+ */
+export function tokensShownInPreview(
+  tokens: ReadonlyArray<Token>,
+  viewerOwn: (t: Token) => boolean,
+  canSee: ((cx: number, cy: number) => boolean) | null,
+  viewport: { gridSize: number; mapHeight: number }
+): Token[] {
+  return tokens.filter((t) => {
+    if (!suppliesPreviewSight(t)) return false;
+    if (viewerOwn(t) || !canSee) return true;
+    const cx = (t.position.x + t.size.width / 2) * viewport.gridSize;
+    const cy = gridYToCentrePx(t.position.y, t.size.height, viewport.mapHeight, viewport.gridSize);
+    return canSee(cx, cy);
+  });
+}
+
+/**
  * Whose explored memory the preview shows. Memory is kept per user, so only
  * a player preview has any; a token or party preview shows current sight.
  */
@@ -91,9 +132,10 @@ export function previewMemoryUser(selection: PreviewSelection | null): string | 
 }
 
 /**
- * The picker's entries: players first, then the material-plane tokens with
- * player-type tokens ahead of the rest, each group by name, and the party
- * entry whenever there is a player-type token to make one of.
+ * The picker's entries: players first, then the tokens a preview may look
+ * through (visible, material plane) with player-type tokens ahead of the
+ * rest, each group by name, and the party entry whenever there is a
+ * player-type token to make one of.
  */
 export function previewOptions(
   memberships: ReadonlyArray<Pick<CampaignMembership, 'userId' | 'role' | 'user'>>,
@@ -103,7 +145,7 @@ export function previewOptions(
     .filter((m) => (m.role as string) === 'PLAYER')
     .map((m) => ({ group: 'players', value: `player:${m.userId}`, label: m.user?.displayName ?? 'Player' }));
 
-  const material = tokens.filter((t) => t.layer === TokenLayer.TOKEN);
+  const material = tokens.filter(suppliesPreviewSight);
   const byName = (a: Token, b: Token) => a.name.localeCompare(b.name);
   const pcs = material.filter((t) => t.type === TokenType.PLAYER).sort(byName);
   const others = material.filter((t) => t.type !== TokenType.PLAYER).sort(byName);

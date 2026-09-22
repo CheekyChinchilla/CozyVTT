@@ -62,11 +62,12 @@ import { useWallSelection } from './map/useWallSelection';
 import {
   previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
+  tokensShownInPreview,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
-import { fogCellIndex, gridXToFogCol, gridYToFogRow, gridYToCentrePx } from './map/coords';
+import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 import { isSeen, type Viewer, type Lit, type InsideFn } from '@/utils/visibilityRule';
@@ -1704,13 +1705,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     let drawn = tokens;
     if (previewing) {
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = tokens.filter((t) => {
-        if (!t.visible || t.layer === TokenLayer.SPIRIT) return false;
-        if (viewerOwn(t) || !rule) return true;
-        const cx = (t.position.x + t.size.width / 2) * viewport.gridSize;
-        const cy = gridYToCentrePx(t.position.y, t.size.height, viewport.mapHeight, viewport.gridSize);
-        return rule.canSee(cx, cy);
-      });
+      drawn = tokensShownInPreview(tokens, viewerOwn, rule?.canSee ?? null, viewport);
     }
 
     // 5. Tokens (+ drag ghost)
@@ -2035,6 +2030,37 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /**
    * Check if a grid coordinate is within a token's bounds
    */
+  /**
+   * The token the hover panel may name. In a preview that is only what the
+   * preview draws, by the same shown-token rule and the previewed fog: the
+   * DM's own lookup would name a hidden, unlit or fogged creature to a table
+   * watching the projector.
+   */
+  const getHoverTokenAt = useCallback(
+    (gridX: number, gridY: number): Token | null => {
+      if (!currentMap) return null;
+      if (!previewing) return pickTokenAt(tokens, gridX, gridY, tokenView);
+      const viewport: Viewport = {
+        zoom: mapControls.zoom,
+        panOffset: mapControls.panOffset,
+        gridSize: currentMap.gridSize,
+        mapWidth: currentMap.width,
+        mapHeight: currentMap.height,
+      };
+      const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+      const shown = tokensShownInPreview(tokens, viewerOwn, rule?.canSee ?? null, viewport);
+      return pickTokenAt(shown, gridX, gridY, {
+        isDM: false,
+        revealedCells: viewerRevealed,
+        isOwnToken: viewerOwn,
+        dmShowSpiritTokens,
+        mapWidth: currentMap.width,
+        mapHeight: currentMap.height,
+      });
+    },
+    [tokens, currentMap, tokenView, previewing, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
+  );
+
   const getTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
@@ -2786,7 +2812,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
       // the cursor was over something else entirely. Reading the square under
       // the cursor also shows what you are about to land on.
-      setHoverToken(getTokenAtPosition(gridCoords.x, gridCoords.y));
+      setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
 
       // Ghost follows the cursor — tokens layer only.
       markDirty('tokens');
@@ -2795,7 +2821,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapControls.handleDrag(e);
 
       // Update hover token
-      const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
+      const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
       setHoverToken(token);
 
       // Pan moves the whole scene → repaint every layer.
