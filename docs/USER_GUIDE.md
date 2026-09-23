@@ -403,7 +403,7 @@ A DM can share their own documents, and Global ones, with their campaign from in
 
 ### Reading
 
-Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer.
+Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer. Some browsers, Safari among them, will not display a PDF inside another page and leave the space blank; if that happens, use **Open this PDF in a new tab** above the document.
 
 ### Editing
 

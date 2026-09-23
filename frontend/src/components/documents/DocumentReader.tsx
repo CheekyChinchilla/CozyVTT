@@ -234,12 +234,28 @@ export default function DocumentReader({
 
              allow-scripts is needed because the viewers themselves are script.
              allow-same-origin is deliberately absent. */
-          <iframe
-            src={url}
-            title={name}
-            sandbox="allow-scripts"
-            className="flex-1 w-full rounded-lg border border-moss-green/20 bg-white"
-          />
+          <>
+            {/* Some browsers show nothing at all for a PDF inside a page, and
+                the frame is white, so there is no way to tell that from a
+                slow load. Safari is the one reported. Opening it as a page of
+                its own always works, so say so where it will be read. */}
+            <p className="mb-2 text-xs text-ink-secondary">
+              Not showing?{' '}
+              <button
+                type="button"
+                onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                className="underline underline-offset-2 hover:text-brand-ink"
+              >
+                Open this PDF in a new tab
+              </button>
+            </p>
+            <iframe
+              src={url}
+              title={name}
+              sandbox="allow-scripts"
+              className="flex-1 w-full rounded-lg border border-moss-green/20 bg-white"
+            />
+          </>
         ) : loading ? (
           <div className="flex-1 flex items-center justify-center gap-2 text-sm text-ink-secondary">
             <Loader2 className="w-4 h-4 animate-spin" />
