@@ -115,11 +115,28 @@ describe('tokensShownInPreview', () => {
 });
 
 describe('previewMemoryUser', () => {
-  it('only a player preview has remembered ground', () => {
-    expect(previewMemoryUser({ kind: 'player', userId: 'bob' })).toBe('bob');
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'hero' })).toBeNull();
-    expect(previewMemoryUser({ kind: 'party' })).toBeNull();
-    expect(previewMemoryUser(null)).toBeNull();
+  it('a player preview shows that player\'s remembered ground', () => {
+    expect(previewMemoryUser({ kind: 'player', userId: 'bob' }, all)).toBe('bob');
+  });
+
+  it("a token preview shows the memory of whoever controls it", () => {
+    // Previewing one character's view is the in-person table's way of asking
+    // "what does this character know", and what they have already explored is
+    // part of that. Memory belongs to a person, so it comes from the token's
+    // controller.
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'hero' }, all)).toBe('alice');
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'wizard' }, all)).toBe('bob');
+  });
+
+  it('shows none for a token nobody controls, and none for a token that has gone', () => {
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'goblin' }, all)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'orphan' }, all)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'not-on-this-map' }, all)).toBeNull();
+  });
+
+  it('shows none for the party, where several memories would be laid over each other', () => {
+    expect(previewMemoryUser({ kind: 'party' }, all)).toBeNull();
+    expect(previewMemoryUser(null, all)).toBeNull();
   });
 });
 

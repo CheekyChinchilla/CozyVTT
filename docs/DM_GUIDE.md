@@ -980,7 +980,7 @@ New maps start with it off. Maps made before it existed have it on, which is exa
 
 ### Explored Areas
 
-On a map with dynamic lighting, the places a player's tokens have seen stay on that player's map, greyed and darkened, until they can see them again. Each player has their own memory of a map, kept on the server, so it survives a reload and a change of device, and it is never used to decide what the server sends them: it only greys in map artwork they already had. The DM view never shows it; use **Preview Player View** to see a player's.
+On a map with dynamic lighting, the places a player's tokens have seen stay on that player's map, greyed and darkened, until they can see them again. Each player has their own memory of a map, kept on the server, so it survives a reload and a change of device, and it is never used to decide what the server sends them: it only greys in map artwork they already had. The DM view never shows it; use **Preview Player View** to see a player's, either by picking the player or by picking a token they control.
 
 - **Remember Explored Areas** in **Edit Map** switches it per map. New maps start with it off; maps from before it existed have it on.
 - **Reset explored areas** at the bottom of the **Fog of War** panel forgets what every player has seen of the map (it asks for a second click). Their view right now is unchanged; only the grey memory goes.
@@ -1060,7 +1060,7 @@ As DM you always see all walls, all tokens and the full map. To see what a playe
 - Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
 - The preview shows the material plane only
 
-**Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Those two previews show current sight only; remembered explored areas belong to a player account, so only a player preview shows them.
+**Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 
 Click the button again to return to your own view.
 

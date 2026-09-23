@@ -111,11 +111,28 @@ export function tokensShownInPreview(
 }
 
 /**
- * Whose explored memory the preview shows. Memory is kept per user, so only
- * a player preview has any; a token or party preview shows current sight.
+ * Whose explored memory the preview shows.
+ *
+ * Memory belongs to a person, so a player preview shows theirs and a token
+ * preview shows its controller's: previewing one character is the in-person
+ * table's way of asking what that character knows, and the ground they have
+ * already walked is part of the answer. A token nobody controls has no
+ * memory to show. The party is several people at once, whose memories laid
+ * over each other would describe nobody, so it shows none.
  */
-export function previewMemoryUser(selection: PreviewSelection | null): string | null {
-  return selection?.kind === 'player' ? selection.userId : null;
+export function previewMemoryUser(
+  selection: PreviewSelection | null,
+  tokens: ReadonlyArray<Token>
+): string | null {
+  if (!selection) return null;
+  switch (selection.kind) {
+    case 'player':
+      return selection.userId;
+    case 'token':
+      return tokens.find((t) => t.id === selection.tokenId)?.controlledBy ?? null;
+    case 'party':
+      return null;
+  }
 }
 
 /**
