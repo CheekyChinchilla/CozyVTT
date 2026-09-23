@@ -1038,6 +1038,12 @@ export interface CreateTokenRequest {
   initiative?: number | null;
   /** Darkvision in grid squares; 0 = none. DM only on update. */
   sightRadius?: number | null;
+  /** Display mode: pog, top-down or full-art. Default: pog */
+  displayMode?: TokenDisplayMode;
+  /** NPC stat block, when placing from the creature library or moving a token that has one. */
+  statBlock?: NpcStatBlock | null;
+  /** The creature template this token came from, if any. */
+  creatureTemplateId?: string | null;
 }
 
 export interface UpdateTokenRequest {

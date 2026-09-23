@@ -22,9 +22,10 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
-import type { Asset, Token, TokenDisplayMode } from '@/types';
+import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
 import { dmTokenControls } from '@/utils/tokenControls';
+import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
@@ -181,7 +182,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         conditions: [] as string[],
       };
 
-      let tokenPayload: typeof basePayload & Record<string, unknown>;
+      let tokenPayload: CreateTokenRequest;
       if (tokenType === TokenType.PLAYER) {
         tokenPayload = {
           ...basePayload,
@@ -224,7 +225,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         };
       }
 
-      const result = await api.addToken(campaign.id, currentMap.id, tokenPayload as Parameters<typeof api.addToken>[2]);
+      const result = await api.addToken(campaign.id, currentMap.id, tokenPayload);
 
       // Optimistic local update then broadcast so other clients get the new token
       useGameStore.getState().addToken(result.token);
@@ -293,21 +294,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     // Read the live position (this list ignores movement, so the row's
     // token prop can be stale), clamped to fit the target map grid.
     const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
-    const position = {
-      x: Math.min(livePosition.x, targetMap.width - token.size.width),
-      y: Math.min(livePosition.y, targetMap.height - token.size.height),
-    };
+    const position = clampTokenPosition(livePosition, token.size, targetMap);
 
     try {
-      await api.addToken(campaign.id, targetMapId, {
-        name: token.name,
-        imageUrl: token.imageUrl,
-        position,
-        size: token.size,
-        layer: token.layer,
-        visible: token.visible,
-        controlledBy: token.controlledBy,
-      });
+      await api.addToken(campaign.id, targetMapId, tokenCopyRequest(token, position));
       await api.deleteToken(campaign.id, currentMap.id, token.id);
 
       useGameStore.getState().removeToken(token.id);

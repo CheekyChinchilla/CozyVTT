@@ -239,6 +239,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       const result = await api.addToken(
         campaign.id,
         currentMap.id,
+        // TODO(typing): CreatureTemplate.disposition is `string`, so this cast
+        // is the only thing letting it reach a TokenDisposition field, and an
+        // unknown value would be stored unchecked. Narrow the template type to
+        // the three-value union, or guard it here, then drop the cast.
         tokenPayload as Parameters<typeof api.addToken>[2]
       );
       useGameStore.getState().addToken(result.token);

@@ -155,7 +155,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
       const result = await api.addToken(
         campaign.id,
         currentMap.id,
-        tokenPayload as Parameters<typeof api.addToken>[2]
+        tokenPayload
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);

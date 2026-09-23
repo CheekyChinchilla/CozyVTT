@@ -22,6 +22,7 @@ import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
+import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 
 // ============================================
 // Props
@@ -72,23 +73,16 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       // The roster subscribes ignoring movement, so this row's `token` prop
       // can hold a stale position — read the live one at action time.
       const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
-      const newX = Math.min(livePosition.x + 1, currentMap.width - token.size.width);
-      const newY = Math.min(livePosition.y + 1, currentMap.height - token.size.height);
-      const freshHp = token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null;
+      const position = clampTokenPosition(
+        { x: livePosition.x + 1, y: livePosition.y + 1 },
+        token.size,
+        currentMap
+      );
       const result = await api.addToken(campaignId, mapId, {
-        name: token.name,
-        imageUrl: token.imageUrl,
-        position: { x: newX, y: newY },
-        size: token.size,
-        layer: token.layer,
-        visible: token.visible,
-        controlledBy: token.controlledBy,
-        type: token.type,
-        disposition: token.disposition,
-        hp: freshHp,
-        showHpBar: token.showHpBar,
-        notes: token.notes,
-        initiative: token.initiative,
+        ...tokenCopyRequest(token, position),
+        // A copy starts fresh and belongs to nobody's character; see MapCanvas.
+        characterId: null,
+        hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
       useGameStore.getState().addToken(result.token);

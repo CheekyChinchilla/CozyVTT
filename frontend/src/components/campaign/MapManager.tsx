@@ -29,6 +29,7 @@ import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import { extractAssetId } from '@/utils/assetUrl';
+import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
   uvttImportDecision,
@@ -508,23 +509,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         );
         await Promise.all(
           tokensToTransfer.map(async (token) => {
-            // Add to new map (clamp position to new map bounds)
-            await api.addToken(campaign.id, targetMap.id, {
-              characterId: token.characterId,
-              name: token.name,
-              imageUrl: extractAssetId(token.imageUrl) || token.imageUrl,
-              position: {
-                x: Math.min(token.position.x, targetMap.width - 1),
-                y: Math.min(token.position.y, targetMap.height - 1),
-              },
-              size: token.size,
-              layer: token.layer,
-              visible: token.visible,
-              controlledBy: token.controlledBy,
-              rotation: token.rotation,
-              conditions: token.conditions,
-              metadata: token.metadata,
-            });
+            // Add to new map, the whole token, clamped to the new bounds
+            await api.addToken(
+              campaign.id,
+              targetMap.id,
+              tokenCopyRequest(token, clampTokenPosition(token.position, token.size, targetMap))
+            );
             // Remove from current map
             await api.deleteToken(campaign.id, currentMap.id, token.id);
           })

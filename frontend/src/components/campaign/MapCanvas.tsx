@@ -81,6 +81,7 @@ import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenControl';
 import { dmTokenControls } from '@/utils/tokenControls';
+import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -4071,25 +4072,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   const token = contextMenu.token;
                   setContextMenu(null);
                   try {
-                    // Place copy 1 cell offset, clamped to map bounds
-                    const newX = Math.min(token.position.x + 1, currentMap.width - token.size.width);
-                    const newY = Math.min(token.position.y + 1, currentMap.height - token.size.height);
-                    // Reset HP to full for the copy
-                    const freshHp = token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null;
+                    // Place the copy one cell along, clamped to the map
+                    const position = clampTokenPosition(
+                      { x: token.position.x + 1, y: token.position.y + 1 },
+                      token.size,
+                      currentMap
+                    );
                     const result = await api.addToken(campaign.id, currentMap.id, {
-                      name: token.name,
-                      imageUrl: token.imageUrl,
-                      position: { x: newX, y: newY },
-                      size: token.size,
-                      layer: token.layer,
-                      visible: token.visible,
-                      controlledBy: token.controlledBy,
-                      type: token.type,
-                      disposition: token.disposition,
-                      hp: freshHp,
-                      showHpBar: token.showHpBar,
-                      notes: token.notes,
-                      initiative: token.initiative,
+                      ...tokenCopyRequest(token, position),
+                      // A copy starts fresh and belongs to nobody's character:
+                      // two tokens on one sheet would follow the same hit
+                      // points and both count as that player's own.
+                      characterId: null,
+                      hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
                       conditions: [],
                     });
                     useGameStore.getState().addToken(result.token);
@@ -4234,19 +4229,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                                 setContextMenuMoveToMapOpen(false);
                                 setIsMoveToMapLoading(true);
                                 try {
-                                  const position = {
-                                    x: Math.min(token.position.x, targetMap.width - token.size.width),
-                                    y: Math.min(token.position.y, targetMap.height - token.size.height),
-                                  };
-                                  await api.addToken(campaign.id, targetMap.id, {
-                                    name: token.name,
-                                    imageUrl: token.imageUrl,
-                                    position,
-                                    size: token.size,
-                                    layer: token.layer,
-                                    visible: token.visible,
-                                    controlledBy: token.controlledBy,
-                                  });
+                                  const position = clampTokenPosition(token.position, token.size, targetMap);
+                                  await api.addToken(campaign.id, targetMap.id, tokenCopyRequest(token, position));
                                   await api.deleteToken(campaign.id, currentMap.id, token.id);
                                   useGameStore.getState().removeToken(token.id);
                                   socket?.emitMapChange(currentMap.id);

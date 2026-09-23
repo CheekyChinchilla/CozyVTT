@@ -73,6 +73,8 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. It is a quick reference during sessions for names, character names and party composition — and it is also how you get a player's character onto the map.
 
+**Moving a token to another map.** Switching maps offers to bring tokens along, and a token's right-click menu and the Token Manager both offer **Move to Map**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
+
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controller**.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
