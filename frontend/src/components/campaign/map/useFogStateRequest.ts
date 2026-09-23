@@ -7,8 +7,12 @@
 // server drops anything from a socket it has not authenticated, silently.
 // Nothing asked again, so on an instance where that ordering held the DM had
 // no fog state on every load: no tint on the map, a preview with everything
-// covered, and reveals that could not be dragged. The request now waits for
-// the socket to report authenticated, and goes again after a reconnect.
+// covered, and reveals that could not be dragged.
+//
+// It now waits for the campaign to be joined. That is later than the socket
+// reconnecting: after a drop, socket.io is connected again a moment before
+// the client has re-authenticated, and a request sent in that window is
+// dropped exactly as before.
 // ============================================
 
 import { useEffect } from 'react';
@@ -26,13 +30,14 @@ export function useFogStateRequest(
   socket: FogRequestSocketSource | null | undefined,
   mapId: string | undefined,
   fogEnabled: boolean,
-  /** The socket has authenticated into the campaign; the server answers only then. */
-  ready: boolean,
-  /** Bumped on every reconnect, so the state is asked for again on the new socket. */
-  epoch: number
+  /**
+   * 0 until the connection has authenticated into the campaign, and a new
+   * number after each re-authentication, so a rejoin asks again.
+   */
+  joinedEpoch: number
 ): void {
   useEffect(() => {
-    if (!mapId || !fogEnabled || !ready) return;
+    if (!mapId || !fogEnabled || !joinedEpoch) return;
     socket?.getSocket()?.emit('fog:request_state', { mapId });
-  }, [socket, mapId, fogEnabled, ready, epoch]);
+  }, [socket, mapId, fogEnabled, joinedEpoch]);
 }

@@ -36,21 +36,29 @@ export function useExploredMemory(
   active: boolean,
   /** Whose memory to hold; null when this canvas explores as nobody (the DM's own view). */
   exploringAs: string | null,
-  /** The socket has authenticated; a request sent before that is dropped unanswered. */
-  ready: boolean,
-  /** Bumped on every reconnect, so the memory is asked for again on the new socket. */
-  epoch: number
+  /**
+   * 0 until the connection has authenticated into the campaign, and a new
+   * number after each re-authentication, so a rejoin asks again. A request
+   * sent before the campaign is joined is dropped by the server unanswered.
+   */
+  joinedEpoch: number
 ) {
   const [exploredCells, setExploredCells] = useState<Set<number> | null>(null);
 
-  // Ask when the map, the setting, or whose memory it is changes, and again
-  // once the socket can answer or after it reconnects. Off, or nobody to ask
-  // for: nothing to hold.
+  // What is held belongs to one map and one person. When either changes, it is
+  // no longer about anything, so it goes. A rejoin is deliberately not in here:
+  // clearing on every reconnect blanked a map that was perfectly good, and the
+  // reply to the fresh request puts the same cells back anyway.
   useEffect(() => {
     setExploredCells(null);
-    if (!mapId || !active || !exploringAs || !ready) return;
+  }, [mapId, active, exploringAs]);
+
+  // Ask when the map, the setting or whose memory it is changes, and again on
+  // each rejoin. Off, or nobody to ask for: nothing to hold.
+  useEffect(() => {
+    if (!mapId || !active || !exploringAs || !joinedEpoch) return;
     socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
-  }, [socket, mapId, active, exploringAs, ready, epoch]);
+  }, [socket, mapId, active, exploringAs, joinedEpoch]);
 
   useEffect(() => {
     const live = socket?.getSocket();

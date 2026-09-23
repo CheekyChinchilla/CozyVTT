@@ -132,10 +132,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // the one pointing — the blue hover outline already marks that case.
   const peekTokenId = useMapPeekTokenId();
   const prefersReducedMotion = useReducedMotion();
-  const { socket, status: socketStatus, reconnectCount } = useWebSocket();
-  // 'connected' is set only once the socket has authenticated into the campaign,
-  // which is when the server starts answering requests for map state.
-  const socketReady = socketStatus === 'connected';
+  // joinedEpoch is 0 until this connection has authenticated into the campaign,
+  // and a new number after each rejoin. Anything that asks the server for map
+  // state watches it, because a request sent before the campaign is joined is
+  // dropped unanswered.
+  const { socket, joinedEpoch } = useWebSocket();
   const { user } = useAuth();
   const isDM = userRole === 'DM';
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -1124,7 +1125,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Fog state is requested whenever the map changes or fog is switched on for
   // it (DMs get the full grid, players their revealed cells), once the socket
   // can be answered and again after a reconnect. Off: nothing to ask for.
-  useFogStateRequest(socket, currentMap?.id, fogEnabled, socketReady, reconnectCount);
+  useFogStateRequest(socket, currentMap?.id, fogEnabled, joinedEpoch);
 
   // Explored memory: the cells this viewer's vision has covered on this map,
   // as the server remembers them. Whose memory depends on whose eyes: a
@@ -1137,8 +1138,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     currentMap?.id,
     explorationEnabled && (currentMap?.lightingEnabled ?? false),
     exploringAs,
-    socketReady,
-    reconnectCount
+    joinedEpoch
   );
   const exploredScratchRef = useRef<HTMLCanvasElement | null>(null);
   const lastExploredReportRef = useRef(0);
@@ -1314,7 +1314,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id, socketReady, reconnectCount]);
+  }, [socket, currentMap?.id, joinedEpoch]);
 
   // ============================================
   // Map pings — receive, name, and expire

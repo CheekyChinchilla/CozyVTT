@@ -38,6 +38,17 @@ interface WebSocketContextState {
    */
   reconnectCount: number;
 
+  /**
+   * 0 until this connection has authenticated into the campaign, then a new
+   * number on each re-authentication.
+   *
+   * Distinct from `reconnectCount`, which ticks when the transport comes back:
+   * that is a moment before the campaign has been rejoined, and the server
+   * drops anything sent by a socket it has not authenticated. Anything that
+   * asks the server for state on joining watches this instead.
+   */
+  joinedEpoch: number;
+
   // Socket Instance (for components that need direct access)
   socket: typeof socketClient;
 
@@ -69,6 +80,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
+  const [joinedEpoch, setJoinedEpoch] = useState(0);
   const heartbeatCleanupRef = useRef<(() => void) | null>(null);
   const connectedCampaignRef = useRef<string | null>(null);
   const statusRef = useRef<ConnectionStatus>('disconnected');
@@ -96,6 +108,16 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  // Every successful join of the campaign, the first and each one after a
+  // drop. Registered through the client's own listener table, which re-attaches
+  // to the socket it builds on reconnect, so this survives the socket being
+  // thrown away and replaced.
+  useEffect(() => {
+    const onJoined = () => setJoinedEpoch((n) => n + 1);
+    socketClient.on('authenticated', onJoined);
+    return () => { socketClient.off('authenticated', onJoined); };
   }, []);
 
   // Connect to WebSocket
@@ -319,11 +341,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     status,
     error,
     reconnectCount,
+    joinedEpoch,
     socket: socketClient,
     connect,
     disconnect,
     reconnect,
-  }), [status, error, reconnectCount, connect, disconnect, reconnect]);
+  }), [status, error, reconnectCount, joinedEpoch, connect, disconnect, reconnect]);
 
   return (
     <WebSocketContext.Provider value={value}>
