@@ -80,6 +80,7 @@ import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenControl';
+import { dmTokenControls } from '@/utils/tokenControls';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -4010,7 +4011,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           {userRole === 'DM' && (() => {
             const cmToken = contextMenu.token;
             const cmType = cmToken.type ?? (cmToken.characterId ? TokenType.PLAYER : TokenType.NPC);
-            const isObject = cmType === TokenType.OBJECT;
+            const controls = dmTokenControls(cmType);
             return (
             <>
               {/* Roll... — NPC tokens only. The `characterId` check is what
@@ -4130,8 +4131,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 Save as Template
               </button>
 
-              {/* Visibility toggle — Object tokens: Reveal/Hide */}
-              {isObject && (
+              {/* Hide from / Reveal to players — every token; see utils/tokenControls.ts */}
+              {controls.hide && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
@@ -4143,7 +4144,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       useGameStore.getState().patchToken(token.id, { visible: !token.visible });
                       socket?.emitMapChange(currentMap.id);
                     } catch (err) {
-                      console.error('Failed to toggle object visibility:', err);
+                      console.error('Failed to toggle token visibility:', err);
                     }
                   }}
                 >
@@ -4151,8 +4152,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Spirit Realm toggle — Player and NPC tokens only (not Objects) */}
-              {!isObject && (
+              {/* Spirit Realm toggle — creatures cross planes, scenery does not */}
+              {controls.crossPlanes && (
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}

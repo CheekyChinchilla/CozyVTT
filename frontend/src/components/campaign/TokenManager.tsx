@@ -24,6 +24,7 @@ import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Asset, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
+import { dmTokenControls } from '@/utils/tokenControls';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
@@ -81,7 +82,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [showHpBar, setShowHpBar] = useState(true);
   const [initiative, setInitiative] = useState<string>('');
   const [sightRadius, setSightRadius] = useState(0);
-  const [objectHidden, setObjectHidden] = useState(true);
+  // Placing a token already hidden. Offered for the tokens that are secrets
+  // (see utils/tokenControls.ts). An object defaults to hidden, which is what
+  // a secret door or a trapped chest wants; a creature defaults to visible, so
+  // an ordinary monster is not placed invisible by accident. The form opens on
+  // NPC, and the type buttons keep the two in step.
+  const [placeHidden, setPlaceHidden] = useState(false);
 
   // ── Token list action state ──
   const [movingTokenId, setMovingTokenId] = useState<string | null>(null);
@@ -194,7 +200,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         tokenPayload = {
           ...basePayload,
           layer: tokenLayer,
-          visible: true,
+          visible: !placeHidden,
           controlledBy: assignTo !== 'none' ? assignTo : null,
           disposition,
           hp: hpValue,
@@ -208,7 +214,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         tokenPayload = {
           ...basePayload,
           layer: TokenLayer.TOKEN,
-          visible: !objectHidden,
+          visible: !placeHidden,
           controlledBy: null,
           disposition: null,
           hp: null,
@@ -235,13 +241,13 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setShowHpBar(true);
       setInitiative('');
       setSightRadius(0);
-      setObjectHidden(true);
+      setPlaceHidden(tokenType === TokenType.OBJECT);
     } catch {
       setError('Failed to add token to map');
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, objectHidden, socket]);
+  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden, socket]);
 
   // ============================================
   // Token List Actions
@@ -397,7 +403,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                     ] as const).map(({ type, label }) => (
                       <button
                         key={type}
-                        onClick={() => setTokenType(type)}
+                        onClick={() => { setTokenType(type); setPlaceHidden(type === TokenType.OBJECT); }}
                         className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                           tokenType === type
                             ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
@@ -618,25 +624,27 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   </>
                 )}
 
+                {/* Hidden on placement — NPCs and objects, the tokens that are secrets */}
+                {dmTokenControls(tokenType).placeHidden && (
+                  <div className="mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={placeHidden}
+                        onChange={(e) => setPlaceHidden(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-stone-gray">Hidden from players on placement</span>
+                    </label>
+                    <p className="text-[10px] text-stone-gray/50 mt-0.5">
+                      Reveal later by right-clicking it — useful for a monster waiting in a room, a secret door, a trapped chest.
+                    </p>
+                  </div>
+                )}
+
                 {/* Object-specific fields */}
                 {tokenType === TokenType.OBJECT && (
                   <>
-                    {/* Hidden toggle */}
-                    <div className="mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={objectHidden}
-                          onChange={(e) => setObjectHidden(e.target.checked)}
-                          className="rounded"
-                        />
-                        <span className="text-xs text-stone-gray">Hidden from players on placement</span>
-                      </label>
-                      <p className="text-[10px] text-stone-gray/50 mt-0.5">
-                        Reveal later via the context menu — useful for secret doors, hidden chests.
-                      </p>
-                    </div>
-
                     {/* DM Notes */}
                     <div className="mb-3">
                       <label className="text-xs text-stone-gray font-medium block mb-1">
