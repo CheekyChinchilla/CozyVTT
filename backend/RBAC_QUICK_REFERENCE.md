@@ -14,7 +14,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 
 #### 1. Authenticated User Only
 ```typescript
-router.get('/api/profile', authenticated, handler);
+router.get('/api/campaigns', authenticated, handler);
 ```
 
 #### 2. Admin Only
@@ -30,13 +30,14 @@ router.get('/api/campaigns/:campaignId', campaignMember, handler);
 
 #### 4. Campaign DM Only
 ```typescript
-router.put('/api/campaigns/:campaignId/settings', campaignDM, handler);
+router.put('/api/campaigns/:campaignId', campaignDM, handler);
 ```
 
 #### 5. Campaign DM or Player (Excludes Spectators)
-```typescript
-router.post('/api/campaigns/:campaignId/chat', campaignDMOrPlayer, handler);
-```
+`campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
+today. Where spectators are refused, the handler does it: `dice.roll` (socket)
+through `canRollDice`, and token control through `canControlToken`. Chat is a
+socket event (`chat.message`) and spectators may send it.
 
 ---
 
