@@ -1073,6 +1073,9 @@ export interface UpdateTokenRequest {
   initiative?: number | null;
   /** Darkvision in grid squares; 0 = none. DM only on update. */
   sightRadius?: number | null;
+  displayMode?: TokenDisplayMode;
+  statBlock?: NpcStatBlock | null;
+  creatureTemplateId?: string | null;
   /** DM only: hide what the token is from players who do not control it. */
   obscured?: boolean;
 }

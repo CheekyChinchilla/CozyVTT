@@ -25,7 +25,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import api from '@/services/api';
-import type { Token, TokenHp, NpcStatBlock, Asset } from '@/types';
+import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
@@ -111,10 +111,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const isSaving = useRef(false);
 
   // ── Generic update helper ──
-  const saveUpdate = useCallback(async (changes: Partial<Token>) => {
+  const saveUpdate = useCallback(async (changes: UpdateTokenRequest) => {
     if (isSaving.current) return;
     try {
-      const result = await api.updateToken(campaignId, mapId, token.id, changes as Parameters<typeof api.updateToken>[3]);
+      const result = await api.updateToken(campaignId, mapId, token.id, changes);
       onTokenUpdate(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
@@ -158,7 +158,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // ── Stat block ──
   const handleStatBlockChange = useCallback(async (updated: NpcStatBlock) => {
     setStatBlock(updated);
-    await saveUpdate({ statBlock: updated } as Partial<Token>);
+    await saveUpdate({ statBlock: updated });
   }, [saveUpdate]);
 
   const handleCreateStatBlock = useCallback(async () => {
@@ -170,13 +170,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setStatBlock(newBlock);
     setEditingStatBlock(true);
     setShowCreateStatBlock(false);
-    await saveUpdate({ statBlock: newBlock } as Partial<Token>);
+    await saveUpdate({ statBlock: newBlock });
   }, [saveUpdate]);
 
   const handleRemoveStatBlock = useCallback(async () => {
     setStatBlock(null);
     setEditingStatBlock(false);
-    await saveUpdate({ statBlock: null } as Partial<Token>);
+    await saveUpdate({ statBlock: null });
   }, [saveUpdate]);
 
   // ── Token image ──
@@ -294,7 +294,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
         imageUrl: token.imageUrl,
       });
       // Relink this token to the new custom creature
-      await saveUpdate({ creatureTemplateId: duplicate.id } as Partial<Token>);
+      await saveUpdate({ creatureTemplateId: duplicate.id });
       setShowDuplicateNamePrompt(false);
       setDuplicateWarning(null);
       setShowImagePicker(false);
