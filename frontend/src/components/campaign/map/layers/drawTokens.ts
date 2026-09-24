@@ -122,6 +122,9 @@ function traceTokenOutline(
  * copy of this would drift into showing a different colour for the same token.
  */
 export function placeholderColor(token: Token): string {
+  // An obscured token gives nothing away, its kind included: the neutral stone
+  // whatever type or disposition it carries
+  if (token.obscured) return '#78716c';
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
   return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
     token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
@@ -152,7 +155,10 @@ export function drawTokens(
   for (const token of state.tokens) {
     if (!isTokenVisibleTo(token, view)) continue;
 
-    const tokenImg = state.tokenImages.get(token.id);
+    // The cache is keyed by id, so it can hold art for a token this view
+    // receives without an address: the DM's preview of an obscured token. The
+    // address decides whether art is drawn, not the cache.
+    const tokenImg = token.imageUrl ? state.tokenImages.get(token.id) : undefined;
 
     // Skip dragged token (drawn separately as ghost)
     if (state.draggedToken?.id === token.id) continue;
@@ -400,6 +406,23 @@ export function drawTokens(
         ctx.arc(centerX + radius * 0.6, centerY - radius * 0.6, dotRadius, 0, Math.PI * 2);
       }
       ctx.fill();
+    }
+
+    // Obscured indicator (DM-only small "?" badge). The DM sees the token as
+    // it is, so this badge is the only sign that the table sees a shape.
+    if (token.obscured && isDM) {
+      const badgeRadius = Math.max(5, 5 / zoom);
+      const bx = displayMode === 'full-art' ? tokenX + badgeRadius * 2 : centerX - radius * 0.6;
+      const by = displayMode === 'full-art' ? tokenY + badgeRadius * 2 : centerY - radius * 0.6;
+      ctx.fillStyle = 'rgba(124, 58, 237, 0.9)';
+      ctx.beginPath();
+      ctx.arc(bx, by, badgeRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `bold ${Math.max(8, badgeRadius * 1.4)}px 'Inter', system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('?', bx, by + badgeRadius * 0.05);
     }
 
     // Hover border

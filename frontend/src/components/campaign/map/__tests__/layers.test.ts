@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
-import { drawTokens, type TokenDrawState } from '../layers/drawTokens';
+import { drawTokens, placeholderColor, type TokenDrawState } from '../layers/drawTokens';
 import { drawWalls } from '../layers/drawWalls';
 import { drawFogSelection, type FogSelectionState } from '../layers/drawOverlays';
 import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
@@ -102,7 +102,9 @@ function makeToken(id: string, overrides: Partial<Token> = {}): Token {
     id,
     characterId: null,
     name: `Token ${id}`,
-    imageUrl: '',
+    // A cached image always has an address in real use; the address decides
+    // whether cached art is drawn (an obscured token arrives without one).
+    imageUrl: `/api/assets/tokens/${id}`,
     position: { x: 0, y: 0 },
     size: { width: 1, height: 1 },
     layer: TokenLayer.TOKEN,
@@ -258,6 +260,29 @@ describe('drawTokens', () => {
     expect(seq.indexOf('roundRect')).toBeGreaterThanOrEqual(0);
     expect(seq.indexOf('clip')).toBeGreaterThan(seq.indexOf('roundRect'));
     expect(count(ctx, 'drawImage')).toBe(1);
+  });
+
+  it('an obscured token is a plain shape with a question mark, even when its art is cached', () => {
+    // A player receives it with no image address. The DM's preview holds the
+    // real art under the same id, so the address decides, not the cache.
+    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '', type: TokenType.PLAYER });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
+    expect(placeholderColor(veiled)).toBe('#78716c');
+  });
+
+  it('marks an obscured token for the DM, who still sees its art', () => {
+    const veiled = makeToken('v', { obscured: true, imageUrl: '/api/assets/tokens/v' });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: true }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(1);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
+
+    const plain = makeMockCtx();
+    drawTokens(plain, baseTokenState({ tokens: [makeToken('p', { imageUrl: '/api/assets/tokens/p' })], tokenImages: new Map([['p', fakeImage]]), isDM: true }), viewport3x3);
+    expect(plain.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(0);
   });
 
   it('players never see hidden tokens; the DM sees them', () => {
