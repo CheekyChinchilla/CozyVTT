@@ -4,14 +4,21 @@ import TokenVisionField from '../TokenVisionField';
 
 describe('TokenVisionField', () => {
   it('shows the value and the units', () => {
-    render(<TokenVisionField value={12} onChange={() => {}} />);
+    render(<TokenVisionField value={12} onChange={() => {}} feetPerSquare={5} />);
     expect((screen.getByLabelText('Darkvision in grid squares') as HTMLInputElement).value).toBe('12');
     expect(screen.getByText(/0 = none, 12 = 60 ft/)).toBeTruthy();
   });
 
+  it('works the hint out from the map\'s feet per square', () => {
+    // 12 squares is 60 ft only at the usual 5 ft a square; a map at 10 ft
+    // a square says so
+    render(<TokenVisionField value={12} onChange={() => {}} feetPerSquare={10} />);
+    expect(screen.getByText(/12 = 120 ft/)).toBeTruthy();
+  });
+
   it('reports a whole number of squares, clamped to the token bounds', () => {
     const onChange = vi.fn();
-    render(<TokenVisionField value={0} onChange={onChange} />);
+    render(<TokenVisionField value={0} onChange={onChange} feetPerSquare={5} />);
     const input = screen.getByLabelText('Darkvision in grid squares');
     fireEvent.change(input, { target: { value: '6' } });
     fireEvent.change(input, { target: { value: '-3' } });
@@ -22,7 +29,7 @@ describe('TokenVisionField', () => {
 
   it('commits once, on blur or Enter, with the final value', () => {
     const onCommit = vi.fn();
-    render(<TokenVisionField value={0} onCommit={onCommit} />);
+    render(<TokenVisionField value={0} onCommit={onCommit} feetPerSquare={5} />);
     const input = screen.getByLabelText('Darkvision in grid squares');
     fireEvent.change(input, { target: { value: '1' } });
     fireEvent.change(input, { target: { value: '12' } });
@@ -36,7 +43,7 @@ describe('TokenVisionField', () => {
 
   it('does not commit a value that did not change, and reads a cleared field as none', () => {
     const onCommit = vi.fn();
-    render(<TokenVisionField value={5} onCommit={onCommit} />);
+    render(<TokenVisionField value={5} onCommit={onCommit} feetPerSquare={5} />);
     const input = screen.getByLabelText('Darkvision in grid squares') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '5' } });
     fireEvent.blur(input);

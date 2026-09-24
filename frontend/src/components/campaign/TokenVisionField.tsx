@@ -16,6 +16,8 @@ export const MAX_SIGHT_RADIUS = 200;
 interface TokenVisionFieldProps {
   /** Darkvision in grid squares; 0 = none. */
   value: number;
+  /** The map's scale, so the hint's feet are right for it (12 squares is 60 ft only at 5). */
+  feetPerSquare: number;
   onChange?: (squares: number) => void;
   onCommit?: (squares: number) => void;
   disabled?: boolean;
@@ -28,7 +30,7 @@ function squaresFrom(raw: string): number | null {
   return Math.max(0, Math.min(MAX_SIGHT_RADIUS, n));
 }
 
-export default function TokenVisionField({ value, onChange, onCommit, disabled }: TokenVisionFieldProps) {
+export default function TokenVisionField({ value, feetPerSquare, onChange, onCommit, disabled }: TokenVisionFieldProps) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => { setDraft(String(value)); }, [value]);
 
@@ -62,7 +64,7 @@ export default function TokenVisionField({ value, onChange, onCommit, disabled }
         className="input-cozy input-cozy-number w-full text-sm"
       />
       <p className="text-[10px] text-stone-gray/60 mt-1">
-        How far this token makes things out with no light. 0 = none, 12 = 60 ft. Lit things are seen at any distance.
+        How far this token makes things out with no light. 0 = none, 12 = {12 * feetPerSquare} ft on this map. Lit things are seen at any distance.
       </p>
     </div>
   );

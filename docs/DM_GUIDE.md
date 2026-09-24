@@ -184,7 +184,7 @@ Click **+ New Token** and fill in:
 - **Type** — **PC** for player characters, **NPC** for monsters and allies, **Object** for environmental pieces
 - **HP** — Starting hit points (can be updated during play)
 - **Size** — How many grid squares the token covers (default: 1×1)
-- **Darkvision** — How far the token sees with no light, in grid squares (0 = none, 12 = 60 ft); not offered for Objects
+- **Darkvision** — How far the token sees with no light, in grid squares (0 = none; at the usual 5 ft a square, 12 = 60 ft, and the hint works it out for the map's own scale); not offered for Objects
 
 *Screenshot pending — Token creation form.*
 
@@ -996,7 +996,7 @@ On a map with dynamic lighting, the places a player's tokens have seen stay on t
 
 ### Darkvision
 
-Each token has a **Darkvision** value, in grid squares: how far it makes things out with no light at all. **0 means none**, which is what a new token starts with; 12 squares is 60 ft, the usual darkvision. It never limits how far a lit thing can be noticed.
+Each token has a **Darkvision** value, in grid squares: how far it makes things out with no light at all. **0 means none**, which is what a new token starts with; 12 squares is 60 ft at the usual 5 ft a square, the common darkvision, and the field's hint works the feet out for the map's own scale. It never limits how far a lit thing can be noticed.
 
 Set it in the **Token Manager** when placing a token, or afterwards from **Edit Token** (right-click the token, or the pencil in the Token Roster), which now opens for player tokens too. Only you can change it: it decides what the server sends that token's player.
 
@@ -1034,10 +1034,9 @@ Two practical consequences when you are building a map:
   room behind one *is* visible from outside. That is the tool for "you can see
   the lamp burning through the shutters".
 
-> **If you are upgrading from 1.2.2**, this is a change. Lit rooms used to be
-> visible to everyone whether or not they could see in, so maps built against
-> that behaviour may now be darker than you expect until a character gets line of
-> sight.
+> Maps made before 1.5.0 have **Global Illumination** on, so a lit room is
+> visible to everyone with line of sight into it, as it always was. Untick it
+> in **Edit Map** to make lights and darkvision decide what a player sees.
 
 #### Placing Lights
 

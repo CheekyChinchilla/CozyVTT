@@ -724,7 +724,7 @@ export interface Token {
   initiative:  number | null;
   /**
    * Darkvision, in grid squares: how far the token makes things out with no
-   * light (0 = none, 12 = 60 ft). It never limits how far a lit thing can be
+   * light (0 = none; 12 = 60 ft at 5 ft a square). It never limits how far a lit thing can be
    * noticed. Decides what the server sends, so only the DM may change it.
    */
   sightRadius?: number;

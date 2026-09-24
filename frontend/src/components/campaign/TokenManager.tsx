@@ -722,7 +722,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
                 {/* Darkvision (NPC and Player only; objects do not see) */}
                 {tokenType !== TokenType.OBJECT && (
-                  <TokenVisionField value={sightRadius} onChange={setSightRadius} />
+                  <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={currentMap?.feetPerSquare ?? 5} />
                 )}
 
                 {/* Assign to player (NPC and Player only) */}

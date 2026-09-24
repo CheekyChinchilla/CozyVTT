@@ -74,7 +74,7 @@ function getEffectiveType(token: Token): TokenType {
 
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
   const { socket } = useWebSocket();
-  const { campaign } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
 
   // Local editable state (mirrors token, updates on save)
   const [name, setName] = useState(token.name);
@@ -867,6 +867,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 <TokenVisionField
                   value={token.sightRadius ?? 0}
                   onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
+                  feetPerSquare={currentMap?.feetPerSquare ?? 5}
                 />
               </section>
             )}

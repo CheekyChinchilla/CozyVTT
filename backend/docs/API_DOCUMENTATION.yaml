@@ -7417,7 +7417,7 @@ components:
           type: number
           minimum: 0
           maximum: 200
-          description: Darkvision in grid squares (0 = none, 12 = 60 ft). How far the token makes things out with no light; never limits how far a lit thing is noticed.
+          description: Darkvision in grid squares (0 = none; 12 = 60 ft at 5 ft a square). How far the token makes things out with no light; never limits how far a lit thing is noticed.
         displayMode:
           type: string
           enum: [pog, top-down, full-art]

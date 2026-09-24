@@ -57,6 +57,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 ### Fixed
 
+- **The darkvision hint uses the map's own scale.** It said "12 = 60 ft" whatever a map's feet per square was set to; it now works the feet out from the map, and the guides say the 60 ft figure assumes 5 ft a square.
+
 - **An imported creature with an unrecognised disposition or display mode no longer keeps it.** A campaign archive could name a disposition the app cannot draw ("Hostile" with a capital, say) and it was stored as written; the importer now treats it like a missing value, hostile and pog.
 
 - **The initiative tracker follows the token.** The hit points it showed were a copy taken when the combatant was added and never changed afterwards, although the guides said they updated live, and a creature hidden mid-fight stayed listed. Changing a creature's hit points, name or picture on its token, or hiding it, now updates every tracker at once. The DM Guide no longer describes an HP control the tracker never had, and says plainly that ending combat clears the order.
