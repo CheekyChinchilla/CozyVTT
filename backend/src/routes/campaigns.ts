@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM } from '../services/permissions';
+import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets } from '../websocket/utils';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
@@ -268,11 +269,22 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 
     // Flatten sessions array → activeSession (first open session, or null)
     const { sessions: _sessions, ...campaignRest } = campaign;
+
+    // A map's spirit layer is for the DM and for a player who has crossed
+    // over. The map fetch hides its address from everyone else, and so must
+    // this list: any member can fetch the image by the address alone.
+    const role = req.campaignMembership!.role;
+    const spiritVisible = role === 'DM' || (await getSpiritVisibility(campaignId, req.session.userId!));
+    const maps = spiritVisible
+      ? campaignRest.maps
+      : campaignRest.maps.map((m) => ({ ...m, spiritLayerUrl: null }));
+
     return res.status(200).json({
       campaign: {
         ...campaignRest,
+        maps,
         activeSession: (_sessions && _sessions.length > 0) ? _sessions[0] : null,
-        userRole: req.campaignMembership!.role,
+        userRole: role,
       },
     });
   } catch (error) {
