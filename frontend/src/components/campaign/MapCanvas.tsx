@@ -1786,18 +1786,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         memoryCanvas: memoryOffscreenRef,
       }, viewport);
 
-      // Report what this player has just seen, at most every 300 ms, from the
-      // coverage mask just built. A DM previewing a player only reads that
-      // player's memory; they never write to it.
+      // Report what this viewer has just seen, at most every 300 ms, from the
+      // coverage mask just built, to whoever's memory this is: the player's
+      // own, or the player the DM is previewing. A preview writes too, so a
+      // token the DM moves for an absent player still remembers its ground.
+      // The party and an uncontrolled token explore as nobody, and write
+      // nothing.
       const now = Date.now();
-      if (!previewing && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
+      if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
         && now - lastExploredReportRef.current >= 300) {
         lastExploredReportRef.current = now;
         const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
         const fresh = seen ? diffNew(exploredCells, seen) : [];
         if (fresh.length > 0) {
           addExplored(fresh);
-          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh });
+          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
         }
       }
     }
@@ -1940,7 +1943,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers

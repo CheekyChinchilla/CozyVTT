@@ -204,6 +204,28 @@ export async function broadcastFogState(io: Server, campaignId: string, mapId: s
   }
 }
 
+/**
+ * Send a user's explored memory to everyone entitled to it: that user's own
+ * sockets in the campaign, so a second tab stays in step, and every DM
+ * socket, so a Player Preview follows the memory as it grows. Nobody else:
+ * one player's memory is never another's to see.
+ */
+export async function broadcastExplorationState(
+  io: Server,
+  campaignId: string,
+  mapId: string,
+  userId: string,
+  cells: number[]
+): Promise<void> {
+  const sockets = await io.in(campaignId).fetchSockets();
+  for (const s of sockets) {
+    const member = s as unknown as AuthenticatedSocket;
+    if (member.userId === userId || member.role === 'DM') {
+      s.emit('exploration:state', { mapId, userId, cells });
+    }
+  }
+}
+
 /** Derive the list of revealed cell indices from a FogState for player broadcasts. */
 export function revealedCellIndices(fog: FogState): number[] {
   return fog.revealed.reduce<number[]>((acc, v, i) => {

@@ -80,4 +80,6 @@ export const FogOperationSchema = z.discriminatedUnion('op', [
 export const ExplorationRevealSchema = z.object({
   mapId: z.string().uuid(),
   cells: z.array(z.number().int().nonnegative()).max(20000),
+  /** Whose memory to write. Only a DM may name someone else (Player Preview). */
+  userId: z.string().uuid().optional(),
 });

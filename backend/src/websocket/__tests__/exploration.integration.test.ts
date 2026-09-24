@@ -138,6 +138,66 @@ describe('exploration:reveal', () => {
   });
 });
 
+describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
+  it('reaches a DM socket in the campaign as the player\'s memory grows', async () => {
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const seenByDm = waitForEvent<StateEvent & { userId: string | null }>(dm, 'exploration:state');
+    const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [2, 3] });
+    await echoed;
+    const got = await seenByDm;
+    expect(got.userId).toBe(p1Id);
+    expect(got.cells).toEqual([2, 3]);
+    p1.disconnect();
+    dm.disconnect();
+  });
+
+  it('lets the DM record cells for a named player, who receives them', async () => {
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const theirs = waitForEvent<StateEvent & { userId: string | null }>(p1, 'exploration:state');
+    dm.emit('exploration:reveal', { mapId, cells: [4], userId: p1Id });
+    const got = await theirs;
+    expect(got.userId).toBe(p1Id);
+    expect(got.cells).toEqual([4]);
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: p1Id } })).toBe(1);
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: dmId } })).toBe(0);
+    p1.disconnect();
+    dm.disconnect();
+  });
+
+  it('refuses a player naming another user, and stores nothing', async () => {
+    const p2 = await server.connectAndAuth(p2Cookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(p2, 'error');
+    p2.emit('exploration:reveal', { mapId, cells: [1], userId: p1Id });
+    expect((await denial).message).toMatch(/own/);
+    expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
+    p2.disconnect();
+  });
+
+  it('refuses the DM naming someone who is not a member', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(dm, 'error');
+    dm.emit('exploration:reveal', { mapId, cells: [1], userId: randomUUID() });
+    expect((await denial).message).toMatch(/member/);
+    expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
+    dm.disconnect();
+  });
+
+  it('never shows one player another\'s memory', async () => {
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const p2 = await server.connectAndAuth(p2Cookie, campaignId);
+    const nothing = expectNoEvent(p2, 'exploration:state', 400);
+    const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [6] });
+    await echoed;
+    await nothing;
+    p1.disconnect();
+    p2.disconnect();
+  });
+});
+
 describe('exploration:request', () => {
   it('gives each player their own memory, and nothing of another\'s', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);

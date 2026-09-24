@@ -980,7 +980,7 @@ New maps start with it off. Maps made before it existed have it on, which is exa
 
 ### Explored Areas
 
-On a map with dynamic lighting, the places a player's tokens have seen stay on that player's map, greyed and darkened, until they can see them again. Each player has their own memory of a map, kept on the server, so it survives a reload and a change of device, and it is never used to decide what the server sends them: it only greys in map artwork they already had. The DM view never shows it; use **Preview Player View** to see a player's, either by picking the player or by picking a token they control.
+On a map with dynamic lighting, the places a player's tokens have seen stay on that player's map, greyed and darkened, until they can see them again. Each player has their own memory of a map, kept on the server, so it survives a reload and a change of device, and it is never used to decide what the server sends them: it only greys in map artwork they already had. The DM view never shows it; use **Preview Player View** to see a player's, either by picking the player or by picking a token they control. The preview keeps up with that memory as it grows, and it adds to it: move a player's token while previewing them and the ground it sees is remembered for that player, whether or not they are connected.
 
 - **Remember Explored Areas** in **Edit Map** switches it per map. New maps start with it off; maps from before it existed have it on.
 - **Reset explored areas** at the bottom of the **Fog of War** panel forgets what every player has seen of the map (it asks for a second click). Their view right now is unchanged; only the grey memory goes.
@@ -1056,11 +1056,11 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
 - Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
-- Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors in their line of sight, and the fog exactly as it is revealed. Tokens that view would not have been sent are not drawn
+- Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors in their line of sight, the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
 - Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
 - The preview shows the material plane only
 
-**Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
+**Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now, and moving the token while you preview it adds to that memory, so a game you run alone still builds up each player's explored ground. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 
 Click the button again to return to your own view.
 

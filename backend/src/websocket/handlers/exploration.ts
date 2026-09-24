@@ -19,7 +19,7 @@ import { prisma } from '../../config/database';
 import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { explorationRevealLimiter, loadFogState, applyWsFogOperation, revealedCellIndices } from '../shared';
+import { explorationRevealLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 
 const MAP_SELECT = { campaignId: true, explorationEnabled: true, width: true, height: true, gridSize: true } as const;
@@ -28,8 +28,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   /**
    * exploration:reveal — a player's vision covered these cells; remember them.
    * Any member. Throttled to 10/s per socket; over-limit reveals are dropped.
-   * Echoes the user's whole memory to every socket of theirs, so a second tab
-   * stays in step.
+   * A DM may name another member and write that player's memory: Player
+   * Preview records what the previewed token has seen, so a table the DM
+   * drives alone still accrues it. The user's whole memory is then sent to
+   * their own sockets and to every DM's, so a preview follows it live.
    */
   socket.on('exploration:reveal', async (data: unknown) => {
     try {
@@ -41,7 +43,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid exploration data' });
         return;
       }
-      const { mapId, cells } = parsed.data;
+      const { mapId, cells, userId: named } = parsed.data;
 
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId) {
@@ -53,7 +55,23 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
 
-      const userId = socket.userId;
+      const isDM = socket.role === 'DM';
+      let userId = socket.userId;
+      if (named !== undefined && named !== socket.userId) {
+        if (!isDM) {
+          socket.emit('error', { message: 'You can only record your own explored memory' });
+          return;
+        }
+        const member = await prisma.campaignMembership.findUnique({
+          where: { userId_campaignId: { userId: named, campaignId: socket.campaignId } },
+          select: { userId: true },
+        });
+        if (!member) {
+          socket.emit('error', { message: 'That user is not a member of this campaign' });
+          return;
+        }
+        userId = named;
+      }
       // One writer per (map, user) at a time. Two tabs, or two reports in
       // flight, would each read the row and write back only their own cells;
       // the lock is released when the transaction ends.
@@ -73,7 +91,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return revealedCellIndices(explored);
       });
 
-      io.to(userId).emit('exploration:state', { mapId, userId, cells: cellsNow });
+      await broadcastExplorationState(io, socket.campaignId, mapId, userId, cellsNow);
     } catch (error) {
       logger.error('exploration:reveal failed', { err: error });
     }
