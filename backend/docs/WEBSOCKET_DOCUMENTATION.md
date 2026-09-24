@@ -524,7 +524,7 @@ socket.on('token.moved', (data) => {
 - Updates `Map.tokens` JSON array
 - Persists final position
 
-**Broadcast:** `token.moved` to campaign members, the sender included. On a lit map each player instead gets `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only.
+**Broadcast:** `token.moved` to campaign members, the sender included. On a lit map each player instead gets `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own, and an obscured token as a shape with no identity) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only.
 **Broadcast Payload:**
 ```typescript
 {

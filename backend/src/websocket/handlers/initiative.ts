@@ -375,14 +375,17 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // value still reaches everyone through the initiative broadcast below.
       if (rollResult) {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
+        // The dice log goes to the whole table: an obscured token is not
+        // named there, whatever name the client sent along.
+        const publicName = token.obscured === true ? 'Unknown creature' : token.name;
         const rollData = {
           userId: socket.userId,
           userName: user?.displayName ?? 'DM',
-          characterName: characterName || token.name,
+          characterName: token.obscured === true ? publicName : (characterName || token.name),
           expression: usedExpression,
           result: rolledValue,
           breakdown: rollResult,
-          purpose: `${token.name} Initiative`,
+          purpose: `${publicName} Initiative`,
           timestamp: new Date().toISOString(),
           secret: false,
         };

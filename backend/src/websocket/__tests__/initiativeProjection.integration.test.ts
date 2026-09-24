@@ -31,7 +31,7 @@ let p1Cookie: string;
 type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string };
 type State = { active: boolean; currentTokenId: string | null; combatants: Entry[] };
 
-const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden';
+const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled';
 const hp = (current: number, max: number) => ({ current, max, temp: 0 });
 
 beforeAll(async () => {
@@ -59,6 +59,7 @@ beforeAll(async () => {
         { ...base, id: GOBLIN, name: 'Goblin', position: { x: 2, y: 2 }, visible: true, controlledBy: null, hp: hp(7, 7), showHpBar: false },
         { ...base, id: SHOWN, name: 'Ogre', position: { x: 3, y: 3 }, visible: true, controlledBy: null, hp: hp(5, 9), showHpBar: true },
         { ...base, id: HIDDEN, name: 'Ambusher', position: { x: 4, y: 4 }, visible: false, controlledBy: null, hp: hp(6, 6), showHpBar: false },
+        { ...base, id: VEILED, name: 'Something Large', position: { x: 5, y: 5 }, visible: true, controlledBy: null, hp: hp(30, 30), showHpBar: true, obscured: true },
       ],
     },
   });
@@ -138,6 +139,28 @@ describe('initiative.state as each member may see it', () => {
     const asked = waitForEvent<State>(p1, 'initiative.state');
     p1.emit('initiative.request_state');
     expect(byId(await asked, SHOWN)?.hp).toEqual(hp(1, 9));
+    dm.disconnect();
+    p1.disconnect();
+  });
+});
+
+describe('an obscured combatant', () => {
+  it('reaches a player nameless, and its initiative roll does not name it either', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const added = waitForEvent<State>(p1, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: VEILED, mapId });
+    const seen = byId(await added, VEILED);
+    expect(seen).toBeDefined();
+    expect(seen?.name).toBe('');
+    expect(seen?.hp).toBeNull();
+
+    const rolled = waitForEvent<{ characterName: string; purpose: string }>(p1, 'dice.rolled');
+    dm.emit('initiative.roll', { tokenId: VEILED, mapId, characterName: 'Something Large' });
+    const roll = await rolled;
+    expect(roll.characterName).not.toContain('Something Large');
+    expect(roll.purpose).not.toContain('Something Large');
+    expect(roll.purpose).toMatch(/Initiative/);
     dm.disconnect();
     p1.disconnect();
   });

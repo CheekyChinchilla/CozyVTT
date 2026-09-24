@@ -155,6 +155,37 @@ describe('on a lit map, in the player\'s line of sight', () => {
   });
 });
 
+describe('an obscured token', () => {
+  const VEILED = 'veiled';
+  beforeEach(async () => {
+    await resetMap(true);
+    const row = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const tokens = row.tokens as unknown[];
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { tokens: [...tokens, { ...token(VEILED, 9, null, true, 'dm eyes only'), obscured: true, hp: { current: 9, max: 9, temp: 0 }, showHpBar: true, conditions: ['prone'] }] as never },
+    });
+  });
+
+  it('arrives in a player\'s sight as a shape with no identity', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const appeared = waitForEvent<{ token: Record<string, unknown> }>(player, 'token:appeared');
+    dm.emit('token.move.end', { tokenId: VEILED, mapId, x: 8, y: 5 });
+    const { token: sent } = await appeared;
+    expect(sent.id).toBe(VEILED);
+    expect(sent.obscured).toBe(true);
+    expect(sent.name).toBe('');
+    expect(sent.imageUrl).toBe('');
+    expect(sent.hp).toBeNull();
+    expect(sent.conditions).toEqual([]);
+    expect(sent).not.toHaveProperty('notes');
+    expect(sent.position).toEqual({ x: 8, y: 5 });
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
 describe('on an unlit map', () => {
   beforeEach(() => resetMap(false));
 
