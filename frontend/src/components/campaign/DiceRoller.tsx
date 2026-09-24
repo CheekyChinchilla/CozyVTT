@@ -140,6 +140,8 @@ export default function DiceRoller() {
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
   const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'DM';
+  // A spectator watches the dice; the server refuses their rolls, and so does this.
+  const isSpectator = userRole === 'SPECTATOR';
 
   /**
    * Which campaign members are DMs, so a roll made on someone else's behalf can
@@ -481,6 +483,10 @@ export default function DiceRoller() {
   // ============================================
 
   const rollDice = (expr: string) => {
+    if (isSpectator) {
+      setError('Spectators watch the dice; they cannot roll.');
+      return;
+    }
     // When session is paused, roll entirely client-side — no server, no DB, no DM visibility
     if (isPaused) {
       if (!user) return;
@@ -718,6 +724,11 @@ export default function DiceRoller() {
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
             Session paused — rolls are automatically secret.
+          </p>
+        )}
+        {isSpectator && (
+          <p className="text-xs text-stone-gray text-center mb-2 italic">
+            You are watching this campaign: the dice are the players' to roll.
           </p>
         )}
         {/* Error Message */}

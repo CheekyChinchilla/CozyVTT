@@ -69,6 +69,8 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 > **Note:** If registration is closed on your instance, the platform administrator will need to create accounts for your players before you can invite them.
 
+**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat, and cannot roll dice, move tokens or change anything. A player you demote to spectator keeps nothing of the player's powers, even over a token that still names them.
+
 ### The Campaign Roster
 
 The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. It is a quick reference during sessions for names, character names and party composition — and it is also how you get a player's character onto the map.

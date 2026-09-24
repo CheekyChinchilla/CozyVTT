@@ -9,6 +9,7 @@ import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice
 import logger from '../../utils/logger';
 import { diceRollLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canRollDice } from '../../services/permissions';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -21,6 +22,12 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
+        return;
+      }
+
+      // Spectators watch: they may talk in chat, and they may not roll.
+      if (!canRollDice(socket.role)) {
+        socket.emit('error', { message: 'Spectators cannot roll dice' });
         return;
       }
 

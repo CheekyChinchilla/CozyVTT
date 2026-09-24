@@ -47,6 +47,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 ### Changed
 
+- **Spectators can chat but no longer roll dice.** A spectator is someone watching a campaign without playing in it. They could roll dice like anyone else, and the roll landed in the table's log and history; the dice roller now tells them the dice are the players' to roll, and the server refuses a roll from them regardless. Chat is unchanged: a spectator can read it and write in it.
+
 - **Preview Player View shows one chosen player's actual view.** It used to combine every token's vision and left the DM's fog and every token on screen. It now asks which player to preview as and draws exactly what they see: their darkvision, the lights and doors in their sight, their fog, the areas they remember, and only the tokens they would have.
 
 - **Dynamic lighting now means what the guide always said it meant.** A player sees what their tokens' sight radius reaches in the dark, plus anything a light source lights, and nothing else. Every token used to see the whole map regardless of light, which made lights decorative. Bright light shows clearly; dim light, and the dark within a token's darkvision, show half-dark; a token's own square is always visible. A new per-map setting, **Global Illumination** (in Edit Map and at the top of the Lights panel), restores the old behaviour (everything in line of sight is visible) for tables that want it; maps from before this release have it on, so they look exactly as before until the DM turns it off. A player, or a spectator, with no token on a lit map is now sent no tokens at all.

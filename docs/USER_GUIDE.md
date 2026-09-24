@@ -81,6 +81,16 @@ CozyVTT has two platform-level roles:
 
 Your role badge is visible on your profile page.
 
+### Campaign Roles
+
+Within a campaign you have one of three roles, set by its DM:
+
+| Role | What they can do |
+|------|-----------------|
+| **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
+| **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters |
+| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything |
+
 ---
 
 ## The Dashboard

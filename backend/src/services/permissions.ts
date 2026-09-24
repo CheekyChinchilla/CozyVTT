@@ -30,13 +30,6 @@ export function isPlayer(campaignRole: CampaignRole): boolean {
 }
 
 /**
- * Check if user is Spectator in a campaign
- */
-export function isSpectator(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'SPECTATOR';
-}
-
-/**
  * Check if user can edit campaign settings
  * Only DM can edit campaign
  */
@@ -245,19 +238,12 @@ export async function canTransferDM(
 }
 
 /**
- * Check if user can send chat messages
- * DM and Players can chat, Spectators cannot
+ * Who may roll dice: the DM and players. A spectator watches, and may talk in
+ * chat, but a roll of theirs would land in the table's log and history. Takes
+ * the socket's role as stored, a plain string, like canControlToken.
  */
-export function canSendChatMessages(campaignRole: CampaignRole): boolean {
-  return isDM(campaignRole) || isPlayer(campaignRole);
-}
-
-/**
- * Check if user can roll dice
- * DM and Players can roll, Spectators cannot
- */
-export function canRollDice(campaignRole: CampaignRole): boolean {
-  return isDM(campaignRole) || isPlayer(campaignRole);
+export function canRollDice(campaignRole: string | undefined): boolean {
+  return campaignRole === 'DM' || campaignRole === 'PLAYER';
 }
 
 /**
