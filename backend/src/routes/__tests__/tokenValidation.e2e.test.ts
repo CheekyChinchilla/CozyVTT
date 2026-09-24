@@ -22,6 +22,7 @@
 
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readTokens, toJson } from '../../utils/prisma-json';
 import {
   prisma,
   createTestUser,
@@ -358,6 +359,55 @@ describe('map token validation', () => {
         .send({ size: { width: 2, height: 2 } });
       expect(res.status).toBe(200);
       expect(res.body.token.size).toEqual({ width: 2, height: 2 });
+    });
+
+    // The reply carries the map, and it used to be the stored row: every
+    // token, hidden ones included, with the DM's notes, stat blocks and hit
+    // points, the fog grid and the spirit layer's address. A player moving
+    // their own token could read all of it. The reply is now filtered exactly
+    // as the map fetch is.
+    it('is answered with the map as this player may see it, not the stored row', async () => {
+      const hidden = await place({
+        name: 'Ambusher', position: { x: 9, y: 9 }, visible: false, notes: 'secret ambusher',
+        hp: { current: 7, max: 7, temp: 0 }, showHpBar: false,
+      });
+      const seen = await place({
+        name: 'Cultist', position: { x: 8, y: 8 }, notes: 'a note for the DM',
+        hp: { current: 9, max: 9, temp: 0 }, showHpBar: false, sightRadius: 12,
+      });
+      expect(hidden.status).toBe(201);
+      expect(seen.status).toBe(201);
+      const row = await prisma.map.findUniqueOrThrow({ where: { id: mapId } });
+      const withBlocks = readTokens(row.tokens).map((t) =>
+        t.id === seen.body.token.id ? { ...t, statBlock: { ac: 13 } } : t
+      );
+      await prisma.map.update({
+        where: { id: mapId },
+        data: {
+          tokens: toJson(withBlocks),
+          spiritLayerUrl: '/api/assets/maps/spirit-secret',
+          fogData: { fogCols: 1, fogRows: 1, cellPx: 50, revealed: [false] },
+        },
+      });
+
+      const res = await playerUpdate({ position: { x: 5, y: 5 } });
+      expect(res.status).toBe(200);
+      const text = JSON.stringify(res.body);
+      const ids = res.body.map.tokens.map((t: { id: string }) => t.id);
+      expect(ids).not.toContain(hidden.body.token.id);
+      expect(ids).toContain(seen.body.token.id);
+      expect(text).not.toContain('secret ambusher');
+      expect(text).not.toContain('a note for the DM');
+      expect(text).not.toContain('statBlock');
+      expect(text).not.toContain('spirit-secret');
+      const cultist = res.body.map.tokens.find((t: { id: string }) => t.id === seen.body.token.id);
+      expect(cultist.hp).toBeUndefined();
+      expect(cultist.sightRadius).toBeUndefined();
+      expect(res.body.map.fogData).toBeNull();
+      expect(res.body.map.spiritLayerUrl).toBeNull();
+      expect(res.body.token.id).toBe(ownedTokenId);
+      expect(res.body.token.position).toEqual({ x: 5, y: 5 });
+      expect(res.body.token).not.toHaveProperty('notes');
     });
   });
 

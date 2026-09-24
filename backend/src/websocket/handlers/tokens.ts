@@ -55,7 +55,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const member = s as unknown as AuthenticatedSocket;
       if (member.role === 'DM') { ids.add(s.id); continue; }
       if (!member.userId) continue;
-      const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false);
+      const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
       const seen = filterTokensByLighting(
         forRole, member.userId, map.wallSegments as unknown as WallSegment[],
         map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
@@ -398,7 +398,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           const forRole = filterTokensByRole(
             updatedTokens,
             authedSocket.role ?? 'PLAYER',
-            spiritVisibility.get(authedSocket.userId) ?? false
+            spiritVisibility.get(authedSocket.userId) ?? false,
+            authedSocket.userId
           );
           const visible = filterTokensByLighting(
             forRole,

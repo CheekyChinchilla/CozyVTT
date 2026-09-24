@@ -6,7 +6,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
+import { filterMapData, getSpiritVisibility, tokenForRecipient } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken } from '../services/permissions';
@@ -1276,10 +1276,15 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       data: { tokens: toJson(updatedTokens) },
     });
 
+    // Answered as the map fetch answers, never with the stored row: that row
+    // carries every token, hidden ones included, with notes, stat blocks and
+    // hit points, plus the fog grid and the spirit layer, and a player moving
+    // their own token could read all of it here.
+    const spiritVisible = await getSpiritVisibility(campaignId, userId);
     return res.status(200).json({
       message: 'Token updated successfully',
-      token: updatedToken,
-      map: updatedMap,
+      token: isDM ? updatedToken : tokenForRecipient(updatedToken, userId),
+      map: filterMapData(updatedMap, membership.role, spiritVisible, userId),
     });
   } catch (error) {
     logger.error('Error updating token', { err: error });

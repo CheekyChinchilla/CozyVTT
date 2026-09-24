@@ -6,7 +6,7 @@
  * raycasting visibility polygon (or tokens controlled by the player themselves).
  */
 
-import { filterTokensByLighting, filterMapData } from './spirit-layer';
+import { filterTokensByLighting, filterMapData, filterTokensByRole } from './spirit-layer';
 import type { WallSegment } from '../types/walls';
 
 // Minimal token factory
@@ -343,5 +343,55 @@ describe('filterTokensByLighting', () => {
     // Both NPCs visible because combined sight covers the whole map
     expect(result.some((t) => t.id === 'leftNPC')).toBe(true);
     expect(result.some((t) => t.id === 'rightNPC')).toBe(true);
+  });
+});
+
+describe('filterTokensByRole', () => {
+  // What the server sends a player of each token, field by field. The role
+  // filter decides which tokens they get; these decide what of each one.
+  const hp = { current: 7, max: 7, temp: 0 };
+  const npc = { ...makeToken('npc', 3, 3, null, 12), hp, showHpBar: false, notes: 'secret ambusher', statBlock: { ac: 13 } };
+  const shown = { ...makeToken('shown', 4, 4, null, 6), hp, showHpBar: true };
+  const mine = { ...makeToken('mine', 5, 5, 'user1', 6), hp, showHpBar: false, notes: 'the DM wrote this' };
+  const tokens = [npc, shown, mine];
+  const byId = (list: { id: string }[], id: string) => list.find((t) => t.id === id) as Record<string, unknown> | undefined;
+
+  it('sends a player neither notes nor a stat block, on any token', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')).not.toHaveProperty('notes');
+    expect(byId(sent, 'npc')).not.toHaveProperty('statBlock');
+    expect(byId(sent, 'mine')).not.toHaveProperty('notes');
+  });
+
+  it('sends a player hit points only when the bar is shown or the token is theirs', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')?.hp).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+    expect(byId(sent, 'mine')?.hp).toEqual(hp);
+  });
+
+  it('sends a player darkvision only for the tokens they control', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBe(6);
+  });
+
+  it('treats a recipient it was not told about as controlling nothing', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false);
+    expect(byId(sent, 'mine')?.hp).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+  });
+
+  it('keeps what a player is sent on the token: position, size, the bar flag', () => {
+    const sent = byId(filterTokensByRole(tokens, 'PLAYER', false, 'user1'), 'npc');
+    expect(sent?.position).toEqual({ x: 3, y: 3 });
+    expect(sent?.size).toEqual({ width: 1, height: 1 });
+    expect(sent?.showHpBar).toBe(false);
+  });
+
+  it('gives the DM the tokens exactly as stored', () => {
+    expect(filterTokensByRole(tokens, 'DM', false, 'dm')).toBe(tokens);
   });
 });

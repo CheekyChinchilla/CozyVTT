@@ -202,10 +202,37 @@ export async function getSpiritVisibilityBatch(
  * @param spiritVisible - Whether the spirit layer is visible to this user
  * @returns Filtered token array
  */
+/**
+ * A token as one non-DM recipient may see it. `filterTokensByRole` decides
+ * which tokens a player is sent; this decides which fields of each one. The
+ * client has a display rule for hit points (`visibleTokenHp`), but a display
+ * rule protects nothing: whatever reaches the browser can be read there, so
+ * what a player is not meant to know is dropped here.
+ *
+ * - `notes` and `statBlock` are the DM's, on every token.
+ * - `hp` goes to the token's controller, and to everyone once the DM turns
+ *   its bar on.
+ * - `sightRadius` goes to the controller, whose client draws what they see
+ *   from it; nobody needs another creature's darkvision.
+ *
+ * "Own" is `controlledBy === userId`, the same test `filterTokensByLighting`
+ * uses. A caller that passes no `userId` is treated as controlling nothing,
+ * so forgetting it can only hide too much.
+ */
+export function tokenForRecipient(token: Token, userId: string | undefined): Token {
+  const own = userId !== undefined && token.controlledBy === userId;
+  const { notes: _notes, statBlock: _statBlock, hp, sightRadius, ...rest } = token;
+  const sent: Token = rest;
+  if (hp !== undefined && (own || token.showHpBar === true)) sent.hp = hp;
+  if (sightRadius !== undefined && own) sent.sightRadius = sightRadius;
+  return sent;
+}
+
 export function filterTokensByRole(
   tokens: unknown,
   userRole: string,
-  spiritVisible: boolean
+  spiritVisible: boolean,
+  userId?: string
 ): Token[] {
   const tokensArray = (Array.isArray(tokens) ? tokens : []) as Token[];
 
@@ -229,11 +256,8 @@ export function filterTokensByRole(
     return true;
   });
 
-  // Strip DM-only notes field from non-DM clients
-  return visibleTokens.map((token) => {
-    const { notes: _notes, ...rest } = token;
-    return rest as Token;
-  });
+  // Then only the fields this recipient may see of each
+  return visibleTokens.map((token) => tokenForRecipient(token, userId));
 }
 
 /**
@@ -380,7 +404,7 @@ export function filterMapData(
    */
   userId: string | undefined
 ): MapData & { tokens: Token[] } {
-  let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible);
+  let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible, userId);
 
   // Apply dynamic lighting filter for non-DM players when lighting is enabled
   if (userRole !== 'DM' && mapData.lightingEnabled && userId) {

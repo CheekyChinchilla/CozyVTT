@@ -4061,6 +4061,11 @@ paths:
         `sightRadius` included, answers 403 for a player. A spectator may not
         update a token at all, even one that still names them from before they
         were demoted.
+
+        The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
+        is: a player receives only the tokens, and only the fields of each,
+        that they may see (see the Token schema), and `fogData` and
+        `spiritLayerUrl` are null for them.
       operationId: updateToken
       security:
         - cookieAuth: []
@@ -4131,7 +4136,7 @@ paths:
                   description: Darkvision in grid squares (0 = none). DM only; it decides what the server sends this token's player.
       responses:
         '200':
-          description: Token updated
+          description: Token updated. The token and the map are filtered for the caller as the map fetch is.
           content:
             application/json:
               schema:
@@ -7314,6 +7319,11 @@ components:
 
     Token:
       type: object
+      description: |
+        A token as the DM sees it. A player is sent a subset of each token they
+        may see at all: never `notes` or `statBlock`; `hp` only for a token they
+        control or one whose `showHpBar` is on; `sightRadius` only for a token
+        they control. The subset is decided on the server before sending.
       properties:
         id:
           type: string
@@ -7399,6 +7409,19 @@ components:
           minimum: 0
           maximum: 200
           description: Darkvision in grid squares (0 = none, 12 = 60 ft). How far the token makes things out with no light; never limits how far a lit thing is noticed.
+        displayMode:
+          type: string
+          enum: [pog, top-down, full-art]
+          description: How the token's art is drawn on the map
+        statBlock:
+          type: object
+          nullable: true
+          description: The creature's stat block. DM only; never sent to a player.
+        creatureTemplateId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The creature library entry this token was placed from
 
     TokenInput:
       type: object

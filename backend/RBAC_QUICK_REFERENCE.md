@@ -112,6 +112,28 @@ deny-based, so a new field is player-writable by default. That is how `metadata`
 came to be writable by any campaign member: it was added to the token shape and
 never added to the list.
 
+#### Which token fields a player is sent
+
+What a player *receives* of a token is decided on the server too, in
+`tokenForRecipient` (`utils/spirit-layer.ts`), which every send to a non-DM
+goes through: the map fetch, the token update's reply, `map.changed` and
+`token:appeared`. The client has display rules for some of these, but a
+display rule protects nothing, since whatever reaches the browser can be
+read there.
+
+| Sent to a player | Only when |
+|---|---|
+| `notes`, `statBlock` | never |
+| `hp` | the player controls the token, or its `showHpBar` is on |
+| `sightRadius` | the player controls the token |
+| everything else on a token they may see at all | always |
+
+`fogData` and `spiritLayerUrl` on a map are DM-only likewise (`filterMapData`),
+and the campaign overview blanks `spiritLayerUrl` for a player who has not
+crossed over. **A new token field a player must not read goes into
+`tokenForRecipient`**, for the same reason a new field a player must not
+write goes into `restrictedFields`.
+
 #### Check Campaign Deletion Permission
 ```typescript
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);
