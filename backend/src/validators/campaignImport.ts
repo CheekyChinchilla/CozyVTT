@@ -123,6 +123,7 @@ const TokenSchema = z.object({
   displayMode: z.string().max(20).optional(),
   statBlock: StatBlockSchema.nullable().optional(),
   creatureTemplateId: z.string().max(100).nullable().optional(),
+  obscured: z.boolean().optional().default(false),
 }).strip();
 
 // ── Map data ────────────────────────────────────────────────────────────────

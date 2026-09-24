@@ -77,6 +77,7 @@ export type TokenShapes = {
   metadata?: Record<string, unknown>;
   statBlock?: unknown;
   sightRadius?: number | null;
+  obscured?: boolean;
 };
 
 export function validateTokenShapes(
@@ -126,6 +127,10 @@ export function validateTokenShapes(
   const sightRadius = check('sightRadius', TokenSightRadiusSchema, true);
   if ('failed' in sightRadius) return { ok: false, message: sightRadius.failed };
   value.sightRadius = sightRadius.parsed;
+
+  const obscured = check('obscured', z.boolean());
+  if ('failed' in obscured) return { ok: false, message: obscured.failed };
+  if (obscured.parsed !== undefined) value.obscured = obscured.parsed ?? undefined;
 
   return { ok: true, value };
 }

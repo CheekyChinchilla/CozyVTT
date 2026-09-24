@@ -1,4 +1,4 @@
-import { CampaignSettingsSchema } from '../campaignImport';
+import { CampaignSettingsSchema, MapDataSchema } from '../campaignImport';
 
 /**
  * An archive's atmosphere and spirit settings are allowlisted like the live
@@ -31,5 +31,24 @@ describe('CampaignSettingsSchema allowlist fallbacks', () => {
       vibeSettings: { periods: [{ name: 'Dusk', hue: '#FF9966', filter: 'url(https://evil.example/f.svg#x)' }] },
     });
     expect(parsed.vibeSettings).toBeUndefined();
+  });
+});
+
+describe('MapDataSchema tokens', () => {
+  const map = {
+    name: 'Arena', imageAssetRef: 'assets/arena.png', width: 10, height: 10, gridSize: 50, feetPerSquare: 5,
+    tokens: [{
+      name: 'Veiled', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, obscured: true,
+    }],
+  };
+
+  it('keeps whether a token is obscured, so an exported campaign comes back as it was', () => {
+    const parsed = MapDataSchema.parse(map);
+    expect(parsed.tokens[0].obscured).toBe(true);
+  });
+
+  it('treats a token that says nothing about it as not obscured', () => {
+    const parsed = MapDataSchema.parse({ ...map, tokens: [{ name: 'Plain', position: { x: 1, y: 1 }, size: { width: 1, height: 1 } }] });
+    expect(parsed.tokens[0].obscured).toBe(false);
   });
 });

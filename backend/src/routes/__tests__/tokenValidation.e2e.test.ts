@@ -409,6 +409,61 @@ describe('map token validation', () => {
       expect(res.body.token.position).toEqual({ x: 5, y: 5 });
       expect(res.body.token).not.toHaveProperty('notes');
     });
+
+    // Obscuring hides what a token is from everyone who does not control it.
+    // Only the DM decides that, and the mask is applied before sending, so
+    // the player's own fetch is the proof.
+    describe('an obscured token', () => {
+      let veiledId: string;
+
+      beforeAll(async () => {
+        const res = await place({
+          name: 'Something Large', position: { x: 12, y: 12 }, hp: { current: 30, max: 30, temp: 0 }, showHpBar: true,
+          conditions: ['prone'], disposition: 'hostile',
+        });
+        veiledId = res.body.token.id;
+      });
+
+      it('may not be set by a player, even on their own token', async () => {
+        const res = await playerUpdate({ obscured: true });
+        expect(res.status).toBe(403);
+        expect(res.body.message).toMatch(/obscured/);
+      });
+
+      it('must be a boolean', async () => {
+        const res = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: 'yes' });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/obscured/);
+      });
+
+      it('is set by the DM, and reaches the player as a shape with no identity', async () => {
+        const set = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: true });
+        expect(set.status).toBe(200);
+        expect(set.body.token.obscured).toBe(true);
+        expect(set.body.token.name).toBe('Something Large');
+
+        const seen = await player.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const veiled = seen.body.map.tokens.find((t: { id: string }) => t.id === veiledId);
+        expect(veiled).toBeDefined();
+        expect(veiled.obscured).toBe(true);
+        expect(veiled.name).toBe('');
+        expect(veiled.imageUrl).toBe('');
+        expect(veiled.hp).toBeNull();
+        expect(veiled.conditions).toEqual([]);
+        expect(veiled.disposition).toBeNull();
+        expect(veiled.position).toEqual({ x: 12, y: 12 });
+        expect(JSON.stringify(seen.body)).not.toContain('Something Large');
+      });
+
+      it('is revealed again by the DM', async () => {
+        const reveal = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: false });
+        expect(reveal.status).toBe(200);
+        const seen = await player.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const veiled = seen.body.map.tokens.find((t: { id: string }) => t.id === veiledId);
+        expect(veiled.name).toBe('Something Large');
+        expect(veiled.obscured).toBe(false);
+      });
+    });
   });
 
   /**

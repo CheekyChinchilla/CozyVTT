@@ -1049,6 +1049,8 @@ export interface CreateTokenRequest {
   statBlock?: NpcStatBlock | null;
   /** The creature template this token came from, if any. */
   creatureTemplateId?: string | null;
+  /** DM only: hide what the token is from players who do not control it. */
+  obscured?: boolean;
 }
 
 export interface UpdateTokenRequest {
@@ -1071,6 +1073,8 @@ export interface UpdateTokenRequest {
   initiative?: number | null;
   /** Darkvision in grid squares; 0 = none. DM only on update. */
   sightRadius?: number | null;
+  /** DM only: hide what the token is from players who do not control it. */
+  obscured?: boolean;
 }
 
 // ============================================

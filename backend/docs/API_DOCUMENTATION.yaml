@@ -7327,7 +7327,12 @@ components:
         A token as the DM sees it. A player is sent a subset of each token they
         may see at all: never `notes` or `statBlock`; `hp` only for a token they
         control or one whose `showHpBar` is on; `sightRadius` only for a token
-        they control. The subset is decided on the server before sending.
+        they control. A token whose `obscured` is true reaches anyone but its
+        controller as a shape with no identity: `name` and `imageUrl` empty,
+        `conditions` empty, `hp` and `disposition` null, `characterId` and
+        `creatureTemplateId` null, position and size kept, and `obscured: true`
+        so the client can draw a question mark. The subset is decided on the
+        server before sending.
       properties:
         id:
           type: string
@@ -7426,6 +7431,10 @@ components:
           format: uuid
           nullable: true
           description: The creature library entry this token was placed from
+        obscured:
+          type: boolean
+          default: false
+          description: The DM has hidden what this token is. DM only on write; players who do not control it receive it masked (see the schema description).
 
     TokenInput:
       type: object
@@ -7434,6 +7443,9 @@ components:
         - imageUrl
         - position
       properties:
+        obscured:
+          type: boolean
+          description: Hide what the token is from players who do not control it. DM only.
         sightRadius:
           type: number
           minimum: 0

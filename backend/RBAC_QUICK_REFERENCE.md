@@ -100,7 +100,7 @@ controls the token may change only where it is and what it is doing:
 
 | A player controlling the token may set | Everything else is DM-only |
 |---|---|
-| `position`, `rotation`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata`, `sightRadius`, `size` |
+| `position`, `rotation`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata`, `sightRadius`, `size`, `obscured` |
 
 `size` and `sightRadius` are DM-only because both decide what the server sends
 that player: a token always sees half its own footprint, so a player who could
@@ -126,6 +126,7 @@ read there.
 | `notes`, `statBlock` | never |
 | `hp` | the player controls the token, or its `showHpBar` is on |
 | `sightRadius` | the player controls the token |
+| the identity of an `obscured` token: name, picture, conditions, HP, disposition, character and template links (`utils/tokenMask.ts`) | the player controls the token |
 | everything else on a token they may see at all | always |
 
 `fogData` and `spiritLayerUrl` on a map are DM-only likewise (`filterMapData`),

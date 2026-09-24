@@ -1060,6 +1060,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       displayMode: displayMode,
       statBlock: shapes.value.statBlock ?? null,
       creatureTemplateId: tokenData.creatureTemplateId || null,
+      obscured: shapes.value.obscured ?? false,
     };
 
     // Get existing tokens array
@@ -1220,7 +1221,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // `size` and `sightRadius` are here because both decide what the server
       // sends this player: a token always sees half its own footprint, so a
       // player who could enlarge their token would enlarge their sight.
-      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius', 'size'];
+      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius', 'size', 'obscured'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
           return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });
@@ -1280,6 +1281,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // route above has always stored the parsed value.
       ...(updates.statBlock !== undefined && { statBlock: shapes.value.statBlock ?? null }),
       ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: updates.creatureTemplateId }),
+      ...(shapes.value.obscured !== undefined && { obscured: shapes.value.obscured }),
     };
 
     // Update the tokens array
