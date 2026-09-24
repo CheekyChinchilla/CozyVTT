@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
 import type { WallSegment, LightSource } from '../types/walls';
+import { maskObscuredToken } from './tokenMask';
 import logger from './logger';
 import type { Token } from '../websocket/shared';
 
@@ -215,6 +216,9 @@ export async function getSpiritVisibilityBatch(
  * - `sightRadius` goes to the controller, whose client draws what they see
  *   from it; nobody needs another creature's darkvision.
  *
+ * - An `obscured` token reaches anyone but its controller as a shape with no
+ *   identity (`maskObscuredToken`).
+ *
  * "Own" is `controlledBy === userId`, the same test `filterTokensByLighting`
  * uses. A caller that passes no `userId` is treated as controlling nothing,
  * so forgetting it can only hide too much.
@@ -225,7 +229,7 @@ export function tokenForRecipient(token: Token, userId: string | undefined): Tok
   const sent: Token = rest;
   if (hp !== undefined && (own || token.showHpBar === true)) sent.hp = hp;
   if (sightRadius !== undefined && own) sent.sightRadius = sightRadius;
-  return sent;
+  return !own && token.obscured === true ? maskObscuredToken(sent) : sent;
 }
 
 export function filterTokensByRole(

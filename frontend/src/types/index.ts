@@ -734,6 +734,11 @@ export interface Token {
   statBlock?: NpcStatBlock | null;
   /** ID of the creature template this token was created from (if any). */
   creatureTemplateId?: string | null;
+  /**
+   * The DM has hidden what this token is. Players who do not control it are
+   * sent it with its identity masked (utils/tokenMask.ts); only the DM may set it.
+   */
+  obscured?: boolean;
 }
 
 export interface Position {

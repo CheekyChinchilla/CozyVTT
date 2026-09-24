@@ -46,6 +46,8 @@ export interface Token {
   displayMode?: 'pog' | 'top-down' | 'full-art';
   statBlock?: Record<string, unknown> | null;
   creatureTemplateId?: string | null;
+  /** Identity hidden from players who do not control it; see utils/tokenMask.ts. DM-only on write. */
+  obscured?: boolean;
 }
 
 /**

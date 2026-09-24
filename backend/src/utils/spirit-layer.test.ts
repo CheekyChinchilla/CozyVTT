@@ -394,4 +394,32 @@ describe('filterTokensByRole', () => {
   it('gives the DM the tokens exactly as stored', () => {
     expect(filterTokensByRole(tokens, 'DM', false, 'dm')).toBe(tokens);
   });
+
+  describe('an obscured token', () => {
+    const veiled = { ...makeToken('veiled', 6, 6, null, 0), obscured: true, hp, showHpBar: true, conditions: ['prone'], disposition: 'hostile' as const, characterId: 'c1' };
+    const ownVeiled = { ...makeToken('own-veiled', 7, 7, 'user1', 0), obscured: true, hp, showHpBar: false, conditions: ['prone'] };
+
+    it('reaches a player who does not control it as a shape with no identity', () => {
+      const sent = byId(filterTokensByRole([veiled], 'PLAYER', false, 'user1'), 'veiled');
+      expect(sent?.name).toBe('');
+      expect(sent?.imageUrl).toBe('');
+      expect(sent?.conditions).toEqual([]);
+      expect(sent?.hp).toBeNull();
+      expect(sent?.disposition).toBeNull();
+      expect(sent?.characterId).toBeNull();
+      expect(sent?.position).toEqual({ x: 6, y: 6 });
+      expect(sent?.obscured).toBe(true);
+    });
+
+    it('reaches its controller whole', () => {
+      const sent = byId(filterTokensByRole([ownVeiled], 'PLAYER', false, 'user1'), 'own-veiled');
+      expect(sent?.name).toBe('Token own-veiled');
+      expect(sent?.hp).toEqual(hp);
+      expect(sent?.conditions).toEqual(['prone']);
+    });
+
+    it('reaches the DM as stored', () => {
+      expect(filterTokensByRole([veiled], 'DM', false, 'dm')[0]).toBe(veiled);
+    });
+  });
 });
