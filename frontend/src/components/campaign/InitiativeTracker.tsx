@@ -36,6 +36,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 import type { CombatantEntry, Token } from '@/types';
+import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -239,7 +240,7 @@ function CombatantRow({
       {/* Name + disposition */}
       <div className="flex-1 min-w-0">
         <div className={`text-sm font-medium truncate ${isActive ? 'text-warm-amber' : 'text-brand-ink'}`}>
-          {entry.name}
+          {tokenDisplayName(entry)}
         </div>
         {entry.hp && (
           <div className="text-xs text-stone-gray">
@@ -382,7 +383,7 @@ export default function InitiativeTracker() {
     // This used to send a flat `1d20` for everything, so a Dexterity 20 rogue
     // rolled exactly what a Dexterity 8 wizard did.
     const token = tokens.find((t) => t.id === tokenId);
-    socket.emitInitiativeRoll({ tokenId, mapId, characterName: token?.name });
+    socket.emitInitiativeRoll({ tokenId, mapId, characterName: token ? tokenPublicName(token) : undefined });
   }, [socket, mapId, tokens]);
 
   const handleStart = useCallback(() => {

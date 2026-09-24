@@ -8,6 +8,7 @@ import {
   defaultPreviewSelection,
   reconcilePreviewSelection,
   tokensShownInPreview,
+  previewTokens,
   type PreviewSelection,
 } from '../previewSelection';
 import type { CampaignMembership, Token } from '@/types';
@@ -196,5 +197,32 @@ describe('defaultPreviewSelection', () => {
   it('falls back to the first token, then to nothing', () => {
     expect(defaultPreviewSelection([], [goblin])).toEqual({ kind: 'token', tokenId: 'goblin' });
     expect(defaultPreviewSelection([], [])).toBeNull();
+  });
+});
+
+describe('previewTokens', () => {
+  const viewport = { gridSize: 50, mapHeight: 10 };
+
+  it('shows an obscured token the previewed player does not control as the server sends it', () => {
+    const veiled = token({ id: 'v', name: 'Goblin Boss', imageUrl: '/api/assets/tokens/v', obscured: true, conditions: ['prone'], hp: { current: 3, max: 9, temp: 0 } });
+    const [seen] = previewTokens([veiled], () => false, null, viewport);
+    expect(seen.name).toBe('');
+    expect(seen.imageUrl).toBe('');
+    expect(seen.conditions).toEqual([]);
+    expect(seen.hp).toBeNull();
+    expect(seen.obscured).toBe(true);
+    expect(seen.id).toBe('v');
+  });
+
+  it('leaves the previewed player\'s own obscured token whole, and plain tokens untouched', () => {
+    const own = token({ id: 'o', name: 'Familiar', obscured: true, controlledBy: 'alice' });
+    const plain = token({ id: 'p', name: 'Cultist' });
+    const seen = previewTokens([own, plain], (t) => t.controlledBy === 'alice', null, viewport);
+    expect(seen.map((t) => t.name)).toEqual(['Familiar', 'Cultist']);
+  });
+
+  it('drops what the preview would not show at all, before masking', () => {
+    const hidden = token({ id: 'h', name: 'Ambusher', visible: false, obscured: true });
+    expect(previewTokens([hidden], () => false, null, viewport)).toEqual([]);
   });
 });

@@ -62,7 +62,7 @@ import { useWallSelection } from './map/useWallSelection';
 import {
   previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
-  tokensShownInPreview,
+  previewTokens,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
@@ -87,6 +87,7 @@ import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
+import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
@@ -1703,7 +1704,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     let drawn = tokens;
     if (previewing) {
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = tokensShownInPreview(tokens, viewerOwn, rule?.canSee ?? null, viewport);
+      drawn = previewTokens(tokens, viewerOwn, rule?.canSee ?? null, viewport);
     }
 
     // 5. Tokens (+ drag ghost)
@@ -2049,7 +2050,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       };
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      const shown = tokensShownInPreview(tokens, viewerOwn, rule?.canSee ?? null, viewport);
+      const shown = previewTokens(tokens, viewerOwn, rule?.canSee ?? null, viewport);
       return pickTokenAt(shown, gridX, gridY, {
         isDM: false,
         revealedCells: viewerRevealed,
@@ -2494,7 +2495,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           characterHpCache
         );
         if (blockedBy.length > 0) {
-          showToast(`${blockedBy[0].name} is already standing there.`, 'info');
+          showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
           cancelHold();
           markDirty('tokens');
           return;
@@ -3072,7 +3073,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socket.emitInitiativeRoll({
       tokenId,
       mapId: currentMap.id,
-      characterName: token?.name,
+      characterName: token ? tokenPublicName(token) : undefined,
     });
   };
 
@@ -3863,7 +3864,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2 mb-1.5">
                   <span className="text-sm font-semibold text-brand-ink truncate">
-                    {hoverToken.name}
+                    {tokenDisplayName(hoverToken)}
                   </span>
                   <span className="text-xs text-stone-gray font-mono shrink-0">
                     ({hoverCoords.x}, {hoverCoords.y})

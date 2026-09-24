@@ -12,6 +12,7 @@ import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { controlsToken } from '@/utils/tokenControl';
 import { gridYToCentrePx } from './coords';
+import { maskObscuredToken } from '@/utils/tokenMask';
 
 /**
  * Whether a token can supply a preview's sight at all. The DM's token list
@@ -108,6 +109,22 @@ export function tokensShownInPreview(
     const cy = gridYToCentrePx(t.position.y, t.size.height, viewport.mapHeight, viewport.gridSize);
     return canSee(cx, cy);
   });
+}
+
+/**
+ * The tokens a preview draws and names, exactly as the server would send the
+ * previewed viewer: what `tokensShownInPreview` keeps, with every token that
+ * viewer does not control passed through the obscured-identity mask the
+ * server applies before sending.
+ */
+export function previewTokens(
+  tokens: ReadonlyArray<Token>,
+  viewerOwn: (t: Token) => boolean,
+  canSee: ((cx: number, cy: number) => boolean) | null,
+  viewport: { gridSize: number; mapHeight: number }
+): Token[] {
+  return tokensShownInPreview(tokens, viewerOwn, canSee, viewport)
+    .map((t) => (t.obscured && !viewerOwn(t) ? maskObscuredToken(t) : t));
 }
 
 /**
