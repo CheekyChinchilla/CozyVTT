@@ -1,4 +1,4 @@
-import { CampaignSettingsSchema, MapDataSchema } from '../campaignImport';
+import { CampaignSettingsSchema, MapDataSchema, CreatureTemplateSchema } from '../campaignImport';
 
 /**
  * An archive's atmosphere and spirit settings are allowlisted like the live
@@ -50,5 +50,24 @@ describe('MapDataSchema tokens', () => {
   it('treats a token that says nothing about it as not obscured', () => {
     const parsed = MapDataSchema.parse({ ...map, tokens: [{ name: 'Plain', position: { x: 1, y: 1 }, size: { width: 1, height: 1 } }] });
     expect(parsed.tokens[0].obscured).toBe(false);
+  });
+});
+
+describe('CreatureTemplateSchema allowlist fallbacks', () => {
+  const base = { name: 'Bandit', statBlock: { ac: 12, speed: '30 ft.', abilities: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 } } };
+
+  it('keeps a disposition and display mode the app knows', () => {
+    const parsed = CreatureTemplateSchema.parse({ ...base, disposition: 'friendly', displayMode: 'top-down' });
+    expect(parsed.disposition).toBe('friendly');
+    expect(parsed.displayMode).toBe('top-down');
+  });
+
+  it('drops a disposition or display mode outside the allowlist and still imports the creature', () => {
+    // The importer falls back to hostile and pog for a missing value; a
+    // hand-edited "Hostile" is not stored as a fourth disposition.
+    const parsed = CreatureTemplateSchema.parse({ ...base, disposition: 'Hostile', displayMode: 'cutout' });
+    expect(parsed.name).toBe('Bandit');
+    expect(parsed.disposition).toBeUndefined();
+    expect(parsed.displayMode).toBeUndefined();
   });
 });

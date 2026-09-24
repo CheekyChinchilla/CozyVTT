@@ -211,7 +211,7 @@ export interface CreatureTemplate {
   imageUrl: string | null;
   statBlock: NpcStatBlock;
   size: { width: number; height: number };
-  disposition: string;
+  disposition: TokenDisposition;
   displayMode: TokenDisplayMode;
   createdById: string | null;
   campaignId: string | null;

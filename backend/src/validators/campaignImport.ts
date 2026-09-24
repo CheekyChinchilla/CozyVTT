@@ -159,8 +159,11 @@ export const CreatureTemplateSchema = z.object({
   imageAssetRef: z.string().max(200).nullable().optional(),
   statBlock: StatBlockSchema,
   size: SizeSchema.optional(),
-  disposition: z.string().max(20).optional(),
-  displayMode: z.string().max(20).optional(),
+  // Allowlisted like the live create and update paths; a value outside it
+  // falls back to the importer's default instead of being stored as a fourth
+  // disposition the app cannot draw
+  disposition: z.enum(['friendly', 'neutral', 'hostile']).optional().catch(undefined),
+  displayMode: z.enum(['pog', 'top-down', 'full-art']).optional().catch(undefined),
 }).strip();
 
 // ── Token template ──────────────────────────────────────────────────────────

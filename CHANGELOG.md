@@ -57,6 +57,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 ### Fixed
 
+- **An imported creature with an unrecognised disposition or display mode no longer keeps it.** A campaign archive could name a disposition the app cannot draw ("Hostile" with a capital, say) and it was stored as written; the importer now treats it like a missing value, hostile and pog.
+
 - **The initiative tracker follows the token.** The hit points it showed were a copy taken when the combatant was added and never changed afterwards, although the guides said they updated live, and a creature hidden mid-fight stayed listed. Changing a creature's hit points, name or picture on its token, or hiding it, now updates every tracker at once. The DM Guide no longer describes an HP control the tracker never had, and says plainly that ending combat clears the order.
 
 - **The DM's Player Preview now keeps up with a player's explored memory.** Previewing a player showed their remembered ground only as it stood when the preview opened: moving their token added nothing until the DM left the preview and came back, and when the DM moved every token themself nothing was remembered at all. The preview now greys in ground as the token sees it, exactly as the player's own screen does, and it records that ground for the player whether or not they are connected, so a game run from one screen builds up each player's memory too.

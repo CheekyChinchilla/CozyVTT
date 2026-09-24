@@ -27,7 +27,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
-import { TokenType, GameSystem, AssetType } from '@/types';
+import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
   StatBlockViewer,
   buildCreatureStatBlock,
@@ -224,7 +224,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         size: creature.size || { width: 1, height: 1 },
         type: TokenType.NPC,
         displayMode: creature.displayMode || 'pog',
-        disposition: creature.disposition || 'hostile',
+        disposition: creature.disposition,
         hp: { current: hpMax, max: hpMax, temp: 0 },
         showHpBar: true,
         visible: true,
@@ -239,11 +239,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       const result = await api.addToken(
         campaign.id,
         currentMap.id,
-        // TODO(typing): CreatureTemplate.disposition is `string`, so this cast
-        // is the only thing letting it reach a TokenDisposition field, and an
-        // unknown value would be stored unchecked. Narrow the template type to
-        // the three-value union, or guard it here, then drop the cast.
-        tokenPayload as Parameters<typeof api.addToken>[2]
+        tokenPayload
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
@@ -910,8 +906,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   const [int, setInt] = useState(sb?.abilities?.int ?? 10);
   const [wis, setWis] = useState(sb?.abilities?.wis ?? 10);
   const [cha, setCha] = useState(sb?.abilities?.cha ?? 10);
-  const [disposition, setDisposition] = useState<'hostile' | 'friendly' | 'neutral'>(
-    (editingCreature?.disposition as 'hostile' | 'friendly' | 'neutral') ?? 'hostile'
+  const [disposition, setDisposition] = useState<TokenDisposition>(
+    editingCreature?.disposition ?? TokenDisposition.HOSTILE
   );
 
   // ── Image field ──
@@ -1214,9 +1210,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         <label className="text-[10px] text-stone-gray block mb-0.5">Disposition</label>
         <div className="flex gap-2">
           {([
-            { d: 'friendly' as const, label: 'Friendly', color: 'teal' },
-            { d: 'neutral' as const, label: 'Neutral', color: 'amber' },
-            { d: 'hostile' as const, label: 'Hostile', color: 'red' },
+            { d: TokenDisposition.FRIENDLY, label: 'Friendly', color: 'teal' },
+            { d: TokenDisposition.NEUTRAL, label: 'Neutral', color: 'amber' },
+            { d: TokenDisposition.HOSTILE, label: 'Hostile', color: 'red' },
           ]).map(({ d, label, color }) => (
             <button
               key={d}
