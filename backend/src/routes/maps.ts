@@ -27,6 +27,8 @@ import { generateThumbnail } from '../utils/thumbnails';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
+import { getState as getCombatState } from '../websocket/initiativeState';
+import { sendInitiativeState } from '../websocket/handlers/initiative';
 import { toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData } from '../websocket/shared';
@@ -66,6 +68,20 @@ const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
  * Create a new map for the campaign
  * Requires: DM role
  */
+/**
+ * A token in the initiative order was changed or removed: send the order
+ * again, as each member may see it, so the tracker follows the token. A
+ * failure here must not fail the request that changed the token.
+ */
+async function resendInitiativeFor(campaignId: string, tokenId: string): Promise<void> {
+  if (!getCombatState(campaignId).combatants.some((c) => c.tokenId === tokenId)) return;
+  try {
+    await sendInitiativeState(getSocketInstance(), campaignId);
+  } catch (error) {
+    logger.warn('Initiative order not re-sent after a token change', { err: error });
+  }
+}
+
 router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
@@ -1276,6 +1292,8 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       data: { tokens: toJson(updatedTokens) },
     });
 
+    await resendInitiativeFor(campaignId, tokenId);
+
     // Answered as the map fetch answers, never with the stored row: that row
     // carries every token, hidden ones included, with notes, stat blocks and
     // hit points, plus the fog grid and the spirit layer, and a player moving
@@ -1344,6 +1362,8 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
       where: { id: mapId },
       data: { tokens: toJson(updatedTokens) },
     });
+
+    await resendInitiativeFor(campaignId, tokenId);
 
     return res.status(200).json({
       message: 'Token removed successfully',

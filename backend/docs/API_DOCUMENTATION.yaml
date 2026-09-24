@@ -4066,6 +4066,10 @@ paths:
         is: a player receives only the tokens, and only the fields of each,
         that they may see (see the Token schema), and `fogData` and
         `spiritLayerUrl` are null for them.
+
+        If the token is in the initiative order, the order is sent again to
+        every connected member (`initiative.state`), each as they may see it,
+        so the tracker follows the token.
       operationId: updateToken
       security:
         - cookieAuth: []

@@ -750,7 +750,7 @@ Put the cursor where you mean and press **Tab**. A dot with radiating rings appe
 
 ### Updating HP
 
-Click a combatant's HP during combat to update it. Changes are broadcast to all players in real time — your players will wince visibly when the boss heals.
+Change a creature's hit points on its token, in **Edit Token** or the quick editor, and the tracker follows: everyone who is allowed to see that creature's HP sees the new value at once. The same goes for its name and portrait, and for hiding it, which takes it out of the players' trackers until you reveal it again.
 
 ### Removing Combatants
 
@@ -758,7 +758,7 @@ Click the remove button next to any combatant to pull them from the tracker (whe
 
 ### Ending Combat
 
-Click **End Initiative** to close combat and hide the tracker. The order is preserved in case you need to resume.
+Click **End Initiative** to close combat and hide the tracker. The order is cleared; the initiative values stay on the tokens, and the next fight starts from an empty order as you add combatants to it.
 
 ---
 

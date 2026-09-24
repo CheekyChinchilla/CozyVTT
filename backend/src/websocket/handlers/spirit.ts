@@ -11,6 +11,8 @@ import logger from '../../utils/logger';
 import { isValidSpiritStyle } from '../../utils/styleAllowlists';
 import { Token, broadcastMapData } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { getState as getCombatState } from '../initiativeState';
+import { sendInitiativeState } from './initiative';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -63,6 +65,10 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
 
         if (currentMap) {
           await broadcastMapData(io, socket.campaignId, currentMap);
+        }
+        // Which plane a player sees decides which combatants they are sent
+        if (getCombatState(socket.campaignId).combatants.length > 0) {
+          await sendInitiativeState(io, socket.campaignId);
         }
       }
 
@@ -170,6 +176,9 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       const campaign = await prisma.campaign.findUnique({ where: { id: socket.campaignId }, select: { currentMapId: true } });
       if (campaign?.currentMapId === mapId) {
         await broadcastMapData(io, socket.campaignId, { ...map, tokens: toJson(updatedTokens) });
+      }
+      if (getCombatState(socket.campaignId).combatants.some((c) => c.tokenId === tokenId)) {
+        await sendInitiativeState(io, socket.campaignId);
       }
 
       logger.debug('spirit_layer.token.toggle', { tokenId, visible, userId: socket.userId, mapId });
