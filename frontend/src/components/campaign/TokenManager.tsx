@@ -11,6 +11,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  HelpCircle,
   Ghost,
   Map as MapIcon,
   Trash2,
@@ -29,6 +30,7 @@ import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
+import { setTokenFlag } from '@/utils/tokenFlags';
 
 // ============================================
 // Constants
@@ -258,11 +260,21 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     if (!campaign || !currentMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-      socket?.emitMapChange(currentMap.id);
+      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
     } catch {
       setError('Failed to toggle token visibility');
+    } finally {
+      setTogglingVisibilityId(null);
+    }
+  };
+
+  const handleToggleObscured = async (token: Token) => {
+    if (!campaign || !currentMap) return;
+    setTogglingVisibilityId(token.id);
+    try {
+      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+    } catch {
+      setError('Failed to toggle token identity');
     } finally {
       setTogglingVisibilityId(null);
     }
@@ -829,6 +841,16 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
                             {/* Action buttons */}
                             <div className="flex items-center gap-0.5 flex-shrink-0">
+                              {/* Obscure / reveal identity */}
+                              <button
+                                onClick={() => handleToggleObscured(token)}
+                                disabled={isTogglingVis}
+                                className="p-1.5 rounded hover:bg-moss-green/10 transition-colors"
+                                title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+                              >
+                                <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
+                              </button>
+
                               {/* Visibility toggle */}
                               <button
                                 onClick={() => handleToggleVisibility(token)}

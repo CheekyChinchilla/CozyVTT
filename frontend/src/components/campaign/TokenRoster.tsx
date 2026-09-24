@@ -14,12 +14,14 @@ import {
   Edit2,
   Eye,
   EyeOff,
+  HelpCircle,
   Loader2,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
+import { setTokenFlag } from '@/utils/tokenFlags';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
 import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
@@ -96,11 +98,17 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
   const handleToggleVisible = useCallback(async () => {
     try {
-      await api.updateToken(campaignId, mapId, token.id, { visible: !token.visible });
-      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-      socket?.emitMapChange(mapId);
+      await setTokenFlag(campaignId, mapId, token, 'visible', !token.visible, socket);
     } catch (err) {
       console.error('TokenRoster: failed to toggle visibility', err);
+    }
+  }, [token, campaignId, mapId, socket]);
+
+  const handleToggleObscured = useCallback(async () => {
+    try {
+      await setTokenFlag(campaignId, mapId, token, 'obscured', !token.obscured, socket);
+    } catch (err) {
+      console.error('TokenRoster: failed to toggle identity', err);
     }
   }, [token, campaignId, mapId, socket]);
 
@@ -139,6 +147,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         <p className={`text-xs font-medium truncate ${!token.visible ? 'text-stone-gray/50' : 'text-charcoal'}`}>
           {token.name}
           {!token.visible && <span className="ml-1 text-[10px] text-stone-gray/40">(hidden)</span>}
+          {token.obscured && <span className="ml-1 text-[10px] text-stone-gray/40">(obscured)</span>}
         </p>
         {hp && (
           <p className="text-[10px] text-stone-gray/60">{hp}</p>
@@ -165,6 +174,15 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           className="p-1 rounded hover:bg-moss-green/10 text-stone-gray transition-colors"
         >
           {token.visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+        </button>
+
+        {/* Obscure / reveal identity */}
+        <button
+          onClick={handleToggleObscured}
+          title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+          className={`p-1 rounded hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
+        >
+          <HelpCircle className="w-3 h-3" />
         </button>
 
         {/* Duplicate */}

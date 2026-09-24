@@ -35,6 +35,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 ### Added
 
+- **The DM can obscure a token.** Right-click a token and choose **Obscure Identity** (the same switch is in Edit Token, the Token Roster and the Token Manager): players who do not control it see a grey shape with a question mark where it stands, and "Unknown creature" wherever it is named, in the hover card, the initiative tracker and the dice log. Its name, picture, conditions, hit points and disposition are not sent to their browsers at all. The DM keeps seeing it as it is, with a small **?** badge, and Preview Player View shows the shape the table sees. **Reveal Identity** puts it back. It is a switch the DM sets by hand; it does not follow the light.
+
 - **Maps remember what each player has explored.** On a map with dynamic lighting, the areas a player's tokens have seen stay on their map, greyed and darkened, until they can see them again. Each player has their own memory, kept on the server, so it survives a reload and a change of device. **Remember Explored Areas** in Edit Map (on for existing maps, off for new ones) controls it, and **Reset explored areas** in the Fog of War panel forgets everyone's memory of a map.
 
 - **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.

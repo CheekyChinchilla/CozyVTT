@@ -39,6 +39,14 @@ describe('dmTokenControls', () => {
     expect(dmTokenControls(TokenType.PLAYER).placeHidden).toBe(false);
   });
 
+  it('lets the DM obscure any token: what it is stays unknown until revealed', () => {
+    // A monster the party has not identified, a disguised ally, a shape in
+    // the dark: every kind can have its identity hidden while it stays visible.
+    for (const type of [TokenType.PLAYER, TokenType.NPC, TokenType.OBJECT]) {
+      expect(dmTokenControls(type).obscure).toBe(true);
+    }
+  });
+
   it('is where the canvas reads its per-type rules, so none is written inline again', () => {
     expect(MAP_CANVAS).toContain('dmTokenControls');
     expect(MAP_CANVAS).not.toContain('const isObject =');

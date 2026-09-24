@@ -304,7 +304,7 @@ If a session shows no notes, your DM simply didn't write any that night.
 
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
 
-You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions or hit points until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
 
 ### Why parts of the map are dark
 

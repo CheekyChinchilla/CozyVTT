@@ -88,6 +88,7 @@ import CharacterSheetViewerModal from '@/components/character/CharacterSheetView
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
 import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
+import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
@@ -4139,15 +4140,32 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-                      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-                      socket?.emitMapChange(currentMap.id);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
                     } catch (err) {
                       console.error('Failed to toggle token visibility:', err);
                     }
                   }}
                 >
                   {cmToken.visible ? 'Hide from Players' : 'Reveal to Players'}
+                </button>
+              )}
+
+              {/* Obscure / Reveal identity — every token; see utils/tokenControls.ts */}
+              {controls.obscure && (
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  onClick={async () => {
+                    if (!campaign?.id || !currentMap?.id) return;
+                    const token = contextMenu.token;
+                    setContextMenu(null);
+                    try {
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+                    } catch (err) {
+                      console.error('Failed to toggle token identity:', err);
+                    }
+                  }}
+                >
+                  {cmToken.obscured ? 'Reveal Identity' : 'Obscure Identity'}
                 </button>
               )}
 

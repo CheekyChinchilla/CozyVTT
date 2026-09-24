@@ -30,6 +30,13 @@ export interface DmTokenControls {
    * still be hidden afterwards, like anything else.
    */
   placeHidden: boolean;
+  /**
+   * Obscure / Reveal Identity. The token stays where players can see it,
+   * but as a shape with no name, picture, conditions or hit points: a
+   * creature the party has not identified, an ally in disguise, something
+   * in the dark. Every kind can be obscured, like every kind can be hidden.
+   */
+  obscure: boolean;
 }
 
 export function dmTokenControls(type: TokenType): DmTokenControls {
@@ -37,5 +44,6 @@ export function dmTokenControls(type: TokenType): DmTokenControls {
     hide: true,
     crossPlanes: type !== TokenType.OBJECT,
     placeHidden: type !== TokenType.PLAYER,
+    obscure: true,
   };
 }

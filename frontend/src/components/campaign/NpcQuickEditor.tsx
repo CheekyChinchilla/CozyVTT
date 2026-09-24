@@ -14,6 +14,7 @@ import {
   X,
   Eye,
   EyeOff,
+  HelpCircle,
   Trash2,
   Upload,
   Loader2,
@@ -84,6 +85,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [conditions, setConditions] = useState<string[]>(token.conditions ?? []);
   const [notes, setNotes] = useState(token.notes ?? '');
   const [visible, setVisible] = useState(token.visible);
+  const [obscured, setObscured] = useState(token.obscured ?? false);
   const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [enableHpPrompt, setEnableHpPrompt] = useState(false);
@@ -349,6 +351,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     await saveUpdate({ visible: next });
   }, [visible, saveUpdate]);
 
+  // ── Identity toggle ──
+  const toggleObscured = useCallback(async () => {
+    const next = !obscured;
+    setObscured(next);
+    await saveUpdate({ obscured: next });
+  }, [obscured, saveUpdate]);
+
   // ── Controller change ──
   const handleControllerChange = useCallback(async (userId: string | null) => {
     setControlledBy(userId);
@@ -383,6 +392,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setConditions(token.conditions ?? []);
     setNotes(token.notes ?? '');
     setVisible(token.visible);
+    setObscured(token.obscured ?? false);
     setControlledBy(token.controlledBy ?? null);
     setStatBlock((token.statBlock as NpcStatBlock) ?? null);
     setEditingStatBlock(false);
@@ -961,6 +971,18 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 >
                   {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   {visible ? 'Hide from Players' : 'Show to Players'}
+                </button>
+
+                <button
+                  onClick={toggleObscured}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
+                    obscured
+                      ? 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
+                      : 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  {obscured ? 'Reveal Identity' : 'Obscure Identity'}
                 </button>
 
                 <button

@@ -224,6 +224,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Change the token image** — click the token avatar in the editor's header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and on the right-click menu
+- **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
 *Screenshot pending — NPC quick editor popup with image picker.*
@@ -299,6 +300,12 @@ Your players are told this plainly now. The secret-roll checkbox used to read "o
 Some tokens shouldn't be visible to players until the right moment. The **Spirit Layer Visibility** setting on a token controls whether it appears in the spirit layer view (see [The Spirit Layer](#the-spirit-layer)).
 
 To hide a token from players entirely, right-click it on the map and choose **Hide from Players**, open **Edit Token** and choose the same, or click the eye beside it in the Token Roster. All three work for any token, whether it is a character, a creature or an object. A creature or an object can also be placed already hidden: tick **Hidden from players on placement** in the Token Manager, which is how you stage a monster in a room before the table knows it is there. A hidden token is never sent to players at all, so it cannot be found by pointing at its square or by reading the page, and it stops lending its sight to any player view or preview. **Show to Players** puts it back.
+
+### Obscuring a Token's Identity
+
+Sometimes the table should see that something is there without knowing what: a creature the party has not identified, a shape in the dark, an ally in disguise. Right-click the token and choose **Obscure Identity**, or use the same switch in **Edit Token**, the Token Roster or the Token Manager. Players who do not control the token then see a plain grey shape with a question mark where it stands, the hover card calls it an unknown creature, and so does its row in the initiative tracker. Its name, picture, conditions, hit points and disposition are not sent to their browsers at all, so nothing can be read from the page either. You keep seeing the token as it is, with a small **?** badge as a reminder, and **Preview Player View** shows you the shape the table sees. Rolls you make for it from its stat block, and its initiative roll, appear in the dice log as *Unknown creature*. **Reveal Identity** puts everything back.
+
+Obscuring is a switch you set by hand. It does not follow the light, since the rules have no half-seen state between dim light (a creature is lightly obscured) and darkness (heavily obscured), and a player's own token is never obscured to them.
 
 ---
 
