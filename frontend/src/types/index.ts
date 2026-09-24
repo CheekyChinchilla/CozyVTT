@@ -1299,6 +1299,8 @@ export interface DmTransferredBroadcast {
 
 export interface CombatantEntry {
   tokenId: string;
+  /** The map the token is on. */
+  mapId?: string;
   name: string;
   imageUrl: string;
   initiative: number | null;

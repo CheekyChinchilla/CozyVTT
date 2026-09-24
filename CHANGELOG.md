@@ -113,6 +113,8 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 ### Security
 
+- **The initiative tracker no longer shows players a creature's exact hit points, or lists creatures the DM has hidden.** Every combatant went to every player with the hit points copied when it joined, whatever the creature's HP bar setting, and a hidden creature added to the order was named to the whole table. A player now sees a creature's hit points in the tracker only when the DM has turned its HP bar on, always sees their own, and never sees a hidden creature listed until it is revealed.
+
 - **The campaign overview no longer tells players where a map's spirit layer image is.** Its address was listed for every member, although the map itself hides it from players who have not crossed to the spirit plane, and any member could fetch the image by that address alone. It is now blank for them there too.
 
 - **Players' browsers are no longer sent what they are not meant to see of a token.** The server sent every visible creature with its hit points, stat block and darkvision and left it to the player's screen to hide them, so anyone who opened their browser's developer tools could read a creature's exact hit points and its whole stat block. A player is now sent a creature's hit points only when the DM has turned its HP bar on, never its stat block or notes, and another token's darkvision only if they control it. The reply to moving your own token was worse: it was the whole stored map, hidden creatures, DM notes and fog grid included. It is now filtered exactly like the map itself.

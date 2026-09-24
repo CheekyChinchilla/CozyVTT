@@ -1,5 +1,6 @@
 // ============================================
-// Initiative tracker handlers (DM-only controls; state broadcasts to all).
+// Initiative tracker handlers (DM-only controls; the order is sent to every
+// member as they may see it, see sendInitiativeState).
 // initiative.add / remove / set / roll / reorder / start / next / end /
 // request_state
 // ============================================
@@ -15,22 +16,64 @@ import {
 } from '../../utils/rules/initiative';
 import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
+import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
+import { canControlToken } from '../../services/permissions';
 import {
   getState as getCombatState,
   setState as setCombatState,
   clearState as clearCombatState,
   sortCombatants,
+  projectCombatState,
   type CombatantEntry,
+  type CombatantSource,
+  type CombatState,
 } from '../initiativeState';
 
+/** What a send needs of a socket; a connected one and a fetched one both have it. */
+interface Recipient {
+  userId?: string;
+  role?: string;
+  emit(event: 'initiative.state', state: CombatState): unknown;
+}
+
+/**
+ * Send the order to the given sockets, or to every socket in the campaign,
+ * each as they may see it. The combatants' tokens are read as they are now,
+ * so a name, picture or hit points the DM changes follow the token, and a
+ * player's copy goes through the same role filter as the map itself: a hidden
+ * token's entry, and hit points behind a bar the DM keeps off, never reach
+ * them. The stored state is the DM's view and is not changed.
+ */
+export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
+  const state = getCombatState(campaignId);
+  const recipients: Recipient[] = only ?? (await io.in(campaignId).fetchSockets()).map((s) => s as unknown as Recipient);
+  if (recipients.length === 0) return;
+
+  const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];
+  const maps = mapIds.length === 0
+    ? []
+    : await prisma.map.findMany({ where: { id: { in: mapIds }, campaignId }, select: { tokens: true } });
+  const tokens = maps.flatMap((m) => readTokens(m.tokens));
+  const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
+  const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+  const byId = (list: CombatantSource[]) => new Map(list.map((t) => [t.id, t]));
+
+  const forDM = byId(tokens);
+  for (const r of recipients) {
+    if (r.role === 'DM') {
+      r.emit('initiative.state', projectCombatState(state, forDM, true));
+      continue;
+    }
+    if (!r.userId) continue;
+    const forRole = filterTokensByRole(tokens, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
+    r.emit('initiative.state', projectCombatState(state, byId(forRole), false));
+  }
+}
+
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {
-  /**
-   * Broadcast full initiative state to all campaign members. Called after
-   * every mutation.
-   */
+  /** Send the order to every member, each as they may see it, after a change. */
   async function broadcastInitiativeState(campaignId: string) {
-    const state = getCombatState(campaignId);
-    io.to(campaignId).emit('initiative.state', state);
+    await sendInitiativeState(io, campaignId);
   }
 
   /**
@@ -61,6 +104,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
 
       const entry: CombatantEntry = {
         tokenId,
+        mapId,
         name: token.name,
         imageUrl: token.imageUrl || '',
         // Always null, never `token.initiative`.
@@ -201,17 +245,14 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // may move a token (see handlers/tokens.ts), so a player can roll for
       // exactly the tokens they can already move.
       if (socket.role !== 'DM') {
-        // Spectators are watching, not playing. `controlledBy` survives a
-        // demotion from PLAYER, so without this an ex-player would keep the
-        // ability to roll — and reorder a fight — after losing the ability to
-        // move the very same token. handlers/tokens.ts makes the same pair of
-        // checks for movement.
-        if (socket.role === 'SPECTATOR') {
-          socket.emit('error', { message: 'Spectators cannot roll initiative' });
-          return;
-        }
-        if (token.controlledBy !== socket.userId) {
-          socket.emit('error', { message: 'You can only roll initiative for your own token' });
+        // The same predicate that decides who may move the token: a spectator
+        // never, even one `controlledBy` still names from before a demotion.
+        if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
+          socket.emit('error', {
+            message: socket.role === 'SPECTATOR'
+              ? 'Spectators cannot roll initiative'
+              : 'You can only roll initiative for your own token',
+          });
           return;
         }
         if (existingIndex === -1) {
@@ -316,6 +357,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       } else {
         state.combatants.push({
           tokenId,
+          mapId,
           name: token.name,
           imageUrl: token.imageUrl || '',
           initiative: rolledValue,
@@ -451,12 +493,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can end combat' }); return; }
 
       clearCombatState(socket.campaignId);
-      io.to(socket.campaignId).emit('initiative.state', {
-        active: false,
-        round: 0,
-        currentTokenId: null,
-        combatants: [],
-      });
+      await broadcastInitiativeState(socket.campaignId);
       logger.info('initiative.end', { campaignId: socket.campaignId });
     } catch (error) {
       logger.error('initiative.end failed', { err: error });
@@ -467,9 +504,12 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   /**
    * INITIATIVE.REQUEST_STATE — Client requests current state on (re)connect.
    */
-  socket.on('initiative.request_state', () => {
-    if (!socket.campaignId) return;
-    const state = getCombatState(socket.campaignId);
-    socket.emit('initiative.state', state);
+  socket.on('initiative.request_state', async () => {
+    try {
+      if (!socket.campaignId) return;
+      await sendInitiativeState(io, socket.campaignId, [socket as unknown as Recipient]);
+    } catch (error) {
+      logger.error('initiative.request_state failed', { err: error });
+    }
   });
 }

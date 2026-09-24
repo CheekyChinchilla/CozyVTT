@@ -314,7 +314,7 @@ Areas open up as you explore. If your DM is using **dynamic lighting** as well, 
 
 Two things worth knowing:
 
-- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there.
+- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
 
 ### Sound and weather on the map
@@ -352,7 +352,7 @@ When combat begins, the DM will start initiative tracking. The **Initiative Trac
 You'll see:
 - **All combatants** in order, highest initiative first
 - **Current turn** highlighted
-- **HP** for each combatant (updating in real time)
+- **HP** for your own token, and for a creature once the DM has turned its HP bar on; it follows the token as the DM changes it
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 

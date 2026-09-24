@@ -12,6 +12,8 @@
 
 export interface CombatantEntry {
   tokenId: string;
+  /** The map the token is on, so a send can look the token up as it is now. */
+  mapId: string;
   name: string;
   imageUrl: string;
   initiative: number | null;
@@ -61,4 +63,48 @@ export function sortCombatants(combatants: CombatantEntry[]): CombatantEntry[] {
     if (b.initiative !== a.initiative) return b.initiative - a.initiative;
     return a.name.localeCompare(b.name); // alphabetical tie-break
   });
+}
+
+/** The fields of a map token a combatant is read from. */
+export interface CombatantSource {
+  id: string;
+  name: string;
+  imageUrl: string;
+  hp?: { current: number; max: number; temp: number } | null;
+  type?: 'player' | 'npc' | 'object';
+  disposition?: 'friendly' | 'neutral' | 'hostile' | null;
+}
+
+/**
+ * The state as one recipient may see it. Entries follow their tokens: a
+ * player is given only the combatants whose token they were sent at all,
+ * with the name, picture and hit points exactly as that token was sent to
+ * them (the role filter has already dropped hidden tokens and the hit points
+ * they may not know), so nothing reaches the tracker that the map keeps from
+ * them. The DM gets every combatant with the token as it is now, and the copy
+ * taken when it joined if the token is gone. The stored state is not changed.
+ */
+export function projectCombatState(
+  state: CombatState,
+  tokens: ReadonlyMap<string, CombatantSource>,
+  isDM: boolean
+): CombatState {
+  const combatants: CombatantEntry[] = [];
+  for (const entry of state.combatants) {
+    const token = tokens.get(entry.tokenId);
+    if (!token) {
+      if (isDM) combatants.push({ ...entry });
+      continue;
+    }
+    combatants.push({
+      ...entry,
+      name: token.name,
+      imageUrl: token.imageUrl || '',
+      hp: token.hp ?? null,
+      type: token.type ?? 'npc',
+      disposition: token.disposition ?? null,
+    });
+  }
+  const currentTokenId = combatants.some((c) => c.tokenId === state.currentTokenId) ? state.currentTokenId : null;
+  return { active: state.active, round: state.round, currentTokenId, combatants };
 }

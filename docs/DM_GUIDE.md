@@ -692,7 +692,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **+ Add** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant carries its token's name, portrait and HP across automatically, but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
+Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on, always sees their own, and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
 
