@@ -83,13 +83,13 @@ Your role badge is visible on your profile page.
 
 ### Campaign Roles
 
-Within a campaign you have one of three roles, set by its DM:
+Within a campaign you have one of three roles. Whoever creates a campaign is its DM, and everyone the DM invites joins as a player:
 
 | Role | What they can do |
 |------|-----------------|
 | **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
 | **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters |
-| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything |
+| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
 
 ---
 
@@ -107,15 +107,15 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Pending invitation banner.*
 
-**Your Campaigns** — A grid of campaign cards. Each card shows the campaign name, description, your role (DM or Player), and the current session status. Click any campaign card to jump right in.
+**Your Campaigns** — A grid of campaign cards. Each card shows the campaign name, description, your role, and the current session status. Click any campaign card to jump right in.
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
-**Quick Access** — Cards for your Character Library, Asset Library and Documents so you can navigate there in one click.
+**Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
 ### Creating a New Campaign
 
-Click the **+ New Campaign** button from the dashboard to open the campaign creation form.
+Click **Create Campaign** on the dashboard to open the campaign creation form.
 
 *GIF pending — Creating a new campaign.*
 
@@ -136,9 +136,9 @@ The campaign page is your command center during play. It's a three-column worksp
 
 *Screenshot pending — Full campaign page layout with labeled panels.*
 
-- **Left Sidebar** — Campaign info, party roster, and (for DMs) the token roster
+- **Left Sidebar** — Campaign info, the campaign roster, and (for DMs) the token roster
 - **Center Canvas** — The battle map where tokens live and adventures happen
-- **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, and **Session** (vibe + session controls); a badge on the Chat tab shows unread messages while you're on another tab
+- **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, **Notes** and **Session** (vibe, session controls and past sessions); a badge on the Chat tab shows unread messages while you're on another tab
 
 You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
 
@@ -148,30 +148,29 @@ You can **drag the dividers** between the columns to resize them, and collapse t
 
 Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign.
 
-As the DM, click the **Maps** button in the campaign header to open the Map Manager.
+As the DM, click **Map Library** (the map icon) in the campaign header.
 
-*Screenshot pending — Map Manager panel.*
+*Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Add a map** by selecting an uploaded image from your asset library
-- **Switch to a different map** — this updates the view for all connected players immediately
-- **Remove a map** from the campaign
+- **Create Map** from an uploaded image in your asset library, or **Import UVTT** from a mapping tool
+- **Set Active** to switch to a different map — this updates the view for all connected players immediately
+- **Edit** a map's settings, export it, or delete it
 
 *GIF pending — Switching the active map mid-session.*
 
 ### Managing Campaign Settings
 
-Click the **Settings** button (gear icon) in the campaign header to open Campaign Settings. Here you can update the campaign name, description, and other properties.
+Click **Campaign Settings** (the gear icon) in the campaign header. Here you can update the campaign name, description, and other properties.
 
 ### Managing Your Roster
 
 Players join your campaign by accepting an invitation. Once they're in, they appear in the **Campaign Roster** on the left sidebar. You can see all current members and their characters.
 
 To invite someone:
-1. Go to **Campaign Settings**
-2. Find the **Invite Players** section
-3. Enter the email address of the user on your platform
-4. They'll see a pending invitation on their dashboard
+1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
+2. Pick them from the list of people on your instance (they need an account first)
+3. They'll see a pending invitation on their dashboard
 
 **Handing the campaign to someone else.** A campaign has one DM, and that seat
 can be passed to another member — useful when you are handing off to a co-DM or
@@ -186,23 +185,25 @@ the seat back later. See
 
 Tokens represent characters, monsters, NPCs, and objects on the map.
 
-**Placing tokens:** Open the **Token Manager** (Tokens button in the header) to add, configure, and manage all tokens in your campaign. DMs can also place tokens directly from the **Creature Library** (see [DM Guide](DM_GUIDE.md#the-creature-library)).
+**Placing tokens:** Open the **Token Manager** (the crossed-swords icon in the header) to add, configure, and manage all tokens in your campaign. DMs can also place tokens directly from the **Creature Library** (see [DM Guide](DM_GUIDE.md#the-creature-library)).
 
 *Screenshot pending — Token Manager panel.*
 
 Each token has:
 - **Name** — Displayed on hover
 - **Image** — Choose from your asset library (TOKEN type assets), or leave blank for a colored-letter placeholder
-- **Type** — PC, NPC, or Object
-- **HP** — Hit points that other players can see update in real time
+- **Type** — Player, NPC / Creature, or Object
+- **HP** — Hit points, which players see only for their own token or once the DM turns on the token's HP bar
 - **Size** — How many grid squares the token occupies (default 1×1)
 - **Display Mode** — **Pog** (circular), **Top-Down** (overhead art), or **Full-Art** (full rectangular image)
-- **Disposition** — Hostile (red), Friendly (green), or Neutral (blue) — affects the placeholder color
+- **Disposition** — Hostile (red), Friendly (teal), or Neutral (amber) — affects a creature's placeholder color and ring
 - **Conditions** — Two-letter amber badges above the token for status effects (**PO**isoned, **ST**unned, and so on). Hover any token to read its conditions in full
-- **Spirit Layer Visibility** — Whether the token appears in the spirit layer view
+- **Layer** — The material plane or the spirit layer; a spirit-layer token is seen only by players in the spirit realm
+- **Darkvision** — How far it sees without light, in grid squares
+- **Hidden** or **Obscured** — Hidden tokens are not sent to players at all; an obscured one shows only as a grey shape with a question mark
 - **Stat Block** — NPC tokens can carry a stat block with AC, HP, speed, attacks, and abilities
 
-**Colored-letter placeholders:** Tokens without an assigned image display a colored circle with the creature's first initial. The color reflects the token's disposition.
+**Colored-letter placeholders:** Tokens without an assigned image display a colored circle with the first letter of their name. Player tokens are blue; for creatures the color reflects the disposition, and objects are grey.
 
 **Moving tokens:** During a session, drag tokens around the map. Everyone connected sees the movement as it happens.
 
@@ -214,23 +215,19 @@ Each token has:
 
 ### Your Character Library
 
-The **Characters** page (accessible from the top nav or dashboard) shows all the characters you own across every campaign and game system.
+The **Characters** page (**Manage** beside **Your Characters** on the dashboard) shows all the characters you own across every campaign and game system.
 
 *Screenshot pending — Characters page grid view.*
 
 From here you can:
 - **Create a new character**
 - **Click a character** to read its sheet — **Edit** is on the sheet when you want to change something
-- **Edit** an existing character directly, skipping the reading step
-- **Copy** a character (great for variants or backup sheets)
-- **Export** a character to JSON (for backups or sharing)
+- From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign**, or unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
 - **Import** a character from a JSON file
-- **Assign** a character to a campaign, or **unassign** them if they've hung up their boots
-- **Delete** a character (with a confirmation prompt — we know how precious they are)
 
 ### Creating a Character
 
-Click **+ New Character** to open the character creation dialog. Choose your **Game System** first — this determines which character sheet you'll fill out.
+Click **Create Character** to open the character creation dialog. Choose your **Game System** first — this determines which character sheet you'll fill out.
 
 *Screenshot pending — New character dialog with game system selector.*
 
@@ -244,7 +241,7 @@ The Character Editor is where you fill in every detail about your character — 
 
 Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent.
 
-You can also **Export to JSON** from the editor header at any time to grab a backup copy.
+You can also click **Export** in the editor header at any time to download a JSON backup copy.
 
 ### Character Templates
 
@@ -274,7 +271,7 @@ Templates you publish are visible to everyone on your instance. You can edit or 
 A character has to belong to a campaign before it shows up in that campaign's roster. There are two ways:
 
 - **When you create it** — pick the campaign in the new character dialog. The character joins the roster straight away.
-- **Afterwards** — click **Assign** on any character card on the Characters page and pick the campaign.
+- **Afterwards** — open a character card's menu on the Characters page, choose **Assign to Campaign**, and pick the campaign.
 
 You can only choose a campaign you are already a member of.
 
@@ -360,7 +357,7 @@ Rulebooks and handouts are not here. They have their own **Documents** section, 
 
 ### Uploading Assets
 
-Click the **Upload** button to add a new asset. You'll choose:
+Click **Upload Asset** to add a new asset. You'll choose:
 - The file to upload
 - A name for the asset
 - The **scope** — where this asset lives:
@@ -449,7 +446,7 @@ Type your message in the input field and press **Enter** to send. Messages show 
 
 ### Rolling Dice
 
-The **Dice Roller** is right below chat. Click a die face to roll it, or type a custom expression.
+The **Dice Roller** has its own **Dice** tab beside Chat. Click a die face to roll it, or type a custom expression.
 
 *GIF pending — Rolling dice and seeing the result in the Dice panel.*
 
@@ -506,25 +503,25 @@ still appears, marked as having no notes.
 
 ### Moving Your Token
 
-When the DM has placed your character's token on the map and the session is live, you can **drag it** to move around. Just click and drag to your destination.
+When the DM has placed your character's token on the map, you can **drag it** to move around. Just click and drag to your destination.
 
 *GIF pending — Moving a player token.*
 
 Token movement is broadcast to everyone in real time — your party can watch you walk into that very suspicious hallway.
 
-> **Note:** Token movement is disabled when the session is paused.
+> **Note:** Token movement is disabled while the session is paused and after the DM has ended it, until the next session starts.
 
 ### The Vibe Tracker
 
-The **Vibe Tracker** is a mood indicator that the DM sets to communicate the current atmosphere of the scene. It might say things like "Cozy," "Tense," "Mysterious," or "Triumphant."
+The **Vibe Tracker**, in the **Session** tab, shows the time of day the DM has set for the scene: dawn, day, dusk and night by default, or periods the DM has named. Each one tints the whole map with its own colour filter, and the header shows which is current.
 
-Keep an eye on it — it's your DM's way of setting the tone without breaking the narrative.
+It's your DM's way of setting the tone without breaking the narrative.
 
-*Screenshot pending — Vibe tracker showing different states.*
+*Screenshot pending — Vibe tracker showing the current period.*
 
 ### The Initiative Tracker
 
-When combat starts, the **Initiative Tracker** appears (or is revealed by the DM) on the right sidebar. It shows the current turn order, who's active, and HP for each combatant.
+The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for your own token and for creatures whose HP bar the DM has turned on. A creature the DM has hidden is not listed.
 
 *Screenshot pending — Initiative tracker panel during combat.*
 
@@ -538,9 +535,9 @@ Whoever's turn it is also gets a pulsing gold ring around their token on the map
 
 ### Session State Saving
 
-CozyVTT automatically saves session state — token positions, chat history, and initiative order are preserved between sessions. When you come back, everything is right where you left it.
+CozyVTT saves as you play: token positions, fog, walls, lights, chat and dice history, and the atmosphere are all stored the moment they change, so there is no save button and nothing is lost by closing the page. When you come back, everything is right where you left it. The one exception is an initiative order, which lasts only while the server is running.
 
-The DM can also manually trigger a save or end the session, which locks in the current state.
+Ending a session records it, with the DM's notes, under **Past Sessions**.
 
 ### Multi-Map Support
 
@@ -612,7 +609,7 @@ An admin upload UI is on the roadmap — see [Future Features](FUTURE_FEATURES.m
 
 ## Your Profile
 
-Click your display name or avatar in the top navigation to reach your **Profile** page.
+Click your display name or avatar at the top of the dashboard to reach your **Profile & Settings** page.
 
 *Screenshot pending — Profile page.*
 
@@ -643,7 +640,7 @@ You'll also receive a set of **backup codes** when you set up MFA — store thes
 
 ### Themes & Fonts
 
-From the **Themes** section of your profile, pick the color theme and font *you* want to see across the app:
+From the **Appearance** section of your profile, pick the color theme and font *you* want to see across the app:
 
 - Browse 16 built-in themes across light, warm, cool, dark, neutral, and vibrant categories
 - Pick from 8 open-source font families
@@ -653,7 +650,7 @@ Your choice is saved to your account and applies immediately. It also persists a
 
 ### Signing Out
 
-Click **Sign Out** in the Danger Zone section (or from the header menu) to log out.
+Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the dashboard, to log out.
 
 ---
 
@@ -662,7 +659,7 @@ Click **Sign Out** in the Danger Zone section (or from the header menu) to log o
 ### I can't connect to my campaign
 
 - Check that you have an active internet connection
-- Make sure the DM has started a session (you'll see a "Live" indicator in the header when a session is active)
+- Look at the connection indicator in the campaign header; it turns green once you're connected. You don't need a live session to connect
 - Try refreshing the page — CozyVTT will reconnect automatically
 - If the problem persists, check with your platform administrator that the server is running
 
@@ -684,7 +681,7 @@ Only you (the character owner) and the DM of an assigned campaign can edit a cha
 
 ### My dice rolls aren't showing up
 
-Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversation itself. If the panel is empty, make sure the session is active (you see the "Live" indicator): rolls need a live connection to the campaign. If you're not on the campaign page, navigate there first.
+Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversation itself. If the panel is empty, check the connection indicator in the header: rolls need a live connection to the campaign. While the session is paused, rolls are worked out in your own browser and kept only there. If you're not on the campaign page, navigate there first.
 
 ### How do I change my email address?
 
@@ -698,7 +695,7 @@ Go to your **Profile** page and scroll to the **Danger Zone** section. Click **D
 
 ### I forgot my password
 
-Contact your platform administrator. They can reset your password from the Admin Panel and give you a temporary password to log in with.
+Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
 
 ---
 
