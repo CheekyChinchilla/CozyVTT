@@ -44,7 +44,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Campaign Tools
 - **Interactive map canvas** — upload map images, place tokens, drag to move in real time
-- **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); colored-letter placeholders for tokens without images
+- **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
 - **Creature library** — browse, search, and place creatures from the SRD bestiary (auto-imported from Open5e) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
 - **Token templates** — save reusable token configurations (image, stats, HP, size, disposition, full NPC stat block); place from library or save from map context menu; copy templates between campaigns the DM owns
 - **NPC right-click rolls** — DMs right-click any NPC token to roll abilities, saves, skills, attacks, and damage parsed from its stat block; advantage/disadvantage selector for d20 systems; free-form custom roll fallback for non-5e systems
@@ -53,12 +53,12 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Universal VTT import/export** — bring in a `.uvtt`, `.dd2vtt` or `.df2vtt` map from Dungeondraft, Dungeon Alchemist, Czepeku and others, with its walls, doors and lights already placed, and export any map back out. One file is one map, as the format intends; if a file's walls reach outside its own picture, CozyVTT says so before importing rather than leaving you to wonder
 - **Fog of war** — drag a box to reveal or hide chunks of the map; the selection snaps to whole grid squares, with animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
-- **Initiative tracker** — real-time combat turn order; DM controls, players watch live. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
+- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Each player sees only the combatants, and the hit points, the map would show them. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
 - **Map pings** — press Tab to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
-- **Vibe tracker** — time-of-day atmosphere presets with custom color filters and ambient audio
+- **Vibe tracker** — time-of-day periods (dawn, day, dusk and night by default, all editable) that tint the map with a colour filter
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)
-- **Resizable session workspace** — drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, and Initiative full-height, with an unread-message badge; layout persists per browser
+- **Resizable session workspace** — drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, Initiative, Notes and Session full-height, with an unread-message badge; layout persists per browser
 
 ### Character Sheets
 - **D&D 5th Edition** — full sheet with stats, skills, saving throws, attacks, spells, inventory
@@ -68,14 +68,14 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Dice System
 - **Full dice notation** — `1d20+5`, `2d6`, `4d6kh3` (keep highest), advantage/disadvantage
-- **Real-time results** — rolls appear in the campaign chat log for all players
+- **Real-time results** — rolls appear in the Dice panel for the whole table
 - **Secret rolls** — hidden from the other players; your DM can still see them, and they stay in your own list marked as secret
 - **Dice history** — a running log of the session's rolls that survives a refresh, filtered per person by the server
 - **Saved rolls** — name a dice expression and it becomes a one-click button in the dice panel; private to you and scoped to one campaign, with the expression checked when you save it so a saved roll always works
 
 ### Communication
 - **Campaign chat** — in-session messaging between all members
-- **System messages** — automatic logs for joins, session events, and dice rolls
+- **System messages** — automatic notices when a session starts, pauses, resumes or ends
 - **Personal notes** — private per-campaign notes in Markdown, with a rendered preview and autosave; readable only by their author, enforced server-side
 - **Documents** — upload a PDF, plain text or Markdown rulebook or handout, or write one in the app, and read it without leaving CozyVTT; a DM shares documents with a campaign, and every member reads them from inside the session; text and Markdown documents can be edited by their uploader
 - **Session history** — every finished session with its date, length and the recap the DM wrote; the DM can edit or clear any past recap
@@ -182,7 +182,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment with Ngin
 
 ## Configuration
 
-All runtime configuration is managed through the Admin dashboard after setup:
+Most runtime configuration is managed through the Admin dashboard after setup. Email (SMTP) and upload limits are set in `.env`; the dashboard shows them and can send a test email:
 
 | Tab | Setting | Description |
 |-----|---------|-------------|
@@ -192,8 +192,8 @@ All runtime configuration is managed through the Admin dashboard after setup:
 | Settings | Allow Registration | Whether new users can self-register |
 | Settings | Require Admin Approval | New registrations must be approved before login |
 | Settings | Timezone | Server timezone for session timestamps |
-| Settings | SMTP | Email server settings (test via the dashboard) |
-| Settings | Upload Limits | Per-type file size limits (maps, tokens, audio, avatars, documents) |
+| Settings | SMTP | Shows the email settings from `.env`, with **Send Test Email** |
+| Settings | Upload Limits | Shows the per-type file size limits from `.env` (maps, tokens, audio, avatars, documents) |
 | Appearance | Default Theme | Theme shown on the login page and used for new users (each user can override from their profile) |
 | Appearance | Default Font | Default font family applied alongside the default theme |
 | Appearance | Custom Theme | Build a palette from primary, accent, background, and text colors, with a live readability check |
@@ -231,7 +231,7 @@ Set these in `.env` and restart — no rebuild needed. If you raise one, raise y
 |------|-------------|
 | `DM` | Full campaign control — manage maps, tokens, sessions, members |
 | `PLAYER` | Can view maps, move their own tokens, roll dice, chat |
-| `SPECTATOR` | Read-only access — can observe but not interact |
+| `SPECTATOR` | Watches the map and can chat; cannot roll dice, move tokens or change anything |
 
 ---
 
