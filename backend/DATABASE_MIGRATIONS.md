@@ -78,14 +78,14 @@ about; the list is not exhaustive.
   document asset to a campaign, so a DM can share a rulebook with one table
   without making it visible to the whole instance. One `CREATE TABLE`, three
   indexes and three foreign keys. Nothing existing is altered.
-- `add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
+- `20260917003045_add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
   One `ALTER TABLE ... ADD COLUMN` with a default, so every existing map keeps
   fog of war exactly as it was; only maps created afterwards start with it off.
-- `add_map_global_illumination` - `Map.globalIllumination`, a boolean defaulting
+- `20260917005458_add_map_global_illumination` - `Map.globalIllumination`, a boolean defaulting
   to `true`. Same shape: one `ALTER TABLE ... ADD COLUMN` with a default. Every
   existing lit map keeps showing players everything in line of sight, as it
   always did; new maps start with it off so lights and darkvision decide.
-- `add_map_exploration` - `Map.explorationEnabled` (boolean, default `true`)
+- `20260917013238_add_map_exploration` - `Map.explorationEnabled` (boolean, default `true`)
   and a new `MapExploration` table holding what each player has explored on a
   map, one row per map and user, cascading on delete of either. One `ALTER
   TABLE ... ADD COLUMN` with a default, one `CREATE TABLE`, two indexes and two
