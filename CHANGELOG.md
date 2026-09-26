@@ -31,7 +31,7 @@ git pull origin main
 docker compose up -d --build
 ```
 
-No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/backups`. There is no manual data migration for this release.
+No new setting is required: backups go to `backend/backups/` on the host. (An install without Docker can put them elsewhere with the optional `BACKUP_DIR` setting.) There is no manual data migration for this release.
 
 ### Added
 
@@ -39,7 +39,7 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 - **Maps remember what each player has explored.** On a map with dynamic lighting, the areas a player's tokens have seen stay on their map, greyed and darkened, until they can see them again. Each player has their own memory, kept on the server, so it survives a reload and a change of device. **Remember Explored Areas** in Edit Map (on for existing maps, off for new ones) controls it, and **Reset explored areas** in the Fog of War panel forgets everyone's memory of a map.
 
-- **Tokens carry a darkvision radius.** A token's sight radius (in grid squares, 0 = none, 12 = 60 ft) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.
+- **Tokens carry a darkvision radius.** A token's sight radius (in grid squares; 0 = none, and 12 is 60 ft at 5 ft a square) is set in the Token Manager when placing a token, or afterwards from Edit Token, which now opens for player tokens too. Only the DM can change it, since it decides what the server sends that token's player.
 
 - **Preview the map through any token's eyes.** The Preview Player View picker now lists the tokens on the map (the material plane) as well as the players, plus **All player tokens** for the party's combined view. A table that projects one screen and moves every token itself, where there are no player accounts to preview as, can show the room exactly what one character sees, or what the party sees with the monsters' sight left out.
 
@@ -127,7 +127,7 @@ No new setting is required. `BACKUP_DIR` is optional and defaults to `backend/ba
 
 - **The campaign overview no longer tells players where a map's spirit layer image is.** Its address was listed for every member, although the map itself hides it from players who have not crossed to the spirit plane, and any member could fetch the image by that address alone. It is now blank for them there too.
 
-- **Players' browsers are no longer sent what they are not meant to see of a token.** The server sent every visible creature with its hit points, stat block and darkvision and left it to the player's screen to hide them, so anyone who opened their browser's developer tools could read a creature's exact hit points and its whole stat block. A player is now sent a creature's hit points only when the DM has turned its HP bar on, never its stat block or notes, and another token's darkvision only if they control it. The reply to moving your own token was worse: it was the whole stored map, hidden creatures, DM notes and fog grid included. It is now filtered exactly like the map itself.
+- **Players' browsers are no longer sent what they are not meant to see of a token.** The server sent every visible creature with its hit points, stat block and darkvision and left it to the player's screen to hide them, so anyone who opened their browser's developer tools could read a creature's exact hit points and its whole stat block. A player is now sent a creature's hit points only when the DM has turned its HP bar on, never its stat block or notes, and another token's darkvision only if they control it. The reply to moving your own token was worse: it was the whole stored map, hidden creatures, DM notes and fog grid included. It is now filtered exactly like the map itself. One thing players will notice: a creature whose HP bar is off no longer shows as down to them when it reaches zero hit points, so it is not drawn faded and still blocks its square until the DM removes it or turns its bar on.
 
 - **Dragging a token players cannot see no longer streams its position to them.** On a lit map, the position updates sent while a token is being dragged went to everyone at the table, so a player could read the exact path of a creature in the dark or behind a wall. They now go only to the DM and to players whose characters could see the token when the drag started; where it ends up is still sent to whoever can see it there.
 
