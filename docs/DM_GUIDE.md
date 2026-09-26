@@ -30,7 +30,7 @@ This guide focuses on DM-specific features. For general platform features (chara
 
 ### Creating a Campaign
 
-From the **Dashboard**, click **+ New Campaign**. Fill in:
+From the **Dashboard**, click **Create Campaign**. Fill in:
 
 - **Campaign Name** — The title your players will see
 - **Description** — A brief blurb about the campaign (optional but recommended)
@@ -69,7 +69,7 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 > **Note:** If registration is closed on your instance, the platform administrator will need to create accounts for your players before you can invite them.
 
-**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat, and cannot roll dice, move tokens or change anything. A player you demote to spectator keeps nothing of the player's powers, even over a token that still names them.
+**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat, and cannot roll dice, move tokens or change anything, even a token that still names them from when they were a player. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
 
 ### The Campaign Roster
 
@@ -79,7 +79,7 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controller**.
 
-**Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
+**Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
 **Who's actually here.** A small dot on each person's icon shows whether they're connected right now — green for in session, grey for not. It updates as people arrive and leave, so you can tell at a glance whether the quiet player is thinking or has dropped off. Someone with the campaign open in two tabs stays green until they close the last one.
 
@@ -110,9 +110,9 @@ CozyVTT does yet.
 
 > **Getting it back.** The new DM can hand it back the same way. And if the
 > campaign is yours — you created it — you keep a way in regardless: an **Owner
-> Settings** button appears in the sidebar, holding the two things that stay
-> yours, deleting the campaign and taking the DM seat back. It sits in the top
-> bar, in the same place the DM's own settings button occupies. So handing the
+> Settings** button appears in the top bar, holding the two things that stay
+> yours, deleting the campaign and taking the DM seat back. It sits in the same
+> place the DM's own settings button occupies. So handing the
 > game over can never lock you out of your own campaign. If you are *not* the owner,
 > ask the new DM, or your instance's administrator can move it for you.
 
@@ -126,8 +126,8 @@ Good maps make great sessions. Here's how to get them into CozyVTT.
 
 Before you can use a map in your campaign, it needs to live in the **Asset Library**.
 
-1. Navigate to the **Asset Library** (from the top nav or dashboard)
-2. Click **Upload**
+1. Open the **Asset Library** from your dashboard
+2. Click **Upload Asset**
 3. Choose your image file (JPEG, PNG, and WebP work great)
 4. Set the type to **Map**
 5. Set the scope to **Campaign** (to keep it associated with this campaign) or **Personal**
@@ -141,16 +141,16 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 
 Once your map is in the asset library:
 
-1. Inside your campaign, click the **Maps** button in the header
-2. The Map Manager panel opens
-3. Click **Add Map** and select your uploaded image
+1. Inside your campaign, click **Map Library** (the map icon) in the header
+2. The Map Library panel opens
+3. Click **Create Map**, pick your uploaded image and check the grid settings
 4. The map is now available to switch to at any time
 
-*Screenshot pending — Map Manager panel with multiple maps.*
+*Screenshot pending — Map Library panel with multiple maps.*
 
 ### Switching Maps
 
-Click the **Maps** button and select the map you want to switch to. This immediately updates the view for all connected players — no need to coordinate.
+Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate.
 
 *GIF pending — Switching maps, showing player view update.*
 
@@ -171,36 +171,42 @@ Tokens are the visual representations of everyone (and everything) on the map.
 
 ### Opening the Token Manager
 
-Click **Tokens** in the campaign header to open the Token Manager.
+Click **Token Manager** (the crossed-swords icon) in the campaign header to open it.
 
 *Screenshot pending — Token Manager panel.*
 
 ### Creating a Token
 
-Click **+ New Token** and fill in:
+The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to drag into position.
 
-- **Name** — Displayed on hover; use the character/NPC name
-- **Image** — Choose a TOKEN-type asset from your library (or leave blank for a placeholder)
-- **Type** — **PC** for player characters, **NPC** for monsters and allies, **Object** for environmental pieces
-- **HP** — Starting hit points (can be updated during play)
-- **Size** — How many grid squares the token covers (default: 1×1)
+- **Token Type** — **Player**, **NPC / Creature** or **Object**
+- **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
+- **Token Name** — Shown when anyone points at the token
+- **Display Mode** — Pog, Top-Down or Full Art (see below)
+- **Disposition** — Friendly, Neutral or Hostile, for creatures
+- **HP Max** — Starting hit points (0 means no HP bar), with **Show HP bar to players**
+- **Initiative**, **DM Notes** (never shown to players) and **Hidden from players on placement** — for creatures and objects
+- **Size (grid cells)** — Small/Med, Large or Huge
 - **Darkvision** — How far the token sees with no light, in grid squares (0 = none; at the usual 5 ft a square, 12 = 60 ft, and the hint works it out for the map's own scale); not offered for Objects
+- **Controlled by** — Which player may move it
 
 *Screenshot pending — Token creation form.*
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Click any token in the roster to quickly select and edit it.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or delete it.
 
 ### Placing Tokens on the Map
 
-Tokens aren't automatically placed on the map. Where you drag them from depends on what they are:
+Tokens aren't automatically placed on the map. Where they come from depends on what they are:
 
-- **Player characters** — from the **Campaign Roster**, or right-click a character there and choose **Add to Map**.
-- **NPCs and monsters** — from the **Creature Library**, or the **Place on Map** button on a creature.
-- **Anything you built yourself** — from the **Token Manager**.
+- **Player characters** — drag one from the **Campaign Roster**, or right-click a character there and choose **Add to Map**.
+- **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
+- **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-*GIF pending — Dragging a token from the manager onto the map.*
+Everything except a character dragged from the roster lands in the middle of the current map; drag it where it belongs.
+
+*GIF pending — Placing a token and dragging it into position.*
 
 ### Token Display Modes
 
@@ -214,7 +220,7 @@ Tokens support three display modes that control how they appear on the map:
 
 Set the display mode when creating a token, or change it later from the Token Manager or Edit Token.
 
-**Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the creature's name. Hostile tokens use red, friendly use green, and neutral use blue — making it easy to distinguish dispositions at a glance.
+**Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the token's name. Player tokens are blue; creatures are red when hostile, teal when friendly and amber when neutral; objects and creatures with no disposition are grey — making it easy to distinguish dispositions at a glance. An obscured token is grey with a question mark whatever it is.
 
 ### Editing Tokens During Play
 
@@ -236,7 +242,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 1. Right-click the token on the map and choose **Edit Token**
 2. Click the token avatar (top-left of the editor) — a hover overlay with an image icon appears
 3. The **Image Picker** opens, showing every token image you have access to — platform-wide assets, your own uploads, and assets from campaigns you're a member of
-4. Select an image, or click **Upload New** to upload a fresh asset
+4. Select an image, or click **Upload** to upload a fresh asset
 5. Click **None** to remove the image and revert to a colored-letter placeholder
 
 The map updates immediately for everyone at the table — no one needs to refresh. This changes only that one token; to change the image every future placement uses, edit the creature template instead (see [Creature Token Images](#creature-token-images)).
@@ -245,12 +251,11 @@ The map updates immediately for everyone at the table — no one needs to refres
 
 After setting a token's image, you can save it back to the creature template so every future placement of that creature uses the same image:
 
-1. In the quick editor, find the **"Save image to creature template"** section
-2. Click **Save to Template**
+1. In the quick editor, below the token image, click **Save image to creature template**
 
 **SRD creatures are read-only.** If the token is based on an SRD creature (imported from Open5e), CozyVTT will automatically create a custom duplicate of that creature for your campaign:
 
-- You'll be prompted to **name the duplicate** (e.g., "Ancient Red Dragon (Fire Variant)")
+- You'll be prompted to **name the duplicate** (e.g., "Ancient Red Dragon (Fire Variant)"), then click **Create & Save Image**
 - If a duplicate of that SRD creature already exists in your campaign, a warning appears asking if you want to create another
 - The new custom creature gets the image, and the token is relinked to it
 - Future placements from the Creature Library use the custom version with the image
@@ -279,7 +284,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 | Call of Cthulhu 7e | Custom Roll only — a percentile system has no d20 rolls to offer |
 | Shadowrun 6e | Custom Roll only — a dice-pool system has no d20 rolls to offer |
 
-If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a **Custom Roll** input at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and optional label, then roll. The result is broadcast to chat with the token name as context (e.g. *"Goblin: Scimitar Damage = 5"*).
+If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured token is named *Unknown creature* there.
 
 *Screenshot pending — NPC roll picker with stat-block-derived options.*
 
@@ -299,7 +304,7 @@ Your players are told this plainly now. The secret-roll checkbox used to read "o
 
 ### Managing Token Visibility
 
-Some tokens shouldn't be visible to players until the right moment. The **Spirit Layer Visibility** setting on a token controls whether it appears in the spirit layer view (see [The Spirit Layer](#the-spirit-layer)).
+Some tokens shouldn't be visible to players until the right moment. A token on the spirit layer is seen only by players in the spirit realm (see [The Spirit Layer](#the-spirit-layer)).
 
 To hide a token from players entirely, right-click it on the map and choose **Hide from Players**, open **Edit Token** and choose the same, or click the eye beside it in the Token Roster. All three work for any token, whether it is a character, a creature or an object. A creature or an object can also be placed already hidden: tick **Hidden from players on placement** in the Token Manager, which is how you stage a monster in a room before the table knows it is there. A hidden token is never sent to players at all, so it cannot be found by pointing at its square or by reading the page, and it stops lending its sight to any player view or preview. **Show to Players** puts it back.
 
@@ -317,7 +322,7 @@ The Creature Library is your DM-side catalog of creature templates — stat bloc
 
 ### Opening the Creature Library
 
-Click the **Creatures** button in the campaign header to open the Creature Library panel. The library shows all available creature templates: both **SRD creatures** (imported from Open5e) and **custom creatures** you've created for this campaign.
+Click **Creature Library** in the campaign header's DM toolbar to open the Creature Library panel. The toolbar's buttons are icons; point at one to see its name. The library shows all available creature templates: both **SRD creatures** (imported from Open5e) and **custom creatures** you've created for this campaign.
 
 ### SRD Creature Seeding
 
@@ -334,10 +339,10 @@ The first time you open the Creature Library in a new campaign, it may be empty.
 The library supports:
 
 - **Search** — Type in the search bar to filter by creature name
-- **Source filter** — Filter by `srd` (imported) or `custom` (your creations)
+- **Source filter** — **SRD (Official)** for imported creatures, or **Custom / Homebrew** for your own
 - **Challenge Rating filter** — Narrow down by CR
 - **Game system filter** — Defaults to your campaign's own system, so a Call of Cthulhu table isn't scrolling past 300 D&D monsters. Switch it to **All game systems** to browse everything — useful when you want to adapt a stat block from another system. Creatures saved without a system recorded always appear, whichever way this is set
-- **Pagination** — Results load in pages; scroll down and click "Load More" to fetch additional creatures
+- **Pagination** — Results load in pages; scroll down and click **Load More** to fetch additional creatures
 
 > **Library looks empty in a non-D&D campaign?** Only D&D 5e ships SRD content, and the library defaults to your campaign's system. The empty state offers a one-click switch to **All game systems**.
 
@@ -351,7 +356,7 @@ Favorites appear in a collapsible **"Favorites"** section at the top of the Crea
 
 ### Placing Creatures on the Map
 
-Click any creature in the library to expand its details, then click **Place on Map** (or drag it onto the canvas). A new NPC token is created with:
+Click any creature in the library to expand its details, then click **Place on Map**. A new NPC token is created in the middle of the current map with:
 
 - The creature's name
 - Its stat block (viewable and editable in the quick editor)
@@ -362,7 +367,7 @@ Click any creature in the library to expand its details, then click **Place on M
 
 ### Creating Custom Creatures
 
-Click **+ New Creature** at the top of the Creature Library to create a custom creature template. Fill in:
+Click **Create Custom** at the top of the Creature Library to create a custom creature template. Fill in:
 
 - **Name** — Required
 - **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
@@ -433,7 +438,7 @@ level, but never changes it.
 
 ### Editing Custom Creatures
 
-Click the **pencil icon** next to any custom creature in the library to open it for editing. You can update any field — name, stat block, saving throws and skills, image, disposition, display mode, and all advanced stats (traits, actions, legendary actions, etc.).
+Click the **pencil icon** (Edit creature) next to any custom creature in the library to open it for editing. You can update any field — name, stat block, saving throws and skills, image, disposition, display mode, and all advanced stats (traits, actions, legendary actions, etc.).
 
 SRD creatures cannot be edited directly. Duplicate them first, then edit the copy.
 
@@ -467,13 +472,13 @@ Token templates let you save reusable token configurations — image, stats, HP,
 
 ### Opening the Token Template Library
 
-Click the **Templates** button (Package icon) in the campaign header toolbar. The panel slides open from the right, similar to the Creature Library.
+Click **Token Templates** (the package icon) in the campaign header. The panel slides open from the right, similar to the Creature Library.
 
 ### Creating a Template
 
 There are two ways to create a template:
 
-1. **From the library** — Click **+ New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block.
+1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block.
 2. **From the map** — Right-click any token on the map and select **Save as Template**. This captures the token's current image, type, disposition, display mode, size, HP, notes, and stat block.
 
 ### Placing Templates on a Map
@@ -482,13 +487,13 @@ Expand a template in the library and click **Place on Map** to create a new toke
 
 ### Editing and Deleting Templates
 
-Click **Edit** on any template to modify its properties. Click **Delete** to remove it permanently.
+Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently.
 
 For **NPC-type templates**, the edit form includes the full stat block editor — AC, ability scores, saves, skills, traits, actions, bonus actions, reactions, and legendary actions — so you can build a complete monster once and reuse it across maps and campaigns. Saves and skills work exactly as they do in the Creature Library: tick what the creature is proficient in and the bonus is derived from its ability scores and Challenge Rating (see [Saving Throws and Skills](#saving-throws-and-skills)). The right-click NPC roll picker (see [Rolling for NPC Tokens](#rolling-for-npc-tokens)) reads from the same stat block, so a template with a well-filled-in action list gets clickable attack and damage rolls automatically.
 
 ### Copying Templates to Another Campaign
 
-If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, then use the **Copy to Campaign** dropdown to select the target campaign. You must have the DM role in both campaigns.
+If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, click **Copy**, and pick the target campaign from the list. You must have the DM role in both campaigns.
 
 ---
 
@@ -498,7 +503,7 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 
 ### Exporting a Campaign
 
-1. Open the campaign and click **Settings** (gear icon)
+1. Open the campaign and click **Campaign Settings** (the gear icon)
 2. In the **General** tab, scroll to the **Export Campaign** section
 3. Optionally toggle **Include audio assets** (off by default to reduce file size)
 4. Click **Export Campaign**
@@ -576,7 +581,7 @@ Players assign their own characters to your campaign when they accept an invitat
 
 ### Sharing Rulebooks and Handouts
 
-The **book icon** in the campaign header opens the documents shared with this campaign. Every member sees it; what the DM sees in addition is the means to change it.
+The **Campaign documents** button (the book icon to the right of the DM toolbar) opens the documents shared with this campaign. Every member sees it; what the DM sees in addition is the means to change it.
 
 **Three ways to put a document in front of the table:**
 
@@ -615,14 +620,14 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 - **Cone** — its point sits on the edge of the square you pinned, so the cone leaves that square evenly. The spreading edges are at an angle, so they'll still cut across squares — that's the shape, not a bug. Judge affected squares by how much of each is covered, as you would at the table
 - **Circle** — centred on the square under the cursor
 
-> Sizes use the map's **feet per square** setting (Map Settings), which defaults to 5 ft. If your templates look twice or half the size you expect, check that value first.
+> Sizes use the map's **feet per square** setting (**Grid Scale** in Edit Map), which defaults to 5 ft. If your templates look twice or half the size you expect, check that value first.
 
 ### Starting a Session
 
 When your players are ready, click **Start Session** in the right sidebar's **Session** tab. This:
 
 - Changes the campaign status to **Live** (green indicator in the header)
-- Enables token movement for players
+- Lets players move their tokens again if the campaign was paused or its last session had ended
 - Logs a system message in chat announcing the session has started
 
 *GIF pending — Starting a session and seeing the status change.*
@@ -631,9 +636,9 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 
 Need a break? Click **Pause Session**. This:
 
-- Changes the campaign status to **Paused** (amber indicator)
+- Changes the campaign status to **Paused**
 - Disables token movement for players
-- A "Session Paused" overlay appears on the player's canvas
+- Shows players a banner above the map: *Session is paused. Token movement is disabled and dice rolls are automatically secret.*
 
 *Screenshot pending — Paused session indicator from player view.*
 
@@ -641,7 +646,7 @@ Click **Resume Session** when you're ready to continue.
 
 ### Ending a Session
 
-Click **End Session** when the adventure is done for the night. CozyVTT will save the session state — token positions, chat history, initiative order — so everything is ready for next time.
+Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
 
 The dialog also offers a **Session Notes** box. Whatever you write there is kept with that session and shown to **everyone in the campaign** under **Session → Past Sessions**, newest first, with the date and how long you played. It is the recap your players read before the next game, so write it for them rather than as a private reminder — there is nowhere here that hides notes from the table.
 
@@ -670,7 +675,7 @@ dialog.
 
 ### The Chat Panel (DM View)
 
-As the DM, chat works the same as it does for players — type and hit Enter to send. However, you have one extra option: **Secret Dice Rolls**. When you roll dice, you can choose to roll secretly. Only you see the result in the **Dice** panel; players see a "DM rolled secretly" notice.
+As the DM, chat works the same as it does for players — type and hit Enter to send. Dice have their own **Dice** tab, where anyone can tick **Secret Roll** before rolling. A secret roll of yours is seen by you alone: players receive nothing, not even a notice that you rolled. A player's secret roll is hidden from the other players and shown to you, marked as secret.
 
 This is perfect for behind-the-screen perception checks, wandering monster rolls, and dramatic reveals.
 
@@ -678,9 +683,9 @@ This is perfect for behind-the-screen perception checks, wandering monster rolls
 
 ### The Vibe Tracker
 
-The **Vibe Tracker** is your tool for wordlessly communicating the current scene's tone. Set it from the **Session** tab in the right sidebar. Options range from relaxed and cozy to tense and terrifying.
+The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders.
 
-Players can see the current vibe — use it to prime the atmosphere before describing a scene. Switching the vibe as the scene shifts is a subtle but powerful storytelling tool.
+Switching the period as the story moves on, from a bright afternoon to a cold night on the road, sets the mood before you say a word.
 
 *GIF pending — DM changing the vibe and player view updating.*
 
@@ -690,7 +695,7 @@ Players can see the current vibe — use it to prime the atmosphere before descr
 
 ### Starting the Initiative Tracker
 
-When combat begins, click **Start Initiative** in the right sidebar's **Initiative** tab. The tracker becomes visible to all players.
+The **Initiative** tab in the right sidebar is always there, for you and your players. Add the combatants (below), roll or set their initiative, then click **Start Combat**: round one begins with the first combatant in the order. Players see each combatant in their own tracker as you add it, apart from creatures you have hidden.
 
 *Screenshot pending — Initiative tracker with active combat.*
 
@@ -698,7 +703,7 @@ When combat begins, click **Start Initiative** in the right sidebar's **Initiati
 
 Combatants are the tokens already on your map — you don't type names in by hand. There are two ways to add one:
 
-- Click **+ Add** in the Initiative tab and pick a token from the list.
+- Click **Add Combatant** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
 Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on, always sees their own, and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
@@ -767,7 +772,7 @@ Click the remove button next to any combatant to pull them from the tracker (whe
 
 ### Ending Combat
 
-Click **End Initiative** to close combat and hide the tracker. The order is cleared; the initiative values stay on the tokens, and the next fight starts from an empty order as you add combatants to it.
+Click **End combat** (the circled ✕ beside **Next Turn**) and confirm with **End Combat**. The order is cleared for everyone; the initiative values stay on the tokens, and the next fight starts from an empty order as you add combatants to it.
 
 ---
 
@@ -787,7 +792,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Click the **Fog** button in the campaign header to open the **Fog of War** panel, then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, and drag the bar above them to move the stack), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up
@@ -807,7 +812,7 @@ Some details worth knowing:
 
 ### Revealing or Hiding Everything
 
-The panel's **Reveal all** and **Hide all** buttons apply to the entire map. Both ask for a second click to confirm, since they are hard to undo by hand — **Hide all** is the quick way to reset a map you have finished exploring, ready for next time.
+The panel's **Reveal all** and **Hide all** buttons apply to the entire map. Both ask for a second click (**Confirm?**), since they are hard to undo by hand — **Hide all** is the quick way to reset a map you have finished exploring, ready for next time.
 
 ### Fog and Tokens
 
@@ -825,7 +830,7 @@ Walls define the physical boundaries of your map — they block line of sight an
 
 ### The Wall Drawing Tool
 
-Open the **Wall Controls** panel by clicking the **Walls** button in the campaign header (DM-only). The panel has six tool modes:
+Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. The panel has six tool modes:
 
 - **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click to finish. Each pair of consecutive points creates a wall segment.
 - **Select** — Click a wall segment to select it and change its type or delete it. Click an endpoint to select it; drag an endpoint to move it (all connected segments move together). Click **Merge point** to remove a bend point and join two segments into one.
@@ -834,7 +839,7 @@ Open the **Wall Controls** panel by clicking the **Walls** button in the campaig
 - **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-Wall types are selected from the **Draw type** section in the Wall Controls panel:
+Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 | Type | Color | Blocks Vision | Notes |
 |------|-------|---------------|-------|
@@ -848,7 +853,7 @@ Wall types are selected from the **Draw type** section in the Wall Controls pane
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:
 
-1. Select **Polygon** mode from the Wall Controls panel
+1. Select **Polygon** mode from the Walls panel
 2. Click to place each corner point — a preview line follows your cursor
 3. To close the shape, click near your starting point (within the snap radius) — all edges are committed as wall segments in one action
 4. Press **Escape** to cancel the polygon without placing any walls
@@ -860,7 +865,7 @@ Polygon mode is great for tracing irregular room shapes without drawing each wal
 
 The **Brush** tool lets you paint over the map to quickly trace walls:
 
-1. Select **Brush** mode from the Wall Controls panel
+1. Select **Brush** mode from the Walls panel
 2. Adjust the **Brush size** slider as needed
 3. Click and drag over the map where walls should be
 4. On release, the brush stroke is simplified into straight wall segments using Douglas-Peucker line simplification
@@ -876,7 +881,7 @@ When drawing a **door** or **window**, CozyVTT can automatically **snap to an ex
 
 **How it works:**
 
-1. Select the **Door** or **Window** tool type from the wall type dropdown
+1. Select a door or **Window** from the **Draw type** buttons
 2. Click near an existing wall to start — the starting point snaps to the nearest wall (shown as a green dot)
 3. Click a second point along the **same wall** — the endpoint also snaps
 4. CozyVTT automatically:
@@ -965,17 +970,17 @@ from can export that section on its own, or export the map as a PNG instead and
 Wall edits support full undo/redo:
 - **Ctrl+Z** (or Cmd+Z) — Undo last wall change
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
-- The undo/redo buttons are also in the Wall Controls panel
+- The undo/redo buttons are also in the Walls panel
 
-Undo/redo applies to: placing walls, deleting walls, splitting, merging, dragging endpoints, and toggling doors.
+Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again.
 
 ### Enabling Dynamic Lighting
 
 Dynamic lighting is off by default. To enable it:
 
-1. Click the **Maps** button → select your map → click the **Edit** (pencil) icon
-2. In the map settings, check **Enable Dynamic Lighting**
-3. Click **Save Map**
+1. Open the **Map Library** and click the **pencil** (Edit map) on your map
+2. In **Edit Map**, tick **Enable Dynamic Lighting**
+3. Click **Save Changes**
 
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
@@ -998,7 +1003,7 @@ On a map with dynamic lighting, the places a player's tokens have seen stay on t
 
 Each token has a **Darkvision** value, in grid squares: how far it makes things out with no light at all. **0 means none**, which is what a new token starts with; 12 squares is 60 ft at the usual 5 ft a square, the common darkvision, and the field's hint works the feet out for the map's own scale. It never limits how far a lit thing can be noticed.
 
-Set it in the **Token Manager** when placing a token, or afterwards from **Edit Token** (right-click the token, or the pencil in the Token Roster), which now opens for player tokens too. Only you can change it: it decides what the server sends that token's player.
+Set it in the **Token Manager** when placing a token, or afterwards from **Edit Token** (right-click the token, or the pencil in the Token Roster), which opens for player tokens too. Only you can change it: it decides what the server sends that token's player.
 
 > **Tip:** With no darkvision and no lights nearby, a player sees only the square their token stands on. If that is not what you want for a map, tick **Global Illumination** in the map's settings (see above).
 
@@ -1040,7 +1045,7 @@ Two practical consequences when you are building a map:
 
 #### Placing Lights
 
-1. Open the **Lights** panel in the wall/lighting controls
+1. Open the **Lights** panel among the DM tool panels at the top right of the map
 2. Click **Place**, then click on the map to drop a light
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
 4. Pick a color from the palette or enter a custom hex
@@ -1055,7 +1060,7 @@ Two practical consequences when you are building a map:
 
 #### Editing & Moving Lights
 
-Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, toggle it on/off (extinguished torch), or delete it.
+Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, untick **Enabled** to put it out (an extinguished torch), or click **Delete Light**.
 
 > **Tip:** The DM always sees light icons on the map. Toggle **Preview Player View** to see how the bright/dim zones actually look to players; the icons are hidden there, as they are for players.
 
@@ -1089,7 +1094,7 @@ It is a **separate plane, not a see-through overlay.** Someone viewing the spiri
 
 There are two ways a player ends up there:
 
-- **The whole table at once.** Click the **Spirit Layer** button in the campaign header and toggle it **on**. Every player is in the spirit realm until you toggle it back off.
+- **The whole table at once.** Click **Spirit Layer** (the ghost icon) in the campaign header and open the veil with the switch at the top of the panel. Every player is in the spirit realm until you close it again.
 - **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane.
 
 *Screenshot pending — Spirit Layer control panel.*
@@ -1102,14 +1107,17 @@ Players in the spirit realm see a pulsing **Spirit Realm** badge in the corner o
 
 On a map with **dynamic lighting** switched on, a player sees by their own token's line of sight. A player who is in the spirit realm but has no spirit-layer token has nothing to see with — so the map renders **completely black** for them.
 
-If a player reports a black map, check whether the Spirit Layer is toggled on in the campaign header. Either switch it off, or give that player a spirit-layer token to look through.
+If a player reports a black map, check whether the veil is open in the **Spirit Layer** panel. Either close it, or give that player a spirit-layer token to look through.
 
 ### Spirit Layer Styles
 
-Two style options are available:
+The **Spirit Layer** panel offers five looks for the spirit realm:
 
-- **Wispy** — A built-in atmospheric effect with a spectral, fog-like appearance
-- **Custom Color** — Set a specific hex color for the overlay tint (great for matching your game's lore, e.g., a purple astral glow or a sickly green necrotic haze)
+- **Wispy** — drifting mist, the default
+- **Ethereal** — a shimmering silver-teal glow
+- **Shadow** — dark and ominous
+- **Dream** — shifting violet, for a fey or psychic realm
+- **Custom** — your own colour (great for matching your game's lore, e.g., a sickly green necrotic haze), with one of four animations: **Particles**, **Shimmer**, **Shadow** or **Rainbow**
 
 *Screenshot pending — Map with wispy spirit layer overlay.*
 
@@ -1119,9 +1127,9 @@ Two style options are available:
 
 Every token sits on exactly one plane: the material one, or the spirit layer. Moving a token to the spirit layer is what makes it visible to players in the spirit realm — and hides it from everyone still on the material plane. This is how you show astral or spiritual entities only to the characters with the perception to see them.
 
-In the Token Manager, toggle **Spirit Layer Visibility** for each token as needed.
+Choose the plane when you place a player or creature token (**Place on Layer** in the Token Manager; objects always go on the material plane), or move one afterwards with **Send to Spirit Realm** and **Return to Material Plane** in the Token Manager's list or on the token's right-click menu.
 
-*GIF pending — Toggling a token's spirit layer visibility.*
+*GIF pending — Sending a token to the spirit realm.*
 
 ---
 
@@ -1164,7 +1172,7 @@ Visual particle overlays render on top of the map to complement your audio. Six 
 
 *Screenshot pending — Map with atmosphere effect applied.*
 
-**Pro tip:** Layer effects purposefully. Spooky dungeon? Set the vibe to "Night" and add mist. Forest ambush? Leaves with suspenseful audio. Magical temple? Sparkles with ethereal music.
+**Pro tip:** Layer effects purposefully. Spooky dungeon? Set the vibe to night and add mist. Forest ambush? Leaves with suspenseful audio. Magical temple? Sparkles with ethereal music.
 
 ---
 
@@ -1174,13 +1182,15 @@ CozyVTT remembers your campaign between sessions, so you can pick up exactly whe
 
 ### What Gets Saved
 
-When you end a session (or when the server saves automatically), CozyVTT preserves:
+Everything is stored as you play, so there is no save step and nothing is lost by closing the page:
 
-- **Token positions** — Everyone stays put on the map
-- **Chat history** — The full log is available when players rejoin
-- **Initiative order** — Combat state is preserved
-- **Map selection** — The active map remains active
-- **Atmosphere settings** — Audio and effects settings are remembered
+- **Token positions**, fog, walls and lights — everyone stays put on the map
+- **Chat and dice history** — the full log is there when players rejoin
+- **Map selection** — the active map remains active
+- **Atmosphere settings** — audio, effects and the vibe are remembered
+- **Explored areas** — each player's memory of a lit map
+
+The one exception is an **initiative order**, which lives only while the server is running: a restart or an upgrade forgets it, though the initiative values stay on the tokens.
 
 ### Resuming a Session
 
@@ -1190,7 +1200,7 @@ When you're ready to play again, navigate to the campaign and click **Start Sess
 
 ### Multi-Session Campaign Tips
 
-- **Use the map notes / description** to leave yourself reminders about where the party is and what's happening. The campaign description field in Campaign Settings is a good place for this.
+- **Use your Notes tab** to leave yourself reminders about where the party is and what's happening; nobody else can read it. The session notes you write when you end a session are the recap for the table.
 - **Update token HP** at session end so it reflects the party's state going into the next session
 - **Tidy up old join/leave notices** if your campaign is old enough to have them — the eraser at the top of the chat panel removes those and nothing else (see [The Campaign Roster](#the-campaign-roster)). There's no way to clear the conversation itself, and no need to: old chat doesn't affect gameplay, and you can scroll back through it whenever you want
 
