@@ -47,6 +47,14 @@ through a helper reaches a client just as surely as a handler emitting one, and
 while the scan covered only handlers the table called itself complete while
 omitting seven such events.
 
+The **Who may send it** column is read from the handler, and from any function
+in the same file it hands straight off to: a handler that refuses non-DMs near
+its top reads **DM only**; one that calls `canControlToken` reads **DM, or the
+token's player**; one that calls `canRollDice` reads **DM and players**;
+anything else reads **Any member**. A new rule written inline instead of through
+those shared predicates in `services/permissions.ts` is not seen, which is one
+more reason to use them.
+
 ### Validate
 
 ```bash

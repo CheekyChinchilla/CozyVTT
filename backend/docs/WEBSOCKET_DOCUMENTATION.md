@@ -183,7 +183,7 @@ All game events require campaign authentication:
 Specific events also check role:
 - DM can move any token
 - Player can only move tokens they control
-- Spectator is read-only
+- Spectator can send chat messages but cannot roll dice, roll initiative or move tokens
 
 ---
 
@@ -972,7 +972,7 @@ right-hand column.
 | `character.hp.update` | Any member | — |
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
-| `dice.roll` | Any member | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
+| `dice.roll` | DM and players | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
 | `dm:editing` | DM only | — |
 | `exploration:request` | Any member | what this user has explored on a map. |
 | `exploration:reset` | DM only | DM forgets every player's explored areas on a map. |
@@ -985,7 +985,7 @@ right-hand column.
 | `initiative.remove` | DM only | DM removes a token from the combatant list. |
 | `initiative.reorder` | DM only | DM drags combatants into a custom order. |
 | `initiative.request_state` | Any member | Client requests current state on (re)connect. |
-| `initiative.roll` | Any member | roll initiative for a token using a dice expression. |
+| `initiative.roll` | DM, or the token's player | roll initiative for a token using a dice expression. |
 | `initiative.set` | DM only | DM manually sets a token's initiative value. |
 | `initiative.start` | DM only | DM begins combat (round 1, first combatant active). |
 | `light:add` | DM only | DM places a single light source. |
@@ -999,9 +999,9 @@ right-hand column.
 | `spirit_layer.style_change` | DM only | DM changes the realm atmosphere style. |
 | `spirit_layer.toggle` | DM only | DM toggles spirit layer visibility for the campaign. |
 | `spirit_layer.token.toggle` | DM only | DM toggles visibility of a specific token. |
-| `token.move` | Any member | — |
-| `token.move.end` | Any member | User finishes dragging (final position) Updates database and broadcasts to campaign |
-| `token.move.start` | Any member | User begins dragging a token Validates permission and broadcasts to campaign |
+| `token.move` | DM, or the token's player | — |
+| `token.move.end` | DM, or the token's player | User finishes dragging (final position) Updates database and broadcasts to campaign |
+| `token.move.start` | DM, or the token's player | User begins dragging a token Validates permission and broadcasts to campaign |
 | `vibe.update` | DM only | DM changes the current vibe period. |
 | `wall:add` | DM only | DM adds a single wall segment. |
 | `wall:remove` | DM only | DM removes a wall segment by id. |
@@ -1026,7 +1026,7 @@ right-hand column.
 | `dice.rolled` | `initiative.ts` |
 | `dice.rolled.secret` | `dice.ts` |
 | `dm:editing` | `walls.ts` |
-| `exploration:state` | `exploration.ts` |
+| `exploration:state` | `shared.ts` |
 | `fog:cells` | `shared.ts` |
 | `fog:updated` | `shared.ts` |
 | `initiative.state` | `initiative.ts` |
@@ -1035,7 +1035,7 @@ right-hand column.
 | `light:removed` | `lights.ts` |
 | `light:updated` | `lights.ts` |
 | `lights:replaced` | `lights.ts` |
-| `map.changed` | `maps.ts` |
+| `map.changed` | `shared.ts` |
 | `map.pinged` | `pings.ts` |
 | `map:settings:updated` | `maps.ts` |
 | `pong` | `events.ts` |

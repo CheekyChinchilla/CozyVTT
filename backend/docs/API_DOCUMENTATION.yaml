@@ -34,7 +34,7 @@ info:
 
     ## Authorization
     - **Platform roles**: `ADMIN` (full system access), `USER` (campaign access)
-    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (read-only)
+    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches and chats; cannot roll dice, move tokens or change anything)
 
     ## Rate Limiting
     - Global API limit: 300 requests per minute per IP (all `/api/*` routes)

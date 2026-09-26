@@ -67,13 +67,29 @@ def collect():
     """Every event, with its direction and whether the handler is DM-gated."""
     inbound, outbound = {}, {}
     for path, text in sources():
-        for m in re.finditer(r"socket\.on\(\s*'([^']+)'", text):
+        handlers = list(re.finditer(r"socket\.on\(\s*'([^']+)'", text))
+        for i, m in enumerate(handlers):
             name = m.group(1)
             if name in ('disconnect', 'error', 'ping'):
                 continue
             window = text[m.end():m.end() + 900]
+            # The whole handler, up to the next one: the shared predicates can
+            # sit well past the first 900 characters of a long handler.
+            body = text[m.end():handlers[i + 1].start() if i + 1 < len(handlers) else len(text)]
+            # A handler that hands straight off to a function defined in the
+            # same file (the throttled per-frame move does) is judged by that
+            # function too, from its definition to the next handler.
+            for called in set(re.findall(r'\b([A-Za-z_]\w*)\(', body)):
+                d = re.search(r'(?:const|function)\s+' + re.escape(called) + r'\b', text)
+                if d:
+                    nxt = text.find('socket.on(', d.end())
+                    body += text[d.start():nxt if nxt != -1 else len(text)]
             inbound.setdefault(name, {
                 'dm': "role !== 'DM'" in window or 'Only the DM' in window,
+                # The shared predicates in services/permissions.ts, which is
+                # where a handler refuses spectators or other players' tokens.
+                'controls': 'canControlToken(' in body,
+                'players': 'canRollDice(' in body,
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
@@ -102,7 +118,14 @@ def table(inbound, outbound):
     ]
     for name in sorted(inbound):
         info = inbound[name]
-        who = 'DM only' if info['dm'] else 'Any member'
+        if info['dm']:
+            who = 'DM only'
+        elif info['controls']:
+            who = "DM, or the token's player"
+        elif info['players']:
+            who = 'DM and players'
+        else:
+            who = 'Any member'
         lines.append(f"| `{name}` | {who} | {info['desc'] or '—'} |")
     lines += ['', '### Server → client', '', '| Event | Emitted from |', '| --- | --- |']
     for name in sorted(outbound):
