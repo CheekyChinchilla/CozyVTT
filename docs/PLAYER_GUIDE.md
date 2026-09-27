@@ -143,7 +143,7 @@ A tabbed panel — click a tab to switch between:
 - **Dice** — Roll your dice
 - **Initiative** — See the turn order during combat
 - **Notes** — Your own private notes (see [Your Own Notes](#your-own-notes))
-- **Session** — The vibe, the session status and past sessions
+- **Session** — The vibe and past sessions (the Live / Paused badge is in the header)
 
 You can also drag the divider to resize the sidebar, or collapse it to give the map more room.
 
@@ -351,9 +351,9 @@ The **Initiative** tab in the right sidebar shows the turn order. As the DM adds
 *Screenshot pending — Initiative tracker during combat.*
 
 You'll see:
-- **The combatants you can see** in order, highest initiative first (a creature the DM has hidden isn't listed until it's revealed)
+- **The combatants the DM has not hidden** in order, highest initiative first (a hidden creature isn't listed until it's revealed; one that is merely out of your sight, in the dark or under fog, is)
 - **Current turn** highlighted
-- **HP** for your own token, and for a creature once the DM has turned its HP bar on; it follows the token as the DM changes it
+- **HP** for a creature once the DM has turned its HP bar on, and for any creature token you control; it follows the token as the DM changes it. Your own character's hit points are on your sheet and roster card, not in the tracker
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
@@ -423,7 +423,7 @@ Your DM can still roll for you (and re-roll, or type a value in by hand) — han
 
 **Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
 
-If a creature is hidden or somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery.
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all.
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
@@ -560,6 +560,8 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 | 🟢 Live | Session is active — you can move your token |
 | 🟡 Paused | DM paused — token movement disabled, rolls are secret |
 | ⚫ Inactive | The last session has ended — token movement disabled |
+
+The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 

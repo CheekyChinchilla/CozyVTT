@@ -522,9 +522,9 @@ Sockets join two rooms, keyed by raw id (no prefix):
 Token data is filtered **per-client** before being broadcast. The server maintains two views of the token list:
 
 - **DM view** — all tokens, both layers, all metadata including DM notes
-- **Player view** — the tokens on the plane the player is on (the spirit layer only once they have crossed over, otherwise the material plane), never a hidden token, and, when dynamic lighting is on, only tokens the visibility rule says the player sees. Each token is then trimmed for that recipient by `tokenForRecipient`: no `notes` or `statBlock`, `hp` only for their own token or one whose HP bar is on, `sightRadius` only for their own, and an obscured token they do not control masked by `tokenMask.ts`
+- **Player view** — the tokens on the plane the player is on (the spirit layer once they have crossed over or the DM has revealed it to everyone, otherwise the material plane), never a hidden token, and, when dynamic lighting is on, only tokens the visibility rule says the player sees. Each token is then trimmed for that recipient by `tokenForRecipient`: no `notes` or `statBlock`, `hp` only for their own token or one whose HP bar is on, `sightRadius` only for their own, and an obscured token they do not control masked by `tokenMask.ts`
 
-This filtering lives in `src/utils/spirit-layer.ts` and is applied before each client receives its payload: by the map fetch and the token update's reply over REST, and by the token, spirit, `map.change` and initiative handlers over the socket. The initiative order is projected per recipient from the same filtered token list, so a combatant's name, picture and hit points are exactly what the map would show that player. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
+This filtering lives in `src/utils/spirit-layer.ts` and is applied before each client receives its payload: by the map fetch and the token update's reply over REST, and by the token, spirit, `map.change` and initiative handlers over the socket. The initiative order is projected per recipient through the same role filter, so a hidden or off-plane combatant is absent and a combatant's name, picture and hit points are what the map would send that player; the lighting rule is not applied to the order, so a combatant out of a player's sight is still listed. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
 
 ### Vision model
 
@@ -537,7 +537,7 @@ The rule, in order: walls first, always (nothing outside a viewer's line of sigh
 
 Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
-A fourth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
+A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 
 ### WebSocket Event Reference
 

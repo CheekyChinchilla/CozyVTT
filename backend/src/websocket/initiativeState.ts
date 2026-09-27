@@ -122,12 +122,15 @@ export interface CombatantSource {
 
 /**
  * The state as one recipient may see it. Entries follow their tokens: a
- * player is given only the combatants whose token they were sent at all,
- * with the name, picture and hit points exactly as that token was sent to
- * them (the role filter has already dropped hidden tokens and the hit points
- * they may not know), so nothing reaches the tracker that the map keeps from
- * them. The DM gets every combatant with the token as it is now, and the copy
- * taken when it joined if the token is gone. The stored state is not changed.
+ * player is given only the combatants the role filter keeps for them, with
+ * the name, picture and hit points exactly as that token is sent to them
+ * (the filter has already dropped hidden and off-plane tokens and the hit
+ * points they may not know). The lighting rule is not applied here: the
+ * order is public once the DM adds a token to it, so a combatant out of a
+ * player's sight on a lit or fogged map is still listed, and hiding the
+ * token is what keeps it out. The DM gets every combatant with the token as
+ * it is now, and the copy taken when it joined if the token is gone. The
+ * stored state is not changed.
  */
 export function projectCombatState(
   state: CombatState,

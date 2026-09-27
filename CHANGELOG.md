@@ -10,15 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.4.0
 
-Nothing to do beyond the usual upgrade, and nothing you have is removed. Three things you will notice:
+Nothing to do beyond the usual upgrade, and nothing you have is removed. Four things you will notice:
 
 - **Fog of war now hides the map.** Areas you have not revealed are solid black for players from the moment the map loads, where they used to show the artwork through a tint. Every map you already have keeps fog on with the same areas revealed; a map you create from now on starts with fog off.
 - **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player, or a spectator, with no token on a lit map is now sent no tokens at all and sees darkness; give a spectator a token to look through, or turn dynamic lighting off for the map.
 - **Explored areas are remembered.** On a lit map, ground a player has seen stays on their map in grey once it is out of sight. It is on for existing maps; **Remember Explored Areas** in Edit Map turns it off for a map, and **Reset explored areas** in the Fog panel forgets it.
+- **A character's token belongs to whoever controls it.** Existing tokens keep their controller. If you had set a character's token to **Nobody (DM controls)**, or handed it to someone else, its player now sees it like any other token: not through unrevealed fog, and it gives them no sight on a lit map. Set them as its controller in **Edit Token → Controlled By** if they should have it.
 
-And three things to do afterwards:
+And four things to do afterwards:
 
-- **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Security → Regenerate backup codes**. The authenticator app itself is unaffected.
+- **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Profile & Settings → Security → Backup Codes → Regenerate**. The authenticator app itself is unaffected.
 - **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
 - **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If `docker compose logs backend` shows that message after this upgrade, the database itself still holds the old password (the database image only reads `POSTGRES_PASSWORD` when it creates an empty database), so changing `.env` alone would lock the backend out. Do it in this order, with the stack up (the database container runs even while the backend refuses):
 
@@ -29,6 +30,14 @@ And three things to do afterwards:
   ```
 
   Put that value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` if you wrote it by hand; use your own user name in place of `cozyvtt` if you changed `DATABASE_USER`), then `docker compose up -d`. See [Changing the database password](docs/DEPLOYMENT.md#changing-the-database-password) in the deployment guide.
+
+- **Without Docker, make sure the database role owns the database.** Restoring a backup now recreates the database's `public` schema, which only the database's owner may do. The Docker setup already has it right. On a manual install run once, with your own names if you changed them:
+
+  ```bash
+  sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
+  ```
+
+  Nothing else needs it until you restore a backup.
 
 **Backups you made from the Admin Dashboard on 1.4.0 could not be restored**, on 1.4.0 or anywhere else, because of the tool mismatch described under Fixed. They were never damaged, and they restore on 1.5.0, including into a freshly installed 1.5.0.
 
@@ -155,7 +164,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Signing in starts a fresh session each time.** CozyVTT now issues a new session identifier whenever you log in, finish two-factor verification, or register, so a session cannot be carried across the moment you authenticate. This is a standard hardening step and changes nothing you will notice.
 
-- **MFA backup codes are stored far more securely, and existing ones must be regenerated.** The recovery codes shown when you set up two-factor authentication were generated from too small a range and stored with a fast, unsalted hash, so a leaked database could have exposed them. They are now longer and hashed the same strong way as passwords. **After upgrading, your existing backup codes no longer work:** sign in with your authenticator and regenerate them from **Security → Regenerate backup codes**. Your authenticator app itself is unaffected.
+- **MFA backup codes are stored far more securely, and existing ones must be regenerated.** The recovery codes shown when you set up two-factor authentication were generated from too small a range and stored with a fast, unsalted hash, so a leaked database could have exposed them. They are now longer and hashed the same strong way as passwords. **After upgrading, your existing backup codes no longer work:** sign in with your authenticator and regenerate them from **Profile & Settings → Security → Backup Codes → Regenerate**. Your authenticator app itself is unaffected.
 
 - **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
@@ -197,7 +206,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **A backup file can no longer run commands on the server when it is restored.** The restore handed the backup to the database's command-line tool, which obeys its own commands as well as SQL, so a specially made file could have run shell commands inside the backend container. The restore now runs that tool in its restricted mode, under a key the file cannot know, and refuses outright a file that holds such a command, a copy statement that is not table data, or a statement that would cut the restore short. What remains is SQL, which the database carries out with full rights, so a backup is still only as trustworthy as where it came from: the restore screen and the deployment guide now say to restore only backups you made.
 
-- **The initiative tracker no longer shows players a creature's exact hit points, or lists creatures the DM has hidden.** Every combatant went to every player with the hit points copied when it joined, whatever the creature's HP bar setting, and a hidden creature added to the order was named to the whole table. A player now sees a creature's hit points in the tracker only when the DM has turned its HP bar on, always sees their own, and never sees a hidden creature listed until it is revealed.
+- **The initiative tracker no longer shows players a creature's exact hit points, or lists creatures the DM has hidden.** Every combatant went to every player with the hit points copied when it joined, whatever the creature's HP bar setting, and a hidden creature added to the order was named to the whole table. A player now sees a creature's hit points in the tracker only when the DM has turned its HP bar on or they control the token, and never sees a hidden creature listed until it is revealed.
 
 - **The campaign overview no longer tells players where a map's spirit layer image is.** Its address was listed for every member, although the map itself hides it from players who have not crossed to the spirit plane, and any member could fetch the image by that address alone. It is now blank for them there too.
 

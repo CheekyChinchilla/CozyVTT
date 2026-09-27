@@ -1191,9 +1191,13 @@ Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (
 
 ---
 
-### `PUT /api/users/:id` *(Admin only)*
+### `PUT /api/users/:id`
 
-Update a user's platform role or approval status.
+Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
+and `bio`; an admin may change anyone's, and only an admin may set
+`platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
+Changing `platformRole` signs the user out everywhere, because the role is
+carried in the session. There is no approval field to set here.
 
 ---
 

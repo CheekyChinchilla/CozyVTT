@@ -30,7 +30,7 @@ const MAP_SELECT = {
 
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * exploration:reveal — a player's vision covered these cells; remember them.
+   * exploration:reveal — a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs).
    * Any member. Throttled to 10/s per socket; over-limit reveals are dropped.
    * A DM may name another member and write that player's memory: Player
    * Preview records what the previewed token has seen, so a table the DM

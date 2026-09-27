@@ -1,7 +1,13 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-09-20
-**Protocol Version:** 2.0
+**Last Updated:** 2026-09-27
+
+> **This is not a public API.** These events are the ones CozyVTT's own web
+> client sends and receives. They are not versioned, carry no compatibility
+> promise, and may change shape or disappear in a point release. A program
+> *can* use them: signing in with `POST /api/auth/login` returns a session
+> cookie that authenticates the Socket.io connection as that user, with that
+> user's permissions and no stability promise.
 
 ## Table of Contents
 
@@ -595,7 +601,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 
 **Dynamic lighting** decides which tokens a player is *sent*. The rule lives in `utils/visibilityRule.ts`, shared byte for byte with the client: walls first (nothing outside a controlled token's line of sight is sent, lit or not), then the map's `globalIllumination` flag, then darkvision, the token's own square and light. Token moves apply the same plane and hidden-token rules as the map fetch before line of sight, so a player never receives on a move what opening the map would not have given them. The frames of a drag (`token.moved` from `token.move`) on a lit map go to the DM's sockets and to the players whose tokens could see the token where the drag began, decided once per drag; `token.move.end` then decides, per player, who is sent where it stopped. Any per-map flag change is broadcast as one `map:settings:updated` event carrying every flag. A change to `lightingEnabled` or `globalIllumination` also re-sends `map.changed` to every member with the map as they can now see it, the same event a map switch or a spirit-realm crossing sends, since those two flags decide which tokens a player is sent. Revealing or hiding one token with `spirit_layer.token.toggle` works the same way: `spirit_layer.token.toggled`, which carries the token, goes to the DM's own sockets only, and every member then receives `map.changed` with the map as they may see it.
 
-**Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants whose token the map sends them at all (a hidden token, or one on the other plane, is absent, and the turn pointer with it), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later change overtakes is dropped, so the newest state always arrives last. The `dice.rolled` entry an `initiative.roll` makes goes to the same people who are sent the token (every DM, and a player who has it on their map), named by the server: an obscured token as "Unknown creature", and the `characterName` a client sends along is not used. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
+**Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants the role filter keeps for them (a hidden token, or one on the other plane, is absent, and the turn pointer with it; the lighting rule is not applied, so a combatant out of their sight on a lit or fogged map is still listed), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on or they control the token. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later change overtakes is dropped, so the newest state always arrives last. The `dice.rolled` entry an `initiative.roll` makes goes to the same people who are sent the token (every DM, and a player who has it on their map), named by the server: an obscured token as "Unknown creature", and the `characterName` a client sends along is not used. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
 
 **Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and sends the user's whole memory as `exploration:state` to that user's sockets in the campaign and to every DM's, so a DM's Player Preview follows a player's memory as it grows. A DM may name another member in `exploration:reveal` and write that player's memory on their behalf, which is what Player Preview does as the previewed token moves; anyone else may only write their own. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview), and `exploration:reset` lets the DM forget everyone's memory of a map. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
 
@@ -991,7 +997,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `dm:editing` | DM only | — |
 | `exploration:request` | Any member | what this user has explored on a map. |
 | `exploration:reset` | DM only | DM forgets every player's explored areas on a map. |
-| `exploration:reveal` | Any member | a player's vision covered these cells; remember them. |
+| `exploration:reveal` | Any member | a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs). |
 | `fog:operation` | DM only | DM applies a fog operation (reveal/hide cells). |
 | `fog:request_state` | Any member | Any campaign member requests current fog state on (re)join. |
 | `initiative.add` | DM only | DM adds a token to the combatant list. |

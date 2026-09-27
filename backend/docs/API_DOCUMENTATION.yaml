@@ -34,7 +34,7 @@ info:
 
     ## Authorization
     - **Platform roles**: `ADMIN` (full system access), `USER` (campaign access)
-    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches and chats; cannot roll dice, move tokens, edit a character or change anything)
+    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches, chats and pings; keeps their own notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character)
 
     ## Rate Limiting
     - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
@@ -4081,8 +4081,9 @@ paths:
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,
-        that they may see (see the Token schema), and `fogData` and
-        `spiritLayerUrl` are null for them.
+        that they may see (see the Token schema); `fogData` is null for them, and
+        `spiritLayerUrl` too unless they can see the spirit layer (crossed over, or
+        revealed campaign-wide).
 
         If the token is in the initiative order, the order is sent again to
         every connected member (`initiative.state`), each as they may see it,
@@ -4140,9 +4141,10 @@ paths:
                   format: uuid
                   nullable: true
                   description: >
-                    Who controls the token. Omitted or null for a token with a
-                    characterId defaults to that character's owner, when the
-                    character belongs to this campaign.
+                    Who controls the token. DM only. Stored as sent: null leaves
+                    the token with no controller, and a value must name a player
+                    of this campaign (400 otherwise); the character-owner default
+                    applies only when the token is created.
                 rotation:
                   type: number
                   minimum: 0
@@ -4159,6 +4161,45 @@ paths:
                   minimum: 0
                   maximum: 200
                   description: Darkvision in grid squares (0 = none). DM only; it decides what the server sends this token's player.
+                obscured:
+                  type: boolean
+                  description: Hide what the token is from players who do not control it. DM only; this route is the only way to change it after creation.
+                type:
+                  type: string
+                  enum: [player, npc, object]
+                  description: DM only.
+                disposition:
+                  type: string
+                  enum: [friendly, neutral, hostile]
+                  nullable: true
+                  description: DM only.
+                hp:
+                  $ref: '#/components/schemas/TokenHp'
+                  nullable: true
+                  description: DM only.
+                showHpBar:
+                  type: boolean
+                  description: DM only.
+                notes:
+                  type: string
+                  description: DM only; never sent to a player.
+                initiative:
+                  type: integer
+                  nullable: true
+                  description: DM only.
+                displayMode:
+                  type: string
+                  enum: [pog, top-down, full-art]
+                  description: DM only.
+                statBlock:
+                  type: object
+                  nullable: true
+                  description: DM only; never sent to a player.
+                creatureTemplateId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: DM only.
       responses:
         '200':
           description: Token updated. The token and the map are filtered for the caller as the map fetch is.
@@ -5994,13 +6035,17 @@ paths:
   /api/admin/backups:
     post:
       tags: [Admin]
-      summary: Trigger a database backup
+      summary: Create a backup archive
       operationId: adminCreateBackup
       description: |
-        Runs `pg_dump` to create a `.sql` backup file in the server's backup directory.
-        **Requires `pg_dump` (postgresql-client) to be installed on the server.**
-        Returns 500 with a helpful message if `pg_dump` is not found.
-        Note: Full in-app backup (create → download as ZIP, restore via file upload) is planned for a future release.
+        Platform ADMIN only. Writes `backup-YYYY-MM-DDTHH-MM-SS.zip` to the server's
+        backup directory (`backend/backups/` on the host under Docker, `BACKUP_DIR`
+        on an install without Docker), holding `database.sql`, a `pg_dump` of the
+        database without its ownership and privilege statements and without the
+        login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
+        image, which the Docker image provides; answers 500 when it is missing or
+        the dump fails. The archive can be fetched with the download route and
+        loaded back with the restore route.
       security:
         - cookieAuth: []
       responses:
@@ -6011,12 +6056,13 @@ paths:
               schema:
                 type: object
                 properties:
-                  message:
-                    type: string
                   filename:
                     type: string
                   sizeBytes:
                     type: integer
+                  createdAt:
+                    type: string
+                    format: date-time
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6027,7 +6073,7 @@ paths:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns all `.sql` backup files in the server's backup directory with filename, size, and creation time.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`) in the server's backup directory with filename, size and creation time, newest first.
       security:
         - cookieAuth: []
       responses:
@@ -7605,6 +7651,11 @@ components:
           type: string
           format: uuid
           nullable: true
+          description: >
+            Who controls the token. Omitted with a characterId naming a
+            character of this campaign: that character's owner. Explicit
+            null: nobody (the DM). A value must name a player of this
+            campaign (400 otherwise).
         rotation:
           type: number
           minimum: 0

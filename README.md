@@ -23,7 +23,7 @@ CozyVTT is a self-hosted, community-maintained project run **by you** on **your 
 - Run on a small VPS rather than your home network
 - Front it with a **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)** (free, hides your origin IP, no open ports needed, automatic DDoS protection) or a similar reverse proxy / WAF
 - Keep the instance updated as security patches land — watch this repo
-- Set a strong `SESSION_SECRET` (32+ char random) — the production build refuses to start with a placeholder
+- Set a strong `SESSION_SECRET` (32+ char random) and your own `DATABASE_PASSWORD` — the production build refuses to start while either is still the placeholder
 - Use the built-in MFA on the admin account at minimum
 - Configure regular database backups (`backend/scripts/backup.sh` + cron — see [DEPLOYMENT.md](docs/DEPLOYMENT.md))
 - Review the **Hardening Checklist** in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before flipping public
@@ -53,7 +53,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Universal VTT import/export** — bring in a `.uvtt`, `.dd2vtt` or `.df2vtt` map from Dungeondraft, Dungeon Alchemist, Czepeku and others, with its walls, doors and lights already placed, and export any map back out. One file is one map, as the format intends; if a file's walls reach outside its own picture, CozyVTT says so before importing rather than leaving you to wonder
 - **Fog of war** — drag a box to reveal or hide chunks of the map; the selection snaps to whole grid squares, with animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
-- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Each player sees only the combatants, and the hit points, the map would show them. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
+- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Players see every combatant the DM has not hidden, even one they cannot yet find on the map, and a creature's hit points only when the DM turns its HP bar on. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
 - **Map pings** — press Tab to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
 - **Vibe tracker** — time-of-day periods (dawn, day, dusk and night by default, all editable) that tint the map with a colour filter
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
@@ -75,7 +75,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Communication
 - **Campaign chat** — in-session messaging between all members
-- **System messages** — automatic notices when a session starts, pauses, resumes or ends
+- **System messages** — automatic notices when a session starts, pauses, resumes or ends, when the DM changes the time of day, and when the spirit layer is revealed or hidden
 - **Personal notes** — private per-campaign notes in Markdown, with a rendered preview and autosave; readable only by their author, enforced server-side
 - **Documents** — upload a PDF, plain text or Markdown rulebook or handout, or write one in the app, and read it without leaving CozyVTT; a DM shares documents with a campaign, and every member reads them from inside the session; text and Markdown documents can be edited by their uploader
 - **Session history** — every finished session with its date, length and the recap the DM wrote; the DM can edit or clear any past recap
@@ -100,7 +100,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
 - **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs
-- **Production refuses to start** with a placeholder `SESSION_SECRET`
+- **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`
 - See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy
 
 ---
@@ -157,7 +157,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 git clone https://github.com/CheekyChinchilla/CozyVTT.git
 cd CozyVTT
 
-# Copy and fill in your environment variables
+# Copy it, then set at least DATABASE_PASSWORD and SESSION_SECRET (see docs/DEPLOYMENT.md)
 cp .env.example .env
 
 # Production stack (hardened, what end-users run)
@@ -231,7 +231,7 @@ Set these in `.env` and apply them with `docker compose up -d`; no rebuild is ne
 |------|-------------|
 | `DM` | Full campaign control — manage maps, tokens, sessions, members |
 | `PLAYER` | Can view maps, move their own tokens, roll dice, chat |
-| `SPECTATOR` | Watches the map and can chat; cannot roll dice, move tokens, edit a character or change anything |
+| `SPECTATOR` | Watches the map, chats and pings; keeps private notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character |
 
 ---
 

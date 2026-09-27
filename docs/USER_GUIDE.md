@@ -89,7 +89,7 @@ Within a campaign you have one of three roles. Whoever creates a campaign is its
 |------|-----------------|
 | **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
 | **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters |
-| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything, including a character sheet of their own while they are a spectator. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
+| **Spectator** | Watch the map, follow and write in the chat, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or change anything else, including a character sheet of their own while they are a spectator. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
 
 ---
 
@@ -521,7 +521,7 @@ It's your DM's way of setting the tone without breaking the narrative.
 
 ### The Initiative Tracker
 
-The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for your own token and for creatures whose HP bar the DM has turned on. A creature the DM has hidden is not listed.
+The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for creatures whose HP bar the DM has turned on and for any creature token you control; your own character's hit points are on your sheet and roster card, not in the tracker. A creature the DM has hidden is not listed; one that is merely out of your sight is.
 
 *Screenshot pending — Initiative tracker panel during combat.*
 

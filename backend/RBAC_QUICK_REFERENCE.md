@@ -19,7 +19,7 @@ router.get('/api/campaigns', authenticated, handler);
 
 #### 2. Admin Only
 ```typescript
-router.get('/api/admin/users', adminOnly, handler);
+router.get('/api/campaigns/admin/all', adminOnly, handler);
 ```
 
 #### 3. Campaign Member (Any Role)
@@ -134,10 +134,10 @@ never added to the list.
 
 What a player *receives* of a token is decided on the server too, in
 `tokenForRecipient` (`utils/spirit-layer.ts`), which every send to a non-DM
-goes through: the map fetch, the token update's reply, `map.changed` and
-`token:appeared`. The client has display rules for some of these, but a
-display rule protects nothing, since whatever reaches the browser can be
-read there.
+goes through: the map fetch, the token update's reply, `map.changed`,
+`token:appeared` and the initiative order (`initiative.state`). The client
+has display rules for some of these, but a display rule protects nothing,
+since whatever reaches the browser can be read there.
 
 | Sent to a player | Only when |
 |---|---|
@@ -148,9 +148,10 @@ read there.
 | everything else on a token they may see at all | always |
 | a token's move events (`token.move.start`, `token.moved`, `token:appeared`) | the map fetch would send them the token (visible, on a plane they can see), and on a lit map they could see it when the drag began |
 
-`fogData` and `spiritLayerUrl` on a map are DM-only likewise (`filterMapData`),
-and the campaign overview blanks `spiritLayerUrl` for a player who has not
-crossed over. **A new token field a player must not read goes into
+`fogData` on a map is DM-only likewise (`filterMapData`); `spiritLayerUrl` goes
+to a player only while they can see the spirit layer (crossed over, or the DM
+has revealed it to everyone), and the campaign overview blanks it on the same
+rule. **A new token field a player must not read goes into
 `tokenForRecipient`**, for the same reason a new field a player must not
 write goes into `restrictedFields`.
 

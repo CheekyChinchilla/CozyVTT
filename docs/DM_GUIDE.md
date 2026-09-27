@@ -69,7 +69,7 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 > **Note:** If registration is closed on your instance, the platform administrator will need to create accounts for your players before you can invite them.
 
-**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat, and cannot roll dice, move tokens or change anything, even a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. Edit Token and the Token Manager offer only players as a token's controller. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
+**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat and ping the map, and keeps private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or change anything else at the table, not even through a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. Edit Token and the Token Manager offer only players as a token's controller. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
 
 ### The Campaign Roster
 
@@ -77,7 +77,7 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Moving a token to another map.** Switching maps offers to bring tokens along, and a token's right-click menu and the Token Manager both offer **Move to Map**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
 
-**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controller**.
+**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character, so they can move it themselves. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
@@ -183,9 +183,8 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 - **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
 - **Token Name** — Shown when anyone points at the token
 - **Display Mode** — Pog, Top-Down or Full Art (see below)
-- **Disposition** — Friendly, Neutral or Hostile, for creatures
-- **HP Max** — Starting hit points (0 means no HP bar), with **Show HP bar to players**
-- **Initiative**, **DM Notes** (never shown to players) and **Hidden from players on placement** — for creatures and objects
+- **Disposition** (Friendly, Neutral or Hostile), **HP Max** (0 means no HP bar; once it is above 0, **Show HP bar to players** appears, ticked by default) and **Initiative** — for creatures
+- **DM Notes** (never shown to players) and **Hidden from players on placement** — for creatures and objects
 - **Size (grid cells)** — Small/Med, Large or Huge
 - **Darkvision** — How far the token sees with no light, in grid squares (0 = none; at the usual 5 ft a square, 12 = 60 ft, and the hint works it out for the map's own scale); not offered for Objects
 - **Controlled by** — Which player may move it
@@ -231,7 +230,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - View and edit the stat block (for NPC tokens with creature template data)
 - **Change the token image** — click the token avatar in the editor's header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
-- **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and on the right-click menu
+- **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
@@ -306,7 +305,7 @@ Your players are told this plainly now. The secret-roll checkbox used to read "o
 
 Some tokens shouldn't be visible to players until the right moment. A token on the spirit layer is seen only by players in the spirit realm (see [The Spirit Layer](#the-spirit-layer)).
 
-To hide a token from players entirely, right-click it on the map and choose **Hide from Players**, open **Edit Token** and choose the same, or click the eye beside it in the Token Roster. All three work for any token, whether it is a character, a creature or an object. A creature or an object can also be placed already hidden: tick **Hidden from players on placement** in the Token Manager, which is how you stage a monster in a room before the table knows it is there. A hidden token is never sent to players at all, so it cannot be found by pointing at its square or by reading the page, and it stops lending its sight to any player view or preview. **Show to Players** puts it back.
+To hide a token from players entirely, right-click it on the map and choose **Hide from Players**, open **Edit Token** and choose the same, or click the eye beside it in the Token Roster. All three work for any token, whether it is a character, a creature or an object. A creature or an object can also be placed already hidden: tick **Hidden from players on placement** in the Token Manager, which is how you stage a monster in a room before the table knows it is there. A hidden token is never sent to players at all, so it cannot be found by pointing at its square or by reading the page, and it stops lending its sight to any player view or preview. **Show to Players** (**Reveal to Players** on the right-click menu) puts it back.
 
 ### Obscuring a Token's Identity
 
@@ -361,6 +360,7 @@ Click any creature in the library to expand its details, then click **Place on M
 - The creature's name
 - Its stat block (viewable and editable in the quick editor)
 - Its hit points, taken from the stat block's **HP Max** (creatures with no HP recorded start at 10 — adjust in the quick editor)
+- Its HP bar **shown to players**; untick **Show HP bar to players** in Edit Token to keep its hit points secret
 - Its image (if one has been associated)
 - Default disposition from the template (hostile, friendly, or neutral)
 - Display mode from the template (pog, top-down, or full-art)
@@ -627,7 +627,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 When your players are ready, click **Start Session** in the right sidebar's **Session** tab. This:
 
 - Changes the campaign status to **Live** (green indicator in the header)
-- Lets players move their tokens again if the campaign was paused or its last session had ended
+- Lets players move their tokens again if the last session had ended (a paused session is continued with **Resume Session**, below)
 - Logs a system message in chat announcing the session has started
 
 *GIF pending — Starting a session and seeing the status change.*
@@ -706,7 +706,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **Add Combatant** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on, always sees their own, and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
+Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on or they control the token (a character's token carries no HP of its own, so a player's own hit points stay on the sheet and roster card), and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A creature that is merely out of a player's sight, in the dark or under fog, is still listed, so hide a token to keep it out of the order. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
 
@@ -942,7 +942,8 @@ edit, and players see the change straight away without reloading.
 
 **Import UVTT** at the top of the Map Library takes a `.uvtt`, `.dd2vtt` or
 `.df2vtt` file and makes a map from it: the picture, the walls, the doors and
-any lights, all placed for you.
+any lights, all placed for you. If the file brings lights, the map starts with
+dynamic lighting on; otherwise it starts off, like any new map.
 
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
@@ -976,7 +977,7 @@ Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving 
 
 ### Enabling Dynamic Lighting
 
-Dynamic lighting is off by default. To enable it:
+Dynamic lighting is off on a new map, unless the map was imported from a Universal VTT file that brought lights. To enable it:
 
 1. Open the **Map Library** and click the **pencil** (Edit map) on your map
 2. In **Edit Map**, tick **Enable Dynamic Lighting**

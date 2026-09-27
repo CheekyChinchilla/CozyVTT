@@ -915,7 +915,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has three things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, and a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
+**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
 
 If you have **Pathfinder 2e** characters made from the built-in templates, run
 this once so their strikes and class features appear on the sheet. It also
@@ -947,6 +947,12 @@ cd ../frontend
 npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
+```
+
+Coming from 1.4.0 or earlier, also make the database role the database's owner once, so a backup can be restored (see [Database Backups](#database-backups)); use your own names if you changed them:
+
+```bash
+sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
 ```
 
 ---
