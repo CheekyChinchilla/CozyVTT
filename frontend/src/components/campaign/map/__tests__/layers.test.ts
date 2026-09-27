@@ -20,7 +20,7 @@ import { drawDynamicLighting, drawLightIcons } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
-import { TokenLayer, TokenType } from '@/types';
+import { TokenDisposition, TokenLayer, TokenType } from '@/types';
 import type { FogState, LightSource, WallSegment } from '@/types/walls';
 
 // ── Recording mock 2D context ────────────────────────────────────────────────
@@ -263,14 +263,36 @@ describe('drawTokens', () => {
   });
 
   it('an obscured token is a plain shape with a question mark, even when its art is cached', () => {
-    // A player receives it with no image address. The DM's preview holds the
-    // real art under the same id, so the address decides, not the cache.
-    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '', type: TokenType.PLAYER });
+    // A player receives it with no image address, as a plain creature with no
+    // disposition. The DM's preview holds the real art under the same id, so
+    // the address decides, not the cache.
+    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '', type: TokenType.NPC, disposition: null });
     const ctx = makeMockCtx();
     drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
     expect(placeholderColor(veiled)).toBe('#78716c');
+  });
+
+  it('keeps an obscured token\'s own colour for the DM, who sees it as it is', () => {
+    // The grey the table sees comes from the mask (no kind, no disposition),
+    // not from the flag, so the DM's lettered circle stays blue for a
+    // character and red for a hostile.
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.PLAYER }))).toBe('#3b82f6');
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.NPC, disposition: TokenDisposition.HOSTILE }))).toBe('#ef4444');
+  });
+
+  it('draws the drag ghost from cached art only when the token has an address', () => {
+    // In Player Preview the dragged token is the masked one, whose id the
+    // DM's image cache still holds under the real art.
+    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '' });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({
+      tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false,
+      draggedToken: veiled, dragOffset: { x: 0, y: 0 }, hoverCoords: { x: 1, y: 1 },
+    }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?').length).toBeGreaterThanOrEqual(1);
   });
 
   it('marks an obscured token for the DM, who still sees its art', () => {

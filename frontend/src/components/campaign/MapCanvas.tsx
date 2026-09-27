@@ -54,13 +54,13 @@ import {
 } from './map/layers';
 import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
-import { placeholderColor } from './map/layers/drawTokens';
+import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
 import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
 import {
-  previewOwnFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
+  previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
   previewTokens,
 } from './map/previewSelection';
@@ -87,7 +87,7 @@ import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
-import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
+import { tokenDisplayName, tokenPublicName, UNKNOWN_CREATURE } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
@@ -302,6 +302,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // decides what is drawn.
   const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
   const previewOwn = useMemo(() => previewOwnFor(previewSelection), [previewSelection]);
+  // Whose tokens the preview shows whole; differs from sight only for the party.
+  const previewControls = useMemo(() => previewControlsFor(previewSelection), [previewSelection]);
   const viewerOwn = previewing ? previewOwn : isOwnToken;
   const previewChoices = useMemo(
     () => previewOptions(campaign?.memberships ?? [], tokens),
@@ -1705,7 +1707,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     let drawn = tokens;
     if (previewing) {
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = previewTokens(tokens, viewerOwn, rule?.canSee ?? null, viewport);
+      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport);
     }
 
     // 5. Tokens (+ drag ghost)
@@ -1714,7 +1716,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       tokenImages,
       animatingTokens,
       now: Date.now(),
-      draggedToken,
+      // In a preview the ghost is the token as the viewer is sent it, or
+      // nothing when the viewer would not have it at all.
+      draggedToken: previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken,
       dragOffset,
       hoverCoords,
       hoverTokenId: hoverToken?.id ?? null,
@@ -2051,7 +2055,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       };
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      const shown = previewTokens(tokens, viewerOwn, rule?.canSee ?? null, viewport);
+      const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport);
       return pickTokenAt(shown, gridX, gridY, {
         isDM: false,
         revealedCells: viewerRevealed,
@@ -3823,8 +3827,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         // sheet, which every campaign member can already read; an NPC's own hit
         // points are the DM's to reveal, so they appear only once the HP bar is
         // turned on. Same rule the bar on the token itself draws by.
-        const hp = visibleTokenHp(hoverToken, characterHpCache, userRole === 'DM');
-        const image = tokenImages.get(hoverToken.id);
+        const hp = visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing);
+        const image = cachedTokenImage(hoverToken, tokenImages);
         const conditions = hoverToken.conditions ?? [];
         // `undefined` means "not in the turn order" — the row is left out
         // rather than shown blank. `null` means it is, but nothing has rolled.
@@ -4321,6 +4325,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
+          // The dice log goes to the whole table, so an obscured token's
+          // rolls are filed under the name everyone may see.
+          publicName={tokens.find((t) => t.id === rollPicker.tokenId)?.obscured ? UNKNOWN_CREATURE : undefined}
           onRoll={(expression, purpose, characterName) =>
             socket?.emitDiceRoll({ expression, purpose, characterName })
           }

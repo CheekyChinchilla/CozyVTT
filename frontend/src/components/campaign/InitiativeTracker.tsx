@@ -486,7 +486,7 @@ export default function InitiativeTracker() {
               <div className="flex items-center gap-2 px-3 py-2 bg-warm-amber/10 border border-warm-amber/30 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-warm-amber animate-pulse flex-shrink-0" />
                 <span className="text-xs font-semibold text-warm-amber truncate">
-                  {currentCombatant.name}'s turn
+                  {tokenDisplayName(currentCombatant)}'s turn
                 </span>
               </div>
             )}

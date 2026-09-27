@@ -8,6 +8,7 @@ import {
   defaultPreviewSelection,
   reconcilePreviewSelection,
   tokensShownInPreview,
+  previewControlsFor,
   previewTokens,
   type PreviewSelection,
 } from '../previewSelection';
@@ -200,12 +201,37 @@ describe('defaultPreviewSelection', () => {
   });
 });
 
+describe('previewControlsFor', () => {
+  const alicesOwn = token({ id: 'a', name: 'Alice', controlledBy: 'alice', type: TokenType.PLAYER });
+  const bobsOwn = token({ id: 'b', name: 'Bob', controlledBy: 'bob', type: TokenType.PLAYER });
+
+  it('a player controls the tokens they control', () => {
+    const controls = previewControlsFor({ kind: 'player', userId: 'alice' });
+    expect(controls(alicesOwn)).toBe(true);
+    expect(controls(bobsOwn)).toBe(false);
+  });
+
+  it('a token preview is its own controller', () => {
+    const controls = previewControlsFor({ kind: 'token', tokenId: 'b' });
+    expect(controls(bobsOwn)).toBe(true);
+    expect(controls(alicesOwn)).toBe(false);
+  });
+
+  it('the party controls nothing: several people share the screen, and no one of them is sent the whole token', () => {
+    const controls = previewControlsFor({ kind: 'party' });
+    expect(controls(alicesOwn)).toBe(false);
+    expect(controls(bobsOwn)).toBe(false);
+    expect(previewControlsFor(null)(alicesOwn)).toBe(false);
+  });
+});
+
 describe('previewTokens', () => {
   const viewport = { gridSize: 50, mapHeight: 10 };
+  const nobody = () => false;
 
   it('shows an obscured token the previewed player does not control as the server sends it', () => {
     const veiled = token({ id: 'v', name: 'Goblin Boss', imageUrl: '/api/assets/tokens/v', obscured: true, conditions: ['prone'], hp: { current: 3, max: 9, temp: 0 } });
-    const [seen] = previewTokens([veiled], () => false, null, viewport);
+    const [seen] = previewTokens([veiled], nobody, nobody, null, viewport);
     expect(seen.name).toBe('');
     expect(seen.imageUrl).toBe('');
     expect(seen.conditions).toEqual([]);
@@ -217,12 +243,33 @@ describe('previewTokens', () => {
   it('leaves the previewed player\'s own obscured token whole, and plain tokens untouched', () => {
     const own = token({ id: 'o', name: 'Familiar', obscured: true, controlledBy: 'alice' });
     const plain = token({ id: 'p', name: 'Cultist' });
-    const seen = previewTokens([own, plain], (t) => t.controlledBy === 'alice', null, viewport);
+    const alice = (t: Token) => t.controlledBy === 'alice';
+    const seen = previewTokens([own, plain], alice, alice, null, viewport);
     expect(seen.map((t) => t.name)).toEqual(['Familiar', 'Cultist']);
+  });
+
+  it('strips what the viewer is not sent of a token they do not control: hit points with the bar off, darkvision', () => {
+    // The hover card and the downed fade read these; a real player has neither.
+    const barOff = token({ id: 'b', name: 'Orc', hp: { current: 0, max: 10, temp: 0 }, showHpBar: false, sightRadius: 12 });
+    const barOn = token({ id: 'o', name: 'Ogre', hp: { current: 5, max: 9, temp: 0 }, showHpBar: true });
+    const seen = previewTokens([barOff, barOn], nobody, nobody, null, viewport);
+    expect(seen.find((t) => t.id === 'b')).not.toHaveProperty('hp');
+    expect(seen.find((t) => t.id === 'b')).not.toHaveProperty('sightRadius');
+    expect(seen.find((t) => t.id === 'o')?.hp).toEqual({ current: 5, max: 9, temp: 0 });
+  });
+
+  it('masks every obscured token in the party view, whose sight comes from tokens nobody on the screen controls alone', () => {
+    const rogue = token({ id: 'r', name: 'Disguised Rogue', imageUrl: '/api/assets/tokens/r', obscured: true, controlledBy: 'alice', type: TokenType.PLAYER });
+    const party = previewOwnFor({ kind: 'party' });
+    const controls = previewControlsFor({ kind: 'party' });
+    const [seen] = previewTokens([rogue], party, controls, null, viewport);
+    expect(seen.name).toBe('');
+    expect(seen.imageUrl).toBe('');
+    expect(seen.controlledBy).toBeNull();
   });
 
   it('drops what the preview would not show at all, before masking', () => {
     const hidden = token({ id: 'h', name: 'Ambusher', visible: false, obscured: true });
-    expect(previewTokens([hidden], () => false, null, viewport)).toEqual([]);
+    expect(previewTokens([hidden], nobody, nobody, null, viewport)).toEqual([]);
   });
 });

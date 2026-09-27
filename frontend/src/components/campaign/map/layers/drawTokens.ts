@@ -121,10 +121,25 @@ function traceTokenOutline(
  * Exported because the hover panel shows the same placeholder, and a second
  * copy of this would drift into showing a different colour for the same token.
  */
+/**
+ * The cached art for a token, if the token has an address for it.
+ *
+ * The cache is keyed by token id, and the DM's holds the real art of every
+ * token. A masked token arrives with no address under the same id, so the
+ * address decides, not the cache; otherwise the DM's preview, the hover card
+ * and the drag ghost would show the table a picture the player is not sent.
+ */
+export function cachedTokenImage(
+  token: Pick<Token, 'id' | 'imageUrl'>,
+  images: ReadonlyMap<string, HTMLImageElement>
+): HTMLImageElement | undefined {
+  return token.imageUrl ? images.get(token.id) : undefined;
+}
+
 export function placeholderColor(token: Token): string {
-  // An obscured token gives nothing away, its kind included: the neutral stone
-  // whatever type or disposition it carries
-  if (token.obscured) return '#78716c';
+  // An obscured token reaches a player with no kind and no disposition, so it
+  // lands on the neutral stone below by itself; the DM, who holds the real
+  // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
   return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
     token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
@@ -158,7 +173,7 @@ export function drawTokens(
     // The cache is keyed by id, so it can hold art for a token this view
     // receives without an address: the DM's preview of an obscured token. The
     // address decides whether art is drawn, not the cache.
-    const tokenImg = token.imageUrl ? state.tokenImages.get(token.id) : undefined;
+    const tokenImg = cachedTokenImage(token, state.tokenImages);
 
     // Skip dragged token (drawn separately as ghost)
     if (state.draggedToken?.id === token.id) continue;
@@ -508,7 +523,7 @@ export function drawTokens(
   // the cursor during drag.
   if (state.draggedToken && state.dragOffset && state.hoverCoords) {
     const draggedToken = state.draggedToken;
-    const tokenImg = state.tokenImages.get(draggedToken.id);
+    const tokenImg = cachedTokenImage(draggedToken, state.tokenImages);
     const maxPosX = mapWidth - draggedToken.size.width;
     const maxPosY = mapHeight - draggedToken.size.height;
     const ghostPosX = Math.max(0, Math.min(maxPosX, state.hoverCoords.x - state.dragOffset.x));

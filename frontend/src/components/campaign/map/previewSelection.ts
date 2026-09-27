@@ -12,7 +12,7 @@ import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { controlsToken } from '@/utils/tokenControl';
 import { gridYToCentrePx } from './coords';
-import { maskObscuredToken } from '@/utils/tokenMask';
+import { tokenSentTo } from '@/utils/tokenMask';
 
 /**
  * Whether a token can supply a preview's sight at all. The DM's token list
@@ -74,6 +74,19 @@ export function previewOwnFor(selection: PreviewSelection | null): (t: Token) =>
   return (t) => suppliesPreviewSight(t) && chosen(t);
 }
 
+/**
+ * Which tokens the previewed viewer is sent whole. A player: the tokens they
+ * control, as the server decides it. One token: itself. The party: none,
+ * since the screen is shared by several people and the server sends no one
+ * of them another's token unmasked. Sight and control differ only for the
+ * party, but they are two questions, and the party is where conflating them
+ * put a disguised character's name and art on the projector.
+ */
+export function previewControlsFor(selection: PreviewSelection | null): (t: Token) => boolean {
+  if (!selection || selection.kind === 'party') return () => false;
+  return ownByKind(selection);
+}
+
 function ownByKind(selection: PreviewSelection): (t: Token) => boolean {
   switch (selection.kind) {
     case 'player': {
@@ -113,18 +126,21 @@ export function tokensShownInPreview(
 
 /**
  * The tokens a preview draws and names, exactly as the server would send the
- * previewed viewer: what `tokensShownInPreview` keeps, with every token that
- * viewer does not control passed through the obscured-identity mask the
- * server applies before sending.
+ * previewed viewer: what `tokensShownInPreview` keeps, each passed through
+ * the same per-recipient rule the server applies before sending (hit points
+ * only with the bar on or for the viewer's own, no darkvision for others, an
+ * obscured token the viewer does not control masked). The hover card and the
+ * downed fade read the result, so they show what the player is sent and not
+ * what the DM holds.
  */
 export function previewTokens(
   tokens: ReadonlyArray<Token>,
   viewerOwn: (t: Token) => boolean,
+  viewerControls: (t: Token) => boolean,
   canSee: ((cx: number, cy: number) => boolean) | null,
   viewport: { gridSize: number; mapHeight: number }
 ): Token[] {
-  return tokensShownInPreview(tokens, viewerOwn, canSee, viewport)
-    .map((t) => (t.obscured && !viewerOwn(t) ? maskObscuredToken(t) : t));
+  return tokensShownInPreview(tokens, viewerOwn, canSee, viewport).map((t) => tokenSentTo(t, viewerControls(t)));
 }
 
 /**
