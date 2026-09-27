@@ -109,6 +109,29 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.message).toMatch(/controlledBy/);
   });
 
+  // The client names no controller when it places a character, so these two
+  // are what a DM's own character and a spectator's come out as: nobody's,
+  // which the DM moves. Naming their owner would be refused above.
+  it("is placed with no controller when the character's owner is the DM", async () => {
+    const own = await prisma.character.create({ data: { userId: dmId, campaignId, name: 'Ser DM', data: {} } });
+    const res = await create({ characterId: own.id });
+    expect(res.status).toBe(201);
+    expect(res.body.token.controlledBy).toBeNull();
+    await prisma.character.delete({ where: { id: own.id } });
+  });
+
+  it("is placed with no controller when the character's owner is a spectator", async () => {
+    const watcher = await createTestUser({ displayName: 'Controller Spectator' });
+    await prisma.campaignMembership.create({ data: { userId: watcher.id, campaignId, role: 'SPECTATOR', characterIds: [] } });
+    const theirs = await prisma.character.create({ data: { userId: watcher.id, campaignId, name: 'Watched', data: {} } });
+    const res = await create({ characterId: theirs.id });
+    expect(res.status).toBe(201);
+    expect(res.body.token.controlledBy).toBeNull();
+    await prisma.character.delete({ where: { id: theirs.id } });
+    await prisma.campaignMembership.deleteMany({ where: { userId: watcher.id } });
+    await cleanupUsers([watcher.id]);
+  });
+
   // Such a token used to be placed with no controller. It is refused now: the
   // initiative roll reads the bound sheet, and character ids are visible to
   // every member of any shared campaign.
