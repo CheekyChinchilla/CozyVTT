@@ -4068,7 +4068,9 @@ paths:
         `position`, `rotation` and `conditions`; every other field, `size` and
         `sightRadius` included, answers 403 for a player. A spectator may not
         update a token at all, even one that still names them from before they
-        were demoted.
+        were demoted. While the session is paused or has ended (campaign status
+        `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
+        DM may move tokens at any time.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,

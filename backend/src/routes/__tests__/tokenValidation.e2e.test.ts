@@ -414,6 +414,35 @@ describe('map token validation', () => {
     // Obscuring hides what a token is from everyone who does not control it.
     // Only the DM decides that, and the mask is applied before sending, so
     // the player's own fetch is the proof.
+    // The client greys the drag out while the session is paused or ended;
+    // the server now holds the same line, over REST as over the socket.
+    describe('while the session is paused or ended', () => {
+      const url = () => `/api/campaigns/${campaignId}/maps/${mapId}/tokens/${ownedTokenId}`;
+      const positionNow = async () => {
+        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        return after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId).position;
+      };
+
+      afterAll(async () => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
+      });
+
+      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's move while %s, and the DM's goes through", async (status) => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
+        const before = await positionNow();
+        const res = await playerUpdate({ position: { x: 2, y: 2 } });
+        expect(res.status).toBe(403);
+        expect(res.body.message).toMatch(/paused|session/i);
+        expect(await positionNow()).toEqual(before);
+        expect((await dm.put(url()).send({ position: before })).status).toBe(200);
+      });
+
+      it('lets the player move again once the session is live', async () => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
+        expect((await playerUpdate({ position: { x: 4, y: 4 } })).status).toBe(200);
+      });
+    });
+
     describe('an obscured token', () => {
       let veiledId: string;
 

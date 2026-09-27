@@ -9,7 +9,7 @@ import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient, viewerIdFor } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canControlToken, canHoldTokens } from '../services/permissions';
+import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -1111,9 +1111,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const userId = req.session.userId!;
     const updates = req.body;
 
-    // Fetch the map
+    // Fetch the map, with the campaign's status for the pause rule below
     const map = await prisma.map.findUnique({
       where: { id: mapId },
+      include: { campaign: { select: { status: true } } },
     });
 
     if (!map) {
@@ -1178,6 +1179,12 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
         error: 'Forbidden',
         message: 'You cannot interact with spirit layer tokens',
       });
+    }
+    // And the same session rule the socket move events apply: a player's
+    // move waits while the session is paused or ended. The DM sets the scene
+    // whenever they like.
+    if (updates.position !== undefined && !canMoveTokensNow(membership.role, map.campaign.status)) {
+      return res.status(403).json({ error: 'Forbidden', message: PAUSED_MOVE_REFUSAL });
     }
 
     // Validate layer if being updated (DM only)

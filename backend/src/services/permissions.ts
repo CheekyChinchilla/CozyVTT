@@ -126,6 +126,22 @@ export async function canHoldTokens(campaignId: string, userId: string): Promise
 }
 
 /**
+ * May this member move tokens right now. The DM always: setting the scene
+ * between sessions is theirs. A player not while the session is paused or
+ * has ended, which is what the client greys the drag out for and the guides
+ * promise; until the server asked too, a scripted client moved its token
+ * straight through a pause. The same statuses the client checks, so the two
+ * cannot disagree. Asked by the three move events and the REST token update.
+ */
+export function canMoveTokensNow(role: string | undefined, campaignStatus: string): boolean {
+  if (role === 'DM') return true;
+  return campaignStatus !== 'PAUSED' && campaignStatus !== 'INACTIVE';
+}
+
+/** What both channels answer a player who moves during a pause. */
+export const PAUSED_MOVE_REFUSAL = 'Players cannot move tokens while the session is paused or ended';
+
+/**
  * Check if user can manage campaign maps
  * Only DM can manage maps
  */

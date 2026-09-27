@@ -12,7 +12,7 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
-import { canControlToken } from '../../services/permissions';
+import { canControlToken, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets } from '../utils';
 
 /** Why a socket may not move a token, in the words the client already shows. */
@@ -149,9 +149,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Fetch the map
+      // Fetch the map, with the campaign's status for the pause rule below
       const map = await prisma.map.findUnique({
         where: { id: mapId },
+        include: { campaign: { select: { status: true } } },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
@@ -178,6 +179,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // The same plane rule the REST update route applies.
       if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
         socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
+        return;
+      }
+
+      // And the same session rule: a player's drag waits for the session.
+      if (!canMoveTokensNow(socket.role, map.campaign.status)) {
+        socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
         return;
       }
 
@@ -225,7 +232,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // instead of two is the meaningful per-frame win).
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true },
+        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true, campaign: { select: { status: true } } },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
@@ -252,6 +259,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       if (!canControlToken(socket.role, movingToken.controlledBy, socket.userId)) {
+        return;
+      }
+
+      // A player's frames are dropped through a pause too, or the token
+      // would still wander on everyone else's screen.
+      if (!canMoveTokensNow(socket.role, map.campaign.status)) {
         return;
       }
 
@@ -294,9 +307,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Fetch the map
+      // Fetch the map, with the campaign's status for the pause rule below
       const map = await prisma.map.findUnique({
         where: { id: mapId },
+        include: { campaign: { select: { status: true } } },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
@@ -332,6 +346,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // The same plane rule the REST update route applies.
       if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
         socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
+        return;
+      }
+
+      // And the same session rule: a player's move waits for the session.
+      if (!canMoveTokensNow(socket.role, map.campaign.status)) {
+        socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
         return;
       }
 

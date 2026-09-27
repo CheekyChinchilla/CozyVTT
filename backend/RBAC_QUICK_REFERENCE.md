@@ -93,7 +93,10 @@ if (!canControlToken(role, token.controlledBy, userId)) {
 `canControlToken` is synchronous and takes the role you already hold (from
 `req.campaignMembership` or `socket.role`). It is the one rule for
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` and for the three
-`token.move*` socket events, so the two channels cannot disagree. The spectator
+`token.move*` socket events, so the two channels cannot disagree. Beside it,
+`canMoveTokensNow(role, campaign.status)` holds a player's move while the
+session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths;
+the DM moves tokens at any time. The spectator
 clause matters: `controlledBy` is set once and is not cleared when someone is
 demoted, so a spectator can still hold a token from their time as a player.
 Such a token is nobody's for what the spectator is sent, too: the

@@ -43,8 +43,9 @@ The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
 gained or lost a gate, or a hand-edited cell. Refresh it with `--write`. The
 "who may send it" column is read from the named permission predicates a
-handler calls (`canControlToken`, `canRollDice`, `canToggleDoor`, the
-character-owner test, and an explicit `socket.role === 'SPECTATOR'` refusal);
+handler calls (`canControlToken`, `canMoveTokensNow`, `canRollDice`,
+`canToggleDoor`, the character-owner test, and an explicit
+`socket.role === 'SPECTATOR'` refusal);
 a handler that gates some other way is listed as "Any member", and the line
 above the table says the handler is authoritative. It
 reads both `backend/src/websocket/` and

@@ -387,6 +387,9 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
 - Player can move tokens where `controlledBy === userId`
 - Spectator cannot move tokens, including one still named in a token's
   `controlledBy` from before they were demoted
+- Nobody but the DM while the session is paused or has ended (campaign
+  status `PAUSED` or `INACTIVE`): a player's `token.move.start` and
+  `token.move.end` answer `error`, and their `token.move` frames are dropped
 
 **Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**
@@ -1007,9 +1010,9 @@ _Who may send it is read from the shared permission predicates each handler call
 | `spirit_layer.style_change` | DM only | DM changes the realm atmosphere style. |
 | `spirit_layer.toggle` | DM only | DM toggles spirit layer visibility for the campaign. |
 | `spirit_layer.token.toggle` | DM only | DM toggles visibility of a specific token. |
-| `token.move` | DM, or the token's player | — |
-| `token.move.end` | DM, or the token's player | User finishes dragging (final position) Updates database and broadcasts to campaign |
-| `token.move.start` | DM, or the token's player | User begins dragging a token Validates permission and broadcasts to campaign |
+| `token.move` | DM, or the token's player while the session is live | — |
+| `token.move.end` | DM, or the token's player while the session is live | User finishes dragging (final position) Updates database and broadcasts to campaign |
+| `token.move.start` | DM, or the token's player while the session is live | User begins dragging a token Validates permission and broadcasts to campaign |
 | `vibe.update` | DM only | DM changes the current vibe period. |
 | `wall:add` | DM only | DM adds a single wall segment. |
 | `wall:remove` | DM only | DM removes a wall segment by id. |

@@ -117,6 +117,7 @@ def collect():
                 'doors': 'canToggleDoor(' in body,
                 'owner': 'character.userId !== socket.userId' in body,
                 'spectator': "socket.role === 'SPECTATOR'" in body,
+                'paused': 'canMoveTokensNow(' in body,
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
@@ -145,7 +146,7 @@ def who_may_send(info):
     if info['doors']:
         return 'DM; a player may toggle an unlocked door'
     if info['controls']:
-        return "DM, or the token's player"
+        return "DM, or the token's player while the session is live" if info['paused'] else "DM, or the token's player"
     if info['owner']:
         return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
     if info['players']:
