@@ -133,7 +133,8 @@ HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-
 
 ### `POST /api/auth/logout`
 
-Destroy the current session.
+Destroy the current session. Any open game connection made under that sign-in is
+dropped with it; another sign-in of the same account (another device) is untouched.
 
 **Response:**
 ```json
@@ -195,7 +196,10 @@ Get the currently authenticated user.
 
 ### `POST /api/auth/change-password`
 
-Change the authenticated user's password.
+Change the authenticated user's password. Every other sign-in of the account is
+signed out, open game connections included; the session making the change stays.
+A reset through the emailed link (`POST /api/auth/reset-password`) signs out
+every sign-in, since nobody is signed in to keep.
 
 **Request:**
 ```json
@@ -209,7 +213,8 @@ Change the authenticated user's password.
 
 ### `DELETE /api/auth/account`
 
-Permanently delete the authenticated user's account and all associated data.
+Permanently delete the authenticated user's account and all associated data. Any
+open game connection of the account is dropped.
 
 **Request:**
 ```json

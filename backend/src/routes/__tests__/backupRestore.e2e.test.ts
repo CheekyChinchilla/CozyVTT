@@ -24,6 +24,7 @@ import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
 import logger from '../../utils/logger';
 
 const app = createTestApp();
@@ -296,6 +297,31 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
     const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
     if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
+  });
+
+  it('ends every live connection once the database has been replaced', async () => {
+    // The restored database holds whatever accounts and memberships the
+    // backup had, and no session at all; a socket that stayed open would keep
+    // acting on the cached identity and role it had before.
+    const ws = await createWsTestServer();
+    try {
+      const cookie = await ws.loginAs(userId);
+      const client = await ws.connectClient(cookie);
+      const told = waitForEvent<{ message: string }>(client, 'error');
+      const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
+      const calls = stubTools();
+      const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+      const res = await restore(admin, zip);
+
+      expect(res.status).toBe(200);
+      written.push(path.join(process.env.BACKUP_DIR || 'backups', res.body.safetyBackup));
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect((await told).message).toMatch(/restored/i);
+      expect(await dropped).toBe('io server disconnect');
+    } finally {
+      await ws.close();
+    }
   });
 
   it('refuses anyone who is not a platform administrator', async () => {

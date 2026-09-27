@@ -695,6 +695,8 @@ Before anything is touched, the file is checked: it has to be a complete `pg_dum
 docker compose logs backend | grep -i restore
 ```
 
+**A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped when the restore finishes, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
+
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with full rights. The restore lets nothing through but SQL, and refuses a file that would run a command on the server, but SQL alone is enough to put anything at all in your database.
 
 A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:

@@ -411,6 +411,19 @@ best-effort so a socket layer that is down cannot fail a change already written:
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
+A sign-in that ends takes its live sockets with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`:
+
+| Route | Which sockets end |
+|---|---|
+| `POST /api/users/:id/reset-password`, `DELETE /api/users/:id`, `PUT /api/users/:id` (platform role changed) | every socket of that user |
+| `POST /api/auth/reset-password` (emailed link) | every socket of that user; this route now also destroys their login sessions |
+| `POST /api/auth/change-password`, `POST /api/auth/mfa/disable` | every socket but those of the sign-in making the change |
+| `POST /api/auth/logout` | the sockets of that sign-in only |
+| `DELETE /api/auth/account` | every socket of that user |
+| `POST /api/admin/backups/restore` | every socket on the instance, and the in-memory combat state is dropped |
+
+Each socket is sent `error` with the reason, then disconnected. A socket records the login session it was opened under (`sessionId`, set at the handshake) so a sign-in can be singled out.
+
 `clearCampaignFromLiveSockets` clears the cached campaign and role and leaves the
 room, so the socket can neither act nor listen. Clearing `campaignId` is what
 stops it acting: every handler refuses a socket that is not authenticated to a

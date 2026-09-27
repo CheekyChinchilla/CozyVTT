@@ -136,20 +136,37 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
 }
 
 /**
- * Disconnect a user's sockets (for forced logout, bans, etc.)
- * @param userId - User ID
- * @param reason - Reason for disconnection
+ * End a user's live sockets, each told why, when their sign-in ends.
+ *
+ * A socket takes its user at the handshake and re-reads nothing after that,
+ * so a sign-in the database no longer holds would otherwise keep acting
+ * through it, with the campaign role it cached. `exceptSessionId` keeps the
+ * sockets of the sign-in making the change (a password change keeps the
+ * device it is made on); `onlySessionId` ends one sign-in's sockets alone
+ * (signing out). Best-effort, like the other live-socket helpers: the change
+ * this follows is already written.
  */
-export async function disconnectUser(userId: string, reason: string): Promise<void> {
-  const io = getSocketInstance();
-  const sockets = await io.in(userId).fetchSockets();
-
-  sockets.forEach((socket) => {
-    socket.emit('error', { message: reason });
-    socket.disconnect(true);
-  });
-
-  logger.info(`❌ Disconnected user ${userId}: ${reason}`);
+export async function endLiveSockets(
+  userId: string,
+  reason: string,
+  which: { exceptSessionId?: string; onlySessionId?: string } = {}
+): Promise<number> {
+  try {
+    const io = getSocketInstance();
+    let ended = 0;
+    for (const socket of await io.in(userId).fetchSockets()) {
+      const sid = (socket as unknown as { sessionId?: string }).sessionId;
+      if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
+      if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
+      socket.emit('error', { message: reason });
+      socket.disconnect(true);
+      ended += 1;
+    }
+    return ended;
+  } catch (error) {
+    logger.error('Failed to end live sockets', { err: error, userId });
+    return 0;
+  }
 }
 
 /**

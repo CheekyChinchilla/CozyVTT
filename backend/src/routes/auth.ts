@@ -8,6 +8,7 @@ import { rememberMeMaxAge } from '../config/session';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { endLiveSockets } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
 import { requireAuth } from '../middleware/auth';
@@ -291,6 +292,10 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
  * Destroy session and log out user
  */
 router.post('/logout', (req: Request, res: Response) => {
+  // Read before the session is gone: the sign-in's own live connections end
+  // with it, and another sign-in of the same account (another device) stays.
+  const { userId } = req.session;
+  const sessionId = req.sessionID;
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({
@@ -298,6 +303,7 @@ router.post('/logout', (req: Request, res: Response) => {
         message: 'Failed to destroy session',
       });
     }
+    if (userId) void endLiveSockets(userId, 'You signed out.', { onlySessionId: sessionId });
 
     res.clearCookie('cozyvtt.sid');
     return res.status(200).json({
@@ -455,6 +461,12 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
       data: { used: true },
     });
 
+    // A reset by link is how someone recovers an account they cannot or will
+    // not sign in to, so every sign-in opened with the old password ends,
+    // live connections included. Nobody is signed in here to keep.
+    await destroyUserLoginSessions(resetToken.userId);
+    await endLiveSockets(resetToken.userId, 'Your password was reset. Sign in again.');
+
     return res.status(200).json({
       message: 'Password has been reset successfully',
     });
@@ -530,6 +542,7 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     // one is kept, so the person doing it is not signed out of the device they
     // are holding.
     await destroyUserLoginSessions(user.id, req.sessionID);
+    await endLiveSockets(user.id, 'Your password was changed on another device. Sign in again.', { exceptSessionId: req.sessionID });
 
     return res.status(200).json({
       message: 'Password changed successfully',
@@ -575,6 +588,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
     // Delete the user (cascades to memberships, characters, messages, etc.)
     await prisma.user.delete({ where: { id: userId } });
+    await endLiveSockets(userId, 'Your account was deleted.');
 
     // Destroy the session
     req.session.destroy(() => {});
@@ -904,6 +918,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
     // protected, so the sessions opened while it was on end with it. This one
     // is kept, as with a password change.
     await destroyUserLoginSessions(user.id, req.sessionID);
+    await endLiveSockets(user.id, 'Two-factor authentication was turned off on another device. Sign in again.', { exceptSessionId: req.sessionID });
 
     return res.status(200).json({ message: 'MFA disabled successfully' });
   } catch (error) {

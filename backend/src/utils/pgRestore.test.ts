@@ -18,6 +18,7 @@ import {
   isSettingUnknownToServer,
   prepareDumpForRestore,
   RESTORE_PREAMBLE,
+  RESTORE_TRAILER,
 } from './pgRestore';
 
 describe('buildRestoreArgs', () => {
@@ -48,6 +49,10 @@ describe('buildDumpArgs', () => {
     const args = buildDumpArgs('postgresql://x', '/tmp/db.sql');
     expect(args).toEqual(expect.arrayContaining(['--clean', '--if-exists', '--no-owner', '--no-privileges']));
     expect(args.slice(0, 4)).toEqual(['--dbname', 'postgresql://x', '--file', '/tmp/db.sql']);
+  });
+
+  it('leaves the login sessions out, so a restore cannot bring back a sign-in that was ended since', () => {
+    expect(buildDumpArgs('postgresql://x', '/tmp/db.sql')).toContain('--exclude-table-data=public.session');
   });
 });
 
@@ -200,7 +205,7 @@ describe('prepareDumpForRestore', () => {
 
     const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
     expect(restrict).toMatch(RESTRICT_LINE);
-    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...expectedBody(NEWER_CLIENT_DUMP)].join('\n') + '\n');
+    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...expectedBody(NEWER_CLIENT_DUMP), ...RESTORE_TRAILER].join('\n') + '\n');
     expect(result.skipped).toEqual({ settings: ['SET transaction_timeout = 0;'], ownership: 3, privileges: 1 });
     expect(result.refused).toBeNull();
   });
@@ -241,7 +246,7 @@ describe('prepareDumpForRestore', () => {
 
     const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
     expect(restrict).toMatch(RESTRICT_LINE);
-    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...clean].join('\n') + '\n');
+    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...clean, ...RESTORE_TRAILER].join('\n') + '\n');
     expect(result.skipped).toEqual({ settings: [], ownership: 0, privileges: 0 });
     expect(result.refused).toBeNull();
   });
@@ -407,8 +412,19 @@ describe('prepareDumpForRestore', () => {
 
     expect(refused).toBeNull();
     const out = await fs.readFile(dest);
-    const afterPreamble = out.subarray(out.indexOf(RESTORE_PREAMBLE[1]) + RESTORE_PREAMBLE[1].length + 1);
+    const trailer = Buffer.from(RESTORE_TRAILER.join('\n') + '\n');
+    const afterPreamble = out.subarray(out.indexOf(RESTORE_PREAMBLE[1]) + RESTORE_PREAMBLE[1].length + 1, out.length - trailer.length);
     expect(afterPreamble.equals(body)).toBe(true);
+    expect(out.subarray(out.length - trailer.length).equals(trailer)).toBe(true);
+  });
+
+  it('ends by emptying the login sessions an older backup carried, inside the same transaction', () => {
+    // Every backup made before sessions were left out holds the session
+    // table's rows, and a restore would revive each one that had not yet
+    // expired, sign-ins ended since included. The table may be missing from
+    // a very old backup, so the purge checks for it first.
+    expect(RESTORE_TRAILER.join('\n')).toMatch(/to_regclass\('public\.session'\)/);
+    expect(RESTORE_TRAILER.join('\n')).toMatch(/DELETE FROM public\.session/);
   });
 
   it('runs the schema replacement inside the same transaction as the dump', () => {

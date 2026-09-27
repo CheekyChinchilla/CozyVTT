@@ -32,6 +32,20 @@ import { once } from 'events';
 export const RESTORE_PREAMBLE = ['DROP SCHEMA public CASCADE;', 'CREATE SCHEMA public;'];
 
 /**
+ * Statements run after the dump, in the same transaction.
+ *
+ * Login sessions live in `public.session`, beside the app's tables. New
+ * backups leave its rows out (see buildDumpArgs), but every backup made
+ * before that carries them, and a restore would bring back each sign-in
+ * that had not yet expired, ones ended since by a password change or an
+ * account removal included. So a restore ends by emptying the table, which
+ * a very old backup may not have at all, hence the check.
+ */
+export const RESTORE_TRAILER = [
+  "DO $$ BEGIN IF to_regclass('public.session') IS NOT NULL THEN DELETE FROM public.session; END IF; END $$;",
+];
+
+/**
  * Settings a newer pg_dump writes that an older server rejects.
  *
  * The dump opens with SET statements for the session that loads it. A client
@@ -179,6 +193,7 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
   for (const line of RESTORE_PREAMBLE) await write(line + '\n');
 
   let inCopy = false;
+  let endedWithNewline = true;
   for await (const { raw, statement, newline } of linesOf(sqlPath)) {
     let keep = true;
     if (inCopy) {
@@ -208,8 +223,13 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
       const table = CREATE_TABLE.exec(statement);
       if (table) tables.add(table[1] ?? table[2]);
     }
-    if (keep) await write(newline ? raw + '\n' : raw);
+    if (keep) {
+      await write(newline ? raw + '\n' : raw);
+      endedWithNewline = newline;
+    }
   }
+  if (!endedWithNewline) await write('\n');
+  for (const line of RESTORE_TRAILER) await write(line + '\n');
   out.end();
   await once(out, 'finish');
 
@@ -228,11 +248,24 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
 
 /**
  * Arguments for dumping the database at `dbUrl` to `sqlPath`. The dump drops
- * each object before recreating it, and names no owner and no privilege, so
- * it loads under whichever database user the restoring instance has.
+ * each object before recreating it, names no owner and no privilege, so it
+ * loads under whichever database user the restoring instance has, and leaves
+ * the login sessions' rows out.
  */
 export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
-  return ['--dbname', dbUrl, '--file', sqlPath, '--clean', '--if-exists', '--no-owner', '--no-privileges'];
+  return [
+    '--dbname',
+    dbUrl,
+    '--file',
+    sqlPath,
+    '--clean',
+    '--if-exists',
+    '--no-owner',
+    '--no-privileges',
+    // The login sessions: a backup that carried them would sign every
+    // sign-in of the day back in when restored (see RESTORE_TRAILER).
+    '--exclude-table-data=public.session',
+  ];
 }
 
 /** Arguments for restoring `sqlPath` into the database at `dbUrl`. */

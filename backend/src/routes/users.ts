@@ -7,6 +7,7 @@ import { sanitizeUser, hashPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { endLiveSockets } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import crypto from 'crypto';
 import logger from '../utils/logger';
@@ -241,6 +242,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     // already takes effect on the next request and needs no sign-out.
     if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
       await destroyUserLoginSessions(id);
+      await endLiveSockets(id, 'Your platform role changed. Sign in again.');
     }
 
     return res.status(200).json({
@@ -409,6 +411,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     // The session outlives the row it refers to, and the guards read the
     // session, so it has to go too.
     await destroyUserLoginSessions(id);
+    await endLiveSockets(id, 'Your account was deleted.');
 
     return res.status(200).json({
       message: 'User deleted successfully',
@@ -464,6 +467,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
     // access on the old session and the forced-change gate would only take
     // effect at their next login
     await destroyUserLoginSessions(id);
+    await endLiveSockets(id, 'An administrator reset your password. Sign in again.');
 
     return res.status(200).json({
       message: 'Password reset successfully',

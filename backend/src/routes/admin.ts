@@ -30,6 +30,8 @@ import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore } from '../utils
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir } from '../utils/backupDir';
+import { getSocketInstance } from '../websocket/utils';
+import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
@@ -1008,7 +1010,20 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       });
     }
 
-    // 8. Log the restore (best-effort — DB just changed so this may use restored data)
+    // 8. Everyone is signed out. The restored database holds no login
+    // sessions, and a socket that stayed open would keep the identity and
+    // campaign role it cached before the restore. Best-effort: the restore
+    // itself is done. The in-memory combat state belonged to the old data.
+    try {
+      const io = getSocketInstance();
+      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
+      io.disconnectSockets(true);
+    } catch (error) {
+      logger.warn('Restore: live sockets could not be ended', { err: error });
+    }
+    clearAllCombatState();
+
+    // 9. Log the restore (best-effort — DB just changed so this may use restored data)
     await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup }).catch(() => {});
 
     if (filesError !== null) {

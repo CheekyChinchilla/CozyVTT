@@ -50,6 +50,11 @@ export function setState(campaignId: string, state: CombatState): void {
   campaignStates.set(campaignId, state);
 }
 
+/** Forget every campaign's combat state, after a restore replaces the database under it. */
+export function clearAllState(): void {
+  campaignStates.clear();
+}
+
 export function clearState(campaignId: string): void {
   campaignStates.delete(campaignId);
 }

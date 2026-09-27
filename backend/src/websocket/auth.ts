@@ -15,6 +15,8 @@ export interface AuthenticatedSocket extends Socket {
   userId?: string;
   campaignId?: string;
   role?: string;
+  /** The login session this socket was opened under, so ending that sign-in can end the socket. */
+  sessionId?: string;
   /** The `authenticate` in progress, so the next one on this socket waits for it (events.ts). */
   authenticating?: Promise<void>;
 }
@@ -33,7 +35,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     // a local `{ userId?: string }` would keep compiling if that field were
     // renamed, and this socket would then silently reject every connection
     // while the REST routes failed loudly at build time.
-    const session = (socket.request as { session?: Partial<SessionData> }).session;
+    const { session, sessionID } = socket.request as { session?: Partial<SessionData>; sessionID?: string };
 
     if (!session || !session.userId) {
       return false;
@@ -56,6 +58,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     }
 
     socket.userId = user.id;
+    socket.sessionId = sessionID;
     return true;
   } catch (error) {
     logger.error('WebSocket authentication error', { err: error });
