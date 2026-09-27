@@ -5,7 +5,7 @@ import { authenticated, campaignMember, campaignDM, adminOnly } from '../middlew
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
-import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
+import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
@@ -1988,16 +1988,11 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
       });
     }
 
-    // Check if session has saved state
-    if (!lastSession.savedState) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'No saved state available for the last session',
-      });
-    }
-
-    // Restore game state
-    await restoreGameState(campaignId, lastSession.savedState as unknown as GameState);
+    // The live state is the state: everything is stored as it is played, so
+    // the snapshot pause took is a record of where the break began and is
+    // never written back. Restoring it undid whatever the DM did during the
+    // break, silently: a token hidden then was shown to players again, a
+    // moved one jumped back, an added one vanished, a map switch reverted.
 
     // Clear endedAt to "reopen" the session
     await prisma.session.update({

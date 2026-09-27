@@ -2727,7 +2727,7 @@ paths:
       tags:
         - Sessions
       summary: Resume last session
-      description: Resume the most recently ended session, restoring saved game state (DM only)
+      description: Resume the most recently paused session (DM only). The table is left exactly as it is: everything is stored as it is played, and the snapshot taken at pause is a record kept with the session, never written back.
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -2735,7 +2735,7 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
       responses:
         '200':
-          description: Session resumed with state restored
+          description: Session resumed
           content:
             application/json:
               schema:

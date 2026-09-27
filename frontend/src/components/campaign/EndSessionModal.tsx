@@ -107,7 +107,7 @@ export default function EndSessionModal({
                 <span className="text-sm font-medium text-stone-gray">Save game state</span>
               </div>
               <p className="text-xs text-warm-gray mt-0.5">
-                Saves token positions, map, vibe, and spirit layer for session resume.
+                Keeps a snapshot of the current map's tokens, the vibe and the spirit layer with this session's record. Play always continues from the live table.
               </p>
             </div>
           </label>
