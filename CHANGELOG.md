@@ -74,6 +74,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup or a restore's safety copy was being written, the write error had nothing listening for it and the backend process exited; the dashboard now reports the failed backup, or the failed restore, and the instance stays up.
+
 - **Two backups made in the same second no longer overwrite each other.** A backup was named by the second it was asked for, and a second one in that second, or the safety copy a restore takes first, silently replaced it: restoring a backup right after making it could leave you with only the smaller safety copy under that name. A name that is already taken now gets a `-2`, `-3` suffix, and every backup is kept.
 
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.

@@ -17,7 +17,9 @@ jest.mock('child_process', () => ({
 
 import { execFile } from 'child_process';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
+import { PassThrough } from 'stream';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
@@ -263,6 +265,30 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.body.error).toBe('Restore Failed');
     expect(res.body.message).toMatch(/backup of the current database/i);
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
+  });
+
+  it('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
+    stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    // The zip's output stream fails once writing starts, as a full disk does.
+    // A stream error with no listener is an uncaught exception, which took
+    // the whole backend down in the middle of a restore.
+    const probe = await fs.open(path.join(os.tmpdir(), `cozyvtt-stream-probe-${Date.now()}`), 'w');
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream: () => NodeJS.WritableStream };
+    await probe.close();
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(() => {
+      const stream = new PassThrough();
+      process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      return stream;
+    });
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Restore Failed');
+      expect(res.body.message).toMatch(/backup of the current database/i);
+    } finally {
+      failing.mockRestore();
+    }
   });
 
   it('says the database was restored but the files were not when copying them fails', async () => {

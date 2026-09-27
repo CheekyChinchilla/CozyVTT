@@ -772,6 +772,10 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       streamed = true;
       const output = handle.createWriteStream();
       const archive = archiver('zip', { zlib: { level: 6 } });
+      // Both ends can fail: the archive while reading, the file while
+      // writing (a full disk). A stream error with nobody listening is an
+      // uncaught exception, which exits the process mid-backup.
+      output.on('error', reject);
       output.on('close', resolve);
       archive.on('error', reject);
       archive.pipe(output);
