@@ -382,13 +382,13 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
 - Spectator cannot move tokens, including one still named in a token's
   `controlledBy` from before they were demoted
 
-**Broadcast:** `token.move.start` to campaign members (excluding sender)
+**Broadcast:** `token.move.start` to campaign members (excluding sender). `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**
 ```typescript
 {
   tokenId: string;
   mapId: string;
-  movedBy: string;  // userId of person moving token
+  movedBy: string | null;
 }
 ```
 
@@ -448,7 +448,7 @@ problem. `token.move.end` answers properly.
   mapId: string;
   x: number;
   y: number;
-  movedBy: string;
+  movedBy: string | null;
 }
 ```
 
@@ -524,7 +524,7 @@ socket.on('token.moved', (data) => {
 - Updates `Map.tokens` JSON array
 - Persists final position
 
-**Broadcast:** `token.moved` to campaign members, the sender included. On a lit map each player instead gets `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own, and an obscured token as a shape with no identity) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only.
+**Broadcast:** `token.moved` to campaign members, the sender included. On a lit map each player instead gets `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own, and an obscured token as a shape with no identity) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only. `movedBy` is null for anyone but the DM and the mover while the token is obscured.
 **Broadcast Payload:**
 ```typescript
 {
@@ -532,7 +532,7 @@ socket.on('token.moved', (data) => {
   mapId: string;
   x: number;
   y: number;
-  movedBy: string;
+  movedBy: string | null;
 }
 ```
 

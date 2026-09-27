@@ -7351,11 +7351,13 @@ components:
         may see at all: never `notes` or `statBlock`; `hp` only for a token they
         control or one whose `showHpBar` is on; `sightRadius` only for a token
         they control. A token whose `obscured` is true reaches anyone but its
-        controller as a shape with no identity: `name` and `imageUrl` empty,
-        `conditions` empty, `hp` and `disposition` null, `characterId` and
-        `creatureTemplateId` null, position and size kept, and `obscured: true`
-        so the client can draw a question mark. The subset is decided on the
-        server before sending.
+        controller as a shape with no identity, built from a fixed list: `id`,
+        `position`, `size`, `layer`, `visible` and `obscured: true` are kept,
+        and every other field is neutral (`name` and `imageUrl` empty,
+        `conditions` and `metadata` empty, `characterId`, `controlledBy`,
+        `creatureTemplateId`, `disposition`, `hp` and `initiative` null, `type`
+        `npc`, `rotation` 0, `showHpBar` false, `displayMode` `pog`). The DM
+        receives it whole. The subset is decided on the server before sending.
       properties:
         id:
           type: string

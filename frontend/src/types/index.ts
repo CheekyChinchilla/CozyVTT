@@ -1114,7 +1114,8 @@ export interface TokenMovedEvent {
   tokenId: string;
   x: number;
   y: number;
-  movedBy: string;
+  /** Null for anyone but the DM and the mover while the token is obscured. */
+  movedBy: string | null;
 }
 
 // Dice Roll Events

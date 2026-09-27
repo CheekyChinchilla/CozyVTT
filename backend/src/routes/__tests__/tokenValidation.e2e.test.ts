@@ -455,6 +455,30 @@ describe('map token validation', () => {
         expect(JSON.stringify(seen.body)).not.toContain('Something Large');
       });
 
+      it('hides who controls it and what kind of token it is from everyone but its controller', async () => {
+        const placed = await place({
+          name: 'Disguised Rogue', type: 'player', controlledBy: playerId, position: { x: 13, y: 13 }, rotation: 90,
+        });
+        expect(placed.status).toBe(201);
+        const rogueId = placed.body.token.id;
+        const set = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${rogueId}`).send({ obscured: true });
+        expect(set.status).toBe(200);
+
+        const seenByOther = await spectator.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const toOther = seenByOther.body.map.tokens.find((t: { id: string }) => t.id === rogueId);
+        expect(toOther).toBeDefined();
+        expect(toOther.controlledBy).toBeNull();
+        expect(toOther.type).toBe('npc');
+        expect(toOther.rotation).toBe(0);
+        expect(JSON.stringify(toOther)).not.toContain(playerId);
+
+        const seenByController = await player.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const toController = seenByController.body.map.tokens.find((t: { id: string }) => t.id === rogueId);
+        expect(toController.name).toBe('Disguised Rogue');
+        expect(toController.controlledBy).toBe(playerId);
+        expect(toController.type).toBe('player');
+      });
+
       it('is revealed again by the DM', async () => {
         const reveal = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: false });
         expect(reveal.status).toBe(200);

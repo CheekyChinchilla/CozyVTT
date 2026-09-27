@@ -7,7 +7,7 @@
  * as it is now. No database: the recipient's token list is an input.
  */
 
-import { projectCombatState, type CombatState, type CombatantEntry } from '../initiativeState';
+import { projectCombatState, sortCombatants, type CombatState, type CombatantEntry } from '../initiativeState';
 
 const hp = (current: number) => ({ current, max: 10, temp: 0 });
 const entry = (tokenId: string, extra: Partial<CombatantEntry> = {}): CombatantEntry => ({
@@ -57,5 +57,28 @@ describe('projectCombatState', () => {
     expect(seen.round).toBe(2);
     expect(seen.combatants.map((c) => c.tokenId)).toEqual(['hero', 'goblin']);
     expect(JSON.stringify(state)).toBe(before);
+  });
+});
+
+describe('sortCombatants', () => {
+  it('orders by initiative, highest first, with the unrolled last', () => {
+    const sorted = sortCombatants([entry('a', { initiative: null }), entry('b', { initiative: 5 }), entry('c', { initiative: 20 })]);
+    expect(sorted.map((c) => c.tokenId)).toEqual(['c', 'b', 'a']);
+  });
+
+  it('keeps the order combatants were added in when initiatives tie or are unrolled', () => {
+    // A tie broken by name would tell a player where an obscured combatant's
+    // real name falls in the alphabet. The order of adding says nothing.
+    const tied = [entry('z', { name: 'Zombie', initiative: 12 }), entry('a', { name: 'Aboleth', initiative: 12 })];
+    expect(sortCombatants(tied).map((c) => c.tokenId)).toEqual(['z', 'a']);
+    const unrolled = [entry('z', { name: 'Zombie', initiative: null }), entry('a', { name: 'Aboleth', initiative: null })];
+    expect(sortCombatants(unrolled).map((c) => c.tokenId)).toEqual(['z', 'a']);
+  });
+
+  it('returns a new array and leaves the stored one as it was', () => {
+    const stored = [entry('b', { initiative: 5 }), entry('c', { initiative: 20 })];
+    const sorted = sortCombatants(stored);
+    expect(sorted).not.toBe(stored);
+    expect(stored.map((c) => c.tokenId)).toEqual(['b', 'c']);
   });
 });

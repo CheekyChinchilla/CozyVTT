@@ -411,6 +411,16 @@ describe('filterTokensByRole', () => {
       expect(sent?.obscured).toBe(true);
     });
 
+    it('tells another player neither who controls it nor what kind of token it is', () => {
+      const disguised = { ...makeToken('disguised', 8, 8, 'user2', 0), obscured: true, type: 'player' as const, rotation: 90, initiative: 17, displayMode: 'full-art' as const };
+      const sent = byId(filterTokensByRole([disguised], 'PLAYER', false, 'user1'), 'disguised');
+      expect(sent?.controlledBy).toBeNull();
+      expect(sent?.type).toBe('npc');
+      expect(sent?.rotation).toBe(0);
+      expect(sent?.initiative).toBeNull();
+      expect(sent?.displayMode).toBe('pog');
+    });
+
     it('reaches its controller whole', () => {
       const sent = byId(filterTokensByRole([ownVeiled], 'PLAYER', false, 'user1'), 'own-veiled');
       expect(sent?.name).toBe('Token own-veiled');

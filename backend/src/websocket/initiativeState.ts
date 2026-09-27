@@ -54,14 +54,17 @@ export function clearState(campaignId: string): void {
   campaignStates.delete(campaignId);
 }
 
-/** Sort combatants in-place: descending initiative, nulls last, then by name for tie-breaking */
+/**
+ * A sorted copy: descending initiative, the unrolled last. Ties keep the order
+ * the combatants were added in (the sort is stable). A tie broken by name
+ * would tell a player where an obscured combatant's real name falls in the
+ * alphabet; the order of adding says nothing.
+ */
 export function sortCombatants(combatants: CombatantEntry[]): CombatantEntry[] {
   return [...combatants].sort((a, b) => {
-    if (a.initiative === null && b.initiative === null) return a.name.localeCompare(b.name);
-    if (a.initiative === null) return 1;
+    if (a.initiative === null) return b.initiative === null ? 0 : 1;
     if (b.initiative === null) return -1;
-    if (b.initiative !== a.initiative) return b.initiative - a.initiative;
-    return a.name.localeCompare(b.name); // alphabetical tie-break
+    return b.initiative - a.initiative;
   });
 }
 

@@ -28,7 +28,7 @@ let mapId: string;
 let dmCookie: string;
 let p1Cookie: string;
 
-type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string };
+type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string; type?: string };
 type State = { active: boolean; currentTokenId: string | null; combatants: Entry[] };
 
 const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled';
@@ -59,7 +59,7 @@ beforeAll(async () => {
         { ...base, id: GOBLIN, name: 'Goblin', position: { x: 2, y: 2 }, visible: true, controlledBy: null, hp: hp(7, 7), showHpBar: false },
         { ...base, id: SHOWN, name: 'Ogre', position: { x: 3, y: 3 }, visible: true, controlledBy: null, hp: hp(5, 9), showHpBar: true },
         { ...base, id: HIDDEN, name: 'Ambusher', position: { x: 4, y: 4 }, visible: false, controlledBy: null, hp: hp(6, 6), showHpBar: false },
-        { ...base, id: VEILED, name: 'Something Large', position: { x: 5, y: 5 }, visible: true, controlledBy: null, hp: hp(30, 30), showHpBar: true, obscured: true },
+        { ...base, id: VEILED, name: 'Something Large', position: { x: 5, y: 5 }, visible: true, controlledBy: dmId, type: 'player', hp: hp(30, 30), showHpBar: true, obscured: true },
       ],
     },
   });
@@ -154,6 +154,8 @@ describe('an obscured combatant', () => {
     expect(seen).toBeDefined();
     expect(seen?.name).toBe('');
     expect(seen?.hp).toBeNull();
+    // Nor is it marked as somebody's character: the tracker draws a player icon for that.
+    expect(seen?.type).toBe('npc');
 
     const rolled = waitForEvent<{ characterName: string; purpose: string }>(p1, 'dice.rolled');
     dm.emit('initiative.roll', { tokenId: VEILED, mapId, characterName: 'Something Large' });

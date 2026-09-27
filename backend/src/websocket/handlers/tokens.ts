@@ -66,6 +66,60 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
   }
 
   /**
+   * Who a recipient is told moved the token. An obscured token's controller
+   * is part of what obscuring hides (the roster maps the id to a name), so
+   * while a token is obscured only the DM and the mover's own screens learn
+   * who moved it; anyone else is told null.
+   */
+  function moverShownTo(token: Token, recipient: AuthenticatedSocket): string | null {
+    const mover = socket.userId ?? null;
+    if (token.obscured !== true) return mover;
+    return recipient.role === 'DM' || recipient.userId === socket.userId ? mover : null;
+  }
+
+  /**
+   * A move event to everyone in the campaign, each told of the mover what
+   * they may know. A token that is not obscured takes the one-line room
+   * broadcast; an obscured one is sent socket by socket.
+   */
+  async function emitMoveToCampaign(
+    event: string,
+    token: Token,
+    payload: Record<string, unknown>,
+    includeSender: boolean
+  ): Promise<void> {
+    const campaignId = socket.campaignId!;
+    if (token.obscured !== true) {
+      if (includeSender) io.to(campaignId).emit(event, { ...payload, movedBy: socket.userId });
+      else socket.to(campaignId).emit(event, { ...payload, movedBy: socket.userId });
+      return;
+    }
+    for (const s of await io.in(campaignId).fetchSockets()) {
+      if (!includeSender && s.id === socket.id) continue;
+      s.emit(event, { ...payload, movedBy: moverShownTo(token, s as unknown as AuthenticatedSocket) });
+    }
+  }
+
+  /** The same, to the sockets decided for this drag on a lit map. */
+  async function emitMoveToDragRecipients(
+    event: string,
+    token: Token,
+    mapId: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    const recipients = await dragRecipientsFor(mapId, token.id);
+    if (token.obscured !== true) {
+      for (const id of recipients) io.to(id).emit(event, { ...payload, movedBy: socket.userId });
+      return;
+    }
+    for (const s of await io.in(socket.campaignId!).fetchSockets()) {
+      if (recipients.has(s.id)) {
+        s.emit(event, { ...payload, movedBy: moverShownTo(token, s as unknown as AuthenticatedSocket) });
+      }
+    }
+  }
+
+  /**
    * TOKEN.MOVE.START - User begins dragging a token
    * Validates permission and broadcasts to campaign
    */
@@ -132,10 +186,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         for (const s of campaignSockets) {
           if (s.id === socket.id) continue; // Exclude sender
           const authedSocket = s as unknown as AuthenticatedSocket;
-          if (authedSocket.role === 'DM') {
-            s.emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
-          } else if (authedSocket.userId && visibility.get(authedSocket.userId)) {
-            s.emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
+          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
+            s.emit('token.move.start', { tokenId, mapId, movedBy: moverShownTo(token, authedSocket) });
           }
         }
       } else if (!token.visible) {
@@ -146,16 +198,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           }
         }
       } else if (map.lightingEnabled) {
-        for (const id of await dragRecipientsFor(mapId, tokenId)) {
-          io.to(id).emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
-        }
+        await emitMoveToDragRecipients('token.move.start', token, mapId, { tokenId, mapId });
       } else {
         // Unlit: every visible token is every player's to see.
-        socket.to(socket.campaignId).emit('token.move.start', {
-          tokenId,
-          mapId,
-          movedBy: socket.userId,
-        });
+        await emitMoveToCampaign('token.move.start', token, { tokenId, mapId }, false);
       }
 
       logger.debug('token.move.start', { tokenId, userId: socket.userId, mapId });
@@ -233,10 +279,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           if (s.id === socket.id) continue; // Exclude sender
           const authedSocket = s as unknown as AuthenticatedSocket;
           // Only send spirit token movement to DMs and players with spirit visibility
-          if (authedSocket.role === 'DM') {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-          } else if (authedSocket.userId && visibility.get(authedSocket.userId)) {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(movingToken, authedSocket) });
           }
         }
       } else if (!movingToken.visible) {
@@ -250,18 +294,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       } else if (map.lightingEnabled) {
         // Lit: only those who could see the token where the drag began.
-        for (const id of await dragRecipientsFor(mapId, tokenId)) {
-          io.to(id).emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-        }
+        await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y });
       } else {
         // Unlit: every visible token is every player's to see.
-        socket.to(socket.campaignId).emit('token.moved', {
-          tokenId,
-          mapId,
-          x,
-          y,
-          movedBy: socket.userId,
-        });
+        await emitMoveToCampaign('token.moved', movingToken, { tokenId, mapId, x, y }, false);
       }
     } catch (error) {
       logger.error('token.move failed', { err: error });
@@ -361,10 +397,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         );
         for (const s of campaignSockets) {
           const authedSocket = s as unknown as AuthenticatedSocket;
-          if (authedSocket.role === 'DM') {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-          } else if (authedSocket.userId && visibility.get(authedSocket.userId)) {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(token, authedSocket) });
           }
         }
       } else if (!token.visible) {
@@ -422,7 +456,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           if (moved) {
             // Visible: position update AND the full token (frontend deduplicates),
             // in case this player did not have it yet.
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(token, authedSocket) });
             s.emit('token:appeared', { token: moved, mapId });
           } else if (mayHave.has(tokenId)) {
             s.emit('token:disappeared', { tokenId, mapId });
@@ -446,13 +480,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       } else {
         // Normal token - broadcast to all campaign members (including sender for confirmation)
-        io.to(socket.campaignId).emit('token.moved', {
-          tokenId,
-          mapId,
-          x,
-          y,
-          movedBy: socket.userId,
-        });
+        await emitMoveToCampaign('token.moved', token, { tokenId, mapId, x, y }, true);
       }
 
       logger.debug('token.move.end', { tokenId, x, y, userId: socket.userId });
