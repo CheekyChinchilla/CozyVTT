@@ -63,8 +63,14 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Each campaign has a room (campaignId)
 - Members join via `authenticate` event
 - One campaign per connection: authenticating a connection into another
-  campaign leaves the previous room first, which gets `user.left` and a fresh
-  `presence.state`
+  campaign leaves every other campaign room first, and each of those gets
+  `user.left` and a fresh `presence.state`. `authenticate` events on one
+  connection are handled one at a time, so two sent together end with the
+  connection in the last campaign only
+- Every broadcast that reads a connection's role skips a connection whose
+  campaign is not the room being broadcast to
+- Deleting a campaign empties its room: every connection in it gets `error`
+  ("This campaign was deleted") and forgets the campaign
 - Used for broadcasting game events
 
 ---
@@ -164,8 +170,8 @@ socket.on('error', (data) => {
 2. Server validates:
    - User is logged in (session exists)
    - User is member of campaign
-3. If the socket was in another campaign's room, it leaves it; that campaign
-   gets 'user.left' and a fresh 'presence.state'
+3. The socket leaves every other campaign room it is in; each of those
+   campaigns gets 'user.left' and a fresh 'presence.state'
 4. Server joins socket to campaign room
 5. Server attaches campaignId and role to socket
 6. Server emits 'authenticated' to client

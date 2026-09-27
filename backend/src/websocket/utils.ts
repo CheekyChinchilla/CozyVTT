@@ -50,6 +50,24 @@ export function broadcastToUser(userId: string, event: string, data: unknown): v
   io.to(userId).emit(event, data);
 }
 
+/** A socket as a room fan-out sees it, with the fields authentication set. */
+export type CampaignSocket = Awaited<ReturnType<Server['fetchSockets']>>[number];
+
+/**
+ * The sockets in a campaign's room that belong to it.
+ *
+ * A socket's own `campaignId` is what every gated handler trusts; the room is
+ * only how a broadcast finds it, and `authenticate` keeps the two in step.
+ * Every fan-out that walks a room and reads each socket's role goes through
+ * here, so a socket that is in a room it no longer belongs to is skipped
+ * instead of being answered with another campaign's view. The default
+ * in-memory adapter hands back the real sockets, so the fields are readable.
+ */
+export async function campaignSockets(io: Server, campaignId: string): Promise<CampaignSocket[]> {
+  const sockets = await io.in(campaignId).fetchSockets();
+  return sockets.filter((s) => (s as unknown as { campaignId?: string }).campaignId === campaignId);
+}
+
 /**
  * Get all sockets in a campaign room
  * @param campaignId - Campaign ID
@@ -57,7 +75,7 @@ export function broadcastToUser(userId: string, event: string, data: unknown): v
  */
 export async function getSocketsInCampaign(campaignId: string): Promise<string[]> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   return sockets.map((socket) => socket.id);
 }
 
@@ -68,7 +86,7 @@ export async function getSocketsInCampaign(campaignId: string): Promise<string[]
  */
 export async function getCampaignMemberCount(campaignId: string): Promise<number> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   return sockets.length;
 }
 
@@ -85,7 +103,7 @@ export async function getCampaignMemberCount(campaignId: string): Promise<number
  */
 export async function getOnlineUserIds(campaignId: string): Promise<string[]> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   const ids = new Set<string>();
   for (const socket of sockets) {
     // The default in-memory adapter hands back the real sockets, so the fields
@@ -219,7 +237,7 @@ export async function applyRoleToLiveSockets(
     // set during authentication are both readable and writable — the same
     // approach getOnlineUserIds and the secret dice-roll fan-out rely on.
     const authed = socket as unknown as { campaignId?: string; role?: string };
-    if (authed.campaignId === campaignId) {
+    if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       authed.role = role;
       updated += 1;
     }
@@ -253,14 +271,38 @@ export async function clearCampaignFromLiveSockets(
   let cleared = 0;
   for (const socket of sockets) {
     const authed = socket as unknown as { campaignId?: string; role?: string };
-    if (authed.campaignId === campaignId) {
+    if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       socket.leave(campaignId);
-      authed.campaignId = undefined;
-      authed.role = undefined;
+      if (authed.campaignId === campaignId) {
+        authed.campaignId = undefined;
+        authed.role = undefined;
+      }
       socket.emit('error', { message: 'You are no longer a member of this campaign' });
       cleared += 1;
     }
   }
 
+  return cleared;
+}
+
+/**
+ * Empty a campaign's room when the campaign itself is gone: every socket in
+ * it leaves, forgets the campaign and its role, and is told why. Deleting a
+ * campaign cascades its memberships in the database; this is the live half
+ * of that, the same as removing one member is for one person.
+ */
+export async function clearDeletedCampaignFromLiveSockets(campaignId: string): Promise<number> {
+  const io = getSocketInstance();
+  let cleared = 0;
+  for (const socket of await io.in(campaignId).fetchSockets()) {
+    const authed = socket as unknown as { campaignId?: string; role?: string };
+    socket.leave(campaignId);
+    if (authed.campaignId === campaignId) {
+      authed.campaignId = undefined;
+      authed.role = undefined;
+    }
+    socket.emit('error', { message: 'This campaign was deleted' });
+    cleared += 1;
+  }
   return cleared;
 }

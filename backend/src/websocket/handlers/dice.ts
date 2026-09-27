@@ -10,6 +10,7 @@ import logger from '../../utils/logger';
 import { diceRollLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
+import { campaignSockets } from '../utils';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -124,8 +125,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
 
         // SECURITY: Also send to DM(s) for audit/oversight
         // Follows Spirit Layer pattern: DMs see everything, players see filtered
-        const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-        for (const s of campaignSockets) {
+        for (const s of await campaignSockets(io, socket.campaignId)) {
           const authedSocket = s as unknown as AuthenticatedSocket;
           // Send to DMs only (excluding the original roller if they're DM)
           if (authedSocket.role === 'DM' && authedSocket.userId !== socket.userId) {

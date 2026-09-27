@@ -28,6 +28,7 @@ import {
   type CombatantSource,
   type CombatState,
 } from '../initiativeState';
+import { campaignSockets } from '../utils';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
 interface Recipient {
@@ -49,7 +50,7 @@ async function recipientsSentToken(
   campaignId: string,
   token: ReturnType<typeof readTokens>[number]
 ): Promise<Recipient[]> {
-  const recipients = (await io.in(campaignId).fetchSockets()).map((s) => s as unknown as Recipient);
+  const recipients = (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
   return recipients.filter((r) => {
@@ -69,7 +70,7 @@ async function recipientsSentToken(
  */
 export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
   const state = getCombatState(campaignId);
-  const recipients: Recipient[] = only ?? (await io.in(campaignId).fetchSockets()).map((s) => s as unknown as Recipient);
+  const recipients: Recipient[] = only ?? (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
   if (recipients.length === 0) return;
 
   const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];

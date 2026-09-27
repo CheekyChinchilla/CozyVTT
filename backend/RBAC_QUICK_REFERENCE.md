@@ -409,12 +409,17 @@ best-effort so a socket layer that is down cannot fail a change already written:
 | `PUT /api/campaigns/:id/dm` | `applyRoleToLiveSockets(userId, campaignId, role)` for both seats |
 | `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)` |
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
+| `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
 `clearCampaignFromLiveSockets` clears the cached campaign and role and leaves the
 room, so the socket can neither act nor listen. Clearing `campaignId` is what
 stops it acting: every handler refuses a socket that is not authenticated to a
 campaign. A socket belongs to one campaign, so somebody playing elsewhere in
-another tab is untouched.
+another tab is untouched. `authenticate` keeps a socket in one campaign room:
+it handles the events one at a time per socket and leaves every other campaign
+room on each success, and every fan-out that walks a room and reads each
+socket's role goes through `campaignSockets`, which skips a socket whose
+`campaignId` is not that room.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
 per request. Platform role is a different matter, see below.

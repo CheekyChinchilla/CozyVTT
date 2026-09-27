@@ -15,6 +15,8 @@ export interface AuthenticatedSocket extends Socket {
   userId?: string;
   campaignId?: string;
   role?: string;
+  /** The `authenticate` in progress, so the next one on this socket waits for it (events.ts). */
+  authenticating?: Promise<void>;
 }
 
 /**

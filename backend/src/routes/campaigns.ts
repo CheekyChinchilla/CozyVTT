@@ -6,7 +6,8 @@ import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets } from '../websocket/utils';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
+import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
 import { exportCampaign } from '../services/campaignExporter';
@@ -535,6 +536,16 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
     await prisma.campaign.delete({
       where: { id: campaignId },
     });
+
+    // The live half of the cascade: sockets still in the room would keep
+    // relaying to each other and fail every write against the missing row.
+    // Best-effort, like the other membership changes: the row is gone.
+    try {
+      await clearDeletedCampaignFromLiveSockets(campaignId);
+    } catch (err) {
+      logger.warn('Campaign deleted but its live sockets could not be cleared', { campaignId, err });
+    }
+    clearCombatState(campaignId);
 
     return res.status(200).json({
       message: 'Campaign deleted successfully',

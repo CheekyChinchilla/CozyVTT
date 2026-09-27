@@ -163,6 +163,45 @@ describe('authenticating into another campaign on the same socket', () => {
     switcher.disconnect();
   });
 
+  it('holds only the last campaign when two authenticate events arrive back to back', async () => {
+    // Emitted in one tick, without waiting: the second must not read the
+    // room to leave before the first has joined it.
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectClient(switcherCookie);
+    const authed: string[] = [];
+    const both = new Promise<void>((resolve) => {
+      switcher.on('authenticated', (d: { campaignId: string }) => {
+        authed.push(d.campaignId);
+        if (authed.length === 2) resolve();
+      });
+    });
+    switcher.emit('authenticate', { campaignId: campaignA });
+    switcher.emit('authenticate', { campaignId: campaignB });
+    await both;
+    expect(authed).toEqual([campaignA, campaignB]);
+
+    // Nothing from A: not chat, not the map, and the DM's copy least of all.
+    const noChat = expectNoEvent(switcher, 'chat.message', 500);
+    const noMap = expectNoEvent(switcher, 'map.changed', 500);
+    host.emit('chat.message', { content: 'A after the race', type: 'DM' });
+    host.emit('map.change', { mapId: mapA });
+    await expect(noChat).resolves.toBeUndefined();
+    await expect(noMap).resolves.toBeUndefined();
+
+    // And A's roster no longer lists the switcher.
+    const presence = waitForEvent<Presence>(host, 'presence.state');
+    host.emit('presence.request');
+    expect((await presence).onlineUserIds).not.toContain(switcherId);
+
+    // B is where it lives now.
+    const echoed = waitForEvent<{ content: string }>(switcher, 'chat.message');
+    switcher.emit('chat.message', { content: 'settled at B', type: 'DM' });
+    expect((await echoed).content).toBe('settled at B');
+
+    host.disconnect();
+    switcher.disconnect();
+  });
+
   it('never applies the new role to the room it left', async () => {
     const host = await server.connectAndAuth(hostCookie, campaignA);
     const switcher = await server.connectAndAuth(switcherCookie, campaignA);

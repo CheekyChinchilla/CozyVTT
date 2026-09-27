@@ -10,6 +10,7 @@ import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
 import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
+import { campaignSockets } from './utils';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -189,7 +190,7 @@ export function applyWsFogOperation(fog: FogState, operation: FogOperation): voi
  * way whichever path made it.
  */
 export async function broadcastFogState(io: Server, campaignId: string, mapId: string, fog: FogState): Promise<void> {
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   for (const s of sockets) {
     const role = (s as unknown as AuthenticatedSocket).role;
     if (role === 'DM') {
@@ -219,7 +220,7 @@ export async function broadcastExplorationState(
   userId: string,
   cells: number[]
 ): Promise<void> {
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   for (const s of sockets) {
     const member = s as unknown as AuthenticatedSocket;
     if (member.userId === userId || member.role === 'DM') {
@@ -250,7 +251,7 @@ export interface HandlerContext {
  * server would no longer send them, or missing one it now would.
  */
 export async function broadcastMapData(io: Server, campaignId: string, map: MapData): Promise<void> {
-  const members = await io.in(campaignId).fetchSockets();
+  const members = await campaignSockets(io, campaignId);
   const visibility = await getSpiritVisibilityBatch(
     campaignId,
     members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)

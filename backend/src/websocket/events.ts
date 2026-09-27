@@ -61,7 +61,16 @@ export function registerEventHandlers(io: Server): void {
     // AUTHENTICATE EVENT
     // User requests to join a campaign room
     // ============================================
-    socket.on('authenticate', async (data: { campaignId: string }) => {
+    // One at a time per socket. Two of these overlapping both read the room
+    // to leave before either has joined its own, and the socket ends up in
+    // two campaign rooms carrying one role. The chain never rejects (the
+    // handler catches everything), so a refused attempt does not block the
+    // next.
+    socket.on('authenticate', (data: { campaignId: string }) => {
+      socket.authenticating = (socket.authenticating ?? Promise.resolve()).then(() => authenticateInto(data));
+    });
+
+    async function authenticateInto(data: { campaignId: string }): Promise<void> {
       try {
         logger.debug('authenticate', { campaignId: data.campaignId, userId: socket.userId });
 
@@ -70,10 +79,6 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // Read before the membership check, which is why that check must not
-        // write the socket's campaign itself: this is the room to leave.
-        const previousCampaignId = socket.campaignId;
-
         const result = await authenticateCampaign(socket, data.campaignId);
 
         if (!result.success) {
@@ -81,15 +86,17 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // SECURITY: one campaign per socket. Leave the previous room before
-        // taking the new campaign's role, or a role-filtered fan-out in the old
-        // room would find this socket still there and answer it with the new
-        // role's view of the old campaign.
-        if (previousCampaignId && previousCampaignId !== data.campaignId) {
-          await socket.leave(previousCampaignId);
+        // SECURITY: one campaign per socket. Leave every other campaign room
+        // before taking the new campaign's role, or a role-filtered fan-out in
+        // an old room would find this socket still there and answer it with
+        // the new role's view of that campaign. A socket's rooms are its own
+        // id, its user room and campaign rooms, nothing else.
+        for (const room of [...socket.rooms]) {
+          if (room === socket.id || room === socket.userId || room === data.campaignId) continue;
+          await socket.leave(room);
 
           // Notify old campaign that user left
-          socket.to(previousCampaignId).emit('user.left', {
+          socket.to(room).emit('user.left', {
             userId: socket.userId,
             timestamp: new Date().toISOString(),
           });
@@ -98,7 +105,7 @@ export function registerEventHandlers(io: Server): void {
           // by the full `presence.state` snapshot, so telling only the new
           // campaign would leave the old one showing this user online forever.
           // Recomputed after the leave above, so a second tab still counts.
-          await broadcastPresence(previousCampaignId);
+          await broadcastPresence(room);
         }
 
         // Join the campaign room. Role is refreshed even when the campaign is
@@ -133,7 +140,7 @@ export function registerEventHandlers(io: Server): void {
         logger.error('authenticate failed', { err: error });
         socket.emit('error', { message: 'Authentication failed' });
       }
-    });
+    }
 
     // ============================================
     // PRESENCE REQUEST

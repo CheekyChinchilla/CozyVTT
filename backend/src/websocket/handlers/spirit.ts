@@ -13,6 +13,7 @@ import { Token, broadcastMapData } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { getState as getCombatState } from '../initiativeState';
 import { sendInitiativeState } from './initiative';
+import { campaignSockets } from '../utils';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -168,7 +169,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       // their plane, in their sight on a lit map), and never with the DM's
       // notes. This used to hand every player the whole token.
       const toggled = { mapId, tokenId, visible, token, toggledBy: socket.userId, timestamp: new Date().toISOString() };
-      for (const s of await io.in(socket.campaignId).fetchSockets()) {
+      for (const s of await campaignSockets(io, socket.campaignId)) {
         if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
       }
       // Only when this is the map the table is on: map.changed puts every
