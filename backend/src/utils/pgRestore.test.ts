@@ -13,6 +13,7 @@ import path from 'path';
 import {
   buildDumpArgs,
   buildRestoreArgs,
+  pgConnection,
   isOwnershipStatement,
   isPrivilegeStatement,
   isSettingUnknownToServer,
@@ -24,9 +25,9 @@ import {
 describe('buildRestoreArgs', () => {
   const args = buildRestoreArgs('postgresql://u:p@h:5432/db', '/tmp/backup/database.sql');
 
-  it('names the database and the file to restore', () => {
+  it('names the database, without its password, and the file to restore', () => {
     expect(args).toEqual(
-      expect.arrayContaining(['--dbname', 'postgresql://u:p@h:5432/db', '--file', '/tmp/backup/database.sql'])
+      expect.arrayContaining(['--dbname', 'postgresql://u@h:5432/db', '--file', '/tmp/backup/database.sql'])
     );
   });
 
@@ -41,6 +42,61 @@ describe('buildRestoreArgs', () => {
   it('runs the whole restore in one transaction', () => {
     // So a failure rolls the drops back instead of leaving the tables gone.
     expect(args).toContain('--single-transaction');
+  });
+});
+
+/**
+ * The password never goes on the command line. A process's arguments are
+ * visible to every local user in the host's process list (unless /proc is
+ * mounted with hidepid), so `--dbname postgresql://user:PASSWORD@host/db`
+ * showed the database password to anyone on the machine for as long as a
+ * backup or restore ran. libpq reads PGPASSWORD from the environment
+ * instead, which only the same user or root can see.
+ */
+describe('pgConnection', () => {
+  it('takes the password out of the address and passes it through the environment', () => {
+    const { dbname, env } = pgConnection('postgresql://cozyvtt:s3cret@database:5432/cozyvtt');
+    expect(dbname).toBe('postgresql://cozyvtt@database:5432/cozyvtt');
+    expect(env.PGPASSWORD).toBe('s3cret');
+  });
+
+  it('gives libpq the password as typed, not as the address encodes it', () => {
+    const { dbname, env } = pgConnection('postgresql://cozyvtt:p%40ss%2Fw%3Frd@database:5432/cozyvtt');
+    expect(env.PGPASSWORD).toBe('p@ss/w?rd');
+    expect(dbname).not.toContain('p%40ss');
+  });
+
+  it('keeps the query string, which may carry connection options', () => {
+    const { dbname } = pgConnection('postgresql://u:p@h:5432/db?sslmode=require');
+    expect(dbname).toBe('postgresql://u@h:5432/db?sslmode=require');
+  });
+
+  it('leaves an address without a password alone, and sets no password', () => {
+    const { dbname, env } = pgConnection('postgresql://u@h:5432/db');
+    expect(dbname).toBe('postgresql://u@h:5432/db');
+    expect(env).not.toHaveProperty('PGPASSWORD');
+  });
+
+  it('passes on what it cannot parse, so an unusual address still connects', () => {
+    const { dbname, env } = pgConnection('not a url');
+    expect(dbname).toBe('not a url');
+    expect(env).not.toHaveProperty('PGPASSWORD');
+  });
+
+  it('hands the tools a minimal environment: the path, the password and nothing of the app\'s secrets', () => {
+    const { env } = pgConnection('postgresql://u:p@h:5432/db');
+    expect(Object.keys(env).sort()).toEqual(['PATH', 'PGPASSWORD']);
+  });
+});
+
+describe('buildDumpArgs and buildRestoreArgs', () => {
+  it.each([
+    ['buildDumpArgs', buildDumpArgs],
+    ['buildRestoreArgs', buildRestoreArgs],
+  ])('%s puts no password on the command line', (_name, build) => {
+    const args = build('postgresql://cozyvtt:s3cret@database:5432/cozyvtt', '/tmp/db.sql');
+    expect(args.join(' ')).not.toContain('s3cret');
+    expect(args).toContain('postgresql://cozyvtt@database:5432/cozyvtt');
   });
 });
 

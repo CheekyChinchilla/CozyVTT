@@ -36,6 +36,8 @@ interface ToolCall {
   args: string[];
   /** What psql was given to load, read at the moment of the call (the file is deleted afterwards). */
   sqlLoaded?: string;
+  /** The environment the tool was started with, when the route gave it one. */
+  env?: Record<string, string>;
 }
 
 type Done = (err: Error | null, out?: { stdout: string; stderr: string }) => void;
@@ -45,7 +47,8 @@ function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
   const calls: ToolCall[] = [];
   execFileMock.mockImplementation((cmd: string, args: string[], ...rest: unknown[]) => {
     const done = rest[rest.length - 1] as Done;
-    const call: ToolCall = { cmd, args };
+    const options = rest.length > 1 ? (rest[0] as { env?: Record<string, string> }) : undefined;
+    const call: ToolCall = { cmd, args, env: options?.env };
     const finish = () => {
       calls.push(call);
       if (fail && fail.cmd === cmd) {
@@ -198,6 +201,31 @@ describe('POST /api/admin/backups/restore', () => {
     written.push(file);
     const entries = (await unzipper.Open.file(file)).files.map((f) => f.path);
     expect(entries).toEqual(['database.sql']);
+
+    // Readable by the backend's user alone: it holds every credential on the instance.
+    expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps the database password off the command line of every tool it runs', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const password = /:\/\/[^:]+:([^@]+)@/.exec(process.env.DATABASE_URL ?? '')?.[1];
+    expect(password).toBeDefined();
+
+    expect((await restore(admin, zip)).status).toBe(200);
+
+    const tools = calls.filter((c) => c.cmd === 'pg_dump' || c.cmd === 'psql');
+    expect(tools.length).toBe(2);
+    for (const call of tools) {
+      // The address keeps its host and user but no `user:password@` part.
+      const dbname = call.args[call.args.indexOf('--dbname') + 1];
+      expect(dbname).toContain('@');
+      expect(dbname).not.toMatch(/\/\/[^/@]*:[^/@]*@/);
+      expect(call.env?.PGPASSWORD).toBe(decodeURIComponent(password!));
+      expect(Object.keys(call.env ?? {}).sort()).toEqual(['PATH', 'PGPASSWORD']);
+    }
+    const named = /(backup-\S+\.zip)/.exec((await admin.get('/api/admin/backups')).body.backups[0]?.filename ?? '')?.[1];
+    if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
   });
 
   it('refuses a file that is not a complete backup before any tool runs', async () => {

@@ -252,10 +252,39 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
  * loads under whichever database user the restoring instance has, and leaves
  * the login sessions' rows out.
  */
+/**
+ * How pg_dump and psql are told where the database is: the address with the
+ * password taken out, and the password in the environment as PGPASSWORD.
+ *
+ * A process's arguments are visible to every local user in the host's
+ * process list (unless /proc is mounted with hidepid), so an address with
+ * the password in it showed the database password to anyone on the machine
+ * for as long as a backup or restore ran. libpq reads PGPASSWORD instead,
+ * which only the same user or root can read. The environment handed over is
+ * the path and the password alone; the tools need nothing else of the app's.
+ *
+ * An address that does not parse, or carries no password, is passed on as it
+ * is, so an unusual one (a Unix socket, a passwordless local server) still
+ * connects the way it did.
+ */
+export function pgConnection(dbUrl: string): { dbname: string; env: Record<string, string> } {
+  const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
+  let parsed: URL;
+  try {
+    parsed = new URL(dbUrl);
+  } catch {
+    return { dbname: dbUrl, env };
+  }
+  if (!parsed.password) return { dbname: dbUrl, env };
+  env.PGPASSWORD = decodeURIComponent(parsed.password);
+  parsed.password = '';
+  return { dbname: parsed.toString(), env };
+}
+
 export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
   return [
     '--dbname',
-    dbUrl,
+    pgConnection(dbUrl).dbname,
     '--file',
     sqlPath,
     '--clean',
@@ -272,7 +301,7 @@ export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
 export function buildRestoreArgs(dbUrl: string, sqlPath: string): string[] {
   return [
     '--dbname',
-    dbUrl,
+    pgConnection(dbUrl).dbname,
     '--file',
     sqlPath,
     // Stop at the first statement that fails, and exit non-zero so the caller

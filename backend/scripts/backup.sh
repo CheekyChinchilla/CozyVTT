@@ -12,6 +12,10 @@
 
 set -euo pipefail
 
+# A dump holds every credential on the instance, so the file and the
+# directory this creates are readable by the user running the script alone.
+umask 077
+
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/cozyvtt_${TIMESTAMP}.sql.gz"

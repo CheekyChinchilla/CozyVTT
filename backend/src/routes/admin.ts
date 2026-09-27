@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore } from '../utils/pgRestore';
+import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir } from '../utils/backupDir';
@@ -737,14 +737,16 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
 
   try {
     try {
-      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath));
+      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
       if (errorCode(execError) === 'ENOENT') throw execError;
       throw new DumpFailed(errorCode(execError), errorStderr(execError));
     }
 
     await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(zipPath);
+      // Readable by the backend's own user alone: the archive holds every
+      // password hash, MFA secret and backup code on the instance.
+      const output = createWriteStream(zipPath, { mode: 0o600 });
       const archive = archiver('zip', { zlib: { level: 6 } });
       output.on('close', resolve);
       archive.on('error', reject);
@@ -891,6 +893,10 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
   const tempDir = path.join(os.tmpdir(), `cozyvtt-restore-${Date.now()}`);
 
   try {
+    // The upload is a backup too, written by multer with the default mode;
+    // close it to everyone but the backend's user before anything else.
+    await fs.chmod(uploadedZip, 0o600);
+
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
     // the entry count and total decompressed size (zip-bomb protection).
@@ -960,7 +966,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     // 5. Load the prepared dump. One transaction, stopped at the first
     // failure, so a load that fails leaves the existing database as it was.
     try {
-      await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath));
+      await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
       if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({

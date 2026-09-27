@@ -13,6 +13,9 @@ set -e
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /app/uploads /app/logs /app/backups
   chown -R appuser:appgroup /app/uploads /app/logs /app/backups
+  # Backups hold every credential on the instance: the directory is the
+  # backend user's alone, on the host as in the container.
+  chmod 700 /app/backups
   exec su-exec appuser "$0" "$@"
 fi
 
