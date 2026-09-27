@@ -369,6 +369,13 @@ Two of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
+- **The backend run manages its own database connections.** Every test file
+  builds its own Prisma clients and jest reuses workers across files, so a
+  full run once crept up to PostgreSQL's default ceiling of a hundred
+  connections and unrelated suites failed with "too many clients already".
+  Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
+  `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
+  it ends; if you see that error again, look there first, not at the code.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction;
