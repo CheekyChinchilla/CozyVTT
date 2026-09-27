@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { isStrongPassword } from '@/utils/validation';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -461,7 +462,7 @@ export default function ProfilePage() {
     setPwSuccess('');
 
     if (!pwCurrent) { setPwError('Current password is required'); return; }
-    if (pwNew.length < 8) { setPwError('New password must be at least 8 characters'); return; }
+    if (!isStrongPassword(pwNew)) { setPwError('New password must be at least 12 characters with uppercase, lowercase, number, and special character'); return; }
     if (pwNew !== pwConfirm) { setPwError('Passwords do not match'); return; }
     if (pwNew === pwCurrent) { setPwError('New password must differ from current password'); return; }
 

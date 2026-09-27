@@ -11,7 +11,10 @@ export interface PasswordValidationResult {
 /**
  * Validates password strength
  * Requirements:
- * - Minimum 8 characters
+ * - Minimum 12 characters (the number every page that asks for a password
+ *   shows and the API document states; the server took eight, so the API
+ *   and the profile page accepted passwords the wizard and the register
+ *   page refused)
  * - At least one uppercase letter
  * - At least one lowercase letter
  * - At least one number
@@ -20,8 +23,8 @@ export interface PasswordValidationResult {
 export function validatePasswordStrength(password: string): PasswordValidationResult {
   const errors: string[] = [];
 
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
+  if (password.length < 12) {
+    errors.push('Password must be at least 12 characters long');
   }
 
   if (!/[A-Z]/.test(password)) {

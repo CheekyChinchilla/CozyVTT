@@ -7,24 +7,17 @@ export function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-export function isStrongPassword(password: string): boolean {
-  // At least 12 characters, 1 uppercase, 1 lowercase, 1 number
-  if (password.length < 12) return false;
-
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasLowerCase = /[a-z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-
-  return hasUpperCase && hasLowerCase && hasNumber;
-}
-
 /**
  * Password rules shown as a live checklist on the pages where a password is
- * chosen. These mirror `validatePasswordStrength` in the backend exactly — keep
- * them in step, or the UI will accept passwords the server rejects.
+ * chosen, and the one rule every page checks by. These mirror
+ * `validatePasswordStrength` in the backend exactly; keep them in step, or
+ * the UI will accept passwords the server rejects. The quick check below
+ * used to ask for twelve characters but no special character, while the
+ * checklist asked for eight, so the pages disagreed with each other and
+ * with the server.
  */
 export const PASSWORD_REQUIREMENTS: Array<{ test: (p: string) => boolean; label: string }> = [
-  { test: (p) => p.length >= 8,          label: 'At least 8 characters' },
+  { test: (p) => p.length >= 12,         label: 'At least 12 characters' },
   { test: (p) => /[A-Z]/.test(p),        label: 'One uppercase letter' },
   { test: (p) => /[a-z]/.test(p),        label: 'One lowercase letter' },
   { test: (p) => /[0-9]/.test(p),        label: 'One number' },
@@ -34,6 +27,11 @@ export const PASSWORD_REQUIREMENTS: Array<{ test: (p: string) => boolean; label:
 /** True when every rule in PASSWORD_REQUIREMENTS passes. */
 export function meetsPasswordRequirements(password: string): boolean {
   return PASSWORD_REQUIREMENTS.every((r) => r.test(password));
+}
+
+/** The same rule under the name the register page and the setup wizard use. */
+export function isStrongPassword(password: string): boolean {
+  return meetsPasswordRequirements(password);
 }
 
 export function getPasswordStrength(password: string): {

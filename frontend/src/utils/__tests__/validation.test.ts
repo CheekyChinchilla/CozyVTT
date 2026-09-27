@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  isValidEmail,
-  isStrongPassword,
-  getPasswordStrength,
-  validateDiceExpression,
-} from '../validation';
+import { isValidEmail, isStrongPassword, getPasswordStrength, validateDiceExpression, meetsPasswordRequirements } from '../validation';
 
 // ============================================
 // isValidEmail
@@ -45,8 +40,14 @@ describe('isValidEmail', () => {
 
 describe('isStrongPassword', () => {
   it('accepts a password meeting all requirements', () => {
-    expect(isStrongPassword('SecurePass123')).toBe(true);
+    expect(isStrongPassword('SecurePass123!')).toBe(true);
     expect(isStrongPassword('MyP@ssw0rd!!')).toBe(true);
+  });
+
+  // The server has always required one; this check did not, so a password
+  // the wizard and the register page accepted was then refused by the server.
+  it('rejects passwords without a special character, as the server does', () => {
+    expect(isStrongPassword('SecurePass123')).toBe(false);
   });
 
   it('rejects passwords shorter than 12 characters', () => {
@@ -67,7 +68,20 @@ describe('isStrongPassword', () => {
   });
 
   it('accepts a password with exactly 12 characters meeting all rules', () => {
-    expect(isStrongPassword('Abc123Abc123')).toBe(true);
+    expect(isStrongPassword('Abc123Abc12!')).toBe(true);
+  });
+});
+
+describe('PASSWORD_REQUIREMENTS', () => {
+  it('asks for twelve characters, like the quick check and the server', () => {
+    expect(meetsPasswordRequirements('Abc123Abc1!')).toBe(false);
+    expect(meetsPasswordRequirements('Abc123Abc12!')).toBe(true);
+  });
+
+  it('is the quick check, rule for rule', () => {
+    for (const p of ['Abc123Abc12!', 'Abc123Abc1!', 'abc123abc12!', 'ABC123ABC12!', 'Abcdefghijk!', 'Abc123Abc123']) {
+      expect(meetsPasswordRequirements(p)).toBe(isStrongPassword(p));
+    }
   });
 });
 
