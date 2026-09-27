@@ -796,8 +796,6 @@ export interface Asset {
   originalName: string;
   mimeType: string;
   fileSize: number;
-  filePath: string;
-  thumbnailPath: string | null;
   name: string;
   description: string | null;
   tags: string[];

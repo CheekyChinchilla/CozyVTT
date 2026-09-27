@@ -238,6 +238,17 @@ assume `req.session` knows about them.
 
 ## Reading an asset: access follows use
 
+Putting an asset *into* a campaign's library, by uploading at CAMPAIGN scope or
+by moving one there (`PATCH /api/assets/:id/scope`), is the DM's
+(`canPlaceAssetAtScope`); a player may add token art, since they upload their
+own character's, and a spectator adds nothing. A character's `tokenImageUrl`
+is checked with `canReadAssetById` before it is stored, like a map's images,
+so pointing at an asset never grants the right to read it. The list and detail
+responses select the public fields only; `filePath` and `thumbnailPath` are the
+server's. A map's spirit-layer image is listed to a member, and served, only
+when that member may see the spirit plane there (`getSpiritVisibility`), which
+is what the map itself does with it.
+
 The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
 asset's **scope**. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that

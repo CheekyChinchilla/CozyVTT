@@ -3,7 +3,8 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
-import { normalizeAssetUrl } from '../utils/asset-urls';
+import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
+import { canReadAssetById } from '../services/permissions';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../validators/game-systems';
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
@@ -13,6 +14,17 @@ import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
 
 const router = Router();
+
+/**
+ * Whether the caller may point a character at this image: the same read
+ * rule the map routes apply before storing an asset reference (an address
+ * that names no asset, or is empty, is fine to store).
+ */
+async function mayUseTokenImage(tokenImageUrl: string | null | undefined, req: AuthenticatedRequest): Promise<boolean> {
+  const assetId = extractAssetId(tokenImageUrl);
+  if (!assetId) return true;
+  return canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN');
+}
 
 /**
  * Character Management Routes
@@ -131,6 +143,13 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
       sheetData = validationResult.data;
+    }
+
+    // The image has to be one the caller may read. Storing an unchecked
+    // reference is what let a member read a fellow member's private asset:
+    // a character pointing at it counted as the campaign using it.
+    if (!(await mayUseTokenImage(tokenImageUrl, req))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
     // Create character with flexible JSON data field
@@ -532,6 +551,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       }
     }
     if (tokenImageUrl !== undefined) {
+      if (!(await mayUseTokenImage(tokenImageUrl, req))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
       // Normalize tokenImageUrl to full path (or null)
       updateData.tokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
     }

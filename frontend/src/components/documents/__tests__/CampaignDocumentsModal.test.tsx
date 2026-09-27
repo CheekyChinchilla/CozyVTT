@@ -64,7 +64,6 @@ const mine = (id: string, name: string, originalName: string): Asset =>
     uploadedById: 'dm',
     mimeType: 'application/pdf',
     fileSize: 1024,
-    filePath: '',
     filename: '',
     description: null,
     tags: [],

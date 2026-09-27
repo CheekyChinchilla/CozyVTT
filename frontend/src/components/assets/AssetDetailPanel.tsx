@@ -190,10 +190,12 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
     }
   };
 
-  // Campaigns available in the picker depend on target scope:
-  // Moving TO campaign — user must be a member (any role)
+  // Campaigns available in the picker depend on target scope. Moving into a
+  // campaign is the DM's, with token art the one thing a player may bring in;
+  // the server refuses the rest, so the picker offers only what it accepts.
+  const playerOrDmCampaigns = userCampaigns.filter((c) => isCampaignDm(c, user?.id) || c.userRole === 'PLAYER');
   const campaignsForPicker =
-    moveScope === AssetScope.CAMPAIGN ? userCampaigns : dmCampaigns;
+    moveScope === AssetScope.CAMPAIGN && currentAsset.type === AssetType.TOKEN ? playerOrDmCampaigns : dmCampaigns;
 
   return (
     <>

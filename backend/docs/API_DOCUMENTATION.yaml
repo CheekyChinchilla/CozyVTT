@@ -3395,14 +3395,15 @@ paths:
         | Move | Required role |
         |------|---------------|
         | Any move involving GLOBAL | Platform admin OR `globalAssetManager` |
-        | USER → CAMPAIGN (own campaign) | Asset owner |
+        | USER → CAMPAIGN | Asset owner who is that campaign's DM; a player may move token art only; never a spectator |
         | CAMPAIGN → USER | Asset owner OR DM of the source campaign |
         | CAMPAIGN → CAMPAIGN | Asset owner OR DM of the source campaign |
         | USER → USER on a different account | Disallowed |
 
         When `scope: CAMPAIGN`, `campaignId` is required and the campaign must
-        exist. The asset's file does not move on disk — only the DB record's
-        scope, `campaignId`, and `uploadedById` are updated.
+        exist, and the same placement rule as an upload there applies. The
+        asset's file does not move on disk — only the DB record's scope and
+        `campaignId` are updated; the uploader stays as recorded.
       operationId: changeAssetScope
       security:
         - cookieAuth: []
@@ -7267,11 +7268,6 @@ components:
           type: string
         fileSize:
           type: integer
-        filePath:
-          type: string
-        thumbnailPath:
-          type: string
-          nullable: true
         name:
           type: string
         description:

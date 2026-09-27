@@ -21,7 +21,7 @@ import {
   UpdateDocumentContentSchema,
   TYPED_DOCUMENT_MIME,
 } from '../validators/documents';
-import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope } from '../services/permissions';
+import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, spiritLayerAssetIdsHiddenFrom } from '../services/permissions';
 import path from 'path';
 import fs from 'fs';
 import { generateThumbnail } from '../utils/thumbnails';
@@ -188,6 +188,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       }
 
       where.campaignId = campaignId as string;
+      if (!isAdmin) {
+        const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId as string]);
+        if (hidden.length > 0) where.id = { notIn: hidden };
+      }
     } else if (!isAdmin) {
       // Non-admin: enforce three-scope visibility rules
       const userMemberships = await prisma.campaignMembership.findMany({
@@ -202,28 +206,34 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         { scope: 'USER', uploadedById: userId },       // User's own personal assets
         ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN' as const, campaignId: cId })), // Campaign assets
       ];
+      const hidden = await spiritLayerAssetIdsHiddenFrom(userId, campaignIds);
+      if (hidden.length > 0) where.id = { notIn: hidden };
     }
     // Admin with no campaignId: no OR filter — sees all assets across all scopes/users
 
     // Get total count for pagination
     const total = await prisma.asset.count({ where });
 
-    // Get paginated assets
+    // Get paginated assets. Selected, not included: where a file sits on the
+    // server is the server's business, so filePath and thumbnailPath stay out.
     const assets = await prisma.asset.findMany({
       where,
-      include: {
-        uploadedBy: {
-          select: {
-            id: true,
-            displayName: true,
-          },
-        },
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+      select: {
+        id: true,
+        type: true,
+        scope: true,
+        uploadedById: true,
+        campaignId: true,
+        filename: true,
+        originalName: true,
+        mimeType: true,
+        fileSize: true,
+        name: true,
+        description: true,
+        tags: true,
+        createdAt: true,
+        uploadedBy: { select: { id: true, displayName: true } },
+        campaign: { select: { id: true, name: true } },
       },
       orderBy: {
         createdAt: 'desc',
@@ -468,19 +478,22 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     const asset = await prisma.asset.findUnique({
       where: { id },
-      include: {
-        uploadedBy: {
-          select: {
-            id: true,
-            displayName: true,
-          },
-        },
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+      select: {
+        id: true,
+        type: true,
+        scope: true,
+        uploadedById: true,
+        campaignId: true,
+        filename: true,
+        originalName: true,
+        mimeType: true,
+        fileSize: true,
+        name: true,
+        description: true,
+        tags: true,
+        createdAt: true,
+        uploadedBy: { select: { id: true, displayName: true } },
+        campaign: { select: { id: true, name: true } },
       },
     });
 
@@ -513,6 +526,14 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
 
       if (!membership) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not have access to this asset',
+        });
+      }
+      // A map's spirit layer is shown to a player only once they have crossed
+      // over; the library entry follows the map.
+      if (membership.role !== 'DM' && (await spiritLayerAssetIdsHiddenFrom(userId, [asset.campaignId])).includes(asset.id)) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to this asset',
@@ -1281,16 +1302,13 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
         }
       }
 
-      // Moving TO CAMPAIGN: caller must be a member of the target campaign
+      // Moving TO CAMPAIGN: the same question the upload route asks, so a
+      // member who could not upload here cannot publish here either. That is
+      // the DM, or a player moving token art.
       if (scope === 'CAMPAIGN' && resolvedCampaignId) {
-        const targetMembership = await prisma.campaignMembership.findUnique({
-          where: { userId_campaignId: { userId, campaignId: resolvedCampaignId } },
-        });
-        if (!targetMembership) {
-          return res.status(403).json({
-            error: 'Forbidden',
-            message: 'You must be a member of the target campaign to move assets there',
-          });
+        const placement = await canPlaceAssetAtScope(userId, asset.type, 'CAMPAIGN', resolvedCampaignId);
+        if (!placement.allowed) {
+          return res.status(placement.status).json({ error: 'Forbidden', message: placement.message });
         }
       }
     }

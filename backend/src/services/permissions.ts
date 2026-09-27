@@ -1,6 +1,8 @@
 import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
+import { getSpiritVisibility } from '../utils/spirit-layer';
+import { extractAssetId } from '../utils/asset-urls';
 
 /**
  * Permission Verification Helpers
@@ -350,7 +352,9 @@ export async function canPlaceAssetAtScope(
   if (!membership) {
     return { allowed: false, status: 403, message: 'You do not have access to this campaign' };
   }
-  if (membership.role !== 'DM' && type !== 'TOKEN') {
+  // A player may add token art, since they upload their own character's; a
+  // spectator adds nothing to a campaign's library.
+  if (membership.role !== 'DM' && !(type === 'TOKEN' && membership.role === 'PLAYER')) {
     return {
       allowed: false,
       status: 403,
@@ -358,6 +362,51 @@ export async function canPlaceAssetAtScope(
     };
   }
   return { allowed: true, campaignId };
+}
+
+/**
+ * The spirit-layer images a user may not see in the given campaigns: the
+ * spirit plane of a map is shown to a player only once they have crossed
+ * over (or the DM has opened it to everyone), and the asset library must not
+ * hand them the picture the map itself withholds. The DM's campaigns hide
+ * nothing. Returns asset ids, for a listing to leave out.
+ */
+export async function spiritLayerAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
+  if (campaignIds.length === 0) return [];
+  const memberships = await prisma.campaignMembership.findMany({
+    where: { userId, campaignId: { in: campaignIds } },
+    select: { campaignId: true, role: true },
+  });
+  const hidden: string[] = [];
+  for (const m of memberships) {
+    if (m.role === 'DM') continue;
+    if (await getSpiritVisibility(m.campaignId, userId)) continue;
+    const maps = await prisma.map.findMany({
+      where: { campaignId: m.campaignId, spiritLayerUrl: { not: null } },
+      select: { spiritLayerUrl: true },
+    });
+    for (const map of maps) {
+      const id = extractAssetId(map.spiritLayerUrl);
+      if (id) hidden.push(id);
+    }
+  }
+  return hidden;
+}
+
+/** Whether `assetId` is a spirit-layer image of a map in `campaignId` that `userId` may not see there. */
+async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId: string): Promise<boolean> {
+  const asSpiritLayer = await prisma.map.findFirst({
+    where: { campaignId, spiritLayerUrl: { contains: assetId } },
+    select: { id: true },
+  });
+  if (!asSpiritLayer) return false;
+  // Shown openly somewhere on the same campaign's maps: nothing to keep.
+  const asBaseLayer = await prisma.map.findFirst({
+    where: { campaignId, OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }] },
+    select: { id: true },
+  });
+  if (asBaseLayer) return false;
+  return !(await getSpiritVisibility(campaignId, userId));
 }
 
 /**
@@ -416,19 +465,23 @@ export async function assetUsedInUserCampaign(
   if (campaignIds.length === 0) return false;
 
   // A map's own layers first: that is the common case, and it answers without
-  // reading any JSON.
+  // reading any JSON. The spirit layer counts only where the viewer may see
+  // that plane; the map keeps it from everyone else, and so does this.
   const mapLayer = await prisma.map.findFirst({
     where: {
       campaignId: { in: campaignIds },
-      OR: [
-        { imageUrl: { contains: assetId } },
-        { baseLayerUrl: { contains: assetId } },
-        { spiritLayerUrl: { contains: assetId } },
-      ],
+      OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }],
     },
     select: { id: true },
   });
   if (mapLayer) return true;
+  const spiritLayers = await prisma.map.findMany({
+    where: { campaignId: { in: campaignIds }, spiritLayerUrl: { contains: assetId } },
+    select: { campaignId: true },
+  });
+  for (const map of new Set(spiritLayers.map((m) => m.campaignId))) {
+    if (await getSpiritVisibility(map, userId)) return true;
+  }
 
   const [character, creature, tokenTemplate] = await Promise.all([
     prisma.character.findFirst({
@@ -503,7 +556,8 @@ export async function canReadAsset(
     const membership = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
     });
-    if (membership) return true;
+    if (membership?.role === 'DM') return true;
+    if (membership) return !(await spiritLayerHidesAsset(asset.id, asset.campaignId, userId));
     // Scoped to one campaign, but a map in another may point at it.
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
