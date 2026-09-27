@@ -82,6 +82,7 @@ import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/character
 import { controlsToken } from '@/utils/tokenControl';
 import { dmTokenControls } from '@/utils/tokenControls';
 import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
+import { apiErrorMessage } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -4100,7 +4101,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     useGameStore.getState().addToken(result.token);
                     socket?.emitMapChange(currentMap.id);
                   } catch (err) {
-                    console.error('Failed to duplicate token:', err);
+                    // A copy is a new token, so an older one whose fields predate
+                    // validation is refused: say which, so the DM can fix it in Edit Token.
+                    showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
                   }
                 }}
               >
@@ -4256,14 +4259,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                                 setContextMenuMoveToMapOpen(false);
                                 setIsMoveToMapLoading(true);
                                 try {
-                                  const position = clampTokenPosition(token.position, token.size, targetMap);
-                                  await api.addToken(campaign.id, targetMap.id, tokenCopyRequest(token, position));
-                                  await api.deleteToken(campaign.id, currentMap.id, token.id);
+                                  // One request: the server moves the token as it is and
+                                  // tells everyone on this map itself.
+                                  await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
                                   useGameStore.getState().removeToken(token.id);
-                                  socket?.emitMapChange(currentMap.id);
-                                  socket?.emitMapChange(targetMap.id);
                                 } catch (err) {
-                                  console.error('Failed to move token to map:', err);
+                                  showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
                                 } finally {
                                   setIsMoveToMapLoading(false);
                                 }

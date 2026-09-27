@@ -890,6 +890,16 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Move tokens from one map to another in one step. The server keeps each
+   * token as it is, under its own id, and tells the table itself; a move
+   * used to be a copy and a delete per token, which raced and rebuilt them.
+   */
+  async moveTokens(campaignId: string, mapId: string, tokenIds: string[], targetMapId: string): Promise<{ message: string; moved: Token[] }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/move`, { tokenIds, targetMapId });
+    return response.data;
+  }
+
   // ============================================
   // Creature Library
   // ============================================

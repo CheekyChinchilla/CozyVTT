@@ -36,6 +36,15 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
+      // map.changed puts every client onto the map it carries, so only the
+      // map the campaign is showing may be sent: a token moved to another
+      // map used to switch the whole table onto that map.
+      const campaign = await prisma.campaign.findUnique({ where: { id: socket.campaignId }, select: { currentMapId: true } });
+      if (campaign?.currentMapId !== mapId) {
+        socket.emit('error', { message: 'Only the current map can be sent to the table; set it current first' });
+        return;
+      }
+
       // Each member gets the map as they may see it; the payload says whether
       // the spirit overlay applies to that viewer.
       await broadcastMapData(io, socket.campaignId, map);

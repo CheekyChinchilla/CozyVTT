@@ -11,7 +11,8 @@ import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filte
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter, limiterKey } from '../shared';
-import { toJson } from '../../utils/prisma-json';
+import { readTokens, toJson } from '../../utils/prisma-json';
+import { withMapsLocked } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets } from '../utils';
 
@@ -355,16 +356,16 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Update token position
+      // Update token position, in the list as it is under the map's lock: a
+      // DM's add or delete landing during the drag used to be written away.
       token.position = { x, y };
-
-      // Update the tokens array in database
-      const updatedTokens = [...tokensArray];
-      updatedTokens[tokenIndex] = token;
-
-      await prisma.map.update({
-        where: { id: mapId },
-        data: { tokens: toJson(updatedTokens) },
+      const updatedTokens = await withMapsLocked([mapId], async (tx) => {
+        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+        const tokens = readTokens(fresh.tokens);
+        const index = tokens.findIndex((t) => t.id === tokenId);
+        if (index !== -1) tokens[index] = { ...tokens[index], position: { x, y } };
+        await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+        return tokens;
       });
 
       if (map.lightingEnabled) {

@@ -29,7 +29,6 @@ import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import { extractAssetId } from '@/utils/assetUrl';
-import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
   uvttImportDecision,
@@ -502,23 +501,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     setError(null);
 
     try {
-      // 1. Transfer selected tokens to the new map
+      // 1. Transfer selected tokens to the new map, all in one request: the
+      // server moves them as they are, under a lock on both maps, so none
+      // is lost or doubled however many go at once.
       if (tokenIdsToTransfer.length > 0 && currentMap) {
-        const tokensToTransfer = currentMapTokens.filter((t) =>
-          tokenIdsToTransfer.includes(t.id)
-        );
-        await Promise.all(
-          tokensToTransfer.map(async (token) => {
-            // Add to new map, the whole token, clamped to the new bounds
-            await api.addToken(
-              campaign.id,
-              targetMap.id,
-              tokenCopyRequest(token, clampTokenPosition(token.position, token.size, targetMap))
-            );
-            // Remove from current map
-            await api.deleteToken(campaign.id, currentMap.id, token.id);
-          })
-        );
+        await api.moveTokens(campaign.id, currentMap.id, tokenIdsToTransfer, targetMap.id);
       }
 
       // 2. Set target map as current

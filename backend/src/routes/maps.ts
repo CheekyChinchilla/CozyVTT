@@ -11,7 +11,8 @@ import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
-import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
+import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema } from '../validators/tokens';
+import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
@@ -27,9 +28,9 @@ import { generateThumbnail } from '../utils/thumbnails';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
-import { getState as getCombatState } from '../websocket/initiativeState';
+import { getState as getCombatState, setState as setCombatState } from '../websocket/initiativeState';
 import { sendInitiativeState } from '../websocket/handlers/initiative';
-import { toJson } from '../utils/prisma-json';
+import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData } from '../websocket/shared';
 
@@ -1035,6 +1036,10 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // initiative roll reads the bound sheet, and character ids are visible to
     // every member of any shared campaign.
     const characterId = shapes.value.characterId ?? null;
+    // Absent means "the character's owner, while a player"; an explicit null
+    // means nobody. The two used to read the same, so a character's token the
+    // DM had taken control of came back to its owner whenever it was copied.
+    const controllerGiven = shapes.value.controlledBy !== undefined;
     let controlledBy: string | null = shapes.value.controlledBy ?? null;
     if (controlledBy && !(await canHoldTokens(campaignId, controlledBy))) {
       return res.status(400).json({
@@ -1053,7 +1058,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
           message: 'Token characterId must name a character of this campaign',
         });
       }
-      if (!controlledBy && (await canHoldTokens(campaignId, character.userId))) {
+      if (!controllerGiven && (await canHoldTokens(campaignId, character.userId))) {
         controlledBy = character.userId;
       }
     }
@@ -1087,16 +1092,11 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       obscured: shapes.value.obscured ?? false,
     };
 
-    // Get existing tokens array
-    const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
-
-    // Add new token to array
-    const updatedTokens = [...tokensArray, newToken];
-
-    // Update the map with new tokens array
-    const updatedMap = await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Appended under the map's lock, to the list as it is then: another
+    // write landing between this route's read and its write used to be lost.
+    const updatedMap = await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
     });
 
     return res.status(201).json({
@@ -1293,8 +1293,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     }
 
     // Build updated token (merge updates with existing)
-    const updatedToken: Token = {
-      ...existingToken,
+    const changes: Partial<Token> = {
       ...(shapes.value.name && { name: shapes.value.name }),
       ...(updates.imageUrl !== undefined && { imageUrl: shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
       ...(position && { position }),
@@ -1322,15 +1321,23 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       ...(shapes.value.obscured !== undefined && { obscured: shapes.value.obscured }),
     };
 
-    // Update the tokens array
-    const updatedTokens = [...tokensArray];
-    updatedTokens[tokenIndex] = updatedToken;
-
-    // Update the map
-    const updatedMap = await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Merged into the token as it is under the map's lock, so a move that
+    // landed since this route read it is kept, and written back to the list
+    // as it is then.
+    const written = await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      const tokens = readTokens(fresh.tokens);
+      const index = tokens.findIndex((t) => t.id === tokenId);
+      if (index === -1) return null;
+      const token: Token = { ...tokens[index], ...changes };
+      tokens[index] = token;
+      const map = await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+      return { token, map };
     });
+    if (!written) {
+      return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
+    }
+    const { token: updatedToken, map: updatedMap } = written;
 
     await resendInitiativeFor(campaignId, tokenId);
 
@@ -1350,6 +1357,92 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       error: 'Internal Server Error',
       message: 'Failed to update token',
     });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/maps/:id/tokens/move
+ * Move tokens to another map of the campaign, in one step
+ * Requires: DM role
+ *
+ * Each token travels as it is stored, under its own id, clamped onto the
+ * target map. A copy and a delete per token used to race (tokens lost or
+ * doubled), gave the token a new id (a combatant dropped out of the order)
+ * and rebuilt it through the create route's defaults.
+ */
+router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id: sourceId } = req.params;
+    const parsed = MoveTokensSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    }
+    const { tokenIds, targetMapId } = parsed.data;
+    if (targetMapId === sourceId) {
+      return res.status(400).json({ error: 'Validation Error', message: 'The target must be another map' });
+    }
+    const wanted = new Set(tokenIds);
+
+    const outcome = await withMapsLocked([sourceId, targetMapId], async (tx) => {
+      const source = await tx.map.findUnique({ where: { id: sourceId } });
+      if (!source || source.campaignId !== campaignId) {
+        return { refused: 'Map not found in this campaign' };
+      }
+      const target = await tx.map.findUnique({ where: { id: targetMapId } });
+      if (!target || target.campaignId !== campaignId) {
+        return { refused: 'Target map not found in this campaign' };
+      }
+      const sourceTokens = readTokens(source.tokens);
+      const missing = tokenIds.filter((id) => !sourceTokens.some((t) => t.id === id));
+      if (missing.length > 0) {
+        return { refused: `Token not found on this map: ${missing.join(', ')}` };
+      }
+      const moved = sourceTokens
+        .filter((t) => wanted.has(t.id))
+        .map((t) => ({ ...t, position: clampTokenPosition(t.position, t.size, target) }));
+      const updatedSource = await tx.map.update({
+        where: { id: sourceId },
+        data: { tokens: toJson(sourceTokens.filter((t) => !wanted.has(t.id))) },
+      });
+      const updatedTarget = await tx.map.update({
+        where: { id: targetMapId },
+        data: { tokens: toJson([...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved]) },
+      });
+      return { moved, updatedSource, updatedTarget };
+    });
+    if ('refused' in outcome) {
+      return res.status(404).json({ error: 'Not Found', message: outcome.refused });
+    }
+    const { moved, updatedSource, updatedTarget } = outcome;
+
+    // A combatant follows its token: the order names the map each entry's
+    // token is on, and the tracker looks for it there.
+    const state = getCombatState(campaignId);
+    const inOrder = state.combatants.some((c) => wanted.has(c.tokenId));
+    if (inOrder) {
+      setCombatState(campaignId, {
+        ...state,
+        combatants: state.combatants.map((c) => (wanted.has(c.tokenId) ? { ...c, mapId: targetMapId } : c)),
+      });
+    }
+
+    // Whichever of the two maps the table is on is sent again, as each
+    // member may see it; the other is the DM's alone until they switch.
+    try {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      const io = getSocketInstance();
+      for (const map of [updatedSource, updatedTarget]) {
+        if (campaign?.currentMapId === map.id) await broadcastMapData(io, campaignId, map);
+      }
+      if (inOrder) await sendInitiativeState(io, campaignId);
+    } catch (error) {
+      logger.warn('Table not told of a token move', { err: error });
+    }
+
+    return res.status(200).json({ message: `${moved.length} token(s) moved`, moved });
+  } catch (error) {
+    logger.error('Error moving tokens', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to move tokens' });
   }
 });
 
@@ -1394,13 +1487,11 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
       });
     }
 
-    // Remove the token
-    const updatedTokens = tokensArray.filter((t) => t.id !== tokenId);
-
-    // Update the map
-    await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Removed from the list as it is under the map's lock; several deletes
+    // at once used to leave only whichever wrote last.
+    await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
     });
 
     await resendInitiativeFor(campaignId, tokenId);

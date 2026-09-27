@@ -26,7 +26,7 @@ import api from '@/services/api';
 import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
 import { dmTokenControls } from '@/utils/tokenControls';
-import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
+import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
@@ -304,23 +304,15 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     const targetMap = campaign.maps?.find((m) => m.id === targetMapId);
     if (!targetMap) return;
 
-    // Read the live position (this list ignores movement, so the row's
-    // token prop can be stale), clamped to fit the target map grid.
-    const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
-    const position = clampTokenPosition(livePosition, token.size, targetMap);
-
     try {
-      await api.addToken(campaign.id, targetMapId, tokenCopyRequest(token, position));
-      await api.deleteToken(campaign.id, currentMap.id, token.id);
+      // One request: the server moves the token as it is, clamped onto the
+      // target map, and tells everyone on this map itself.
+      await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
 
       useGameStore.getState().removeToken(token.id);
       setMovingTokenId(null);
-
-      // Broadcast to both maps
-      socket?.emitMapChange(currentMap.id);
-      socket?.emitMapChange(targetMapId);
-    } catch {
-      setError('Failed to move token to map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to move token to map');
     } finally {
       setIsMovingTokenMap(false);
     }

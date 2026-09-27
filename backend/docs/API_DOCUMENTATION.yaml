@@ -4222,6 +4222,72 @@ paths:
   # Per-map dynamic lighting and fog-of-war state.
   # ============================================
 
+  /api/campaigns/{campaignId}/maps/{id}/tokens/move:
+    post:
+      tags:
+        - Maps
+      summary: Move tokens to another map
+      description: |
+        Move tokens from this map to another map of the campaign in one step
+        (DM only). Each token travels as it is stored, under its own id, with
+        its position clamped onto the target map, and a combatant keeps its
+        place in the initiative order. All named tokens move or none does: an
+        id that is not on this map answers 404 and nothing changes. Whichever
+        of the two maps the campaign is showing is then sent again to every
+        member as `map.changed`; the other stays the DM's until they switch.
+      operationId: moveTokens
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: id
+          in: path
+          required: true
+          description: The map the tokens are on
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tokenIds
+                - targetMapId
+              properties:
+                tokenIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: string
+                targetMapId:
+                  type: string
+                  format: uuid
+                  description: Another map of the same campaign
+      responses:
+        '200':
+          description: Tokens moved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  moved:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Token'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/campaigns/{campaignId}/maps/{id}/walls:
     parameters:
       - $ref: '#/components/parameters/CampaignId'

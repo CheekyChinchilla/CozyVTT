@@ -105,12 +105,15 @@ beforeAll(async () => {
     },
   });
   mapA = map.id;
+  // map.change sends only the map the campaign is showing.
+  await prisma.campaign.update({ where: { id: campaignA }, data: { currentMapId: mapA } });
 
   server = await createWsTestServer();
   [hostCookie, switcherCookie] = await Promise.all([server.loginAs(hostId), server.loginAs(switcherId)]);
 });
 
 afterAll(async () => {
+  await prisma.campaign.updateMany({ where: { id: { in: [campaignA, campaignB] } }, data: { currentMapId: null } });
   await server?.close();
   await prisma.map.deleteMany({ where: { id: mapA } });
   await prisma.campaign.deleteMany({ where: { id: { in: [campaignA, campaignB] } } });

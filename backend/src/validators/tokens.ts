@@ -208,3 +208,12 @@ export function validateTokenShapes(
 
   return { ok: true, value };
 }
+
+/**
+ * Moving tokens to another map of the campaign, all in one step. Token ids
+ * are whatever the map stores (older maps hold ids that are not UUIDs).
+ */
+export const MoveTokensSchema = z.object({
+  tokenIds: z.array(z.string().min(1).max(100)).min(1).max(500),
+  targetMapId: z.uuid(),
+});

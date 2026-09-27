@@ -85,10 +85,14 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.token.controlledBy).toBe(playerId);
   });
 
-  it('the same when the controller is given as null', async () => {
+  // An explicit null is the DM saying "nobody": a character's token the DM
+  // took control of used to come back to its owner whenever it was moved or
+  // duplicated, because the copy carried `controlledBy: null` and null read
+  // as "not given".
+  it('has no controller when the request says so with null', async () => {
     const res = await create({ characterId, controlledBy: null });
     expect(res.status).toBe(201);
-    expect(res.body.token.controlledBy).toBe(playerId);
+    expect(res.body.token.controlledBy).toBeNull();
   });
 
   it('keeps a controller the request names, when that is a player', async () => {
