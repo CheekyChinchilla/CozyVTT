@@ -247,6 +247,17 @@ export function canRollDice(campaignRole: string | undefined): boolean {
 }
 
 /**
+ * Who may open or close a door: the DM and players. A spectator watches the
+ * map and does not touch it. The DM may also move, redraw or lock a door, and
+ * change any other wall; a player may change nothing about a door but whether
+ * it is open, which the wall handler enforces on top of this. Takes the
+ * socket's role as stored, a plain string, like canRollDice.
+ */
+export function canToggleDoor(campaignRole: string | undefined): boolean {
+  return campaignRole === 'DM' || campaignRole === 'PLAYER';
+}
+
+/**
  * Check if user can delete chat messages
  * Only DM can delete messages
  */

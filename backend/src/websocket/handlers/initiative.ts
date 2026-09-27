@@ -236,8 +236,8 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
    * This check is the real boundary: the tracker and the map menu only decide
    * whether to *offer* the control, and neither is trustworthy on its own.
    */
-  // `characterName` is what older clients sent along; the server names the token itself now.
   socket.on('initiative.roll', async (data: { tokenId: string; mapId: string; expression?: string; characterName?: string }) => {
+    // `characterName` is what older clients sent along; the server names the token itself now.
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
 

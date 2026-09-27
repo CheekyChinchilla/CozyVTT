@@ -10,7 +10,9 @@ machine work; this generates it.
     python scripts/websocket-events.py --check    # non-zero if the doc is behind
 
 Run from the repository root. The `--check` form is what stops this drifting
-again: it fails when an event exists in the code with no line in the table.
+again: it regenerates the table and fails on any difference from the one in the
+doc, so a handler that gains or loses a gate, an event that goes away, or a
+hand-edited cell all fail it.
 """
 
 import argparse
@@ -35,6 +37,13 @@ HANDLERS = [
 DOC = 'backend/docs/WEBSOCKET_DOCUMENTATION.md'
 BEGIN = '<!-- BEGIN GENERATED EVENTS -->'
 END = '<!-- END GENERATED EVENTS -->'
+
+# The "who may send it" column is read off the shared predicates in
+# services/permissions.ts and a few fixed phrases. A handler that gates inline
+# some other way is listed as "Any member": the handler is authoritative, and
+# the line above the table says so.
+CAVEAT = ('_Who may send it is read from the shared permission predicates each '
+          'handler calls; the handler itself is authoritative._')
 
 
 def sources():
@@ -63,8 +72,28 @@ def describe(text, index):
     return re.split(r'(?<=[.!?])\s', body)[0].strip() if body else ''
 
 
+def handler_body(text, start, handlers, i):
+    """
+    The handler from its `socket.on(` to the next one, plus the body of any
+    same-file function it calls outright (the throttled per-frame move hands
+    off to one). Only a bare call counts, not a method call: `.map(` must not
+    pull in a `const map` from elsewhere in the file. Only a function
+    definition is followed, not every `const` that shares the name.
+    """
+    body = text[start:handlers[i + 1].start() if i + 1 < len(handlers) else len(text)]
+    for called in set(re.findall(r'(?<![.\w])([A-Za-z_]\w*)\(', body)):
+        d = re.search(
+            r'(?:function\s+' + re.escape(called) + r'\b'
+            r'|const\s+' + re.escape(called) + r'\s*=\s*(?:async\s*)?(?:\(|[A-Za-z_]\w*\s*=>|throttle\())',
+            text)
+        if d:
+            nxt = text.find('socket.on(', d.end())
+            body += text[d.start():nxt if nxt != -1 else len(text)]
+    return body
+
+
 def collect():
-    """Every event, with its direction and whether the handler is DM-gated."""
+    """Every event, with its direction and how its handler is gated."""
     inbound, outbound = {}, {}
     for path, text in sources():
         handlers = list(re.finditer(r"socket\.on\(\s*'([^']+)'", text))
@@ -73,23 +102,20 @@ def collect():
             if name in ('disconnect', 'error', 'ping'):
                 continue
             window = text[m.end():m.end() + 900]
-            # The whole handler, up to the next one: the shared predicates can
-            # sit well past the first 900 characters of a long handler.
-            body = text[m.end():handlers[i + 1].start() if i + 1 < len(handlers) else len(text)]
-            # A handler that hands straight off to a function defined in the
-            # same file (the throttled per-frame move does) is judged by that
-            # function too, from its definition to the next handler.
-            for called in set(re.findall(r'\b([A-Za-z_]\w*)\(', body)):
-                d = re.search(r'(?:const|function)\s+' + re.escape(called) + r'\b', text)
-                if d:
-                    nxt = text.find('socket.on(', d.end())
-                    body += text[d.start():nxt if nxt != -1 else len(text)]
+            body = handler_body(text, m.end(), handlers, i)
+            # A refusal of anyone who is neither DM nor player is a spectator
+            # refusal, not a DM-only gate, whatever the first clause says.
+            dm_only = ('Only the DM' in window
+                       or ("role !== 'DM'" in window
+                           and "role !== 'DM' && socket.role !== 'PLAYER'" not in window))
             inbound.setdefault(name, {
-                'dm': "role !== 'DM'" in window or 'Only the DM' in window,
+                'dm': dm_only,
                 # The shared predicates in services/permissions.ts, which is
                 # where a handler refuses spectators or other players' tokens.
                 'controls': 'canControlToken(' in body,
                 'players': 'canRollDice(' in body,
+                'doors': 'canToggleDoor(' in body,
+                'owner': 'character.userId !== socket.userId' in body,
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
@@ -109,8 +135,24 @@ def collect():
     return inbound, outbound
 
 
+def who_may_send(info):
+    if info['dm']:
+        return 'DM only'
+    if info['doors']:
+        return 'DM; a player may toggle an unlocked door'
+    if info['controls']:
+        return "DM, or the token's player"
+    if info['owner']:
+        return "DM, or the character's owner"
+    if info['players']:
+        return 'DM and players'
+    return 'Any member'
+
+
 def table(inbound, outbound):
     lines = [
+        CAVEAT,
+        '',
         '### Client → server',
         '',
         '| Event | Who may send it | What it does |',
@@ -118,15 +160,7 @@ def table(inbound, outbound):
     ]
     for name in sorted(inbound):
         info = inbound[name]
-        if info['dm']:
-            who = 'DM only'
-        elif info['controls']:
-            who = "DM, or the token's player"
-        elif info['players']:
-            who = 'DM and players'
-        else:
-            who = 'Any member'
-        lines.append(f"| `{name}` | {who} | {info['desc'] or '—'} |")
+        lines.append(f"| `{name}` | {who_may_send(info)} | {info['desc'] or '—'} |")
     lines += ['', '### Server → client', '', '| Event | Emitted from |', '| --- | --- |']
     for name in sorted(outbound):
         lines.append(f"| `{name}` | `{outbound[name]['file']}` |")
@@ -136,7 +170,7 @@ def table(inbound, outbound):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true',
-                    help='exit non-zero if the doc is missing an event')
+                    help='exit non-zero if the doc differs from what --write would produce')
     ap.add_argument('--write', action='store_true',
                     help='rewrite the generated block in the doc')
     args = ap.parse_args()
@@ -152,12 +186,14 @@ def main():
         current = doc[doc.index(BEGIN) + len(BEGIN):doc.index(END)]
 
         if args.check:
-            missing = [n for n in list(inbound) + list(outbound)
-                       if f'`{n}`' not in current]
-            if missing:
-                print('Events in the code with no line in the table:')
-                for n in sorted(missing):
-                    print('  ', n)
+            stored = current.strip().split('\n')
+            wanted = rendered.strip().split('\n')
+            if stored != wanted:
+                print(f'{DOC} is behind the handlers. Lines that differ:')
+                for line in sorted(set(wanted) - set(stored)):
+                    print('  +', line)
+                for line in sorted(set(stored) - set(wanted)):
+                    print('  -', line)
                 print('\nRun: python scripts/websocket-events.py --write')
                 return 1
             print(f'{len(inbound)} inbound + {len(outbound)} outbound events, all listed.')

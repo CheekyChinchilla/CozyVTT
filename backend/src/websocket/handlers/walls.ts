@@ -12,6 +12,7 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { mapEditLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canToggleDoor } from '../../services/permissions';
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -90,14 +91,14 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * wall:update — DM updates a wall segment (e.g., door open/close).
+   * wall:update — Update a wall segment; a player may only open or close an unlocked door, and cannot move it.
    * Players may only toggle unlocked doors.
    */
   socket.on('wall:update', async (data: { mapId: string; segment: unknown }) => {
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM' && socket.role !== 'PLAYER') {
-        socket.emit('error', { message: 'Permission denied' });
+      if (!canToggleDoor(socket.role)) {
+        socket.emit('error', { message: 'Spectators cannot open or close doors' });
         return;
       }
       if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
@@ -124,7 +125,11 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      // Non-DM users may only toggle unlocked doors (door-closed ↔ door-open)
+      // Non-DM users may only toggle unlocked doors (door-closed ↔ door-open),
+      // and only that: the segment they send is otherwise ignored, so the door
+      // stays where the DM drew it. Storing the whole segment let a player
+      // move or stretch any unlocked door across the map by toggling it.
+      let updated: WallSegment;
       if (socket.role !== 'DM') {
         const targetType = parsed.data.type;
         const currentType = existing[idx].type;
@@ -139,12 +144,15 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           socket.emit('error', { message: 'Players may only toggle doors' });
           return;
         }
+        updated = { ...existing[idx], type: targetType };
+      } else {
+        updated = parsed.data;
       }
 
-      existing[idx] = parsed.data;
+      existing[idx] = updated;
       await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson(existing) } });
 
-      io.to(socket.campaignId).emit('wall:updated', { mapId, segment: parsed.data });
+      io.to(socket.campaignId).emit('wall:updated', { mapId, segment: updated });
     } catch (error) {
       logger.error('wall:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update wall segment' });

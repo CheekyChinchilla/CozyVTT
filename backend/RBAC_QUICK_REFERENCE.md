@@ -36,8 +36,11 @@ router.put('/api/campaigns/:campaignId', campaignDM, handler);
 #### 5. Campaign DM or Player (Excludes Spectators)
 `campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
 today. Where spectators are refused, the handler does it: `dice.roll` (socket)
-through `canRollDice`, and token control through `canControlToken`. Chat is a
-socket event (`chat.message`) and spectators may send it.
+through `canRollDice`, token control through `canControlToken`, and doors
+through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+may open or close an unlocked door and nothing else, the segment's position
+and size they send being ignored). Chat is a socket event (`chat.message`)
+and spectators may send it.
 
 ---
 

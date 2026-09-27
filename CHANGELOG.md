@@ -65,6 +65,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **The socket event table now says who may really send each event, and the check catches drift.** The generated table listed `wall:update` as DM-only when players may toggle doors, and the character HP and hit-dice events as open to any member when only the character's owner or the DM may send them; its check only confirmed each event had a row, so a hand-edited or stale cell passed. The column now reads the named permission predicates, and the check regenerates the table and fails on any difference.
+
 - **Deleting a campaign disconnects everyone still on it.** Members whose browsers were still open on a deleted campaign stayed on its live connection: they could still see each other's pings, every action they tried failed with a server error, and the campaign's combat state stayed in memory until the next restart. Their connections are now told the campaign was deleted and dropped from it, and its combat state is cleared.
 
 - **The initiative tracker's turn banner names an obscured creature properly.** When it was an obscured creature's turn, players saw a banner reading just "'s turn"; it now reads "Unknown creature's turn", as the creature's row already did. And the DM's own view of an obscured token that has no picture is no longer a grey circle: the token keeps its colour for the DM, with the **?** badge as the reminder, while players still see grey.
@@ -138,6 +140,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
 ### Security
+
+- **A player opening or closing a door can no longer move it.** The rule was that players may only toggle an unlocked door, but the whole door segment the player's client sent was stored, so a scripted player could stretch a door across the map or pull it out of its doorway, which changed what everyone else on a lit map could see until the DM noticed. Only the open/closed state a player sends is applied now; where the door is stays the DM's.
 
 - **The creature and token template libraries are the DM's to read, as they always were to edit.** Any member, spectators included, could list a campaign's token templates and read every creature template with their session cookie: the DM's notes on a prepared NPC, its stat block and hit points, and the whole homebrew bestiary. Every token on a map also carried the id of the creature it was placed from, which resolved to that creature's real name and stat block even when the DM had renamed the token to hide what it was. Reading either library now needs the DM role, and a placed token's creature link is sent only to the DM and the token's controller.
 

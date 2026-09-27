@@ -617,7 +617,7 @@ socket.on('error', (data) => {
       alert('You can only move your own tokens');
       break;
     case 'Spectators cannot move tokens':
-      alert('Spectators have read-only access');
+      alert('Spectators cannot move tokens');
       break;
     case 'Not authenticated to a campaign':
       // Re-authenticate
@@ -967,6 +967,8 @@ right-hand column.
 
 <!-- BEGIN GENERATED EVENTS -->
 
+_Who may send it is read from the shared permission predicates each handler calls; the handler itself is authoritative._
+
 ### Client → server
 
 | Event | Who may send it | What it does |
@@ -974,8 +976,8 @@ right-hand column.
 | `atmosphere.audio.set` | DM only | DM queues or stops ambient audio for all players. |
 | `atmosphere.effect.set` | DM only | DM sets a visual particle overlay on the map canvas. |
 | `authenticate` | Any member | — |
-| `character.hitdice.spend` | Any member | spend one D&D 5e hit die. |
-| `character.hp.update` | Any member | — |
+| `character.hitdice.spend` | DM, or the character's owner | spend one D&D 5e hit die. |
+| `character.hp.update` | DM, or the character's owner | — |
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
 | `dice.roll` | DM and players | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
@@ -1011,7 +1013,7 @@ right-hand column.
 | `vibe.update` | DM only | DM changes the current vibe period. |
 | `wall:add` | DM only | DM adds a single wall segment. |
 | `wall:remove` | DM only | DM removes a wall segment by id. |
-| `wall:update` | DM only | DM updates a wall segment (e.g., door open/close). |
+| `wall:update` | DM; a player may toggle an unlocked door | Update a wall segment; a player may only open or close an unlocked door, and cannot move it. |
 | `walls:replace` | DM only | DM bulk-replaces all wall segments. |
 | `walls:request` | Any member | Any campaign member requests current wall segments on (re)join. |
 

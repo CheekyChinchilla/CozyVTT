@@ -333,6 +333,48 @@ describe('walls & doors', () => {
     expect((await denial).message).toBe('Players may only toggle doors');
     player.disconnect();
   });
+
+  it("a player's toggle keeps the door where the DM drew it", async () => {
+    // The whole segment the client sent used to be stored, so a player could
+    // move or stretch any unlocked door by toggling it with new coordinates.
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+
+    const moved = { ...seedWalls()[1], x1: 0, y1: 0, x2: 19, y2: 19, type: 'door-open' };
+    const dmSees = waitForEvent<{ segment: { id: string; type: string; x1: number; y1: number; x2: number; y2: number } }>(dm, 'wall:updated');
+    player.emit('wall:update', { mapId, segment: moved });
+
+    const seen = (await dmSees).segment;
+    expect(seen.type).toBe('door-open');
+    expect([seen.x1, seen.y1, seen.x2, seen.y2]).toEqual([5, 0, 6, 0]);
+
+    const map = await prisma.map.findUnique({ where: { id: mapId }, select: { wallSegments: true } });
+    const stored = (map!.wallSegments as Array<{ id: string; x1: number; y1: number; x2: number; y2: number; type: string }>)
+      .find((s) => s.id === DOOR_CLOSED_ID);
+    expect(stored).toMatchObject({ x1: 5, y1: 0, x2: 6, y2: 0, type: 'door-open' });
+
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('a spectator cannot toggle a door', async () => {
+    await prisma.campaignMembership.updateMany({
+      where: { userId: player1Id, campaignId },
+      data: { role: 'SPECTATOR' },
+    });
+    try {
+      const spectator = await server.connectAndAuth(player1Cookie, campaignId);
+      const denial = waitForEvent<{ message: string }>(spectator, 'error');
+      spectator.emit('wall:update', { mapId, segment: { ...seedWalls()[1], type: 'door-open' } });
+      expect((await denial).message).toBe('Spectators cannot open or close doors');
+      spectator.disconnect();
+    } finally {
+      await prisma.campaignMembership.updateMany({
+        where: { userId: player1Id, campaignId },
+        data: { role: 'PLAYER' },
+      });
+    }
+  });
 });
 
 // ── 4. Fog of war ────────────────────────────────────────────────────────────

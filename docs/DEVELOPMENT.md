@@ -372,8 +372,10 @@ Two of those deserve a note:
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction;
-  `websocket-events.py --check` does the same for the WebSocket event table.
-  Regenerate that table with `python scripts/websocket-events.py --write`.
+  `websocket-events.py --check` regenerates the WebSocket event table from
+  the handlers and fails on any difference from the one in the doc, a
+  changed permission column included. Regenerate that table with
+  `python scripts/websocket-events.py --write`.
 
 `.github/workflows/ci.yml` runs the same commands on every push and pull
 request. Note that it **reports** failures rather than blocking a merge —
