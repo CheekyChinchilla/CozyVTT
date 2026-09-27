@@ -8,7 +8,7 @@ import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/rbac';
-import { campaignMember, campaignDM } from '../middleware/compose';
+import { campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
   CreateTokenTemplateSchema,
@@ -23,10 +23,11 @@ const router = Router({ mergeParams: true });
 // ============================================
 // LIST — GET /
 // Returns token templates for this campaign with search/pagination.
-// Any campaign member can list.
+// DM only, like every other route here: a template carries the notes, stat
+// block and hit points the map keeps from players.
 // ============================================
 
-router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const { search, type, limit = '50', offset = '0' } = req.query;
@@ -64,7 +65,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
 // GET ONE — GET /:id
 // ============================================
 
-router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 

@@ -93,6 +93,14 @@ describe('tokenSentTo', () => {
     expect(tokenSentTo(token, false)).not.toHaveProperty('sightRadius');
   });
 
+  it('carries the creature template link to the controller only', () => {
+    // The link resolves to the library entry, whose stat block and true name
+    // the DM may have renamed the token to hide.
+    const placed = { ...token, creatureTemplateId: 'tmpl-1' };
+    expect(tokenSentTo(placed, true).creatureTemplateId).toBe('tmpl-1');
+    expect(tokenSentTo(placed, false)).not.toHaveProperty('creatureTemplateId');
+  });
+
   it('masks an obscured token for anyone but the controller', () => {
     const veiled = { ...token, obscured: true };
     expect(tokenSentTo(veiled, true).name).toBe('Goblin');

@@ -411,6 +411,12 @@ describe('filterTokensByRole', () => {
       expect(sent?.obscured).toBe(true);
     });
 
+    it('never names the creature template a placed token came from to a player who does not control it', () => {
+      const fromLibrary = { ...makeToken('placed', 9, 9, null, 0), creatureTemplateId: 'tmpl-1' };
+      const sent = byId(filterTokensByRole([fromLibrary], 'PLAYER', false, 'user1'), 'placed');
+      expect(sent).not.toHaveProperty('creatureTemplateId');
+    });
+
     it('tells another player neither who controls it nor what kind of token it is', () => {
       const disguised = { ...makeToken('disguised', 8, 8, 'user2', 0), obscured: true, type: 'player' as const, rotation: 90, initiative: 17, displayMode: 'full-art' as const };
       const sent = byId(filterTokensByRole([disguised], 'PLAYER', false, 'user1'), 'disguised');

@@ -78,7 +78,7 @@ router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Respons
 // Any campaign member can list.
 // ============================================
 
-router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const { search, source, cr, gameSystem, limit = '50', offset = '0' } = req.query;
@@ -155,7 +155,7 @@ function isVisibleFromCampaign(
 // GET ONE — GET /:creatureId
 // ============================================
 
-router.get('/:creatureId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
 
@@ -372,7 +372,7 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
 // Returns creature IDs that the current user has favorited in this campaign.
 // ============================================
 
-router.get('/favorites/list', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/favorites/list', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -400,7 +400,7 @@ router.get('/favorites/list', campaignMember, async (req: AuthenticatedRequest, 
 // Toggle favorite for the current user in this campaign.
 // ============================================
 
-router.post('/:creatureId/favorite', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:creatureId/favorite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
     const userId = req.session.userId!;

@@ -32,6 +32,7 @@ import characterRoutes from '../../routes/characters';
 import characterTemplateRoutes from '../../routes/characterTemplates';
 import assetRoutes from '../../routes/assets';
 import creatureRoutes from '../../routes/creatures';
+import tokenTemplateRoutes from '../../routes/tokenTemplates';
 import userRoutes from '../../routes/users';
 import mapRoutes from '../../routes/maps';
 import configRoutes from '../../routes/config';
@@ -67,6 +68,7 @@ export function createTestApp(): express.Express {
   // Mounted separately in server.ts too — the creature routes hang off a
   // campaign path rather than the campaigns router, so they need their own line.
   app.use('/api/campaigns/:campaignId/creatures', creatureRoutes);
+  app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
   app.use('/api/campaigns/:campaignId/maps', mapRoutes);
   app.use('/api/characters', characterRoutes);
   app.use('/api/character-templates', characterTemplateRoutes);

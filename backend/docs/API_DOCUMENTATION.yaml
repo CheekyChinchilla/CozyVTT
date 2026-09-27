@@ -4728,7 +4728,8 @@ paths:
       description: |
         Returns SRD (global) + campaign-specific custom creature templates.
         Supports search, source filter, challenge rating filter, and pagination.
-        Any campaign member can list.
+        Campaign DM only: the library holds stat blocks and the DM's homebrew,
+        and the client shows it to the DM alone.
       operationId: listCreatures
       security:
         - cookieAuth: []
@@ -4849,7 +4850,7 @@ paths:
     get:
       tags: [Creatures]
       summary: Get creature template
-      description: Get a single creature template by ID. Any campaign member can view a creature belonging to this campaign, or a global SRD creature. A creature belonging to another campaign answers 404.
+      description: Get a single creature template by ID. Campaign DM only. A creature belonging to this campaign, or a global SRD creature; one belonging to another campaign answers 404.
       operationId: getCreature
       security:
         - cookieAuth: []
@@ -4983,7 +4984,7 @@ paths:
     get:
       tags: [Creatures]
       summary: List creature favorites
-      description: Returns creature IDs and full creature objects that the current user has favorited in this campaign.
+      description: Returns creature IDs and full creature objects that the current user has favorited in this campaign. Campaign DM only, like the library it belongs to.
       operationId: listCreatureFavorites
       security:
         - cookieAuth: []
@@ -5011,7 +5012,7 @@ paths:
     post:
       tags: [Creatures]
       summary: Toggle creature favorite
-      description: Toggle favorite for the current user in this campaign. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's answers 404.
+      description: Toggle favorite for the current user in this campaign. Campaign DM only. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's answers 404.
       operationId: toggleCreatureFavorite
       security:
         - cookieAuth: []
@@ -5112,7 +5113,7 @@ paths:
     get:
       tags: [Token Templates]
       summary: List token templates
-      description: Get all token templates for a campaign. Supports search and type filtering.
+      description: Get all token templates for a campaign. Supports search and type filtering. Campaign DM only: a template carries the notes, stat block and hit points the map keeps from players.
       operationId: listTokenTemplates
       security:
         - cookieAuth: []
@@ -5177,6 +5178,7 @@ paths:
     get:
       tags: [Token Templates]
       summary: Get token template
+      description: Campaign DM only, like the list.
       operationId: getTokenTemplate
       security:
         - cookieAuth: []
@@ -7352,8 +7354,8 @@ components:
       description: |
         A token as the DM sees it. A player is sent a subset of each token they
         may see at all: never `notes` or `statBlock`; `hp` only for a token they
-        control or one whose `showHpBar` is on; `sightRadius` only for a token
-        they control. A token whose `obscured` is true reaches anyone but its
+        control or one whose `showHpBar` is on; `sightRadius` and
+        `creatureTemplateId` only for a token they control. A token whose `obscured` is true reaches anyone but its
         controller as a shape with no identity, built from a fixed list: `id`,
         `position`, `size`, `layer`, `visible` and `obscured: true` are kept,
         and every other field is neutral (`name` and `imageUrl` empty,

@@ -105,8 +105,9 @@ export function maskObscuredToken<T extends MaskableToken>(token: T): T {
 /**
  * The token as a recipient who does or does not control it is sent it: never
  * the DM's notes or the stat block, hit points only for their own token or
- * one whose bar is on, darkvision only for their own, and an obscured token
- * they do not control through the mask above. The server applies this before
+ * one whose bar is on, darkvision and the creature template link only for
+ * their own, and an obscured token they do not control through the mask
+ * above. The server applies this before
  * sending; the DM's Player Preview applies it to show the same thing.
  */
 export function tokenSentTo<T extends MaskableToken>(token: T, own: boolean): T {
@@ -114,6 +115,11 @@ export function tokenSentTo<T extends MaskableToken>(token: T, own: boolean): T 
   delete sent.notes;
   delete sent.statBlock;
   if (!(own || token.showHpBar === true)) delete sent.hp;
-  if (!own) delete sent.sightRadius;
+  if (!own) {
+    delete sent.sightRadius;
+    // The link resolves to a library entry, whose stat block and true name
+    // the DM may have renamed the token to hide.
+    delete sent.creatureTemplateId;
+  }
   return !own && token.obscured === true ? maskObscuredToken(sent) : sent;
 }

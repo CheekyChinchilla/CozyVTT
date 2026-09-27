@@ -126,7 +126,7 @@ read there.
 |---|---|
 | `notes`, `statBlock` | never |
 | `hp` | the player controls the token, or its `showHpBar` is on |
-| `sightRadius` | the player controls the token |
+| `sightRadius`, `creatureTemplateId` | the player controls the token |
 | the identity of an `obscured` token: name, picture, conditions, metadata, HP, disposition, character and template links, controller, kind, facing, initiative and display mode (`utils/tokenMask.ts` builds the masked token from a list of what may be known) | the player controls the token |
 | everything else on a token they may see at all | always |
 
