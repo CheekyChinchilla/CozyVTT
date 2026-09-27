@@ -1,9 +1,11 @@
 /**
  * The restore route, with the database tools stubbed.
  *
- * psql and the migration run are child processes, so the test replaces
- * child_process.execFile and checks what the route hands them: psql must load
- * the prepared copy of the dump (schema replaced, the setting an older server
+ * pg_dump, psql and the migration run are child processes, so the test
+ * replaces child_process.execFile and checks what the route hands them: a file
+ * that is not a complete backup must reach none of them, a safety copy of the
+ * database must be written before psql loads anything, psql must load the
+ * prepared copy of the dump (schema replaced, the setting an older server
  * rejects removed), migrations must run after a successful load and never
  * after a failed one, and a failed load must leave the uploads alone.
  */
@@ -17,6 +19,7 @@ import { execFile } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import archiver from 'archiver';
+import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -36,7 +39,7 @@ interface ToolCall {
 
 type Done = (err: Error | null, out?: { stdout: string; stderr: string }) => void;
 
-/** Stand in for psql and the migration run; `fail` makes one of them exit non-zero. */
+/** Stand in for pg_dump, psql and the migration run; `fail` makes one of them exit non-zero. */
 function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
   const calls: ToolCall[] = [];
   execFileMock.mockImplementation((cmd: string, args: string[], ...rest: unknown[]) => {
@@ -53,12 +56,17 @@ function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
     const fileFlag = args.indexOf('--file');
     if (cmd === 'psql' && fileFlag >= 0) {
       fs.readFile(args[fileFlag + 1], 'utf8').then((sql) => { call.sqlLoaded = sql; finish(); }, finish);
+    } else if (cmd === 'pg_dump' && fileFlag >= 0) {
+      fs.writeFile(args[fileFlag + 1], SAFETY_DUMP).then(finish, finish);
     } else {
       finish();
     }
   });
   return calls;
 }
+
+/** What the stubbed pg_dump writes when the route takes its safety copy. */
+const SAFETY_DUMP = '-- the database as it was before the restore\n';
 
 /** A backup archive holding the given files. */
 async function backupZip(entries: Record<string, string>): Promise<Buffer> {
@@ -94,6 +102,16 @@ const DUMP_FROM_NEWER_CLIENT = [
   'COPY public."Note" (id, body) FROM stdin;',
   'a1\tSET transaction_timeout = 0;',
   '\\.',
+  'CREATE TABLE public."User" (',
+  '    id text NOT NULL',
+  ');',
+  'CREATE TABLE public._prisma_migrations (',
+  '    id character varying(36) NOT NULL',
+  ');',
+  '',
+  '--',
+  '-- PostgreSQL database dump complete',
+  '--',
   '',
 ].join('\n');
 
@@ -119,8 +137,12 @@ beforeAll(async () => {
   user = await login(u.email);
 });
 
+/** Backups the route wrote during a test, removed afterwards. */
+const written: string[] = [];
+
 afterAll(async () => {
   await cleanupUsers([adminId, userId]);
+  await Promise.all(written.map((f) => fs.unlink(f).catch(() => {})));
 });
 
 beforeEach(() => {
@@ -140,17 +162,105 @@ describe('POST /api/admin/backups/restore', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/log in again/);
+    written.push(path.join(process.env.BACKUP_DIR || 'backups', res.body.safetyBackup));
 
-    expect(calls.map((c) => c.cmd)).toEqual(['psql', 'npx']);
-    const [psql, migrate] = calls;
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    const [, psql, migrate] = calls;
     expect(psql.args).toEqual(expect.arrayContaining(['--single-transaction', 'ON_ERROR_STOP=1']));
     expect(path.basename(psql.args[psql.args.indexOf('--file') + 1])).not.toBe('database.sql');
-    expect(psql.sqlLoaded?.startsWith('DROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n')).toBe(true);
+    expect(psql.sqlLoaded).toMatch(/^\\restrict [A-Za-z0-9]+\nDROP SCHEMA public CASCADE;\nCREATE SCHEMA public;\n/);
     expect(psql.sqlLoaded).not.toContain('\nSET transaction_timeout = 0;\n');
     expect(psql.sqlLoaded).toContain('CREATE TABLE public."Note"');
     expect(psql.sqlLoaded).not.toContain('OWNER TO');
     expect(psql.sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
     expect(migrate.args).toEqual(['prisma', 'migrate', 'deploy']);
+  });
+
+  it('writes a backup of the database as it is before loading anything, and names it', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(200);
+    const [dump] = calls;
+    expect(dump.cmd).toBe('pg_dump');
+    expect(dump.args).toEqual(expect.arrayContaining(['--clean', '--if-exists', '--no-owner', '--no-privileges']));
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    expect(named).toBeDefined();
+    expect(res.body.safetyBackup).toBe(named);
+
+    // It is an ordinary backup: listed with the others, and holding the dump pg_dump wrote.
+    const list = await admin.get('/api/admin/backups');
+    expect(list.body.backups.map((b: { filename: string }) => b.filename)).toContain(named);
+    const file = path.join(process.env.BACKUP_DIR || 'backups', named!);
+    written.push(file);
+    const entries = (await unzipper.Open.file(file)).files.map((f) => f.path);
+    expect(entries).toEqual(['database.sql']);
+  });
+
+  it('refuses a file that is not a complete backup before any tool runs', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': '' });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid Backup');
+    expect(res.body.message).toMatch(/cut short/);
+    expect(res.body.message).toMatch(/Nothing was changed/);
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a backup that would run a command, before any tool runs', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': '\\! id > /tmp/pwned\n' + DUMP_FROM_NEWER_CLIENT });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid Backup');
+    expect(res.body.message).toMatch(/psql command/);
+    expect(calls).toEqual([]);
+  });
+
+  it('stops before loading when the safety copy cannot be written', async () => {
+    const calls = stubTools({ cmd: 'pg_dump', stderr: 'pg_dump: error: connection failed' });
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Restore Failed');
+    expect(res.body.message).toMatch(/backup of the current database/i);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
+  });
+
+  it('says the database was restored but the files were not when copying them fails', async () => {
+    const marker = `restore-test-${Date.now()}`;
+    const uploads = process.env.UPLOAD_DIR || 'uploads';
+    // A file where the archive has a directory: the copy cannot replace one with the other.
+    await fs.mkdir(uploads, { recursive: true });
+    await fs.writeFile(path.join(uploads, marker), 'in the way');
+    const calls = stubTools();
+    const zip = await backupZip({
+      'database.sql': DUMP_FROM_NEWER_CLIENT,
+      [`uploads/${marker}/marker.txt`]: 'cannot land',
+    });
+
+    try {
+      const res = await restore(admin, zip);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Restore Incomplete');
+      expect(res.body.message).toMatch(/files/);
+      // The database side still finishes, migrations included, so what was restored is usable.
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+      if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
+    } finally {
+      await fs.rm(path.join(uploads, marker), { force: true });
+    }
   });
 
   it('answers 500 when the load fails, runs no migration and copies no uploads', async () => {
@@ -165,7 +275,9 @@ describe('POST /api/admin/backups/restore', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Restore Failed');
-    expect(calls.map((c) => c.cmd)).toEqual(['psql']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql']);
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
     // The log carries psql's own words and never the command line, which holds the database URL and its password.
     const logged = JSON.stringify(errorSpy.mock.calls.filter((c) => String(c[0]).includes('psql restore error')));
     expect(logged).toContain('unrecognized configuration parameter');
@@ -181,7 +293,9 @@ describe('POST /api/admin/backups/restore', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
-    expect(calls.map((c) => c.cmd)).toEqual(['psql', 'npx']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
   });
 
   it('refuses anyone who is not a platform administrator', async () => {

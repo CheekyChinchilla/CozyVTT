@@ -124,6 +124,9 @@ describe('prepareDumpForRestore', () => {
     return file;
   };
 
+  /** The line the restore opens with: psql's restricted mode, under a key the backup cannot know. */
+  const RESTRICT_LINE = /^\\restrict [A-Za-z0-9]{32,}$/;
+
   const NEWER_CLIENT_DUMP = [
     '--',
     '-- PostgreSQL database dump',
@@ -157,13 +160,26 @@ describe('prepareDumpForRestore', () => {
     '\\.',
     '',
     'ALTER TABLE ONLY public."Note" ADD CONSTRAINT "Note_pkey" PRIMARY KEY (id);',
+    'CREATE TABLE public."User" (',
+    '    id text NOT NULL',
+    ');',
+    'CREATE TABLE public._prisma_migrations (',
+    '    id character varying(36) NOT NULL',
+    ');',
+    '',
+    '--',
+    '-- PostgreSQL database dump complete',
+    '--',
     '',
     '\\unrestrict k3y',
   ];
 
   const isSkipped = (l: string) =>
-    l === 'SET transaction_timeout = 0;' || (l.startsWith('ALTER ') && l.includes(' OWNER TO ')) || l.startsWith('GRANT ');
-  /** The sample without the statements a restore drops, COPY rows untouched. */
+    l === 'SET transaction_timeout = 0;' ||
+    (l.startsWith('ALTER ') && l.includes(' OWNER TO ')) ||
+    l.startsWith('GRANT ') ||
+    /^\\(?:un)?restrict /.test(l);
+  /** The sample without the lines a restore drops or replaces, COPY rows untouched. */
   const expectedBody = (dump: string[]) => {
     let inCopy = false;
     return dump.filter((l) => {
@@ -182,9 +198,11 @@ describe('prepareDumpForRestore', () => {
 
     const result = await prepareDumpForRestore(src, dest);
 
-    const expected = [...RESTORE_PREAMBLE, ...expectedBody(NEWER_CLIENT_DUMP)].join('\n') + '\n';
-    expect(await fs.readFile(dest, 'utf8')).toBe(expected);
+    const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
+    expect(restrict).toMatch(RESTRICT_LINE);
+    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...expectedBody(NEWER_CLIENT_DUMP)].join('\n') + '\n');
     expect(result.skipped).toEqual({ settings: ['SET transaction_timeout = 0;'], ownership: 3, privileges: 1 });
+    expect(result.refused).toBeNull();
   });
 
   it('drops every owner and privilege statement, so the backup restores under whatever database user the instance has', async () => {
@@ -221,8 +239,176 @@ describe('prepareDumpForRestore', () => {
 
     const result = await prepareDumpForRestore(src, dest);
 
-    expect(await fs.readFile(dest, 'utf8')).toBe([...RESTORE_PREAMBLE, ...clean].join('\n') + '\n');
+    const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
+    expect(restrict).toMatch(RESTRICT_LINE);
+    expect(rest.join('\n')).toBe([...RESTORE_PREAMBLE, ...clean].join('\n') + '\n');
     expect(result.skipped).toEqual({ settings: [], ownership: 0, privileges: 0 });
+    expect(result.refused).toBeNull();
+  });
+
+  describe('what psql is allowed to run', () => {
+    it('opens with a restricted-mode line under a new key each time, so psql runs no command the backup holds', async () => {
+      const src = await write('database.sql', NEWER_CLIENT_DUMP);
+      const first = path.join(dir, 'first.sql');
+      const second = path.join(dir, 'second.sql');
+
+      await prepareDumpForRestore(src, first);
+      await prepareDumpForRestore(src, second);
+
+      const a = (await fs.readFile(first, 'utf8')).split('\n')[0];
+      const b = (await fs.readFile(second, 'utf8')).split('\n')[0];
+      expect(a).toMatch(RESTRICT_LINE);
+      expect(b).toMatch(RESTRICT_LINE);
+      expect(a).not.toBe(b);
+    });
+
+    it("drops the backup's own restricted-mode lines, which would otherwise end the restore's", async () => {
+      const src = await write('database.sql', NEWER_CLIENT_DUMP);
+      const dest = path.join(dir, 'restore.sql');
+
+      await prepareDumpForRestore(src, dest);
+
+      const out = await fs.readFile(dest, 'utf8');
+      expect(out).not.toContain('k3y');
+      expect(out.match(/^\\/gm)?.length).toBe(2); // the restore's own \restrict, and the COPY block's \.
+    });
+
+    it.each([
+      ['a shell command', '\\! id > /tmp/pwned'],
+      ['output sent to a program', '\\o | sh'],
+      ['a setting that turns the error stop off', '\\set ON_ERROR_STOP off'],
+      ['a new connection', '\\connect other'],
+      ['a client-side copy', "\\copy public.\"Note\" to '/tmp/out'"],
+    ])('refuses a backup that holds %s', async (_what, line) => {
+      const dump = [...NEWER_CLIENT_DUMP];
+      dump.splice(dump.indexOf('SET statement_timeout = 0;'), 0, line);
+      const src = await write('database.sql', dump);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/psql command/);
+      expect(refused).toContain(line);
+    });
+
+    it.each(['COMMIT;', 'commit;', 'BEGIN;', 'END;', 'ROLLBACK;', 'START TRANSACTION;'])(
+      'refuses a backup that takes control of the transaction with %s',
+      async (line) => {
+        const dump = [...NEWER_CLIENT_DUMP];
+        dump.splice(dump.indexOf('SET default_table_access_method = heap;'), 0, line);
+        const src = await write('database.sql', dump);
+
+        const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+        expect(refused).toMatch(/transaction/);
+        expect(refused).toContain(line);
+      }
+    );
+
+    it('refuses a COPY that is not table data, which could run a program in the database container', async () => {
+      const dump = [...NEWER_CLIENT_DUMP];
+      dump.splice(dump.indexOf('SET default_table_access_method = heap;'), 0, "COPY public.\"Note\" TO PROGRAM 'sh /tmp/x';");
+      const src = await write('database.sql', dump);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/COPY that is not table data/);
+    });
+
+    it('lets a table row start with a backslash, which is how a row whose first column is empty is written', async () => {
+      const dump = [...NEWER_CLIENT_DUMP];
+      dump.splice(dump.indexOf('\\.'), 0, '\\N\tnote with no id');
+      const src = await write('database.sql', dump);
+      const dest = path.join(dir, 'restore.sql');
+
+      const { refused } = await prepareDumpForRestore(src, dest);
+
+      expect(refused).toBeNull();
+      expect(await fs.readFile(dest, 'utf8')).toContain('\n\\N\tnote with no id\n');
+    });
+  });
+
+  describe('a backup that is not complete', () => {
+    it('refuses an empty file', async () => {
+      const src = await write('database.sql', []);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/cut short/);
+    });
+
+    it('refuses a dump cut short after its data, before the constraints and indexes pg_dump writes last', async () => {
+      const cut = NEWER_CLIENT_DUMP.slice(0, NEWER_CLIENT_DUMP.indexOf('\\.') + 1);
+      const src = await write('database.sql', cut);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/cut short/);
+    });
+
+    it('refuses a dump cut short in the middle of a table', async () => {
+      const cut = NEWER_CLIENT_DUMP.slice(0, NEWER_CLIENT_DUMP.indexOf('\\.'));
+      const src = await write('database.sql', cut);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/partway through/);
+    });
+
+    it("does not count the trailer when it only appears inside a table's rows", async () => {
+      const dump = NEWER_CLIENT_DUMP.slice(0, NEWER_CLIENT_DUMP.indexOf('\\.'));
+      dump.push('-- PostgreSQL database dump complete');
+      const src = await write('database.sql', dump);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/partway through/);
+    });
+
+    it('refuses a complete dump of some other database', async () => {
+      const other = NEWER_CLIENT_DUMP.filter((l) => !l.startsWith('CREATE TABLE public."User"'));
+      const src = await write('database.sql', other);
+
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+
+      expect(refused).toMatch(/not a CozyVTT backup/);
+      expect(refused).toContain('User');
+    });
+
+    it('accepts a real dump taken on Windows line endings', async () => {
+      const src = path.join(dir, 'database.sql');
+      await fs.writeFile(src, NEWER_CLIENT_DUMP.join('\r\n') + '\r\n');
+      const dest = path.join(dir, 'restore.sql');
+
+      const { refused } = await prepareDumpForRestore(src, dest);
+
+      expect(refused).toBeNull();
+      const out = await fs.readFile(dest, 'utf8');
+      expect(out).not.toContain('k3y');
+      expect(out).toContain('CREATE TABLE public."User" (\r\n');
+    });
+  });
+
+  it('writes every byte it keeps exactly as it read it, whatever the encoding', async () => {
+    // A database in LATIN1 dumps its rows in LATIN1, where 0xFF is a letter;
+    // a string literal may hold a carriage return of its own.
+    const body = Buffer.concat([
+      Buffer.from(expectedBody(NEWER_CLIENT_DUMP).slice(0, 8).join('\n') + '\n'),
+      Buffer.from("COMMENT ON TABLE public.\"Note\" IS 'one\rtwo';\n"),
+      Buffer.from('COPY public."Note" (id, body) FROM stdin;\n'),
+      Buffer.from([0x62, 0x31, 0x09, 0x63, 0x61, 0x66, 0xe9, 0x20, 0xff, 0x0a]),
+      Buffer.from('\\.\n'),
+      Buffer.from(expectedBody(NEWER_CLIENT_DUMP).slice(expectedBody(NEWER_CLIENT_DUMP).indexOf('\\.') + 1).join('\n') + '\n'),
+    ]);
+    const src = path.join(dir, 'database.sql');
+    await fs.writeFile(src, body);
+    const dest = path.join(dir, 'restore.sql');
+
+    const { refused } = await prepareDumpForRestore(src, dest);
+
+    expect(refused).toBeNull();
+    const out = await fs.readFile(dest);
+    const afterPreamble = out.subarray(out.indexOf(RESTORE_PREAMBLE[1]) + RESTORE_PREAMBLE[1].length + 1);
+    expect(afterPreamble.equals(body)).toBe(true);
   });
 
   it('runs the schema replacement inside the same transaction as the dump', () => {

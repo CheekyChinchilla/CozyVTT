@@ -64,6 +64,12 @@ import type {
 // Vite dev server proxies in development)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+/** What a finished restore answers: the safety copy is the backup of the database as it was, in the backup list. */
+export interface RestoreReply {
+  message: string;
+  safetyBackup: string;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -406,10 +412,10 @@ class ApiClient {
     return response.data;
   }
 
-  async restoreAdminBackup(file: File): Promise<{ message: string }> {
+  async restoreAdminBackup(file: File): Promise<RestoreReply> {
     const formData = new FormData();
     formData.append('backup', file);
-    const response = await this.client.post<{ message: string }>('/api/admin/backups/restore', formData, {
+    const response = await this.client.post<RestoreReply>('/api/admin/backups/restore', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;

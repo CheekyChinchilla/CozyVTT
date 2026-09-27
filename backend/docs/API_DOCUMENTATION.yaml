@@ -6738,18 +6738,28 @@ paths:
       tags: [Admin]
       summary: Restore the instance from a backup archive
       description: >
-        Platform ADMIN only. Replaces the database and the uploaded files from
-        an archive downloaded earlier. Needs psql present in the backend image.
-        The public schema is dropped and recreated from the archive in a single
-        transaction that stops at the first failed statement, so an archive that
-        cannot be applied in full leaves the existing database unchanged and
-        answers 500. A SET line for a setting this server does not know (a dump
-        written by a newer pg_dump) is skipped, as are the archive's ownership
-        and privilege statements, so it restores under this instance's database
-        user whatever user the archive came from. After a successful load the
-        migrations run, so an archive from an older release comes up to date;
-        if that step fails the response is 500 and says to restart the backend,
-        which runs migrations on start.
+        Platform ADMIN only. Replaces the database from an archive downloaded
+        earlier and copies the archive's uploaded files over the existing ones
+        (a file the archive does not have is left in place). Needs pg_dump and
+        psql present in the backend image. The archive's database.sql is
+        checked before anything runs: it must be a complete pg_dump of a
+        CozyVTT database (pg_dump's closing line present, the User and
+        _prisma_migrations tables created) holding nothing but SQL; a psql
+        backslash command, a COPY that is not table data, or a transaction
+        statement makes the archive invalid. A refused archive answers 400 with
+        the reason and changes nothing. A database-only backup of the current
+        database is then written to the backup list, named in the response as
+        safetyBackup, so the restore can be undone. The public schema is
+        dropped and recreated from the archive in a single transaction that
+        stops at the first failed statement, in psql's restricted mode, so an
+        archive that cannot be applied in full leaves the existing database
+        unchanged and answers 500. The transaction_timeout setting a newer
+        pg_dump writes is skipped, as are the archive's ownership and privilege
+        statements, so it restores under this instance's database user whatever
+        user the archive came from. After a successful load the migrations run,
+        so an archive from an older release comes up to date. If that step
+        fails, or copying the uploaded files fails, the response is 500 Restore
+        Incomplete and says what to do.
       operationId: restoreBackup
       security:
         - cookieAuth: []
@@ -6766,15 +6776,28 @@ paths:
                   format: binary
       responses:
         '200':
-          description: Restore completed
+          description: Restore completed. The session that made the request went with the old database.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  safetyBackup:
+                    type: string
+                    description: Filename, in the backup list, of the backup of the database as it was before the restore
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: No file, or a file that is not a complete CozyVTT backup; nothing was changed
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
-          description: Restore failed, or psql is not available in the image
+          description: >
+            Restore Failed (nothing changed), Restore Incomplete (the database was
+            restored but migrating it or copying its files failed), or a tool is
+            not available in the image
 
 components:
   securitySchemes:

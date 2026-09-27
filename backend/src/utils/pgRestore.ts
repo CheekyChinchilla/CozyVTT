@@ -13,8 +13,8 @@
  */
 
 import { createReadStream, createWriteStream } from 'fs';
+import { randomBytes } from 'crypto';
 import { once } from 'events';
-import readline from 'readline';
 
 /**
  * Statements run before the dump itself.
@@ -78,6 +78,36 @@ export function isPrivilegeStatement(line: string): boolean {
 const COPY_START = /^COPY .* FROM stdin;$/;
 const COPY_END = '\\.';
 
+/**
+ * What a file has to look like before any of it is loaded.
+ *
+ * A restore replaces the whole database, so it may only start from a complete
+ * backup, and psql cannot tell one from a broken file: an empty dump, or one
+ * cut short before its CREATE TABLEs, loads without an error, the schema
+ * replacement above commits, and the instance is left empty while the restore
+ * reports success. So a file is refused unless, outside its table data, it
+ * ends with the trailer pg_dump writes last and creates the tables every
+ * CozyVTT database has.
+ *
+ * psql also runs whatever the file says, as the database owner. A backslash
+ * command such as `\!` runs a shell command in the backend container, `COPY
+ * ... PROGRAM` runs one in the database container, and a `COMMIT` would make
+ * the drops at the top permanent partway through. pg_dump writes none of
+ * those, so a file holding one is refused too. The backslash half is also
+ * closed at the source: the file psql loads opens with `\restrict` under a key
+ * the backup cannot know, which makes psql refuse every other backslash
+ * command until it exits. The dump's own `\restrict` and `\unrestrict` lines
+ * are dropped, since the second would end that protection early.
+ */
+const DUMP_COMPLETE = '-- PostgreSQL database dump complete';
+const RESTRICTED_MODE_LINE = /^\\(?:un)?restrict /;
+const CREATE_TABLE = /^CREATE TABLE public\.(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*)) \($/;
+const TRANSACTION_CONTROL =
+  /^(?:BEGIN|START TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE TRANSACTION)\b/i;
+
+/** Tables every CozyVTT database has; a dump that does not create them is not a backup of one. */
+export const REQUIRED_TABLES = ['User', '_prisma_migrations'];
+
 /** What prepareDumpForRestore left out, for the log. */
 export interface SkippedStatements {
   settings: string[];
@@ -85,45 +115,115 @@ export interface SkippedStatements {
   privileges: number;
 }
 
-/**
- * Write the file psql actually loads: the preamble, then the dump without the
- * statements this server would reject. Streams line by line, since a dump can
- * be far larger than memory. Rows inside a COPY block are never inspected, so
- * a row that happens to start like a statement is left exactly as it is.
- */
-export async function prepareDumpForRestore(
-  sqlPath: string,
-  outPath: string
-): Promise<{ skipped: SkippedStatements }> {
-  const skipped: SkippedStatements = { settings: [], ownership: 0, privileges: 0 };
-  const out = createWriteStream(outPath);
-  const write = async (line: string) => {
-    if (!out.write(line + '\n')) await once(out, 'drain');
-  };
-  for (const line of RESTORE_PREAMBLE) await write(line);
+/** The result of preparing a dump: why it must not be loaded, or null when it may be. */
+export interface PreparedDump {
+  skipped: SkippedStatements;
+  refused: string | null;
+}
 
-  const lines = readline.createInterface({ input: createReadStream(sqlPath), crlfDelay: Infinity });
-  let inCopy = false;
-  for await (const line of lines) {
-    if (inCopy) {
-      if (line === COPY_END) inCopy = false;
-    } else if (COPY_START.test(line)) {
-      inCopy = true;
-    } else if (isSettingUnknownToServer(line)) {
-      skipped.settings.push(line);
-      continue;
-    } else if (isOwnershipStatement(line)) {
-      skipped.ownership++;
-      continue;
-    } else if (isPrivilegeStatement(line)) {
-      skipped.privileges++;
-      continue;
+/** The first characters of a line, for a refusal message. */
+function excerpt(line: string): string {
+  return line.length > 80 ? line.slice(0, 80) + '…' : line;
+}
+
+/**
+ * Split a file into lines on `\n` only, keeping every other byte as it is.
+ *
+ * Read as latin1, so each byte maps to one character and back: a dump in any
+ * encoding, or with a carriage return inside a value, is written out exactly
+ * as it came in. (readline decoded as UTF-8, replacing any byte that was not,
+ * and also split at a lone `\r`.) The checks only need ASCII, and match on the
+ * line without a trailing `\r`, so a dump saved with Windows line endings is
+ * read the same as one without.
+ */
+async function* linesOf(path: string): AsyncGenerator<{ raw: string; statement: string; newline: boolean }> {
+  let rest = '';
+  const emit = (raw: string, newline: boolean) => ({
+    raw,
+    statement: raw.endsWith('\r') ? raw.slice(0, -1) : raw,
+    newline,
+  });
+  for await (const chunk of createReadStream(path, { encoding: 'latin1' })) {
+    rest += chunk as string;
+    let at = rest.indexOf('\n');
+    while (at >= 0) {
+      yield emit(rest.slice(0, at), true);
+      rest = rest.slice(at + 1);
+      at = rest.indexOf('\n');
     }
-    await write(line);
+  }
+  if (rest.length > 0) yield emit(rest, false);
+}
+
+/**
+ * Write the file psql actually loads: restricted mode, the preamble, then the
+ * dump without the statements this server would reject. Streams line by line,
+ * since a dump can be far larger than memory. Rows inside a COPY block are
+ * never inspected, so a row that happens to start like a statement is left
+ * exactly as it is.
+ *
+ * `refused` says why the file is not a backup that can be loaded (see
+ * DUMP_COMPLETE above), and a caller must not load a file that was refused.
+ */
+export async function prepareDumpForRestore(sqlPath: string, outPath: string): Promise<PreparedDump> {
+  const skipped: SkippedStatements = { settings: [], ownership: 0, privileges: 0 };
+  let refused: string | null = null;
+  let complete = false;
+  const tables = new Set<string>();
+
+  const out = createWriteStream(outPath, { encoding: 'latin1' });
+  const write = async (text: string) => {
+    if (!out.write(text, 'latin1')) await once(out, 'drain');
+  };
+  await write(`\\restrict ${randomBytes(32).toString('hex')}\n`);
+  for (const line of RESTORE_PREAMBLE) await write(line + '\n');
+
+  let inCopy = false;
+  for await (const { raw, statement, newline } of linesOf(sqlPath)) {
+    let keep = true;
+    if (inCopy) {
+      if (statement === COPY_END) inCopy = false;
+    } else if (COPY_START.test(statement)) {
+      inCopy = true;
+    } else if (statement.startsWith('COPY ')) {
+      refused ??= `it runs a COPY that is not table data: ${excerpt(statement)}`;
+    } else if (RESTRICTED_MODE_LINE.test(statement)) {
+      keep = false;
+    } else if (statement.startsWith('\\')) {
+      refused ??= `it runs a psql command: ${excerpt(statement)}`;
+    } else if (TRANSACTION_CONTROL.test(statement)) {
+      refused ??= `it takes control of the transaction the restore runs in: ${excerpt(statement)}`;
+    } else if (statement === DUMP_COMPLETE) {
+      complete = true;
+    } else if (isSettingUnknownToServer(statement)) {
+      skipped.settings.push(statement);
+      keep = false;
+    } else if (isOwnershipStatement(statement)) {
+      skipped.ownership++;
+      keep = false;
+    } else if (isPrivilegeStatement(statement)) {
+      skipped.privileges++;
+      keep = false;
+    } else {
+      const table = CREATE_TABLE.exec(statement);
+      if (table) tables.add(table[1] ?? table[2]);
+    }
+    if (keep) await write(newline ? raw + '\n' : raw);
   }
   out.end();
   await once(out, 'finish');
-  return { skipped };
+
+  if (refused === null) {
+    const missing = REQUIRED_TABLES.filter((t) => !tables.has(t));
+    if (inCopy) {
+      refused = "it stops partway through a table's rows, so it was cut short";
+    } else if (!complete) {
+      refused = 'it does not end the way a complete pg_dump backup does, so it was cut short or is not a pg_dump backup';
+    } else if (missing.length > 0) {
+      refused = `it does not create the ${missing.join(' and ')} table${missing.length > 1 ? 's' : ''}, so it is not a CozyVTT backup`;
+    }
+  }
+  return { skipped, refused };
 }
 
 /**

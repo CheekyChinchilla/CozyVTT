@@ -65,7 +65,7 @@ import type {
   Campaign,
 } from '@/types';
 import { PlatformRole, AssetType, AssetScope } from '@/types';
-import { api } from '@/services/api';
+import { api, type RestoreReply } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   PRESET_THEMES,
@@ -272,7 +272,7 @@ export default function AdminPage() {
   const [restoring, setRestoring] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [restoreError, setRestoreError] = useState('');
-  const [restoreSuccess, setRestoreSuccess] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<RestoreReply | null>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Activity ----
@@ -804,8 +804,7 @@ export default function AdminPage() {
     setRestoring(true);
     setRestoreError('');
     try {
-      await adminService.restoreBackup(restoreFile);
-      setRestoreSuccess(true);
+      setRestoreResult(await adminService.restoreBackup(restoreFile));
       setRestoreFile(null);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -2304,11 +2303,13 @@ export default function AdminPage() {
                 <h3 className="font-semibold text-danger-ink text-sm">Restore from Backup</h3>
               </div>
               <div className="p-5 space-y-4">
-                {restoreSuccess ? (
+                {restoreResult ? (
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-4 text-center space-y-2">
                     <p className="text-sm font-semibold text-brand-ink">Restore complete!</p>
                     <p className="text-xs text-warm-gray">
-                      The database and files have been restored. Your current session is no longer valid.
+                      The database and files have been restored. The database as it was before is saved as{' '}
+                      <span className="font-mono">{restoreResult.safetyBackup}</span> in the backup list, in case this was
+                      the wrong file. Your current session is no longer valid.
                     </p>
                     <Button
                       onClick={() => window.location.href = '/login'}
@@ -2322,8 +2323,11 @@ export default function AdminPage() {
                     <div className="bg-danger/10 border border-danger/60 rounded-lg p-3 flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-danger-ink">
-                        Restoring will <strong>permanently overwrite</strong> the current database and all uploaded files.
-                        This cannot be undone. Make sure you have a recent backup before proceeding.
+                        Restoring <strong>replaces the current database</strong> with the backup's and copies the backup's
+                        uploaded files over yours. A backup of the database as it is now is saved to the backup list first,
+                        so the database can be put back if this turns out to be the wrong file.{' '}
+                        <strong>Restore only backups made by this dashboard or the backup script, on an instance you trust:</strong>{' '}
+                        the database carries out the file's instructions with full rights.
                       </p>
                     </div>
 

@@ -57,6 +57,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A restore refuses a file that is not a complete backup, and keeps a copy of what it replaces.** An empty, cut-short or unrelated file used to be accepted and reported as restored. The file is now checked before anything is touched: it has to be a complete backup of a CozyVTT database, and anything else is refused with the reason on screen and nothing changed. A backup of the database as it is at that moment is also written to the backup list before the restore starts, so restoring the wrong file can be undone by restoring that one; its name is shown when the restore finishes. And a restore whose uploaded files could not be copied used to report success anyway; it now says that the database was restored but the files were not, and what to do.
+
 - **The darkvision hint uses the map's own scale.** It said "12 = 60 ft" whatever a map's feet per square was set to; it now works the feet out from the map, and the guides say the 60 ft figure assumes 5 ft a square.
 
 - **An imported creature with an unrecognised disposition or display mode no longer keeps it.** A campaign archive could name a disposition the app cannot draw ("Hostile" with a capital, say) and it was stored as written; the importer now treats it like a missing value, hostile and pog.
@@ -122,6 +124,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
 ### Security
+
+- **A backup file can no longer run commands on the server when it is restored.** The restore handed the backup to the database's command-line tool, which obeys its own commands as well as SQL, so a specially made file could have run shell commands inside the backend container. The restore now runs that tool in its restricted mode, under a key the file cannot know, and refuses outright a file that holds such a command, a copy statement that is not table data, or a statement that would cut the restore short. What remains is SQL, which the database carries out with full rights, so a backup is still only as trustworthy as where it came from: the restore screen and the deployment guide now say to restore only backups you made.
 
 - **The initiative tracker no longer shows players a creature's exact hit points, or lists creatures the DM has hidden.** Every combatant went to every player with the hit points copied when it joined, whatever the creature's HP bar setting, and a hidden creature added to the order was named to the whole table. A player now sees a creature's hit points in the tracker only when the DM has turned its HP bar on, always sees their own, and never sees a hidden creature listed until it is revealed.
 

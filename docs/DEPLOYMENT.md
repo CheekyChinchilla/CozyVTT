@@ -667,17 +667,23 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 **Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
 
-**Admin Dashboard → Backups → Restore** replaces the database and the uploaded files with the contents of a backup, then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own. A restore either works completely or changes nothing: if any part of the backup cannot be applied, your existing data is untouched and the reason is in the backend log:
+**Admin Dashboard → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
+
+Before anything is touched, the file is checked: it has to be a complete `pg_dump` of a CozyVTT database, holding nothing but SQL. An empty, cut-short or unrelated file is refused with the reason on screen, and nothing has changed. A backup of the database as it is at that moment is then written to the backup list (database only, named like any other backup), so restoring the wrong file can be undone by restoring that one; the restore names it when it finishes. The database is loaded in a single step that is undone as a whole if any part of it fails, so a backup that cannot be applied leaves your existing data untouched, and the reason is in the backend log:
 
 ```bash
 docker compose logs backend | grep -i restore
 ```
+
+**Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with full rights. The restore lets nothing through but SQL, and refuses a file that would run a command on the server, but SQL alone is enough to put anything at all in your database.
 
 A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
 ```
+
+A manual install also needs a `psql` from August 2025 or later (PostgreSQL 13.22, 14.19, 15.14, 16.10, 17.6, or any 18): the restore runs in psql's restricted mode, which older releases do not have. With an older one the restore stops before changing anything, and the log says `invalid command \restrict`. The Docker image already has a recent one.
 
 ### Via the included scripts
 

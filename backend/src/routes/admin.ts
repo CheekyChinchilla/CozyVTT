@@ -705,6 +705,69 @@ router.post('/smtp/test', async (req, res) => {
   }
 });
 
+/**
+ * pg_dump did not produce a dump. Carries only what is safe to log: the exec
+ * error's own message repeats the command line, database URL and password
+ * included.
+ */
+class DumpFailed extends Error {
+  constructor(
+    readonly code: string | undefined,
+    readonly stderr: string | undefined
+  ) {
+    super('pg_dump failed');
+  }
+}
+
+/**
+ * Write a backup ZIP into BACKUP_DIR: a pg_dump of the database (flags
+ * explained in utils/pgRestore.ts), plus the uploaded files when asked. Create
+ * Backup takes both; a restore takes the database alone as the copy that lets
+ * it be undone. The ZIP is named by the second it was made, like every backup
+ * the dashboard lists.
+ */
+async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
+  await fs.mkdir(BACKUP_DIR, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+  const filename = `backup-${timestamp}.zip`;
+  const zipPath = path.join(BACKUP_DIR, filename);
+  const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
+
+  try {
+    try {
+      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath));
+    } catch (execError: unknown) {
+      if (errorCode(execError) === 'ENOENT') throw execError;
+      throw new DumpFailed(errorCode(execError), errorStderr(execError));
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const output = createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.file(sqlPath, { name: 'database.sql' });
+      if (withUploads) {
+        // Under an "uploads/" prefix, skipping the backups subdir older installs had there
+        archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
+          return entry.name.startsWith('backups/') ? false : entry;
+        });
+      }
+      archive.finalize();
+    });
+
+    const stat = await fs.stat(zipPath);
+    return { filename, sizeBytes: stat.size };
+  } catch (error) {
+    // Leave no partial ZIP behind: the dashboard would list it as a backup
+    await fs.unlink(zipPath).catch(() => {});
+    throw error;
+  } finally {
+    await fs.unlink(sqlPath).catch(() => {});
+  }
+}
+
 // ============================================
 // POST /api/admin/backups
 // Creates a full instance backup: pg_dump of the database + all uploaded
@@ -712,63 +775,31 @@ router.post('/smtp/test', async (req, res) => {
 // Requires pg_dump (postgresql-client) to be installed in the container.
 // ============================================
 router.post('/backups', async (req, res) => {
-  await fs.mkdir(BACKUP_DIR, { recursive: true });
-
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
     return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
   }
 
-  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-  const zipFilename = `backup-${timestamp}.zip`;
-  const zipPath = path.join(BACKUP_DIR, zipFilename);
-  const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
-
   try {
-    // 1. Dump database to a temp SQL file (flags explained in utils/pgRestore.ts)
-    try {
-      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath));
-    } catch (execError: unknown) {
-      if (errorCode(execError) === 'ENOENT') {
-        return res.status(500).json({
-          error: 'Tool Not Available',
-          message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
-        });
-      }
-      // stderr only: the error's message repeats the command line, database URL and password included.
-      logger.error('pg_dump error', { stderr: errorStderr(execError), code: errorCode(execError) });
+    const { filename, sizeBytes } = await writeBackupZip(dbUrl, true);
+
+    await writeAdminLog(req.session.userId!, `Created instance backup: ${filename}`, 'INFO', {
+      filename,
+      sizeBytes,
+    });
+
+    return res.status(201).json({ filename, sizeBytes, createdAt: new Date().toISOString() });
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return res.status(500).json({
+        error: 'Tool Not Available',
+        message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
+      });
+    }
+    if (error instanceof DumpFailed) {
+      logger.error('pg_dump error', { stderr: error.stderr, code: error.code });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
-
-    // 2. Bundle database.sql + uploads/ (excluding previous backups) into a ZIP
-    await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(zipPath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      output.on('close', resolve);
-      archive.on('error', reject);
-      archive.pipe(output);
-      // Include the SQL dump
-      archive.file(sqlPath, { name: 'database.sql' });
-      // Include uploaded files under an "uploads/" prefix, skipping the backups subdir
-      archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
-        return entry.name.startsWith('backups/') ? false : entry;
-      });
-      archive.finalize();
-    });
-
-    await fs.unlink(sqlPath).catch(() => {});
-
-    const stat = await fs.stat(zipPath);
-    await writeAdminLog(req.session.userId!, `Created instance backup: ${zipFilename}`, 'INFO', {
-      filename: zipFilename,
-      sizeBytes: stat.size,
-    });
-
-    return res.status(201).json({ filename: zipFilename, sizeBytes: stat.size, createdAt: new Date().toISOString() });
-  } catch (error) {
-    // Clean up partial output on failure
-    await fs.unlink(zipPath).catch(() => {});
-    await fs.unlink(sqlPath).catch(() => {});
     logger.error('Backup error', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create backup' });
   }
@@ -845,7 +876,9 @@ router.delete('/backups/:filename', async (req, res) => {
 // Restores the entire instance from an uploaded backup ZIP.
 // The ZIP must contain database.sql (created by pg_dump --clean --if-exists)
 // and optionally an uploads/ directory.
-// WARNING: This overwrites the current database and all uploaded files.
+// WARNING: This overwrites the current database and copies the archive's
+// uploaded files over the existing ones. A backup of the database as it was
+// is written first, so the database half can be undone.
 // ============================================
 router.post('/backups/restore', restoreUpload.single('backup'), async (req, res) => {
   if (!req.file) {
@@ -881,15 +914,49 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
     }
 
-    // 3. Restore the database. psql loads a prepared copy of the dump: the
-    // schema is replaced first, and a setting this server would reject (a
-    // dump written by a newer pg_dump) is dropped from the header. See
-    // utils/pgRestore.ts for why each matters.
+    // 3. Check the dump is a complete CozyVTT backup that runs nothing but
+    // SQL, and write the copy psql loads: the schema is replaced first, and a
+    // setting this server would reject (a dump written by a newer pg_dump) is
+    // dropped from the header. See utils/pgRestore.ts for why each matters.
+    // A refused file has changed nothing, and no tool has run yet.
     const restorePath = path.join(tempDir, 'restore.sql');
-    const { skipped } = await prepareDumpForRestore(sqlPath, restorePath);
+    const { skipped, refused } = await prepareDumpForRestore(sqlPath, restorePath);
+    if (refused !== null) {
+      return res.status(400).json({
+        error: 'Invalid Backup',
+        message: `This file cannot be restored because ${refused}. Nothing was changed.`,
+      });
+    }
     if (skipped.settings.length > 0 || skipped.ownership > 0 || skipped.privileges > 0) {
       logger.info('Restore: skipped statements this server would reject', skipped);
     }
+
+    // 4. Keep the database as it is now, so the restore can be undone. A
+    // backup that loads cleanly can still be the wrong one, or an empty one.
+    let safetyBackup: string;
+    try {
+      safetyBackup = (await writeBackupZip(dbUrl, false)).filename;
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') {
+        return res.status(500).json({
+          error: 'Tool Not Available',
+          message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
+        });
+      }
+      if (error instanceof DumpFailed) {
+        logger.error('pg_dump error before restore', { stderr: error.stderr, code: error.code });
+      } else {
+        logger.error('Backup before restore failed', { err: error });
+      }
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: 'A backup of the current database could not be written, so nothing was restored. Check server logs for details.',
+      });
+    }
+    const undo = `The database as it was before is saved as ${safetyBackup} in the backup list.`;
+
+    // 5. Load the prepared dump. One transaction, stopped at the first
+    // failure, so a load that fails leaves the existing database as it was.
     try {
       await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath));
     } catch (execError: unknown) {
@@ -901,19 +968,28 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       }
       // stderr only: the error's message repeats the command line, database URL and password included.
       logger.error('psql restore error', { stderr: errorStderr(execError), code: errorCode(execError) });
-      return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `Database restore failed and the existing database is unchanged. Check server logs for details. ${undo}`,
+      });
     }
 
-    // 4. Restore uploaded files (if present in backup)
+    // 6. Copy the archive's uploaded files over the existing ones. A backup
+    // without any is fine; a copy that fails is not, and is reported after the
+    // database side has been finished, so what was restored is usable.
     const extractedUploads = path.join(tempDir, 'uploads');
-    try {
-      await fs.access(extractedUploads);
-      await fs.cp(extractedUploads, UPLOADS_DIR, { recursive: true });
-    } catch {
-      // No uploads dir in backup — skip (DB-only backup is still valid)
+    const hasUploads = await fs.access(extractedUploads).then(() => true, () => false);
+    let filesError: string | null = null;
+    if (hasUploads) {
+      try {
+        await fs.cp(extractedUploads, UPLOADS_DIR, { recursive: true });
+      } catch (error) {
+        logger.error('Restore: copying uploaded files failed', { code: errorCode(error), err: error });
+        filesError = errorCode(error) ?? 'unknown error';
+      }
     }
 
-    // 5. Bring a backup from an older release up to this version's schema.
+    // 7. Bring a backup from an older release up to this version's schema.
     // start.sh runs the same command on every boot, so a failure here is
     // recovered by a restart, and the response says so.
     try {
@@ -924,15 +1000,30 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
         error: 'Restore Incomplete',
         message:
           'The backup was restored, but bringing its database up to this version failed. ' +
-          'Restart the backend (docker compose restart backend), which runs migrations on start, then check the server logs.',
+          'Restart the backend (docker compose restart backend), which runs migrations on start, then check the server logs. ' +
+          (filesError
+            ? `Copying the uploaded files failed too (${filesError}); once the backend is up, restore again or copy the archive's uploads folder in by hand. `
+            : '') +
+          undo,
       });
     }
 
-    // 6. Log the restore (best-effort — DB just changed so this may use restored data)
-    await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {}).catch(() => {});
+    // 8. Log the restore (best-effort — DB just changed so this may use restored data)
+    await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup }).catch(() => {});
+
+    if (filesError !== null) {
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          `The database was restored and is up to date, but copying the uploaded files from the backup failed (${filesError}). ` +
+          'Check that the uploads directory is writable and has room, then restore again, ' +
+          `or copy the archive's uploads folder into it by hand. ${undo}`,
+      });
+    }
 
     return res.json({
-      message: 'Restore complete. Your session is no longer valid — please refresh and log in again.',
+      message: `Restore complete. ${undo} Your session is no longer valid — please refresh and log in again.`,
+      safetyBackup,
     });
   } catch (error) {
     logger.error('Restore error', { err: error });
