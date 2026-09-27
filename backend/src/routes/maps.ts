@@ -65,11 +65,6 @@ const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
  */
 
 /**
- * POST /api/campaigns/:campaignId/maps
- * Create a new map for the campaign
- * Requires: DM role
- */
-/**
  * A token in the initiative order was changed or removed: send the order
  * again, as each member may see it, so the tracker follows the token. A
  * failure here must not fail the request that changed the token.
@@ -83,6 +78,11 @@ async function resendInitiativeFor(campaignId: string, tokenId: string): Promise
   }
 }
 
+/**
+ * POST /api/campaigns/:campaignId/maps
+ * Create a new map for the campaign
+ * Requires: DM role
+ */
 router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
