@@ -20,7 +20,15 @@ And three things to do afterwards:
 
 - **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Security → Regenerate backup codes**. The authenticator app itself is unaffected.
 - **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
-- **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If it stops after this upgrade with that message, set a real password, and update `DATABASE_URL` if you wrote it by hand.
+- **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If `docker compose logs backend` shows that message after this upgrade, the database itself still holds the old password (the database image only reads `POSTGRES_PASSWORD` when it creates an empty database), so changing `.env` alone would lock the backend out. Do it in this order, with the stack up (the database container runs even while the backend refuses):
+
+  ```bash
+  NEW_PASSWORD=$(openssl rand -hex 24)
+  docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt WITH PASSWORD '$NEW_PASSWORD';"
+  echo "$NEW_PASSWORD"
+  ```
+
+  Put that value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` if you wrote it by hand; use your own user name in place of `cozyvtt` if you changed `DATABASE_USER`), then `docker compose up -d`. See [Changing the database password](docs/DEPLOYMENT.md#changing-the-database-password) in the deployment guide.
 
 **Backups you made from the Admin Dashboard on 1.4.0 could not be restored**, on 1.4.0 or anywhere else, because of the tool mismatch described under Fixed. They were never damaged, and they restore on 1.5.0, including into a freshly installed 1.5.0.
 
@@ -157,7 +165,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Instance backups no longer live inside the uploads folder.** The Admin Dashboard wrote its backups, which hold every password hash and MFA secret, to `backend/uploads/backups/`, while the documentation told you to sync `backend/uploads/` off-site as your media. They now go to `backend/backups/`, beside it. **If you have backups from an earlier version, move them from `backend/uploads/backups/` to `backend/backups/`**; the dashboard only lists the new location.
 
-- **A production instance refuses to start on the placeholder database password.** `SESSION_SECRET` has always been checked this way; `DATABASE_PASSWORD` now is too. If your instance stops after this upgrade with a message about the placeholder password, set a real one in `.env` and, if you wrote `DATABASE_URL` by hand, update it to match.
+- **A production instance refuses to start on the placeholder database password.** `SESSION_SECRET` has always been checked this way; `DATABASE_PASSWORD` now is too. If your instance stops after this upgrade with a message about the placeholder password, follow the steps in the upgrade note above: on Docker the database keeps its old password, so it has to be changed inside the database first, then in `.env`.
 
 - **Dependencies with published advisories updated.** Every advisory `npm audit` reported against the running application is fixed by an in-range update. Two remaining advisories against the routing library need a major upgrade and do not apply here: no navigation target in this app comes from user input.
 

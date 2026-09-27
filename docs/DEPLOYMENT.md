@@ -65,6 +65,26 @@ CORS_ORIGIN=https://your-domain.com
 NODE_ENV=production
 ```
 
+### Changing the database password
+
+The database image reads `POSTGRES_PASSWORD` only when it creates an empty database, so on an instance that has already run, changing `DATABASE_PASSWORD` in `.env` on its own locks the backend out: the database keeps the old password and the backend connects with the new one. This is what happens if you upgrade with the placeholder still in place and the backend stops with `DATABASE_URL uses the placeholder password from .env.example` in `docker compose logs backend`.
+
+Change it inside the database first, with the stack up (the database container runs even while the backend refuses to start):
+
+```bash
+NEW_PASSWORD=$(openssl rand -hex 24)
+docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt WITH PASSWORD '$NEW_PASSWORD';"
+echo "$NEW_PASSWORD"
+```
+
+Use your own user name in place of `cozyvtt` if you set `DATABASE_USER`. Then put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` too if you wrote that by hand), and restart:
+
+```bash
+docker compose up -d
+```
+
+A hex password avoids any quoting trouble in the command above and in `.env`. On a manual install the same `ALTER USER` runs through `sudo -u postgres psql`, as in the install steps below.
+
 ### 3. Build and start the stack
 
 ```bash

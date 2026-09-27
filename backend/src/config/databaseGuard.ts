@@ -40,9 +40,14 @@ export function enforceDatabaseCredential(
   const problem = databaseCredentialProblem(env.DATABASE_URL);
   if (!problem) return;
   if (env.NODE_ENV === 'production') {
+    // An instance that has already run keeps the password its database was
+    // created with, whatever .env says, so the order of the steps matters.
     logger.error(
-      `[FATAL] ${problem}. Set DATABASE_PASSWORD in .env to a strong value ` +
-        '(for example: openssl rand -hex 24) and, if you wrote DATABASE_URL by hand, update it to match.'
+      `[FATAL] ${problem}. On Docker, change it inside the database first: ` +
+        `docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt WITH PASSWORD '<new>';" ` +
+        '(openssl rand -hex 24 makes a good one), then set DATABASE_PASSWORD in .env to the same value, ' +
+        'update DATABASE_URL too if you wrote it by hand, and run docker compose up -d. ' +
+        'See docs/DEPLOYMENT.md, "Changing the database password".'
     );
     exit(1);
     return;
