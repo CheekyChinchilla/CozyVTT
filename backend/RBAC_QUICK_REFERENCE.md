@@ -251,6 +251,18 @@ assume `req.session` knows about them.
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
 
+## Reading a map: the current one
+
+`canReadMap(role, mapId, campaign.currentMapId)` in `services/permissions.ts`:
+the DM may read any map of the campaign; a player or spectator only the one the
+campaign is showing. It gates `GET /api/campaigns/:campaignId/maps` (a player's
+list holds the current map alone), `GET .../maps/:id` and its `walls` and
+`lights` (404 for any other map), the `maps` array of
+`GET /api/campaigns/:campaignId`, and the `walls:request`, `lights:request`,
+`fog:request_state` and `exploration:request` socket events (answered with
+nothing). A map the DM has prepared but not switched to is therefore the DM's
+alone, tokens left visible on it included.
+
 ## Reading an asset: access follows use
 
 Putting an asset *into* a campaign's library, by uploading at CAMPAIGN scope or
@@ -258,7 +270,10 @@ by moving one there (`PATCH /api/assets/:id/scope`), is the DM's
 (`canPlaceAssetAtScope`); a player may add token art, since they upload their
 own character's, and a spectator adds nothing. A character's `tokenImageUrl`
 is checked with `canReadAssetById` before it is stored, like a map's images,
-so pointing at an asset never grants the right to read it. The list and detail
+so pointing at an asset never grants the right to read it. A map's use counts
+for a player only while it is the campaign's current map (`canReadMap`): the
+artwork and token art of a prepared map stay the DM's until they switch to it.
+The list and detail
 responses select the public fields only; `filePath` and `thumbnailPath` are the
 server's. A map's spirit-layer image is listed to a member, and served, only
 when that member may see the spirit plane there (`getSpiritVisibility`), which

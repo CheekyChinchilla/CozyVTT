@@ -94,6 +94,8 @@ describe('a spectator never controls a token', () => {
       },
     });
     mapId = map.id;
+    // The campaign is showing this map: a player is sent the current map only.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
     dm = request.agent(app);
     await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });

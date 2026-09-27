@@ -1,4 +1,5 @@
 import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility } from '../utils/spirit-layer';
@@ -140,6 +141,23 @@ export function canMoveTokensNow(role: string | undefined, campaignStatus: strin
 
 /** What both channels answer a player who moves during a pause. */
 export const PAUSED_MOVE_REFUSAL = 'Players cannot move tokens while the session is paused or ended';
+
+/**
+ * May this member read this map: the DM any map of the campaign; anyone else
+ * only the map the campaign is showing. A prepared map is the DM's until they
+ * switch to it, with its artwork, walls, lights and whatever tokens were left
+ * visible on it. One rule for the map routes, the walls, lights, fog and
+ * exploration requests, the campaign fetch's map list, and the asset reads a
+ * map's use grants.
+ */
+export function canReadMap(
+  role: string | undefined,
+  mapId: string,
+  currentMapId: string | null | undefined
+): boolean {
+  if (role === 'DM') return true;
+  return !!currentMapId && mapId === currentMapId;
+}
 
 /**
  * Check if user can manage campaign maps
@@ -487,30 +505,42 @@ export async function assetUsedInUserCampaign(
   if (!uploaderId) return false;
 
   const [viewerIn, uploaderIn] = await Promise.all([
-    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }),
+    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } }),
     prisma.campaignMembership.findMany({ where: { userId: uploaderId }, select: { campaignId: true } }),
   ]);
 
   const uploaderCampaigns = new Set(uploaderIn.map((m) => m.campaignId));
-  const campaignIds = viewerIn
-    .map((m) => m.campaignId)
-    .filter((id) => uploaderCampaigns.has(id));
+  const shared = viewerIn.filter((m) => uploaderCampaigns.has(m.campaignId));
+  const campaignIds = shared.map((m) => m.campaignId);
 
   if (campaignIds.length === 0) return false;
+
+  // A map's use counts for a player only while the campaign is showing that
+  // map (canReadMap): a prepared map is the DM's until they switch to it,
+  // artwork and token art included. The DM's campaigns count every map.
+  const dmCampaignIds = shared.filter((m) => m.role === 'DM').map((m) => m.campaignId);
+  const memberCampaignIds = shared.filter((m) => m.role !== 'DM').map((m) => m.campaignId);
+  const currentMapIds = memberCampaignIds.length === 0
+    ? []
+    : (await prisma.campaign.findMany({ where: { id: { in: memberCampaignIds } }, select: { currentMapId: true } }))
+        .map((c) => c.currentMapId)
+        .filter((id): id is string => id !== null);
+  const readableMaps: Prisma.MapWhereInput = {
+    OR: [{ campaignId: { in: dmCampaignIds } }, { id: { in: currentMapIds } }],
+  };
 
   // A map's own layers first: that is the common case, and it answers without
   // reading any JSON. The spirit layer counts only where the viewer may see
   // that plane; the map keeps it from everyone else, and so does this.
   const mapLayer = await prisma.map.findFirst({
     where: {
-      campaignId: { in: campaignIds },
-      OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }],
+      AND: [readableMaps, { OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }] }],
     },
     select: { id: true },
   });
   if (mapLayer) return true;
   const spiritLayers = await prisma.map.findMany({
-    where: { campaignId: { in: campaignIds }, spiritLayerUrl: { contains: assetId } },
+    where: { AND: [readableMaps, { spiritLayerUrl: { contains: assetId } }] },
     select: { campaignId: true },
   });
   for (const map of new Set(spiritLayers.map((m) => m.campaignId))) {
@@ -548,7 +578,7 @@ export async function assetUsedInUserCampaign(
   // Tokens live as JSON on the map, so they cannot be matched by column. Only
   // the art URL is read, and only once everything cheaper has missed.
   const maps = await prisma.map.findMany({
-    where: { campaignId: { in: campaignIds } },
+    where: readableMaps,
     select: { tokens: true },
   });
   return maps.some((map) =>

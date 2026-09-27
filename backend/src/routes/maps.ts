@@ -9,7 +9,7 @@ import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient, viewerIdFor } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -204,8 +204,15 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
   try {
     const { campaignId } = req.params;
 
+    // A player is sent the map the campaign is showing and nothing else; the
+    // rest are the DM's until they switch to them (canReadMap).
+    const role = req.campaignMembership!.role;
+    const currentMapId = role === 'DM'
+      ? null
+      : (await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }))?.currentMapId ?? '';
+
     const maps = await prisma.map.findMany({
-      where: { campaignId },
+      where: role === 'DM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
       select: {
         id: true,
         name: true,
@@ -550,6 +557,15 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
         error: 'Forbidden',
         message: 'You are not a member of this campaign',
       });
+    }
+
+    // A player may fetch only the map the campaign is showing; a prepared map
+    // is the DM's until they switch to it, and answers as if it were not here.
+    if (membership.role !== 'DM') {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      if (!canReadMap(membership.role, map.id, campaign?.currentMapId)) {
+        return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      }
     }
 
     // Get spirit layer visibility for this user
@@ -1412,7 +1428,8 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 async function findMapInCampaign(
   campaignId: string,
   mapId: string,
-  res: Response
+  res: Response,
+  role: string
 ) {
   const map = await prisma.map.findUnique({ where: { id: mapId } });
   if (!map) {
@@ -1422,6 +1439,14 @@ async function findMapInCampaign(
   if (map.campaignId !== campaignId) {
     res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
     return null;
+  }
+  // A prepared map is the DM's alone; to anyone else it is not here.
+  if (role !== 'DM') {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    if (!canReadMap(role, map.id, campaign?.currentMapId)) {
+      res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      return null;
+    }
   }
   return map;
 }
@@ -1433,7 +1458,7 @@ async function findMapInCampaign(
 router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
     const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
     return res.status(200).json({ segments });
@@ -1451,7 +1476,7 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
 router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = WallSegmentsArraySchema.safeParse(req.body.segments);
@@ -1479,7 +1504,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const segmentData = { ...req.body, id: req.body.id || randomUUID() };
@@ -1512,7 +1537,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
@@ -1538,7 +1563,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
 router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const validTypes = ['wall', 'door-closed', 'door-open', 'window'];
@@ -1574,7 +1599,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
 router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
     const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
     return res.status(200).json({ lights });
@@ -1592,7 +1617,7 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
 router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = LightSourcesArraySchema.safeParse(req.body.lights);
@@ -1621,7 +1646,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
 router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const lightData = { ...req.body, id: req.body.id || randomUUID() };
@@ -1656,7 +1681,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
 router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = LightSourceUpdateSchema.safeParse(req.body);
@@ -1688,7 +1713,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
 router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
@@ -1718,7 +1743,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const fog = loadFogState(map, map.fogData as FogState | null);
@@ -1738,7 +1763,7 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
 router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     // The map's flag is the single source of truth, here as on the socket.
@@ -1780,7 +1805,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     if (typeof req.body.enabled !== 'boolean') {

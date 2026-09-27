@@ -1277,7 +1277,7 @@ paths:
       tags:
         - Campaigns
       summary: Get campaign details
-      description: Get campaign with members, maps, and characters (requires campaign membership)
+      description: Get campaign with members, maps, and characters (requires campaign membership). `maps` lists every map to the DM and only the current map to other members.
       operationId: getCampaignById
       security:
         - cookieAuth: []
@@ -3765,7 +3765,10 @@ paths:
       tags:
         - Maps
       summary: List campaign maps
-      description: Get all maps for a campaign (campaign member)
+      description: |
+        List the campaign's maps. The DM gets every map; a player or spectator
+        is sent only the map the campaign is showing (`currentMapId`). A map the
+        DM has prepared but not switched to is the DM's alone.
       operationId: listMaps
       security:
         - cookieAuth: []
@@ -3844,7 +3847,11 @@ paths:
       tags:
         - Maps
       summary: Get map
-      description: Get map with tokens. Spirit layer data filtered by role (DM sees all, players see filtered).
+      description: |
+        Get map with tokens. Spirit layer data filtered by role (DM sees all,
+        players see filtered). A player or spectator may fetch only the
+        campaign's current map; any other map of the campaign answers 404 for
+        them, as does everything under it (walls, lights).
       operationId: getMapById
       security:
         - cookieAuth: []
@@ -4223,7 +4230,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List wall segments
-      description: Returns all wall segments for the map. Available to any campaign member.
+      description: Returns all wall segments for the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise).
       operationId: listWalls
       security:
         - cookieAuth: []
@@ -4416,7 +4423,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List light sources
-      description: Returns all placed lights on the map. Available to any campaign member.
+      description: Returns all placed lights on the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise).
       operationId: listLights
       security:
         - cookieAuth: []

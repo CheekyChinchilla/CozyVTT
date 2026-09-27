@@ -12,7 +12,7 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { mapEditLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
-import { canToggleDoor } from '../../services/permissions';
+import { canReadMap, canToggleDoor } from '../../services/permissions';
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -206,9 +206,12 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, wallSegments: true },
+        select: { campaignId: true, wallSegments: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // A prepared map is the DM's alone; a player is answered only about
+      // the map the campaign is showing.
+      if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
       socket.emit('walls:replaced', { mapId, segments });

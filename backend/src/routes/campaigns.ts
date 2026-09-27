@@ -3,7 +3,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign, canTransferDM } from '../services/permissions';
+import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
@@ -276,9 +276,12 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
     // this list: any member can fetch the image by the address alone.
     const role = req.campaignMembership!.role;
     const spiritVisible = role === 'DM' || (await getSpiritVisibility(campaignId, req.session.userId!));
+    // A player is told about the map the campaign is showing and no other;
+    // the rest are the DM's until they switch to them (canReadMap).
+    const shown = campaignRest.maps.filter((m) => canReadMap(role, m.id, campaignRest.currentMapId));
     const maps = spiritVisible
-      ? campaignRest.maps
-      : campaignRest.maps.map((m) => ({ ...m, spiritLayerUrl: null }));
+      ? shown
+      : shown.map((m) => ({ ...m, spiritLayerUrl: null }));
 
     return res.status(200).json({
       campaign: {

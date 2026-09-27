@@ -62,6 +62,8 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // The campaign is showing this map: a player is answered about the current map only.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
   [dmCookie, p1Cookie, p2Cookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(p2Id)]);
 });

@@ -160,7 +160,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its artwork, walls, lights and tokens stay yours alone while you prepare it
 - **Keep backups** — Export important maps so you can recover them if needed
 
 ---

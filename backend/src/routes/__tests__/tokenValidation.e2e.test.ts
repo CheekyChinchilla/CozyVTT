@@ -98,6 +98,8 @@ describe('map token validation', () => {
       },
     });
     mapId = map.id;
+    // The campaign is showing this map: a player is sent the current map only.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   });
 
   afterAll(async () => {
@@ -531,7 +533,10 @@ describe('map token validation', () => {
       expect(res.status).toBe(201);
       wispId = res.body.token.id;
       // Placing may or may not take the layer; the DM's update always does.
-      const moved = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ layer: 'spirit' });
+      // Hidden, because a visible spirit-plane token of the player's on the
+      // current map would itself put them in the spirit realm, and the first
+      // case below needs them unable to see that plane.
+      const moved = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ layer: 'spirit', visible: false });
       expect(moved.status).toBe(200);
       expect(moved.body.token.layer).toBe('spirit');
     });

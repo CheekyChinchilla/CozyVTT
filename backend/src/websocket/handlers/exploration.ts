@@ -21,8 +21,12 @@ import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { explorationRevealLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canReadMap } from '../../services/permissions';
 
-const MAP_SELECT = { campaignId: true, explorationEnabled: true, width: true, height: true, gridSize: true } as const;
+const MAP_SELECT = {
+  campaignId: true, explorationEnabled: true, width: true, height: true, gridSize: true,
+  campaign: { select: { currentMapId: true } },
+} as const;
 
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -109,6 +113,9 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
 
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // A prepared map is the DM's alone; a player is answered only about
+      // the map the campaign is showing.
+      if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
 
       const userId = socket.role === 'DM' && typeof data.userId === 'string' ? data.userId : socket.userId;

@@ -11,6 +11,7 @@ import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { mapEditLimiter } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canReadMap } from '../../services/permissions';
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -179,9 +180,12 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, lights: true },
+        select: { campaignId: true, lights: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // A prepared map is the DM's alone; a player is answered only about
+      // the map the campaign is showing.
+      if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
       socket.emit('lights:replaced', { mapId, lights });

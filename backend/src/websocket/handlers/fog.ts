@@ -10,6 +10,7 @@ import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canReadMap } from '../../services/permissions';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -77,9 +78,12 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
+        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // A prepared map is the DM's alone; a player is answered only about
+      // the map the campaign is showing.
+      if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       // Fog off: nothing to send. A client that receives no reply draws no fog.
       if (!map.fogEnabled) return;
 

@@ -41,7 +41,7 @@ describe('campaign overview map metadata', () => {
     await prisma.campaignMembership.create({
       data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     });
-    await prisma.map.create({
+    const map = await prisma.map.create({
       data: {
         campaignId,
         name: 'Two Layers',
@@ -55,6 +55,8 @@ describe('campaign overview map metadata', () => {
         annotations: [],
       },
     });
+    // The campaign is showing this map: a player is told about the current map only.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: map.id } });
 
     dm = request.agent(app);
     await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
