@@ -702,9 +702,17 @@ database container, so you do **not** need PostgreSQL installed on the host.
 Backups older than 30 days are pruned; set `BACKUP_RETAIN_DAYS` to change that.
 
 **A restore either works completely or changes nothing.** The restore script
-checks the backup file is complete before it touches your database, and loads it
-in a single step that is undone if any part of it fails. A damaged or truncated
-backup stops with your existing data still there, and tells you so.
+checks the backup file before it touches your database: the archive has to be
+whole, and what is inside has to be a complete backup of a CozyVTT database
+holding nothing but SQL. Anything else is refused with the reason, and nothing
+has changed. It then replaces the database's contents in a single step that is
+undone entirely if any part of it fails, so a backup that cannot be applied
+leaves your existing data as it was. Ownership and permission lines from
+another instance are ignored, as the dashboard ignores them, so a backup made
+under a different database user name still restores. Like the dashboard, the
+script runs `psql` in its restricted mode, which needs a PostgreSQL release
+from August 2025 or later; on Docker that is the database container's own
+`psql`, and `docker compose pull database` brings an older image up to date.
 
 If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 
@@ -714,7 +722,9 @@ DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup
 
 ### Via Command Line
 
-The same thing by hand, if you would rather not use the scripts:
+A bare version by hand, if you would rather not use the scripts. It makes none
+of the checks above, and it does not replace the schema first, so a table added
+to CozyVTT since the backup was made keeps its current rows:
 
 ```bash
 # Create a backup

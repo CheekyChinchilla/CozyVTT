@@ -8,8 +8,13 @@
 #   DATABASE_URL="postgresql://user:pass@host:5432/dbname" \
 #     ./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
 #
-# WARNING: This will DROP and recreate the target database.
-#          All existing data will be lost. Make a backup first.
+# WARNING: This replaces everything in the target database with the backup.
+#          Make a backup first (./backend/scripts/backup.sh).
+#
+# The restore is all or nothing. The file is checked before the database is
+# touched, and the load runs as one transaction that is undone entirely if any
+# statement fails, so a backup that cannot be applied leaves the existing data
+# as it was.
 
 set -euo pipefail
 
@@ -28,16 +33,101 @@ if [[ ! -f "$BACKUP_FILE" ]]; then
   exit 1
 fi
 
-# Check the archive is whole before anything is dropped. Restoring runs a dump
-# that deletes every table before recreating it, so a truncated or corrupted
-# file used to destroy the database and then fail to refill it. This catches a
-# damaged archive; a complete archive holding bad SQL is caught later by
-# ON_ERROR_STOP, after the load has been wrapped in a transaction.
+# A truncated or corrupted archive is the cheapest thing to catch.
 if ! gzip -t "$BACKUP_FILE" 2>/dev/null; then
   echo "❌ $BACKUP_FILE is not a complete gzip archive. Nothing was changed."
   echo "   The file is truncated or corrupted. Try another backup."
   exit 1
 fi
+
+# ------------------------------------------------------------------
+# Prepare the file psql loads, and refuse anything that is not a backup.
+#
+# This mirrors what the Admin Dashboard's restore does (backend/src/utils/
+# pgRestore.ts explains each rule). The dump is written to a temporary file
+# first, never streamed straight into psql: a check that stopped a stream
+# halfway would hand psql a cut-short file, which is the exact thing being
+# guarded against.
+#
+# The prepared file opens with psql's restricted mode under a key the backup
+# cannot know, so psql refuses every backslash command in it, then replaces
+# the public schema so a backup from an older CozyVTT applies cleanly. The
+# dump follows, without the lines this server would reject or that name the
+# database user of the instance the backup came from (SET transaction_timeout,
+# ALTER ... OWNER TO, GRANT, REVOKE) and without the dump's own \restrict
+# lines. Table rows (COPY blocks) are copied through untouched.
+#
+# Outside its rows, the dump must end with pg_dump's closing line, create the
+# User and _prisma_migrations tables, and hold nothing but SQL: a psql
+# command, a COPY that is not table data, or a transaction statement means
+# it is not a backup pg_dump wrote, and it is refused before anything runs.
+# ------------------------------------------------------------------
+PREPARED=$(mktemp "${TMPDIR:-/tmp}/cozyvtt-restore.XXXXXX")
+trap 'rm -f "$PREPARED"' EXIT
+RESTRICT_KEY=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+
+echo "🔍 Checking $BACKUP_FILE..."
+if ! gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
+  BEGIN {
+    print "\\restrict " key
+    print "SET client_min_messages = warning;"
+    print "DROP SCHEMA public CASCADE;"
+    print "CREATE SCHEMA public;"
+    in_copy = 0; complete = 0; has_user = 0; has_migrations = 0; refused = ""
+  }
+  {
+    line = $0
+    sub(/\r$/, "", line)
+    if (in_copy) {
+      if (line == "\\.") in_copy = 0
+      print; next
+    }
+    if (line ~ /^COPY .* FROM stdin;$/) { in_copy = 1; print; next }
+    if (line ~ /^COPY /) { refused = "it runs a COPY that is not table data: " line; exit }
+    if (line ~ /^\\(un)?restrict /) next
+    if (line ~ /^\\/) { refused = "it runs a psql command: " line; exit }
+    if (toupper(line) ~ /^(BEGIN|START TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE TRANSACTION)([^A-Z0-9_]|$)/) {
+      refused = "it takes control of the transaction the restore runs in: " line; exit
+    }
+    if (line == "-- PostgreSQL database dump complete") complete = 1
+    if (line ~ /^SET transaction_timeout = /) next
+    if (line ~ /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/) next
+    if (line ~ /^(GRANT|REVOKE) /) next
+    if (line == "CREATE TABLE public.\"User\" (") has_user = 1
+    if (line == "CREATE TABLE public._prisma_migrations (") has_migrations = 1
+    print
+  }
+  END {
+    if (refused == "") {
+      if (in_copy) refused = "it stops partway through a table'"'"'s rows, so it was cut short"
+      else if (!complete) refused = "it does not end the way a complete pg_dump backup does, so it was cut short or is not a pg_dump backup"
+      else if (!has_user || !has_migrations) refused = "it does not create the User and _prisma_migrations tables, so it is not a CozyVTT backup"
+    }
+    if (refused != "") {
+      print "❌ This file cannot be restored because " refused ". Nothing was changed." > "/dev/stderr"
+      exit 3
+    }
+  }
+' > "$PREPARED"; then
+  exit 1
+fi
+
+confirm_or_abort() {
+  echo "⚠️  WARNING: This will REPLACE all existing data in '$DB_NAME' with the backup."
+  echo "   Make sure you have a current backup before proceeding."
+  echo ""
+  if [[ "${RESTORE_ASSUME_YES:-}" != "yes" ]]; then
+    read -r -p "Type 'yes' to confirm: " CONFIRM
+    [[ "$CONFIRM" == "yes" ]] || { echo "Aborted."; exit 0; }
+  fi
+}
+
+report_failure() {
+  echo "❌ Restore failed. Your existing data is unchanged: the load is undone as a whole when any part of it fails."
+  echo "   The reason is in the messages above. If it says 'invalid command \\restrict', psql is too old:"
+  echo "   the restore needs PostgreSQL 13.22, 14.19, 15.14, 16.10, 17.6 or 18"
+  echo "   (on Docker: docker compose pull database && docker compose up -d database)."
+}
 
 # ------------------------------------------------------------------
 # Docker deployments: run psql inside the database container.
@@ -60,37 +150,23 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     echo "  User:   $DB_USER"
     echo "  Source: $BACKUP_FILE"
     echo ""
-    echo "⚠️  WARNING: This will DESTROY all existing data in '$DB_NAME'."
-    echo "   Make sure you have a current backup before proceeding."
-    echo ""
-    if [[ "${RESTORE_ASSUME_YES:-}" != "yes" ]]; then
-      read -r -p "Type 'yes' to confirm: " CONFIRM
-      [[ "$CONFIRM" == "yes" ]] || { echo "Aborted."; exit 0; }
-    fi
+    confirm_or_abort
 
     echo ""
-    echo "🔄 Dropping and recreating database '$DB_NAME'..."
-    # Sessions hold connections open, and DROP DATABASE fails while any remain.
-    docker compose exec -T "$DB_SERVICE" psql -U "$DB_USER" -d postgres \
-      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-          WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" >/dev/null
-    docker compose exec -T "$DB_SERVICE" psql -U "$DB_USER" -d postgres \
-      -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" \
-      -c "CREATE DATABASE \"$DB_NAME\" OWNER \"$DB_USER\";"
-
     echo "🔄 Restoring from $BACKUP_FILE..."
-    if gunzip -c "$BACKUP_FILE" | docker compose exec -T "$DB_SERVICE" \
-        psql -U "$DB_USER" -d "$DB_NAME" -q \
-        -v ON_ERROR_STOP=1 --single-transaction; then
+    # -q and -o keep the dump's own chatter off the screen; errors still show.
+    if docker compose exec -T "$DB_SERVICE" \
+        psql -U "$DB_USER" -d "$DB_NAME" -q -o /dev/null \
+        -v ON_ERROR_STOP=1 --single-transaction < "$PREPARED"; then
       echo "✅ Restore complete."
       echo ""
       echo "Next steps:"
-      echo "  - Restart the backend:  docker compose restart backend"
-      echo "  - Verify the app:       curl http://localhost/health"
+      echo "  - Restart the backend, which brings an older backup up to this version:"
+      echo "                            docker compose restart backend"
+      echo "  - Verify the app:         curl http://localhost/health"
       exit 0
     else
-      echo "❌ Restore failed. The database may be in a partial state."
-      echo "   Re-run migrations manually: docker compose exec backend npx prisma migrate deploy"
+      report_failure
       exit 1
     fi
   fi
@@ -119,44 +195,29 @@ echo "  DB:     $DB_NAME"
 echo "  User:   $DB_USER"
 echo "  Source: $BACKUP_FILE"
 echo ""
-echo "⚠️  WARNING: This will DESTROY all existing data in '$DB_NAME'."
-echo "   Make sure you have a current backup before proceeding."
-echo ""
-read -r -p "Type 'yes' to confirm: " CONFIRM
-
-if [[ "$CONFIRM" != "yes" ]]; then
-  echo "Aborted."
-  exit 0
-fi
+confirm_or_abort
 
 echo ""
-echo "🔄 Dropping and recreating database '$DB_NAME'..."
+echo "🔄 Restoring from $BACKUP_FILE..."
 
 export PGPASSWORD="$DB_PASS"
 
-# Drop and recreate — connect to postgres (maintenance DB) to do this
-psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres --no-password \
-  -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" \
-  -c "CREATE DATABASE \"$DB_NAME\" OWNER \"$DB_USER\";"
-
-echo "🔄 Restoring from $BACKUP_FILE..."
-
-if gunzip -c "$BACKUP_FILE" | psql \
+if psql \
     -h "$DB_HOST" \
     -p "$DB_PORT" \
     -U "$DB_USER" \
     -d "$DB_NAME" \
     --no-password \
-    -q \
+    -q -o /dev/null \
     -v ON_ERROR_STOP=1 \
-    --single-transaction; then
+    --single-transaction < "$PREPARED"; then
   echo "✅ Restore complete."
   echo ""
   echo "Next steps:"
-  echo "  - Restart the backend:  docker compose restart backend"
-  echo "  - Verify the app:       curl http://localhost/health"
+  echo "  - Bring an older backup up to this version:  cd backend && npx prisma migrate deploy"
+  echo "  - Restart the backend"
+  echo "  - Verify the app:                            curl http://localhost/health"
 else
-  echo "❌ Restore failed. The database may be in a partial state."
-  echo "   Re-run migrations manually: docker compose exec backend npx prisma migrate deploy"
+  report_failure
   exit 1
 fi
