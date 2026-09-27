@@ -28,21 +28,23 @@ let server: WsTestServer;
 let dmId: string;
 let p1Id: string;
 let p2Id: string;
+let specId: string;
 let campaignId: string;
 let mapId: string;
 let dmCookie: string;
 let p1Cookie: string;
 let p2Cookie: string;
+let specCookie: string;
 
 type StateEvent = { mapId: string; cells: number[] };
 
 beforeAll(async () => {
-  const [dm, p1, p2] = await Promise.all(
-    ['dm', 'p1', 'p2'].map((name) =>
+  const [dm, p1, p2, spec] = await Promise.all(
+    ['dm', 'p1', 'p2', 'spec'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Explore ${name}` } })
     )
   );
-  dmId = dm.id; p1Id = p1.id; p2Id = p2.id;
+  dmId = dm.id; p1Id = p1.id; p2Id = p2.id; specId = spec.id;
   const campaign = await prisma.campaign.create({ data: { name: `Explore ${runId}`, ownerId: dmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
@@ -50,6 +52,7 @@ beforeAll(async () => {
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: p1Id, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: p2Id, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: specId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
   });
   const map = await prisma.map.create({
@@ -65,14 +68,14 @@ beforeAll(async () => {
   // The campaign is showing this map: a player is answered about the current map only.
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, p1Cookie, p2Cookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(p2Id)]);
+  [dmCookie, p1Cookie, p2Cookie, specCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(p2Id), server.loginAs(specId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, p1Id, p2Id] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [dmId, p1Id, p2Id, specId] } } });
   await prisma.$disconnect();
 });
 
@@ -188,6 +191,25 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     expect((await denial).message).toMatch(/member/);
     expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
     dm.disconnect();
+  });
+
+  // A spectator is a non-DM like any other for memory: they may write only
+  // their own, and are sent nobody else's.
+  it("refuses a spectator naming another user, and shows them nobody's memory", async () => {
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const spectator = await server.connectAndAuth(specCookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(spectator, 'error');
+    spectator.emit('exploration:reveal', { mapId, cells: [1], userId: p1Id });
+    expect((await denial).message).toMatch(/own/);
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: p1Id } })).toBe(0);
+
+    const nothing = expectNoEvent(spectator, 'exploration:state', 400);
+    const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [6] });
+    await echoed;
+    await nothing;
+    p1.disconnect();
+    spectator.disconnect();
   });
 
   it('never shows one player another\'s memory', async () => {

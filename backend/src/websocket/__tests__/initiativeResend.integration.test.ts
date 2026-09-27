@@ -153,6 +153,18 @@ describe('the order is sent again when a member\'s view of it changes', () => {
     player.disconnect();
   });
 
+  it('through the live toggle of any token, not only a combatant', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    await addAll(dm, [HERO]);
+
+    const toggled = waitForEvent<State>(player, 'initiative.state');
+    dm.emit('spirit_layer.token.toggle', { mapId: mapA, tokenId: SCOUT, visible: false });
+    expect(ids(await toggled)).toEqual([HERO]);
+    dm.disconnect();
+    player.disconnect();
+  });
+
   it('through a map switch', async () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);

@@ -23,10 +23,12 @@ const email = (name: string) => `init-${name}-${runId}@test.cozyvtt.local`;
 let server: WsTestServer;
 let dmId: string;
 let p1Id: string;
+let specId: string;
 let campaignId: string;
 let mapId: string;
 let dmCookie: string;
 let p1Cookie: string;
+let specCookie: string;
 
 type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string; type?: string };
 type State = { active: boolean; currentTokenId: string | null; combatants: Entry[] };
@@ -35,18 +37,19 @@ const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEIL
 const hp = (current: number, max: number) => ({ current, max, temp: 0 });
 
 beforeAll(async () => {
-  const [dm, p1] = await Promise.all(
-    ['dm', 'p1'].map((name) =>
+  const [dm, p1, spec] = await Promise.all(
+    ['dm', 'p1', 'spec'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Init ${name}` } })
     )
   );
-  dmId = dm.id; p1Id = p1.id;
+  dmId = dm.id; p1Id = p1.id; specId = spec.id;
   const campaign = await prisma.campaign.create({ data: { name: `Init ${runId}`, ownerId: dmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: p1Id, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: specId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
   });
   const base = { imageUrl: '', size: { width: 1, height: 1 }, layer: 'token', rotation: 0, conditions: [], metadata: {} };
@@ -66,14 +69,14 @@ beforeAll(async () => {
   });
   mapId = map.id;
   server = await createWsTestServer();
-  [dmCookie, p1Cookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id)]);
+  [dmCookie, p1Cookie, specCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(specId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, p1Id] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [dmId, p1Id, specId] } } });
   await prisma.$disconnect();
 });
 
@@ -104,6 +107,25 @@ describe('initiative.state as each member may see it', () => {
     expect(byId(seen, SHOWN)?.hp).toEqual(hp(5, 9));
     dm.disconnect();
     p1.disconnect();
+  });
+
+  // A spectator goes through the same non-DM branch as a player: nothing
+  // hidden, no hit points behind a bar that is off, and, controlling nothing,
+  // not even the hit points of a token that still names a player.
+  it('sends a spectator the order as a player with no token would see it', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const spectator = await server.connectAndAuth(specCookie, campaignId);
+    await addAll(dm);
+
+    const asked = waitForEvent<State>(spectator, 'initiative.state');
+    spectator.emit('initiative.request_state');
+    const seen = await asked;
+    expect(seen.combatants.map((c) => c.tokenId).sort()).toEqual([GOBLIN, HERO, SHOWN]);
+    expect(byId(seen, HERO)?.hp).toBeNull();
+    expect(byId(seen, GOBLIN)?.hp).toBeNull();
+    expect(byId(seen, SHOWN)?.hp).toEqual(hp(5, 9));
+    dm.disconnect();
+    spectator.disconnect();
   });
 
   it('never lists a hidden token to a player, and lists everything to the DM', async () => {

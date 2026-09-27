@@ -406,6 +406,28 @@ describe('filterTokensByRole', () => {
     expect(byId(sent, 'veiled')?.conditions).toEqual([]);
   });
 
+  // "Own" is the recipient's controller id and nobody else's: another
+  // player's token is sent without its hit points or darkvision, and masked
+  // when obscured, exactly like the DM's.
+  it("sends another player's token as any other token: no hit points, no darkvision, masked when obscured", () => {
+    const theirs = { ...makeToken('theirs', 6, 6, 'user2', 9), hp, showHpBar: false };
+    const theirsVeiled = { ...makeToken('theirs-veiled', 7, 7, 'user2', 9), hp, showHpBar: false, obscured: true, conditions: ['prone'] };
+    const sent = filterTokensByRole([theirs, theirsVeiled], 'PLAYER', false, 'user1');
+    expect(byId(sent, 'theirs')?.hp).toBeUndefined();
+    expect(byId(sent, 'theirs')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'theirs')?.name).toBe('Token theirs');
+    expect(byId(sent, 'theirs-veiled')?.name).toBe('');
+    expect(byId(sent, 'theirs-veiled')?.conditions).toEqual([]);
+    expect(byId(sent, 'theirs-veiled')?.hp).toBeNull();
+  });
+
+  // Tokens placed by older versions carry no showHpBar at all; a missing flag
+  // is off, or an imported or legacy token with hit points would leak them.
+  it('withholds the hit points of a token that has no showHpBar flag', () => {
+    const legacy = { ...makeToken('legacy', 8, 8, null, 0), hp };
+    expect(byId(filterTokensByRole([legacy], 'PLAYER', false, 'user1'), 'legacy')?.hp).toBeUndefined();
+  });
+
   it('keeps what a player is sent on the token: position, size, the bar flag', () => {
     const sent = byId(filterTokensByRole(tokens, 'PLAYER', false, 'user1'), 'npc');
     expect(sent?.position).toEqual({ x: 3, y: 3 });

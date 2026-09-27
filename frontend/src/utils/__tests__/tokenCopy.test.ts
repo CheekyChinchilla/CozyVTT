@@ -34,6 +34,7 @@ const full: Token = {
   displayMode: 'full-art',
   statBlock: { ac: 15, speed: '30 ft.', abilities: { str: 10, dex: 14, con: 12, int: 8, wis: 11, cha: 9 } },
   creatureTemplateId: 'creature-3',
+  obscured: true,
 };
 
 describe('tokenCopyRequest', () => {

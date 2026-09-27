@@ -710,4 +710,47 @@ describe('map token validation', () => {
       expect(after.body.map.tokens.some((t: { name: string }) => t.name === 'Bound Elsewhere')).toBe(false);
     });
   });
+
+  // The create route is the DM's. It now derives a controller and accepts
+  // the obscured flag, and the client builds player tokens from a character
+  // drag, so the guard is worth pinning: nothing a player or spectator sends
+  // is written.
+  describe('placing a token as a player or spectator', () => {
+    it.each([['player', () => player], ['spectator', () => spectator]])('is refused for a %s, and nothing is written', async (_who, agent) => {
+      const before = (await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens;
+      const res = await agent().post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Smuggled', position: { x: 1, y: 1 } });
+      expect(res.status).toBe(403);
+      const after = (await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens;
+      expect(after).toEqual(before);
+    });
+  });
+
+  // "Own" is the recipient's controller id and nobody else's.
+  describe("another member's token, fetched by a player", () => {
+    let theirsId: string;
+
+    beforeAll(async () => {
+      // Controlled by the spectator, so it is somebody's and not the player's.
+      const held = {
+        id: randomUUID(), name: 'Somebody Else', imageUrl: '', position: { x: 12, y: 12 }, size: { width: 1, height: 1 }, layer: 'token',
+        visible: true, controlledBy: spectatorId, rotation: 0, conditions: ['prone'], metadata: {}, hp: { current: 2, max: 9, temp: 0 },
+        showHpBar: false, sightRadius: 12, obscured: true,
+      };
+      theirsId = held.id;
+      const row = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(row.tokens), held]) } });
+    });
+
+    it('carries no hit points, no darkvision and no identity', async () => {
+      const res = await player.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      expect(res.status).toBe(200);
+      const theirs = res.body.map.tokens.find((t: { id: string }) => t.id === theirsId);
+      expect(theirs).toBeDefined();
+      expect(theirs.hp ?? null).toBeNull();
+      expect(theirs.sightRadius ?? null).toBeNull();
+      expect(theirs.name).toBe('');
+      expect(theirs.conditions).toEqual([]);
+      expect(theirs.controlledBy).toBeNull();
+    });
+  });
 });
