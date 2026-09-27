@@ -65,11 +65,14 @@ vi.mock('@/stores/gameStore', () => ({
 // The hook reads the client off the context; the provider itself is not under
 // test, so stand in for it with the real singleton client.
 let clientForContext: any;
+let contextStatus = 'connected';
+let contextJoinedEpoch = 1;
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({
     socket: clientForContext,
-    status: 'connected',
+    status: contextStatus,
     reconnectCount: 0,
+    joinedEpoch: contextJoinedEpoch,
   }),
 }));
 
@@ -91,6 +94,8 @@ describe('useInitiativeSync listener lifecycle', () => {
   beforeEach(async () => {
     sockets.length = 0;
     applied.length = 0;
+    contextStatus = 'connected';
+    contextJoinedEpoch = 1;
     vi.resetModules();
     client = (await import('@/services/socket')).default;
     clientForContext = client;
@@ -135,5 +140,66 @@ describe('useInitiativeSync listener lifecycle', () => {
 
     current().fire('initiative.state', { round: 3 });
     expect(applied).toEqual([{ round: 3 }]);
+  });
+});
+
+/**
+ * A dropped connection. socket.io reconnects underneath, the client
+ * re-authenticates, and the campaign is joined again; the tracker has to
+ * follow. It used to key its subscription on the context's `status`, which
+ * only ever went back to 'connected' on an event socket.io never emits on the
+ * Socket, so the listener was removed on the drop and never put back, and the
+ * state was never asked for again: the tracker froze until a reload.
+ */
+describe('useInitiativeSync across a dropped connection', () => {
+  let client: any;
+  let useInitiativeSync: typeof import('../useInitiativeSync').useInitiativeSync;
+
+  beforeEach(async () => {
+    sockets.length = 0;
+    applied.length = 0;
+    contextStatus = 'connected';
+    contextJoinedEpoch = 1;
+    vi.resetModules();
+    client = (await import('@/services/socket')).default;
+    clientForContext = client;
+    useInitiativeSync = (await import('../useInitiativeSync')).useInitiativeSync;
+  });
+
+  it('asks for the state once the campaign is joined, and again after each rejoin, never before', async () => {
+    await connect(client);
+    const requests = () => (current() as any).requests;
+    (current() as any).requests = 0;
+    current().emit = function (this: any, event: string) { if (event === 'initiative.request_state') this.requests += 1; } as any;
+
+    contextJoinedEpoch = 0;
+    const hook = renderHook(() => useInitiativeSync());
+    expect(requests()).toBe(0);
+
+    contextJoinedEpoch = 1;
+    hook.rerender();
+    expect(requests()).toBe(1);
+
+    contextJoinedEpoch = 2;
+    hook.rerender();
+    expect(requests()).toBe(2);
+  });
+
+  it('keeps listening while the connection is down, and applies state once it is back', async () => {
+    await connect(client);
+    const hook = renderHook(() => useInitiativeSync());
+
+    contextStatus = 'disconnected';
+    hook.rerender();
+    expect(current().countFor('initiative.state')).toBe(1);
+
+    // The client rebuilds the socket and re-attaches what it holds.
+    await connect(client, 'campaign-1');
+    contextStatus = 'connected';
+    contextJoinedEpoch = 2;
+    hook.rerender();
+    expect(current().countFor('initiative.state')).toBe(1);
+    current().fire('initiative.state', { round: 4 });
+    expect(applied).toEqual([{ round: 4 }]);
   });
 });

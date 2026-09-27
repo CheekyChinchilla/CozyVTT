@@ -1007,11 +1007,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => clearTimeout(t);
   }, [currentMap?.id]);  
 
-  // Listen for map.changed events broadcast by the DM
+  // Listen for map.changed events broadcast by the DM.
+  //
+  // Through the client, never the raw socket: the client rebuilds its socket
+  // on a manual reconnect and re-attaches only what was registered with it.
+  // Bound to `getSocket()` this listener died with the first socket, so after
+  // the browser came back online a player never received another map change,
+  // and with it the DM's Hide or Obscure.
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
       setCurrentMap(mapData);
@@ -1033,9 +1037,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     };
 
-    socketInstance.on('map.changed', handleMapChanged);
+    socket.onMapChanged(handleMapChanged);
     return () => {
-      socketInstance.off('map.changed', handleMapChanged);
+      socket.off('map.changed', handleMapChanged);
     };
   }, [socket, setCurrentMap]);
 
@@ -1045,8 +1049,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
     const handleSpiritLayerToggled = (data: SpiritLayerToggledBroadcast) => {
       // Play ethereal audio cue — ascending when entering, descending when leaving
@@ -1069,14 +1071,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       updateCampaignSpiritLayer(campaign?.spiritLayerEnabled ?? false, data.style);
     };
 
-    socketInstance.on('spirit_layer.toggled', handleSpiritLayerToggled);
-    socketInstance.on('spirit_layer.token.toggled', handleSpiritTokenToggled);
-    socketInstance.on('spirit_layer.style_changed', handleSpiritStyleChanged);
+    // Through the client's own table, so these survive a rebuilt socket.
+    socket.onSpiritLayerToggled(handleSpiritLayerToggled);
+    socket.onSpiritLayerTokenToggled(handleSpiritTokenToggled);
+    socket.onSpiritLayerStyleChanged(handleSpiritStyleChanged);
 
     return () => {
-      socketInstance.off('spirit_layer.toggled', handleSpiritLayerToggled);
-      socketInstance.off('spirit_layer.token.toggled', handleSpiritTokenToggled);
-      socketInstance.off('spirit_layer.style_changed', handleSpiritStyleChanged);
+      socket.off('spirit_layer.toggled', handleSpiritLayerToggled);
+      socket.off('spirit_layer.token.toggled', handleSpiritTokenToggled);
+      socket.off('spirit_layer.style_changed', handleSpiritStyleChanged);
     };
   }, [socket, updateCampaignSpiritLayer, campaign?.spiritLayerEnabled, playEtherealTransition]);
 
@@ -1086,16 +1089,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
     const handleVibeUpdated = (data: VibeUpdatedBroadcast) => {
       updateVibe(data.period, data.hue, data.filter);
     };
 
-    socketInstance.on('vibe.updated', handleVibeUpdated);
+    // Through the client's own table, so this survives a rebuilt socket.
+    socket.onVibeUpdated(handleVibeUpdated);
     return () => {
-      socketInstance.off('vibe.updated', handleVibeUpdated);
+      socket.off('vibe.updated', handleVibeUpdated);
     };
   }, [socket, updateVibe]);
 

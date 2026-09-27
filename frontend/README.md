@@ -20,7 +20,7 @@ npx tsc --noEmit         # type-check
 - [`src/pages/`](src/pages/) — top-level route components
 - [`src/contexts/`](src/contexts/) — global React state (Auth, Campaign, WebSocket, Theme)
 - [`src/services/api.ts`](src/services/api.ts) — REST client (Axios)
-- [`src/services/socket.ts`](src/services/socket.ts) — Socket.io client
+- [`src/services/socket.ts`](src/services/socket.ts) — Socket.io client. Subscribe through its `on…` methods and unsubscribe with `off(event, handler)`: it rebuilds the socket on reconnect and re-attaches only what it holds, so a listener bound to `getSocket()` dies with the first socket
 - [`src/types/index.ts`](src/types/index.ts) — TypeScript types mirroring the backend
 - [`src/themes.ts`](src/themes.ts) — built-in color themes and font families
 - [`src/components/character-sheets/`](src/components/character-sheets/) — per-game-system character sheet implementations

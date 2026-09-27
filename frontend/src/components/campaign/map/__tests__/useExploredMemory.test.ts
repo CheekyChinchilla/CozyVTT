@@ -96,6 +96,29 @@ describe('useExploredMemory', () => {
     expect(s.emit).toHaveBeenLastCalledWith('exploration:request', { mapId: 'map-1', userId: 'alice' });
   });
 
+  // A reconnect throws the socket away and builds a new one. The re-request
+  // already followed the rejoin; the listener did not, so the reply to that
+  // request arrived with nobody listening and the DM's reset or another
+  // tab's reveals never reached this canvas again.
+  it('listens on the socket a rejoin built, and no longer on the one it replaced', () => {
+    const first = fakeSocket();
+    const second = fakeSocket();
+    let live = first;
+    const source = { getSocket: () => live.source.getSocket() };
+    const hook = renderHook(({ epoch }) => useExploredMemory(source, 'map-1', true, 'alice', epoch), {
+      initialProps: { epoch: 1 },
+    });
+    expect(first.listeners()).toBe(1);
+
+    live = second;
+    hook.rerender({ epoch: 2 });
+    expect(second.emit).toHaveBeenCalledWith('exploration:request', { mapId: 'map-1', userId: 'alice' });
+    expect(second.listeners()).toBe(1);
+    expect(first.listeners()).toBe(0);
+    second.deliver({ mapId: 'map-1', userId: 'alice', cells: [5] });
+    expect([...hook.result.current.exploredCells!]).toEqual([5]);
+  });
+
   it('keeps what it is showing across a rejoin, instead of blanking the map', () => {
     // The re-request was emitted before the campaign had been rejoined, so the
     // server dropped it; clearing first meant the memory stayed blank until

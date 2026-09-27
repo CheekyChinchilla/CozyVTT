@@ -60,6 +60,10 @@ export function useExploredMemory(
     socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
   }, [socket, mapId, active, exploringAs, joinedEpoch]);
 
+  // Keyed on the rejoin as well: a reconnect throws the socket away and
+  // builds a new one, and the request above already follows the rejoin. The
+  // listener did not, so the reply arrived with nobody listening and the
+  // DM's reset or another tab's reveals never reached this canvas again.
   useEffect(() => {
     const live = socket?.getSocket();
     if (!live || !mapId) return;
@@ -70,7 +74,7 @@ export function useExploredMemory(
     };
     live.on('exploration:state', onState);
     return () => { live.off('exploration:state', onState); };
-  }, [socket, mapId, exploringAs]);
+  }, [socket, mapId, exploringAs, joinedEpoch]);
 
   /** Cells this canvas has just seen for itself, added before the server echoes them. */
   const addExplored = useCallback((fresh: readonly number[]) => {

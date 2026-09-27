@@ -169,21 +169,29 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           setStatus('disconnected');
         });
 
+        // The reconnect lifecycle belongs to the Manager (`socket.io`), not the
+        // Socket: socket.io-client v4 never emits `reconnect_attempt`,
+        // `reconnect` or `reconnect_failed` on the Socket itself. Listening
+        // there left the badge on "disconnected" after every automatic
+        // reconnect, and everything keyed on `status` returning to
+        // 'connected' waited for an event that never came.
+        const manager = socket.io;
+
         // Reconnect attempt (socket.io is actively retrying)
-        socket.on('reconnect_attempt', () => {
+        manager.on('reconnect_attempt', () => {
           if (!isMountedRef.current) return;
           setStatus('connecting');
         });
 
         // Successful reconnect — flip back to 'connected' and signal consumers
-        socket.on('reconnect', () => {
+        manager.on('reconnect', () => {
           if (!isMountedRef.current) return;
           setStatus('connected');
           setReconnectCount((c) => c + 1);
         });
 
         // Final reconnect failure (socket.io gave up)
-        socket.on('reconnect_failed', () => {
+        manager.on('reconnect_failed', () => {
           if (!isMountedRef.current) return;
           setStatus('error');
           setError('Connection lost. Click Retry to try again.');
