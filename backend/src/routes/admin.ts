@@ -776,7 +776,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
 // POST /api/admin/backups
 // Creates a full instance backup: pg_dump of the database + all uploaded
 // files bundled into a single downloadable ZIP archive.
-// Requires pg_dump (postgresql-client) to be installed in the container.
+// Requires pg_dump, which the backend Dockerfiles install.
 // ============================================
 router.post('/backups', async (req, res) => {
   const dbUrl = process.env.DATABASE_URL;
@@ -797,7 +797,7 @@ router.post('/backups', async (req, res) => {
     if (errorCode(error) === 'ENOENT') {
       return res.status(500).json({
         error: 'Tool Not Available',
-        message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
+        message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
       });
     }
     if (error instanceof DumpFailed) {
@@ -948,7 +948,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       if (errorCode(error) === 'ENOENT') {
         return res.status(500).json({
           error: 'Tool Not Available',
-          message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
+          message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
         });
       }
       if (error instanceof DumpFailed) {
@@ -971,7 +971,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
           error: 'Tool Not Available',
-          message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
+          message: 'psql is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
         });
       }
       // stderr only: the error's message repeats the command line, database URL and password included.

@@ -376,9 +376,18 @@ Two of those deserve a note:
   Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
   `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
   it ends; if you see that error again, look there first, not at the code.
+- **Two build facts are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
+  fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
+  `docker-compose.yml` being set to the value it prints (the file's hash, which
+  is what makes an upgrade recreate the web server), and when the PostgreSQL
+  client the backend image installs is older than the server image the compose
+  files and CI pin.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
-  mounts and fails when they disagree in either direction;
+  mounts and fails when they disagree in either direction, and loads the file
+  as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
+  the route check does not care whether the file loads and three unquoted
+  colons once made it unloadable;
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with

@@ -37,7 +37,10 @@ python scripts/websocket-events.py --check   # Socket.io events
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
 directions, and `docs/API_REFERENCE.md`, a hand-written guide that is allowed to
 be partial but must not describe routes that do not exist — twelve of those had
-accumulated, all wrong paths rather than removed features.
+accumulated, all wrong paths rather than removed features. It also loads the
+YAML file when PyYAML is installed (CI installs it; locally, `pip install
+pyyaml`), because the route check reads it line by line and does not care
+whether it loads, and three unquoted colons once made it unloadable.
 
 The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
