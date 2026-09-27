@@ -7,6 +7,8 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { broadcastMapData } from '../shared';
 import logger from '../../utils/logger';
+import { getState as getCombatState } from '../initiativeState';
+import { resendInitiativeState } from './initiative';
 
 export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -48,6 +50,11 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
       // Each member gets the map as they may see it; the payload says whether
       // the spirit overlay applies to that viewer.
       await broadcastMapData(io, socket.campaignId, map);
+      // The plane each player is on follows the current map, and with it
+      // which combatants they are sent.
+      if (getCombatState(socket.campaignId).combatants.length > 0) {
+        await resendInitiativeState(io, socket.campaignId);
+      }
 
       logger.info('map.change', { mapId, userId: socket.userId, campaignId: socket.campaignId });
     } catch (error) {

@@ -28,8 +28,8 @@ import { generateThumbnail } from '../utils/thumbnails';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
-import { getState as getCombatState, setState as setCombatState } from '../websocket/initiativeState';
-import { sendInitiativeState } from '../websocket/handlers/initiative';
+import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
+import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData } from '../websocket/shared';
@@ -846,6 +846,11 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       where: { id },
     });
 
+    // Combatants that stood on it leave the order with it.
+    if (removeCombatants(campaignId, (c) => c.mapId === id)) {
+      await resendInitiative(campaignId, { evenWhenEmpty: true });
+    }
+
     return res.status(200).json({
       message: 'Map deleted successfully',
     });
@@ -900,6 +905,10 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
         },
       },
     });
+
+    // Which plane each player is on is decided by the current map, and with
+    // it which combatants they are sent.
+    await resendInitiative(campaignId);
 
     return res.status(200).json({
       message: 'Current map updated successfully',
@@ -1339,7 +1348,14 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     }
     const { token: updatedToken, map: updatedMap } = written;
 
-    await resendInitiativeFor(campaignId, tokenId);
+    // A combatant's own change follows the token. A layer or visibility
+    // change on any token may move its controller between planes, which
+    // changes what they are sent of the whole order.
+    if (updates.layer !== undefined || shapes.value.visible !== undefined) {
+      await resendInitiative(campaignId);
+    } else {
+      await resendInitiativeFor(campaignId, tokenId);
+    }
 
     // Answered as the map fetch answers, never with the stored row: that row
     // carries every token, hidden ones included, with notes, stat blocks and
@@ -1494,7 +1510,10 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
       await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
     });
 
-    await resendInitiativeFor(campaignId, tokenId);
+    // The entry goes with the token, and the order is sent again without it.
+    if (removeCombatants(campaignId, (c) => c.tokenId === tokenId)) {
+      await resendInitiative(campaignId, { evenWhenEmpty: true });
+    }
 
     return res.status(200).json({
       message: 'Token removed successfully',

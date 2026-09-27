@@ -65,6 +65,10 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Ending combat no longer leaves some screens showing a fight still in progress.** When the DM ended combat right after another change to the order, the earlier update could arrive after the ending one and every tracker showed the fight as still running until something else changed. The newest state now always arrives last.
+
+- **The initiative tracker follows every change to what a member may see of it.** A player's copy of the order depends on which plane they are on, their role and each combatant's token, but it was only sent again when a combatant's own token changed. It now follows a map switch, a crossing to or from the spirit plane through any token of theirs, a role change or handover, and a new picture on a bound character; a combatant whose token or map is deleted leaves the order instead of lingering on the DM's tracker alone.
+
 - **Resuming a paused session no longer undoes what the DM did during the break.** Resume wrote the snapshot taken at pause back over the live table, so a creature hidden during the break was shown to players again, a moved one jumped back, one added vanished, and a switch to another map was reverted, all without a word. Resume now only reopens the session; the snapshot stays with the session record as a note of where the break began.
 
 - **A connection drop no longer leaves a player behind.** After the browser came back online, or the Retry button was used, a player's screen quietly stopped receiving map changes, so the DM's Hide and Obscure never reached them, spirit-plane and vibe changes went the same way, and their explored memory stopped updating; the initiative tracker froze after any automatic reconnect until the page was reloaded. Everything now follows the rebuilt connection.

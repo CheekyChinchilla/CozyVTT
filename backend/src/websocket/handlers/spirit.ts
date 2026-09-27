@@ -178,7 +178,10 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       if (campaign?.currentMapId === mapId) {
         await broadcastMapData(io, socket.campaignId, { ...map, tokens: toJson(updatedTokens) });
       }
-      if (getCombatState(socket.campaignId).combatants.some((c) => c.tokenId === tokenId)) {
+      // Any token: revealing or hiding a player's own spirit-plane token
+      // moves them between planes, which changes what they are sent of the
+      // whole order, not only an entry of that token.
+      if (getCombatState(socket.campaignId).combatants.length > 0) {
         await resendInitiativeState(io, socket.campaignId);
       }
 

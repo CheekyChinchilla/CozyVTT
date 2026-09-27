@@ -24,11 +24,12 @@ import {
   clearState as clearCombatState,
   sortCombatants,
   projectCombatState,
+  getVersion,
   type CombatantEntry,
   type CombatantSource,
   type CombatState,
 } from '../initiativeState';
-import { campaignSockets } from '../utils';
+import { campaignSockets, getSocketInstance } from '../utils';
 import { diceRollLimiter, stateRequestAllowed } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
@@ -71,8 +72,13 @@ async function recipientsSentToken(
  */
 export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
   const state = getCombatState(campaignId);
+  const version = getVersion(campaignId);
+  // A change that lands while this send is still reading starts its own
+  // send with the newer state; this one would arrive after it and show the
+  // older, so it is dropped instead. Checked before every emit.
+  const overtaken = () => getVersion(campaignId) !== version;
   const recipients: Recipient[] = only ?? (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
-  if (recipients.length === 0) return;
+  if (recipients.length === 0 || overtaken()) return;
 
   // Nothing in the order means nothing to look up: every client asks for
   // the state when it opens a campaign, and a reply that costs several
@@ -91,6 +97,7 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   const tokens = maps.flatMap((m) => readTokens(m.tokens));
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+  if (overtaken()) return;
   const byId = (list: CombatantSource[]) => new Map(list.map((t) => [t.id, t]));
 
   const forDM = byId(tokens);
@@ -119,6 +126,24 @@ export async function resendInitiativeState(io: Server, campaignId: string): Pro
   } catch (error) {
     logger.warn('initiative.state fan-out failed; the change stands', { err: error, campaignId });
   }
+}
+
+/**
+ * The same from a REST route, which has no socket server in hand. A member's
+ * copy of the order depends on their plane, their role and each token, so
+ * the routes that change any of those call this. Skipped while nothing is in
+ * the order, unless told otherwise (a deletion that emptied it still has to
+ * be sent).
+ */
+export async function resendInitiative(campaignId: string, options: { evenWhenEmpty?: boolean } = {}): Promise<void> {
+  if (!options.evenWhenEmpty && getCombatState(campaignId).combatants.length === 0) return;
+  let io: Server;
+  try {
+    io = getSocketInstance();
+  } catch {
+    return;
+  }
+  await resendInitiativeState(io, campaignId);
 }
 
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {

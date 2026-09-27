@@ -9,6 +9,7 @@ import { GameSystem } from '../game-systems';
 import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../validators/game-systems';
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
+import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
@@ -637,6 +638,12 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         // asked for; a failure to repaint tokens must not fail the request.
         logger.error('Failed to sync token images after character update', { err: error });
       }
+    }
+
+    // A combatant bound to this character shows the token's picture, which
+    // the sync above may just have changed.
+    for (const affectedCampaignId of campaignsWithChangedTokens) {
+      await resendInitiative(affectedCampaignId);
     }
 
     // Broadcast character update to campaign if character is in a campaign

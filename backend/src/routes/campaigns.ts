@@ -6,6 +6,7 @@ import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
+import { resendInitiative } from '../websocket/handlers/initiative';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
@@ -974,6 +975,8 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
     // person keeps what they had until they reload.
     try {
       await applyRoleToLiveSockets(userId, campaignId, role);
+      // Their copy of the initiative order follows the role.
+      await resendInitiative(campaignId);
     } catch (error) {
       logger.error('Member role updated but live sockets were not', { err: error, userId, campaignId });
     }
@@ -1107,6 +1110,8 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
       }
       await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
+      // Both copies of the initiative order follow the new roles.
+      await resendInitiative(campaignId);
 
       broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
         campaignId,

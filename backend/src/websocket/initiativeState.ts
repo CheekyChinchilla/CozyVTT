@@ -33,6 +33,25 @@ export interface CombatState {
 
 const campaignStates = new Map<string, CombatState>();
 
+/**
+ * How many times each campaign's state has been replaced. A send reads the
+ * state, then the combatants' tokens and each player's plane, before it
+ * emits; a change that lands meanwhile starts its own send with the newer
+ * state, and the older send checks this before emitting so it never arrives
+ * after the newer one. Ending the fight is the case that bit: its send has
+ * nothing to look up and finished first, and the earlier send then showed
+ * every client a fight that had ended.
+ */
+const versions = new Map<string, number>();
+
+function bump(campaignId: string): void {
+  versions.set(campaignId, (versions.get(campaignId) ?? 0) + 1);
+}
+
+export function getVersion(campaignId: string): number {
+  return versions.get(campaignId) ?? 0;
+}
+
 function defaultState(): CombatState {
   return {
     active: false,
@@ -48,15 +67,33 @@ export function getState(campaignId: string): CombatState {
 
 export function setState(campaignId: string, state: CombatState): void {
   campaignStates.set(campaignId, state);
+  bump(campaignId);
 }
 
 /** Forget every campaign's combat state, after a restore replaces the database under it. */
 export function clearAllState(): void {
+  for (const campaignId of campaignStates.keys()) bump(campaignId);
   campaignStates.clear();
 }
 
 export function clearState(campaignId: string): void {
   campaignStates.delete(campaignId);
+  bump(campaignId);
+}
+
+/**
+ * Drop the combatants `gone` names, when a token or a whole map is deleted.
+ * An entry whose token is gone used to linger for the DM (the projection kept
+ * the copy taken when it joined) while players no longer saw it, so the two
+ * disagreed about the order. Returns whether anything was dropped.
+ */
+export function removeCombatants(campaignId: string, gone: (entry: CombatantEntry) => boolean): boolean {
+  const state = getState(campaignId);
+  const kept = state.combatants.filter((c) => !gone(c));
+  if (kept.length === state.combatants.length) return false;
+  const currentTokenId = kept.some((c) => c.tokenId === state.currentTokenId) ? state.currentTokenId : null;
+  setState(campaignId, { ...state, combatants: kept, currentTokenId });
+  return true;
 }
 
 /**
