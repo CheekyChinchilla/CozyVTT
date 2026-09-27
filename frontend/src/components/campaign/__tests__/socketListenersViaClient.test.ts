@@ -28,6 +28,7 @@ const REGISTRY_EVENTS = [
   'initiative.state',
   'token.moved',
   'dice.rolled',
+  'map.pinged',
 ];
 
 const COMPONENTS: Array<[string, string]> = [

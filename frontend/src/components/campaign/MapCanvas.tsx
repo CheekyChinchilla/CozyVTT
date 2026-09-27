@@ -1339,8 +1339,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [user?.id, user?.displayName, campaign?.memberships]);
 
   useEffect(() => {
-    const socketInstance = socket?.getSocket();
-    if (!socketInstance) return;
+    if (!socket) return;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -1365,9 +1364,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }, PING_DURATION_MS));
     };
 
-    socketInstance.on('map.pinged', handlePinged);
+    // Through the client's table, not the socket.io instance: a rebuilt
+    // socket after a reconnect gets the listener back only this way.
+    socket.onMapPinged(handlePinged);
     return () => {
-      socketInstance.off('map.pinged', handlePinged);
+      socket.off('map.pinged', handlePinged);
       timers.forEach(clearTimeout);
     };
   }, [socket, currentMap?.id, resolvePingerName]);
