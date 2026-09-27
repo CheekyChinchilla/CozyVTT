@@ -40,7 +40,14 @@ through `canRollDice`, token control through `canControlToken`, and doors
 through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
 and size they send being ignored). Chat is a socket event (`chat.message`)
-and spectators may send it.
+and spectators may send it. `character.hp.update`, `character.hitdice.spend`
+and `PUT /api/characters/:id` refuse a spectator outright, even for a
+character they own, because a token bound to it follows the sheet on every
+screen; the token-image sync that route runs skips any campaign where the
+editor is a spectator. `controlledBy` may only name a player
+(`canHoldTokens`): a token cannot be created for or handed to a spectator, a
+spectator's character is placed with no controller, and what a spectator is
+sent never treats a token as theirs (`viewerIdFor` in `utils/spirit-layer.ts`).
 
 ---
 
@@ -89,6 +96,10 @@ if (!canControlToken(role, token.controlledBy, userId)) {
 `token.move*` socket events, so the two channels cannot disagree. The spectator
 clause matters: `controlledBy` is set once and is not cleared when someone is
 demoted, so a spectator can still hold a token from their time as a player.
+Such a token is nobody's for what the spectator is sent, too: the
+per-recipient filters ask `viewerIdFor(role, userId)`, which is undefined for
+anyone but a player, so they get no hit points, darkvision or obscured
+identity from it and no sight on a lit map.
 
 `controlledBy` is the whole of what makes a token a player's, on the server
 and in the client alike; a token bound to one of their characters is not theirs

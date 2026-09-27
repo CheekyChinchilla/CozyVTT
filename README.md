@@ -231,7 +231,7 @@ Set these in `.env` and restart — no rebuild needed. If you raise one, raise y
 |------|-------------|
 | `DM` | Full campaign control — manage maps, tokens, sessions, members |
 | `PLAYER` | Can view maps, move their own tokens, roll dice, chat |
-| `SPECTATOR` | Watches the map and can chat; cannot roll dice, move tokens or change anything |
+| `SPECTATOR` | Watches the map and can chat; cannot roll dice, move tokens, edit a character or change anything |
 
 ---
 

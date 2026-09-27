@@ -476,29 +476,22 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Check authorization
-    let isAuthorized = false;
-
-    // Owner can always edit
-    if (character.userId === userId) {
-      isAuthorized = true;
-    }
-
-    // If character is in a campaign, check if requester is the DM
-    if (!isAuthorized && character.campaignId) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId: character.campaignId,
-          },
-        },
+    // Check authorization: the owner, or the DM of the character's campaign.
+    // A spectator in that campaign may not edit even their own character: a
+    // token bound to it follows the sheet on every screen (its bar, its
+    // downed fade, its picture), and spectators change nothing at the table.
+    const membership = character.campaignId
+      ? await prisma.campaignMembership.findUnique({
+          where: { userId_campaignId: { userId, campaignId: character.campaignId } },
+        })
+      : null;
+    if (membership?.role === 'SPECTATOR') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Spectators cannot edit a character in this campaign',
       });
-
-      if (membership && membership.role === 'DM') {
-        isAuthorized = true;
-      }
     }
+    const isAuthorized = character.userId === userId || membership?.role === 'DM';
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -612,7 +605,18 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           WHERE tokens @> ${JSON.stringify([{ characterId: updatedCharacter.id }])}::jsonb
         `;
 
+        // A campaign where the editor is only a spectator keeps its tokens as
+        // they are: spectators change nothing at the table, and this is the
+        // one write of theirs that would otherwise reach it.
+        const spectatorIn = new Set(
+          (await prisma.campaignMembership.findMany({
+            where: { userId, role: 'SPECTATOR', campaignId: { in: boundMaps.map((m) => m.campaignId) } },
+            select: { campaignId: true },
+          })).map((m) => m.campaignId)
+        );
+
         for (const map of boundMaps) {
+          if (spectatorIn.has(map.campaignId)) continue;
           const tokens = readTokens(map.tokens);
           let mapChanged = false;
 

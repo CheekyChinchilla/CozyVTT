@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting } from '../../utils/spirit-layer';
+import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting, viewerIdFor } from '../../utils/spirit-layer';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
@@ -58,7 +58,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       if (!member.userId) continue;
       const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
       const seen = filterTokensByLighting(
-        forRole, member.userId, map.wallSegments as unknown as WallSegment[],
+        forRole, viewerIdFor(member.role, member.userId), map.wallSegments as unknown as WallSegment[],
         map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
       );
       if (seen.some((t) => t.id === tokenId)) ids.add(s.id);
@@ -367,6 +367,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           }
           if (!authedSocket.userId) continue;
 
+          const viewer = viewerIdFor(authedSocket.role, authedSocket.userId);
           const forRole = filterTokensByRole(
             updatedTokens,
             authedSocket.role ?? 'PLAYER',
@@ -375,7 +376,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           );
           const visible = filterTokensByLighting(
             forRole,
-            authedSocket.userId,
+            viewer,
             map.wallSegments as unknown as WallSegment[],
             map.width,
             map.height,
@@ -402,11 +403,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
           // If a player moved their OWN token, their view changed: re-sync all
           // OTHER tokens so those that left or entered view go at once.
-          if (token.controlledBy === authedSocket.userId) {
+          if (viewer && token.controlledBy === viewer) {
             for (const otherToken of forRole) {
               if (otherToken.id === tokenId) continue; // already handled above
               // Skip own tokens — always included by filterTokensByLighting
-              if ((otherToken as Token).controlledBy === authedSocket.userId) continue;
+              if ((otherToken as Token).controlledBy === viewer) continue;
               const other = visibleById.get(otherToken.id);
               if (other) {
                 s.emit('token:appeared', { token: other, mapId });

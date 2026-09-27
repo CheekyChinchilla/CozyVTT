@@ -257,6 +257,15 @@ describe('filterTokensByLighting', () => {
       expect(out.tokens.some((t: { id: string }) => t.id === 'behind')).toBe(true);
     });
 
+    it('sends a spectator nothing on a lit map, even one a token still names', () => {
+      const held = makeToken('held', 2, 5, 'user1', 12);
+      const near = makeToken('near', 3, 5);
+
+      const out = filterMapData(litMap([held, near]) as never, 'SPECTATOR', false, 'user1');
+
+      expect(out.tokens).toEqual([]);
+    });
+
     it('passes the fog flag through to every role, so a client knows whether to draw fog', () => {
       const map = { ...litMap([]), fogEnabled: false };
       expect(filterMapData(map as never, 'PLAYER', false, 'user1').fogEnabled).toBe(false);
@@ -382,6 +391,19 @@ describe('filterTokensByRole', () => {
     expect(byId(sent, 'mine')?.hp).toBeUndefined();
     expect(byId(sent, 'mine')?.sightRadius).toBeUndefined();
     expect(byId(sent, 'shown')?.hp).toEqual(hp);
+  });
+
+  // A spectator still named on a token from their time as a player is sent
+  // it as any other player would be: `controlledBy` grants a spectator
+  // nothing, on the server as in the move handlers.
+  it('treats a spectator as controlling nothing, whatever controlledBy says', () => {
+    const veiled = { ...makeToken('veiled', 6, 6, 'user1', 12), hp, showHpBar: false, obscured: true, conditions: ['invisible'] };
+    const sent = filterTokensByRole([...tokens, veiled], 'SPECTATOR', false, 'user1');
+    expect(byId(sent, 'mine')?.hp).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+    expect(byId(sent, 'veiled')?.name).toBe('');
+    expect(byId(sent, 'veiled')?.conditions).toEqual([]);
   });
 
   it('keeps what a player is sent on the token: position, size, the bar flag', () => {

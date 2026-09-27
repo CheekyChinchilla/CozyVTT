@@ -65,6 +65,14 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
+      // A spectator is watching, not playing: not even a character they own,
+      // since a token bound to it follows the sheet on every screen. The DM
+      // can still cover for them.
+      if (socket.role === 'SPECTATOR') {
+        socket.emit('error', { message: 'Spectators cannot change a character' });
+        return;
+      }
+
       // Permission: character owner or DM
       if (character.userId !== socket.userId && socket.role !== 'DM') {
         socket.emit('error', { message: 'You do not have permission to update this character\'s HP' });
@@ -163,6 +171,12 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
       });
       if (!membership) {
         socket.emit('error', { message: 'Character is not in this campaign' });
+        return;
+      }
+
+      // As for hit points: a spectator changes nothing, the DM may.
+      if (socket.role === 'SPECTATOR') {
+        socket.emit('error', { message: 'Spectators cannot change a character' });
         return;
       }
 

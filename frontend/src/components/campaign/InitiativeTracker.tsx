@@ -37,6 +37,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 import type { CombatantEntry, Token } from '@/types';
 import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
+import { controlsToken } from '@/utils/tokenControl';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -342,12 +343,12 @@ export default function InitiativeTracker() {
    */
   const canRollFor = useCallback((tokenId: string) => {
     if (isDM) return true;
-    if (!user || userRole === 'SPECTATOR') return false;
     // Only before the fight starts: re-rolling re-sorts the order, and the turn
     // pointer walks it by position, so a mid-combat change can skip someone's
-    // turn. The server enforces the same rule.
+    // turn. The server enforces the same rule, and that a spectator controls
+    // no token.
     if (combatState.active) return false;
-    return tokens.some((t) => t.id === tokenId && t.controlledBy === user.id);
+    return tokens.some((t) => t.id === tokenId && controlsToken(t, user?.id, userRole));
   }, [isDM, user, userRole, combatState.active, tokens]);
 
   /** A player has a combatant of their own that still has no initiative value. */

@@ -27,6 +27,7 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
   let campaignId: string;
   let otherCampaignId: string;
   let mapId: string;
+  let otherPlayerId: string;
   let characterId: string;
   let strayCharacterId: string;
   let dm: ReturnType<typeof request.agent>;
@@ -42,6 +43,10 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     playerId = playerUser.id;
     await prisma.campaignMembership.create({ data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] } });
     characterId = (await prisma.character.create({ data: { userId: playerId, campaignId, name: 'Aldra', data: {} } })).id;
+
+    const otherPlayerUser = await createTestUser({ displayName: 'Controller Other Player' });
+    otherPlayerId = otherPlayerUser.id;
+    await prisma.campaignMembership.create({ data: { userId: otherPlayerId, campaignId, role: 'PLAYER', characterIds: [] } });
 
     const other = await createTestCampaign(dmId, { name: 'Elsewhere' });
     otherCampaignId = other.id;
@@ -68,7 +73,7 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId, otherCampaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([dmId, playerId, otherPlayerId]);
   });
 
   const create = (body: Record<string, unknown>) =>
@@ -86,10 +91,18 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.token.controlledBy).toBe(playerId);
   });
 
-  it('keeps a controller the request names', async () => {
-    const res = await create({ characterId, controlledBy: dmId });
+  it('keeps a controller the request names, when that is a player', async () => {
+    const res = await create({ characterId, controlledBy: otherPlayerId });
     expect(res.status).toBe(201);
-    expect(res.body.token.controlledBy).toBe(dmId);
+    expect(res.body.token.controlledBy).toBe(otherPlayerId);
+  });
+
+  // The DM controls every token without being named on one, and a spectator
+  // controls nothing, so `controlledBy` may only ever name a player.
+  it('refuses a controller who is not a player of the campaign', async () => {
+    const res = await create({ characterId, controlledBy: dmId });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/controlledBy/);
   });
 
   // Such a token used to be placed with no controller. It is refused now: the

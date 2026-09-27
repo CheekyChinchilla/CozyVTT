@@ -248,7 +248,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
 
   // Tokens this viewer controls, by the server's definition (utils/tokenControl.ts).
-  const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id), [user?.id]);
+  const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id, userRole), [user?.id, userRole]);
 
   // Whether manual fog applies on this map. Absent on an older payload means
   // on, matching the column default. When fog is on and the player's revealed
@@ -634,8 +634,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Player's own token on the current map — used as ruler origin for non-DM users
   const myToken = useMemo(() => {
     if (isDM || !tokens || !user) return null;
-    return tokens.find((t) => t.controlledBy === user.id) ?? null;
-  }, [tokens, user, isDM]);
+    return tokens.find((t) => controlsToken(t, user.id, userRole)) ?? null;
+  }, [tokens, user, isDM, userRole]);
 
   // Effective ruler origin: players use their token position, DM uses clicked point
   const effectiveRulerOrigin = isDM ? rulerOrigin : (myToken ? myToken.position : null);
@@ -2092,8 +2092,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
 
       // A player moves the tokens they control, the same rule the server
-      // applies to the move; a character binding alone is not control.
-      return controlsToken(token, user?.id);
+      // applies to the move; a character binding alone is not control, and a
+      // spectator controls nothing.
+      return controlsToken(token, user?.id, userRole);
     },
     [campaign, userRole, user?.id]
   );
@@ -3056,11 +3057,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const combat = useGameStore.getState().combat;
     if (!combat.combatants.some((c) => c.tokenId === token.id)) return false;
     if (isDM) return true;
-    // Spectators are watching, not playing; and once combat is under way a
-    // re-roll re-sorts the order and can skip a turn, so that is the DM's call.
-    // The server enforces both.
-    if (userRole === 'SPECTATOR' || combat.active) return false;
-    return !!user && token.controlledBy === user.id;
+    // Once combat is under way a re-roll re-sorts the order and can skip a
+    // turn, so that is the DM's call; and a spectator controls no token. The
+    // server enforces both.
+    if (combat.active) return false;
+    return controlsToken(token, user?.id, userRole);
   };
 
   /**

@@ -16,6 +16,13 @@ export function canEditCharacter(
   character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
+  // A spectator may read the characters they own but not edit them while
+  // they are a spectator in the character's campaign: a bound token follows
+  // the sheet on every screen, and the server refuses the save.
+  if (membership?.role === 'SPECTATOR') {
+    return false;
+  }
+
   // User owns the character
   if (character.userId === user.id) {
     return true;
@@ -82,6 +89,12 @@ export function canRollAsCharacter(
   character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
+  // A spectator is watching, not playing, even with a character of their own
+  // in the roster; the server refuses the roll.
+  if (membership?.role === 'SPECTATOR') {
+    return false;
+  }
+
   // User owns the character
   if (character.userId === user.id) {
     return true;

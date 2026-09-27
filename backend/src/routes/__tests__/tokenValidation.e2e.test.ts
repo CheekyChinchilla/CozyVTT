@@ -20,6 +20,7 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { readTokens, toJson } from '../../utils/prisma-json';
@@ -536,8 +537,16 @@ describe('map token validation', () => {
     let heldTokenId: string;
 
     beforeAll(async () => {
-      const res = await place({ name: 'Held Token', controlledBy: spectatorId, position: { x: 7, y: 7 } });
-      heldTokenId = res.body.token.id;
+      // The route no longer places a token controlled by a spectator; one can
+      // only be left over from before a demotion, so it is written straight
+      // into the map.
+      heldTokenId = randomUUID();
+      const row = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      const held = {
+        id: heldTokenId, name: 'Held Token', imageUrl: '', position: { x: 7, y: 7 }, size: { width: 1, height: 1 },
+        layer: 'token', visible: true, controlledBy: spectatorId, rotation: 0, conditions: [], metadata: {},
+      };
+      await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(row.tokens), held]) } });
     });
 
     it('may not move it', async () => {

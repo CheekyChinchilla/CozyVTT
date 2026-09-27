@@ -976,8 +976,8 @@ _Who may send it is read from the shared permission predicates each handler call
 | `atmosphere.audio.set` | DM only | DM queues or stops ambient audio for all players. |
 | `atmosphere.effect.set` | DM only | DM sets a visual particle overlay on the map canvas. |
 | `authenticate` | Any member | — |
-| `character.hitdice.spend` | DM, or the character's owner | spend one D&D 5e hit die. |
-| `character.hp.update` | DM, or the character's owner | — |
+| `character.hitdice.spend` | DM, or the character's owner, never a spectator | spend one D&D 5e hit die. |
+| `character.hp.update` | DM, or the character's owner, never a spectator | — |
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
 | `dice.roll` | DM and players | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |

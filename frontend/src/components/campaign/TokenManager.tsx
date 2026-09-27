@@ -118,7 +118,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   }, [isOpen, campaign?.id]);
 
   // ── Derived values ──
-  const players = campaign?.memberships?.filter((m) => m.role !== 'DM') ?? [];
+  // Only a player can be given a token; the server refuses a spectator.
+  const players = campaign?.memberships?.filter((m) => m.role === 'PLAYER') ?? [];
   const otherMaps = (campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id);
   const canAdd = !!tokenName.trim() && !!currentMap;
 

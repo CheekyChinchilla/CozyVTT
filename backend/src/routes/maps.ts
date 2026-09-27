@@ -6,10 +6,10 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient } from '../utils/spirit-layer';
+import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient, viewerIdFor } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canControlToken } from '../services/permissions';
+import { canReadAssetById, canControlToken, canHoldTokens } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -1009,7 +1009,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
 
-    // A token bound to a character is controlled by that character's owner
+    // Control can only be given to a player of this campaign: the DM needs no
+    // naming, and a spectator controls nothing. A token bound to a character
+    // is controlled by that character's owner, while they are a player,
     // unless the request names someone else. The controller is who the map is
     // drawn for and who may move the token, on the server and in the client
     // alike, so a client that omits it no longer creates a token its own
@@ -1018,6 +1020,12 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // every member of any shared campaign.
     const characterId = shapes.value.characterId ?? null;
     let controlledBy: string | null = shapes.value.controlledBy ?? null;
+    if (controlledBy && !(await canHoldTokens(campaignId, controlledBy))) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Token controlledBy must name a player of this campaign',
+      });
+    }
     if (characterId) {
       const character = await prisma.character.findUnique({
         where: { id: characterId },
@@ -1029,7 +1037,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
           message: 'Token characterId must name a character of this campaign',
         });
       }
-      if (!controlledBy) controlledBy = character.userId;
+      if (!controlledBy && (await canHoldTokens(campaignId, character.userId))) {
+        controlledBy = character.userId;
+      }
     }
 
     // Build the new token with defaults
@@ -1233,6 +1243,15 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
 
+    // Control can only be handed to a player of this campaign: the DM needs
+    // no naming, and a spectator controls nothing.
+    if (shapes.value.controlledBy && !(await canHoldTokens(campaignId, shapes.value.controlledBy))) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Token controlledBy must name a player of this campaign',
+      });
+    }
+
     // Metadata is merged into what the token already holds, so the size limit
     // has to be checked against the result. Checking only the incoming patch
     // bounded each request and not the column: a sequence of small updates
@@ -1299,7 +1318,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
     return res.status(200).json({
       message: 'Token updated successfully',
-      token: isDM ? updatedToken : tokenForRecipient(updatedToken, userId),
+      token: isDM ? updatedToken : tokenForRecipient(updatedToken, viewerIdFor(membership.role, userId)),
       map: filterMapData(updatedMap, membership.role, spiritVisible, userId),
     });
   } catch (error) {

@@ -116,6 +116,7 @@ def collect():
                 'players': 'canRollDice(' in body,
                 'doors': 'canToggleDoor(' in body,
                 'owner': 'character.userId !== socket.userId' in body,
+                'spectator': "socket.role === 'SPECTATOR'" in body,
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
@@ -146,7 +147,7 @@ def who_may_send(info):
     if info['controls']:
         return "DM, or the token's player"
     if info['owner']:
-        return "DM, or the character's owner"
+        return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
     if info['players']:
         return 'DM and players'
     return 'Any member'

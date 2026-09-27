@@ -108,6 +108,24 @@ export function canControlToken(
 }
 
 /**
+ * May this member be given tokens to control: a player of the campaign, and
+ * nobody else. The DM controls every token without being named on one, and
+ * a spectator controls nothing, so `controlledBy` may only ever name a
+ * player. Asked before a token is created or handed over, and before a
+ * character's owner is made the default controller of a token bound to it,
+ * so a spectator is never named on a token from now on; one still named from
+ * their time as a player is treated as nobody's by `canControlToken` above
+ * and by `viewerIdFor` in `utils/spirit-layer.ts`.
+ */
+export async function canHoldTokens(campaignId: string, userId: string): Promise<boolean> {
+  const membership = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId, campaignId } },
+    select: { role: true },
+  });
+  return membership?.role === 'PLAYER';
+}
+
+/**
  * Check if user can manage campaign maps
  * Only DM can manage maps
  */

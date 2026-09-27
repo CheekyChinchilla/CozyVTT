@@ -941,7 +941,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               >
                 <option value="none">Nobody (DM controls)</option>
                 {(campaign?.memberships ?? [])
-                  .filter((m) => m.role !== 'DM')
+                  .filter((m) => m.role === 'PLAYER')
                   .map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.user?.displayName ?? m.userId}

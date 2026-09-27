@@ -89,7 +89,7 @@ Within a campaign you have one of three roles. Whoever creates a campaign is its
 |------|-----------------|
 | **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
 | **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters |
-| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
+| **Spectator** | Watch the map and follow the chat, and write in it; they cannot roll dice, move tokens or change anything, including a character sheet of their own while they are a spectator. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
 
 ---
 

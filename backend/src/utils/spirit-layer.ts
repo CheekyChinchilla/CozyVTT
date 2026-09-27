@@ -230,6 +230,19 @@ export function tokenForRecipient(token: Token, userId: string | undefined): Tok
 }
 
 /**
+ * Whose tokens count as their own for what they are sent: a player's. A
+ * spectator controls nothing, whatever `controlledBy` still says from their
+ * time as a player (it is not cleared on demotion, and `canControlToken`
+ * refuses them the move), so for hit points, darkvision, an obscured
+ * identity and sight on a lit map they are nobody. The DM is sent everything
+ * and needs no viewpoint. Every per-recipient filter asks this, so a caller
+ * cannot forget the role half of the rule.
+ */
+export function viewerIdFor(role: string | undefined, userId: string | undefined): string | undefined {
+  return role === 'PLAYER' ? userId : undefined;
+}
+
+/**
  * Whether a member may act on this token's plane: the DM anywhere, anyone
  * on the material plane, and a player on the spirit plane only while they
  * can see it. The socket move handlers and the REST token update ask this
@@ -273,8 +286,10 @@ export function filterTokensByRole(
     return true;
   });
 
-  // Then only the fields this recipient may see of each
-  return visibleTokens.map((token) => tokenForRecipient(token, userId));
+  // Then only the fields this recipient may see of each; a spectator is
+  // nobody's controller, whatever the tokens say.
+  const viewer = viewerIdFor(userRole, userId);
+  return visibleTokens.map((token) => tokenForRecipient(token, viewer));
 }
 
 /**
@@ -284,7 +299,8 @@ export function filterTokensByRole(
  * receive tokens that are within their character's line of sight.
  *
  * @param tokens         Tokens already filtered by role/spirit rules
- * @param playerUserId   The player's user ID
+ * @param playerUserId   The player's user ID, from `viewerIdFor`: undefined for
+ *                       a spectator, who controls no token and so sees nothing
  * @param walls          Map wall segments (for raycasting)
  * @param mapWidth       Map pixel width
  * @param mapHeight      Map pixel height
@@ -294,7 +310,7 @@ export function filterTokensByRole(
  */
 export function filterTokensByLighting(
   tokens: Token[],
-  playerUserId: string,
+  playerUserId: string | undefined,
   walls: unknown,
   mapWidth: number,
   mapHeight: number,
@@ -315,8 +331,9 @@ export function filterTokensByLighting(
   const lightSources = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
   const enabledLights = lightSources.filter((l) => l.enabled);
 
-  // Find all tokens controlled by this player
-  const myTokens = tokens.filter((t) => t.controlledBy === playerUserId);
+  // Find all tokens controlled by this player. Nobody's viewpoint matches
+  // nothing, not the tokens that carry no controller at all.
+  const myTokens = playerUserId ? tokens.filter((t) => t.controlledBy === playerUserId) : [];
 
   // Nobody on the map to look through: nothing is seen, so nothing is sent.
   // Lights deliberately do not help here — a light is not a viewer, and a
@@ -423,11 +440,13 @@ export function filterMapData(
 ): MapData & { tokens: Token[] } {
   let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible, userId);
 
-  // Apply dynamic lighting filter for non-DM players when lighting is enabled
+  // Apply dynamic lighting filter for non-DM members when lighting is enabled.
+  // A spectator has no viewpoint (`viewerIdFor`), so a lit map sends them
+  // nothing, like a player with no token on it.
   if (userRole !== 'DM' && mapData.lightingEnabled && userId) {
     filteredTokens = filterTokensByLighting(
       filteredTokens,
-      userId,
+      viewerIdFor(userRole, userId),
       mapData.wallSegments,
       mapData.width,
       mapData.height,

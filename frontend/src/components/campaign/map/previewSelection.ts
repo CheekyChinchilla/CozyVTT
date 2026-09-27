@@ -90,8 +90,9 @@ export function previewControlsFor(selection: PreviewSelection | null): (t: Toke
 function ownByKind(selection: PreviewSelection): (t: Token) => boolean {
   switch (selection.kind) {
     case 'player': {
+      // The previewed member is a player: previewOptions lists only those.
       const { userId } = selection;
-      return (t) => controlsToken(t, userId);
+      return (t) => controlsToken(t, userId, 'PLAYER');
     }
     case 'token': {
       const { tokenId } = selection;
