@@ -214,7 +214,7 @@ Instance branding (logo, mascot, favicon) is **not** set from the dashboard yet 
 | Avatar images | 2 MB | `MAX_AVATAR_SIZE_MB` |
 | Documents (PDF, text, Markdown) | 50 MB | `MAX_DOCUMENT_SIZE_MB` |
 
-Set these in `.env` and restart — no rebuild needed. If you raise one, raise your reverse proxy's body limit to match (`NGINX_MAX_BODY_SIZE` for the bundled Nginx). See [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
+Set these in `.env` and apply them with `docker compose up -d`; no rebuild is needed, but `docker compose restart` keeps the old values. If you raise one, raise your reverse proxy's body limit to match (`NGINX_MAX_BODY_SIZE` for the bundled Nginx). See [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
 
 ---
 

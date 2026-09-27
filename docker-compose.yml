@@ -84,6 +84,13 @@ services:
       NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
+      ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      # Session timeouts (milliseconds) and logging. Every setting .env.example
+      # offers is named here, or it never reaches the container: a test keeps
+      # the two files in step.
+      SESSION_MAX_AGE: ${SESSION_MAX_AGE:-3600000}
+      REMEMBER_ME_MAX_AGE: ${REMEMBER_ME_MAX_AGE:-2592000000}
+      LOG_LEVEL: ${LOG_LEVEL:-}
     volumes:
       # Uploads persist on the host — back this directory up regularly
       - ./backend/uploads:/app/uploads

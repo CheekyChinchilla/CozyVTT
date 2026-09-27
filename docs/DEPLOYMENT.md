@@ -129,7 +129,7 @@ your `/api` requests are landing on the web pages instead of the API — see
 ```bash
 docker compose stop          # Stop without removing containers
 docker compose start         # Start stopped containers
-docker compose restart       # Restart all services
+docker compose restart       # Restart all services (keeps the old settings: after editing .env, use `docker compose up -d`)
 docker compose down          # Stop and remove containers (data volume preserved)
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
@@ -662,7 +662,7 @@ Back up `backend/uploads/` alongside your database dumps. See [Database Backups]
 
 Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now.
 
-On an install without Docker the backend writes them to a `backups` folder beside its working directory; set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
+On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
 Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for the dumps it writes. On the host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
 
@@ -687,7 +687,7 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand (set `BACKUP_DIR` in `.env` to change that; a location inside `uploads/` is refused).
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. To keep them elsewhere under Docker, change the `./backend/backups` volume line in your `docker-compose.override.yml`; `BACKUP_DIR` applies only to an install without Docker, and a location inside `uploads/` is refused either way.
 
 **Admin Dashboard → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
 
