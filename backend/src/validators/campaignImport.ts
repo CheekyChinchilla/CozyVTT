@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
+import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema } from './tokens';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -25,21 +26,30 @@ export const IMPORT_LIMITS = {
 
 // ── Helper sub-schemas ──────────────────────────────────────────────────────
 
-const SizeSchema = z.object({
-  width: z.number().int().min(1).max(100),
-  height: z.number().int().min(1).max(100),
-}).strip();
-
 const PositionSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
 }).strip();
 
-const HpSchema = z.object({
-  current: z.number().int().min(0),
-  max: z.number().int().min(1),
-  temp: z.number().int().min(0),
-}).strip();
+// Tokens and templates in an archive are stored as they arrive, so they are
+// held to what the live routes accept: the same size and hit-point limits and
+// the same allowlists. A value outside them falls back to the default instead
+// of refusing the whole map, as the creature templates below already do; a
+// stored value the routes refuse would otherwise vanish for players (the role
+// filter matches layers exactly) or fail the next time the DM edited it.
+const TokenLayerSchema = z.enum(['token', 'spirit']).default('token').catch('token');
+const TokenTypeSchema = z.enum(['player', 'npc', 'object']);
+const TokenDispositionSchema = z.enum(['friendly', 'neutral', 'hostile']).nullable().default(null).catch(null);
+const TokenDisplayModeSchema = z.enum(['pog', 'top-down', 'full-art']);
+const ImportHpSchema = TokenHpSchema.nullable().optional().catch(null);
+
+// Conditions are kept one at a time, so an over-long entry costs itself and
+// not the list.
+const ImportConditionsSchema = z
+  .array(z.string().trim().max(60).catch(''))
+  .max(50)
+  .catch([])
+  .transform((conditions) => conditions.filter((c) => c.length > 0));
 
 // Stat blocks arriving in an archive validate against the same definition the
 // creature and token-template routes use, with the looser import limits this
@@ -107,20 +117,20 @@ const TokenSchema = z.object({
   name: z.string().max(200),
   imageUrl: z.string().max(500).optional().default(''),
   position: PositionSchema,
-  size: SizeSchema,
-  layer: z.string().max(20).optional().default('token'),
+  size: TokenSizeSchema.catch({ width: 1, height: 1 }),
+  layer: TokenLayerSchema,
   visible: z.boolean().optional().default(true),
   controlledBy: z.string().max(100).nullable().optional(),
   rotation: z.number().min(0).max(360).optional(),
-  conditions: z.array(z.string().max(100)).max(50).optional(),
-  type: z.string().max(20).optional().default('npc'),
-  disposition: z.string().max(20).nullable().optional(),
-  hp: HpSchema.nullable().optional(),
+  conditions: ImportConditionsSchema.optional(),
+  type: TokenTypeSchema.default('npc').catch('npc'),
+  disposition: TokenDispositionSchema,
+  hp: ImportHpSchema,
   showHpBar: z.boolean().optional(),
   notes: z.string().max(5000).optional(),
   initiative: z.number().nullable().optional(),
-  sightRadius: z.number().min(0).max(200).optional(),
-  displayMode: z.string().max(20).optional(),
+  sightRadius: TokenSightRadiusSchema.optional(),
+  displayMode: TokenDisplayModeSchema.default('pog').catch('pog'),
   statBlock: StatBlockSchema.nullable().optional(),
   creatureTemplateId: z.string().max(100).nullable().optional(),
   obscured: z.boolean().optional().default(false),
@@ -158,12 +168,12 @@ export const CreatureTemplateSchema = z.object({
   alignment: z.string().max(100).nullable().optional(),
   imageAssetRef: z.string().max(200).nullable().optional(),
   statBlock: StatBlockSchema,
-  size: SizeSchema.optional(),
+  size: TokenSizeSchema.optional().catch(undefined),
   // Allowlisted like the live create and update paths; a value outside it
   // falls back to the importer's default instead of being stored as a fourth
   // disposition the app cannot draw
   disposition: z.enum(['friendly', 'neutral', 'hostile']).optional().catch(undefined),
-  displayMode: z.enum(['pog', 'top-down', 'full-art']).optional().catch(undefined),
+  displayMode: TokenDisplayModeSchema.optional().catch(undefined),
 }).strip();
 
 // ── Token template ──────────────────────────────────────────────────────────
@@ -171,15 +181,17 @@ export const CreatureTemplateSchema = z.object({
 export const TokenTemplateImportSchema = z.object({
   name: z.string().min(1).max(200),
   imageAssetRef: z.string().max(200).nullable().optional(),
-  type: z.string().max(20),
-  disposition: z.string().max(20).nullable().optional(),
-  displayMode: z.string().max(20).optional(),
-  size: SizeSchema.optional(),
+  // The importer applies the template defaults (object, pog, one square) to
+  // whatever is dropped here.
+  type: TokenTypeSchema.catch('object'),
+  disposition: TokenDispositionSchema,
+  displayMode: TokenDisplayModeSchema.optional().catch(undefined),
+  size: TokenSizeSchema.optional().catch(undefined),
   notes: z.string().max(5000).nullable().optional(),
-  hp: HpSchema.nullable().optional(),
+  hp: ImportHpSchema,
   showHpBar: z.boolean().optional(),
   statBlock: StatBlockSchema.nullable().optional(),
-  sightRadius: z.number().min(0).max(200).nullable().optional(),
+  sightRadius: TokenSightRadiusSchema.nullable().optional(),
 }).strip();
 
 // ── Asset manifest ──────────────────────────────────────────────────────────

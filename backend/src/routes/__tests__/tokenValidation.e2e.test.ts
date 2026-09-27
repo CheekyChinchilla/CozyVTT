@@ -550,4 +550,121 @@ describe('map token validation', () => {
       expect(token.position).toEqual({ x: 7, y: 7 });
     });
   });
+
+  // What a player may write is now typed, not only gated: `position` kept
+  // whatever arrived beside x and y, and `rotation` took any JSON value, and
+  // both were then sent to every member on each map fetch.
+  describe('the fields a player may write', () => {
+    let tokenId: string;
+
+    beforeAll(async () => {
+      const res = await place({ name: 'Typed Player Token', controlledBy: playerId, position: { x: 9, y: 9 } });
+      tokenId = res.body.token.id;
+    });
+
+    const update = (body: Record<string, unknown>) =>
+      player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send(body);
+    const stored = async () => {
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      return after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
+    };
+
+    it('stores only x and y of a position', async () => {
+      const res = await update({ position: { x: 3, y: 3, junk: 'A'.repeat(2000), nested: { a: [1, 2, 3] } } });
+      expect(res.status).toBe(200);
+      expect((await stored()).position).toEqual({ x: 3, y: 3 });
+    });
+
+    it('stores a rotation in degrees', async () => {
+      expect((await update({ rotation: 90 })).status).toBe(200);
+      expect((await stored()).rotation).toBe(90);
+    });
+
+    it.each([
+      ['an object', { evil: 'x'.repeat(500) }],
+      ['a word', 'north'],
+      ['400 degrees', 400],
+      ['a negative angle', -1],
+    ])('refuses %s as a rotation', async (_what, rotation) => {
+      const res = await update({ rotation });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/rotation/);
+      expect((await stored()).rotation).toBe(90);
+    });
+  });
+
+  // The DM's fields were stored as sent too: `visible: 'false'` is a truthy
+  // string, so a token the DM believed hidden was shown to everyone.
+  describe('the fields the DM sets', () => {
+    it.each([
+      ['visible', 'false'],
+      ['showHpBar', 'no'],
+      ['initiative', 'abc'],
+      ['controlledBy', { $ne: null }],
+      ['characterId', ['x']],
+      ['creatureTemplateId', 'not-a-uuid'],
+      ['rotation', 'north'],
+      ['notes', ['x']],
+    ])('refuses to place a token whose %s is %j', async (field, value) => {
+      const res = await place({ name: `Bad ${field}`, [field]: value });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(new RegExp(field));
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      expect(after.body.map.tokens.some((t: { name: string }) => t.name === `Bad ${field}`)).toBe(false);
+    });
+
+    it('refuses the same on update, leaving the token as it was', async () => {
+      const placed = await place({ name: 'Typed DM Token', visible: false });
+      const id = placed.body.token.id;
+      const url = `/api/campaigns/${campaignId}/maps/${mapId}/tokens/${id}`;
+      expect((await dm.put(url).send({ visible: 'true' })).status).toBe(400);
+      expect((await dm.put(url).send({ name: { evil: true } })).status).toBe(400);
+      expect((await dm.put(url).send({ initiative: '12' })).status).toBe(400);
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const token = after.body.map.tokens.find((t: { id: string }) => t.id === id);
+      expect(token).toMatchObject({ name: 'Typed DM Token', visible: false, initiative: null });
+    });
+  });
+
+  // A token could be bound to any character id at all, and the initiative roll
+  // then read that sheet. Character ids are visible to every member of a
+  // shared campaign, and anyone can be the DM of a campaign they create.
+  describe('a token bound to a character', () => {
+    let ownCharacterId: string;
+    let foreignCharacterId: string;
+    let otherCampaignId: string;
+
+    beforeAll(async () => {
+      const other = await createTestCampaign(playerId, { name: 'Elsewhere' });
+      otherCampaignId = other.id;
+      const [own, foreign] = await Promise.all([
+        prisma.character.create({ data: { userId: playerId, campaignId, name: 'Here', data: {} } }),
+        prisma.character.create({ data: { userId: playerId, campaignId: otherCampaignId, name: 'Elsewhere', data: {} } }),
+      ]);
+      ownCharacterId = own.id;
+      foreignCharacterId = foreign.id;
+    });
+
+    afterAll(async () => {
+      await prisma.character.deleteMany({ where: { id: { in: [ownCharacterId, foreignCharacterId] } } });
+      await cleanupCampaigns([otherCampaignId]);
+    });
+
+    it("is placed, and controlled by the character's owner", async () => {
+      const res = await place({ name: 'Bound Here', characterId: ownCharacterId });
+      expect(res.status).toBe(201);
+      expect(res.body.token).toMatchObject({ characterId: ownCharacterId, controlledBy: playerId });
+    });
+
+    it.each([
+      ["another campaign's character", () => foreignCharacterId],
+      ['a character that does not exist', () => '00000000-0000-4000-8000-000000000000'],
+    ])('is refused for %s', async (_what, id) => {
+      const res = await place({ name: 'Bound Elsewhere', characterId: id() });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/character/i);
+      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      expect(after.body.map.tokens.some((t: { name: string }) => t.name === 'Bound Elsewhere')).toBe(false);
+    });
+  });
 });

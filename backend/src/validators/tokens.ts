@@ -60,15 +60,40 @@ export const TokenMetadataSchema = z.record(z.string(), z.unknown()).refine(
 );
 
 /**
- * Check the JSON-valued fields of a token payload.
+ * Where a token stands, in grid squares. Rebuilt from x and y, so nothing that
+ * arrives beside them is stored: a player may move their own token, and the
+ * stored position goes to every member on each map fetch. Whether the square
+ * is on the map is the route's check, since only it has the map.
+ */
+export const TokenPositionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+/** Which way a token faces, in degrees. */
+export const TokenRotationSchema = z.number().min(0).max(360);
+
+// The same caps the token templates apply to the same fields.
+const TokenNameSchema = z.string().max(200);
+const TokenNotesSchema = z.string().max(5000);
+const TokenImageUrlSchema = z.string().max(500);
+const IdSchema = z.uuid();
+
+/**
+ * Check the fields of a token payload.
  *
  * Each field is optional, so a partial update is checked only on what it
- * actually carries. `null` is accepted for `hp` and `statBlock`, which is how
- * a token records having neither.
+ * actually carries. `null` is accepted where a token records having none:
+ * `hp`, `statBlock`, `sightRadius`, `notes`, `imageUrl`, `initiative`, and
+ * the three ids.
  *
  * Returns the parsed values rather than the raw ones, so callers store what the
- * schema produced — a trimmed condition list, for instance — instead of what
- * arrived.
+ * schema produced — a trimmed condition list, a position that is only its
+ * square — instead of what arrived. The routes used to type-check a few
+ * fields by hand and store the rest as sent: a player could keep any extra
+ * keys beside a position's x and y and any value at all as a rotation, and a
+ * DM's `visible: 'false'` was a truthy string that showed everyone a token
+ * they believed hidden.
  */
 export type TokenShapes = {
   hp?: z.infer<typeof TokenHpSchema> | null;
@@ -78,6 +103,17 @@ export type TokenShapes = {
   statBlock?: unknown;
   sightRadius?: number | null;
   obscured?: boolean;
+  position?: z.infer<typeof TokenPositionSchema>;
+  rotation?: number;
+  visible?: boolean;
+  showHpBar?: boolean;
+  initiative?: number | null;
+  controlledBy?: string | null;
+  characterId?: string | null;
+  creatureTemplateId?: string | null;
+  name?: string;
+  notes?: string | null;
+  imageUrl?: string | null;
 };
 
 export function validateTokenShapes(
@@ -131,6 +167,44 @@ export function validateTokenShapes(
   const obscured = check('obscured', z.boolean());
   if ('failed' in obscured) return { ok: false, message: obscured.failed };
   if (obscured.parsed !== undefined) value.obscured = obscured.parsed ?? undefined;
+
+  const position = check('position', TokenPositionSchema);
+  if ('failed' in position) return { ok: false, message: position.failed };
+  if (position.parsed) value.position = position.parsed;
+
+  const rotation = check('rotation', TokenRotationSchema);
+  if ('failed' in rotation) return { ok: false, message: rotation.failed };
+  if (rotation.parsed !== undefined) value.rotation = rotation.parsed ?? undefined;
+
+  const visible = check('visible', z.boolean());
+  if ('failed' in visible) return { ok: false, message: visible.failed };
+  if (visible.parsed !== undefined) value.visible = visible.parsed ?? undefined;
+
+  const showHpBar = check('showHpBar', z.boolean());
+  if ('failed' in showHpBar) return { ok: false, message: showHpBar.failed };
+  if (showHpBar.parsed !== undefined) value.showHpBar = showHpBar.parsed ?? undefined;
+
+  const initiative = check('initiative', z.number(), true);
+  if ('failed' in initiative) return { ok: false, message: initiative.failed };
+  if (initiative.parsed !== undefined) value.initiative = initiative.parsed;
+
+  for (const field of ['controlledBy', 'characterId', 'creatureTemplateId'] as const) {
+    const id = check(field, IdSchema, true);
+    if ('failed' in id) return { ok: false, message: id.failed };
+    if (id.parsed !== undefined) value[field] = id.parsed;
+  }
+
+  const name = check('name', TokenNameSchema);
+  if ('failed' in name) return { ok: false, message: name.failed };
+  if (name.parsed !== undefined) value.name = name.parsed ?? undefined;
+
+  const notes = check('notes', TokenNotesSchema, true);
+  if ('failed' in notes) return { ok: false, message: notes.failed };
+  if (notes.parsed !== undefined) value.notes = notes.parsed;
+
+  const imageUrl = check('imageUrl', TokenImageUrlSchema, true);
+  if ('failed' in imageUrl) return { ok: false, message: imageUrl.failed };
+  if (imageUrl.parsed !== undefined) value.imageUrl = imageUrl.parsed;
 
   return { ok: true, value };
 }

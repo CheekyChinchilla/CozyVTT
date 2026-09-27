@@ -306,8 +306,12 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // than by both remembering to compute it the same way.
       let resolution = null as ReturnType<typeof resolveCharacterInitiative>;
       if (token.characterId) {
-        const character = await prisma.character.findUnique({
-          where: { id: token.characterId },
+        // Only a character of this campaign. Character ids are visible to
+        // every member of any shared campaign, and anyone can be the DM of a
+        // campaign they create, so a token bound to someone else's character
+        // must not read that sheet.
+        const character = await prisma.character.findFirst({
+          where: { id: token.characterId, campaignId: socket.campaignId },
           select: { gameSystem: true, data: true },
         });
         if (character) {

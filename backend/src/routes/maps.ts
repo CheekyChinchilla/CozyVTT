@@ -954,15 +954,16 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // imageUrl is optional — tokens without an image get colored-letter placeholders
-    if (tokenData.imageUrl && typeof tokenData.imageUrl !== 'string') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Token imageUrl must be a string if provided',
-      });
+    // Every other field is checked against the token schemas, shared with the
+    // update route and the token templates, and stored as parsed, never as it
+    // arrived. imageUrl is optional: a token without one gets a placeholder.
+    const shapes = validateTokenShapes(tokenData);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    if (!tokenData.position || typeof tokenData.position.x !== 'number' || typeof tokenData.position.y !== 'number') {
+    const position = shapes.value.position;
+    if (!position) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Token position {x, y} is required',
@@ -970,8 +971,8 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     // Validate position is within map bounds
-    if (tokenData.position.x < 0 || tokenData.position.x >= map.width ||
-        tokenData.position.y < 0 || tokenData.position.y >= map.height) {
+    if (position.x < 0 || position.x >= map.width ||
+        position.y < 0 || position.y >= map.height) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
@@ -1003,63 +1004,60 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: 'Invalid display mode' });
     }
 
-    // The JSON fields. Hand-checking stopped short of these, so anything at all
-    // could be written into the column and every reader then had to cope — HP
-    // sent in the character-sheet shape stored happily and rendered as
-    // "8/undefined" everywhere. Same schemas the token-template route uses.
-    const shapes = validateTokenShapes(tokenData);
-    if (!shapes.ok) {
-      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
-    }
-
     // Normalize token imageUrl to full path (optional for placeholder tokens)
-    const normalizedTokenImageUrl = tokenData.imageUrl
-      ? normalizeAssetUrl(tokenData.imageUrl, 'tokens')
+    const normalizedTokenImageUrl = shapes.value.imageUrl
+      ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
 
     // A token bound to a character is controlled by that character's owner
     // unless the request names someone else. The controller is who the map is
     // drawn for and who may move the token, on the server and in the client
     // alike, so a client that omits it no longer creates a token its own
-    // player cannot use. A character from another campaign grants nothing.
-    let controlledBy: string | null = tokenData.controlledBy || null;
-    if (!controlledBy && typeof tokenData.characterId === 'string' && tokenData.characterId) {
+    // player cannot use. The character has to be this campaign's: the
+    // initiative roll reads the bound sheet, and character ids are visible to
+    // every member of any shared campaign.
+    const characterId = shapes.value.characterId ?? null;
+    let controlledBy: string | null = shapes.value.controlledBy ?? null;
+    if (characterId) {
       const character = await prisma.character.findUnique({
-        where: { id: tokenData.characterId },
+        where: { id: characterId },
         select: { userId: true, campaignId: true },
       });
-      if (character && character.campaignId === campaignId) controlledBy = character.userId;
+      if (!character || character.campaignId !== campaignId) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Token characterId must name a character of this campaign',
+        });
+      }
+      if (!controlledBy) controlledBy = character.userId;
     }
 
     // Build the new token with defaults
     const newToken = {
       id: randomUUID(),
-      characterId: tokenData.characterId || null,
+      characterId,
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
-      position: {
-        x: tokenData.position.x,
-        y: tokenData.position.y,
-      },
+      position,
       size: shapes.value.size ?? { width: 1, height: 1 },
       layer,
-      visible: tokenData.visible !== undefined ? tokenData.visible : true,
+      visible: shapes.value.visible ?? true,
       controlledBy,
-      rotation: tokenData.rotation || 0,
+      rotation: shapes.value.rotation ?? 0,
       conditions: shapes.value.conditions ?? [],
       metadata: shapes.value.metadata ?? {},
       type: tokenType,
       disposition: disposition,
       hp: shapes.value.hp ?? null,
-      showHpBar: tokenData.showHpBar !== undefined ? tokenData.showHpBar : false,
-      notes: typeof tokenData.notes === 'string' ? tokenData.notes : '',
-      initiative: tokenData.initiative !== undefined ? tokenData.initiative : null,
+      showHpBar: shapes.value.showHpBar ?? false,
+      notes: shapes.value.notes ?? '',
+      initiative: shapes.value.initiative ?? null,
       // Darkvision in squares; 0 = none. Decides what the server sends this
       // token's owner, so it is set here and by the DM, never by a player.
       sightRadius: shapes.value.sightRadius ?? 0,
       displayMode: displayMode,
       statBlock: shapes.value.statBlock ?? null,
-      creatureTemplateId: tokenData.creatureTemplateId || null,
+      creatureTemplateId: shapes.value.creatureTemplateId ?? null,
       obscured: shapes.value.obscured ?? false,
     };
 
@@ -1172,24 +1170,6 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
 
-    // Validate position if being updated
-    if (updates.position) {
-      if (typeof updates.position.x !== 'number' || typeof updates.position.y !== 'number') {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Position must have numeric x and y values',
-        });
-      }
-
-      if (updates.position.x < 0 || updates.position.x >= map.width ||
-          updates.position.y < 0 || updates.position.y >= map.height) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-        });
-      }
-    }
-
     // Validate layer if being updated (DM only)
     if (updates.layer !== undefined) {
       if (!isDM) {
@@ -1237,12 +1217,20 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       }
     }
 
-    // The JSON-valued fields, checked against the same schemas the create route
-    // and the token templates use. Only what the request actually carries is
-    // checked, so a position-only move is unaffected.
+    // Every field the request carries, checked against the same schemas the
+    // create route and the token templates use, and stored as parsed: a
+    // position keeps only its square, a rotation is a number of degrees.
     const shapes = validateTokenShapes(updates);
     if (!shapes.ok) {
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
+    const position = shapes.value.position;
+    if (position && (position.x < 0 || position.x >= map.width || position.y < 0 || position.y >= map.height)) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
+      });
     }
 
     // Metadata is merged into what the token already holds, so the size limit
@@ -1265,22 +1253,22 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // Build updated token (merge updates with existing)
     const updatedToken: Token = {
       ...existingToken,
-      ...(updates.name && { name: updates.name }),
-      ...(updates.imageUrl !== undefined && { imageUrl: updates.imageUrl ? (normalizeAssetUrl(updates.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
-      ...(updates.position && { position: updates.position }),
+      ...(shapes.value.name && { name: shapes.value.name }),
+      ...(updates.imageUrl !== undefined && { imageUrl: shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
+      ...(position && { position }),
       ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
-      ...(updates.visible !== undefined && { visible: updates.visible }),
-      ...(updates.controlledBy !== undefined && { controlledBy: updates.controlledBy }),
-      ...(updates.rotation !== undefined && { rotation: updates.rotation }),
+      ...(shapes.value.visible !== undefined && { visible: shapes.value.visible }),
+      ...(updates.controlledBy !== undefined && { controlledBy: shapes.value.controlledBy ?? null }),
+      ...(shapes.value.rotation !== undefined && { rotation: shapes.value.rotation }),
       ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
       ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
       ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
-      ...(updates.showHpBar !== undefined && { showHpBar: updates.showHpBar }),
-      ...(updates.notes !== undefined && { notes: updates.notes }),
-      ...(updates.initiative !== undefined && { initiative: updates.initiative }),
+      ...(shapes.value.showHpBar !== undefined && { showHpBar: shapes.value.showHpBar }),
+      ...(updates.notes !== undefined && { notes: shapes.value.notes ?? '' }),
+      ...(updates.initiative !== undefined && { initiative: shapes.value.initiative ?? null }),
       ...(updates.sightRadius !== undefined && { sightRadius: shapes.value.sightRadius ?? 0 }),
       ...(updates.displayMode !== undefined && { displayMode: updates.displayMode }),
       // The parsed value, not the raw one: Zod drops keys the schema does not
@@ -1288,7 +1276,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // undeclared fields survived into sheets and then drifted. The create
       // route above has always stored the parsed value.
       ...(updates.statBlock !== undefined && { statBlock: shapes.value.statBlock ?? null }),
-      ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: updates.creatureTemplateId }),
+      ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: shapes.value.creatureTemplateId ?? null }),
       ...(shapes.value.obscured !== undefined && { obscured: shapes.value.obscured }),
     };
 

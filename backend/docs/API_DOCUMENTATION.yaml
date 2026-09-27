@@ -4011,7 +4011,14 @@ paths:
       tags:
         - Maps
       summary: Add token to map
-      description: Add a new token to the map (DM only)
+      description: |
+        Add a new token to the map (DM only). Every field is checked against
+        the token schema and stored as parsed: a position keeps only `x` and
+        `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
+        UUIDs. A `characterId` must name a character of this campaign, or the
+        request is refused with 400; a token bound to a character is
+        controlled by that character's owner unless `controlledBy` says
+        otherwise.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -4101,6 +4108,7 @@ paths:
                   type: string
                 position:
                   type: object
+                  description: Grid square, within the map. Only x and y are stored.
                   properties:
                     x:
                       type: number
@@ -4128,6 +4136,9 @@ paths:
                     character belongs to this campaign.
                 rotation:
                   type: number
+                  minimum: 0
+                  maximum: 360
+                  description: Degrees
                 conditions:
                   type: array
                   items:
@@ -7405,6 +7416,8 @@ components:
           description: User ID of the player who controls this token (null = DM-only)
         rotation:
           type: number
+          minimum: 0
+          maximum: 360
           default: 0
           description: Rotation in degrees
         conditions:
@@ -7481,6 +7494,7 @@ components:
           type: string
           format: uuid
           nullable: true
+          description: A character of this campaign; any other id is refused (400).
         name:
           type: string
         imageUrl:
@@ -7490,6 +7504,7 @@ components:
           required:
             - x
             - y
+          description: Grid square, within the map. Only x and y are stored.
           properties:
             x:
               type: number
@@ -7517,7 +7532,10 @@ components:
           nullable: true
         rotation:
           type: number
+          minimum: 0
+          maximum: 360
           default: 0
+          description: Degrees
         conditions:
           type: array
           items:

@@ -92,10 +92,13 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.token.controlledBy).toBe(dmId);
   });
 
-  it('takes no controller from a character that belongs to another campaign', async () => {
+  // Such a token used to be placed with no controller. It is refused now: the
+  // initiative roll reads the bound sheet, and character ids are visible to
+  // every member of any shared campaign.
+  it('refuses a character that belongs to another campaign', async () => {
     const res = await create({ characterId: strayCharacterId });
-    expect(res.status).toBe(201);
-    expect(res.body.token.controlledBy).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/character/i);
   });
 
   it('gives an unbound token no controller unless one is named', async () => {
