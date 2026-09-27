@@ -158,7 +158,7 @@ paths:
                       api: { type: string, example: ok }
                       database: { type: string, example: ok }
         '503':
-          description: The database cannot be reached; the body carries `status: degraded`
+          description: 'The database cannot be reached; the body carries `status: degraded`'
 
   # ============================================
   # CLIENT CONFIG
@@ -2727,7 +2727,7 @@ paths:
       tags:
         - Sessions
       summary: Resume last session
-      description: Resume the most recently paused session (DM only). The table is left exactly as it is: everything is stored as it is played, and the snapshot taken at pause is a record kept with the session, never written back.
+      description: 'Resume the most recently paused session (DM only). The table is left exactly as it is: everything is stored as it is played, and the snapshot taken at pause is a record kept with the session, never written back.'
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -5200,7 +5200,7 @@ paths:
     get:
       tags: [Token Templates]
       summary: List token templates
-      description: Get all token templates for a campaign. Supports search and type filtering. Campaign DM only: a template carries the notes, stat block and hit points the map keeps from players.
+      description: 'Get all token templates for a campaign. Supports search and type filtering. Campaign DM only: a template carries the notes, stat block and hit points the map keeps from players.'
       operationId: listTokenTemplates
       security:
         - cookieAuth: []
