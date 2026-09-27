@@ -233,7 +233,14 @@ export default function DocumentReader({
              not one; that was checked, not assumed.
 
              allow-scripts is needed because the viewers themselves are script.
-             allow-same-origin is deliberately absent. */
+             allow-same-origin is deliberately absent.
+
+             TODO(safari): Safari shows a blank frame here. The suspected
+             cause is the double sandbox, this attribute plus the sandbox
+             directive in the response's Content-Security-Policy; Safari
+             18.4's notes say that combination was fixed for a main frame
+             only. Confirm it from the frame request's status before
+             relaxing either one. The link below is the workaround. */
           <>
             {/* Some browsers show nothing at all for a PDF inside a page, and
                 the frame is white, so there is no way to tell that from a
