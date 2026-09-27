@@ -490,6 +490,42 @@ describe('map token validation', () => {
     });
   });
 
+  // The socket refuses a player who cannot see the spirit plane from
+  // touching a spirit-layer token; the REST update let them, and answered
+  // with the token the map fetch withholds from them.
+  describe('a spirit-layer token', () => {
+    let wispId: string;
+
+    beforeAll(async () => {
+      const res = await place({ name: 'Wisp', layer: 'spirit', controlledBy: playerId, position: { x: 14, y: 14 } });
+      expect(res.status).toBe(201);
+      wispId = res.body.token.id;
+      // Placing may or may not take the layer; the DM's update always does.
+      const moved = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ layer: 'spirit' });
+      expect(moved.status).toBe(200);
+      expect(moved.body.token.layer).toBe('spirit');
+    });
+
+    afterAll(async () => {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+    });
+
+    it('cannot be moved over REST by its player while they cannot see the spirit plane', async () => {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+      const res = await player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ position: { x: 15, y: 14 } });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/spirit/i);
+      expect(JSON.stringify(res.body)).not.toContain('Wisp');
+    });
+
+    it('can be moved by its player once the spirit plane is open to them', async () => {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
+      const res = await player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ position: { x: 15, y: 14 } });
+      expect(res.status).toBe(200);
+      expect(res.body.token.position).toEqual({ x: 15, y: 14 });
+    });
+  });
+
   /**
    * controlledBy is set once and is not cleared when someone is demoted, so a
    * spectator can still hold a token from before. The socket handlers refuse

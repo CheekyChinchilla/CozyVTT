@@ -48,10 +48,12 @@ character-owner test); a handler that gates some other way is listed as "Any
 member", and the line above the table says the handler is authoritative. It
 reads both `backend/src/websocket/` and
 `backend/src/routes/`, and matches `socket.emit` alongside the
-`broadcastToCampaign` / `broadcastToUser` helpers — a route pushing an event
-through a helper reaches a client just as surely as a handler emitting one, and
-while the scan covered only handlers the table called itself complete while
-omitting seven such events.
+`broadcastToCampaign` / `broadcastToUser` helpers and the token move
+handlers' `emitMoveToVisibleSockets` / `emitMoveToDragRecipients`, which take
+the event name as their first argument — a route pushing an event through a
+helper reaches a client just as surely as a handler emitting one, and while the
+scan covered only handlers the table called itself complete while omitting
+seven such events.
 
 The **Who may send it** column is read from the handler, and from any function
 in the same file it hands straight off to: a handler that refuses non-DMs near

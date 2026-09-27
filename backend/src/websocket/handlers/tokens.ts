@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibility, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting } from '../../utils/spirit-layer';
+import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting } from '../../utils/spirit-layer';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter } from '../shared';
@@ -79,25 +79,36 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
   }
 
   /**
-   * A move event to everyone in the campaign, each told of the mover what
-   * they may know. A token that is not obscured takes the one-line room
-   * broadcast; an obscured one is sent socket by socket.
+   * A move event to everyone the map fetch would send this token to: every
+   * DM, and a player for whom the role filter keeps it (visible, on their
+   * plane). One path for every token, so a hidden token and a spirit-plane
+   * token get the same treatment moving that they get when the map is
+   * opened; the four branches this replaced (spirit, hidden, lit, unlit)
+   * each applied a different subset of those rules. Each recipient is told
+   * of the mover what they may know.
    */
-  async function emitMoveToCampaign(
+  async function emitMoveToVisibleSockets(
     event: string,
     token: Token,
     payload: Record<string, unknown>,
     includeSender: boolean
   ): Promise<void> {
     const campaignId = socket.campaignId!;
-    if (token.obscured !== true) {
-      if (includeSender) io.to(campaignId).emit(event, { ...payload, movedBy: socket.userId });
-      else socket.to(campaignId).emit(event, { ...payload, movedBy: socket.userId });
-      return;
-    }
-    for (const s of await campaignSockets(io, campaignId)) {
+    const members = await campaignSockets(io, campaignId);
+    const playerIds = members
+      .map((s) => s as unknown as AuthenticatedSocket)
+      .filter((a) => a.role !== 'DM' && a.userId)
+      .map((a) => a.userId as string);
+    const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+    for (const s of members) {
       if (!includeSender && s.id === socket.id) continue;
-      s.emit(event, { ...payload, movedBy: moverShownTo(token, s as unknown as AuthenticatedSocket) });
+      const recipient = s as unknown as AuthenticatedSocket;
+      if (recipient.role !== 'DM') {
+        if (!recipient.userId) continue;
+        const sent = filterTokensByRole([token], recipient.role ?? 'PLAYER', spiritVisibility.get(recipient.userId) ?? false, recipient.userId);
+        if (sent.length === 0) continue;
+      }
+      s.emit(event, { ...payload, movedBy: moverShownTo(token, recipient) });
     }
   }
 
@@ -164,45 +175,20 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Spirit layer check: non-DMs cannot interact with spirit tokens when spirit layer is disabled
-      if (token.layer === 'spirit' && socket.role !== 'DM') {
-        const spiritVisible = await getSpiritVisibility(socket.campaignId, socket.userId!);
-        if (!spiritVisible) {
-          socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
-          return;
-        }
+      // The same plane rule the REST update route applies.
+      if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
+        socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
+        return;
       }
 
       // A new drag: whoever this token's frames went to last time is decided
       // afresh, in case the last drag never reached token.move.end.
       dragRecipients.delete(tokenId);
 
-      // Role-filtered broadcast for spirit tokens
-      if (token.layer === 'spirit') {
-        const members = await campaignSockets(io, socket.campaignId);
-        const visibility = await getSpiritVisibilityBatch(
-          socket.campaignId,
-          members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-        );
-        for (const s of members) {
-          if (s.id === socket.id) continue; // Exclude sender
-          const authedSocket = s as unknown as AuthenticatedSocket;
-          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
-            s.emit('token.move.start', { tokenId, mapId, movedBy: moverShownTo(token, authedSocket) });
-          }
-        }
-      } else if (!token.visible) {
-        // A hidden token is the DM's secret, its id included.
-        for (const s of await campaignSockets(io, socket.campaignId)) {
-          if (s.id !== socket.id && (s as unknown as AuthenticatedSocket).role === 'DM') {
-            s.emit('token.move.start', { tokenId, mapId, movedBy: socket.userId });
-          }
-        }
-      } else if (map.lightingEnabled) {
+      if (map.lightingEnabled) {
         await emitMoveToDragRecipients('token.move.start', token, mapId, { tokenId, mapId });
       } else {
-        // Unlit: every visible token is every player's to see.
-        await emitMoveToCampaign('token.move.start', token, { tokenId, mapId }, false);
+        await emitMoveToVisibleSockets('token.move.start', token, { tokenId, mapId }, false);
       }
 
       logger.debug('token.move.start', { tokenId, userId: socket.userId, mapId });
@@ -269,36 +255,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Role-filtered broadcast for spirit tokens
-      if (movingToken && movingToken.layer === 'spirit') {
-        const members = await campaignSockets(io, socket.campaignId);
-        const visibility = await getSpiritVisibilityBatch(
-          socket.campaignId,
-          members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-        );
-        for (const s of members) {
-          if (s.id === socket.id) continue; // Exclude sender
-          const authedSocket = s as unknown as AuthenticatedSocket;
-          // Only send spirit token movement to DMs and players with spirit visibility
-          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(movingToken, authedSocket) });
-          }
-        }
-      } else if (!movingToken.visible) {
-        // A hidden token is the DM's secret; its drag frames reach DMs only.
-        const members = await campaignSockets(io, socket.campaignId);
-        for (const s of members) {
-          if (s.id === socket.id) continue; // Exclude sender
-          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-          }
-        }
-      } else if (map.lightingEnabled) {
+      if (map.lightingEnabled) {
         // Lit: only those who could see the token where the drag began.
         await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y });
       } else {
-        // Unlit: every visible token is every player's to see.
-        await emitMoveToCampaign('token.moved', movingToken, { tokenId, mapId, x, y }, false);
+        await emitMoveToVisibleSockets('token.moved', movingToken, { tokenId, mapId, x, y }, false);
       }
     } catch (error) {
       logger.error('token.move failed', { err: error });
@@ -368,13 +329,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Spirit layer check: non-DMs cannot interact with spirit tokens when spirit layer is disabled
-      if (token.layer === 'spirit' && socket.role !== 'DM') {
-        const spiritVisible = await getSpiritVisibility(socket.campaignId, socket.userId!);
-        if (!spiritVisible) {
-          socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
-          return;
-        }
+      // The same plane rule the REST update route applies.
+      if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
+        socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
+        return;
       }
 
       // Update token position
@@ -389,28 +347,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         data: { tokens: toJson(updatedTokens) },
       });
 
-      // Role-filtered broadcast for spirit tokens
-      if (token.layer === 'spirit') {
-        const members = await campaignSockets(io, socket.campaignId);
-        const visibility = await getSpiritVisibilityBatch(
-          socket.campaignId,
-          members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-        );
-        for (const s of members) {
-          const authedSocket = s as unknown as AuthenticatedSocket;
-          if (authedSocket.role === 'DM' || (authedSocket.userId && visibility.get(authedSocket.userId))) {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(token, authedSocket) });
-          }
-        }
-      } else if (!token.visible) {
-        // A hidden token is the DM's secret; its final position reaches DMs only.
-        const members = await campaignSockets(io, socket.campaignId);
-        for (const s of members) {
-          if ((s as unknown as AuthenticatedSocket).role === 'DM') {
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
-          }
-        }
-      } else if (map.lightingEnabled) {
+      if (map.lightingEnabled) {
         // Dynamic lighting: per-player visibility filtering. The plane and
         // hidden-token rules (filterTokensByRole, the same call the map fetch
         // makes) come first, then line of sight, so a player is never sent a
@@ -480,8 +417,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           }
         }
       } else {
-        // Normal token - broadcast to all campaign members (including sender for confirmation)
-        await emitMoveToCampaign('token.moved', token, { tokenId, mapId, x, y }, true);
+        // The sender included, as confirmation that the write went through.
+        await emitMoveToVisibleSockets('token.moved', token, { tokenId, mapId, x, y }, true);
       }
 
       logger.debug('token.move.end', { tokenId, x, y, userId: socket.userId });

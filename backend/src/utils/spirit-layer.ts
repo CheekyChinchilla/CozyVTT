@@ -229,6 +229,22 @@ export function tokenForRecipient(token: Token, userId: string | undefined): Tok
   return tokenSentTo(token, userId !== undefined && token.controlledBy === userId);
 }
 
+/**
+ * Whether a member may act on this token's plane: the DM anywhere, anyone
+ * on the material plane, and a player on the spirit plane only while they
+ * can see it. The socket move handlers and the REST token update ask this
+ * before touching a token, so the two channels cannot disagree.
+ */
+export async function canActOnTokenPlane(
+  role: string | undefined,
+  token: Pick<Token, 'layer'>,
+  campaignId: string,
+  userId: string
+): Promise<boolean> {
+  if (role === 'DM' || token.layer !== 'spirit') return true;
+  return getSpiritVisibility(campaignId, userId);
+}
+
 export function filterTokensByRole(
   tokens: unknown,
   userRole: string,

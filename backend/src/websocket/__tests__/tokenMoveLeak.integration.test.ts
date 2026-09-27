@@ -225,3 +225,89 @@ describe('on an unlit map', () => {
     player.disconnect();
   });
 });
+
+// ── Spirit-plane and hidden tokens on the move ───────────────────────────────
+
+/**
+ * Every move event used to take one of four branches (spirit, hidden, lit,
+ * unlit), and only the lit one applied the rules the map fetch applies. A
+ * hidden spirit token took the spirit branch and streamed to every player who
+ * could see that plane; an unlit material move went to the whole room, a
+ * player in the spirit realm included; a spirit token's move ignored the
+ * light. One per-recipient path now: a socket is sent a move only if the map
+ * fetch would send it the token, and on a lit map only if it can see it.
+ */
+describe('spirit-plane and hidden tokens on the move', () => {
+  const GHOST = 'token-ghost';
+  const WRAITH = 'token-hidden-wraith';
+
+  async function spiritMap(lightingEnabled: boolean, spiritOpen: boolean, globalIllumination = true) {
+    await prisma.map.update({
+      where: { id: mapId },
+      data: {
+        lightingEnabled,
+        globalIllumination,
+        tokens: [
+          token(OWN, 5, playerId, true, undefined),
+          token(SHOWN, 7, null, true, 'dm eyes only'),
+          { ...token(GHOST, 18, null, true, undefined), layer: 'spirit' },
+          { ...token(WRAITH, 6, null, false, 'a hidden wraith'), layer: 'spirit' },
+        ],
+      },
+    });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: spiritOpen } });
+  }
+
+  it.each([
+    ['token.move.start', 'token.move.start', {}],
+    ['token.move', 'token.moved', { x: 7, y: 5 }],
+    ['token.move.end', 'token.moved', { x: 8, y: 5 }],
+  ])('a hidden spirit token the DM moves with %s reaches no player, even one who can see the spirit plane', async (sent, received, coords) => {
+    await spiritMap(false, true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const silence = expectNoEvent(player, received, 500);
+    const noAppear = expectNoEvent(player, 'token:appeared', 500);
+    dm.emit(sent, { tokenId: WRAITH, mapId, ...coords });
+    await Promise.all([silence, noAppear]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('a material token moved on an unlit map is not sent to a player in the spirit realm', async () => {
+    await spiritMap(false, true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The map fetch gives a player in the spirit realm only spirit tokens.
+    const silence = expectNoEvent(player, 'token.moved', 500);
+    dm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 9, y: 5 });
+    await silence;
+
+    // While a spirit token's move does reach them there.
+    const heard = waitForEvent<{ tokenId: string }>(player, 'token.moved');
+    dm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
+    expect((await heard).tokenId).toBe(GHOST);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('a spirit token out of sight on a lit map is not sent to a player in the spirit realm', async () => {
+    // Lighting on, no global illumination, and the player's token sees only
+    // its own square: a spirit token thirteen squares away is in the dark.
+    await spiritMap(true, true, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const silence = expectNoEvent(player, 'token.moved', 500);
+    const noAppear = expectNoEvent(player, 'token:appeared', 500);
+    dm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
+    await Promise.all([silence, noAppear]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});

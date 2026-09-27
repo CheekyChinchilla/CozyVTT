@@ -122,9 +122,12 @@ def collect():
         # Direct emits, plus the helpers in websocket/utils.ts that wrap them —
         # `broadcastToCampaign(id, 'event', data)` reaches a client just as
         # surely as `socket.emit`, so it belongs in the same table.
+        # The token move handlers hand the event name to a helper that picks
+        # the recipients, so the name is that call's first argument.
         patterns = (
             r"\.emit\(\s*'([^']+)'",
             r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*'([^']+)'",
+            r"emitMoveTo(?:VisibleSockets|DragRecipients)\(\s*'([^']+)'",
         )
         for pattern in patterns:
             for m in re.finditer(pattern, text):

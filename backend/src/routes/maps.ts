@@ -6,7 +6,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { filterMapData, getSpiritVisibility, tokenForRecipient } from '../utils/spirit-layer';
+import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient } from '../utils/spirit-layer';
 import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken } from '../services/permissions';
@@ -1161,6 +1161,14 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(403).json({
         error: 'Forbidden',
         message: 'You can only update tokens you control',
+      });
+    }
+    // And the same plane rule: a player touches a spirit-plane token only
+    // while they can see that plane, as over the socket.
+    if (!(await canActOnTokenPlane(membership.role, existingToken, campaignId, userId))) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You cannot interact with spirit layer tokens',
       });
     }
 

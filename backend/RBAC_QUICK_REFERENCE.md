@@ -132,6 +132,7 @@ read there.
 | `sightRadius`, `creatureTemplateId` | the player controls the token |
 | the identity of an `obscured` token: name, picture, conditions, metadata, HP, disposition, character and template links, controller, kind, facing, initiative and display mode (`utils/tokenMask.ts` builds the masked token from a list of what may be known) | the player controls the token |
 | everything else on a token they may see at all | always |
+| a token's move events (`token.move.start`, `token.moved`, `token:appeared`) | the map fetch would send them the token (visible, on a plane they can see), and on a lit map they could see it when the drag began |
 
 `fogData` and `spiritLayerUrl` on a map are DM-only likewise (`filterMapData`),
 and the campaign overview blanks `spiritLayerUrl` for a player who has not
