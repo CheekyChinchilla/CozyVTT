@@ -37,17 +37,26 @@ async function login(email: string): Promise<ReturnType<typeof request.agent>> {
   return agent;
 }
 
-/** A fresh user with one live socket, and what that socket reports. */
+/** A fresh user with one live socket. */
 async function userWithSocket(label: string) {
   const user = await createTestUser({ email: `livesess-${label}-${randomUUID().slice(0, 8)}@test.cozyvtt.local`, displayName: label });
   created.push(user.id);
   const cookie = await server.loginAs(user.id);
   const client = await server.connectClient(cookie);
-  return { user, client, told: waitForEvent<{ message: string }>(client, 'error'), dropped: whenDropped(client) };
+  return { user, client };
 }
 
-function whenDropped(client: ClientSocket): Promise<string> {
-  return new Promise((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
+/**
+ * What a socket that is about to be ended reports. Created only where both
+ * promises are awaited: a wait for an event that never comes rejects on its
+ * timer, and an unawaited one surfaces in whatever test the worker is running
+ * three seconds later.
+ */
+function expectEnding(client: ClientSocket) {
+  return {
+    told: waitForEvent<{ message: string }>(client, 'error'),
+    dropped: new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason))),
+  };
 }
 
 beforeAll(async () => {
@@ -65,21 +74,24 @@ afterAll(async () => {
 
 describe('an admin acting on an account', () => {
   it('resetting its password ends its live connections', async () => {
-    const { user, told, dropped } = await userWithSocket('reset');
+    const { user, client } = await userWithSocket('reset');
+    const { told, dropped } = expectEnding(client);
     expect((await admin.post(`/api/users/${user.id}/reset-password`)).status).toBe(200);
     expect((await told).message).toMatch(/password/i);
     expect(await dropped).toBe('io server disconnect');
   });
 
   it('deleting it ends its live connections', async () => {
-    const { user, told, dropped } = await userWithSocket('deleted');
+    const { user, client } = await userWithSocket('deleted');
+    const { told, dropped } = expectEnding(client);
     expect((await admin.delete(`/api/users/${user.id}`)).status).toBe(200);
     expect((await told).message).toMatch(/deleted/i);
     expect(await dropped).toBe('io server disconnect');
   });
 
   it('changing its platform role ends its live connections', async () => {
-    const { user, told, dropped } = await userWithSocket('promoted');
+    const { user, client } = await userWithSocket('promoted');
+    const { told, dropped } = expectEnding(client);
     expect((await admin.put(`/api/users/${user.id}`).send({ platformRole: 'ADMIN' })).status).toBe(200);
     expect((await told).message).toMatch(/role/i);
     expect(await dropped).toBe('io server disconnect');
@@ -88,7 +100,8 @@ describe('an admin acting on an account', () => {
 
 describe('the account holder', () => {
   it('changing their password ends their other connections and keeps the one they are on', async () => {
-    const { user, told, dropped } = await userWithSocket('changer');
+    const { user, client } = await userWithSocket('changer');
+    const { told, dropped } = expectEnding(client);
     const me = await login(user.email);
     // The REST session doing the change is not the socket's sign-in, so the
     // socket is one of the "other devices" that has to go.
@@ -111,7 +124,8 @@ describe('the account holder', () => {
   });
 
   it('resetting the password by emailed link ends every sign-in, live connections included', async () => {
-    const { user, told, dropped } = await userWithSocket('recovering');
+    const { user, client } = await userWithSocket('recovering');
+    const { told, dropped } = expectEnding(client);
     // The test app keeps sessions in memory, so the login sessions' end is
     // pinned by the call that removes them from the store the real app uses.
     const destroyed = jest.spyOn(sessionStore, 'destroyUserLoginSessions');
