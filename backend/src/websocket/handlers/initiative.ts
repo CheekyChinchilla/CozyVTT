@@ -29,6 +29,7 @@ import {
   type CombatState,
 } from '../initiativeState';
 import { campaignSockets } from '../utils';
+import { diceRollLimiter, stateRequestAllowed } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
 interface Recipient {
@@ -73,6 +74,16 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   const recipients: Recipient[] = only ?? (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
   if (recipients.length === 0) return;
 
+  // Nothing in the order means nothing to look up: every client asks for
+  // the state when it opens a campaign, and a reply that costs several
+  // queries for an empty list was the most expensive request a member could
+  // repeat.
+  if (state.combatants.length === 0) {
+    const nothing = new Map<string, CombatantSource>();
+    for (const r of recipients) r.emit('initiative.state', projectCombatState(state, nothing, r.role === 'DM'));
+    return;
+  }
+
   const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];
   const maps = mapIds.length === 0
     ? []
@@ -94,10 +105,26 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   }
 }
 
+/**
+ * Send the order again after something changed, and never let that fail the
+ * change: the state or the token is already saved by the time this runs, so
+ * a database blip here used to tell the DM "Failed to add to initiative"
+ * for an addition that had been made, and a retry was refused as a
+ * duplicate. The next change, or a client's request on reconnect, catches
+ * everyone up.
+ */
+export async function resendInitiativeState(io: Server, campaignId: string): Promise<void> {
+  try {
+    await sendInitiativeState(io, campaignId);
+  } catch (error) {
+    logger.warn('initiative.state fan-out failed; the change stands', { err: error, campaignId });
+  }
+}
+
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {
   /** Send the order to every member, each as they may see it, after a change. */
   async function broadcastInitiativeState(campaignId: string) {
-    await sendInitiativeState(io, campaignId);
+    await resendInitiativeState(io, campaignId);
   }
 
   /**
@@ -243,6 +270,15 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
 
       const { tokenId, mapId, expression } = data;
       if (!tokenId || !mapId) { socket.emit('error', { message: 'tokenId and mapId required' }); return; }
+
+      // A player's initiative roll is a dice roll: it writes the map, tells
+      // the table and re-sends the order, and it used to bypass the ceiling
+      // dice.roll applies. The DM rolls for a whole encounter at once and is
+      // not counted; a spectator is refused below whatever the count.
+      if (socket.role === 'PLAYER' && !diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
+        socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
+        return;
+      }
 
       // `expression` is now only a fallback for combatants the server cannot
       // work initiative out for itself — see the resolution below. Validate it
@@ -542,6 +578,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.request_state', async () => {
     try {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'initiative.request_state')) return;
       await sendInitiativeState(io, socket.campaignId, [socket as unknown as Recipient]);
     } catch (error) {
       logger.error('initiative.request_state failed', { err: error });

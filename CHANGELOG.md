@@ -65,6 +65,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A momentary database error while the table was being told about an initiative or spirit-layer change no longer reports the change as failed.** The change had already been made, so the DM saw "Failed to add to initiative" for an addition that stood, and adding again was refused as a duplicate; a spirit-layer toggle skipped its chat notice the same way. The notice now goes out, and the order is sent again on the next change or when a client reconnects.
+
 - **Imported tokens are held to the same limits as tokens placed by hand.** A campaign archive could carry a token with a layer, kind, disposition or display mode the app does not know, a size far beyond the ten-square limit, or over-long conditions, and it was stored as it came: such a token could vanish for players, or be refused the next time the DM edited it or moved it to another map. A value outside the allowlist now falls back to the default and the token still imports; a size outside the limit becomes one square, an over-long condition is dropped on its own, and hit points outside the limit are cleared. Token templates in an archive get the same treatment.
 
 - **The socket event table now says who may really send each event, and the check catches drift.** The generated table listed `wall:update` as DM-only when players may toggle doors, and the character HP and hit-dice events as open to any member when only the character's owner or the DM may send them; its check only confirmed each event had a row, so a hand-edited or stale cell passed. The column now reads the named permission predicates, and the check regenerates the table and fails on any difference.
@@ -142,6 +144,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
 ### Security
+
+- **A member can no longer slow the server down by repeating the requests a client makes on load.** Asking for the initiative order grew into several database queries per request with no limit on how often anyone could ask; one connection repeating it stalled everyone else's requests for seconds, and the other on-load requests (walls, lights, fog, explored memory, who is online) had no limit either. Each is now answered at most a few times a second per person, counted across all of their connections, an empty initiative order is answered without touching the database, and a player's initiative rolls count against their dice-roll limit like any other roll. Token moves and explored-memory reports are likewise limited per person rather than per connection.
 
 - **A map the DM has prepared but not shown is now the DM's alone.** Any member could list every map in the campaign and fetch any of them, with its artwork, its walls and lights, and every token the DM had left visible on it, before the DM switched to it. A player or spectator is now sent the campaign's current map and nothing else: the map list, the map fetch, its walls and lights, the live requests for walls, lights, fog and explored memory, and the artwork and token art the map uses all follow the switch. The DM still sees every map.
 

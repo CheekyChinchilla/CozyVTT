@@ -19,7 +19,7 @@ import { prisma } from '../../config/database';
 import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { explorationRevealLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
+import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -40,7 +40,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:reveal', async (data: unknown) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
-      if (!explorationRevealLimiter.check(socket.id, 10, 1000)) return;
+      if (!explorationRevealLimiter.check(limiterKey(socket), 10, 1000)) return;
 
       const parsed = ExplorationRevealSchema.safeParse(data);
       if (!parsed.success) {
@@ -108,6 +108,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:request', async (data: { mapId?: unknown; userId?: unknown }) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
+      if (!stateRequestAllowed(socket, 'exploration:request')) return;
       const mapId = typeof data?.mapId === 'string' ? data.mapId : null;
       if (!mapId) return;
 

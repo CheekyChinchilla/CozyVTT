@@ -125,6 +125,9 @@ describe('exploration:reveal', () => {
     expect(states.length).toBeGreaterThan(0);
     expect(states.length).toBeLessThanOrEqual(10);
     p1.disconnect();
+    // The ceiling is counted per user, not per socket, so let the window pass
+    // before the next case opens a fresh socket for the same player.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
   });
 
   it('never makes the server send a token: exploring the cell an unseen token stands on shows nothing', async () => {

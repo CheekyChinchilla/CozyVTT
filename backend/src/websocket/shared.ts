@@ -111,7 +111,7 @@ export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second p
 // token.move/s; human wall/light edits are a few per second) — these exist to
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
-export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events/second per socket
+export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events/second per user
 export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per socket
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
@@ -119,7 +119,30 @@ export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/se
 export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per socket
 // Explored-memory reveals arrive as a player's vision moves; a client sends
 // at most a few a second. Over-limit reveals are dropped silently.
-export const explorationRevealLimiter = new RateLimiter(); // Max 10 reveals/second per socket
+export const explorationRevealLimiter = new RateLimiter(); // Max 10 reveals/second per user
+
+/**
+ * The key a per-socket flood ceiling is counted under: the user, so that
+ * opening more sockets does not multiply the budget. Thirty sockets of one
+ * player each at their own limit stalled the server; one player is one
+ * budget. Before authentication the socket id stands in.
+ */
+export function limiterKey(socket: { userId?: string; id: string }): string {
+  return socket.userId ?? socket.id;
+}
+
+// The requests a client makes when it opens a map or reconnects: walls,
+// lights, fog, explored memory, presence, the initiative order. A client
+// sends each once per load; a flood of any of them is database work for
+// nothing (the initiative reply alone runs several queries), so each is
+// answered at most a few times a second per user and the rest are dropped
+// silently, like the other ceilings.
+export const stateRequestLimiter = new RateLimiter();
+const STATE_REQUESTS_PER_SECOND = 5;
+
+export function stateRequestAllowed(socket: { userId?: string; id: string }, event: string): boolean {
+  return stateRequestLimiter.check(`${limiterKey(socket)}:${event}`, STATE_REQUESTS_PER_SECOND, 1000);
+}
 
 // Cleanup old events every 5 minutes. unref() so this housekeeping timer
 // never holds the process open on its own (matters for test runners and

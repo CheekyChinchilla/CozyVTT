@@ -9,7 +9,7 @@ import { prisma } from '../../config/database';
 import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
-import { mapEditLimiter } from '../shared';
+import { mapEditLimiter, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -175,6 +175,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   socket.on('lights:request', async (data: { mapId: string }) => {
     try {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'lights:request')) return;
       const { mapId } = data;
       if (!mapId) return;
 

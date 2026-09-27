@@ -10,7 +10,7 @@ import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { mapEditLimiter } from '../shared';
+import { mapEditLimiter, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 
@@ -201,6 +201,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   socket.on('walls:request', async (data: { mapId: string }) => {
     try {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'walls:request')) return;
       const { mapId } = data;
       if (!mapId) return;
 

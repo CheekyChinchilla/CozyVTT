@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign } from './auth';
 import { broadcastPresence, getOnlineUserIds } from './utils';
 import logger from '../utils/logger';
+import { stateRequestAllowed } from './shared';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -152,6 +153,7 @@ export function registerEventHandlers(io: Server): void {
     // ask. Replies to the caller alone — nobody else's view has changed.
     socket.on('presence.request', async () => {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'presence.request')) return;
       try {
         const onlineUserIds = await getOnlineUserIds(socket.campaignId);
         socket.emit('presence.state', { campaignId: socket.campaignId, onlineUserIds });

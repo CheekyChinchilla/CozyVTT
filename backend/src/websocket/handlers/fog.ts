@@ -8,7 +8,7 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
+import { fogOperationLimiter, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -73,6 +73,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
   socket.on('fog:request_state', async (data: { mapId: string }) => {
     try {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'fog:request_state')) return;
       const { mapId } = data;
       if (!mapId) return;
 

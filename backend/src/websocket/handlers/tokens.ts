@@ -10,7 +10,7 @@ import { prisma } from '../../config/database';
 import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting, viewerIdFor } from '../../utils/spirit-layer';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { Token, tokenMoveLimiter } from '../shared';
+import { Token, tokenMoveLimiter, limiterKey } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canControlToken, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets } from '../utils';
@@ -217,7 +217,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       // Flood ceiling: drop excess frames silently — the 16ms throttle
       // already paces legitimate drags well under this limit.
-      if (!tokenMoveLimiter.check(socket.id, 150, 1000)) {
+      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
         return;
       }
 
@@ -296,7 +296,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       // Flood ceiling: drop excess finalize writes silently. Shares the
       // per-socket budget with token.move; a normal drag stays far under it.
-      if (!tokenMoveLimiter.check(socket.id, 150, 1000)) {
+      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
         return;
       }
 
