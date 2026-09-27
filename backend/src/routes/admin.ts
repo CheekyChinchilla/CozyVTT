@@ -8,8 +8,8 @@ import crypto from 'crypto';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { createWriteStream } from 'fs';
 import fs from 'fs/promises';
+import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
@@ -38,7 +38,7 @@ const execFileAsync = promisify(execFile);
 const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
 // Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
 const BACKUP_DIR = resolveBackupDir();
-const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip$/;
+const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
 
 // Guards for restoring an uploaded backup archive (see utils/archive.ts).
 // A full-instance backup legitimately bundles every uploaded file, but the
@@ -728,12 +728,37 @@ class DumpFailed extends Error {
  * it be undone. The ZIP is named by the second it was made, like every backup
  * the dashboard lists.
  */
+/**
+ * A backup file of its own, opened exclusively. The name is the second the
+ * backup was asked for; two asked for in the same second, or a restore's
+ * safety copy taken in the second a backup was made, used to be given the
+ * same name, and the later one silently replaced the earlier. While the name
+ * is taken, `-2`, `-3` and so on follow it.
+ */
+async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }> {
+  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+  for (let n = 1; ; n++) {
+    const filename = n === 1 ? `backup-${timestamp}.zip` : `backup-${timestamp}-${n}.zip`;
+    try {
+      // 'wx' refuses an existing file instead of truncating it. Readable by the
+      // backend's own user alone: the archive holds every password hash, MFA
+      // secret and backup code on the instance.
+      const handle = await fs.open(path.join(BACKUP_DIR, filename), 'wx', 0o600);
+      return { filename, handle };
+    } catch (error) {
+      if (errorCode(error) !== 'EEXIST') throw error;
+    }
+  }
+}
+
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
   await fs.mkdir(BACKUP_DIR, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-  const filename = `backup-${timestamp}.zip`;
+  const { filename, handle } = await openNewBackup();
   const zipPath = path.join(BACKUP_DIR, filename);
   const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
+  // The stream takes the handle over once it exists; until then a failure
+  // has to close it here.
+  let streamed = false;
 
   try {
     try {
@@ -744,9 +769,8 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     }
 
     await new Promise<void>((resolve, reject) => {
-      // Readable by the backend's own user alone: the archive holds every
-      // password hash, MFA secret and backup code on the instance.
-      const output = createWriteStream(zipPath, { mode: 0o600 });
+      streamed = true;
+      const output = handle.createWriteStream();
       const archive = archiver('zip', { zlib: { level: 6 } });
       output.on('close', resolve);
       archive.on('error', reject);
@@ -765,6 +789,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     return { filename, sizeBytes: stat.size };
   } catch (error) {
     // Leave no partial ZIP behind: the dashboard would list it as a backup
+    if (!streamed) await handle.close().catch(() => {});
     await fs.unlink(zipPath).catch(() => {});
     throw error;
   } finally {

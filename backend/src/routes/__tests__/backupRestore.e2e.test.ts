@@ -190,7 +190,7 @@ describe('POST /api/admin/backups/restore', () => {
     const [dump] = calls;
     expect(dump.cmd).toBe('pg_dump');
     expect(dump.args).toEqual(expect.arrayContaining(['--clean', '--if-exists', '--no-owner', '--no-privileges']));
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     expect(named).toBeDefined();
     expect(res.body.safetyBackup).toBe(named);
 
@@ -285,7 +285,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.message).toMatch(/files/);
       // The database side still finishes, migrations included, so what was restored is usable.
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
       if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
     } finally {
       await fs.rm(path.join(uploads, marker), { force: true });
@@ -305,7 +305,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Restore Failed');
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql']);
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
     // The log carries psql's own words and never the command line, which holds the database URL and its password.
     const logged = JSON.stringify(errorSpy.mock.calls.filter((c) => String(c[0]).includes('psql restore error')));
@@ -323,7 +323,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
   });
 
@@ -360,5 +360,64 @@ describe('POST /api/admin/backups/restore', () => {
 
     expect(res.status).toBe(403);
     expect(calls).toEqual([]);
+  });
+});
+
+describe('POST /api/admin/backups', () => {
+  const dir = () => process.env.BACKUP_DIR || 'backups';
+  /** Every backup in a test is asked for in the same second. */
+  let clock: jest.SpyInstance;
+
+  beforeAll(async () => {
+    await fs.mkdir(path.resolve(process.env.UPLOAD_DIR || 'uploads'), { recursive: true });
+  });
+
+  beforeEach(() => {
+    clock = jest.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-27T14:43:06.000Z');
+  });
+
+  afterEach(() => {
+    clock.mockRestore();
+  });
+
+  it('gives two backups made in the same second different names, and keeps the first as it was', async () => {
+    stubTools();
+    const first = await admin.post('/api/admin/backups');
+    expect(first.status).toBe(201);
+    const firstFile = path.join(dir(), first.body.filename);
+    written.push(firstFile);
+    // A mark on the first file: a second backup that reused its name would wipe it.
+    await fs.appendFile(firstFile, 'kept');
+    const marked = (await fs.stat(firstFile)).size;
+
+    const second = await admin.post('/api/admin/backups');
+    expect(second.status).toBe(201);
+    written.push(path.join(dir(), second.body.filename));
+
+    expect(first.body.filename).toBe('backup-2026-09-27T14-43-06.zip');
+    expect(second.body.filename).toBe('backup-2026-09-27T14-43-06-2.zip');
+    expect((await fs.stat(firstFile)).size).toBe(marked);
+    const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(names).toEqual(expect.arrayContaining([first.body.filename, second.body.filename]));
+    expect((await fs.stat(path.join(dir(), second.body.filename))).mode & 0o777).toBe(0o600);
+  });
+
+  it("names a restore's safety copy apart from a backup made in the same second, and leaves that backup alone", async () => {
+    stubTools();
+    const made = await admin.post('/api/admin/backups');
+    expect(made.status).toBe(201);
+    const madeFile = path.join(dir(), made.body.filename);
+    written.push(madeFile);
+    await fs.appendFile(madeFile, 'kept');
+    const marked = (await fs.stat(madeFile)).size;
+
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }));
+    expect(res.status).toBe(200);
+    written.push(path.join(dir(), res.body.safetyBackup));
+
+    expect(res.body.safetyBackup).not.toBe(made.body.filename);
+    expect((await fs.stat(madeFile)).size).toBe(marked);
+    const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(names).toContain(res.body.safetyBackup);
   });
 });

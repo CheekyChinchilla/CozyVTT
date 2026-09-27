@@ -6038,8 +6038,9 @@ paths:
       summary: Create a backup archive
       operationId: adminCreateBackup
       description: |
-        Platform ADMIN only. Writes `backup-YYYY-MM-DDTHH-MM-SS.zip` to the server's
-        backup directory (`backend/backups/` on the host under Docker, `BACKUP_DIR`
+        Platform ADMIN only. Writes `backup-YYYY-MM-DDTHH-MM-SS.zip` (with a `-2`, `-3`
+        suffix while that name is taken, so two backups asked for in the same
+        second are both kept) to the server's backup directory (`backend/backups/` on the host under Docker, `BACKUP_DIR`
         on an install without Docker), holding `database.sql`, a `pg_dump` of the
         database without its ownership and privilege statements and without the
         login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
@@ -6073,7 +6074,7 @@ paths:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`) in the server's backup directory with filename, size and creation time, newest first.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first.
       security:
         - cookieAuth: []
       responses:
@@ -6106,7 +6107,7 @@ paths:
       tags: [Admin]
       summary: Download a backup file
       operationId: adminDownloadBackup
-      description: Streams a backup `.zip` (the database dump and every uploaded file) as a download. Filename is strictly validated against the `backup-YYYY-MM-DDTHH-MM-SS.zip` pattern to prevent path traversal.
+      description: Streams a backup `.zip` (the database dump and every uploaded file) as a download. Filename is strictly validated against the `backup-YYYY-MM-DDTHH-MM-SS.zip` pattern (an optional `-2`, `-3` suffix included) to prevent path traversal.
       security:
         - cookieAuth: []
       parameters:
