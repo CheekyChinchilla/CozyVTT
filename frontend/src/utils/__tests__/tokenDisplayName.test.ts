@@ -22,4 +22,9 @@ describe('tokenPublicName', () => {
     expect(tokenPublicName({ name: 'Goblin Boss', obscured: false })).toBe('Goblin Boss');
     expect(tokenPublicName({ name: 'Goblin Boss' })).toBe('Goblin Boss');
   });
+
+  it('never names a hidden token either, which players are not sent at all', () => {
+    expect(tokenPublicName({ name: 'Ambusher', visible: false })).toBe('Unknown creature');
+    expect(tokenPublicName({ name: 'Goblin Boss', visible: true })).toBe('Goblin Boss');
+  });
 });

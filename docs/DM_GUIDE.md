@@ -284,7 +284,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 | Call of Cthulhu 7e | Custom Roll only — a percentile system has no d20 rolls to offer |
 | Shadowrun 6e | Custom Roll only — a dice-pool system has no d20 rolls to offer |
 
-If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured token is named *Unknown creature* there.
+If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured or hidden token is named *Unknown creature* there.
 
 *Screenshot pending — NPC roll picker with stat-block-derived options.*
 
@@ -706,7 +706,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **Add Combatant** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on, always sees their own, and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
+Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on, always sees their own, and never sees a hidden creature listed at all, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
 

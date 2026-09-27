@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
-import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { clearState } from '../initiativeState';
 import { readTokens, toJson } from '../../utils/prisma-json';
 
@@ -31,7 +31,7 @@ let p1Cookie: string;
 type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string; type?: string };
 type State = { active: boolean; currentTokenId: string | null; combatants: Entry[] };
 
-const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled';
+const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled', SPIRIT = 'spirit';
 const hp = (current: number, max: number) => ({ current, max, temp: 0 });
 
 beforeAll(async () => {
@@ -60,6 +60,7 @@ beforeAll(async () => {
         { ...base, id: SHOWN, name: 'Ogre', position: { x: 3, y: 3 }, visible: true, controlledBy: null, hp: hp(5, 9), showHpBar: true },
         { ...base, id: HIDDEN, name: 'Ambusher', position: { x: 4, y: 4 }, visible: false, controlledBy: null, hp: hp(6, 6), showHpBar: false },
         { ...base, id: VEILED, name: 'Something Large', position: { x: 5, y: 5 }, visible: true, controlledBy: dmId, type: 'player', hp: hp(30, 30), showHpBar: true, obscured: true },
+        { ...base, id: SPIRIT, name: 'Wisp', position: { x: 6, y: 6 }, visible: true, controlledBy: null, hp: hp(3, 3), showHpBar: false, layer: 'spirit' },
       ],
     },
   });
@@ -163,6 +164,54 @@ describe('an obscured combatant', () => {
     expect(roll.characterName).not.toContain('Something Large');
     expect(roll.purpose).not.toContain('Something Large');
     expect(roll.purpose).toMatch(/Initiative/);
+    dm.disconnect();
+    p1.disconnect();
+  });
+});
+
+/**
+ * The dice log entry an initiative roll makes goes only to those who are sent
+ * the token: the tracker keeps a hidden or off-plane combatant from a player,
+ * and the roll announcing it must not undo that.
+ */
+describe("an initiative roll's dice log entry", () => {
+  interface Rolled { characterName: string; purpose: string; result: number }
+
+  it.each([
+    ['a hidden token', HIDDEN, 'Ambusher'],
+    ['a token on the spirit plane', SPIRIT, 'Wisp'],
+  ])('for %s reaches the DM by name and a player not at all', async (_what, tokenId, name) => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const added = waitForEvent<State>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId, mapId });
+    await added;
+
+    const toDm = waitForEvent<Rolled>(dm, 'dice.rolled');
+    const silence = expectNoEvent(p1, 'dice.rolled', 800);
+    dm.emit('initiative.roll', { tokenId, mapId });
+    const roll = await toDm;
+    expect(roll.characterName).toBe(name);
+    expect(roll.purpose).toBe(`${name} Initiative`);
+    await expect(silence).resolves.toBeUndefined();
+
+    dm.disconnect();
+    p1.disconnect();
+  });
+
+  it('for a visible token reaches the player, named by the server and not by the client', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const added = waitForEvent<State>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: GOBLIN, mapId });
+    await added;
+
+    const toP1 = waitForEvent<Rolled>(p1, 'dice.rolled');
+    dm.emit('initiative.roll', { tokenId: GOBLIN, mapId, characterName: 'Definitely a Friend' });
+    const roll = await toP1;
+    expect(roll.characterName).toBe('Goblin');
+    expect(roll.purpose).toBe('Goblin Initiative');
+
     dm.disconnect();
     p1.disconnect();
   });

@@ -34,6 +34,29 @@ interface Recipient {
   userId?: string;
   role?: string;
   emit(event: 'initiative.state', state: CombatState): unknown;
+  emit(event: 'dice.rolled', roll: Record<string, unknown>): unknown;
+}
+
+/**
+ * The sockets in the campaign that are sent `token` at all: every DM's, and
+ * a player's when the role filter keeps it for them (visible, on their
+ * plane). The dice log entry for a token's roll goes to these and no one
+ * else, so a hidden or off-plane combatant the tracker keeps from a player is
+ * not announced to them by its roll.
+ */
+async function recipientsSentToken(
+  io: Server,
+  campaignId: string,
+  token: ReturnType<typeof readTokens>[number]
+): Promise<Recipient[]> {
+  const recipients = (await io.in(campaignId).fetchSockets()).map((s) => s as unknown as Recipient);
+  const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
+  const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+  return recipients.filter((r) => {
+    if (r.role === 'DM') return true;
+    if (!r.userId) return false;
+    return filterTokensByRole([token], r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId).length > 0;
+  });
 }
 
 /**
@@ -212,11 +235,12 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
    * This check is the real boundary: the tracker and the map menu only decide
    * whether to *offer* the control, and neither is trustworthy on its own.
    */
+  // `characterName` is what older clients sent along; the server names the token itself now.
   socket.on('initiative.roll', async (data: { tokenId: string; mapId: string; expression?: string; characterName?: string }) => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
 
-      const { tokenId, mapId, expression, characterName } = data;
+      const { tokenId, mapId, expression } = data;
       if (!tokenId || !mapId) { socket.emit('error', { message: 'tokenId and mapId required' }); return; }
 
       // `expression` is now only a fallback for combatants the server cannot
@@ -375,13 +399,14 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // value still reaches everyone through the initiative broadcast below.
       if (rollResult) {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
-        // The dice log goes to the whole table: an obscured token is not
-        // named there, whatever name the client sent along.
+        // The server names the token; a name the client sends is not used.
+        // An obscured token is not named in the dice log even to the DM, since
+        // one entry reaches everyone who is sent the token.
         const publicName = token.obscured === true ? 'Unknown creature' : token.name;
         const rollData = {
           userId: socket.userId,
           userName: user?.displayName ?? 'DM',
-          characterName: token.obscured === true ? publicName : (characterName || token.name),
+          characterName: publicName,
           expression: usedExpression,
           result: rolledValue,
           breakdown: rollResult,
@@ -389,7 +414,9 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           timestamp: new Date().toISOString(),
           secret: false,
         };
-        io.to(socket.campaignId).emit('dice.rolled', rollData);
+        for (const r of await recipientsSentToken(io, socket.campaignId, token)) {
+          r.emit('dice.rolled', rollData);
+        }
       }
 
       await broadcastInitiativeState(socket.campaignId);
