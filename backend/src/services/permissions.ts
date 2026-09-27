@@ -452,11 +452,19 @@ async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId
     select: { id: true },
   });
   if (!asSpiritLayer) return false;
-  // Shown openly somewhere on the same campaign's maps: nothing to keep.
-  const asBaseLayer = await prisma.map.findFirst({
-    where: { campaignId, OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }] },
-    select: { id: true },
-  });
+  // Shown openly on the map the campaign is showing: nothing to keep. A
+  // prepared map does not count, since a player is not sent it at all.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const asBaseLayer = campaign?.currentMapId
+    ? await prisma.map.findFirst({
+        where: {
+          id: campaign.currentMapId,
+          campaignId,
+          OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }],
+        },
+        select: { id: true },
+      })
+    : null;
   if (asBaseLayer) return false;
   return !(await getSpiritVisibility(campaignId, userId));
 }
