@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io';
-import type { SessionData } from 'express-session';
+import type { SessionData, Store } from 'express-session';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 
@@ -29,6 +29,24 @@ export interface AuthenticatedSocket extends Socket {
  * keeps the fields declared once.
  */
 export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId'>;
+
+/**
+ * Whether the sign-in this socket was opened under still exists in the session
+ * store and is still this user's. The handshake checks the session once; a
+ * sign-in that ends later (signing out, expiry, a password change elsewhere)
+ * leaves the socket open, and `authenticate` asks this before letting it join
+ * a campaign. Read through the socket's own session store, the one the
+ * handshake used, so a store error counts as ended.
+ */
+export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<boolean> {
+  const { sessionStore } = socket.request as { sessionStore?: Store };
+  const sessionId = socket.sessionId;
+  if (!sessionStore || !sessionId || !socket.userId) return false;
+  const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
+    sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
+  });
+  return stored?.userId === socket.userId;
+}
 
 /**
  * Authenticate an incoming WebSocket connection via the shared Express session.

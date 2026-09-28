@@ -21,6 +21,8 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import * as sessionStore from '../../services/sessionStore';
+import * as liveSockets from '../utils';
+import type { AuthenticatedFields } from '../auth';
 
 jest.setTimeout(30000);
 
@@ -141,6 +143,63 @@ describe('the account holder', () => {
       expect(await dropped).toBe('io server disconnect');
     } finally {
       destroyed.mockRestore();
+    }
+  });
+});
+
+// The route tests above cannot pin which sign-in a socket belongs to: their
+// sockets are opened under the test server's own session store, so no REST
+// sign-in ever matches one. The matching is pinned here, on the helper and on
+// the id the sign-out route hands it.
+describe('which sign-in a live connection belongs to', () => {
+  const sessionOf = async (userId: string, client: ClientSocket) => {
+    const found = (await server.io.in(userId).fetchSockets()).find((s) => s.id === client.id);
+    const sid = (found as unknown as AuthenticatedFields | undefined)?.sessionId;
+    if (!sid) throw new Error('socket has no session id');
+    return sid;
+  };
+
+  it('ends only the connections of the named sign-in, or every one but it', async () => {
+    const user = await createTestUser({ email: `livesess-two-${randomUUID().slice(0, 8)}@test.cozyvtt.local`, displayName: 'two' });
+    created.push(user.id);
+    const [first, second] = await Promise.all([server.loginAs(user.id), server.loginAs(user.id)]);
+    const onFirst = await server.connectClient(first);
+    const onSecond = await server.connectClient(second);
+    const secondSid = await sessionOf(user.id, onSecond);
+
+    // Only the first sign-in's connections.
+    const ending = expectEnding(onFirst);
+    const stays = expectNoEvent(onSecond, 'disconnect', 700);
+    expect(await liveSockets.endLiveSockets(user.id, 'You signed out.', { onlySessionId: await sessionOf(user.id, onFirst) })).toBe(1);
+    expect((await ending.told).message).toBe('You signed out.');
+    expect(await ending.dropped).toBe('io server disconnect');
+    await expect(stays).resolves.toBeUndefined();
+
+    // Every connection but the second sign-in's.
+    const again = await server.connectClient(first);
+    const endingAgain = expectEnding(again);
+    const staysAgain = expectNoEvent(onSecond, 'disconnect', 700);
+    expect(await liveSockets.endLiveSockets(user.id, 'Your password was changed.', { exceptSessionId: secondSid })).toBe(1);
+    expect(await endingAgain.dropped).toBe('io server disconnect');
+    await expect(staysAgain).resolves.toBeUndefined();
+    onSecond.disconnect();
+  });
+
+  it('signing out hands the helper the sign-in it ends', async () => {
+    const user = await createTestUser({ email: `livesess-out-${randomUUID().slice(0, 8)}@test.cozyvtt.local`, displayName: 'out' });
+    created.push(user.id);
+    const agent = request.agent(app);
+    const signedIn = await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+    expect(signedIn.status).toBe(200);
+    const cookie = String(signedIn.headers['set-cookie']?.[0] ?? '');
+    // express-session signs the id: s:<sid>.<signature>, URL-encoded.
+    const sid = decodeURIComponent(cookie.split(';')[0].split('=')[1]).slice(2).split('.')[0];
+    const ended = jest.spyOn(liveSockets, 'endLiveSockets');
+    try {
+      expect((await agent.post('/api/auth/logout')).status).toBe(200);
+      expect(ended).toHaveBeenCalledWith(user.id, 'You signed out.', { onlySessionId: sid });
+    } finally {
+      ended.mockRestore();
     }
   });
 });

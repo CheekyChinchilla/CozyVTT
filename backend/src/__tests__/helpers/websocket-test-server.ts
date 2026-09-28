@@ -34,6 +34,8 @@ export interface WsTestServer {
   loginAs(userId: string): Promise<string>;
   /** Connect a socket.io client carrying the given session cookie. Resolves on the server's 'connected' ack. */
   connectClient(cookie: string): Promise<ClientSocket>;
+  /** End the sign-in the given cookie belongs to, in the server's session store. */
+  logout(cookie: string): Promise<void>;
   /** Connect + emit 'authenticate' for a campaign. Resolves with the client on 'authenticated'. */
   connectAndAuth(cookie: string, campaignId: string): Promise<ClientSocket>;
   close(): Promise<void>;
@@ -55,6 +57,10 @@ export async function createWsTestServer(): Promise<WsTestServer> {
   app.post('/test/login-as', (req, res) => {
     req.session.userId = req.body.userId;
     res.json({ ok: true });
+  });
+  // Ends the sign-in the cookie names, as signing out or expiring does.
+  app.post('/test/logout', (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
   });
 
   const httpServer = createServer(app);
@@ -108,6 +114,10 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     });
   }
 
+  async function logout(cookie: string): Promise<void> {
+    await request(app).post('/test/logout').set('Cookie', cookie);
+  }
+
   async function connectAndAuth(cookie: string, campaignId: string): Promise<ClientSocket> {
     const client = await connectClient(cookie);
     await new Promise<void>((resolve, reject) => {
@@ -133,7 +143,7 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   }
 
-  return { httpServer, io, url, loginAs, connectClient, connectAndAuth, close };
+  return { httpServer, io, url, loginAs, logout, connectClient, connectAndAuth, close };
 }
 
 /** Wait for a single occurrence of an event, with timeout. */

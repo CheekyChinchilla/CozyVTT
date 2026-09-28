@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { AuthenticatedSocket, authenticateSocket, authenticateCampaign } from './auth';
+import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { broadcastPresence, getOnlineUserIds } from './utils';
 import logger from '../utils/logger';
 import { stateRequestAllowed } from './shared';
@@ -77,6 +77,15 @@ export function registerEventHandlers(io: Server): void {
 
         if (!data.campaignId || typeof data.campaignId !== 'string') {
           socket.emit('error', { message: 'Campaign ID required' });
+          return;
+        }
+
+        // The sign-in has to be live now, not only at the handshake. The
+        // same answer a refused handshake gets, then the connection ends; the
+        // client then asks the server whether it is still signed in.
+        if (!(await socketSessionIsLive(socket))) {
+          socket.emit('error', { message: 'Unauthorized' });
+          socket.disconnect(true);
           return;
         }
 
