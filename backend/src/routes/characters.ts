@@ -19,7 +19,9 @@ const router = Router();
 /**
  * Whether the caller may point a character at this image: the same read
  * rule the map routes apply before storing an asset reference (an address
- * that names no asset, or is empty, is fine to store).
+ * that names no asset, or is empty, is fine to store). Pass the address as
+ * it will be stored: normalising can turn one that names no asset into one
+ * that does.
  */
 async function mayUseTokenImage(tokenImageUrl: string | null | undefined, req: AuthenticatedRequest): Promise<boolean> {
   const assetId = extractAssetId(tokenImageUrl);
@@ -146,16 +148,15 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       sheetData = validationResult.data;
     }
 
+    // Normalize tokenImageUrl to full path if provided
+    const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+
     // The image has to be one the caller may read. Storing an unchecked
     // reference is what let a member read a fellow member's private asset:
     // a character pointing at it counted as the campaign using it.
-    if (!(await mayUseTokenImage(tokenImageUrl, req))) {
+    if (!(await mayUseTokenImage(normalizedTokenImageUrl, req))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
-
-    // Create character with flexible JSON data field
-    // Normalize tokenImageUrl to full path if provided
-    const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
 
     // Both halves in one transaction. Written separately, a failure between
     // them would produce exactly the state this fixes: a character carrying a
@@ -545,11 +546,12 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       }
     }
     if (tokenImageUrl !== undefined) {
-      if (!(await mayUseTokenImage(tokenImageUrl, req))) {
+      // Normalize tokenImageUrl to full path (or null), and check what is stored
+      const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+      if (!(await mayUseTokenImage(normalizedTokenImageUrl, req))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
-      // Normalize tokenImageUrl to full path (or null)
-      updateData.tokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+      updateData.tokenImageUrl = normalizedTokenImageUrl;
     }
 
     const updatedCharacter = await prisma.character.update({
