@@ -78,6 +78,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A backup or restore from the Admin Dashboard no longer shows as failed while it is still running.** The page gave up on any request after 30 seconds, while making a backup or restoring one can take minutes on a large instance; the restore went on to replace the database and sign everyone out while the page said it had failed. The page now waits as long as the bundled web server does, ten minutes.
+
 - **The restore script says what to do when there is no room to unpack a backup.** It unpacks the whole backup into `/tmp` before loading anything, and where `/tmp` is small a large backup failed with only a bare write error. It now says the folder is full, that nothing was changed, and how to point it somewhere with more room.
 
 - **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup or a restore's safety copy was being written, the write error had nothing listening for it and the backend process exited; the dashboard now reports the failed backup, or the failed restore, and the instance stays up.
