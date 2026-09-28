@@ -817,7 +817,9 @@ paths:
         Self-service permanent account deletion. Requires the current
         password as confirmation. Deletes the user's memberships, characters,
         personal notes and dice macros. Their chat messages, dice rolls and
-        uploaded assets stay, with the user field set to null. A campaign the
+        uploaded assets stay, with the user field set to null, and documents
+        they shared into a campaign stay shared (the share passes to the
+        campaign's DM, or its owner). A campaign the
         user owns passes to its sitting DM; while the user is that DM the
         deletion is refused with 409 and nothing changes.
       operationId: deleteOwnAccount
