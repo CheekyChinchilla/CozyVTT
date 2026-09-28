@@ -1047,12 +1047,12 @@ _Who may send it is read from the shared permission predicates each handler call
 | `chat.system` | `utils.ts` |
 | `connected` | `events.ts` |
 | `dice.historyCleared` | `dice.ts` |
-| `dice.rolled` | `initiative.ts` |
+| `dice.rolled` | `dice.ts` |
 | `dice.rolled.secret` | `dice.ts` |
 | `dm:editing` | `walls.ts` |
-| `exploration:state` | `shared.ts` |
-| `fog:cells` | `shared.ts` |
-| `fog:updated` | `shared.ts` |
+| `exploration:state` | `exploration.ts` |
+| `fog:cells` | `fog.ts` |
+| `fog:updated` | `fog.ts` |
 | `initiative.state` | `initiative.ts` |
 | `invitation.received` | `campaigns.ts` |
 | `light:added` | `lights.ts` |
@@ -1063,7 +1063,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `map.pinged` | `pings.ts` |
 | `map:settings:updated` | `maps.ts` |
 | `pong` | `events.ts` |
-| `presence.state` | `utils.ts` |
+| `presence.state` | `events.ts` |
 | `roster.updated` | `characters.ts` |
 | `session.ended` | `campaigns.ts` |
 | `session.paused` | `campaigns.ts` |
