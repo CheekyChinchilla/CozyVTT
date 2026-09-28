@@ -164,4 +164,29 @@ describe('drag frames on an unlit map', () => {
     dm.disconnect();
     player.disconnect();
   });
+
+  // Frames arrive up to sixty times a second. Who they go to used to be
+  // decided afresh on every one of them, which on an unlit map meant three
+  // more database reads per frame; it is now decided once per drag, as a lit
+  // map already did.
+  it('decide who they go to once per drag, not once per frame', async () => {
+    await resetMap(false, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const memberships = jest.spyOn(prisma.campaignMembership, 'findMany');
+    memberships.mockClear();
+
+    // Frames the server cannot keep up with are coalesced, so only the last
+    // one is certain to arrive; it is what the drag is waited on.
+    const last = new Promise<void>((resolve) => {
+      player.on('token.moved', (e: { x: number }) => { if (e.x === 19) resolve(); });
+    });
+    drag(dm, FAR, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    await last;
+
+    expect(memberships.mock.calls.length).toBeLessThanOrEqual(1);
+    memberships.mockRestore();
+    dm.disconnect();
+    player.disconnect();
+  });
 });

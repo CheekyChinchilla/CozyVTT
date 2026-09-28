@@ -22,9 +22,10 @@ const moveRefusal = (role: string | undefined): string =>
 
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * Who is sent a token's drag frames on a lit map: the DM's sockets, and the
-   * players whose tokens could see the token where its drag began. Frames
-   * arrive up to sixty times a second, so the line-of-sight check runs once,
+   * Who is sent a token's drag frames: the DM's sockets, and the players the
+   * map fetch would send the token to, which on a lit map also means their
+   * tokens could see it where its drag began. Frames arrive up to sixty times
+   * a second, so the decision, line of sight included, runs once,
    * on the start event or the first frame, and is reused until token.move.end
    * clears it. A player who could not see the token learns where it ended
    * up, if they can see it there, from the end event's own fan-out.
@@ -60,7 +61,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
       const seen = filterTokensByLighting(
         forRole, viewerIdFor(member.role, member.userId), map.wallSegments as unknown as WallSegment[],
-        map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
+        map.width, map.height, map.gridSize, map.lightingEnabled, map.lights, map.globalIllumination
       );
       if (seen.some((t) => t.id === tokenId)) ids.add(s.id);
     }
@@ -150,6 +151,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
+      // A new drag: whoever this token's frames went to last time is decided
+      // afresh, in case the last drag never reached token.move.end. Cleared
+      // before the first await, so frames sent right behind this event share
+      // the one decision instead of making one this then throws away.
+      dragRecipients.delete(tokenId);
+
       // Fetch the map, with the campaign's status for the pause rule below
       const map = await prisma.map.findUnique({
         where: { id: mapId },
@@ -189,15 +196,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // A new drag: whoever this token's frames went to last time is decided
-      // afresh, in case the last drag never reached token.move.end.
-      dragRecipients.delete(tokenId);
-
-      if (map.lightingEnabled) {
-        await emitMoveToDragRecipients('token.move.start', token, mapId, { tokenId, mapId });
-      } else {
-        await emitMoveToVisibleSockets('token.move.start', token, { tokenId, mapId }, false);
-      }
+      await emitMoveToDragRecipients('token.move.start', token, mapId, { tokenId, mapId });
 
       logger.debug('token.move.start', { tokenId, userId: socket.userId, mapId });
     } catch (error) {
@@ -269,12 +268,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      if (map.lightingEnabled) {
-        // Lit: only those who could see the token where the drag began.
-        await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y });
-      } else {
-        await emitMoveToVisibleSockets('token.moved', movingToken, { tokenId, mapId, x, y }, false);
-      }
+      // To those decided when the drag began (on a lit map, those who could
+      // see the token there), not decided again for every frame.
+      await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y });
     } catch (error) {
       logger.error('token.move failed', { err: error });
     }
