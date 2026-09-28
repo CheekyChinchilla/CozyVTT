@@ -199,7 +199,9 @@ Get the currently authenticated user.
 Change the authenticated user's password. Every other sign-in of the account is
 signed out, open game connections included; the session making the change stays.
 A reset through the emailed link (`POST /api/auth/reset-password`) signs out
-every sign-in, since nobody is signed in to keep.
+every sign-in, since nobody is signed in to keep. Either way, the account's
+unused reset and invitation links stop working, and a link sets the password
+once even when two requests carry it at the same moment.
 
 **Request:**
 ```json
@@ -213,8 +215,10 @@ every sign-in, since nobody is signed in to keep.
 
 ### `DELETE /api/auth/account`
 
-Permanently delete the authenticated user's account and all associated data. Any
-open game connection of the account is dropped.
+Permanently delete the authenticated user's account and all associated data.
+Every sign-in of the account ends, on every device, and any open game connection
+of the account is dropped. The instance's only admin is
+refused with `409` until another user has been promoted to admin.
 
 **Request:**
 ```json
@@ -1197,7 +1201,17 @@ Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
 and `bio`; an admin may change anyone's, and only an admin may set
 `platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
 Changing `platformRole` signs the user out everywhere, because the role is
-carried in the session. There is no approval field to set here.
+carried in the session. Setting it to `USER` for the instance's only admin is
+refused with `409`. There is no approval field to set here.
+
+`displayName` is trimmed and must then be 1 to 50 characters of text; anything
+else is refused with `400`. Registration applies the same rule.
+
+Changing **your own** `email` needs `currentPassword` in the same request (`400`
+without it, `401` when it is wrong); an admin changing someone else's does not.
+When the address changes, any unused password-reset or invitation link for the
+account stops working, and the old address is emailed a notice if the instance
+has SMTP configured.
 
 ---
 
@@ -1205,7 +1219,8 @@ carried in the session. There is no approval field to set here.
 
 Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
 sessions the user currently has open are signed out** — otherwise they would keep browsing on the
-old session and the forced change would only apply at their next login.
+old session and the forced change would only apply at their next login. Any reset or invitation
+link the user has not used stops working.
 
 **Response:**
 ```json

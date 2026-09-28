@@ -64,7 +64,7 @@ Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor 
 
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel.
+**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
@@ -632,11 +632,17 @@ game table on it is disconnected in the same moment and taken to the sign-in
 page; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
 your password is what removes them. Turning off MFA does the same thing, and so
 does resetting your password from the sign-in page's **Forgot password?** link,
-which signs out every device, the one you are holding included.
+which signs out every device, the one you are holding included. Changing or
+resetting your password also cancels any reset or invitation link you have been
+emailed and not used.
 
 ### Multi-Factor Authentication (MFA)
 
-For extra account security, enable **MFA** in the Security section. You'll use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+For extra account security, enable **MFA** in the Security section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+
+**Turning MFA on signs you out everywhere else**, as turning it off does: any other browser or device signed in to your account is signed out, and the one you are using stays where it is.
+
+**Each code works once.** If you sign in on two devices within the same half-minute, the second one will refuse the code you just used; wait for your app to show the next one. After five wrong codes in 15 minutes, the code step is locked for your account for a while, from every device.
 
 You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
 
@@ -691,9 +697,11 @@ Email addresses cannot be changed by users directly. Contact your platform admin
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, so the table's history and the art on its maps are not lost.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, so the table's history and the art on its maps are not lost. Every other browser or device signed in to the account is signed out at the same moment.
 
 > **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
+
+If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
 
 ### I forgot my password
 

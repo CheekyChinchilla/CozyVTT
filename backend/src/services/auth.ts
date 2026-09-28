@@ -2,6 +2,7 @@ import argon2 from 'argon2';
 import { prisma } from '../config/database';
 import { User, PlatformRole } from '@prisma/client';
 import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
+import { parseDisplayName } from '../validators/users';
 
 /**
  * Authentication Service
@@ -27,6 +28,13 @@ export interface RegisterInput {
   email: string;
   password: string;
   displayName: string;
+  /**
+   * False when the instance requires an admin to approve new accounts. Set in
+   * the create itself: the column defaults to approved, so a separate write
+   * afterwards would leave the account able to sign in until it landed, and
+   * for good if it failed.
+   */
+  isApproved?: boolean;
 }
 
 export interface LoginInput {
@@ -70,9 +78,14 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     throw new Error(passwordValidation.errors.join(', '));
   }
 
+  const parsedName = parseDisplayName(input.displayName);
+  if (!parsedName.ok) {
+    throw new Error(parsedName.message);
+  }
+  const displayName = parsedName.name;
+
   // Sanitize inputs
   const email = sanitizeInput(input.email.toLowerCase());
-  const displayName = sanitizeInput(input.displayName);
 
   // Hash before the transaction: Argon2 is deliberately slow, and holding the
   // registration lock across it would serialise every signup on the hash.
@@ -97,7 +110,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
 
     return tx.user.create({
-      data: { email, passwordHash, displayName, platformRole },
+      data: { email, passwordHash, displayName, platformRole, isApproved: input.isApproved ?? true },
     });
   });
 }

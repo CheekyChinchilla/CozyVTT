@@ -8,9 +8,12 @@ import { rememberMeMaxAge } from '../config/session';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
+import { verifyTotpOnce, forgetTotpSteps } from '../utils/totp';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
@@ -112,6 +115,25 @@ export const mfaLoginLimiter = rateLimit({
 });
 
 /**
+ * MFA login verification, per account: 5 failed codes per 15 minutes for one
+ * account, from wherever they come. The limiter above counts per address, so
+ * someone who already has the password could otherwise spread their guesses
+ * at the code across many addresses. Keyed on the account the pending sign-in
+ * belongs to, which the password step put in the session; a request with no
+ * sign-in pending is refused by the handler and not counted here.
+ */
+export const mfaAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Rate Limited', message: 'Too many MFA login attempts for this account, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req) => !req.session?.mfaPendingUserId,
+  keyGenerator: (req) => `mfa-account:${req.session.mfaPendingUserId}`,
+});
+
+/**
  * POST /api/auth/register
  * Register a new user account
  * First user automatically becomes ADMIN
@@ -144,15 +166,15 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       }
 
       // Register user with approval status based on settings
-      const user = await registerUser({ email, password, displayName });
+      const user = await registerUser({
+        email,
+        password,
+        displayName,
+        isApproved: !settings.requireAdminApproval,
+      });
 
       if (settings.requireAdminApproval) {
-        // Mark as pending approval — do NOT create a session
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { isApproved: false },
-        });
-
+        // Pending approval — do NOT create a session
         return res.status(201).json({
           message: 'Registration submitted. Your account is pending admin approval.',
           pendingApproval: true,
@@ -373,6 +395,9 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
     if (user) {
       const token = crypto.randomUUID();
 
+      // Only the newest link works. This also voids a pending invitation,
+      // whose replacement goes to the same address.
+      await voidOutstandingResetLinks(user.id);
       await prisma.passwordResetToken.create({
         data: {
           userId: user.id,
@@ -427,7 +452,6 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // Find valid token
     const resetToken = await prisma.passwordResetToken.findUnique({
       where: { token },
-      include: { user: true },
     });
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
@@ -446,21 +470,37 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
       });
     }
 
-    // Hash and update password
     const passwordHash = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: resetToken.userId },
-      data: {
-        passwordHash,
-        mustChangePassword: false,
-      },
+
+    // Claim the link and set the password together. The claim is a
+    // conditional write, so of two requests carrying the same link only one
+    // finds it unused; the other changes nothing. The account's other links
+    // are voided in the same step, since the password they would set is
+    // settled now.
+    const claimed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.passwordResetToken.updateMany({
+        where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
+        data: { used: true },
+      });
+      if (claim.count === 0) return false;
+
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: {
+          passwordHash,
+          mustChangePassword: false,
+        },
+      });
+      await voidOutstandingResetLinks(resetToken.userId, tx);
+      return true;
     });
 
-    // Mark token as used
-    await prisma.passwordResetToken.update({
-      where: { id: resetToken.id },
-      data: { used: true },
-    });
+    if (!claimed) {
+      return res.status(400).json({
+        error: 'Invalid Token',
+        message: 'This password reset link is invalid or has expired',
+      });
+    }
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,
@@ -538,6 +578,9 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     // Lift the gate for this session immediately (see middleware/passwordChange.ts)
     req.session.mustChangePassword = false;
 
+    // A reset link issued before the change would undo it.
+    await voidOutstandingResetLinks(user.id);
+
     // Changing a password is how someone recovers an account they think is
     // compromised, so the sessions opened with the old one have to end. This
     // one is kept, so the person doing it is not signed out of the device they
@@ -587,11 +630,22 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
+    // The instance must keep an admin (see services/platformAdmins).
+    if (user.platformRole === 'ADMIN' && (await isOnlyAdmin(userId))) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'You are the only admin on this instance. Promote another user to admin before deleting your account.',
+      });
+    }
+
     // See services/accountDeletion.ts for what stays and what goes.
     const deletion = await deleteAccount(userId);
     if (!deletion.deleted) {
       return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'you') });
     }
+    // The account's other sign-ins outlive the row, and the guards read the
+    // session, so a deleted admin would keep the role on another device.
+    await destroyUserLoginSessions(userId);
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, deletion.campaignIds, 'member.left');
 
@@ -615,11 +669,21 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
  * POST /api/auth/mfa/setup
  * Generate TOTP secret and QR code for authenticated user.
  * Stores the secret in DB (not yet enabled until verified).
- * Requires: Authentication
+ * Requires: Authentication + current password. Enrolling an authenticator
+ * decides who can sign in from then on, so a session alone is not enough, as
+ * with turning MFA off.
  */
-router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
+router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
+    const { password } = req.body;
+
+    if (typeof password !== 'string' || password === '') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Enter your current password to set up MFA',
+      });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -633,6 +697,10 @@ router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
+    if (!(await verifyPassword(user.passwordHash, password))) {
+      return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
+    }
+
     // Generate TOTP secret
     const secret = speakeasy.generateSecret({
       name: `CozyVTT:${user.email}`,
@@ -644,6 +712,7 @@ router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
       where: { id: userId },
       data: { mfaSecret: secret.base32 },
     });
+    forgetTotpSteps(userId);
 
     // Generate QR code as a data URL
     const otpauthUrl = speakeasy.otpauthURL({
@@ -695,13 +764,8 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
       return res.status(400).json({ error: 'Bad Request', message: 'MFA is already enabled' });
     }
 
-    // Verify TOTP token
-    const isValid = speakeasy.totp.verify({
-      secret: user.mfaSecret,
-      encoding: 'base32',
-      token: token.toString(),
-      window: 1, // Allow 30s clock drift
-    });
+    // Verify TOTP token (once: see utils/totp)
+    const isValid = verifyTotpOnce(userId, user.mfaSecret, String(token));
 
     if (!isValid) {
       return res.status(401).json({
@@ -723,6 +787,12 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
       },
     });
 
+    // Turning the second factor on is a change to how the account is
+    // protected, often made because something looked wrong, so the sessions
+    // opened without it end. This one is kept, as when MFA is turned off.
+    await destroyUserLoginSessions(userId, req.sessionID);
+    await endLiveSockets(userId, 'Two-factor authentication was turned on from another device. Sign in again.', { exceptSessionId: req.sessionID });
+
     return res.status(200).json({
       message: 'MFA enabled successfully. Save these backup codes securely — they will not be shown again.',
       backupCodes: plainCodes,
@@ -738,7 +808,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
  * Verify TOTP or backup code during login MFA flow.
  * Requires: mfaPending session state (set by /login when user has MFA enabled)
  */
-router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
   try {
     if (!req.session.mfaPending || !req.session.mfaPendingUserId) {
       return res.status(401).json({
@@ -774,13 +844,9 @@ router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Resp
     let remainingBackupCodes: number | undefined;
 
     if (token) {
-      // Verify TOTP token
-      const isValid = speakeasy.totp.verify({
-        secret: user.mfaSecret,
-        encoding: 'base32',
-        token: token.toString(),
-        window: 1,
-      });
+      // Verify TOTP token. A code that has been accepted once, here or when
+      // MFA was turned on, is refused: see utils/totp.
+      const isValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
       if (!isValid) {
         return res.status(401).json({
@@ -798,15 +864,28 @@ router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Resp
         });
       }
 
-      // Remove used backup code
-      const updatedCodes = user.mfaBackupCodes.filter((_, i) => i !== matchIndex);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { mfaBackupCodes: updatedCodes },
-      });
+      // Spend exactly the hash that matched, and only if it is still there.
+      // The Argon2 checks above take a moment, and another sign-in may have
+      // spent this code, or another one, since the list was read: writing
+      // that list back would let this code work twice, or bring the other one
+      // back. So the removal is one conditional statement, and no row
+      // changed means the code was spent in the meantime.
+      const matched = user.mfaBackupCodes[matchIndex];
+      const spent = await prisma.$queryRaw<{ remaining: number }[]>`
+        UPDATE "User"
+        SET "mfaBackupCodes" = array_remove("mfaBackupCodes", ${matched})
+        WHERE id = ${user.id} AND ${matched} = ANY("mfaBackupCodes")
+        RETURNING cardinality("mfaBackupCodes") AS remaining
+      `;
+      if (spent.length === 0) {
+        return res.status(401).json({
+          error: 'Invalid Code',
+          message: 'Invalid backup code. Please try again.',
+        });
+      }
 
       backupCodeUsed = true;
-      remainingBackupCodes = updatedCodes.length;
+      remainingBackupCodes = Number(spent[0].remaining);
     }
 
     // MFA passed — create full session. rememberMe is captured before the
@@ -897,13 +976,8 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
       return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 
-    // Verify TOTP token
-    const tokenValid = speakeasy.totp.verify({
-      secret: user.mfaSecret,
-      encoding: 'base32',
-      token: token.toString(),
-      window: 1,
-    });
+    // Verify TOTP token (once: see utils/totp)
+    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, String(token));
 
     if (!tokenValid) {
       return res.status(401).json({ error: 'Invalid Code', message: 'Invalid authentication code' });
@@ -918,6 +992,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
         mfaBackupCodes: [],
       },
     });
+    forgetTotpSteps(userId);
 
     // Turning the second factor off is a change to how the account is
     // protected, so the sessions opened while it was on end with it. This one
