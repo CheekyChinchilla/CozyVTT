@@ -42,7 +42,7 @@ Click **Create Campaign** and you're taken directly to the campaign page.
 
 ### Campaign Settings
 
-Once inside the campaign, click the **Settings** button (gear icon in the header) to open the Campaign Settings panel.
+Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel.
 
 From here you can update:
 - Campaign name and description
@@ -75,7 +75,7 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 The left sidebar's **Campaign Roster** shows all players currently in your campaign along with their assigned characters. It is a quick reference during sessions for names, character names and party composition — and it is also how you get a player's character onto the map.
 
-**Moving a token to another map.** Switching maps offers to bring tokens along, and a token's right-click menu and the Token Manager both offer **Move to Map**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
+**Moving a token to another map.** Switching maps offers to bring tokens along, a token's right-click menu offers **Move to Map…**, and in the Token Manager the map icon (**Move to another map**) opens **Move to which map?**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
 
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
@@ -145,6 +145,8 @@ Once your map is in the asset library:
 2. The Map Library panel opens
 3. Click **Create Map**, pick your uploaded image and check the grid settings
 4. The map is now available to switch to at any time
+
+You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
 *Screenshot pending — Map Library panel with multiple maps.*
 
@@ -217,7 +219,7 @@ Tokens support three display modes that control how they appear on the map:
 | **Top-Down** | Image rendered from above, no border | Overhead dungeon art, top-down tokens |
 | **Full-Art** | Full rectangular image shown at token size | Character portraits, scenic tokens |
 
-Set the display mode when creating a token, or change it later from the Token Manager or Edit Token.
+Choose the display mode in the Token Manager's **Add Token** section when you place a token. It can't be changed once the token is on the map.
 
 **Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the token's name. Player tokens are blue; creatures are red when hostile, teal when friendly and amber when neutral; objects and creatures with no disposition are grey — making it easy to distinguish dispositions at a glance. An obscured token keeps its color and letter on your own map, with a small **?** badge as a reminder; players who do not control it, and **Preview Player View**, see a grey circle with a question mark whatever it is.
 
@@ -274,7 +276,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
-> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back: they are told, and the sheet opens again with your change on it. The same goes the other way when you are editing a sheet the player changes.
+> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back, and they are told. The editor then loads the new version, or closes so it can be opened again on it; one opened with **Edit Character Sheet** from the roster's right-click menu just closes, and the roster fetches the character again. The same goes the other way when you are editing a sheet the player changes.
 
 **What each system offers.** The rolls on the menu depend on your campaign's game system, because not every system has something meaningful to compute from a stat block:
 
@@ -291,7 +293,7 @@ If a token doesn't have a stat block, or you're running one of the systems above
 
 ### Roll History
 
-The **Dice** tab keeps the rolls made in your campaign, newest first, with arrows to step back through them. It's stored on the server, so it survives a refresh, a navigation away and back, and a dropped connection — yours and your players'. Come back the next evening and last session's rolls are still there.
+The **Dice** tab keeps the rolls made in your campaign in a scrolling list, oldest at the top and newest at the bottom. It's stored on the server, so it survives a refresh, a navigation away and back, and a dropped connection — yours and your players'. Come back the next evening and last session's rolls are still there. Initiative rolls are the exception: their entries in the list are not stored and are gone after a reload.
 
 **What each person sees.** Players see the open rolls plus their own secret ones. You see everything, including your players' secret rolls, marked as such — the same oversight you have live. That filtering happens on the server, so a player reloading the page never picks up a roll they weren't meant to see.
 
@@ -311,7 +313,7 @@ To hide a token from players entirely, right-click it on the map and choose **Hi
 
 ### Obscuring a Token's Identity
 
-Sometimes the table should see that something is there without knowing what: a creature the party has not identified, a shape in the dark, an ally in disguise. Right-click the token and choose **Obscure Identity**, or use the same switch in **Edit Token**, the Token Roster or the Token Manager. Players who do not control the token then see a plain grey shape with a question mark where it stands, the hover card calls it an unknown creature, and so does its row in the initiative tracker. Its name, picture, conditions, hit points, disposition, facing, who controls it and what kind of token it is are not sent to their browsers at all, so nothing can be read from the page either. You keep seeing the token as it is, with a small **?** badge as a reminder, and **Preview Player View** shows you the shape the table sees. Rolls you make for it from its stat block, and its initiative roll, appear in the dice log as *Unknown creature*; the roll's label and dice still show, so when the attack's name would give the creature away, use a custom roll with a plain label. A roll a player makes is filed under their own name whatever token it is for, so obscuring a player's token hides the token, not the player. **Reveal Identity** puts everything back.
+Sometimes the table should see that something is there without knowing what: a creature the party has not identified, a shape in the dark, an ally in disguise. Right-click the token and choose **Obscure Identity**, or use the same switch in **Edit Token**, the Token Roster or the Token Manager. Players who do not control the token then see a plain grey shape with a question mark where it stands, the hover card calls it an unknown creature, and so does its row in the initiative tracker. Its name, picture, conditions, hit points, disposition, facing, who controls it and what kind of token it is are not sent to their browsers at all, so nothing can be read from the page either. You keep seeing the token as it is, with a small **?** badge as a reminder, and **Preview Player View** shows you the shape the table sees. Rolls you make for it from its stat block, and its initiative roll, appear in the dice log as *Unknown creature*; the roll's label and dice still show, so when the attack's name would give the creature away, use a custom roll with a plain label. A roll a player makes from their character's sheet is headed with the character's name, with the player shown beside it as *(rolled by …)*, so obscuring a player's token hides the token, not the player or their character. **Reveal Identity** puts everything back.
 
 Obscuring is a switch you set by hand. It does not follow the light, since the rules have no half-seen state between dim light (a creature is lightly obscured) and darkness (heavily obscured), and a player's own token is never obscured to them.
 
@@ -474,7 +476,7 @@ Token templates let you save reusable token configurations — image, stats, HP,
 
 ### Opening the Token Template Library
 
-Click **Token Templates** (the package icon) in the campaign header. The panel slides open from the right, similar to the Creature Library.
+Click **Token Templates** (the package icon) in the campaign header. The panel slides open from the left, like the Creature Library.
 
 ### Creating a Template
 
@@ -574,8 +576,9 @@ rest of the table is doing, without waiting for them to close the page.
 
 **Their characters leave with them.** Each of their characters is taken out of
 the campaign: it stays theirs, but you and the other players can no longer open
-or edit its sheet, and nothing they change on it reaches your table. A token on
-the map that was bound to one of those characters stays where it is.
+or edit its sheet, and nothing they change on it reaches your table except its
+picture. A token on the map that was bound to one of those characters stays
+where it is, still shows the character's picture, and follows it if they change it.
 
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
@@ -645,7 +648,7 @@ Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
 - Disables token movement for players
-- Shows players a banner above the map: *Session is paused. Token movement is disabled and dice rolls are automatically secret.*
+- Shows players a banner above the map: *Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
 
@@ -710,12 +713,12 @@ The **Initiative** tab in the right sidebar is always there, for you and your pl
 
 Combatants are the tokens already on your map — you don't type names in by hand. There are two ways to add one:
 
-- Click **Add Combatant** in the Initiative tab and pick a token from the list.
+- Click **Add Combatant** in the Initiative tab and pick a token from the list. It lists only tokens players can see, so add a hidden creature the second way.
 - Right-click a token on the map and choose **Add to Initiative**.
 
 Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on or they control the token (a character's token carries no HP of its own, so a player's own hit points stay on the sheet and roster card), and never sees a hidden creature listed at all, nor one standing on a map you have not switched to, nor one on the other plane from them, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A creature that is merely out of a player's sight, in the dark or under fog, is still listed, so hide a token to keep it out of the order. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
-**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
+**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel. They can only roll before you click **Start Combat**; once combat has started, the option is gone for them and the server refuses it, so only you can change their initiative.
 
 You keep everything else: only you decide who is in the fight, drag the order around, type a value in by hand, advance the turn, or end combat. You can still roll for any combatant, players included — useful when someone is away from the keyboard as the fight starts. A player who isn't in the tracker yet has nothing to roll: the option doesn't appear until you add them.
 
@@ -1087,7 +1090,7 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
 - Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
-- Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors in their line of sight, the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
+- Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors they can actually see (in their line of sight and lit, within their darkvision, or under Global Illumination), the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
 - Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
 - The preview shows the material plane only
 - The preview shows exactly what that viewer is sent, the hover card and a dragged token included: a creature's hit points only once its HP bar is on, and an obscured token as the grey shape. **All player tokens** masks every obscured token, since nobody at a shared screen is its sole controller
