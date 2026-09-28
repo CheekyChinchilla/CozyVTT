@@ -108,12 +108,23 @@ const COPY_END = '\\.';
  * psql also runs whatever the file says, as the database owner. A backslash
  * command such as `\!` runs a shell command in the backend container, `COPY
  * ... PROGRAM` runs one in the database container, and a `COMMIT` would make
- * the drops at the top permanent partway through. pg_dump writes none of
- * those, so a file holding one is refused too. The backslash half is also
- * closed at the source: the file psql loads opens with `\restrict` under a key
- * the backup cannot know, which makes psql refuse every other backslash
- * command until it exits. The dump's own `\restrict` and `\unrestrict` lines
- * are dropped, since the second would end that protection early.
+ * the drops at the top permanent partway through. pg_dump starts no line with
+ * any of those, so a line that starts with one is refused. The backslash half
+ * is also closed at the source: the file psql loads opens with `\restrict`
+ * under a key the backup cannot know, which makes psql refuse every other
+ * backslash command, wherever it sits, until it exits. The dump's own
+ * `\restrict` and `\unrestrict` lines are dropped, since the second would end
+ * that protection early.
+ *
+ * The COPY and transaction checks are not a sandbox. They look at the start
+ * of a line only, and the COPY one is case-sensitive, so a lowercase `copy
+ * ... to program`, an indented statement, a second statement on the same
+ * line, or a DO block that EXECUTEs one all get through. The SQL runs with
+ * the database owner's full rights, which on the Docker setup is a superuser
+ * that can run programs in the database container. A restore is only as safe
+ * as the file, which is why the restore screen and the deployment guide say
+ * to restore only backups this dashboard or the backup script made, on an
+ * instance you trust.
  */
 const DUMP_COMPLETE = '-- PostgreSQL database dump complete';
 const RESTRICTED_MODE_LINE = /^\\(?:un)?restrict /;

@@ -6886,10 +6886,14 @@ paths:
         psql present in the backend image. The archive's database.sql is
         checked before anything runs: it must be a complete pg_dump of a
         CozyVTT database (pg_dump's closing line present, the User and
-        _prisma_migrations tables created) holding nothing but SQL; a psql
-        backslash command, a COPY that is not table data, or a transaction
-        statement makes the archive invalid. A refused archive answers 400 with
-        the reason and changes nothing. A database-only backup of the current
+        _prisma_migrations tables created) holding nothing but SQL; a line
+        that starts with a psql backslash command, a COPY that is not table
+        data, or a transaction statement makes the archive invalid. These
+        checks are not a sandbox: the SQL runs with the database owner's full
+        rights, which on the Docker setup include running programs in the
+        database container, so restore only archives made on an instance you
+        trust. A refused archive answers 400 with the reason and changes
+        nothing. A database-only backup of the current
         database is then written to the backup list, named in the response as
         safetyBackup, so the restore can be undone. The public schema is
         dropped and recreated from the archive in a single transaction that
