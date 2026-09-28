@@ -50,8 +50,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       }
       const { mapId, cells, userId: named } = parsed.data;
 
+      // A prepared map is the DM's until they switch to it, for writes as
+      // for reads (canReadMap).
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
-      if (!map || map.campaignId !== socket.campaignId) {
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         socket.emit('error', { message: 'Map not found' });
         return;
       }

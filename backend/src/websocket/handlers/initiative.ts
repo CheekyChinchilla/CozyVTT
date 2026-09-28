@@ -18,7 +18,7 @@ import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
-import { canControlToken, canRollDice } from '../../services/permissions';
+import { canControlToken, canReadMap, canRollDice } from '../../services/permissions';
 import {
   getState as getCombatState,
   setState as setCombatState,
@@ -360,9 +360,13 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         }
       }
 
-      // Fetch token name from DB for logging
-      const map = await prisma.map.findUnique({ where: { id: mapId } });
-      if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
+      // Fetch token name from DB for logging, with the campaign's current map:
+      // a prepared map is the DM's until they switch to it (canReadMap).
+      const map = await prisma.map.findUnique({ where: { id: mapId }, include: { campaign: { select: { currentMapId: true } } } });
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
+        socket.emit('error', { message: 'Map not found' });
+        return;
+      }
 
       const tokens = readTokens(map.tokens);
       const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
