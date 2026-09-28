@@ -213,6 +213,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **An account registered while admin approval is required can no longer sign in before it is approved.** A new account was created approved and marked as waiting a moment later, so a sign-in in between kept its access, and if that second step failed the account stayed approved for good. It is now created waiting for approval in the first place.
+
 - **Exporting a campaign, or a map as a UVTT file, no longer hands over files the exporter cannot open.** A campaign's DM could give a template, token or map a picture address the image check did not recognise as naming a file (a document's address, or one with extra parts), and the exports, which read addresses their own way, then put another user's private upload into the download. Each export now includes only files the person exporting may open (a map whose picture is left out still imports, without it), and a picture address on this server has to be exactly a file's own address, or it is refused, a shared character template's picture included. That also stops a picture address pointing at another page of the app, which made every viewer's browser request that page.
 
 - **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did. When it closes up a folder that already existed, the backend's log says so and gives the old permissions, since another account that copied backups from it will no longer be able to.

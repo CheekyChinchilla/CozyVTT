@@ -143,15 +143,15 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       }
 
       // Register user with approval status based on settings
-      const user = await registerUser({ email, password, displayName });
+      const user = await registerUser({
+        email,
+        password,
+        displayName,
+        isApproved: !settings.requireAdminApproval,
+      });
 
       if (settings.requireAdminApproval) {
-        // Mark as pending approval — do NOT create a session
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { isApproved: false },
-        });
-
+        // Pending approval — do NOT create a session
         return res.status(201).json({
           message: 'Registration submitted. Your account is pending admin approval.',
           pendingApproval: true,

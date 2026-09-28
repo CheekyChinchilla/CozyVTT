@@ -27,6 +27,13 @@ export interface RegisterInput {
   email: string;
   password: string;
   displayName: string;
+  /**
+   * False when the instance requires an admin to approve new accounts. Set in
+   * the create itself: the column defaults to approved, so a separate write
+   * afterwards would leave the account able to sign in until it landed, and
+   * for good if it failed.
+   */
+  isApproved?: boolean;
 }
 
 export interface LoginInput {
@@ -97,7 +104,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
 
     return tx.user.create({
-      data: { email, passwordHash, displayName, platformRole },
+      data: { email, passwordHash, displayName, platformRole, isApproved: input.isApproved ?? true },
     });
   });
 }
