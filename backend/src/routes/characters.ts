@@ -13,6 +13,7 @@ import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import { withMapsLocked } from '../utils/mapTokens';
 
 const router = Router();
@@ -96,9 +97,11 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       where: { id: userId },
       select: { displayName: true },
     });
+    // A sheet in the shape of a version before 1.3.0 has its older fields
+    // moved where the sheet reads them first, since validation drops them.
     const dataWithIdentity = applyIdentityToSheet(
       finalGameSystem as GameSystem | null,
-      data as Record<string, unknown> | undefined,
+      migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
     );
@@ -493,10 +496,15 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     // Validate data update if character has gameSystem. What gets stored is
     // the schema's parsed output, so a key the sheet does not declare never
-    // reaches the database.
+    // reaches the database. A sheet still carrying fields from before 1.3.0
+    // has them moved where the sheet reads them first, or that would drop
+    // their content before `migrate:sheet-fields` could move it.
     let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
-      const validationResult = validateCharacterData(character.gameSystem as GameSystem, data);
+      const validationResult = validateCharacterData(
+        character.gameSystem as GameSystem,
+        migrateLegacySheetFields(character.gameSystem, data)
+      );
       if (!validationResult.success) {
         return res.status(400).json({
           error: 'Validation Error',

@@ -1044,11 +1044,9 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their migrations run automatically and change no existing data. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you are coming from a version **before 1.3.0** and never ran it.
+**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their database migrations run automatically and change no existing data. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
-If you have **Pathfinder 2e** characters made from the built-in templates, run
-this once so their strikes and class features appear on the sheet. It also
-tidies up D&D 5e sheets, whose features already display without it.
+Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place, so nothing is lost if someone saves a sheet before you run this. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 
 ```bash
 # See what would change, without writing anything

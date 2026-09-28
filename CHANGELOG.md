@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.4.0
 
-Nothing to do beyond the usual upgrade, and nothing you have is removed. Four things you will notice:
+Nothing to do beyond the usual upgrade, and nothing you have is removed, with one exception: a field on a character sheet that its game system does not define is dropped the next time that sheet is saved (see **Character sheets keep only the fields the sheet defines** under Fixed). Fields that the built-in sheets of earlier versions wrote are moved to where the sheet reads them first. Four things you will notice:
 
 - **Fog of war now hides the map.** Areas you have not revealed are solid black for players from the moment the map loads, where they used to show the artwork through a tint. Every map you already have keeps fog on with the same areas revealed; a map you create from now on starts with fog off.
 - **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player, or a spectator, with no token on a lit map is now sent no tokens at all and sees darkness. A spectator cannot be given a token to look through, so to let one watch a lit map, turn dynamic lighting off for it.
@@ -80,6 +80,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed
+
+- **A D&D 5e character made before 1.3.0 keeps its proficiencies and languages.** The built-in templates of those versions stored them as plain lists the sheet did not read, so it showed none, and the first save in the editor replaced them with four empty boxes. The sheet now reads them into the boxes, so they show and are saved. Saving any character made before 1.3.0 also moves its other older fields to where the sheet reads them, as the `migrate:sheet-fields` command does, so nothing depends on having run the command first.
 
 - **Call of Cthulhu skills inside a group can be edited.** Changing **Fighting (Brawl)**, a **Firearms** skill, an **Other Language**, a **Science** or a custom skill in the editor did nothing: the box went back to its old value and the change was not saved. These now save like every other skill.
 

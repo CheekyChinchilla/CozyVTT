@@ -1,5 +1,6 @@
 /**
- * The one-off migration that moves sheets onto the fields the app reads.
+ * The transforms that move sheets onto the fields the app reads, used by the
+ * one-off migration and by every character save.
  *
  * This edits players' characters in place, so what matters is not that it
  * moves the right things but that it cannot lose anything. Each transform is
@@ -11,7 +12,8 @@ import {
   migrateDnD5e,
   migratePathfinder2e,
   migrateCallOfCthulhu,
-} from '../migrate-sheet-fields';
+  migrateLegacySheetFields,
+} from '../sheetFieldMigrations';
 
 /** Run a transform and return just the sheet. */
 const run = (fn: (s: Record<string, unknown>, n: string[]) => Record<string, unknown>) =>
@@ -98,6 +100,22 @@ describe('D&D 5e', () => {
     // stays put instead of vanishing.
     const out = dnd({ languages: [{ tongue: 'Druidic' }] });
     expect(out.languages).toEqual([{ tongue: 'Druidic' }]);
+  });
+
+  it('adds old languages to the Languages box of a sheet that has the four boxes', () => {
+    // A 1.2.2 sheet edited on 1.3.0 or 1.4.0: the editor wrote the boxes and
+    // left the old `languages` beside them. The boxes are what the sheet shows,
+    // so a language only in the flat list would be invisible, then gone at the
+    // next save, which rebuilds the flat list from the boxes.
+    const out = dnd({
+      proficiencies: { armor: '', weapons: '', tools: '', languages: 'Elvish' },
+      languages: ['Common', 'elvish'],
+      proficienciesAndLanguages: ['Elvish'],
+    });
+
+    expect(out.proficiencies).toEqual({ armor: '', weapons: '', tools: '', languages: 'Elvish, Common' });
+    expect(out.proficienciesAndLanguages).toEqual(['Elvish', 'Common']);
+    expect(out).not.toHaveProperty('languages');
   });
 
   it('leaves the editor structured proficiencies object alone', () => {
@@ -242,5 +260,27 @@ describe('Call of Cthulhu 7e', () => {
   it('is idempotent', () => {
     const once = coc({ player: 'Tyke' });
     expect(coc(once)).toEqual(once);
+  });
+});
+
+describe('migrateLegacySheetFields', () => {
+  it('returns a sheet with no older fields as it was sent', () => {
+    const sheet = { characterName: 'Aldra', featuresAndTraits: ['  Second Wind  '] };
+    expect(migrateLegacySheetFields('DND_5E', sheet)).toBe(sheet);
+  });
+
+  it('moves the older fields of the system it is given', () => {
+    expect(migrateLegacySheetFields('CALL_OF_CTHULHU_7E', { player: 'Pat' })).toEqual({ playerName: 'Pat' });
+    expect(migrateLegacySheetFields('PATHFINDER_2E', { attacks: [{ name: 'Bow', range: 'ranged' }] })).toEqual({
+      strikes: [{ name: 'Bow', type: 'ranged' }],
+    });
+  });
+
+  it('leaves anything that is not a sheet, or has no system, alone', () => {
+    expect(migrateLegacySheetFields('DND_5E', null)).toBeNull();
+    expect(migrateLegacySheetFields('DND_5E', ['features'])).toEqual(['features']);
+    const sheet = { player: 'Pat' };
+    expect(migrateLegacySheetFields(null, sheet)).toBe(sheet);
+    expect(migrateLegacySheetFields('SHADOWRUN_6E', sheet)).toBe(sheet);
   });
 });

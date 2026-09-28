@@ -110,10 +110,17 @@ sheets created from them hold content in fields nothing displays: a D&D 5e
 Fighter's features, its armour and weapon proficiencies, a Pathfinder 2e
 character's strikes and class features.
 
-Reading is already fixed for D&D 5e — those sheets display correctly with no
+Reading is already fixed for D&D 5e: those sheets display correctly with no
 migration at all. **Pathfinder 2e sheets need this script** to show their
 strikes and class features, and running it also tidies the 5e duplicates away
 so the same fact is not stored twice.
+
+The same transforms, in `src/utils/sheetFieldMigrations.ts`, run on every
+character the API creates or saves, before the sheet is validated. Validation
+drops a field the schema does not declare, so without them the first save of
+such a sheet would lose the content this script exists to move. A sheet that
+is saved is therefore moved already, and the script finds nothing to do for
+it.
 
 ```bash
 # Report what would change, without writing anything

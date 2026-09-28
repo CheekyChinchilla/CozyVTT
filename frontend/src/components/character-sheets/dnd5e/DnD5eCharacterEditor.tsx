@@ -171,6 +171,20 @@ function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
 }
 
 /**
+ * Drop the separate `languages` list a sheet written before 1.3.0 carries.
+ *
+ * The form's proficiency boxes are read from the stored sheet, which puts
+ * those languages in the Languages box, so from here on the box is the only
+ * copy. Kept, it would put a language back on every save after the player
+ * deleted it from the box.
+ */
+function withoutOrphanLanguages(sheet: DnD5eFormData): DnD5eFormData {
+  const settled = { ...sheet };
+  delete (settled as Record<string, unknown>).languages;
+  return settled;
+}
+
+/**
  * DnD5eCharacterEditor - Editable D&D 5e character sheet
  */
 export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
@@ -191,7 +205,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Form state - initialize with character data
   const [formData, setFormData] = useState<DnD5eFormData>(() => ({
-    ...withoutOrphanFeatures(data),
+    ...withoutOrphanLanguages(withoutOrphanFeatures(data)),
     // Ensure nested objects exist.
     //
     // TODO(typing): `{}` is not a valid container — none of these has its keys,
