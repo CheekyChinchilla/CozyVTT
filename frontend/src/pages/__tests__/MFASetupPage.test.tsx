@@ -80,6 +80,25 @@ describe('MFASetupPage', () => {
     expect(screen.getByText('SECRETKEY')).toBeInTheDocument();
   });
 
+  // The server sends each backup code already split, as ABCD-EFGH. The page
+  // split it again, so it showed ABCD--EFGH, which the sign-in box refused.
+  it('shows each backup code as the server sends it', async () => {
+    const setupMFA = vi.fn().mockResolvedValue({ message: 'ok', qrCodeUrl: 'data:image/png;base64,AA', secret: 'SECRETKEY' });
+    const completeMFASetup = vi.fn().mockResolvedValue({ message: 'ok', backupCodes: ['ABCD-EFGH', 'JKLM-NPQR'] });
+    mockUseAuth.mockReturnValue(authState({ setupMFA, completeMFASetup }));
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'MyPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(screen.getByAltText('MFA QR Code')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('000000'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: /verify & enable/i }));
+
+    expect(await screen.findByText('ABCD-EFGH')).toBeInTheDocument();
+    expect(screen.getByText('JKLM-NPQR')).toBeInTheDocument();
+    expect(screen.queryByText(/--/)).not.toBeInTheDocument();
+  });
+
   it('shows the server\'s reason when the password is wrong, and lets them try again', async () => {
     const setupMFA = vi.fn().mockRejectedValueOnce(apiError(401, 'Incorrect password'));
     mockUseAuth.mockReturnValue(authState({ setupMFA }));
