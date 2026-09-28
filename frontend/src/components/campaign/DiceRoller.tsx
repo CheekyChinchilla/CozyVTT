@@ -136,7 +136,9 @@ const SPECIAL_ROLLS = [
  * Dice roller component with carousel navigation and secret rolls
  */
 export default function DiceRoller() {
-  const { socket, reconnectCount, status } = useWebSocket();
+  const { socket, joinedEpoch, status } = useWebSocket();
+  // Joins after the first; see the history load below.
+  const rejoins = Math.max(0, joinedEpoch - 1);
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
   const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'DM';
@@ -236,7 +238,10 @@ export default function DiceRoller() {
   // ============================================
 
   /**
-   * Load roll history from the server on mount, and again after a reconnect.
+   * Load roll history from the server on mount, and again after the page
+   * rejoins the campaign: not on the transport's reconnect, which comes
+   * before the socket is back in the room, so a roll sent in that gap would
+   * be missed by a read made then.
    *
    * Rolls have always been stored server-side; nothing read them back, so this
    * panel started empty after every refresh even though the rolls still
@@ -277,7 +282,7 @@ export default function DiceRoller() {
 
     loadHistory();
     return () => { cancelled = true; };
-  }, [campaign?.id, userRole, reconnectCount]);
+  }, [campaign?.id, userRole, rejoins]);
 
   // Saved rolls for this campaign. Failure is quiet on purpose: macros are a
   // convenience on top of a dice panel that works without them, and an error

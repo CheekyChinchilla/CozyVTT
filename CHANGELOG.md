@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A chat message or dice roll sent while your connection was coming back no longer goes missing.** After a dropped connection the page read the chat and dice history again as soon as the network returned, a moment before it had rejoined the game, so anything sent in between never appeared until you reloaded. It now reads them once it has rejoined.
+
 - **A wall changed through the API shows up on open pages at once.** The API's wall routes saved the change without telling anyone, so an open page kept its old walls, and on a lit map its old line of sight, until it loaded the map again. They now tell every open page as a change made on the map does.
 
 - **A member whose role is changed during a session gets the new role's controls at once.** The server applied a new role straight away, but the member's open page kept the old one until reloaded: someone made a player could not move the token they had just been given or roll, and someone made a spectator was still offered dice and editing the server then refused. Every open page in the campaign now updates, the roster panel included, the member is sent the map again as the new role sees it (a spectator on a lit map is sent no tokens, a player their own), and a page that missed the change while offline picks it up when it reconnects. Handing the DM's seat to someone else does the same for both of them: the new DM's page is sent the hidden creatures and notes it lacked, and the old DM's page stops holding them. So does a page that missed a pause, the end of a session or a switch to another map: it no longer offers drags the server refuses, or asks for a map the player may no longer see.
