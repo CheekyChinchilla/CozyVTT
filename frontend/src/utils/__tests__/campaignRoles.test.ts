@@ -25,6 +25,7 @@ import {
   isCampaignOwner,
   isCampaignDm,
   campaignsToPlaceAssetIn,
+  withMemberRole,
 } from '../campaignRoles';
 
 const member = (
@@ -166,6 +167,27 @@ describe('campaignsToPlaceAssetIn', () => {
     // The creator handed c1 over and runs c2 and c3.
     expect(ids(campaignsToPlaceAssetIn(all, false, 'creator'))).toEqual(['c2', 'c3']);
     expect(ids(campaignsToPlaceAssetIn(all, false, 'bystander'))).toEqual([]);
+  });
+});
+
+// A role change mid-session is patched into the open page's membership list,
+// which every "may I?" on the page reads.
+describe('withMemberRole', () => {
+  it("changes that member's role and leaves everyone else's", () => {
+    const changed = withMemberRole(untouched, 'bystander', CampaignRole.SPECTATOR);
+    expect(changed.memberships?.find((m) => m.userId === 'bystander')?.role).toBe(CampaignRole.SPECTATOR);
+    expect(changed.memberships?.find((m) => m.userId === 'creator')?.role).toBe(CampaignRole.DM);
+  });
+
+  it("updates the page's own role when it is the viewer who changed", () => {
+    const mine = { ...untouched, userRole: CampaignRole.PLAYER } as unknown as Campaign;
+    expect(withMemberRole(mine, 'bystander', CampaignRole.SPECTATOR, 'bystander').userRole).toBe(CampaignRole.SPECTATOR);
+    expect(withMemberRole(mine, 'creator', CampaignRole.PLAYER, 'bystander').userRole).toBe(CampaignRole.PLAYER);
+  });
+
+  it('returns the same campaign when nothing changes', () => {
+    expect(withMemberRole(untouched, 'bystander', CampaignRole.PLAYER)).toBe(untouched);
+    expect(withMemberRole(untouched, 'nobody', CampaignRole.DM)).toBe(untouched);
   });
 });
 

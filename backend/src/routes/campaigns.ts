@@ -975,6 +975,9 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
     // person keeps what they had until they reload.
     try {
       await applyRoleToLiveSockets(userId, campaignId, role);
+      // And every open page, the member's own included, so the controls
+      // follow the role without a reload (the client patches its list).
+      broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
       // Their copy of the initiative order follows the role.
       await resendInitiative(campaignId);
     } catch (error) {

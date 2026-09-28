@@ -17,10 +17,11 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { withMemberRole } from '@/utils/campaignRoles';
 
 // ============================================
 // Types
@@ -333,6 +334,30 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     socketClient.onDmTransferred(handleDmTransferred);
     return () => {
       socketClient.off('campaign.dm.transferred', handleDmTransferred);
+    };
+  }, []);
+
+  /**
+   * A member's role changed, possibly this user's own. The server has
+   * already applied it to what it accepts, so the page follows: `userRole`
+   * is read from the membership list. The `authenticated` reply also carries
+   * this user's role, which catches a change made while this page was
+   * offline and never heard.
+   */
+  useEffect(() => {
+    const handleRoleChanged = (data: MemberRoleChangedBroadcast) => {
+      setCampaign((prev) => (prev && prev.id === data.campaignId ? withMemberRole(prev, data.userId, data.role) : prev));
+    };
+    const handleAuthenticated = (data: { campaignId?: string; userId?: string; role?: CampaignRole }) => {
+      if (!data?.campaignId || !data.userId || !data.role) return;
+      const { campaignId, userId, role } = data;
+      setCampaign((prev) => (prev && prev.id === campaignId ? withMemberRole(prev, userId, role) : prev));
+    };
+    socketClient.onMemberRoleChanged(handleRoleChanged);
+    socketClient.on('authenticated', handleAuthenticated);
+    return () => {
+      socketClient.off('campaign.role.changed', handleRoleChanged);
+      socketClient.off('authenticated', handleAuthenticated);
     };
   }, []);
 

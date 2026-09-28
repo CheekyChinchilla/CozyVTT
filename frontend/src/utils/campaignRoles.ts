@@ -15,7 +15,7 @@
  * One place to ask, so the answer cannot drift apart again.
  */
 
-import type { Campaign, CampaignMembership } from '@/types';
+import type { Campaign, CampaignMembership, CampaignRole } from '@/types';
 
 /** The membership of whoever currently runs the campaign, if it is loaded. */
 export function campaignDmMembership(
@@ -115,5 +115,27 @@ export function campaignsToPlaceAssetIn<T extends Pick<Campaign, 'memberships' |
     const role = c.userRole ?? c.memberships?.find((m) => m.userId === userId)?.role;
     return role === 'PLAYER';
   });
+}
+
+/**
+ * The campaign with one member's role changed, as a role change mid-session
+ * is patched into an open page: the membership list, which every "may I?"
+ * on the page reads, and the page's own `userRole` when `viewerId` is the
+ * member who changed. The same object when nothing changes.
+ */
+export function withMemberRole<T extends Pick<Campaign, 'memberships' | 'userRole'>>(
+  campaign: T,
+  userId: string,
+  role: CampaignRole,
+  viewerId?: string | null
+): T {
+  const member = campaign.memberships?.find((m) => m.userId === userId);
+  const ownRoleChanges = viewerId === userId && campaign.userRole !== undefined && campaign.userRole !== role;
+  if ((!member || member.role === role) && !ownRoleChanges) return campaign;
+  return {
+    ...campaign,
+    memberships: campaign.memberships?.map((m) => (m.userId === userId ? { ...m, role } : m)),
+    ...(ownRoleChanges && { userRole: role }),
+  };
 }
 

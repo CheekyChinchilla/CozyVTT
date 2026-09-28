@@ -36,6 +36,7 @@ vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: vi.fn(),
     onDmTransferred: vi.fn(),
+    onMemberRoleChanged: vi.fn(),
     // The provider subscribes to 'authenticated' through the client's own
     // listener table, so the double has to offer the same pair the real
     // client does. It did not, and the provider threw on mount.
