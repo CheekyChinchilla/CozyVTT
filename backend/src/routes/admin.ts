@@ -29,7 +29,7 @@ import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail 
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
-import { resolveBackupDir } from '../utils/backupDir';
+import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
@@ -51,7 +51,7 @@ const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    fs.mkdir(BACKUP_DIR, { recursive: true })
+    ensureBackupDir(BACKUP_DIR)
       .then(() => cb(null, BACKUP_DIR))
       .catch((err) => cb(err, BACKUP_DIR));
   },
@@ -752,7 +752,7 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
 }
 
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
-  await fs.mkdir(BACKUP_DIR, { recursive: true });
+  await ensureBackupDir(BACKUP_DIR);
   const { filename, handle } = await openNewBackup();
   const zipPath = path.join(BACKUP_DIR, filename);
   const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
@@ -844,7 +844,7 @@ router.post('/backups', async (req, res) => {
 // ============================================
 router.get('/backups', async (_req, res) => {
   try {
-    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
     const backups = await Promise.all(
       files

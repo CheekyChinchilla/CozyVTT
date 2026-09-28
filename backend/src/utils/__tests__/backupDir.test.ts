@@ -1,5 +1,7 @@
+import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
-import { resolveBackupDir, isInside } from '../backupDir';
+import { resolveBackupDir, isInside, ensureBackupDir } from '../backupDir';
 
 describe('resolveBackupDir', () => {
   it('defaults to a backups directory beside uploads, never inside it', () => {
@@ -24,5 +26,28 @@ describe('isInside', () => {
     expect(isInside('/a', '/a')).toBe(true);
     expect(isInside('/a/../c', '/a')).toBe(false);
     expect(isInside('/ab', '/a')).toBe(false);
+  });
+});
+
+// The deployment guide promises the folder is its user's alone, as the
+// archives in it are. Only the Docker start script made it so; an install
+// without Docker got whatever the process umask gave, usually 755.
+describe('ensureBackupDir', () => {
+  let root: string;
+  beforeEach(async () => { root = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-backupdir-')); });
+  afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });
+
+  it('creates the folder readable by its owner alone', async () => {
+    const dir = path.join(root, 'backups');
+    await ensureBackupDir(dir);
+    expect((await fs.stat(dir)).mode & 0o777).toBe(0o700);
+  });
+
+  it('closes up a folder that already exists', async () => {
+    const dir = path.join(root, 'backups');
+    await fs.mkdir(dir, { mode: 0o755 });
+    await fs.chmod(dir, 0o755);
+    await ensureBackupDir(dir);
+    expect((await fs.stat(dir)).mode & 0o777).toBe(0o700);
   });
 });
