@@ -381,7 +381,8 @@ Two of those deserve a note:
   `docker-compose.yml` being set to the value it prints (the file's hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
-  files and CI pin.
+  files and CI pin, or any line in either Dockerfile that installs it names the
+  unpinned `postgresql-client`.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
