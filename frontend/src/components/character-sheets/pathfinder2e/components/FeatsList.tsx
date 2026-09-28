@@ -7,12 +7,10 @@
 
 import React from 'react';
 import { Award, Star, Zap, Circle, Gift } from 'lucide-react';
+import type { PF2eFeat } from '@/types/game-systems';
 
-export interface Feat {
-  level: number;
-  name: string;
-  notes: string;
-}
+/** The sheet's own feat type, so this list reads the fields the editor writes. */
+export type Feat = PF2eFeat;
 
 export interface FeatsData {
   ancestryAndHeritage?: Feat[];
@@ -112,7 +110,13 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
                             Level {feat.level}
                           </span>
                         </div>
-                        {feat.notes && (
+                        {/* The editor's box writes `description`; the
+                            built-in templates wrote `notes`. Either may be
+                            present, so both are shown. */}
+                        {feat.description && (
+                          <p className="text-sm text-stone-600 mt-1 whitespace-pre-line">{feat.description}</p>
+                        )}
+                        {feat.notes && feat.notes !== feat.description && (
                           <p className="text-sm text-stone-600 mt-1">{feat.notes}</p>
                         )}
                       </div>

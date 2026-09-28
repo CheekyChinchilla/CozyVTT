@@ -38,7 +38,6 @@ import type {
   PF2eClassDC,
   PF2eHitPoints,
   PF2eFeats,
-  PF2eFeat,
   PF2eSpellSlots,
   PF2eAppearance,
   PF2ePersonality,
@@ -61,9 +60,8 @@ import { isHexColor } from '@/utils/styleAllowlists';
  * `PUT /characters/:id` validates the body and stores it as sent, rather than
  * storing Zod's parsed output, so a key the schema does not declare survives.
  */
-interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'>, SheetChrome {
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
   spellcasting?: PF2eEditorSpellcasting | null;
-  feats?: Record<keyof PF2eFeats, PF2eEditorFeat[]>;
 }
 
 /**
@@ -92,18 +90,6 @@ interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'can
    * `expended` stays at whatever it was. Verified against the validator.
    */
   slots?: Partial<Record<keyof PF2eSpellSlots, { total: number; expended?: number; used?: number }>>;
-}
-
-/**
- * A feat as the editor edits it.
- *
- * `description` is not declared by the shared type or by the backend schema.
- * It survives a save regardless: an undeclared key is stripped by Zod's parse,
- * but the route stores the body as sent rather than the parsed output. Verified
- * against the validator — a feat carrying one is accepted.
- */
-interface PF2eEditorFeat extends PF2eFeat {
-  description?: string;
 }
 
 interface Pathfinder2eCharacterEditorProps {

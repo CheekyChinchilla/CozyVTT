@@ -265,12 +265,14 @@ const bulkSchema = z.object({
 
 /**
  * Feat
- * Notes optional for quick feat addition
+ * Notes optional for quick feat addition. `description` is what the editor's
+ * text box under each feat writes; the built-in templates write `notes`.
  */
 const featSchema = z.object({
   level: z.number().int().min(1).max(20).optional(),
   name: z.string().min(1),
   notes: z.string().optional(),
+  description: z.string().optional(),
 });
 
 /**
