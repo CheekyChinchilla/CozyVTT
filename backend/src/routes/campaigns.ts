@@ -7,7 +7,7 @@ import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permis
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange } from '../websocket/utils';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
@@ -873,6 +873,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     } catch (error) {
       logger.error('Member removed but live sockets were not updated', { err: error, userId, campaignId });
     }
+    announceRosterChange(userId, [campaignId], 'member.left');
 
     return res.status(200).json({
       message: 'Member removed successfully',
@@ -978,6 +979,8 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       // And every open page, the member's own included, so the controls
       // follow the role without a reload (the client patches its list).
       broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
+      // The roster panel groups members by role from its own list.
+      announceRosterChange(userId, [campaignId], 'member.role');
       // Their copy of the initiative order follows the role.
       await resendInitiative(campaignId);
     } catch (error) {

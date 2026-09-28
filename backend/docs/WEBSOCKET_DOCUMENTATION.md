@@ -1068,7 +1068,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `map:settings:updated` | `maps.ts` |
 | `pong` | `events.ts` |
 | `presence.state` | `events.ts` |
-| `roster.updated` | `characters.ts` |
+| `roster.updated` | `utils.ts` |
 | `session.ended` | `campaigns.ts` |
 | `session.paused` | `campaigns.ts` |
 | `session.resumed` | `campaigns.ts` |
