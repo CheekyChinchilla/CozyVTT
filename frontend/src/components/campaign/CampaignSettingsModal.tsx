@@ -643,7 +643,8 @@ export default function CampaignSettingsModal({
                           <p className="text-sm text-danger-ink">
                             Permanently deletes this campaign and all associated maps, tokens, chat
                             history, and session records. Characters and uploaded assets are{' '}
-                            <strong>not</strong> deleted — they remain in your library.
+                            <strong>not</strong> deleted: characters stay with their owners, and each
+                            uploaded file moves to the personal library of whoever uploaded it.
                           </p>
                           <p className="text-sm text-danger-ink mt-2">
                             This action <strong>cannot be undone</strong>.

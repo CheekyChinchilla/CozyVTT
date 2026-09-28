@@ -417,9 +417,10 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       const result = await mapService.importUVTT(campaign.id, file, undefined, undefined, opts);
       setMaps((prev) => [result.map, ...prev]);
-      const parts = [`${result.totalSegments} wall segments`];
-      if (result.portalCount > 0) parts.push(`${result.portalCount} doors`);
-      if (result.lightCount > 0) parts.push(`${result.lightCount} lights`);
+      const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+      const parts = [count(result.totalSegments, 'wall segment')];
+      if (result.portalCount > 0) parts.push(count(result.portalCount, 'door'));
+      if (result.lightCount > 0) parts.push(count(result.lightCount, 'light'));
       setImportSuccess(`Imported "${result.map.name}" with ${parts.join(', ')}`);
       // Auto-clear success message after 5 seconds
       setTimeout(() => setImportSuccess(null), 5000);

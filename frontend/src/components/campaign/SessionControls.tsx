@@ -209,7 +209,7 @@ export default function SessionControls() {
             </Button>
           )}
 
-          {/* Resume Session — PAUSED only (same session, restores saved state) */}
+          {/* Resume Session — PAUSED only (same session; the map stays as the DM left it) */}
           {isPaused && (
             <Button
               onClick={handleResume}
@@ -249,7 +249,7 @@ export default function SessionControls() {
         {/* Paused hint */}
         {isPaused && (
           <p className="text-xs text-warm-gray text-center italic">
-            Players are in read-only mode.
+            Players can't move tokens, and their dice rolls stay on their own screens.
           </p>
         )}
 

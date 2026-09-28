@@ -392,7 +392,7 @@ function CampaignPageContent() {
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-warm-amber/10 border-b border-warm-amber/20">
           <PauseCircle className="w-4 h-4 text-warm-amber flex-shrink-0" />
           <p className="text-xs font-medium text-warm-amber">
-            Session is paused. Token movement is disabled and dice rolls are automatically secret.
+            Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.
           </p>
         </div>
       )}

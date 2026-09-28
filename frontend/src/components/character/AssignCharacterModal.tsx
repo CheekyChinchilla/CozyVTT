@@ -163,8 +163,8 @@ export default function AssignCharacterModal({
                         <AlertCircle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm text-stone-gray">
-                            No compatible campaigns found. Create a campaign with a matching
-                            game system or use a flexible campaign.
+                            No compatible campaigns found. Create a campaign with the same
+                            game system as this character.
                           </p>
                         </div>
                       </div>
