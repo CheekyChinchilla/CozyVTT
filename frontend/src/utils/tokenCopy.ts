@@ -1,4 +1,4 @@
-import type { CreateTokenRequest, Position, Size, Token } from '@/types';
+import { CampaignRole, type CampaignMembership, type CreateTokenRequest, type Position, type Size, type Token } from '@/types';
 import { extractAssetId } from './assetUrl';
 
 /**
@@ -25,6 +25,21 @@ export function tokenCopyRequest(token: Token, position: Position): CreateTokenR
     imageUrl: extractAssetId(imageUrl) ?? imageUrl,
     position,
   };
+}
+
+/**
+ * Who controls a copy of a token: its controller, while they are still a
+ * player of the campaign, otherwise nobody. `controlledBy` is not cleared
+ * when a member leaves, becomes a spectator or takes the DM's seat, and the
+ * server creates a token for a player or for nobody, so copying the stale id
+ * made Duplicate fail on a token that still moves and draws normally.
+ */
+export function copyController(
+  controlledBy: string | null | undefined,
+  memberships: readonly Pick<CampaignMembership, 'userId' | 'role'>[] | undefined
+): string | null {
+  if (!controlledBy) return null;
+  return memberships?.some((m) => m.userId === controlledBy && m.role === CampaignRole.PLAYER) ? controlledBy : null;
 }
 
 /**

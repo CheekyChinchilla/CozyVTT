@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { tokenCopyRequest, clampTokenPosition } from '../tokenCopy';
+import { tokenCopyRequest, clampTokenPosition, copyController } from '../tokenCopy';
 import type { Token } from '@/types';
-import { TokenLayer, TokenType, TokenDisposition } from '@/types';
+import { CampaignRole, TokenLayer, TokenType, TokenDisposition } from '@/types';
 
 /**
  * The bug this pins: moving a token to another map rebuilt it from a
@@ -76,5 +76,33 @@ describe('clampTokenPosition', () => {
 
   it('never goes negative, however small the map', () => {
     expect(clampTokenPosition({ x: 5, y: 5 }, { width: 4, height: 4 }, { width: 2, height: 2 })).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('copyController', () => {
+  const members = [
+    { userId: 'dm', role: CampaignRole.DM },
+    { userId: 'player', role: CampaignRole.PLAYER },
+    { userId: 'watcher', role: CampaignRole.SPECTATOR },
+  ];
+
+  it('keeps a controller who is still a player', () => {
+    expect(copyController('player', members)).toBe('player');
+  });
+
+  // controlledBy is never cleared when a member leaves or stops playing, and
+  // the server refuses a new token for anyone but a player, so copying the
+  // stale id made Duplicate fail on a token that moves and draws fine.
+  it.each([
+    ['who became a spectator', 'watcher'],
+    ['who became the DM', 'dm'],
+    ['who left the campaign', 'gone'],
+  ])('drops a controller %s', (_why, id) => {
+    expect(copyController(id, members)).toBeNull();
+  });
+
+  it('keeps nobody as nobody', () => {
+    expect(copyController(null, members)).toBeNull();
+    expect(copyController(undefined, members)).toBeNull();
   });
 });

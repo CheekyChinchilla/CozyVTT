@@ -25,7 +25,7 @@ import api from '@/services/api';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
-import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
+import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
@@ -64,7 +64,7 @@ interface TokenRowProps {
 }
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
-  const { currentMap } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
   const { socket } = useWebSocket();
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -87,6 +87,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         ...tokenCopyRequest(token, position),
         // A copy starts fresh and belongs to nobody's character; see MapCanvas.
         characterId: null,
+        controlledBy: copyController(token.controlledBy, campaign?.memberships),
         hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
