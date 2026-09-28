@@ -50,6 +50,16 @@ describe('isStrongPassword', () => {
     expect(isStrongPassword('SecurePass123')).toBe(false);
   });
 
+  // The server counts only the ASCII punctuation it lists as special. A
+  // character outside that list turned every checklist item green, and the
+  // server then refused the password.
+  it.each(['Password1234~', 'Password1234 ', 'Pässwort12345', 'Password1234`'])(
+    'rejects %j, whose only candidate for a special character the server does not count',
+    (password) => {
+      expect(isStrongPassword(password)).toBe(false);
+    }
+  );
+
   it('rejects passwords shorter than 12 characters', () => {
     expect(isStrongPassword('Short1A')).toBe(false);
     expect(isStrongPassword('Sh0rtPass!')).toBe(false);

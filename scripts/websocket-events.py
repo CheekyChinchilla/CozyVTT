@@ -49,7 +49,11 @@ CAVEAT = ('_Who may send it is read from the shared permission predicates each '
 def sources():
     seen = set()
     for pattern in HANDLERS:
-        for path in glob.glob(pattern, recursive=True):
+        # Sorted: glob returns files in the filesystem's order, and an event
+        # emitted from two files is listed under the first one read, so an
+        # unsorted walk gave a different table (and a failing --check) on a
+        # different machine.
+        for path in sorted(glob.glob(pattern, recursive=True)):
             normalised = path.replace('\\', '/')
             if '__tests__' in normalised or normalised in seen:
                 continue

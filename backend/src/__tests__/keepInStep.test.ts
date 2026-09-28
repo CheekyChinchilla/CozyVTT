@@ -18,6 +18,9 @@
  * end the load with the same statements, or a backup restored from the
  * command line brings back what the dashboard's restore removes.
  *
+ * The password rule's special characters, checked in the browser as you type
+ * and decided on the server.
+ *
  * The combat state. The server sends it and the client reads it, and each
  * package declares it; the first field added to it after the split already
  * disagreed (required on one side, optional on the other). The fields are
@@ -40,8 +43,18 @@ function nginxStampFor(template: string): string {
   return crypto.createHash('sha256').update(template.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
 
+/**
+ * The majors `pattern` finds in a file's instructions. Comment lines are left
+ * out: both Dockerfiles explain the pinned client in a comment that names it,
+ * and a check that read the comments would pass with the install line
+ * itself back on the unpinned name.
+ */
 function majors(rel: string, pattern: RegExp): number[] {
-  const found = [...read(rel).matchAll(pattern)].map((m) => Number(m[1]));
+  const instructions = read(rel)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+  const found = [...instructions.matchAll(pattern)].map((m) => Number(m[1]));
   if (found.length === 0) throw new Error(`${rel} no longer matches ${pattern}; update the pattern with the file`);
   return found;
 }
@@ -91,6 +104,21 @@ describe('backend/scripts/restore.sh', () => {
       }
       expect(lines).toContain(statement);
     }
+  });
+});
+
+describe('the special characters a password needs one of', () => {
+  // Written in both packages: the browser checks as you type, the server
+  // decides. The two used to differ, so a password the checklist passed was
+  // refused on submit.
+  const pattern = (rel: string) => {
+    const m = /export const SPECIAL_CHARACTER = (\/.+\/[a-z]*);/.exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares SPECIAL_CHARACTER; update this test with the file`);
+    return m[1];
+  };
+
+  it('are the same in the browser and on the server', () => {
+    expect(pattern('frontend/src/utils/validation.ts')).toBe(pattern('backend/src/utils/validation.ts'));
   });
 });
 
