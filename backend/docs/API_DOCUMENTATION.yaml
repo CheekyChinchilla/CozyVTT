@@ -37,19 +37,30 @@ info:
     - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches, chats and pings; keeps their own notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character)
 
     ## Rate Limiting
-    - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
-    - Credential endpoints (login, register, reset-password, MFA login verify):
-      5 **failed** requests per 15 minutes. Successful requests are not counted,
-      so getting your password right never moves you towards a lockout.
+    The HTTP limits are counted per client address as the backend sees it: the
+    last address in `X-Forwarded-For`, since the backend trusts one proxy. The
+    bundled nginx puts the visitor's own address there, taken from a tunnel or
+    proxy in front of it only when that connects from a private address. Behind
+    a proxy that does not pass the visitor's address on, every client shares one
+    allowance. Uploads and the WebSocket limits are counted per user.
+    - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
+    - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/disable`
+      and `/mfa/backup-codes`): one shared allowance of 5 **failed** requests per
+      15 minutes. Successful requests are not counted, so getting your password
+      right never moves you towards a lockout.
+    - `POST /api/auth/register`: 10 requests per hour, counted whether or not
+      they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
       or not they succeed. That endpoint answers identically for a known and an
       unknown address, so successes cannot be skipped without removing the limit
       on the mail it sends
-    - MFA setup verification: 5 attempts per 15 minutes
+    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
     - MFA login verification: 5 attempts per 15 minutes (separate limit)
     - Asset uploads and typed documents (`POST /api/assets/upload`, `POST /api/assets/documents`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
-    - Chat messages: 5 per minute (WebSocket)
+    - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
+      cooldown (off by default), which allows each member one message per 1 to
+      300 seconds, as the DM sets it
     - Dice rolls: 30 per minute (WebSocket)
     - Token movement: 60 per second (WebSocket, throttled)
 
@@ -6145,7 +6156,7 @@ paths:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read. A backup directory that cannot be read answers 500, not an empty list.
       security:
         - cookieAuth: []
       responses:
@@ -6172,6 +6183,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The backup directory could not be read (error `Backup Failed`; the message names the directory)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/admin/backups/{filename}/download:
     get:

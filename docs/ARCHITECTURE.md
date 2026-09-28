@@ -425,10 +425,10 @@ sequenceDiagram
     S->>DB: Verify argon2id hash
     DB-->>S: User record
     S->>DB: Create session record
-    S-->>C: Set-Cookie: session_id (httpOnly, secure, sameSite=lax)
+    S-->>C: Set-Cookie: cozyvtt.sid (httpOnly, sameSite=lax, Secure over HTTPS)
 
     Note over C,S: Subsequent requests
-    C->>S: GET /api/campaigns (Cookie: session_id)
+    C->>S: GET /api/campaigns (Cookie: cozyvtt.sid)
     S->>DB: Look up session
     DB-->>S: Session + user id
     S->>S: req.user = user
