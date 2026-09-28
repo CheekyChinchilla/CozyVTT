@@ -4205,7 +4205,8 @@ paths:
                   nullable: true
                   description: DM only.
                 hp:
-                  $ref: '#/components/schemas/TokenHp'
+                  allOf:
+                    - $ref: '#/components/schemas/TokenHp'
                   nullable: true
                   description: DM only.
                 showHpBar:
@@ -4400,10 +4401,10 @@ paths:
       description: |
         Replaces the map's entire wall list atomically. DM only.
 
-        None of the wall routes tells connected clients of the change. The web
-        client edits walls through the socket events (`wall:add`, `wall:remove`,
-        `wall:update`, `walls:replace`), which do; a wall changed here reaches a
-        client when it next fetches the map or sends `walls:request`.
+        Each wall route tells connected clients of the change with the event
+        the matching socket edit sends (`walls:replaced`, `wall:added`,
+        `wall:updated`, `wall:removed`): to every member for the map the
+        campaign is showing, and to the DM's connections for any other.
       operationId: replaceWalls
       security:
         - cookieAuth: []
@@ -4446,7 +4447,7 @@ paths:
       description: |
         Append a single wall segment. The server assigns an `id` if the body
         omits one. Maps are capped at 5000 wall segments. DM only. Connected
-        clients are not told (see `replaceWalls`).
+        clients are sent `wall:added` (see `replaceWalls`).
       operationId: addWall
       security:
         - cookieAuth: []
@@ -4498,7 +4499,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a wall segment
-      description: Remove a wall segment by id. DM only. Connected clients are not told (see `replaceWalls`).
+      description: Remove a wall segment by id. DM only. Connected clients are sent `wall:removed` (see `replaceWalls`).
       operationId: deleteWall
       security:
         - cookieAuth: []
@@ -4524,8 +4525,8 @@ paths:
       description: |
         Change the `type` of a single wall segment — most commonly used to
         toggle a door open/closed. Geometry (`x1/y1/x2/y2`) is immutable;
-        to move a wall, delete and re-add. DM only. Connected clients are not
-        told (see `replaceWalls`).
+        to move a wall, delete and re-add. DM only. Connected clients are sent
+        `wall:updated` (see `replaceWalls`).
       operationId: updateWallType
       security:
         - cookieAuth: []
@@ -7607,7 +7608,8 @@ components:
           nullable: true
           description: NPC attitude toward the party
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
           description: Hit points / health for this token
         showHpBar:
@@ -7726,7 +7728,8 @@ components:
           enum: [friendly, neutral, hostile]
           nullable: true
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
         showHpBar:
           type: boolean
@@ -7753,7 +7756,8 @@ components:
           type: integer
           nullable: true
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
         type:
           type: string

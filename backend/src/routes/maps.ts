@@ -1644,6 +1644,8 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
       data: { wallSegments: toJson(parsed.data) },
     });
 
+    // The same events the socket wall edits send, to those who may read the map.
+    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: updated.wallSegments });
     return res.status(200).json({ segments: updated.wallSegments });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
@@ -1678,6 +1680,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
       data: { wallSegments: toJson([...existing, parsed.data]) },
     });
 
+    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment: parsed.data });
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
   } catch (error) {
     logger.error('Error adding wall segment', { err: error });
@@ -1703,6 +1706,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
     }
 
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
+    await tellMapReaders(campaignId, id, 'wall:removed', { mapId: id, segmentId: sid });
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
     logger.error('Error deleting wall segment', { err: error });
@@ -1736,6 +1740,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     existing[segIndex] = { ...existing[segIndex], type: req.body.type };
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
+    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
