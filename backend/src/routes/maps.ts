@@ -8,8 +8,8 @@ import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
-import { normalizeAssetUrl } from '../utils/asset-urls';
-import { canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
+import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
@@ -480,13 +480,15 @@ router.get(
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
       }
 
-      // Resolve asset file path
-      const assetId = path.basename(map.imageUrl);
-      const asset = await prisma.asset.findUnique({
-        where: { id: assetId },
-        select: { filePath: true },
-      });
-      if (!asset) {
+      // Resolve asset file path. The file goes into the download, so the
+      // caller must be able to read it, and the address is read the way the
+      // reference check reads it: a map could otherwise name another user's
+      // private file and hand it over here.
+      const assetId = extractAssetId(map.imageUrl);
+      const asset = assetId
+        ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
+        : null;
+      if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
       }
 

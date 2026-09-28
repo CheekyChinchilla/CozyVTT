@@ -2074,7 +2074,11 @@ router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, 
 
     logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
 
-    const result = await exportCampaign(campaignId, { includeAudio, includeTokens });
+    const result = await exportCampaign(
+      campaignId,
+      { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
+      { includeAudio, includeTokens }
+    );
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);

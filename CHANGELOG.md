@@ -209,6 +209,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **Exporting a campaign, or a map as a UVTT file, no longer hands over files the exporter cannot open.** A campaign's DM could give a template, token or map a picture address the image check did not recognise as naming a file (a document's address, or one with extra parts), and the exports, which read addresses their own way, then put another user's private upload into the download. Each export now includes only files the person exporting may open, and a picture address on this server has to be exactly a file's own address, or it is refused. That also stops a picture address pointing at another page of the app, which made every viewer's browser request that page.
+
 - **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did. When it closes up a folder that already existed, the backend's log says so and gives the old permissions, since another account that copied backups from it will no longer be able to.
 
 - **Players are no longer told about combatants on a map the table is not showing.** A creature added to the initiative order from a map you had prepared but not switched to, or moved there mid-fight, still appeared in every player's tracker with its name and picture, and its initiative roll was announced to them. Players now see, and hear the rolls of, only the combatants on the map the campaign is showing; the DM sees them all.

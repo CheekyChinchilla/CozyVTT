@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility } from '../utils/spirit-layer';
-import { extractAssetId } from '../utils/asset-urls';
+import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
 
 /**
  * Permission Verification Helpers
@@ -716,6 +716,10 @@ export async function canReferenceAsset(
 ): Promise<boolean> {
   if (!address) return true;
   if (stored !== undefined && address === stored) return true;
+  // One reading of an address for every reader: an address on this server
+  // that is not an asset's exact address was accepted here as naming no
+  // asset, and the exports, reading it their own way, found one in it.
+  if (isSameOriginPath(address) && !isExactAssetAddress(address)) return false;
   const assetId = extractAssetId(address);
   if (!assetId) return true;
   const asset = await prisma.asset.findUnique({

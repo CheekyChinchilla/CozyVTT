@@ -290,7 +290,12 @@ stored even if it can no longer be read, and an address naming an asset that
 does not exist is accepted, since it grants nothing. The check never counts a
 platform admin's right to read any file: a stored reference shows the asset
 to the whole table, so an admin who is a campaign's DM may reference only what
-they could read as that DM. A map's use counts
+they could read as that DM. An address on this server must be exactly an
+asset's own (`/api/assets/<kind>/<id>`): any other same-origin path is
+refused, since every viewer's browser would request it with their own
+session, and because an address the check read as naming nothing was read
+differently by the exports. The campaign export and a map's UVTT export
+include only the asset files their caller may read. A map's use counts
 for a player only while it is the campaign's current map (`canReadMap`): the
 artwork and token art of a prepared map stay the DM's until they switch to it.
 The list and detail
