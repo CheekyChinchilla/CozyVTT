@@ -215,8 +215,9 @@ once even when two requests carry it at the same moment.
 
 ### `DELETE /api/auth/account`
 
-Permanently delete the authenticated user's account and all associated data. Any
-open game connection of the account is dropped. The instance's only admin is
+Permanently delete the authenticated user's account and all associated data.
+Every sign-in of the account ends, on every device, and any open game connection
+of the account is dropped. The instance's only admin is
 refused with `409` until another user has been promoted to admin.
 
 **Request:**

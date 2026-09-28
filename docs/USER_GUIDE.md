@@ -697,7 +697,7 @@ Email addresses cannot be changed by users directly. Contact your platform admin
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent and will remove all your campaigns, characters, and messages.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent and will remove all your campaigns, characters, and messages. Every other browser or device signed in to the account is signed out at the same moment.
 
 > **Warning:** If you're a DM running active campaigns, deleting your account will also remove those campaigns for all players. Make sure to hand off or wrap up campaigns before deleting.
 

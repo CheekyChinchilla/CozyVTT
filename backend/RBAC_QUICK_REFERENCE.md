@@ -410,8 +410,9 @@ session. Sessions roll on every response and the client sends a keepalive, so
 one that stays in use does not expire on its own.
 
 `PUT /api/users/:id` therefore calls `destroyUserLoginSessions(id)` when the role
-actually changes, and `DELETE /api/users/:id` calls it too, because the session
-outlives the row it points at and nothing checks the user still exists. The same
+actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
+it too, because the session outlives the row it points at and nothing checks the
+user still exists. The same
 helper ends a user's other sessions on a self-service password change and on
 turning MFA on or off, with `exceptSessionId` keeping the device making the
 request signed in.
@@ -525,7 +526,7 @@ The routes below end a sign-in's live sockets along with it, through `endLiveSoc
 | `POST /api/auth/reset-password` (emailed link) | every socket of that user; this route now also destroys their login sessions |
 | `POST /api/auth/change-password`, `POST /api/auth/mfa/verify` (MFA turned on), `POST /api/auth/mfa/disable` | every socket but those of the sign-in making the change |
 | `POST /api/auth/logout` | the sockets of that sign-in only |
-| `DELETE /api/auth/account` | every socket of that user |
+| `DELETE /api/auth/account` | every socket of that user; its login sessions on every device end too |
 | `POST /api/admin/backups/restore` | every socket on the instance, and the in-memory combat state is dropped |
 
 Each socket is sent `error` with the reason, then disconnected. A socket records the login session it was opened under (`sessionId`, set at the handshake) so a sign-in can be singled out.

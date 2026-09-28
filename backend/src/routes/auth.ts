@@ -643,6 +643,9 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
 
     // Delete the user (cascades to memberships, characters, messages, etc.)
     await prisma.user.delete({ where: { id: userId } });
+    // The account's other sign-ins outlive the row, and the guards read the
+    // session, so a deleted admin would keep the role on another device.
+    await destroyUserLoginSessions(userId);
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, campaignIds, 'member.left');
 

@@ -215,6 +215,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **Deleting your own account signs it out on every device.** Deleting an account from the profile page ended only the sign-in it was done from, so the account's other browsers and devices stayed signed in after it was gone; for an admin, that meant keeping admin powers on another device. Every sign-in of the account now ends with it, as it already did when an administrator deleted someone.
+
 - **An instance can no longer lose its last admin.** The only admin could delete their own account from the profile page, or remove their own admin role through the API, and nothing could then give the role back: setup does not run again, and the first account only becomes admin on an empty instance. If that was the last account on the instance, the next person to register became its admin, even with registration closed. Both are now refused while you are the only admin, with a message asking you to promote another user to admin first. With two or more admins, either can still step down or leave.
 
 - **A backup code can only be used once, even by two sign-ins at the same moment.** Two sign-ins using the same backup code together could both get in, and two using different codes together could leave one of them working after it had been used, with the count of codes left shown wrongly. Each code is now removed the moment it is accepted, and a sign-in that finds it already gone is refused.

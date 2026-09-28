@@ -818,7 +818,7 @@ paths:
               password: hunter2-correct-horse-battery
       responses:
         '200':
-          description: Account deleted; session destroyed.
+          description: Account deleted; every login session of the account ended, on every device.
           content:
             application/json:
               schema:
