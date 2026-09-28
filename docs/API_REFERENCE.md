@@ -34,9 +34,9 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 ### Session Cookie
 
-- **Cookie name:** `cozyvtt.sid` (configured by `SESSION_SECRET`)
-- **Flags:** `httpOnly`, `secure` (in production), `sameSite: lax`
-- **Duration:** 24 hours standard; 30 days with "remember me"
+- **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
+- **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days)
 
 ### Error Responses for Unauthenticated Requests
 

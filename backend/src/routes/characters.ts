@@ -14,6 +14,7 @@ import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
 import { withMapsLocked } from '../utils/mapTokens';
+import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
 const router = Router();
 
@@ -92,6 +93,12 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
+      // TODO(rules): a gameSystem sent with the campaignId is not checked
+      // against the campaign's, so the API creates a Pathfinder 2e character
+      // straight into a D&D 5e campaign, or a typed one into a Flexible
+      // campaign, which assigning and accepting an invitation both refuse.
+      // It should answer 400 unless systemsCompatible(gameSystem, the
+      // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
         // Prisma's GameSystem is a string-literal union; cast to the local enum
         // type finalGameSystem was inferred from (identical string values).
@@ -922,11 +929,8 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     // typed characters must match the campaign's game system exactly.
     const charSystem = character.gameSystem;
     const campSystem = campaign.gameSystem;
-    const systemsCompatible =
-      (!charSystem && !campSystem) ||
-      (charSystem && campSystem && charSystem === campSystem);
 
-    if (!systemsCompatible) {
+    if (!systemsCompatible(charSystem, campSystem)) {
       const charLabel = charSystem ?? 'flexible';
       const campLabel = campSystem ?? 'flexible';
       return res.status(400).json({

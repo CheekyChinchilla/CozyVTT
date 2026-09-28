@@ -38,6 +38,7 @@ import userRoutes from '../../routes/users';
 import mapRoutes from '../../routes/maps';
 import configRoutes from '../../routes/config';
 import adminRoutes from '../../routes/admin';
+import invitationRoutes from '../../routes/invitations';
 
 export function createTestApp(): express.Express {
   const app = express();
@@ -76,6 +77,7 @@ export function createTestApp(): express.Express {
   app.use('/api/character-templates', characterTemplateRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/assets', assetRoutes);
+  app.use('/api/invitations', invitationRoutes);
 
   // Catch-all 404
   app.use('*', (_req, res) => {

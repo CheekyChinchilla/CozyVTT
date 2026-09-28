@@ -95,9 +95,11 @@ describe('the settings the backend reads', () => {
     expect(limits[type]).toBe(7 * 1024 * 1024);
   });
 
+  // Found by the scan alone: the upload limits above are added by name, so
+  // listing them here would check the helper against itself.
   it('include those read through an injected environment object', () => {
     const backend = keysTheBackendReads();
-    for (const key of ['NGINX_MAX_BODY_SIZE', 'MAX_MAP_SIZE_MB', 'MAX_TOKEN_SIZE_MB', 'MAX_AUDIO_SIZE_MB', 'MAX_AVATAR_SIZE_MB', 'MAX_DOCUMENT_SIZE_MB']) {
+    for (const key of ['NGINX_MAX_BODY_SIZE', 'BACKUP_DIR']) {
       expect(backend).toContain(key);
     }
   });

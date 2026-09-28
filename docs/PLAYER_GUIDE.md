@@ -56,7 +56,7 @@ Your DM invites you by picking your account from a list of the people on your in
 1. **Log in** to CozyVTT
 2. On your **Dashboard**, you'll see a **Pending Invitations** banner at the top
 3. The banner shows the campaign name and your DM's name
-4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already)
+4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already). Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
 5. Or click **Decline** if it's not for you
 
 *Screenshot pending — Pending invitation banner.*

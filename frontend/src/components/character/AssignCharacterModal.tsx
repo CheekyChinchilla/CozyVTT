@@ -10,6 +10,7 @@ import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface AssignCharacterModalProps {
   isOpen: boolean;
@@ -85,11 +86,7 @@ export default function AssignCharacterModal({
   // Filter compatible campaigns — game systems must match exactly:
   // flexible character → only flexible (null) campaigns
   // typed character → only campaigns with the same game system
-  const compatibleCampaigns = campaigns.filter((campaign) => {
-    if (!character.gameSystem && !campaign.gameSystem) return true;  // both flexible
-    if (!character.gameSystem || !campaign.gameSystem) return false;  // one flexible, one not
-    return campaign.gameSystem === character.gameSystem;              // both typed, must match
-  });
+  const compatibleCampaigns = campaigns.filter((campaign) => systemsCompatible(character.gameSystem, campaign.gameSystem));
 
   // Check if selected campaign is compatible
   const selectedCampaign = compatibleCampaigns.find((c) => c.id === selectedCampaignId);
@@ -244,7 +241,7 @@ export default function AssignCharacterModal({
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-3">
                     <p className="text-xs text-stone-gray">
                       <strong className="text-brand-ink">Note:</strong> Only showing campaigns
-                      compatible with {character.gameSystem} or flexible campaigns.
+                      that use {character.gameSystem}.
                     </p>
                   </div>
                 )}
