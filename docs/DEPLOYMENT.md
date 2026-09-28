@@ -65,6 +65,8 @@ CORS_ORIGIN=https://your-domain.com
 NODE_ENV=production
 ```
 
+`CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
+
 ### Changing the database password
 
 The database image reads `POSTGRES_PASSWORD` only when it creates an empty database, so on an instance that has already run, changing `DATABASE_PASSWORD` in `.env` on its own locks the backend out: the database keeps the old password and the backend connects with the new one. This is what happens if you upgrade with the placeholder still in place and the backend stops with `DATABASE_URL uses the placeholder password from .env.example` in `docker compose logs backend`.

@@ -28,6 +28,13 @@ info:
     All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
     Login via `/api/auth/login` to obtain a session cookie.
 
+    A request that changes something (POST, PUT, PATCH or DELETE) and that a
+    browser marks as sent from another site (`Sec-Fetch-Site` of `same-site`
+    or `cross-site`, which includes another port of the same host) is refused
+    with 403 unless its `Origin` is exactly `CORS_ORIGIN`. A client that is not
+    a browser sends no such header and is unaffected. Request bodies are JSON;
+    a form-encoded body is not read.
+
     ## MFA Flow
     If a user has MFA enabled, `/api/auth/login` returns `{ mfaRequired: true }` instead of a full session.
     The client must then call `/api/auth/mfa/verify-login` with a TOTP code or backup code to complete authentication.

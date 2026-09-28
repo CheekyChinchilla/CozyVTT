@@ -23,6 +23,7 @@
 import express from 'express';
 import session from 'express-session';
 import { bodyParsers } from '../../middleware/bodyParsers';
+import { originCheck } from '../../middleware/originCheck';
 import { errorHandler } from '../../middleware/errorHandler';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
@@ -42,6 +43,7 @@ export function createTestApp(): express.Express {
   const app = express();
 
   app.use(bodyParsers());
+  app.use(originCheck);
 
   // Memory store — no PostgreSQL needed for tests
   app.use(

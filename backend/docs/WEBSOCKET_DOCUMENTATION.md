@@ -144,6 +144,11 @@ const socket = io('http://localhost:4000', {
 });
 ```
 
+A handshake a browser marks as made from another site (`Sec-Fetch-Site` of
+`same-site` or `cross-site`) is refused unless its `Origin` is exactly
+`CORS_ORIGIN`, as the HTTP API refuses such a request. A program that is not
+a browser sends no such header and connects as above.
+
 ---
 
 ## Authentication

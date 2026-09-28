@@ -25,6 +25,7 @@ import request from 'supertest';
 import { io as ioc, Socket as ClientSocket } from 'socket.io-client';
 import { registerEventHandlers } from '../../websocket/events';
 import { setSocketInstance } from '../../websocket/utils';
+import { socketAllowRequest } from '../../middleware/originCheck';
 
 export interface WsTestServer {
   httpServer: HTTPServer;
@@ -66,6 +67,7 @@ export async function createWsTestServer(): Promise<WsTestServer> {
   const httpServer = createServer(app);
   const io = new IOServer(httpServer, {
     transports: ['websocket', 'polling'],
+    allowRequest: socketAllowRequest,
   });
 
   // Same session-sharing wiring as production (websocket/index.ts), casts

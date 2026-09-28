@@ -215,6 +215,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **A web page on another address can no longer act as you.** Your browser sends CozyVTT's sign-in along with requests from any page on the same site, which includes another port on the same server and another subdomain of the same domain. Such a page could post to CozyVTT as whoever was signed in, an administrator restoring a backup or inviting a new admin included, or open a live game connection as the DM. A browser request from another address is now refused unless it comes from the address `CORS_ORIGIN` names. Nothing changes for the app itself, for scripts, or for an install that serves its frontend from its own address with `CORS_ORIGIN` set to it.
+
 - **Someone who leaves a campaign can no longer delete or move the campaign's assets they uploaded.** An uploader kept the right to delete a campaign's map art or token art, or move it back into their own library, after leaving the campaign or being removed from it, taking it off every map that used it. That right now lasts only while they are a member; the DM can still delete or move it as before.
 
 - **A player removed from a campaign takes their characters with them.** Removing a member left each of their characters in the campaign, so the other players could still open the sheets, the DM could still edit them, and every change the removed player made was still sent to the table they had left. Their characters now leave the campaign with them and stay theirs. A character left behind this way by an earlier removal is treated the same: only its owner can open it.
