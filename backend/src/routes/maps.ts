@@ -1137,6 +1137,11 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
     });
 
+    // A player's spirit-layer token placed on the map the table is on moves
+    // them to the spirit plane, which changes what they are sent of the
+    // order. Skipped while nothing is in it.
+    await resendInitiative(campaignId);
+
     return res.status(201).json({
       message: 'Token added successfully',
       token: newToken,
@@ -1562,8 +1567,12 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     });
 
     // The entry goes with the token, and the order is sent again without it.
+    // Any other token's deletion can move its controller between planes (a
+    // player's spirit-layer token), so the order is sent again then too.
     if (removeCombatants(campaignId, (c) => c.tokenId === tokenId)) {
       await resendInitiative(campaignId, { evenWhenEmpty: true });
+    } else {
+      await resendInitiative(campaignId);
     }
 
     return res.status(200).json({
