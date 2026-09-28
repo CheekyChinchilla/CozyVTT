@@ -19,10 +19,11 @@ vi.mock('@/services/api', () => ({
   default: { getMap: (...a: unknown[]) => getMap(...a), pingSession: vi.fn() },
   api: { getMap: (...a: unknown[]) => getMap(...a), pingSession: vi.fn() },
 }));
+const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
-    on: vi.fn(), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null), startHeartbeat: vi.fn(),
+    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null), startHeartbeat: vi.fn(),
   },
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
@@ -43,6 +44,7 @@ beforeEach(() => {
   latest = null;
   getCampaign.mockReset();
   getMap.mockReset();
+  socketOn.mockReset();
   getMap.mockImplementation((_c: string, mapId: string) => Promise.resolve({ map: { id: mapId, tokens: [] }, spiritVisible: false }));
 });
 
@@ -67,3 +69,28 @@ it('picks up the session state, the role and the map the table is now on', async
   expect(latest!.currentMap?.id).toBe('m2');
   expect(getMap).toHaveBeenLastCalledWith('c1', 'm2');
 });
+
+// Someone joining the campaign is announced as roster.updated. The page's
+// member list, which Duplicate and every role check read, followed only a
+// full load, so a token duplicated after a player joined lost its controller.
+it('refreshes the member list when the roster changes', async () => {
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'DM'));
+  render(
+    <MemoryRouter initialEntries={['/campaigns/c1']}>
+      <Routes>
+        <Route path="/campaigns/:id" element={<CampaignProvider><Probe /></CampaignProvider>} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(latest?.campaign?.id).toBe('c1'));
+  const onRoster = socketOn.mock.calls.filter(([event]) => event === 'roster.updated').pop()?.[1] as ((d: unknown) => void) | undefined;
+  expect(onRoster).toBeDefined();
+
+  getCampaign.mockResolvedValueOnce({
+    ...campaignAs('ACTIVE', 'm1', 'DM'),
+    memberships: [{ userId: 'me', role: 'DM' }, { userId: 'newcomer', role: 'PLAYER' }],
+  });
+  await act(async () => { onRoster!({ action: 'member.joined', campaignId: 'c1', userId: 'newcomer' }); });
+  await waitFor(() => expect(latest!.campaign?.memberships?.map((m) => m.userId)).toEqual(['me', 'newcomer']));
+});
+

@@ -98,7 +98,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Removing the last combatant ends the fight.** Removing the only combatant left with the tracker's Remove button, deleting its token, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared. Removing the combatant whose turn it is also passes the turn to the next one in the order, as **Next** does, where it used to jump to the top.
 
-- **Duplicate works on a token whose controller has left or stopped playing.** A token keeps the name of whoever controlled it after they leave the campaign, become a spectator or take over as DM, and duplicating it was refused because only a player can be given a token. The copy is now made with no controller in that case.
+- **Duplicate works on a token whose controller has left or stopped playing.** A token keeps the name of whoever controlled it after they leave the campaign, become a spectator or take over as DM, and duplicating it was refused because only a player can be given a token. The copy is now made with no controller in that case. The page also keeps its list of members current as people join or leave, so a token duplicated after a player joined keeps that player as its controller.
 
 - **Edit Token says when a change could not be saved.** A refused change, such as notes on a token from an earlier release that are longer than the 5,000 characters now allowed, stayed in the field as if saved and was gone the next time the editor opened. The editor now shows why the change was refused.
 
