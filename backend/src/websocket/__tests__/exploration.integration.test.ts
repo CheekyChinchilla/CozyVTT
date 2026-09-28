@@ -147,9 +147,13 @@ describe('exploration:reveal', () => {
 });
 
 describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
-  it('reaches a DM socket in the campaign as the player\'s memory grows', async () => {
+  it('reaches a DM socket previewing that player as the player\'s memory grows', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
     const dm = await server.connectAndAuth(dmCookie, campaignId);
+    // The preview asks for the player's memory by name when it starts.
+    const opened = waitForEvent<StateEvent & { userId: string | null }>(dm, 'exploration:state');
+    dm.emit('exploration:request', { mapId, userId: p1Id });
+    await opened;
     const seenByDm = waitForEvent<StateEvent & { userId: string | null }>(dm, 'exploration:state');
     const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [2, 3] });
@@ -157,6 +161,21 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     const got = await seenByDm;
     expect(got.userId).toBe(p1Id);
     expect(got.cells).toEqual([2, 3]);
+    p1.disconnect();
+    dm.disconnect();
+  });
+
+  // Each reveal carries the player's whole memory, a few times a second while
+  // they move. A DM who is not previewing that player throws it away, so it
+  // is not sent: before, every DM received every player's memory.
+  it("reaches no DM socket that is not previewing that player", async () => {
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const quiet = expectNoEvent(dm, 'exploration:state', 800);
+    const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [4] });
+    await echoed;
+    await quiet;
     p1.disconnect();
     dm.disconnect();
   });

@@ -236,10 +236,12 @@ export async function broadcastFogState(io: Server, campaignId: string, mapId: s
 }
 
 /**
- * Send a user's explored memory to everyone entitled to it: that user's own
- * sockets in the campaign, so a second tab stays in step, and every DM
- * socket, so a Player Preview follows the memory as it grows. Nobody else:
- * one player's memory is never another's to see.
+ * Send a user's explored memory to those who show it: that user's own
+ * sockets in the campaign, so a second tab stays in step, and the DM sockets
+ * whose Player Preview is on that user (previewingMemoryOf), so the preview
+ * follows the memory as it grows. Each send is the whole memory, a few times
+ * a second while a player moves, so a DM socket not previewing them is not
+ * sent it. Nobody else: one player's memory is never another's to see.
  */
 export async function broadcastExplorationState(
   io: Server,
@@ -251,7 +253,7 @@ export async function broadcastExplorationState(
   const sockets = await campaignSockets(io, campaignId);
   for (const s of sockets) {
     const member = s as unknown as AuthenticatedSocket;
-    if (member.userId === userId || member.role === 'DM') {
+    if (member.userId === userId || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
       s.emit('exploration:state', { mapId, userId, cells });
     }
   }
