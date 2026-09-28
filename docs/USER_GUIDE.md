@@ -37,7 +37,7 @@ Create the administrator account. This is the most powerful account on the platf
 
 - **Display Name** — What other users will see (2–50 characters)
 - **Email** — Your login email address
-- **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character
+- **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
 - A live password strength meter gives you instant feedback as you type
 
 *Screenshot pending — Admin account creation form with password strength indicator.*

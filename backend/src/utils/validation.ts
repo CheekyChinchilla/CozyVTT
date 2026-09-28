@@ -9,6 +9,13 @@ export interface PasswordValidationResult {
 }
 
 /**
+ * The characters a password must contain one of. The browser checks the same
+ * pattern as the password is typed (frontend/src/utils/validation.ts), and
+ * keepInStep.test.ts fails if the two differ.
+ */
+export const SPECIAL_CHARACTER = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
+
+/**
  * Validates password strength
  * Requirements:
  * - Minimum 12 characters (the number every page that asks for a password
@@ -39,7 +46,7 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
     errors.push('Password must contain at least one number');
   }
 
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (!SPECIAL_CHARACTER.test(password)) {
     errors.push('Password must contain at least one special character');
   }
 

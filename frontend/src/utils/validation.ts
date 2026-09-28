@@ -16,12 +16,20 @@ export function isValidEmail(email: string): boolean {
  * checklist asked for eight, so the pages disagreed with each other and
  * with the server.
  */
+/**
+ * The characters a password must contain one of: the server's list, which
+ * does not count a space, ~, ` or a letter outside A-Z. Written the same as
+ * in backend/src/utils/validation.ts, and keepInStep.test.ts there fails if
+ * the two differ.
+ */
+export const SPECIAL_CHARACTER = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
+
 export const PASSWORD_REQUIREMENTS: Array<{ test: (p: string) => boolean; label: string }> = [
   { test: (p) => p.length >= 12,         label: 'At least 12 characters' },
   { test: (p) => /[A-Z]/.test(p),        label: 'One uppercase letter' },
   { test: (p) => /[a-z]/.test(p),        label: 'One lowercase letter' },
   { test: (p) => /[0-9]/.test(p),        label: 'One number' },
-  { test: (p) => /[^A-Za-z0-9]/.test(p), label: 'One special character' },
+  { test: (p) => SPECIAL_CHARACTER.test(p), label: 'One special character, such as ! @ # $ %' },
 ];
 
 /** True when every rule in PASSWORD_REQUIREMENTS passes. */
@@ -47,7 +55,7 @@ export function getPasswordStrength(password: string): {
   if (/[A-Z]/.test(password)) score++;
   if (/[a-z]/.test(password)) score++;
   if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
+  if (SPECIAL_CHARACTER.test(password)) score++;
 
   if (score <= 2) return { score, label: 'Weak', color: 'red' };
   if (score <= 4) return { score, label: 'Fair', color: 'orange' };
