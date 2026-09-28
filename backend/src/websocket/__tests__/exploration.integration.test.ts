@@ -167,6 +167,30 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     dm.disconnect();
   });
 
+  // Switching the preview between players quickly can run past the request
+  // limit. The dropped request still names who the DM is now previewing, or
+  // the socket went on following the previous player and never heard the
+  // new one's memory grow.
+  it('follows the player a DM previews even when the request for them is over the limit', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const p2 = await server.connectAndAuth(p2Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const states: Array<StateEvent & { userId: string | null }> = [];
+    dm.on('exploration:state', (d: StateEvent & { userId: string | null }) => states.push(d));
+    for (let i = 0; i < 5; i++) dm.emit('exploration:request', { mapId, userId: p1Id });
+    dm.emit('exploration:request', { mapId, userId: p2Id });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const echoed = waitForEvent<StateEvent>(p2, 'exploration:state');
+    p2.emit('exploration:reveal', { mapId, cells: [4] });
+    await echoed;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(states.some((d) => d.userId === p2Id && d.cells.includes(4))).toBe(true);
+    p2.disconnect();
+    dm.disconnect();
+  });
+
   // Each reveal carries the player's whole memory, a few times a second while
   // they move. A DM who is not previewing that player throws it away, so it
   // is not sent: before, every DM received every player's memory.
