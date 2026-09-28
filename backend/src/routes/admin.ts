@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection } from '../utils/pgRestore';
+import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
@@ -1001,7 +1001,17 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     // dropped from the header. See utils/pgRestore.ts for why each matters.
     // A refused file has changed nothing, and no tool has run yet.
     const restorePath = path.join(tempDir, 'restore.sql');
-    const { skipped, refused } = await prepareDumpForRestore(sqlPath, restorePath);
+    let prepared: PreparedDump;
+    try {
+      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+    } catch (error) {
+      logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). If that folder is full, free some space or set TMPDIR to another folder. Nothing was changed.`,
+      });
+    }
+    const { skipped, refused } = prepared;
     if (refused !== null) {
       return res.status(400).json({
         error: 'Invalid Backup',

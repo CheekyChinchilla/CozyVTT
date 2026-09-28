@@ -16,9 +16,11 @@
  * data survives.
  */
 
+import nodeFs, { type ReadStream, type WriteStream } from 'fs';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { Readable, Writable } from 'stream';
 import {
   buildDumpArgs,
   buildRestoreArgs,
@@ -490,6 +492,30 @@ describe('prepareDumpForRestore', () => {
     const afterPreamble = out.subarray(out.indexOf(RESTORE_PREAMBLE[1]) + RESTORE_PREAMBLE[1].length + 1, out.length - trailer.length);
     expect(afterPreamble.equals(body)).toBe(true);
     expect(out.subarray(out.length - trailer.length).equals(trailer)).toBe(true);
+  });
+
+  it('rejects, instead of exiting the process, when a write fails while it waits for the dump', async () => {
+    // A full disk fails a write after the call has returned, as an 'error'
+    // event. Nothing listened for one while the loop waited on the next part
+    // of the dump, and a stream error nobody hears exits the backend in the
+    // middle of a restore, leaving the unpacked database in the temp folder.
+    const src = await write('database.sql', NEWER_CLIENT_DUMP);
+    const text = await fs.readFile(src, 'latin1');
+    const slowly = jest.spyOn(nodeFs, 'createReadStream').mockImplementation(() => Readable.from((async function* () {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      yield text;
+    })()) as unknown as ReadStream);
+    const full = jest.spyOn(nodeFs, 'createWriteStream').mockImplementation(() => new Writable({
+      write(_chunk, _encoding, callback) {
+        setImmediate(() => callback(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      },
+    }) as unknown as WriteStream);
+    try {
+      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'))).rejects.toThrow(/ENOSPC/);
+    } finally {
+      slowly.mockRestore();
+      full.mockRestore();
+    }
   });
 
   it('ends by emptying the login sessions an older backup carried, inside the same transaction', () => {

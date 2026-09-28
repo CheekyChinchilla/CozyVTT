@@ -87,7 +87,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **The restore script says what to do when there is no room to unpack a backup.** It unpacks the whole backup into `/tmp` before loading anything, and where `/tmp` is small a large backup failed with only a bare write error. It now says the folder is full, that nothing was changed, and how to point it somewhere with more room.
 
-- **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup or a restore's safety copy was being written, the write error had nothing listening for it and the backend process exited; the dashboard now reports the failed backup, or the failed restore, and the instance stays up.
+- **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup, a restore's safety copy or the working copy a restore loads was being written, the write error had nothing listening for it and the backend process exited, leaving the unpacked backup in the temporary folder. The dashboard now reports the failed backup, or the failed restore (saying the temporary folder could not take it and that nothing was changed), and the instance stays up.
 
 - **Two backups made in the same second no longer overwrite each other.** A backup was named by the second it was asked for, and a second one in that second, or the safety copy a restore takes first, silently replaced it: restoring a backup right after making it could leave you with only the smaller safety copy under that name. A name that is already taken now gets a `-2`, `-3` suffix, and every backup is kept.
 

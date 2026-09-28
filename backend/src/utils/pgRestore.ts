@@ -200,52 +200,64 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
 
   // The whole database: readable by the backend's user alone.
   const out = createWriteStream(outPath, { encoding: 'latin1', mode: 0o600 });
+  // A failed write (a full disk) arrives later as an 'error' event, often
+  // while the loop below waits on the dump. Unheard, it would exit the
+  // backend, so keep it and throw it from the next write.
+  const failure: { error?: Error } = {};
+  out.on('error', (err) => { failure.error = err; });
   const write = async (text: string) => {
+    if (failure.error) throw failure.error;
     if (!out.write(text, 'latin1')) await once(out, 'drain');
   };
-  await write(`\\restrict ${randomBytes(32).toString('hex')}\n`);
-  for (const line of RESTORE_PREAMBLE) await write(line + '\n');
-
   let inCopy = false;
   let endedWithNewline = true;
-  for await (const { raw, statement, newline } of linesOf(sqlPath)) {
-    let keep = true;
-    if (inCopy) {
-      if (statement === COPY_END) inCopy = false;
-    } else if (COPY_START.test(statement)) {
-      inCopy = true;
-    } else if (statement.startsWith('COPY ')) {
-      refused ??= `it runs a COPY that is not table data: ${excerpt(statement)}`;
-    } else if (RESTRICTED_MODE_LINE.test(statement)) {
-      keep = false;
-    } else if (statement.startsWith('\\')) {
-      refused ??= `it runs a psql command: ${excerpt(statement)}`;
-    } else if (TRANSACTION_CONTROL.test(statement)) {
-      refused ??= `it takes control of the transaction the restore runs in: ${excerpt(statement)}`;
-    } else if (statement === DUMP_COMPLETE) {
-      complete = true;
-    } else if (isSettingUnknownToServer(statement)) {
-      skipped.settings.push(statement);
-      keep = false;
-    } else if (isOwnershipStatement(statement)) {
-      skipped.ownership++;
-      keep = false;
-    } else if (isPrivilegeStatement(statement)) {
-      skipped.privileges++;
-      keep = false;
-    } else {
-      const table = CREATE_TABLE.exec(statement);
-      if (table) tables.add(table[1] ?? table[2]);
+  try {
+    await write(`\\restrict ${randomBytes(32).toString('hex')}\n`);
+    for (const line of RESTORE_PREAMBLE) await write(line + '\n');
+
+    for await (const { raw, statement, newline } of linesOf(sqlPath)) {
+      let keep = true;
+      if (inCopy) {
+        if (statement === COPY_END) inCopy = false;
+      } else if (COPY_START.test(statement)) {
+        inCopy = true;
+      } else if (statement.startsWith('COPY ')) {
+        refused ??= `it runs a COPY that is not table data: ${excerpt(statement)}`;
+      } else if (RESTRICTED_MODE_LINE.test(statement)) {
+        keep = false;
+      } else if (statement.startsWith('\\')) {
+        refused ??= `it runs a psql command: ${excerpt(statement)}`;
+      } else if (TRANSACTION_CONTROL.test(statement)) {
+        refused ??= `it takes control of the transaction the restore runs in: ${excerpt(statement)}`;
+      } else if (statement === DUMP_COMPLETE) {
+        complete = true;
+      } else if (isSettingUnknownToServer(statement)) {
+        skipped.settings.push(statement);
+        keep = false;
+      } else if (isOwnershipStatement(statement)) {
+        skipped.ownership++;
+        keep = false;
+      } else if (isPrivilegeStatement(statement)) {
+        skipped.privileges++;
+        keep = false;
+      } else {
+        const table = CREATE_TABLE.exec(statement);
+        if (table) tables.add(table[1] ?? table[2]);
+      }
+      if (keep) {
+        await write(newline ? raw + '\n' : raw);
+        endedWithNewline = newline;
+      }
     }
-    if (keep) {
-      await write(newline ? raw + '\n' : raw);
-      endedWithNewline = newline;
-    }
+    if (!endedWithNewline) await write('\n');
+    for (const line of RESTORE_TRAILER) await write(line + '\n');
+    if (failure.error) throw failure.error;
+    out.end();
+    await once(out, 'finish');
+  } catch (err) {
+    out.destroy();
+    throw err;
   }
-  if (!endedWithNewline) await write('\n');
-  for (const line of RESTORE_TRAILER) await write(line + '\n');
-  out.end();
-  await once(out, 'finish');
 
   if (refused === null) {
     const missing = REQUIRED_TABLES.filter((t) => !tables.has(t));

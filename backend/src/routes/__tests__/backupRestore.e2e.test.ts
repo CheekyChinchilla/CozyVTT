@@ -348,6 +348,29 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
+  it('says the temporary folder could not take the working copy, and that nothing changed, when writing it fails', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    // Only the file psql would load fails, as it does when the temporary
+    // folder fills while the unpacked backup is copied into it.
+    const original = fsSync.createWriteStream;
+    const failing = jest.spyOn(fsSync, 'createWriteStream').mockImplementation((file, options) => {
+      if (!String(file).endsWith('restore.sql')) return original(file, options);
+      const stream = original(path.join(SCRATCH, 'restore-probe'), options);
+      process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      return stream;
+    });
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/temporary folder/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
+    } finally {
+      failing.mockRestore();
+    }
+  });
+
   it('says the database was restored but the files were not when copying them fails', async () => {
     const marker = `restore-test-${Date.now()}`;
     // A file where the archive has a directory: the copy cannot replace one with the other.
