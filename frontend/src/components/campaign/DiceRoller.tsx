@@ -725,10 +725,10 @@ export default function DiceRoller() {
 
       {/* Input Area */}
       <div className="flex-shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-sm">
-        {/* Paused notice for players — rolls still work but are forced secret */}
+        {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
-            Session paused — rolls are automatically secret.
+            Session paused: your rolls stay on your own screen.
           </p>
         )}
         {isSpectator && (

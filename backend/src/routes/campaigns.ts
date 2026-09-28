@@ -2014,7 +2014,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
 
 /**
  * PUT /api/campaigns/:campaignId/resume
- * Resume the last session by restoring saved state
+ * Reopen the paused session. The snapshot taken at pause is not applied.
  * Requires: Campaign DM role
  * Resuming a Session
  */
