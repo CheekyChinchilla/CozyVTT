@@ -53,7 +53,7 @@ import type {
   RosterMember,
   CampaignMembership,
 } from '@/types';
-import { withKnownDisposition } from '@/utils/creatureDisposition';
+import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
 
 // ============================================
 // API Client Configuration
@@ -990,22 +990,22 @@ class ApiClient {
     params?: { search?: string; source?: string; cr?: string; gameSystem?: string; limit?: number; offset?: number }
   ): Promise<{ creatures: CreatureTemplate[]; total: number; limit: number; offset: number }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures`, { params });
-    return { ...response.data, creatures: response.data.creatures.map(withKnownDisposition) };
+    return { ...response.data, creatures: response.data.creatures.map(withKnownCreatureChoices) };
   }
 
   async getCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/${creatureId}`);
-    return withKnownDisposition(response.data);
+    return withKnownCreatureChoices(response.data);
   }
 
   async createCreature(campaignId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures`, data);
-    return withKnownDisposition(response.data);
+    return withKnownCreatureChoices(response.data);
   }
 
   async updateCreature(campaignId: string, creatureId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/creatures/${creatureId}`, data);
-    return withKnownDisposition(response.data);
+    return withKnownCreatureChoices(response.data);
   }
 
   async deleteCreature(campaignId: string, creatureId: string): Promise<{ message: string }> {
@@ -1025,12 +1025,12 @@ class ApiClient {
 
   async duplicateCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/${creatureId}/duplicate`);
-    return withKnownDisposition(response.data);
+    return withKnownCreatureChoices(response.data);
   }
 
   async listCreatureFavorites(campaignId: string): Promise<{ favoriteIds: string[]; creatures: CreatureTemplate[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/favorites/list`);
-    return { ...response.data, creatures: response.data.creatures.map(withKnownDisposition) };
+    return { ...response.data, creatures: response.data.creatures.map(withKnownCreatureChoices) };
   }
 
   async toggleCreatureFavorite(campaignId: string, creatureId: string): Promise<{ favorited: boolean }> {
@@ -1047,12 +1047,12 @@ class ApiClient {
     params?: { search?: string; type?: string; limit?: number; offset?: number }
   ): Promise<{ templates: TokenTemplate[]; total: number; limit: number; offset: number }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/token-templates`, { params });
-    return response.data;
+    return { ...response.data, templates: response.data.templates.map(withKnownTemplateChoices) };
   }
 
   async getTokenTemplate(campaignId: string, id: string): Promise<TokenTemplate> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/token-templates/${id}`);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   async createTokenTemplate(campaignId: string, data: Partial<TokenTemplate>): Promise<TokenTemplate> {
@@ -1062,7 +1062,7 @@ class ApiClient {
 
   async updateTokenTemplate(campaignId: string, id: string, data: Partial<TokenTemplate>): Promise<TokenTemplate> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/token-templates/${id}`, data);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   async deleteTokenTemplate(campaignId: string, id: string): Promise<{ message: string }> {
@@ -1077,7 +1077,7 @@ class ApiClient {
 
   async copyTokenTemplateToCampaign(campaignId: string, templateId: string, targetCampaignId: string): Promise<TokenTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/token-templates/${templateId}/copy-to/${targetCampaignId}`);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   // ============================================
