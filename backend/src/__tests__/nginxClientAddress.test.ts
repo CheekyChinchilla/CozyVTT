@@ -14,6 +14,10 @@
  * their own connection is not from a trusted address. These check the
  * configuration that decides it; docs/DEPLOYMENT.md describes it for
  * self-hosters.
+ *
+ * Also here, because it is the same file's promise about who reaches the
+ * backend: the backup restore upload streams to the backend, which refuses
+ * a non-admin before nginx has taken the body.
  */
 
 import fs from 'fs';
@@ -40,6 +44,20 @@ const https = conf
 const values = (lines: string[], directive: string) =>
   lines.filter((line) => line.startsWith(`${directive} `)).map((line) => line.slice(directive.length).replace(/;$/, '').trim());
 
+/** Each location that proxies, with the directives inside it. */
+function proxyingLocations(lines: string[]): { name: string; directives: string[] }[] {
+  const found: { name: string; directives: string[] }[] = [];
+  let current: { name: string; directives: string[] } | null = null;
+  for (const line of lines) {
+    if (line.startsWith('location ')) current = { name: line, directives: [] };
+    else if (current && line === '}') {
+      if (current.directives.some((d) => d.startsWith('proxy_pass '))) found.push(current);
+      current = null;
+    } else if (current) current.directives.push(line.replace(/\s+/g, ' '));
+  }
+  return found;
+}
+
 describe('the bundled nginx configuration', () => {
   it('believes X-Forwarded-For only from loopback and private addresses', () => {
     // The trusted ranges, exactly: one more (a public range, or 0.0.0.0/0)
@@ -63,29 +81,32 @@ describe('the bundled nginx configuration', () => {
     ['HTTP', live],
     ['commented HTTPS', https],
   ])('hands the backend only the resolved address, in every %s location that proxies', (_name, lines) => {
-    // Each proxy_pass location, with the headers it sets.
-    const locations: { name: string; forwardedFor: string[] }[] = [];
-    let current: { name: string; forwardedFor: string[]; proxies: boolean } | null = null;
-    for (const line of lines) {
-      if (line.startsWith('location ')) current = { name: line, forwardedFor: [], proxies: false };
-      else if (current && line.startsWith('proxy_pass ')) current.proxies = true;
-      else if (current && /^proxy_set_header\s+X-Forwarded-For\s/.test(line)) {
-        current.forwardedFor.push(line.replace(/^proxy_set_header\s+X-Forwarded-For\s+/, '').replace(/;$/, ''));
-      } else if (current && line === '}') {
-        if (current.proxies) locations.push({ name: current.name, forwardedFor: current.forwardedFor });
-        current = null;
-      }
-    }
-    expect(locations.length).toBeGreaterThanOrEqual(5);
+    const located = proxyingLocations(lines);
+    expect(located.length).toBeGreaterThanOrEqual(5);
     // /health in the HTTPS block sets no X-Forwarded-For; it is outside /api
     // and nothing there counts per address. Every other location must hand
     // over $remote_addr, the visitor as resolved above: an appended chain
     // would put the proxy's address last again.
-    const wrong = locations
+    const wrong = located
+      .map((l) => ({ name: l.name, forwardedFor: values(l.directives, 'proxy_set_header').filter((v) => /^X-Forwarded-For\s/.test(v)) }))
       .filter((l) => !(l.name === 'location = /health {' && l.forwardedFor.length === 0))
-      .filter((l) => l.forwardedFor.length !== 1 || l.forwardedFor[0] !== '$remote_addr')
+      .filter((l) => l.forwardedFor.length !== 1 || !/^X-Forwarded-For\s+\$remote_addr$/.test(l.forwardedFor[0]))
       .map((l) => `${l.name} ${JSON.stringify(l.forwardedFor)}`);
     expect(wrong).toEqual([]);
+  });
+
+  // The restore path accepts a whole instance backup, up to 4 GB. Buffered,
+  // nginx takes all of it onto its own disk before the backend sees the
+  // request, from anyone; streamed, the backend refuses a non-admin before
+  // reading the body.
+  it.each([
+    ['HTTP', live],
+    ['commented HTTPS', https],
+  ])('streams the backup restore upload to the backend in the %s block', (_name, lines) => {
+    const restore = proxyingLocations(lines).filter((l) => l.name === 'location /api/admin/backups/restore {');
+    expect(restore).toHaveLength(1);
+    expect(values(restore[0].directives, 'proxy_request_buffering')).toEqual(['off']);
+    expect(values(restore[0].directives, 'client_max_body_size')).toEqual(['4096M']);
   });
 
   it('is paired with a backend that trusts exactly one proxy, this one', () => {

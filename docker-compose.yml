@@ -162,7 +162,7 @@ services:
       # `docker compose up -d --build` leaves a running container alone unless
       # its definition changed, so without a change here an upgrade keeps
       # serving the previous config.
-      NGINX_CONF_STAMP: "73ffa6f1b2e0"
+      NGINX_CONF_STAMP: "507e7aa210aa"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
