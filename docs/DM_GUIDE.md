@@ -130,7 +130,7 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 2. Click **Upload Asset**
 3. Choose your image file (JPEG, PNG, and WebP work great)
 4. Set the type to **Map**
-5. Set the scope to **Campaign** (to keep it associated with this campaign) or **Personal**
+5. Set the scope to **Campaign** (shared with everyone in that campaign, who can browse it in the asset library straight away) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps
 7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern")
 8. Click **Upload**
@@ -160,7 +160,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its artwork, walls, lights and tokens stay yours alone while you prepare it
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map
 - **Keep backups** — Export important maps so you can recover them if needed
 
 ---
@@ -695,7 +695,7 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 ### Starting the Initiative Tracker
 
-The **Initiative** tab in the right sidebar is always there, for you and your players. Add the combatants (below), roll or set their initiative, then click **Start Combat**: round one begins with the first combatant in the order. Players see each combatant in their own tracker as you add it, apart from creatures you have hidden.
+The **Initiative** tab in the right sidebar is always there, for you and your players. Add the combatants (below), roll or set their initiative, then click **Start Combat**: round one begins with the first combatant in the order. Players see each combatant in their own tracker as you add it, apart from creatures you have hidden, ones on a map you have not switched to, and ones on the other plane from the player (see [The Spirit Layer](#the-spirit-layer)).
 
 *Screenshot pending — Initiative tracker with active combat.*
 
@@ -706,7 +706,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 - Click **Add Combatant** in the Initiative tab and pick a token from the list.
 - Right-click a token on the map and choose **Add to Initiative**.
 
-Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on or they control the token (a character's token carries no HP of its own, so a player's own hit points stay on the sheet and roster card), and never sees a hidden creature listed at all, nor one standing on a map you have not switched to, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A creature that is merely out of a player's sight, in the dark or under fog, is still listed, so hide a token to keep it out of the order. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
+Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on or they control the token (a character's token carries no HP of its own, so a player's own hit points stay on the sheet and roster card), and never sees a hidden creature listed at all, nor one standing on a map you have not switched to, nor one on the other plane from them, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A creature that is merely out of a player's sight, in the dark or under fog, is still listed, so hide a token to keep it out of the order. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
 **Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel.
 

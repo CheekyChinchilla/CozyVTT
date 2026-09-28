@@ -2727,7 +2727,14 @@ paths:
       tags:
         - Sessions
       summary: Resume last session
-      description: 'Resume the most recently paused session (DM only). The table is left exactly as it is: everything is stored as it is played, and the snapshot taken at pause is a record kept with the session, never written back.'
+      description: >
+        Reopen the campaign's most recently started session (DM only), whether
+        it was paused or ended: its end time is cleared, the campaign is set
+        ACTIVE, and `session.resumed` is broadcast. The campaign's current
+        status is not checked, so a call while a session is running succeeds
+        too and posts another "resumed" message. The table is left exactly
+        as it is: everything is stored as it is played, and the snapshot taken
+        at pause is a record kept with the session, never written back.
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -2744,15 +2751,20 @@ paths:
                   message:
                     type: string
                   session:
-                    $ref: '#/components/schemas/Session'
-        '400':
-          description: No ended session to resume
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      sessionNumber:
+                        type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign has never had a session
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '403':
-          $ref: '#/components/responses/Forbidden'
 
   # ============================================
   # CHARACTERS
@@ -6487,7 +6499,7 @@ paths:
 #
 # session.resumed:
 #   payload: { sessionId: string, sessionNumber: number, startedAt: string }
-#   description: Session resumed (state restored from saved snapshot).
+#   description: Session resumed. Nothing is restored: the table stays as it is.
 #
 # character.hp.updated:
 #   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
