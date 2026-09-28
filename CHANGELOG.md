@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A Call of Cthulhu possession keeps notes that contain a dash.** The possessions box reads each line as "Item - notes", and cut a note like "sharp - old" short at its own dash as soon as anything in the box was edited. Only the first " - " on a line now separates the item from its notes.
+
 - **A D&D 5e character with no spellcasting details can be saved.** A character created through the API, or imported, without them could not be saved from the editor at all; the built-in templates always include them. It now saves, with every spell slot level empty.
 
 - **Clearing a text box no longer stops a sheet saving.** Emptying **Background** or **Alignment** on a D&D 5e or Pathfinder 2e sheet, **Deity** or an innate spell's frequency on a Pathfinder 2e sheet, or **Sex**, **Residence**, **Birthplace** or a weapon's skill on a Call of Cthulhu sheet made the server refuse the whole save. An empty box is now saved as empty.

@@ -1032,9 +1032,12 @@ value={formData.wealth?.cash}
           }
           onChange={(e) => {
             const lines = e.target.value.split('\n').filter(line => line.trim());
+            // Split at the first " - " only: the notes may hold one too.
             const possessions = lines.map(line => {
-              const parts = line.split(' - ');
-              return { name: parts[0], notes: parts[1] || '' };
+              const at = line.indexOf(' - ');
+              return at > 0
+                ? { name: line.slice(0, at), notes: line.slice(at + 3) }
+                : { name: line, notes: '' };
             });
             setFormData({ ...formData, possessions });
           }}
