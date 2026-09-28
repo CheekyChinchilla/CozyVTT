@@ -55,7 +55,9 @@ export interface MapData {
  * - Players see it when the DM has globally enabled it (campaign.spiritLayerEnabled), OR
  *   when the player's own token (identified by controlledBy) is currently on the spirit
  *   layer in the campaign's current map — i.e. they have personally crossed over.
- * - Spectators follow the same rules as players
+ * - Spectators see it when the DM has enabled it for everyone, and never by
+ *   crossing over: a token that still names them from when they were a
+ *   player is nobody's (viewerIdFor), here as everywhere else
  *
  * @param campaignId - The campaign ID
  * @param userId - The user ID to check visibility for
