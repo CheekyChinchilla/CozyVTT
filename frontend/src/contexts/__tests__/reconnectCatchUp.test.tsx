@@ -94,3 +94,37 @@ it('refreshes the member list when the roster changes', async () => {
   await waitFor(() => expect(latest!.campaign?.memberships?.map((m) => m.userId)).toEqual(['me', 'newcomer']));
 });
 
+
+// A catch-up still waiting on the server when the page moves to another
+// campaign wrote the first campaign's map, tokens and session over the new
+// one's when its answers arrived.
+it('writes nothing once the page has moved to another campaign', async () => {
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'PLAYER'));
+  render(
+    <MemoryRouter initialEntries={['/campaigns/c1']}>
+      <Routes>
+        <Route path="/campaigns/:id" element={<CampaignProvider><Probe /></CampaignProvider>} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(latest?.currentMap?.id).toBe('m1'));
+
+  // The catch-up for c1: its campaign read answers, its map read is held.
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'PLAYER'));
+  let releaseMap: () => void = () => {};
+  getMap.mockImplementationOnce((_c: string, mapId: string) => new Promise((resolve) => {
+    releaseMap = () => resolve({ map: { id: mapId, tokens: [] }, spiritVisible: false });
+  }));
+  let catching: Promise<void> = Promise.resolve();
+  act(() => { catching = latest!.catchUpAfterReconnect(); });
+  await waitFor(() => expect(getMap).toHaveBeenLastCalledWith('c1', 'm1'));
+
+  // The page moves to c2 meanwhile.
+  getCampaign.mockResolvedValueOnce({ ...campaignAs('ACTIVE', 'mB', 'PLAYER'), id: 'c2' });
+  await act(async () => { await latest!.loadCampaign('c2'); });
+  await waitFor(() => expect(latest?.currentMap?.id).toBe('mB'));
+
+  await act(async () => { releaseMap(); await catching; });
+  expect(latest!.campaign?.id).toBe('c2');
+  expect(latest!.currentMap?.id).toBe('mB');
+});

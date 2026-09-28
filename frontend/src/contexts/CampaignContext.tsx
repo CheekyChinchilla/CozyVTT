@@ -10,6 +10,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   ReactNode,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -133,6 +134,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   const { user } = useAuth();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  // The campaign the page shows now, for work that finishes after an await.
+  const shownCampaignId = useRef<string | null>(null);
+  useEffect(() => { shownCampaignId.current = campaign?.id ?? null; }, [campaign?.id]);
   const [currentMap, setCurrentMap] = useState<Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,9 +268,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   const catchUpAfterReconnect = useCallback(async () => {
     const campaignId = campaign?.id;
     if (!campaignId) return;
+    // Each answer is applied only while the page still shows this campaign:
+    // one arriving after a switch to another would write over it.
+    const stillShown = () => shownCampaignId.current === campaignId;
     let mapId = currentMap?.id ?? null;
     try {
       const fresh = await campaignService.getCampaign(campaignId);
+      if (!stillShown()) return;
       setCampaign((prev) =>
         prev && prev.id === fresh.id
           ? { ...prev, status: fresh.status, memberships: fresh.memberships, currentMapId: fresh.currentMapId }
@@ -280,6 +288,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     if (!mapId) return;
     try {
       const { map, spiritVisible } = await api.getMap(campaignId, mapId);
+      if (!stillShown()) return;
       setCurrentMap(map);
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
