@@ -1382,7 +1382,7 @@ paths:
       tags:
         - Campaigns
       summary: Delete campaign
-      description: Delete campaign (owner or admin only)
+      description: Delete campaign (owner or admin only). The campaign's library assets become their uploaders' personal (`USER`) assets in the same transaction as the delete, so a failed delete changes neither, and an asset written into the campaign while it is being deleted goes the same way.
       operationId: deleteCampaign
       security:
         - cookieAuth: []

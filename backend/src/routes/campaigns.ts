@@ -533,14 +533,23 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
 
     // Convert CAMPAIGN-scoped assets to USER scope before deleting.
     // Each asset is reassigned to its uploader's personal library.
-    await prisma.asset.updateMany({
-      where: { campaignId, scope: 'CAMPAIGN' },
-      data: { scope: 'USER', campaignId: null },
-    });
-
-    await prisma.campaign.delete({
-      where: { id: campaignId },
-    });
+    //
+    // One transaction, so a delete that fails leaves the library as it was.
+    // The campaign's row is locked first: an asset written into the campaign
+    // holds a share lock on that row until it commits, so none can land
+    // between the two writes and be left a campaign asset with no campaign,
+    // which the permission check lets anyone read. The array form has no
+    // time limit, which a large campaign's cascade may need.
+    await prisma.$transaction([
+      prisma.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`,
+      prisma.asset.updateMany({
+        where: { campaignId, scope: 'CAMPAIGN' },
+        data: { scope: 'USER', campaignId: null },
+      }),
+      prisma.campaign.delete({
+        where: { id: campaignId },
+      }),
+    ]);
 
     // The live half of the cascade: sockets still in the room would keep
     // relaying to each other and fail every write against the missing row.
