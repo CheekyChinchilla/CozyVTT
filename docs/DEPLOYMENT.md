@@ -257,7 +257,7 @@ ingress:
   - service: http_status:404
 ```
 
-This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) and secure-cookie headers working without extra configuration.
+This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`), secure-cookie headers and each visitor's own address (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)) working without extra configuration.
 
 **2. Run `cloudflared` as a container** on CozyVTT's own Docker network. Nothing is published to the host at all — the tunnel reaches the containers by name:
 
@@ -302,12 +302,39 @@ sudo systemctl restart cloudflared
 curl -si https://cozyvtt.example.com/api/setup/status | head -3
 ```
 
+### Visitor addresses and sign-in limits
+
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. It tells visitors apart by their *IP address*, the address their device connects from, so it has to see each visitor's own address and not your tunnel's or proxy's.
+
+**With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
+
+To check it, open CozyVTT from a device outside your network (a phone on mobile data, with Wi-Fi off), then run this on the server:
+
+```bash
+docker compose logs --tail 5 nginx
+```
+
+After the `cozyvtt-nginx |` label, each line starts with the address CozyVTT saw, for example:
+
+```
+cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
+```
+
+You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address, and a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes. That happens when:
+
+- **A proxy in front of nginx is on a public address**, for example Cloudflare's proxy (the orange cloud) pointed at your server's public IP without a tunnel. nginx does not believe a public address, so add that proxy's address ranges to `nginx/nginx.conf`, one `set_real_ip_from` line each, next to the lines already there. For Cloudflare the ranges are listed at [cloudflare.com/ips](https://www.cloudflare.com/ips/). Then run `docker compose restart nginx`. `git pull` will stop at the changed file from then on; set your change aside and bring it back with the same `git stash` steps as in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml).
+- **Docker hands visitors to nginx from its own address.** Docker Desktop (on Windows and Mac) and rootless Docker do this. A visitor connecting straight to such a server could then choose the address CozyVTT counts them as. Put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front, and keep ports 80 and 443 closed to the internet.
+
+One thing to know: a device on your own network connects from a private address, so it can set the header itself and choose the address CozyVTT counts it as. On a home network those are people you already let in.
+
+**If you removed the bundled nginx**, the backend takes the **last** address in the `X-Forwarded-For` header your proxy sends as the visitor's own. Proxies add the address they were connected from there, which is right when nothing else stands in front of yours. If something does (Cloudflare's proxy in front of Caddy, say), set your proxy to believe it, or every visitor counts as the same address: `trusted_proxies` in Caddy, `forwardedHeaders.trustedIPs` in Traefik, `set_real_ip_from` in nginx.
+
 ### Minimum proxy requirements
 
 Whatever proxy you use, it must:
 - Forward `/api/*` and `/socket.io/*` to the backend, and everything else to the frontend
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
-- Pass `X-Forwarded-For` and `X-Forwarded-Proto` headers to the backend
+- Pass `X-Forwarded-Proto` to the backend, and `X-Forwarded-For` with the visitor's own address last (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits))
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
 
 > ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
@@ -1104,7 +1131,8 @@ Before going live:
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log rotation** — `backend/logs/` directory is being rotated (consider `logrotate` for the host-mounted path)
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
-- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own auth limiter is 5 req/15min on auth routes, but a host-level ban catches scanners earlier
+- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limit is 5 failed sign-ins per 15 minutes per visitor address, but a host-level ban catches scanners earlier
+- [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)
 - [ ] **Stable update plan** — You watch the [CozyVTT repo](https://github.com/CheekyChinchilla/CozyVTT) for releases and apply security patches promptly (no auto-update is bundled — that's your choice)
 - [ ] **Vulnerability reporting path** — You've read [SECURITY.md](../SECURITY.md) and know how to report issues responsibly
 - [ ] **Origin hidden (optional but recommended)** — Instance is fronted by a Cloudflare Tunnel, Tailscale Funnel, or equivalent so the server's real IP is never exposed (see below)
@@ -1159,6 +1187,7 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    curl -si https://cozyvtt.example.com/api/setup/status | head -3
    ```
    You want `content-type: application/json`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
+8. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
 Once running, you can **close ports 80 and 443 on your VPS firewall entirely** — only SSH (port 22, or your chosen alternative) needs to be reachable, and even that you can put behind Cloudflare Access if you want.
 

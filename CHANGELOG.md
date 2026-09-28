@@ -55,6 +55,8 @@ git pull origin main
 docker compose up -d --build
 ```
 
+If you have edited `nginx/nginx.conf`, to turn on HTTPS for instance, `git pull` stops at it, because this release changes that file too. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict, keep your uncommented lines and use `$remote_addr` wherever the new file sends `X-Forwarded-For`.
+
 No new setting is required: backups go to `backend/backups/` on the host. (An install without Docker can put them elsewhere with the optional `BACKUP_DIR` setting.) There is no manual data migration for this release.
 
 ### Added
@@ -212,6 +214,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **A fresh install can no longer end up with two administrators.** On a brand new instance the first person to register becomes the administrator. If two people registered at the very same moment, before anyone had opened the setup wizard, both could be made administrators. Registration is now serialised so exactly one first administrator is ever created.
 
 ### Security
+
+- **Behind a Cloudflare Tunnel or another proxy, a few wrong passwords from anyone no longer lock everyone out of signing in.** CozyVTT limits failed sign-ins per visitor address, but behind a tunnel or proxy the bundled nginx passed every visitor on with the tunnel's own address, so five wrong passwords in fifteen minutes, from anyone at all, locked everybody out of signing in, and the password reset, two-factor and general request limits were shared the same way. nginx now passes on each visitor's own address, which it takes from the tunnel or proxy only when that connects from a private address, so someone reaching the server straight from the internet still cannot choose the address they are counted as. The deployment guide shows how to check which address CozyVTT sees, and what to add when a proxy in front of nginx has a public address.
 
 - **Exporting a campaign, or a map as a UVTT file, no longer hands over files the exporter cannot open.** A campaign's DM could give a template, token or map a picture address the image check did not recognise as naming a file (a document's address, or one with extra parts), and the exports, which read addresses their own way, then put another user's private upload into the download. Each export now includes only files the person exporting may open (a map whose picture is left out still imports, without it), and a picture address on this server has to be exactly a file's own address, or it is refused, a shared character template's picture included. That also stops a picture address pointing at another page of the app, which made every viewer's browser request that page.
 
