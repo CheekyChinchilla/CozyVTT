@@ -149,11 +149,12 @@ function handleAssetCaching(
  *   - type: Filter by AssetType (MAP, TOKEN, AUDIO, AVATAR)
  *   - scope: Filter by AssetScope (GLOBAL, CAMPAIGN)
  *   - campaignId: Filter by campaign (requires CAMPAIGN scope or returns campaign-specific assets)
+ *   - usable: 'true' applies the member scope rules to an admin too (the pickers)
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { type, scope, campaignId, page, limit, search, uploadedBy } = req.query;
+    const { type, scope, campaignId, page, limit, search, uploadedBy, usable } = req.query;
 
     // Pagination parameters
     const pageNum = parseInt(page as string) || 1;
@@ -216,8 +217,11 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId as string]);
         if (hidden.length > 0) where.id = { notIn: hidden };
       }
-    } else if (!isAdmin) {
-      // Non-admin: enforce three-scope visibility rules
+    } else if (!isAdmin || usable === 'true') {
+      // Non-admin: enforce three-scope visibility rules. So for an admin who
+      // asks for what they may use (`usable=true`, the map and token picture
+      // pickers): the reference check holds an admin to the same rule, so
+      // anything else on the instance would be offered and then refused.
       const userMemberships = await prisma.campaignMembership.findMany({
         where: { userId },
         select: { campaignId: true },

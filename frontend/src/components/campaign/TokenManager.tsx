@@ -111,6 +111,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       .listAssets({
         type: AssetType.TOKEN,
         limit: 100,
+        usable: true,
       })
       .then((res) => setAssets(res.assets))
       .catch(() => setError('Failed to load token assets'))

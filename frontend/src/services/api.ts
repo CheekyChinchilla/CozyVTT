@@ -783,6 +783,8 @@ class ApiClient {
     limit?: number;
     search?: string;
     uploadedBy?: string;
+    /** Only what the caller may put on a map or token; see GET /api/assets. */
+    usable?: boolean;
   }): Promise<AssetListResponse> {
     const response = await this.client.get<AssetListResponse>('/api/assets', { params });
     return response.data;

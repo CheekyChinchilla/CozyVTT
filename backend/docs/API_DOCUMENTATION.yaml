@@ -3233,6 +3233,15 @@ paths:
             type: integer
             default: 50
             maximum: 100
+        - name: usable
+          in: query
+          description: >-
+            `true` lists only assets the caller may put on a map, token or
+            creature: global ones, their own personal ones, and those of
+            campaigns they belong to. Without it, a platform admin is listed
+            every asset on the instance; for anyone else the two are the same.
+          schema:
+            type: boolean
       responses:
         '200':
           description: List of assets
