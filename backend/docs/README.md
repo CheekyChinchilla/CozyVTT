@@ -44,29 +44,33 @@ whether it loads, and three unquoted colons once made it unloadable.
 
 The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
-gained or lost a gate, or a hand-edited cell. Refresh it with `--write`. The
-"who may send it" column is read from the named permission predicates a
-handler calls (`canControlToken`, `canMoveTokensNow`, `canRollDice`,
-`canToggleDoor`, the character-owner test, and an explicit
-`socket.role === 'SPECTATOR'` refusal);
-a handler that gates some other way is listed as "Any member", and the line
-above the table says the handler is authoritative. It
-reads both `backend/src/websocket/` and
-`backend/src/routes/`, and matches `socket.emit` alongside the
-`broadcastToCampaign` / `broadcastToUser` helpers and the token move
-handlers' `emitMoveToVisibleSockets` / `emitMoveToDragRecipients`, which take
-the event name as their first argument — a route pushing an event through a
-helper reaches a client just as surely as a handler emitting one, and while the
-scan covered only handlers the table called itself complete while omitting
-seven such events.
+gained or lost a gate, or a hand-edited cell. Refresh it with `--write`. It
+reads both `backend/src/websocket/` and `backend/src/routes/`, and matches
+`socket.emit` alongside the `broadcastToCampaign` / `broadcastToUser` helpers
+and the token move handlers' `emitMoveToVisibleSockets` /
+`emitMoveToDragRecipients`, which take the event name as their first argument —
+a route pushing an event through a helper reaches a client just as surely as a
+handler emitting one, and while the scan covered only handlers the table called
+itself complete while omitting seven such events.
 
-The **Who may send it** column is read from the handler, and from any function
-in the same file it hands straight off to: a handler that refuses non-DMs near
-its top reads **DM only**; one that calls `canControlToken` reads **DM, or the
-token's player**; one that calls `canRollDice` reads **DM and players**;
-anything else reads **Any member**. A new rule written inline instead of through
-those shared predicates in `services/permissions.ts` is not seen, which is one
-more reason to use them.
+The **Who may send it** column is read from the handler and from any function
+in the same file that it calls directly, each only as far as the end of its own
+body. The first row that matches decides the cell:
+
+| The handler, or a function it calls | Reads |
+|---|---|
+| Turns every non-DM away: an `if` among its own statements (inside a `try` counts; a nested block, an `else` or a callback does not) whose branch ends in a bare `return;`, and whose condition is `socket.role !== 'DM'` alone or as one side of an *or*, or whose refusal says "Only the DM" | DM only |
+| Calls `canToggleDoor` | DM; a player may toggle an unlocked door |
+| Calls `canControlToken` | DM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`) |
+| Tests `character.userId !== socket.userId` | DM, or the character's owner (adding "never a spectator" when it also tests `socket.role === 'SPECTATOR'`) |
+| Calls `canRollDice` | DM and players |
+| None of these | Any member |
+
+`socket.role !== 'DM' && …` refuses only some non-DMs, as the character-owner
+test does, so it does not read as DM only. A rule written inline instead of
+through the shared predicates in `services/permissions.ts` is not seen, which
+is one more reason to use them; the line above the table says the handler is
+authoritative.
 
 ### Validate
 
