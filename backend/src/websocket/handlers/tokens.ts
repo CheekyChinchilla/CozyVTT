@@ -13,7 +13,7 @@ import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter, limiterKey } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
-import { canControlToken, canMoveTokensNow, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
+import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets } from '../utils';
 
 /** Why a socket may not move a token, in the words the client already shows. */
@@ -44,7 +44,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     const ids = new Set<string>();
     const campaignId = socket.campaignId;
     if (!campaignId) return ids;
-    const map = await prisma.map.findUnique({ where: { id: mapId } });
+    const map = await prisma.map.findUnique({
+      where: { id: mapId },
+      include: { campaign: { select: { currentMapId: true } } },
+    });
     if (!map) return ids;
     const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
     const members = await campaignSockets(io, campaignId);
@@ -56,6 +59,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     for (const s of members) {
       if (s.id === socket.id) continue;
       const member = s as unknown as AuthenticatedSocket;
+      // A map the DM is preparing is theirs until they switch to it.
+      if (!canReadMap(member.role, mapId, map.campaign.currentMapId)) continue;
       if (member.role === 'DM') { ids.add(s.id); continue; }
       if (!member.userId) continue;
       const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
@@ -86,12 +91,15 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * plane). One path for every token, so a hidden token and a spirit-plane
    * token get the same treatment moving that they get when the map is
    * opened; the four branches this replaced (spirit, hidden, lit, unlit)
-   * each applied a different subset of those rules. Each recipient is told
+   * each applied a different subset of those rules. A map the DM is
+   * preparing reaches only DMs, as its fetch does. Each recipient is told
    * of the mover what they may know.
    */
   async function emitMoveToVisibleSockets(
     event: string,
     token: Token,
+    mapId: string,
+    currentMapId: string | null,
     payload: Record<string, unknown>,
     includeSender: boolean
   ): Promise<void> {
@@ -105,6 +113,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     for (const s of members) {
       if (!includeSender && s.id === socket.id) continue;
       const recipient = s as unknown as AuthenticatedSocket;
+      if (!canReadMap(recipient.role, mapId, currentMapId)) continue;
       if (recipient.role !== 'DM') {
         if (!recipient.userId) continue;
         const sent = filterTokensByRole([token], recipient.role ?? 'PLAYER', spiritVisibility.get(recipient.userId) ?? false, recipient.userId);
@@ -305,9 +314,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Fetch the map, with the campaign's status for the pause rule below
+      // and its current map for who is told
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        include: { campaign: { select: { status: true } } },
+        include: { campaign: { select: { status: true, currentMapId: true } } },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
@@ -388,6 +398,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             continue;
           }
           if (!authedSocket.userId) continue;
+          if (!canReadMap(authedSocket.role, mapId, map.campaign.currentMapId)) continue;
 
           const viewer = viewerIdFor(authedSocket.role, authedSocket.userId);
           const forRole = filterTokensByRole(
@@ -441,7 +452,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       } else {
         // The sender included, as confirmation that the write went through.
-        await emitMoveToVisibleSockets('token.moved', token, { tokenId, mapId, x, y }, true);
+        await emitMoveToVisibleSockets(
+          'token.moved', token, mapId, map.campaign.currentMapId, { tokenId, mapId, x, y }, true
+        );
       }
 
       logger.debug('token.move.end', { tokenId, x, y, userId: socket.userId });

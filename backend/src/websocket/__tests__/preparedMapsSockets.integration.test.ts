@@ -98,3 +98,39 @@ describe.each(REQUESTS)('%s', (request, reply, what) => {
     dm.disconnect();
   });
 });
+
+// A DM staging a prepared map moves tokens on it. The moves went to every
+// player the role filter kept the token for, so their ids and coordinates
+// reached screens that are not sent that map at all.
+describe('a token moved on a prepared map', () => {
+  const STAGED = 'staged-token';
+  const staged = (lightingEnabled: boolean) => prisma.map.update({
+    where: { id: preparedId },
+    data: {
+      lightingEnabled, globalIllumination: true,
+      tokens: [{
+        id: STAGED, name: 'Staged', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 },
+        layer: 'token', visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
+      }],
+    },
+  });
+
+  it.each([[false, 'an unlit'], [true, 'a lit']])('reaches no player, drag or drop, on %s map', async (lit) => {
+    await staged(lit as boolean);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const quiet = Promise.all([
+      expectNoEvent(player, 'token.move.start', 800),
+      expectNoEvent(player, 'token.moved', 800),
+      expectNoEvent(player, 'token:appeared', 800),
+    ]);
+    const done = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
+    dm.emit('token.move.start', { tokenId: STAGED, mapId: preparedId });
+    dm.emit('token.move', { tokenId: STAGED, mapId: preparedId, x: 2, y: 1 });
+    dm.emit('token.move.end', { tokenId: STAGED, mapId: preparedId, x: 3, y: 1 });
+    expect((await done).tokenId).toBe(STAGED);
+    await expect(quiet).resolves.toBeDefined();
+    dm.disconnect();
+    player.disconnect();
+  });
+});
