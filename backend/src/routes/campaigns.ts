@@ -889,6 +889,22 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
 });
 
 /**
+ * What the open pages need after members' roles change, the new roles
+ * already applied to their live connections: the roster panel regroups
+ * (it groups by role from its own list), and each copy of the initiative
+ * order and of the map the table is on is sent again as the new roles see
+ * it. A spectator on a lit map is sent no tokens, a player their own and
+ * what they see, a DM every hidden creature and its notes.
+ */
+async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
+  for (const userId of userIds) announceRosterChange(userId, [campaignId], 'member.role');
+  await resendInitiative(campaignId);
+  const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
+  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+}
+
+/**
  * PUT /api/campaigns/:campaignId/members/:userId/role
  * Change a member's role in the campaign
  * Requires: Campaign DM role
@@ -980,15 +996,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       // And every open page, the member's own included, so the controls
       // follow the role without a reload (the client patches its list).
       broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
-      // The roster panel groups members by role from its own list.
-      announceRosterChange(userId, [campaignId], 'member.role');
-      // Their copy of the initiative order follows the role.
-      await resendInitiative(campaignId);
-      // So does what they are sent of the map the table is on: a spectator
-      // on a lit map is sent no tokens, a player their own and what they see.
-      const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
-      if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+      await followNewRoles(campaignId, [userId]);
     } catch (error) {
       logger.error('Member role updated but live sockets were not', { err: error, userId, campaignId });
     }
@@ -1122,14 +1130,13 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
       }
       await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
-      // Both copies of the initiative order follow the new roles.
-      await resendInitiative(campaignId);
 
       broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
         campaignId,
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
       });
+      await followNewRoles(campaignId, outgoing ? [outgoing.userId, incomingId] : [incomingId]);
     } catch (error) {
       logger.error('DM transfer committed but live sockets were not updated', {
         err: error,

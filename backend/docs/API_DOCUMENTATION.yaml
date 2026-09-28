@@ -1556,7 +1556,7 @@ paths:
       tags:
         - Campaigns
       summary: Change member role
-      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it.
+      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it, with a `roster.updated`; the initiative order and the map on screen are sent again as the new role sees it.
       operationId: changeMemberRole
       security:
         - cookieAuth: []
@@ -1609,7 +1609,10 @@ paths:
         The campaign's owner is NOT changed: ownership and the DM role are
         separate, which lets an owner hand the game to someone else and remain at
         the table as a player. Callable by the sitting DM, the campaign owner
-        (even when they are not the DM), or a platform admin.
+        (even when they are not the DM), or a platform admin. Both members'
+        open connections take their new roles at once; `campaign.dm.transferred`
+        and a `roster.updated` for each go to the campaign, and the initiative
+        order and the map on screen are sent again as each new role sees it.
       operationId: transferDM
       security:
         - cookieAuth: []
