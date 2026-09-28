@@ -110,19 +110,38 @@ export function clearState(campaignId: string): void {
  * disagreed about the order. Returns whether anything was dropped.
  */
 export function removeCombatants(campaignId: string, gone: (entry: CombatantEntry) => boolean): boolean {
-  const state = getState(campaignId);
-  const kept = state.combatants.filter((c) => !gone(c));
-  if (kept.length === state.combatants.length) return false;
-  // With nobody left the fight is over: an active round with no combatants
-  // can be neither advanced nor ended, since the tracker draws those controls
-  // beside a combatant and the server refuses Next and Start on an empty order.
-  if (kept.length === 0) {
-    setState(campaignId, defaultState());
-    return true;
-  }
-  const currentTokenId = kept.some((c) => c.tokenId === state.currentTokenId) ? state.currentTokenId : null;
-  setState(campaignId, { ...state, combatants: kept, currentTokenId });
+  const next = withoutCombatants(getState(campaignId), gone);
+  if (!next) return false;
+  setState(campaignId, next);
   return true;
+}
+
+/**
+ * The order without the combatants `gone` picks, or null when it picks none.
+ * If the acting combatant is among them the turn passes on as Next would: to
+ * the first one after them who stays, or round to the top of the order in a
+ * new round. With nobody left the fight is over: an active round with no
+ * combatants can be neither advanced nor ended, since the tracker draws
+ * those controls beside a combatant and the server refuses Next and Start on
+ * an empty order. The tracker's Remove and a deleted token both go through
+ * this.
+ */
+export function withoutCombatants(state: CombatState, gone: (entry: CombatantEntry) => boolean): CombatState | null {
+  const kept = state.combatants.filter((c) => !gone(c));
+  if (kept.length === state.combatants.length) return null;
+  if (kept.length === 0) return defaultState();
+  let { currentTokenId, round } = state;
+  const currentIndex = state.combatants.findIndex((c) => c.tokenId === currentTokenId);
+  if (currentIndex !== -1 && gone(state.combatants[currentIndex])) {
+    const after = state.combatants.slice(currentIndex + 1).find((c) => !gone(c));
+    if (after) {
+      currentTokenId = after.tokenId;
+    } else {
+      currentTokenId = kept[0].tokenId;
+      if (state.active) round += 1;
+    }
+  }
+  return { ...state, combatants: kept, currentTokenId, round };
 }
 
 /**

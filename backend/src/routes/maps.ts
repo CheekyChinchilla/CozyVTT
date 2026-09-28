@@ -1495,7 +1495,10 @@ router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, re
       for (const map of [updatedSource, updatedTarget]) {
         if (campaign?.currentMapId === map.id) await broadcastMapData(io, campaignId, map);
       }
-      if (inOrder) await sendInitiativeState(io, campaignId);
+      // Any token, not only a combatant's: moving a player's spirit-layer
+      // token onto or off the map the table is on moves them between
+      // planes, which changes what they are sent of the whole order.
+      if (getCombatState(campaignId).combatants.length > 0) await sendInitiativeState(io, campaignId);
     } catch (error) {
       logger.warn('Table not told of a token move', { err: error });
     }

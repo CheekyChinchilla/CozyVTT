@@ -748,7 +748,7 @@ docker compose config --services
 
 The list should include `nginx`, the bundled web server that answers your visitors. If it is missing, your override file is switching nginx off (it holds the `profiles: ["disabled"]` line from the example file); take the `nginx:` line and the `profiles:` line under it out of the file and run `docker compose up -d` again.
 
-The backend takes ownership of the new folder when it starts. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
+The backend takes ownership of the new folder when it starts and makes it private to itself. On a NAS or USB drive that does not accept Linux owners or permissions, it cannot; it still starts, and its log (`docker compose logs backend`) says so. Backups there are then readable by whoever can read that drive, so choose one only you can reach. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
 
 ```bash
 sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
@@ -768,10 +768,11 @@ docker compose logs backend | grep -i restore
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
-A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (the first `cozyvtt` is the database, the second the user):
+A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
+sudo -u postgres psql -d cozyvtt -c "ALTER SCHEMA public OWNER TO cozyvtt;"
 ```
 
 A manual install also needs a `psql` from August 2025 or later (PostgreSQL 13.22, 14.19, 15.14, 16.10, 17.6, or any 18): the restore runs in psql's restricted mode, which older releases do not have. With an older one the restore stops before changing anything, and the log says `invalid command \restrict`. The Docker image already has a recent one.
@@ -852,11 +853,13 @@ backup by hand (with the default `cozyvtt` names; put yours in place of both if
 you changed them):
 
 ```bash
-docker compose exec -T database \
+(umask 077; docker compose exec -T database \
   pg_dump -U cozyvtt -d cozyvtt --no-owner --no-privileges \
     --exclude-table-data=public.session \
-  | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+  | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz)
 ```
+
+The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance.
 
 `--exclude-table-data=public.session` leaves the login sessions out, as the
 dashboard and the script do, so restoring the file cannot sign back in someone
@@ -1052,10 +1055,11 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
 ```
 
-Coming from 1.4.0 or earlier, also make the database role the database's owner once, so a backup can be restored (see [Database Backups](#database-backups)); use your own names if you changed them:
+Coming from 1.4.0 or earlier, also make the database role the owner of the database and its `public` schema once, so a backup can be restored (see [Database Backups](#database-backups)); use your own names if you changed them:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
+sudo -u postgres psql -d cozyvtt -c "ALTER SCHEMA public OWNER TO cozyvtt;"
 ```
 
 ---

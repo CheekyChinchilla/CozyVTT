@@ -104,4 +104,24 @@ describe('removeCombatants', () => {
     expect(removeCombatants('c-remove-2', () => true)).toBe(true);
     expect(getState('c-remove-2')).toEqual({ active: false, round: 0, currentTokenId: null, combatants: [] });
   });
+  // Deleting the token of the combatant whose turn it is passes the turn on
+  // as Next would, as the tracker's Remove does. It used to clear the turn,
+  // and Next then went back to the top of the order in the same round.
+  it('passes the turn to the next combatant when the acting one is removed', () => {
+    setState('c-remove-3', { active: true, round: 2, currentTokenId: 'b', combatants: [combatant('a'), combatant('b'), combatant('c')] });
+    removeCombatants('c-remove-3', (e) => e.tokenId === 'b');
+    expect(getState('c-remove-3')).toMatchObject({ round: 2, currentTokenId: 'c' });
+  });
+
+  it('wraps into a new round when the acting one was last in line', () => {
+    setState('c-remove-4', { active: true, round: 2, currentTokenId: 'c', combatants: [combatant('a'), combatant('b'), combatant('c')] });
+    removeCombatants('c-remove-4', (e) => e.tokenId === 'c');
+    expect(getState('c-remove-4')).toMatchObject({ round: 3, currentTokenId: 'a' });
+  });
+
+  it('skips over the others removed at the same time', () => {
+    setState('c-remove-5', { active: true, round: 1, currentTokenId: 'b', combatants: [combatant('a'), combatant('b'), combatant('c'), combatant('d')] });
+    removeCombatants('c-remove-5', (e) => e.tokenId === 'b' || e.tokenId === 'c');
+    expect(getState('c-remove-5')).toMatchObject({ round: 1, currentTokenId: 'd' });
+  });
 });

@@ -24,6 +24,7 @@ import {
   setState as setCombatState,
   clearState as clearCombatState,
   sortCombatants,
+  withoutCombatants,
   projectCombatState,
   getVersion,
   startSend,
@@ -251,26 +252,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const { tokenId } = data;
       if (!tokenId) { socket.emit('error', { message: 'tokenId required' }); return; }
 
-      const state = getCombatState(socket.campaignId);
-      const index = state.combatants.findIndex((c) => c.tokenId === tokenId);
-      const kept = state.combatants.filter((c) => c.tokenId !== tokenId);
-
-      if (index !== -1 && kept.length === 0) {
-        // With nobody left the fight is over, as when the last combatant's
-        // token is deleted (removeCombatants): an active round with no
-        // combatants could be neither advanced nor ended.
-        clearCombatState(socket.campaignId);
-      } else if (index !== -1) {
-        let { currentTokenId, round } = state;
-        // Removing whoever's turn it was passes the turn on as Next would:
-        // to the one after them, or round to the top of the order.
-        if (currentTokenId === tokenId) {
-          const after = state.combatants[index + 1];
-          currentTokenId = after ? after.tokenId : kept[0].tokenId;
-          if (!after && state.active) round += 1;
-        }
-        setCombatState(socket.campaignId, { ...state, combatants: kept, currentTokenId, round });
-      }
+      // The turn passes on, and an emptied order ends the fight, as when a
+      // combatant's token is deleted (withoutCombatants).
+      const next = withoutCombatants(getCombatState(socket.campaignId), (c) => c.tokenId === tokenId);
+      if (next) setCombatState(socket.campaignId, next);
       await broadcastInitiativeState(socket.campaignId);
     } catch (error) {
       logger.error('initiative.remove failed', { err: error });

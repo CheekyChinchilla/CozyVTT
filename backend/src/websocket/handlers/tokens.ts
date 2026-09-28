@@ -27,17 +27,20 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * tokens could see it where its drag began. Frames arrive up to sixty times
    * a second, so the decision, line of sight included, runs once,
    * on the start event or the first frame, and is reused until token.move.end
-   * clears it. A player who could not see the token learns where it ended
-   * up, if they can see it there, from the end event's own fan-out.
+   * clears it, or until the token is hidden, shown or moved to the other
+   * plane mid-drag, which changes who may see it and so decides again. A
+   * player who could not see the token learns where it ended up, if they can
+   * see it there, from the end event's own fan-out.
    */
-  const dragRecipients = new Map<string, Promise<Set<string>>>();
-  function dragRecipientsFor(mapId: string, tokenId: string): Promise<Set<string>> {
-    const cached = dragRecipients.get(tokenId);
-    if (cached) return cached;
+  const dragRecipients = new Map<string, { seenAs: string; deciding: Promise<Set<string>> }>();
+  const seenAs = (token: Pick<Token, 'visible' | 'layer'>) => `${token.visible !== false}|${token.layer}`;
+  function dragRecipientsFor(mapId: string, token: Token): Promise<Set<string>> {
+    const cached = dragRecipients.get(token.id);
+    if (cached && cached.seenAs === seenAs(token)) return cached.deciding;
     // The promise is cached, not its result, so frames that arrive while the
     // first one is still being decided wait for it instead of deciding again.
-    const deciding = decideDragRecipients(mapId, tokenId);
-    dragRecipients.set(tokenId, deciding);
+    const deciding = decideDragRecipients(mapId, token.id);
+    dragRecipients.set(token.id, { seenAs: seenAs(token), deciding });
     return deciding;
   }
   async function decideDragRecipients(mapId: string, tokenId: string): Promise<Set<string>> {
@@ -130,7 +133,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     mapId: string,
     payload: Record<string, unknown>
   ): Promise<void> {
-    const recipients = await dragRecipientsFor(mapId, token.id);
+    const recipients = await dragRecipientsFor(mapId, token);
     // Decided once for the whole drag, so each frame goes only to those of
     // them still in this campaign: a socket that authenticated into another
     // since is not sent its old table's token positions. Reading the room
@@ -359,7 +362,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const token = tokensArray[tokenIndex];
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
-      const sawTheDrag = dragRecipients.get(tokenId);
+      const sawTheDrag = dragRecipients.get(tokenId)?.deciding;
       dragRecipients.delete(tokenId);
 
       // See token.move.start: one rule, shared with the REST update route.

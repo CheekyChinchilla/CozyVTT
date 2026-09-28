@@ -189,4 +189,26 @@ describe('drag frames on an unlit map', () => {
     dm.disconnect();
     player.disconnect();
   });
+
+  // Who the frames go to is decided once per drag, from the token as it was.
+  // The DM can hide it, or move it to the other plane, while the drag goes
+  // on; from then on it must reach only those who may still see it.
+  it('stop reaching a player once the token is hidden mid-drag', async () => {
+    await resetMap(false, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const first = waitForEvent<{ x: number }>(player, 'token.moved');
+    drag(dm, FAR, [16]);
+    expect((await first).x).toBe(16);
+
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, 5, playerId), token(FAR, 16, null, false)] } });
+    const quiet = expectNoEvent(player, 'token.moved', 800);
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+    await quiet;
+
+    dm.disconnect();
+    player.disconnect();
+  });
 });
+

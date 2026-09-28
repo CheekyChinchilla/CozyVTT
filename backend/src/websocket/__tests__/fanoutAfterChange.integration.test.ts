@@ -102,3 +102,16 @@ it('a roll stands, and the new order goes out, when the dice log entry cannot be
   expect(typeof sent.combatants.find((c) => c.tokenId === ORC)?.initiative).toBe('number');
   await expect(noError).resolves.toBeUndefined();
 });
+
+// A map's live edits go through emitToMapReaders, which reads the campaign's
+// current map after the edit is saved.
+it('a wall added stands, and is not reported as failed, when telling the table fails', async () => {
+  jest.spyOn(prisma.campaign, 'findUnique').mockImplementationOnce(boom as never);
+  const noError = expectNoEvent(dm, 'error', 800);
+  const segment = { id: randomUUID(), x1: 0, y1: 0, x2: 50, y2: 0, type: 'wall' };
+  dm.emit('wall:add', { mapId, segment });
+  await expect(noError).resolves.toBeUndefined();
+  const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } });
+  expect((stored.wallSegments as Array<{ id: string }>).some((w) => w.id === segment.id)).toBe(true);
+});
+

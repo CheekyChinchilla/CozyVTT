@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Nothing to do beyond the usual upgrade, and nothing you have is removed. Four things you will notice:
 
 - **Fog of war now hides the map.** Areas you have not revealed are solid black for players from the moment the map loads, where they used to show the artwork through a tint. Every map you already have keeps fog on with the same areas revealed; a map you create from now on starts with fog off.
-- **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player, or a spectator, with no token on a lit map is now sent no tokens at all and sees darkness; give a spectator a token to look through, or turn dynamic lighting off for the map.
+- **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player, or a spectator, with no token on a lit map is now sent no tokens at all and sees darkness. A spectator cannot be given a token to look through, so to let one watch a lit map, turn dynamic lighting off for it.
 - **Explored areas are remembered.** On a lit map, ground a player has seen stays on their map in grey once it is out of sight. It is on for existing maps; **Remember Explored Areas** in Edit Map turns it off for a map, and **Reset explored areas** in the Fog panel forgets it.
 - **A character's token belongs to whoever controls it.** Existing tokens keep their controller. If you had set a character's token to **Nobody (DM controls)**, or handed it to someone else, its player now sees it like any other token: not through unrevealed fog, and it gives them no sight on a lit map. Set them as its controller in **Edit Token → Controlled By** if they should have it.
 
@@ -35,10 +35,11 @@ And four things to do afterwards:
 
   Put that value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` if you wrote it by hand; use your own user name in place of `cozyvtt` if you changed `DATABASE_USER`), then `docker compose up -d`. See [Changing the database password](docs/DEPLOYMENT.md#changing-the-database-password) in the deployment guide.
 
-- **Without Docker, make sure the database role owns the database.** Restoring a backup now recreates the database's `public` schema, which only the database's owner may do. The Docker setup already has it right. On a manual install run once, with your own names if you changed them:
+- **Without Docker, make sure the database role owns the database and its `public` schema.** Restoring a backup now recreates the database's `public` schema, which only its owner may do. The Docker setup already has it right. On a manual install run these once, with your own names if you changed them (the second is needed on PostgreSQL 14 and on a database first created on 14, and does no harm on newer ones):
 
   ```bash
   sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
+  sudo -u postgres psql -d cozyvtt -c "ALTER SCHEMA public OWNER TO cozyvtt;"
   ```
 
   Nothing else needs it until you restore a backup.
@@ -98,7 +99,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **The initiative tracker rolls and sets initiative on the map a combatant is actually on.** A combatant follows its token to another map, but the tracker still named the map the table was showing, so rolling for it answered "Token not found" and a typed value changed the order without being saved to the token.
 
-- **Removing the last combatant ends the fight.** Removing the only combatant left with the tracker's Remove button, deleting its token, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared. Removing the combatant whose turn it is also passes the turn to the next one in the order, as **Next** does, where it used to jump to the top.
+- **Removing the last combatant ends the fight.** Removing the only combatant left with the tracker's Remove button, deleting its token, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared. Removing the combatant whose turn it is, with Remove or by deleting its token, also passes the turn to the next one in the order, as **Next** does, where it used to jump to the top or start that round again.
 
 - **Duplicate works on a token whose controller has left or stopped playing.** A token keeps the name of whoever controlled it after they leave the campaign, become a spectator or take over as DM, and duplicating it was refused because only a player can be given a token. The copy is now made with no controller in that case. The page also keeps its list of members current as people join or leave, so a token duplicated after a player joined keeps that player as its controller.
 
@@ -118,7 +119,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Moving tokens between maps no longer loses or doubles them.** Bringing several tokens along when switching maps sent a copy and a delete for each, all at once, and two of those could overwrite each other's change: every request reported success while some tokens vanished from both maps and others appeared on both. Tokens now move in one step, exactly as they are, and every change to a map's tokens waits its turn, so a player's move landing during the DM's add or delete is kept too, and so is a token revealed from the Spirit Layer panel, an initiative set or rolled, or a character's new picture reaching its tokens.
 
-- **A moved token keeps who controls it and its place in the initiative order, and the table stays on its map.** A character's token whose controller the DM had set to nobody came back controlled by the character's owner after a move, a combatant moved to another map dropped out of the players' trackers while lingering in the DM's, and moving a token switched every player onto the map it went to. A move now keeps the token as it was, under the same id, the order follows it, and only the map the campaign is showing is ever sent to the table. Setting a token's controller to nobody when placing or duplicating it is respected too.
+- **A moved token keeps who controls it and its place in the initiative order, and the table stays on its map.** A character's token whose controller the DM had set to nobody came back controlled by the character's owner after a move, a combatant moved to another map was still looked for on the old one, and moving a token switched every player onto the map it went to. A move now keeps the token as it was, under the same id, the order follows it to its new map (players see it in their tracker while the table is on that map, as for every combatant), and only the map the campaign is showing is ever sent to the table. Setting a token's controller to nobody when placing or duplicating it is respected too.
 
 - **A duplicate the server refuses says why.** Duplicating an older token whose stored stat block or hit points predate the checks the app now makes was refused without a word; the reason now appears, so the DM can fix the field in Edit Token.
 

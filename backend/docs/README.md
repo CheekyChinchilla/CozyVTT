@@ -46,9 +46,11 @@ The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
 gained or lost a gate, or a hand-edited cell. Refresh it with `--write`. It
 reads both `backend/src/websocket/` and `backend/src/routes/`, and matches
-`socket.emit` alongside the `broadcastToCampaign` / `broadcastToUser` helpers
-and the token move handlers' `emitMoveToVisibleSockets` /
-`emitMoveToDragRecipients`, which take the event name as their first argument —
+`socket.emit` alongside the `broadcastToCampaign` / `broadcastToUser` helpers,
+the token move handlers' `emitMoveToVisibleSockets` /
+`emitMoveToDragRecipients`, which take the event name as their first argument,
+and `emitToMapReaders` and the map routes' `tellMapReaders`, whose event name is
+their first quoted argument —
 a route pushing an event through a helper reaches a client just as surely as a
 handler emitting one, and while the scan covered only handlers the table called
 itself complete while omitting seven such events.
