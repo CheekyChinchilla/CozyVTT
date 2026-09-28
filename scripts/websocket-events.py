@@ -325,7 +325,9 @@ def collect():
     inbound, outbound = {}, {}
     for path, text in sources():
         code, plain = masked(text), masked(text, keep_strings=True)
-        for m in re.finditer(r"socket\.on\(\s*'([^']+)'", text):
+        # Comments blanked, so a handler or an emit that is commented out is
+        # not listed.
+        for m in re.finditer(r"socket\.on\(\s*'([^']+)'", plain):
             name = m.group(1)
             if name in ('disconnect', 'error', 'ping'):
                 continue
@@ -359,7 +361,7 @@ def collect():
             r"(?:emitToMapReaders|tellMapReaders)\(\s*[^'()]*'([^']+)'",
         )
         for pattern in patterns:
-            for m in re.finditer(pattern, text):
+            for m in re.finditer(pattern, plain):
                 name = m.group(1)
                 if name in ('error',):
                     continue
