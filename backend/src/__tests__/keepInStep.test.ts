@@ -44,17 +44,24 @@ function nginxStampFor(template: string): string {
 }
 
 /**
- * The majors `pattern` finds in a file's instructions. Comment lines are left
- * out: both Dockerfiles explain the pinned client in a comment that names it,
- * and a check that read the comments would pass with the install line
- * itself back on the unpinned name.
+ * A file's instructions, one per line. Comment lines are left out: both
+ * Dockerfiles explain the pinned client in a comment that names it, and a
+ * check that read the comments would pass with the install line itself back
+ * on the unpinned name. A line continued with a backslash is joined to the
+ * next, so an install split over several lines is still one.
  */
-function majors(rel: string, pattern: RegExp): number[] {
-  const instructions = read(rel)
-    .split('\n')
+function instructions(rel: string): string[] {
+  return read(rel)
+    .split(/\r?\n/)
     .filter((line) => !line.trimStart().startsWith('#'))
-    .join('\n');
-  const found = [...instructions.matchAll(pattern)].map((m) => Number(m[1]));
+    .join('\n')
+    .replace(/\\\n/g, ' ')
+    .split('\n');
+}
+
+/** The majors `pattern` finds in a file's instructions. */
+function majors(rel: string, pattern: RegExp): number[] {
+  const found = [...instructions(rel).join('\n').matchAll(pattern)].map((m) => Number(m[1]));
   if (found.length === 0) throw new Error(`${rel} no longer matches ${pattern}; update the pattern with the file`);
   return found;
 }
@@ -83,6 +90,20 @@ describe('the PostgreSQL client the backend image installs', () => {
     expect(new Set(clients).size).toBe(1);
   });
 
+  it('is named by its pinned major on every line that installs it', () => {
+    // Line by line: the majors above are gathered from every stage of a file
+    // at once, so one stage back on the unpinned postgresql-client passed as
+    // long as another stage still named the pinned one.
+    const unpinned = clientFiles.flatMap((f) => {
+      const installs = instructions(f).filter((line) => /\bapk add\b/.test(line) && /postgresql\d*-client/.test(line));
+      if (installs.length === 0) throw new Error(`${f} no longer installs a PostgreSQL client with apk add; update this test with the file`);
+      return installs
+        .filter((line) => [...line.matchAll(/postgresql(\d*)-client/g)].some((m) => m[1] === ''))
+        .map((line) => `${f}: ${line.trim()}`);
+    });
+    expect(unpinned).toEqual([]);
+  });
+
   it('is pinned against one server major, the same in both compose files and CI', () => {
     expect(new Set(servers).size).toBe(1);
   });
@@ -93,17 +114,28 @@ describe('the PostgreSQL client the backend image installs', () => {
 });
 
 describe('backend/scripts/restore.sh', () => {
-  const lines = read('backend/scripts/restore.sh')
-    .split(/\r?\n/)
-    .map((line) => line.trim());
+  const script = read('backend/scripts/restore.sh').replace(/\r\n/g, '\n');
 
   it('ends the load with the statements the dashboard restore ends it with, emptying the login sessions', () => {
-    for (const statement of RESTORE_TRAILER) {
-      if (!lines.includes(statement)) {
-        throw new Error(`restore.sh does not run RESTORE_TRAILER from utils/pgRestore.ts after the dump: ${statement}`);
-      }
-      expect(lines).toContain(statement);
-    }
+    // The statements, as the script holds them.
+    const held = /^RESTORE_TRAILER=\$\(cat <<'SQL'\n([\s\S]*?)\nSQL\n\)$/m.exec(script);
+    if (!held) throw new Error('restore.sh no longer holds RESTORE_TRAILER in a heredoc; update this test with the script');
+    expect(held[1].split('\n')).toEqual(RESTORE_TRAILER);
+
+    // Handed to the awk step that writes the file psql loads.
+    const awk = /awk -v key="\$RESTRICT_KEY" -v trailer="\$RESTORE_TRAILER" '\n([\s\S]*?)\n' > "\$PREPARED"/.exec(script);
+    if (!awk) throw new Error('restore.sh no longer hands RESTORE_TRAILER to its awk step; update this test with the script');
+    const program = awk[1];
+
+    // Printed once, as the last thing the END block does: END runs after
+    // every line of the dump has gone through, and only once it has passed
+    // the checks. Anywhere else, the sessions are emptied before the dump
+    // brings them back, or not at all.
+    expect(program.match(/\bprint trailer\b/g) ?? []).toHaveLength(1);
+    const end = /\n\s*END \{\n([\s\S]*)\n\s*\}\s*$/.exec(program);
+    if (!end) throw new Error("restore.sh's awk step no longer ends with an END block; update this test with the script");
+    const statements = end[1].split('\n').map((line) => line.trim()).filter(Boolean);
+    expect(statements[statements.length - 1]).toBe('print trailer');
   });
 });
 

@@ -71,7 +71,8 @@ export function getProxyLimitWarnings(env: NodeJS.ProcessEnv = process.env): str
   } else if (configured !== null && configured < required) {
     warnings.push(
       `NGINX_MAX_BODY_SIZE=${env.NGINX_MAX_BODY_SIZE} is smaller than the largest upload limit ${largest}. ` +
-        `Uploads will fail with HTTP 413 at Nginx. Set NGINX_MAX_BODY_SIZE=${requiredMB}M or larger in .env and restart.`
+        `Uploads will fail with HTTP 413 at Nginx. Set NGINX_MAX_BODY_SIZE=${requiredMB}M or larger in .env, then run ` +
+        `\`docker compose up -d\` to apply it (\`docker compose restart\` does not read .env again).`
     );
   } else if (configured === null && MAX_UPLOAD_BYTES > 50 * MB) {
     warnings.push(

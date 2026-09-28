@@ -4242,7 +4242,10 @@ paths:
                   message:
                     type: string
                   token:
-                    $ref: '#/components/schemas/Token'
+                    allOf:
+                      - $ref: '#/components/schemas/Token'
+                    nullable: true
+                    description: Null when the map would not send the caller this token (hidden from them, or on the other plane).
                   map:
                     $ref: '#/components/schemas/Map'
         '400':
@@ -4395,9 +4398,12 @@ paths:
         - Walls & Lighting
       summary: Replace all wall segments
       description: |
-        Replaces the map's entire wall list atomically. Used by the wall editor
-        when committing a large batch of changes (e.g. after drawing a polygon
-        room, or after undo/redo). DM only.
+        Replaces the map's entire wall list atomically. DM only.
+
+        None of the wall routes tells connected clients of the change. The web
+        client edits walls through the socket events (`wall:add`, `wall:remove`,
+        `wall:update`, `walls:replace`), which do; a wall changed here reaches a
+        client when it next fetches the map or sends `walls:request`.
       operationId: replaceWalls
       security:
         - cookieAuth: []
@@ -4439,7 +4445,8 @@ paths:
       summary: Add a wall segment
       description: |
         Append a single wall segment. The server assigns an `id` if the body
-        omits one. Maps are capped at 5000 wall segments. DM only.
+        omits one. Maps are capped at 5000 wall segments. DM only. Connected
+        clients are not told (see `replaceWalls`).
       operationId: addWall
       security:
         - cookieAuth: []
@@ -4491,7 +4498,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a wall segment
-      description: Remove a wall segment by id. DM only.
+      description: Remove a wall segment by id. DM only. Connected clients are not told (see `replaceWalls`).
       operationId: deleteWall
       security:
         - cookieAuth: []
@@ -4517,7 +4524,8 @@ paths:
       description: |
         Change the `type` of a single wall segment — most commonly used to
         toggle a door open/closed. Geometry (`x1/y1/x2/y2`) is immutable;
-        to move a wall, delete and re-add. DM only.
+        to move a wall, delete and re-add. DM only. Connected clients are not
+        told (see `replaceWalls`).
       operationId: updateWallType
       security:
         - cookieAuth: []

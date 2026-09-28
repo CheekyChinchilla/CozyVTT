@@ -160,7 +160,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
 
 ---
@@ -944,6 +944,16 @@ edit, and players see the change straight away without reloading.
 `.df2vtt` file and makes a map from it: the picture, the walls, the doors and
 any lights, all placed for you. If the file brings lights, the map starts with
 dynamic lighting on; otherwise it starts off, like any new map.
+
+**The picture goes into the campaign's library.** Import UVTT files the
+map's picture as a **Campaign** asset, so everyone in the campaign can browse it
+in the Asset Library as soon as the import finishes, even though the map itself
+stays yours until you switch to it. There is no option to import it as
+Personal. To keep a surprise map's picture hidden, open it in the Asset Library
+straight after importing (it has the map's name), and under **Move to…** choose
+**Personal**, then **Move to Personal**. The map keeps its picture, and your
+players can see it once you switch to that map. Until you move it, anyone
+browsing the library can see it.
 
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
