@@ -274,6 +274,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // Reset reconnect-detection so navigating to a new campaign doesn't
       // trigger a false-positive resync when the new campaign first connects.
       previouslyConnectedCampaignRef.current = null;
+      // Likewise the join count: the next campaign's first join is not a rejoin.
+      setJoinedEpoch(0);
     };
   }, [campaignId]); // connect is stable - no need in deps (causes premature cleanup)
 
