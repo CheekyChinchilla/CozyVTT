@@ -28,10 +28,15 @@ const client = (api as unknown as { client: AxiosInstance }).client;
 afterEach(() => vi.restoreAllMocks());
 
 describe('the backup requests', () => {
-  it('wait as long as the proxy does for a restore', async () => {
+  // A restore uploads the backup first. The browser's timeout covers the
+  // upload too, while nginx's counts only from when the upload is done, so a
+  // slow upload used to run the page out of time as the server went on
+  // restoring. The page leaves the limit to the proxy.
+  it('leave a restore to the proxy, which times it from the end of the upload', async () => {
     const post = vi.spyOn(client, 'post').mockResolvedValue({ data: {} });
     await api.restoreAdminBackup(new File(['zip'], 'backup.zip'));
-    expect(post.mock.calls[0][2]?.timeout).toBe(proxyTimeoutMs('/api/admin/backups/restore'));
+    expect(proxyTimeoutMs('/api/admin/backups/restore')).toBeGreaterThan(0);
+    expect(post.mock.calls[0][2]?.timeout).toBe(0);
   });
 
   it('wait as long as the proxy does for a new backup', async () => {
