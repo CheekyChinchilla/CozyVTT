@@ -783,7 +783,7 @@ export default function ProfilePage() {
                     value={pwNew}
                     onChange={(e) => setPwNew(e.target.value)}
                     className="input-cozy w-full pr-10"
-                    placeholder="Min 8 characters"
+                    placeholder="At least 12 characters"
                     autoComplete="new-password"
                   />
                   <button
