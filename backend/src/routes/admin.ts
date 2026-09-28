@@ -8,8 +8,8 @@ import crypto from 'crypto';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { createWriteStream } from 'fs';
 import fs from 'fs/promises';
+import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
@@ -29,7 +29,7 @@ import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail 
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
-import { resolveBackupDir } from '../utils/backupDir';
+import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
@@ -38,7 +38,7 @@ const execFileAsync = promisify(execFile);
 const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
 // Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
 const BACKUP_DIR = resolveBackupDir();
-const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip$/;
+const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
 
 // Guards for restoring an uploaded backup archive (see utils/archive.ts).
 // A full-instance backup legitimately bundles every uploaded file, but the
@@ -51,7 +51,7 @@ const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    fs.mkdir(BACKUP_DIR, { recursive: true })
+    ensureBackupDir(BACKUP_DIR)
       .then(() => cb(null, BACKUP_DIR))
       .catch((err) => cb(err, BACKUP_DIR));
   },
@@ -728,12 +728,37 @@ class DumpFailed extends Error {
  * it be undone. The ZIP is named by the second it was made, like every backup
  * the dashboard lists.
  */
-async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
-  await fs.mkdir(BACKUP_DIR, { recursive: true });
+/**
+ * A backup file of its own, opened exclusively. The name is the second the
+ * backup was asked for; two asked for in the same second, or a restore's
+ * safety copy taken in the second a backup was made, used to be given the
+ * same name, and the later one silently replaced the earlier. While the name
+ * is taken, `-2`, `-3` and so on follow it.
+ */
+async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }> {
   const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-  const filename = `backup-${timestamp}.zip`;
+  for (let n = 1; ; n++) {
+    const filename = n === 1 ? `backup-${timestamp}.zip` : `backup-${timestamp}-${n}.zip`;
+    try {
+      // 'wx' refuses an existing file instead of truncating it. Readable by the
+      // backend's own user alone: the archive holds every password hash, MFA
+      // secret and backup code on the instance.
+      const handle = await fs.open(path.join(BACKUP_DIR, filename), 'wx', 0o600);
+      return { filename, handle };
+    } catch (error) {
+      if (errorCode(error) !== 'EEXIST') throw error;
+    }
+  }
+}
+
+async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
+  await ensureBackupDir(BACKUP_DIR);
+  const { filename, handle } = await openNewBackup();
   const zipPath = path.join(BACKUP_DIR, filename);
   const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
+  // The stream takes the handle over once it exists; until then a failure
+  // has to close it here.
+  let streamed = false;
 
   try {
     try {
@@ -744,10 +769,13 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     }
 
     await new Promise<void>((resolve, reject) => {
-      // Readable by the backend's own user alone: the archive holds every
-      // password hash, MFA secret and backup code on the instance.
-      const output = createWriteStream(zipPath, { mode: 0o600 });
+      streamed = true;
+      const output = handle.createWriteStream();
       const archive = archiver('zip', { zlib: { level: 6 } });
+      // Both ends can fail: the archive while reading, the file while
+      // writing (a full disk). A stream error with nobody listening is an
+      // uncaught exception, which exits the process mid-backup.
+      output.on('error', reject);
       output.on('close', resolve);
       archive.on('error', reject);
       archive.pipe(output);
@@ -765,6 +793,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     return { filename, sizeBytes: stat.size };
   } catch (error) {
     // Leave no partial ZIP behind: the dashboard would list it as a backup
+    if (!streamed) await handle.close().catch(() => {});
     await fs.unlink(zipPath).catch(() => {});
     throw error;
   } finally {
@@ -815,7 +844,7 @@ router.post('/backups', async (req, res) => {
 // ============================================
 router.get('/backups', async (_req, res) => {
   try {
-    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
     const backups = await Promise.all(
       files
@@ -982,7 +1011,22 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       });
     }
 
-    // 6. Copy the archive's uploaded files over the existing ones. A backup
+    // 6. Everyone is signed out, as soon as the load has committed: the
+    // database is the backup's from here on, whatever the steps below do. The
+    // restored database holds no login sessions, and a socket that stayed open
+    // would keep the identity and campaign role it cached before the restore.
+    // Best-effort: the load itself is done. The in-memory combat state
+    // belonged to the old data.
+    try {
+      const io = getSocketInstance();
+      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
+      io.disconnectSockets(true);
+    } catch (error) {
+      logger.warn('Restore: live sockets could not be ended', { err: error });
+    }
+    clearAllCombatState();
+
+    // 7. Copy the archive's uploaded files over the existing ones. A backup
     // without any is fine; a copy that fails is not, and is reported after the
     // database side has been finished, so what was restored is usable.
     const extractedUploads = path.join(tempDir, 'uploads');
@@ -997,13 +1041,16 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       }
     }
 
-    // 7. Bring a backup from an older release up to this version's schema.
+    // 8. Bring a backup from an older release up to this version's schema.
     // start.sh runs the same command on every boot, so a failure here is
     // recovered by a restart, and the response says so.
     try {
       await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
+      // TODO(restore): this return skips step 9, so a restore whose migrations
+      // failed leaves no entry in the admin log although the database was
+      // replaced. It should write the same best-effort entry before answering.
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:
@@ -1015,19 +1062,6 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
           undo,
       });
     }
-
-    // 8. Everyone is signed out. The restored database holds no login
-    // sessions, and a socket that stayed open would keep the identity and
-    // campaign role it cached before the restore. Best-effort: the restore
-    // itself is done. The in-memory combat state belonged to the old data.
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
-    clearAllCombatState();
 
     // 9. Log the restore (best-effort — DB just changed so this may use restored data)
     await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup }).catch(() => {});

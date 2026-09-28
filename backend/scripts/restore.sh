@@ -55,19 +55,38 @@ fi
 # dump follows, without the lines this server would reject or that name the
 # database user of the instance the backup came from (SET transaction_timeout,
 # ALTER ... OWNER TO, GRANT, REVOKE) and without the dump's own \restrict
-# lines. Table rows (COPY blocks) are copied through untouched.
+# lines. Table rows (COPY blocks) are copied through untouched. The file ends
+# by emptying the login sessions, in the same transaction as the load: every
+# backup made before sessions were left out of backups carries them, and
+# restoring one would sign back in whoever had not yet expired, including
+# sign-ins ended since by a password change or a removed account.
 #
 # Outside its rows, the dump must end with pg_dump's closing line, create the
 # User and _prisma_migrations tables, and hold nothing but SQL: a psql
 # command, a COPY that is not table data, or a transaction statement means
 # it is not a backup pg_dump wrote, and it is refused before anything runs.
 # ------------------------------------------------------------------
-PREPARED=$(mktemp "${TMPDIR:-/tmp}/cozyvtt-restore.XXXXXX")
+# The whole backup is unpacked into this working file, so its folder needs
+# room for all of it; TMPDIR moves it somewhere with more.
+SCRATCH="${TMPDIR:-/tmp}"
+if ! PREPARED=$(mktemp "$SCRATCH/cozyvtt-restore.XXXXXX"); then
+  echo "❌ Could not create a working file in $SCRATCH. Nothing was changed."
+  echo "   Point TMPDIR at a folder you can write to, for example:"
+  echo "   TMPDIR=/var/tmp $0 $BACKUP_FILE"
+  exit 1
+fi
 trap 'rm -f "$PREPARED"' EXIT
 RESTRICT_KEY=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+# The same statement as RESTORE_TRAILER in backend/src/utils/pgRestore.ts;
+# keepInStep.test.ts fails if they differ. A very old backup has no session table.
+RESTORE_TRAILER=$(cat <<'SQL'
+DO $$ BEGIN IF to_regclass('public.session') IS NOT NULL THEN DELETE FROM public.session; END IF; END $$;
+SQL
+)
 
 echo "🔍 Checking $BACKUP_FILE..."
-if ! gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
+set +e
+gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" -v trailer="$RESTORE_TRAILER" '
   BEGIN {
     print "\\restrict " key
     print "SET client_min_messages = warning;"
@@ -107,8 +126,21 @@ if ! gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
       print "❌ This file cannot be restored because " refused ". Nothing was changed." > "/dev/stderr"
       exit 3
     }
+    print trailer
   }
-' > "$PREPARED"; then
+' > "$PREPARED"
+CHECK=("${PIPESTATUS[@]}")
+set -e
+# 3 is the check's own refusal, whose reason is printed above.
+if [[ "${CHECK[1]}" -eq 3 ]]; then
+  exit 1
+fi
+if [[ "${CHECK[0]}" -ne 0 || "${CHECK[1]}" -ne 0 ]]; then
+  echo "❌ Could not write the unpacked backup to $SCRATCH. Nothing was changed."
+  echo "   The whole backup is unpacked there before anything is loaded, so the folder"
+  echo "   needs room for all of it. If the messages above say no space is left, run it"
+  echo "   again with TMPDIR pointing at a folder with more room, for example:"
+  echo "   TMPDIR=/var/tmp $0 $BACKUP_FILE"
   exit 1
 fi
 
@@ -158,12 +190,14 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     if docker compose exec -T "$DB_SERVICE" \
         psql -U "$DB_USER" -d "$DB_NAME" -q -o /dev/null \
         -v ON_ERROR_STOP=1 --single-transaction < "$PREPARED"; then
-      echo "✅ Restore complete."
+      echo "✅ Restore complete. Every sign-in has ended, so everyone signs in again."
       echo ""
       echo "Next steps:"
-      echo "  - Restart the backend, which brings an older backup up to this version:"
-      echo "                            docker compose restart backend"
-      echo "  - Verify the app:         curl http://localhost/health"
+      echo "  - Restart the backend now:  docker compose restart backend"
+      echo "    It brings an older backup up to this version and ends the game connections"
+      echo "    still open, which keep the identity and role they had before the restore"
+      echo "    until the backend restarts."
+      echo "  - Verify the app:           curl http://localhost/health"
       exit 0
     else
       report_failure
@@ -211,11 +245,12 @@ if psql \
     -q -o /dev/null \
     -v ON_ERROR_STOP=1 \
     --single-transaction < "$PREPARED"; then
-  echo "✅ Restore complete."
+  echo "✅ Restore complete. Every sign-in has ended, so everyone signs in again."
   echo ""
   echo "Next steps:"
   echo "  - Bring an older backup up to this version:  cd backend && npx prisma migrate deploy"
-  echo "  - Restart the backend"
+  echo "  - Restart the backend now. That ends the game connections still open, which keep"
+  echo "    the identity and role they had before the restore until the backend restarts."
   echo "  - Verify the app:                            curl http://localhost/health"
 else
   report_failure

@@ -660,11 +660,11 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
-Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now.
+Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`: `sudo mv backend/uploads/backups/*.zip backend/backups/`.
 
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
-Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for the dumps it writes. On the host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
+Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for the dumps it writes. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
 
 For large or multi-server deployments, consider mounting an S3-compatible object store (MinIO, AWS S3) as a FUSE filesystem at `backend/uploads/`. No code changes required.
 
@@ -697,7 +697,7 @@ Before anything is touched, the file is checked: it has to be a complete `pg_dum
 docker compose logs backend | grep -i restore
 ```
 
-**A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped when the restore finishes, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
+**A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with full rights. The restore lets nothing through but SQL, and refuses a file that would run a command on the server, but SQL alone is enough to put anything at all in your database.
 
@@ -737,6 +737,31 @@ under a different database user name still restores. Like the dashboard, the
 script runs `psql` in its restricted mode, which needs a PostgreSQL release
 from August 2025 or later; on Docker that is the database container's own
 `psql`, and `docker compose pull database` brings an older image up to date.
+
+**Restart the backend as soon as a restore finishes.** The restore empties the
+login sessions an older backup carried, as part of that same single step, so
+every sign-in has ended and everyone signs in again. The script cannot reach
+the running backend, though: a game table that is already open keeps its live
+connection, with the identity and campaign role it had before the restore,
+until the backend restarts. The restart also brings a backup from an older
+CozyVTT up to this version. The script prints the command when it finishes:
+
+```bash
+docker compose restart backend
+```
+
+Without Docker, run `cd backend && npx prisma migrate deploy`, then restart the
+backend the way you normally start it.
+
+The script unpacks the whole backup into a working file before it loads
+anything, in `/tmp` unless `TMPDIR` says otherwise, so that folder needs room
+for the unpacked backup, which can be several times the size of the `.sql.gz`.
+Where `/tmp` is small (it is held in memory on some systems), point it
+somewhere with more room:
+
+```bash
+TMPDIR=/var/tmp ./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+```
 
 If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 

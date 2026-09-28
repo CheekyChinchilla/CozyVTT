@@ -20,7 +20,11 @@ Nothing to do beyond the usual upgrade, and nothing you have is removed. Four th
 And four things to do afterwards:
 
 - **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Profile & Settings → Security → Backup Codes → Regenerate**. The authenticator app itself is unaffected.
-- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
+- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there once the upgraded stack has started (it creates the new folder); the dashboard lists only the new location. Both folders belong to the backend's user in the container, so on Docker the move needs `sudo`:
+
+  ```bash
+  sudo mv backend/uploads/backups/*.zip backend/backups/
+  ```
 - **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If `docker compose logs backend` shows that message after this upgrade, the database itself still holds the old password (the database image only reads `POSTGRES_PASSWORD` when it creates an empty database), so changing `.env` alone would lock the backend out. Do it in this order, with the stack up (the database container runs even while the backend refuses):
 
   ```bash
@@ -73,6 +77,12 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed
+
+- **The restore script says what to do when there is no room to unpack a backup.** It unpacks the whole backup into `/tmp` before loading anything, and where `/tmp` is small a large backup failed with only a bare write error. It now says the folder is full, that nothing was changed, and how to point it somewhere with more room.
+
+- **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup or a restore's safety copy was being written, the write error had nothing listening for it and the backend process exited; the dashboard now reports the failed backup, or the failed restore, and the instance stays up.
+
+- **Two backups made in the same second no longer overwrite each other.** A backup was named by the second it was asked for, and a second one in that second, or the safety copy a restore takes first, silently replaced it: restoring a backup right after making it could leave you with only the smaller safety copy under that name. A name that is already taken now gets a `-2`, `-3` suffix, and every backup is kept.
 
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.
 
@@ -172,6 +182,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did.
+
 - **One password rule everywhere: at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character.** The setup wizard and the register page said so but did not check for the special character, the change-password and reset pages asked for eight characters, the profile page for eight with no other rule, the user guide named no special character, and the server itself accepted eight. Every page now checks the same rule the server enforces. Passwords already set are not affected.
 
 - **Backups are private files, and the database password stays out of the process list.** A backup made from the Admin Dashboard, or by the backup script, was written readable by every account on the server, and the backups folder was open to all; both hold every password hash, MFA secret and backup code on the instance. They are now readable by the backend's own user alone (copying one off the host by hand needs `sudo`; downloading from the dashboard does not). While a backup or restore ran, the database password was also visible in the server's process list, because it was passed to `pg_dump` and `psql` on the command line; it now reaches them through their environment.
@@ -196,7 +208,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Ending a sign-in now ends its open game connections too.** Changing your password, turning off MFA, an administrator resetting your password, changing your platform role or deleting your account, and signing out, all ended the browser sessions they were meant to, but a game table left open on another device, or a scripted client, kept its connection with every campaign power it had until it disconnected on its own. Each of those now also drops the live connections in question, with a message saying why; a password change or MFA removal keeps the device it is made on, and signing out drops only that sign-in's connections. Resetting a password from the **Forgot password?** link, which never ended any session before, now signs out every device.
 
-- **A backup no longer carries sign-ins, and a restore signs everyone out.** Backups included the login sessions, so restoring one brought back every sign-in it held that had not yet expired, including ones ended since by a password change or a removed account, and left every open game connection running on the pre-restore identity and role. New backups leave the sessions out, a restore empties whatever sessions an older backup holds, and every live connection is dropped once the restore finishes.
+- **A backup no longer carries sign-ins, and a restore signs everyone out.** Backups included the login sessions, so restoring one brought back every sign-in it held that had not yet expired, including ones ended since by a password change or a removed account, and left every open game connection running on the pre-restore identity and role. New backups leave the sessions out, and a restore, from the Admin Dashboard or the restore script, empties whatever sessions an older backup holds. The dashboard's restore also drops every live connection as soon as the backup is loaded, even when bringing it up to this version fails afterwards. The restore script cannot reach the running backend, so after it, restart the backend, which is what drops them; the script says so when it finishes.
 
 - **A connection told to join two campaigns at once ends up in only the last one.** Two join requests sent back to back on one live connection, before the first had finished, left it in both campaigns' rooms while carrying the second campaign's role. A player in one campaign who is the DM of another could have a scripted client receive the first campaign's DM view that way: hidden creatures with their notes, every player's explored ground, secret rolls and the whole fog grid, and removing them from that campaign did not cut the connection off. Join requests are now handled one at a time per connection, a connection leaves every other campaign room when it joins one, and every broadcast that reads a connection's role skips a connection that is not in the campaign being broadcast to.
 

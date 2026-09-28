@@ -12,11 +12,17 @@
  * The database client. The backend image installs a pinned PostgreSQL client
  * major for pg_dump and psql, and the server image is pinned separately in
  * three files. A client older than the server cannot dump it.
+ *
+ * The restore script. backend/scripts/restore.sh prepares the file psql loads
+ * in its own awk step, apart from the Admin Dashboard's restore, and has to
+ * end the load with the same statements, or a backup restored from the
+ * command line brings back what the dashboard's restore removes.
  */
 
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { RESTORE_TRAILER } from '../utils/pgRestore';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -65,5 +71,20 @@ describe('the PostgreSQL client the backend image installs', () => {
 
   it('is not older than the server image, or pg_dump refuses to dump it', () => {
     expect(clients[0]).toBeGreaterThanOrEqual(servers[0]);
+  });
+});
+
+describe('backend/scripts/restore.sh', () => {
+  const lines = read('backend/scripts/restore.sh')
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+
+  it('ends the load with the statements the dashboard restore ends it with, emptying the login sessions', () => {
+    for (const statement of RESTORE_TRAILER) {
+      if (!lines.includes(statement)) {
+        throw new Error(`restore.sh does not run RESTORE_TRAILER from utils/pgRestore.ts after the dump: ${statement}`);
+      }
+      expect(lines).toContain(statement);
+    }
   });
 });

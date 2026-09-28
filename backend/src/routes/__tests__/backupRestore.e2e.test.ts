@@ -7,7 +7,8 @@
  * database must be written before psql loads anything, psql must load the
  * prepared copy of the dump (schema replaced, the setting an older server
  * rejects removed), migrations must run after a successful load and never
- * after a failed one, and a failed load must leave the uploads alone.
+ * after a failed one, and a failed load must leave the uploads alone. Live
+ * connections end once the load has committed, whatever fails after it.
  */
 
 jest.mock('child_process', () => ({
@@ -17,7 +18,9 @@ jest.mock('child_process', () => ({
 
 import { execFile } from 'child_process';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
+import { PassThrough } from 'stream';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
@@ -25,6 +28,11 @@ import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
+import {
+  clearState as clearCombatState,
+  getState as getCombatState,
+  setState as setCombatState,
+} from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
 
 const app = createTestApp();
@@ -190,7 +198,7 @@ describe('POST /api/admin/backups/restore', () => {
     const [dump] = calls;
     expect(dump.cmd).toBe('pg_dump');
     expect(dump.args).toEqual(expect.arrayContaining(['--clean', '--if-exists', '--no-owner', '--no-privileges']));
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     expect(named).toBeDefined();
     expect(res.body.safetyBackup).toBe(named);
 
@@ -265,6 +273,30 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
   });
 
+  it('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
+    stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    // The zip's output stream fails once writing starts, as a full disk does.
+    // A stream error with no listener is an uncaught exception, which took
+    // the whole backend down in the middle of a restore.
+    const probe = await fs.open(path.join(os.tmpdir(), `cozyvtt-stream-probe-${Date.now()}`), 'w');
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream: () => NodeJS.WritableStream };
+    await probe.close();
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(() => {
+      const stream = new PassThrough();
+      process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      return stream;
+    });
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Restore Failed');
+      expect(res.body.message).toMatch(/backup of the current database/i);
+    } finally {
+      failing.mockRestore();
+    }
+  });
+
   it('says the database was restored but the files were not when copying them fails', async () => {
     const marker = `restore-test-${Date.now()}`;
     const uploads = process.env.UPLOAD_DIR || 'uploads';
@@ -285,15 +317,17 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.message).toMatch(/files/);
       // The database side still finishes, migrations included, so what was restored is usable.
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
       if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
     } finally {
       await fs.rm(path.join(uploads, marker), { force: true });
     }
   });
 
-  it('answers 500 when the load fails, runs no migration and copies no uploads', async () => {
+  it('answers 500 when the load fails, runs no migration, copies no uploads and leaves combat alone', async () => {
     const marker = `restore-test-${Date.now()}`;
+    const campaignId = `restore-combat-${Date.now()}`;
+    setCombatState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
     const calls = stubTools({ cmd: 'psql', stderr: 'ERROR:  unrecognized configuration parameter "transaction_timeout"' });
     const zip = await backupZip({
       'database.sql': DUMP_FROM_NEWER_CLIENT,
@@ -305,13 +339,15 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Restore Failed');
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql']);
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
     // The log carries psql's own words and never the command line, which holds the database URL and its password.
     const logged = JSON.stringify(errorSpy.mock.calls.filter((c) => String(c[0]).includes('psql restore error')));
     expect(logged).toContain('unrecognized configuration parameter');
     expect(logged).not.toContain('postgresql://');
     await expect(fs.access(path.join(process.env.UPLOAD_DIR || 'uploads', marker))).rejects.toBeDefined();
+    expect(getCombatState(campaignId).active).toBe(true);
+    clearCombatState(campaignId);
   });
 
   it('says the database was restored but not migrated when the migration run fails', async () => {
@@ -323,7 +359,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip)/.exec(res.body.message)?.[1];
+    const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
     if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
   });
 
@@ -352,6 +388,38 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
+  it('still ends every live connection and forgets combat when the migration run fails after the load', async () => {
+    // The load has committed by then, so the database is the backup's whether
+    // or not the migrations succeed, and a socket left open would keep the
+    // identity and role it cached from the database that was replaced.
+    const ws = await createWsTestServer();
+    const campaignId = `restore-combat-${Date.now()}`;
+    setCombatState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
+    try {
+      const cookie = await ws.loginAs(userId);
+      const client = await ws.connectClient(cookie);
+      const told = waitForEvent<{ message: string }>(client, 'error');
+      const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
+      const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+      const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+      const res = await restore(admin, zip);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Restore Incomplete');
+      expect(res.body.message).toMatch(/restart/i);
+      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
+      if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect((await told).message).toMatch(/restored/i);
+      expect(await dropped).toBe('io server disconnect');
+      expect(getCombatState(campaignId).active).toBe(false);
+    } finally {
+      clearCombatState(campaignId);
+      await ws.close();
+    }
+  });
+
   it('refuses anyone who is not a platform administrator', async () => {
     const calls = stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -360,5 +428,64 @@ describe('POST /api/admin/backups/restore', () => {
 
     expect(res.status).toBe(403);
     expect(calls).toEqual([]);
+  });
+});
+
+describe('POST /api/admin/backups', () => {
+  const dir = () => process.env.BACKUP_DIR || 'backups';
+  /** Every backup in a test is asked for in the same second. */
+  let clock: jest.SpyInstance;
+
+  beforeAll(async () => {
+    await fs.mkdir(path.resolve(process.env.UPLOAD_DIR || 'uploads'), { recursive: true });
+  });
+
+  beforeEach(() => {
+    clock = jest.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-27T14:43:06.000Z');
+  });
+
+  afterEach(() => {
+    clock.mockRestore();
+  });
+
+  it('gives two backups made in the same second different names, and keeps the first as it was', async () => {
+    stubTools();
+    const first = await admin.post('/api/admin/backups');
+    expect(first.status).toBe(201);
+    const firstFile = path.join(dir(), first.body.filename);
+    written.push(firstFile);
+    // A mark on the first file: a second backup that reused its name would wipe it.
+    await fs.appendFile(firstFile, 'kept');
+    const marked = (await fs.stat(firstFile)).size;
+
+    const second = await admin.post('/api/admin/backups');
+    expect(second.status).toBe(201);
+    written.push(path.join(dir(), second.body.filename));
+
+    expect(first.body.filename).toBe('backup-2026-09-27T14-43-06.zip');
+    expect(second.body.filename).toBe('backup-2026-09-27T14-43-06-2.zip');
+    expect((await fs.stat(firstFile)).size).toBe(marked);
+    const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(names).toEqual(expect.arrayContaining([first.body.filename, second.body.filename]));
+    expect((await fs.stat(path.join(dir(), second.body.filename))).mode & 0o777).toBe(0o600);
+  });
+
+  it("names a restore's safety copy apart from a backup made in the same second, and leaves that backup alone", async () => {
+    stubTools();
+    const made = await admin.post('/api/admin/backups');
+    expect(made.status).toBe(201);
+    const madeFile = path.join(dir(), made.body.filename);
+    written.push(madeFile);
+    await fs.appendFile(madeFile, 'kept');
+    const marked = (await fs.stat(madeFile)).size;
+
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }));
+    expect(res.status).toBe(200);
+    written.push(path.join(dir(), res.body.safetyBackup));
+
+    expect(res.body.safetyBackup).not.toBe(made.body.filename);
+    expect((await fs.stat(madeFile)).size).toBe(marked);
+    const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(names).toContain(res.body.safetyBackup);
   });
 });
