@@ -3902,9 +3902,12 @@ paths:
         now see it (`map.changed`), since those two decide which tokens a
         player is sent.
 
-        An image address must name an asset the caller can read, or the request
-        answers 403 (the right to read an asset follows its use, so storing a
-        reference is checked like reading it). The address already stored may be
+        An image address on this server must be an asset's exact address
+        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
+        one the caller can read, or the request answers 403 (the right to read
+        an asset follows its use, so storing a reference is checked like
+        reading it). An address naming an asset that no longer exists is
+        accepted. The address already stored may be
         sent back unchanged.
       operationId: updateMap
       security:
@@ -4046,9 +4049,12 @@ paths:
         this campaign, unless `controlledBy` says otherwise. A character
         owned by the DM or a spectator gives its token no controller.
 
-        An image address must name an asset the caller can read, or the request
-        answers 403 (the right to read an asset follows its use, so storing a
-        reference is checked like reading it).
+        An image address on this server must be an asset's exact address
+        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
+        one the caller can read, or the request answers 403 (the right to read
+        an asset follows its use, so storing a reference is checked like
+        reading it). An address naming an asset that no longer exists is
+        accepted.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -4104,9 +4110,12 @@ paths:
         player's update answers 404, as fetching that map does, even for a
         token they control; the DM may update tokens on any map.
 
-        An image address must name an asset the caller can read, or the request
-        answers 403 (the right to read an asset follows its use, so storing a
-        reference is checked like reading it). The address already stored may be
+        An image address on this server must be an asset's exact address
+        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
+        one the caller can read, or the request answers 403 (the right to read
+        an asset follows its use, so storing a reference is checked like
+        reading it). An address naming an asset that no longer exists is
+        accepted. The address already stored may be
         sent back unchanged.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
@@ -4961,7 +4970,7 @@ paths:
     post:
       tags: [Creatures]
       summary: Create custom creature
-      description: Create a new campaign-specific custom creature template (DM only). An image address must name an asset the caller can read (403 otherwise); the address already stored may be sent back unchanged.
+      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
       operationId: createCreature
       security:
         - cookieAuth: []
@@ -5045,7 +5054,7 @@ paths:
     put:
       tags: [Creatures]
       summary: Update custom creature
-      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address must name an asset the caller can read (403 otherwise); the address already stored may be sent back unchanged.
+      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateCreature
       security:
         - cookieAuth: []
@@ -5317,7 +5326,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Create token template
-      description: Create a new token template (DM only). An image address must name an asset the caller can read (403 otherwise); the address already stored may be sent back unchanged.
+      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -5366,7 +5375,7 @@ paths:
     put:
       tags: [Token Templates]
       summary: Update token template
-      description: Update a token template (DM only). An image address must name an asset the caller can read (403 otherwise); the address already stored may be sent back unchanged.
+      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -5406,7 +5415,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Save token as template
-      description: Create a token template from an existing map token's properties. An image address must name an asset the caller can read (403 otherwise); the address already stored may be sent back unchanged.
+      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
