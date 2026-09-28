@@ -20,7 +20,11 @@ Nothing to do beyond the usual upgrade, and nothing you have is removed. Four th
 And four things to do afterwards:
 
 - **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Profile & Settings → Security → Backup Codes → Regenerate**. The authenticator app itself is unaffected.
-- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there; the dashboard lists only the new location. The directory is created for you on the first start.
+- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there once the upgraded stack has started (it creates the new folder); the dashboard lists only the new location. Both folders belong to the backend's user in the container, so on Docker the move needs `sudo`:
+
+  ```bash
+  sudo mv backend/uploads/backups/*.zip backend/backups/
+  ```
 - **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If `docker compose logs backend` shows that message after this upgrade, the database itself still holds the old password (the database image only reads `POSTGRES_PASSWORD` when it creates an empty database), so changing `.env` alone would lock the backend out. Do it in this order, with the stack up (the database container runs even while the backend refuses):
 
   ```bash
@@ -73,6 +77,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed
+
+- **The restore script says what to do when there is no room to unpack a backup.** It unpacks the whole backup into `/tmp` before loading anything, and where `/tmp` is small a large backup failed with only a bare write error. It now says the folder is full, that nothing was changed, and how to point it somewhere with more room.
 
 - **A backup that fails while being written no longer takes the backend down.** If the disk filled up while a backup or a restore's safety copy was being written, the write error had nothing listening for it and the backend process exited; the dashboard now reports the failed backup, or the failed restore, and the instance stays up.
 

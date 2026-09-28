@@ -62,12 +62,21 @@ fi
 # command, a COPY that is not table data, or a transaction statement means
 # it is not a backup pg_dump wrote, and it is refused before anything runs.
 # ------------------------------------------------------------------
-PREPARED=$(mktemp "${TMPDIR:-/tmp}/cozyvtt-restore.XXXXXX")
+# The whole backup is unpacked into this working file, so its folder needs
+# room for all of it; TMPDIR moves it somewhere with more.
+SCRATCH="${TMPDIR:-/tmp}"
+if ! PREPARED=$(mktemp "$SCRATCH/cozyvtt-restore.XXXXXX"); then
+  echo "❌ Could not create a working file in $SCRATCH. Nothing was changed."
+  echo "   Point TMPDIR at a folder you can write to, for example:"
+  echo "   TMPDIR=/var/tmp $0 $BACKUP_FILE"
+  exit 1
+fi
 trap 'rm -f "$PREPARED"' EXIT
 RESTRICT_KEY=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
 
 echo "🔍 Checking $BACKUP_FILE..."
-if ! gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
+set +e
+gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
   BEGIN {
     print "\\restrict " key
     print "SET client_min_messages = warning;"
@@ -108,7 +117,19 @@ if ! gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
       exit 3
     }
   }
-' > "$PREPARED"; then
+' > "$PREPARED"
+CHECK=("${PIPESTATUS[@]}")
+set -e
+# 3 is the check's own refusal, whose reason is printed above.
+if [[ "${CHECK[1]}" -eq 3 ]]; then
+  exit 1
+fi
+if [[ "${CHECK[0]}" -ne 0 || "${CHECK[1]}" -ne 0 ]]; then
+  echo "❌ Could not write the unpacked backup to $SCRATCH. Nothing was changed."
+  echo "   The whole backup is unpacked there before anything is loaded, so the folder"
+  echo "   needs room for all of it. If the messages above say no space is left, run it"
+  echo "   again with TMPDIR pointing at a folder with more room, for example:"
+  echo "   TMPDIR=/var/tmp $0 $BACKUP_FILE"
   exit 1
 fi
 

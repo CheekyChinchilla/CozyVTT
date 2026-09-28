@@ -660,7 +660,7 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
-Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now.
+Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`: `sudo mv backend/uploads/backups/*.zip backend/backups/`.
 
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
@@ -737,6 +737,16 @@ under a different database user name still restores. Like the dashboard, the
 script runs `psql` in its restricted mode, which needs a PostgreSQL release
 from August 2025 or later; on Docker that is the database container's own
 `psql`, and `docker compose pull database` brings an older image up to date.
+
+The script unpacks the whole backup into a working file before it loads
+anything, in `/tmp` unless `TMPDIR` says otherwise, so that folder needs room
+for the unpacked backup, which can be several times the size of the `.sql.gz`.
+Where `/tmp` is small (it is held in memory on some systems), point it
+somewhere with more room:
+
+```bash
+TMPDIR=/var/tmp ./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+```
 
 If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 
