@@ -6609,7 +6609,11 @@ paths:
     post:
       tags: [Character Templates]
       summary: Publish a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: >-
+        Any signed-in user may publish a template. A `tokenImageUrl`, when
+        given, must name a global asset by its own address
+        (`/api/assets/tokens/<id>`, with nothing after the id) or by its bare
+        id; anything else is refused with 400.
       operationId: createCharacterTemplate
       security:
         - cookieAuth: []
@@ -6647,7 +6651,9 @@ paths:
     put:
       tags: [Character Templates]
       summary: Update a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: >-
+        The template's author, a user with the `templateEditor` flag, or a
+        platform ADMIN. `tokenImageUrl` follows the rule on create.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -6670,7 +6676,7 @@ paths:
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: The template's author, a user with the `templateEditor` flag, or a platform ADMIN.
       operationId: deleteCharacterTemplate
       security:
         - cookieAuth: []
