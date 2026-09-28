@@ -40,8 +40,18 @@ function nginxStampFor(template: string): string {
   return crypto.createHash('sha256').update(template.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
 }
 
+/**
+ * The majors `pattern` finds in a file's instructions. Comment lines are left
+ * out: both Dockerfiles explain the pinned client in a comment that names it,
+ * and a check that read the comments would pass with the install line
+ * itself back on the unpinned name.
+ */
 function majors(rel: string, pattern: RegExp): number[] {
-  const found = [...read(rel).matchAll(pattern)].map((m) => Number(m[1]));
+  const instructions = read(rel)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+  const found = [...instructions.matchAll(pattern)].map((m) => Number(m[1]));
   if (found.length === 0) throw new Error(`${rel} no longer matches ${pattern}; update the pattern with the file`);
   return found;
 }
