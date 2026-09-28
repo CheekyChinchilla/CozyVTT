@@ -313,6 +313,11 @@ class SocketClient {
     this.isConnecting = false;
   }
 
+  /** Whether a connect() is under way and has not yet joined or failed. */
+  isConnectInProgress(): boolean {
+    return this.isConnecting;
+  }
+
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }

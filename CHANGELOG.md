@@ -76,6 +76,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **A game table whose sign-in has ended goes to the sign-in page.** When a password change on another device, an admin reset or a restore ended a sign-in, its open game tables kept trying to reconnect every second or two for as long as the tab stayed open, showing a disconnected badge and nothing else. They now stop and go to the sign-in page, and a connection that the server keeps closing is retried a few times and then left to the Retry button.
 
+- **Coming back online reconnects even while a reconnect is already being tried.** If the network came back while the table was still retrying on its own, the event was ignored, and once those retries ran out the table stayed on Connection Error until Retry was clicked.
+
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.
 
 - **Session timeouts and the log level set in `.env` now apply under Docker.** The Docker setup never handed `SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` or `LOG_LEVEL` to the backend, so setting them in `.env` did nothing on a Docker install and nothing said so; they reach the backend now, with the same defaults as before, and a check keeps the example env file and the Docker setup in step. The guides also now say that `docker compose restart` keeps the old settings (apply a changed `.env` with `docker compose up -d`) and that `BACKUP_DIR` applies only to an install without Docker.

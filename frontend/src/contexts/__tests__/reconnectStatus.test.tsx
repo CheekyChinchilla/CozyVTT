@@ -24,9 +24,11 @@ const fakeSocket = {
 
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: vi.fn().mockResolvedValue(undefined) } }));
+const clientConnect = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/services/socket', () => ({
   default: {
-    connect: vi.fn().mockResolvedValue(undefined),
+    connect: (id: string) => clientConnect(id),
+    isConnectInProgress: () => false,
     disconnect: vi.fn(),
     getSocket: () => fakeSocket,
     on: vi.fn(),
@@ -66,4 +68,28 @@ describe('connection status across socket.io reconnects', () => {
     act(() => managerHandlers.reconnect_failed!());
     expect(screen.getByTestId('status').textContent).toBe('error:1');
   });
+
+  // While socket.io retries on its own the status is 'connecting'. The network
+  // coming back in that window used to be ignored, so if the remaining
+  // attempts ran out the tab stayed on "Connection Error" for good.
+  it('reconnects on the network coming back while socket.io is still retrying', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<WebSocketProvider><Probe /></WebSocketProvider>);
+      await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected:0'));
+      const before = clientConnect.mock.calls.length;
+
+      act(() => socketHandlers.disconnect?.('transport close'));
+      act(() => managerHandlers.reconnect_attempt!());
+      expect(screen.getByTestId('status').textContent).toBe('connecting:0');
+
+      act(() => { window.dispatchEvent(new Event('online')); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+
+      expect(clientConnect.mock.calls.length).toBe(before + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
+

@@ -290,7 +290,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     const handleOnline = () => {
       const cid = connectedCampaignRef.current ?? previouslyConnectedCampaignRef.current;
       if (!cid) return;
-      if (statusRef.current === 'connected' || statusRef.current === 'connecting') return;
+      if (statusRef.current === 'connected') return;
+      // 'connecting' is either our own connect in flight, which will finish,
+      // or socket.io retrying by itself, whose remaining attempts may already
+      // be spent against a network that has only now come back. Only the
+      // first is left alone.
+      if (statusRef.current === 'connecting' && socketClient.isConnectInProgress()) return;
 
       // Full disconnect + reconnect dance. Goes through our connect() flow
       // which handles the auth/reauth handshake and ticks reconnectCount
