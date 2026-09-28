@@ -73,5 +73,8 @@ it('does not blame pg_dump when the temporary folder cannot be used', async () =
   expect(res.status).toBe(500);
   expect(res.body.message).not.toMatch(/not installed/);
   expect(res.body.message).toMatch(/temporary/i);
+  // TMPDIR in .env never reaches the backend container, so the advice has
+  // to say what to do under Docker too.
+  expect(res.body.message).toMatch(/under Docker/);
   expect(execFileMock).not.toHaveBeenCalled();
 });

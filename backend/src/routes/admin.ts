@@ -744,10 +744,18 @@ const TOOL_MISSING_REPLY = {
   message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
 };
 
+/**
+ * What to do about a temporary folder a backup or restore could not use.
+ * Under Docker it is inside the backend container, on the disk Docker keeps
+ * its containers on, and TMPDIR in .env does not reach the container.
+ */
+const TEMP_FOLDER_ADVICE =
+  'Check that it exists and that the backend can write to it. If it is full, free some space on the disk it is on (under Docker, the disk Docker keeps its containers on); on an install without Docker you can also set TMPDIR to a folder with more room.';
+
 function tempFolderReply() {
   return {
     error: 'Backup Failed',
-    message: `The backup could not use the temporary folder (${os.tmpdir()}). Check that it exists and that the backend can write to it; if it is full or read-only, set TMPDIR to another folder.`,
+    message: `The backup could not use the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE}`,
   };
 }
 
@@ -1043,7 +1051,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
       return res.status(500).json({
         error: 'Restore Failed',
-        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). If that folder is full, free some space or set TMPDIR to another folder. Nothing was changed.`,
+        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
       });
     }
     const { skipped, refused } = prepared;
