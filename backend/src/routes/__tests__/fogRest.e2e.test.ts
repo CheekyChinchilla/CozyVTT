@@ -53,6 +53,8 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // Players are told of fog on the map the table is on.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   agent = request.agent(app);
   expect((await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();

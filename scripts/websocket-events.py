@@ -125,11 +125,14 @@ def collect():
         # `broadcastToCampaign(id, 'event', data)` reaches a client just as
         # surely as `socket.emit`, so it belongs in the same table.
         # The token move handlers hand the event name to a helper that picks
-        # the recipients, so the name is that call's first argument.
+        # the recipients, so the name is that call's first argument. A map's
+        # live edits go through emitToMapReaders (or the map routes' wrapper,
+        # tellMapReaders), where the name is the first quoted argument.
         patterns = (
             r"\.emit\(\s*'([^']+)'",
             r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*'([^']+)'",
             r"emitMoveTo(?:VisibleSockets|DragRecipients)\(\s*'([^']+)'",
+            r"(?:emitToMapReaders|tellMapReaders)\(\s*[^'()]*'([^']+)'",
         )
         for pattern in patterns:
             for m in re.finditer(pattern, text):

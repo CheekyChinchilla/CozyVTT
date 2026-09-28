@@ -54,6 +54,8 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // Pings on the map the table is on reach players.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   owner = request.agent(app);
   expect((await owner.post('/api/auth/login').send({ email: ownerUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();

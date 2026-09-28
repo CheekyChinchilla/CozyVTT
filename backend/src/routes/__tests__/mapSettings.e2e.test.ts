@@ -74,11 +74,14 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function createMap(): Promise<{ id: string; fogEnabled: boolean; lightingEnabled: boolean; globalIllumination: boolean; explorationEnabled: boolean }> {
+async function createMap(onScreen = true): Promise<{ id: string; fogEnabled: boolean; lightingEnabled: boolean; globalIllumination: boolean; explorationEnabled: boolean }> {
   const res = await agent
     .post(`/api/campaigns/${campaignId}/maps`)
     .send({ name: `Map ${randomUUID().slice(0, 8)}`, imageUrl: assetId, width: 10, height: 10 });
   expect(res.status).toBe(201);
+  // Put it on screen: a player is told of changes to the map the table is on,
+  // and a map being edited in the library is nobody's canvas.
+  if (onScreen) await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: res.body.map.id } });
   return res.body.map;
 }
 
@@ -178,7 +181,7 @@ describe('a change that alters what players can see', () => {
    * Global Illumination is on or lighting is off altogether.
    */
   async function createLitMap(current = true): Promise<string> {
-    const map = await createMap();
+    const map = await createMap(current);
     const base = { imageUrl: '', size: { width: 1, height: 1 }, visible: true, rotation: 0, conditions: [] as string[], metadata: {} as Record<string, unknown>, layer: 'token' };
     await prisma.map.update({
       where: { id: map.id },
@@ -190,9 +193,6 @@ describe('a change that alters what players can see', () => {
         ]),
       },
     });
-    // The re-send is for the map the table is on; a map being edited in the
-    // library is nobody's canvas.
-    if (current) await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: map.id } });
     return map.id;
   }
 
@@ -219,17 +219,24 @@ describe('a change that alters what players can see', () => {
     client.disconnect();
   });
 
-  it('a change to a map the table is not on sends the flags and nothing more', async () => {
+  // A map the table is not on is the DM's until they switch to it, its
+  // settings included; a player is sent them with the map when it is shown.
+  it('a change to a map the table is not on tells the DM and no player', async () => {
     const current = await createLitMap();
     const other = await createLitMap(false);
     const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-    const flags = waitForEvent<{ mapId: string }>(client, 'map:settings:updated');
-    const quiet = expectNoEvent(client, 'map.changed', 500);
+    const dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const flags = waitForEvent<{ mapId: string }>(dm, 'map:settings:updated');
+    const quiet = Promise.all([
+      expectNoEvent(client, 'map:settings:updated', 500),
+      expectNoEvent(client, 'map.changed', 500),
+    ]);
     expect((await agent.put(`/api/campaigns/${campaignId}/maps/${other}`).send({ globalIllumination: true })).status).toBe(200);
     expect((await flags).mapId).toBe(other);
     await quiet;
     expect(current).not.toBe(other);
     client.disconnect();
+    dm.disconnect();
   });
 
   it('a change that leaves sight alone sends the flags and nothing more', async () => {

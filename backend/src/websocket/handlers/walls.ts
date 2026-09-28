@@ -10,6 +10,7 @@ import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
+import { emitToMapReaders } from '../utils';
 import { mapEditLimiter, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
@@ -50,7 +51,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson([...existing, parsed.data]) } });
 
-      io.to(socket.campaignId).emit('wall:added', { mapId, segment: parsed.data });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'wall:added', { mapId, segment: parsed.data });
     } catch (error) {
       logger.error('wall:add failed', { err: error });
       socket.emit('error', { message: 'Failed to add wall segment' });
@@ -83,7 +84,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson(filtered) } });
 
-      io.to(socket.campaignId).emit('wall:removed', { mapId, segmentId });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'wall:removed', { mapId, segmentId });
     } catch (error) {
       logger.error('wall:remove failed', { err: error });
       socket.emit('error', { message: 'Failed to remove wall segment' });
@@ -157,7 +158,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       existing[idx] = updated;
       await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson(existing) } });
 
-      io.to(socket.campaignId).emit('wall:updated', { mapId, segment: updated });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'wall:updated', { mapId, segment: updated });
     } catch (error) {
       logger.error('wall:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update wall segment' });
@@ -193,7 +194,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson(parsed.data) } });
 
-      io.to(socket.campaignId).emit('walls:replaced', { mapId, segments: parsed.data });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'walls:replaced', { mapId, segments: parsed.data });
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace wall segments' });
@@ -232,7 +233,8 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
    */
   const emitDmEditing = throttle((mapId: string) => {
     if (socket.campaignId) {
-      socket.to(socket.campaignId).emit('dm:editing', { mapId, timestamp: new Date().toISOString() });
+      void emitToMapReaders(io, socket.campaignId, mapId, 'dm:editing', { mapId, timestamp: new Date().toISOString() }, socket.id)
+        .catch((err: unknown) => logger.error('dm:editing failed', { err }));
     }
   }, 500);
 

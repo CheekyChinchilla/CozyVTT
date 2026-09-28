@@ -11,6 +11,8 @@ import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
 import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
 import { campaignSockets } from './utils';
+import { prisma } from '../config/database';
+import { canReadMap } from '../services/permissions';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -213,9 +215,12 @@ export function applyWsFogOperation(fog: FogState, operation: FogOperation): voi
  * way whichever path made it.
  */
 export async function broadcastFogState(io: Server, campaignId: string, mapId: string, fog: FogState): Promise<void> {
+  // A prepared map's fog is the DM's until they switch to it (canReadMap).
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   const sockets = await campaignSockets(io, campaignId);
   for (const s of sockets) {
     const role = (s as unknown as AuthenticatedSocket).role;
+    if (!canReadMap(role, mapId, campaign?.currentMapId)) continue;
     if (role === 'DM') {
       s.emit('fog:updated', { mapId, fogState: fog });
     } else {

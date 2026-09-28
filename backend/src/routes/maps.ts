@@ -7,7 +7,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient, viewerIdFor } from '../utils/spirit-layer';
-import { broadcastToCampaign, getSocketInstance } from '../websocket/utils';
+import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
@@ -49,6 +49,20 @@ const uvttUpload = multer({
 });
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
+
+/**
+ * Tell those who may read a map of a change to it (emitToMapReaders): the
+ * whole campaign for the map on screen, the DM for a prepared one. The write
+ * has already happened, so a failure to tell anyone is logged and the
+ * request still succeeds.
+ */
+async function tellMapReaders(campaignId: string, mapId: string, event: string, data: unknown): Promise<void> {
+  try {
+    await emitToMapReaders(getSocketInstance(), campaignId, mapId, event, data);
+  } catch (err) {
+    logger.warn('Map change not broadcast', { err, event, mapId });
+  }
+}
 
 // The token shape lives in websocket/shared.ts — see the note there on why this
 // file no longer keeps its own copy.
@@ -755,7 +769,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // event carrying all of them, so a client never holds a stale flag.
     if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined || updateData.globalIllumination !== undefined || updateData.explorationEnabled !== undefined) {
       try {
-        broadcastToCampaign(campaignId, 'map:settings:updated', {
+        await tellMapReaders(campaignId, id, 'map:settings:updated', {
           mapId: id,
           lightingEnabled: updatedMap.lightingEnabled,
           fogEnabled: updatedMap.fogEnabled,
@@ -1748,7 +1762,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
       data: { lights: toJson(parsed.data) },
     });
 
-    broadcastToCampaign(campaignId, 'lights:replaced', { mapId: id, lights: updated.lights });
+    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: updated.lights });
     return res.status(200).json({ lights: updated.lights });
   } catch (error) {
     logger.error('Error replacing light sources:', error);
@@ -1783,7 +1797,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
       data: { lights: toJson([...existing, parsed.data]) },
     });
 
-    broadcastToCampaign(campaignId, 'light:added', { mapId: id, light: parsed.data });
+    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: parsed.data });
     return res.status(201).json({ light: parsed.data, total: (updated.lights as unknown as LightSource[]).length });
   } catch (error) {
     logger.error('Error adding light source:', error);
@@ -1816,7 +1830,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     existing[idx] = { ...existing[idx], ...parsed.data };
     await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
-    broadcastToCampaign(campaignId, 'light:updated', { mapId: id, light: existing[idx] });
+    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
     return res.status(200).json({ light: existing[idx] });
   } catch (error) {
     logger.error('Error updating light source:', error);
@@ -1843,7 +1857,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 
     await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
 
-    broadcastToCampaign(campaignId, 'light:removed', { mapId: id, lightId });
+    await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
     logger.error('Error deleting light source:', error);
@@ -1937,7 +1951,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
 
     // Broadcast to all clients in this campaign so they don't need to reload
     try {
-      broadcastToCampaign(campaignId, 'map:settings:updated', {
+      await tellMapReaders(campaignId, id, 'map:settings:updated', {
         mapId: id,
         lightingEnabled: updated.lightingEnabled,
         fogEnabled: updated.fogEnabled,

@@ -3,6 +3,7 @@ import { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
+import { canReadMap } from '../services/permissions';
 
 /**
  * WebSocket Utility Functions
@@ -66,6 +67,35 @@ export type CampaignSocket = Awaited<ReturnType<Server['fetchSockets']>>[number]
 export async function campaignSockets(io: Server, campaignId: string): Promise<CampaignSocket[]> {
   const sockets = await io.in(campaignId).fetchSockets();
   return sockets.filter((s) => (s as unknown as { campaignId?: string }).campaignId === campaignId);
+}
+
+/**
+ * Send one of a map's live edits (its walls, lights, fog, settings, pings,
+ * the explored-memory reset, the DM's editing notice) to everyone who may
+ * read that map (canReadMap): the whole campaign while it is the map on
+ * screen, the DM's sockets for any other. A prepared map's layout is the
+ * DM's until they switch to it, on the live connection as on its fetch.
+ * `exceptSocketId` leaves out the sender where the event is not echoed.
+ */
+export async function emitToMapReaders(
+  io: Server,
+  campaignId: string,
+  mapId: string,
+  event: string,
+  data: unknown,
+  exceptSocketId?: string
+): Promise<void> {
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const currentMapId = campaign?.currentMapId ?? null;
+  if (currentMapId === mapId) {
+    const room = io.to(campaignId);
+    (exceptSocketId ? room.except(exceptSocketId) : room).emit(event, data);
+    return;
+  }
+  for (const s of await campaignSockets(io, campaignId)) {
+    if (s.id === exceptSocketId) continue;
+    if (canReadMap((s as unknown as { role?: string }).role, mapId, currentMapId)) s.emit(event, data);
+  }
 }
 
 /**

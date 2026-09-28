@@ -9,6 +9,7 @@ import { prisma } from '../../config/database';
 import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
+import { emitToMapReaders } from '../utils';
 import { mapEditLimiter, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
@@ -49,7 +50,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       await prisma.map.update({ where: { id: mapId }, data: { lights: toJson([...existing, parsed.data]) } });
 
-      io.to(socket.campaignId).emit('light:added', { mapId, light: parsed.data });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'light:added', { mapId, light: parsed.data });
     } catch (error) {
       logger.error('light:add failed', { err: error });
       socket.emit('error', { message: 'Failed to add light source' });
@@ -82,7 +83,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(filtered) } });
 
-      io.to(socket.campaignId).emit('light:removed', { mapId, lightId });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'light:removed', { mapId, lightId });
     } catch (error) {
       logger.error('light:remove failed', { err: error });
       socket.emit('error', { message: 'Failed to remove light source' });
@@ -126,7 +127,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       existing[idx] = parsed.data;
       await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(existing) } });
 
-      io.to(socket.campaignId).emit('light:updated', { mapId, light: parsed.data });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'light:updated', { mapId, light: parsed.data });
     } catch (error) {
       logger.error('light:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update light source' });
@@ -162,7 +163,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(parsed.data) } });
 
-      io.to(socket.campaignId).emit('lights:replaced', { mapId, lights: parsed.data });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'lights:replaced', { mapId, lights: parsed.data });
     } catch (error) {
       logger.error('lights:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace light sources' });

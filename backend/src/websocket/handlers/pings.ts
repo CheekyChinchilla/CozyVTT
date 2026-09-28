@@ -14,6 +14,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import logger from '../../utils/logger';
+import { emitToMapReaders } from '../utils';
 import { pingLimiter } from '../shared';
 
 /** Max pings per user per window, and the window itself. */
@@ -27,7 +28,7 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
    * where the cursor was rather than snapping to a square.
    * SECURITY: broadcasts to the server-authenticated socket.campaignId only.
    */
-  socket.on('map.ping', (data: { mapId: string; x: number; y: number }) => {
+  socket.on('map.ping', async (data: { mapId: string; x: number; y: number }) => {
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
@@ -43,8 +44,9 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
       // Silent drop over the limit — see the note in shared.ts.
       if (!pingLimiter.check(socket.userId!, PING_LIMIT, PING_WINDOW_MS)) return;
 
-      // io.to (not socket.to) so the sender sees their own ping as well.
-      io.to(socket.campaignId).emit('map.pinged', {
+      // The sender included, so they see their own ping as well; a ping on
+      // a map the DM is preparing reaches only the DM.
+      await emitToMapReaders(io, socket.campaignId, mapId, 'map.pinged', {
         mapId,
         x,
         y,

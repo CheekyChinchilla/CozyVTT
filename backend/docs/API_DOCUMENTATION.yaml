@@ -3884,7 +3884,8 @@ paths:
       summary: Update map
       description: |
         Update map settings (DM only). A change to any per-map flag is
-        broadcast as `map:settings:updated`; a change to `lightingEnabled` or
+        broadcast as `map:settings:updated`, to every member for the map the
+        campaign is showing and to the DM's connections for any other; a change to `lightingEnabled` or
         `globalIllumination` also re-sends every member the map as they can
         now see it (`map.changed`), since those two decide which tokens a
         player is sent.
@@ -4754,8 +4755,9 @@ paths:
         Mutate the fog state by either revealing/hiding a list of cell indices
         (`reveal` / `hide` with `cells: number[]`) or by revealing/hiding the
         entire map (`reveal_all` / `hide_all`). Returns the updated fog state
-        and broadcasts it to every connected client, exactly as the socket
-        `fog:operation` event does. Refused with 409 while fog of war is off
+        and broadcasts it exactly as the socket `fog:operation` event does:
+        to every connected member for the map the campaign is showing, to the
+        DM's connections for any other. Refused with 409 while fog of war is off
         for the map. DM only.
       operationId: applyFogOperation
       security:
@@ -4812,7 +4814,8 @@ paths:
         manual brush-controlled layer. DM only.
 
         Also broadcasts `map:settings:updated`, carrying every per-map flag,
-        to all connected clients. Because this flag decides which tokens
+        to every connected member for the map the campaign is showing and to
+        the DM's connections for any other. Because this flag decides which tokens
         players are sent, a change also re-sends each member the map as they
         can now see it (`map.changed`), so nothing needs a reload.
       operationId: setLightingEnabled

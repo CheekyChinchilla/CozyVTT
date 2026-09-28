@@ -19,6 +19,7 @@ import { prisma } from '../../config/database';
 import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
+import { emitToMapReaders } from '../utils';
 import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
@@ -152,7 +153,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
       await prisma.mapExploration.deleteMany({ where: { mapId } });
-      io.to(socket.campaignId).emit('exploration:state', { mapId, userId: null, cells: [] });
+      await emitToMapReaders(io, socket.campaignId, mapId, 'exploration:state', { mapId, userId: null, cells: [] });
     } catch (error) {
       logger.error('exploration:reset failed', { err: error });
       socket.emit('error', { message: 'Failed to reset explored areas' });
