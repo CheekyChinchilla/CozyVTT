@@ -49,6 +49,22 @@ describe('useExploredMemory', () => {
     expect([...hook.result.current.exploredCells!]).toEqual([9]);
   });
 
+  // The server sends a player's memory to the DM sockets following them, and
+  // a socket follows whoever its last request named. Closing the preview sent
+  // nothing, so the DM went on being sent that player's memory on every
+  // reveal. Ending it asks as nobody, which stops the following.
+  it('stops following the player when the DM closes the preview', () => {
+    const s = fakeSocket();
+    const hook = renderHook(({ who }) => useExploredMemory(s.source, 'map-1', true, who, 1), {
+      initialProps: { who: 'alice' as string | null },
+    });
+    expect(s.emit).toHaveBeenLastCalledWith('exploration:request', { mapId: 'map-1', userId: 'alice' });
+
+    hook.rerender({ who: null });
+    expect(s.emit).toHaveBeenLastCalledWith('exploration:request', { mapId: 'map-1' });
+    expect(s.emit).toHaveBeenCalledTimes(2);
+  });
+
   it('drops another user\'s memory and another map\'s', () => {
     const s = fakeSocket();
     const hook = renderHook(() => useExploredMemory(s.source, 'map-1', true, 'alice', 1));

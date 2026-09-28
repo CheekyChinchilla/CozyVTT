@@ -167,6 +167,27 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     dm.disconnect();
   });
 
+  // Closing the preview asks as nobody, which is how a DM socket stops
+  // following the player it previewed.
+  it('stops following a player once the DM asks as nobody', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const opened = waitForEvent(dm, 'exploration:state');
+    dm.emit('exploration:request', { mapId, userId: p1Id });
+    await opened;
+    dm.emit('exploration:request', { mapId: '' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const quiet = expectNoEvent(dm, 'exploration:state', 600);
+    const echoed = waitForEvent(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [5] });
+    await echoed;
+    await quiet;
+    p1.disconnect();
+    dm.disconnect();
+  });
+
   // Switching the preview between players quickly can run past the request
   // limit. The dropped request still names who the DM is now previewing, or
   // the socket went on following the previous player and never heard the
