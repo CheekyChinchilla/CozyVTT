@@ -187,6 +187,24 @@ describe('the socket client when the server stops accepting its sign-in', () => 
     expect(sockets).toHaveLength(2);
   });
 
+  // The socket can be refused on every handshake while the REST API takes
+  // the same sign-in: a proxy that drops the cookie on /socket.io, or a
+  // socket address on another site. Each check then succeeds, and each
+  // reconnect it leads to has to count, or the page retries for ever.
+  it('gives up after its attempts when every socket is refused but every check succeeds', async () => {
+    listCampaigns.mockResolvedValue({ campaigns: [] });
+    await joined(client);
+
+    for (let i = 0; i < 20; i++) {
+      current().fire('connect');
+      current().fire('error', { message: 'Unauthorized' });
+      current().fire('disconnect', 'io server disconnect');
+      if (!(await nextSocket())) break;
+    }
+
+    expect(sockets.length).toBeLessThanOrEqual(6);
+  });
+
   it('gives up after its attempts when the server keeps closing a socket before it joins', async () => {
     await joined(client);
 

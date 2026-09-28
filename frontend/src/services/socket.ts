@@ -87,6 +87,8 @@ function isSignInRefusal(error: unknown): boolean {
 class SocketClient {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
+  /** Sign-in checks that failed for a reason other than the sign-in; see checkSignIn. */
+  private signInChecks = 0;
   /** The server refused this socket's sign-in; the disconnect that follows must not reconnect. */
   private signInRefused = false;
   private maxReconnectAttempts = 5;
@@ -209,6 +211,7 @@ class SocketClient {
         // transport's own connect let a server that closes every socket
         // before it joins be retried for ever.
         this.reconnectAttempts = 0;
+        this.signInChecks = 0;
         resolve();
       });
 
@@ -292,14 +295,17 @@ class SocketClient {
       // about the sign-in, so ask again after a while, within the attempts.
       const status = apiErrorStatus(error);
       if (status === 401 || status === 403) return;
-      if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
-      const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 30000);
-      this.reconnectAttempts++;
+      if (this.signInChecks >= this.maxReconnectAttempts) return;
+      const delay = Math.min(this.reconnectDelay * Math.pow(2, this.signInChecks), 30000);
+      this.signInChecks++;
       setTimeout(() => { void this.checkSignIn(); }, delay);
       return;
     }
-    // The checks spent the attempts; the reconnect they lead to gets its own.
-    this.reconnectAttempts = 0;
+    // The checks have attempts of their own, so a run the network cut short
+    // still leaves the reconnect its own. Each reconnect spends one of those,
+    // so a socket refused every time while the REST API takes the same
+    // sign-in (a proxy dropping the cookie on /socket.io) still stops.
+    this.signInChecks = 0;
     this.reconnect();
   }
 
