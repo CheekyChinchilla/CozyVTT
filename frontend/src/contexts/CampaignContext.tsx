@@ -389,11 +389,26 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       const { campaignId, userId, role } = data;
       setCampaign((prev) => (prev && prev.id === campaignId ? withMemberRole(prev, userId, role) : prev));
     };
+    // Someone joined, left, or brought a character: the roster refetches, and
+    // so does the member list everything else on the page reads (Duplicate
+    // keeps a token's controller only while they are a player here).
+    const handleRosterUpdated = (data: { campaignId?: string }) => {
+      const campaignId = data?.campaignId;
+      if (!campaignId) return;
+      campaignService
+        .getCampaign(campaignId)
+        .then((fresh) => {
+          setCampaign((prev) => (prev && prev.id === fresh.id ? { ...prev, memberships: fresh.memberships } : prev));
+        })
+        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', err));
+    };
     socketClient.onMemberRoleChanged(handleRoleChanged);
     socketClient.on('authenticated', handleAuthenticated);
+    socketClient.on('roster.updated', handleRosterUpdated);
     return () => {
       socketClient.off('campaign.role.changed', handleRoleChanged);
       socketClient.off('authenticated', handleAuthenticated);
+      socketClient.off('roster.updated', handleRosterUpdated);
     };
   }, []);
 
