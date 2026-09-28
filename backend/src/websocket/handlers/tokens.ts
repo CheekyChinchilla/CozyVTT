@@ -28,19 +28,24 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * a second, so the decision, line of sight included, runs once,
    * on the start event or the first frame, and is reused until token.move.end
    * clears it, or until the token is hidden, shown or moved to the other
-   * plane mid-drag, which changes who may see it and so decides again. A
-   * player who could not see the token learns where it ended up, if they can
-   * see it there, from the end event's own fan-out.
+   * plane mid-drag, which changes who may see it and so decides again. Who
+   * may see it also turns on each player's plane, their role and the map on
+   * screen, which can change mid-drag without touching the token, so the
+   * decision is made again at least every DRAG_DECISION_MS as well. A player
+   * who could not see the token learns where it ended up, if they can see it
+   * there, from the end event's own fan-out.
    */
-  const dragRecipients = new Map<string, { seenAs: string; deciding: Promise<Set<string>> }>();
+  const DRAG_DECISION_MS = 1000;
+  const dragRecipients = new Map<string, { seenAs: string; at: number; deciding: Promise<Set<string>> }>();
   const seenAs = (token: Pick<Token, 'visible' | 'layer'>) => `${token.visible !== false}|${token.layer}`;
   function dragRecipientsFor(mapId: string, token: Token): Promise<Set<string>> {
     const cached = dragRecipients.get(token.id);
-    if (cached && cached.seenAs === seenAs(token)) return cached.deciding;
+    const now = Date.now();
+    if (cached && cached.seenAs === seenAs(token) && now - cached.at < DRAG_DECISION_MS) return cached.deciding;
     // The promise is cached, not its result, so frames that arrive while the
     // first one is still being decided wait for it instead of deciding again.
     const deciding = decideDragRecipients(mapId, token.id);
-    dragRecipients.set(token.id, { seenAs: seenAs(token), deciding });
+    dragRecipients.set(token.id, { seenAs: seenAs(token), at: now, deciding });
     return deciding;
   }
   async function decideDragRecipients(mapId: string, tokenId: string): Promise<Set<string>> {

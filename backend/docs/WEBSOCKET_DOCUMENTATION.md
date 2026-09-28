@@ -403,7 +403,7 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
   everyone the drag's frames went to, since a pause can land mid-drag after
   those screens have drawn the frames and the drop
 
-**Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. Who that is gets decided once, on this event or the first frame, and the drag's frames reuse it. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
+**Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. Who that is gets decided on this event or the first frame, and the drag's frames reuse it; it is decided again when the token is hidden, shown or moved to the other plane mid-drag, and at least once a second, so a player who changes plane or leaves the map the table is on stops receiving the frames within a second. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**
 ```typescript
 {
