@@ -41,9 +41,9 @@ The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by dom
   document; deleting the asset removes every link to it
 
 **Assets & messages**
-- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN
+- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN; `uploadedById` becomes null when the uploader's account is deleted, and the file stays
 - `Message` — chat history (player, DM, system, dice rolls, character actions)
-- `DiceRoll` — historical dice rolls with breakdowns
+- `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 
 **Platform**
 - `SystemLog` — admin-visible audit log
@@ -72,6 +72,7 @@ Note: `AssetType` includes `DOCUMENT` and `OTHER`, but the upload route rejects 
 - **Cascade deletions** — deleting a campaign cascades to its memberships, maps, sessions, messages, dice rolls, creature templates, token templates, personal notes, and (campaign-scoped) assets
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
+- **Deleting a user** keeps their chat messages, dice rolls and uploads with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they are that DM
 
 ## JSON columns
 

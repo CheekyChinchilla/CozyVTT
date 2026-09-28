@@ -779,8 +779,11 @@ paths:
       summary: Delete own account
       description: |
         Self-service permanent account deletion. Requires the current
-        password as confirmation. Cascades to delete memberships, characters,
-        and messages owned by the user.
+        password as confirmation. Deletes the user's memberships, characters,
+        personal notes and dice macros. Their chat messages, dice rolls and
+        uploaded assets stay, with the user field set to null. A campaign the
+        user owns passes to its sitting DM; while the user is that DM the
+        deletion is refused with 409 and nothing changes.
       operationId: deleteOwnAccount
       security:
         - cookieAuth: []
@@ -819,6 +822,8 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The user runs a campaign they own; the message names it. Nothing was changed.
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1019,7 +1024,7 @@ paths:
       tags:
         - Users
       summary: Delete user
-      description: Delete user account (Admin only, cannot delete self). Ends every login session the deleted user had.
+      description: Delete user account (Admin only, cannot delete self). Ends every login session the deleted user had. What stays and what goes, and the 409 for a user who runs a campaign they own, are as for `DELETE /api/auth/account`.
       operationId: deleteUser
       security:
         - cookieAuth: []
@@ -1046,6 +1051,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The user runs a campaign they own; the message names it. Nothing was changed.
 
   /api/users/{id}/reset-password:
     post:
@@ -7359,6 +7366,7 @@ components:
           type: string
           format: date-time
         uploadedBy:
+          nullable: true
           type: object
           properties:
             id:
@@ -7490,6 +7498,8 @@ components:
         uploadedById:
           type: string
           format: uuid
+          nullable: true
+          description: Null once the uploader's account is deleted; the asset stays.
         campaignId:
           type: string
           format: uuid

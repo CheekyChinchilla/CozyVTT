@@ -710,7 +710,7 @@ export default function DiceRoller() {
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
-                rollerIsDM={dmUserIds.has(roll.userId)}
+                rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
               />
             ))}
             {shownRolls.length === 0 && (

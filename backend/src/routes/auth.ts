@@ -16,6 +16,7 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import logger from '../utils/logger';
+import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 
 // ============================================
 // MFA Helpers
@@ -586,14 +587,13 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    // The campaigns they were in, read before the cascade removes the rows.
-    const campaignIds = (await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
-      .map((m) => m.campaignId);
-
-    // Delete the user (cascades to memberships, characters, messages, etc.)
-    await prisma.user.delete({ where: { id: userId } });
+    // See services/accountDeletion.ts for what stays and what goes.
+    const deletion = await deleteAccount(userId);
+    if (!deletion.deleted) {
+      return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'you') });
+    }
     await endLiveSockets(userId, 'Your account was deleted.');
-    announceRosterChange(userId, campaignIds, 'member.left');
+    announceRosterChange(userId, deletion.campaignIds, 'member.left');
 
     // Destroy the session
     req.session.destroy(() => {});

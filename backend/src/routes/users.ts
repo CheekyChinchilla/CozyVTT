@@ -11,6 +11,7 @@ import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import crypto from 'crypto';
 import logger from '../utils/logger';
+import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 
 /**
  * User Management Routes
@@ -398,19 +399,17 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
 
     // Count USER-scoped assets before deletion so the frontend can warn admins.
-    // Assets with scope USER are owned by this user and will be orphaned on deletion.
+    // They stay, owned by no one, which leaves them readable by admins alone.
     const userAssetCount = await prisma.asset.count({
       where: { uploadedById: id, scope: 'USER' },
     });
 
-    // The campaigns they were in, read before the cascade removes the rows.
-    const campaignIds = (await prisma.campaignMembership.findMany({ where: { userId: id }, select: { campaignId: true } }))
-      .map((m) => m.campaignId);
-
-    // Delete user (cascades to related data)
-    await prisma.user.delete({
-      where: { id },
-    });
+    // See services/accountDeletion.ts for what stays and what goes.
+    const deletion = await deleteAccount(id);
+    if (!deletion.deleted) {
+      return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'they') });
+    }
+    const campaignIds = deletion.campaignIds;
 
     // The session outlives the row it refers to, and the guards read the
     // session, so it has to go too.

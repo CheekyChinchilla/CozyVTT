@@ -96,6 +96,14 @@ describe('CampaignDocumentsModal', () => {
       expect(listAssets).not.toHaveBeenCalled();
     });
 
+    // A deleted account's uploads stay, with no uploader.
+    it('lists a document whose uploader has deleted their account', async () => {
+      listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d2', 'Old Handout', 'old.pdf'), uploadedBy: null }] });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      fireEvent.click(await screen.findByText('Old Handout'));
+      expect(await screen.findAllByText('Old Handout')).not.toHaveLength(0);
+    });
+
     it('offers a way to open each document in a new tab', async () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
       await screen.findByText('Core Rules');

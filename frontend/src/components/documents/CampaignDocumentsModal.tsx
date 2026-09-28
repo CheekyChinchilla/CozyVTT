@@ -50,7 +50,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   const { user } = useAuth();
   const isAdmin = user?.platformRole === PlatformRole.ADMIN;
   /** Edit rights: the uploader or an admin. The server decides for real. */
-  const canEdit = (doc: CampaignDocument) => isAdmin || doc.uploadedBy.id === user?.id;
+  const canEdit = (doc: CampaignDocument) => isAdmin || (doc.uploadedBy !== null && doc.uploadedBy.id === user?.id);
 
   const load = useCallback(async () => {
     setLoading(true);

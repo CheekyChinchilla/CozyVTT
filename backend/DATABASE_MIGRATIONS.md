@@ -90,6 +90,12 @@ about; the list is not exhaustive.
   map, one row per map and user, cascading on delete of either. One `ALTER
   TABLE ... ADD COLUMN` with a default, one `CREATE TABLE`, two indexes and two
   foreign keys. Nothing existing is altered; the table starts empty.
+- `20260928120000_keep_rolls_and_uploads_of_deleted_accounts` - `Asset.uploadedById`
+  and `DiceRoll.userId` become nullable, and their foreign keys change from
+  refusing a user's deletion to setting the column to null, as
+  `Message.userId` already did. Two `DROP NOT NULL` and the two foreign keys
+  dropped and re-added in one transaction. No row is changed or removed; it
+  only lets an account with rolls or uploads be deleted.
 
 ## Data migrations (one-off scripts)
 

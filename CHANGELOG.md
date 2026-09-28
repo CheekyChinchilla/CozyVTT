@@ -48,7 +48,7 @@ And four things to do afterwards:
 
 **Backups you made from the Admin Dashboard on 1.4.0 could not be restored**, on 1.4.0 or anywhere else, because of the tool mismatch described under Fixed. They were never damaged, and they restore on 1.5.0, including into a freshly installed 1.5.0.
 
-The upgrade adds three columns to the map table, each defaulting to today's behaviour, and one new empty table for explored memory. They are created automatically on the first startup after you pull, and no existing row is changed or removed. Back up first as always — see [Database Backups](docs/DEPLOYMENT.md#database-backups) — then rebuild and restart:
+The upgrade adds three columns to the map table, each defaulting to today's behaviour, and one new empty table for explored memory, and it lets two existing columns (who made a dice roll, who uploaded a file) be empty, so that an account can be deleted. They are changed automatically on the first startup after you pull, and no existing row is changed or removed. Back up first as always — see [Database Backups](docs/DEPLOYMENT.md#database-backups) — then rebuild and restart:
 
 ```bash
 git pull origin main
@@ -80,6 +80,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **New maps start with fog of war off.** Every map used to be fully fogged for players from the moment it was created, with no way to turn that off. A map you create from now on starts unfogged; maps you already have keep fog exactly as it is.
 
 ### Fixed
+
+- **Deleting an account works.** Deleting your own account, or an admin deleting someone else's, failed with an error for anyone who had ever rolled a die, uploaded a file or created a campaign, which is almost everyone. It now goes through. Their chat messages, dice rolls and uploads stay where they are, no longer linked to anyone, so a campaign keeps its history and its map art. A campaign they created but someone else runs as DM passes to that DM. If they run a campaign themselves, the deletion is refused and names it: hand the DM seat to another member in the campaign's settings, or delete the campaign, first. The warnings in the profile page and the admin panel now say what really happens, where they said campaigns and messages would be deleted.
 
 - **A chat message or dice roll sent while your connection was coming back no longer goes missing.** After a dropped connection the page read the chat and dice history again as soon as the network returned, a moment before it had rejoined the game, so anything sent in between never appeared until you reloaded. It now reads them once it has rejoined.
 

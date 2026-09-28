@@ -1496,8 +1496,8 @@ export default function AdminPage() {
                                         <div className="flex items-start gap-2 mb-3 p-2.5 bg-warning/10 border border-warning/30 rounded-lg text-xs text-warning-ink">
                                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning-ink" />
                                           <span>
-                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''} that will be deleted with their account.
-                                            To preserve them, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
+                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''}. They stay after the account is deleted, owned by no one, and only admins can see them then.
+                                            To keep them usable by others, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
                                           </span>
                                         </div>
                                       )}
@@ -1648,7 +1648,7 @@ export default function AdminPage() {
 
                         // Thumb URL
                         const thumbUrl = asset.type === AssetType.AVATAR
-                          ? api.getAssetUrl(asset.uploadedById, 'avatars')
+                          ? (asset.uploadedById ? api.getAssetUrl(asset.uploadedById, 'avatars') : '')
                           : asset.type === AssetType.MAP
                             ? api.getAssetUrl(asset.id, 'maps')
                             : asset.type === AssetType.TOKEN

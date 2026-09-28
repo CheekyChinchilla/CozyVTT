@@ -691,9 +691,9 @@ Email addresses cannot be changed by users directly. Contact your platform admin
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent and will remove all your campaigns, characters, and messages.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, so the table's history and the art on its maps are not lost.
 
-> **Warning:** If you're a DM running active campaigns, deleting your account will also remove those campaigns for all players. Make sure to hand off or wrap up campaigns before deleting.
+> **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 
 ### I forgot my password
 

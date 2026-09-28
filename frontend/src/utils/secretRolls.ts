@@ -15,7 +15,8 @@
 
 /** The parts of a roll this decision depends on. */
 export interface RollVisibility {
-  userId: string;
+  /** Null once the roller's account is deleted: then a secret roll is the DM's alone. */
+  userId: string | null;
   secret?: boolean;
 }
 
