@@ -852,15 +852,28 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
         });
       }
 
-      // Remove used backup code
-      const updatedCodes = user.mfaBackupCodes.filter((_, i) => i !== matchIndex);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { mfaBackupCodes: updatedCodes },
-      });
+      // Spend exactly the hash that matched, and only if it is still there.
+      // The Argon2 checks above take a moment, and another sign-in may have
+      // spent this code, or another one, since the list was read: writing
+      // that list back would let this code work twice, or bring the other one
+      // back. So the removal is one conditional statement, and no row
+      // changed means the code was spent in the meantime.
+      const matched = user.mfaBackupCodes[matchIndex];
+      const spent = await prisma.$queryRaw<{ remaining: number }[]>`
+        UPDATE "User"
+        SET "mfaBackupCodes" = array_remove("mfaBackupCodes", ${matched})
+        WHERE id = ${user.id} AND ${matched} = ANY("mfaBackupCodes")
+        RETURNING cardinality("mfaBackupCodes") AS remaining
+      `;
+      if (spent.length === 0) {
+        return res.status(401).json({
+          error: 'Invalid Code',
+          message: 'Invalid backup code. Please try again.',
+        });
+      }
 
       backupCodeUsed = true;
-      remainingBackupCodes = updatedCodes.length;
+      remainingBackupCodes = Number(spent[0].remaining);
     }
 
     // MFA passed — create full session. rememberMe is captured before the

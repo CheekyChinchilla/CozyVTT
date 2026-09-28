@@ -215,6 +215,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **A backup code can only be used once, even by two sign-ins at the same moment.** Two sign-ins using the same backup code together could both get in, and two using different codes together could leave one of them working after it had been used, with the count of codes left shown wrongly. Each code is now removed the moment it is accepted, and a sign-in that finds it already gone is refused.
+
 - **An authenticator code now works once, and guessing codes is limited per account.** A six-digit code stays valid for up to a minute and a half, and the same code could be used to sign in again in that time by anyone who saw it. It is now refused after its first use, and so is any earlier code; if a sign-in right after another is refused, wait for the next code. Wrong codes at the sign-in step were limited only per network address, so someone who already had the password could spread guesses across many addresses; each account now also allows five wrong codes per 15 minutes.
 
 - **Changing an account's email address, or turning on MFA, now needs the current password.** Someone who got hold of a signed-in browser could change the account's address and then use **Forgot password?** to set a new password from their own mailbox, or set up an authenticator of their own so the owner could no longer sign in. Both now ask for the current password; an administrator changing another person's address still does not need theirs. When an address changes, the old address is emailed to say so (if the instance can send email), and any reset or invitation link already sent stops working. Turning MFA on also signs out your other devices, as turning it off already did.

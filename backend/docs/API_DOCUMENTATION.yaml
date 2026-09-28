@@ -666,7 +666,7 @@ paths:
       summary: Verify MFA during login
       description: |
         Complete MFA verification during login flow. Requires a pending MFA session from `/api/auth/login`.
-        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use.
+        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use, exactly once even when two requests carry the same code; the second is answered 401.
         A TOTP code is accepted once: one from the same 30-second step as a code already accepted for the account, or an earlier step, is refused.
         Rate limited (5 failures/15min per address, separate from setup verification, and 5 failures/15min per account from any address).
       operationId: mfaVerifyLogin
