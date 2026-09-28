@@ -634,7 +634,11 @@ happened: Pathfinder 2e feat descriptions were dropped, and adding a cantrip
 blocked saving. Type each entry an editor creates with the sheet's interface
 from `frontend/src/types/game-systems/`, which follows the schema, so a missing
 field fails to compile, and give a field the editor writes a declaration in the
-schema before anything else.
+schema before anything else. A text box the player can clear writes an empty
+string, so its field must accept one. `editorShapes.test.ts`, beside the
+schemas, parses a sheet holding everything each editor writes and fails when
+the schema refuses or drops any of it; add to it when an editor gains a
+field.
 
 **Derive what the sheet can work out; store what it cannot.** The 5e sheet's own
 skills (`customSkills`) record a name, an ability and a proficiency level, and

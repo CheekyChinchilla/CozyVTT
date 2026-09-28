@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Clearing a text box no longer stops a sheet saving.** Emptying **Background** or **Alignment** on a D&D 5e or Pathfinder 2e sheet, **Deity** or an innate spell's frequency on a Pathfinder 2e sheet, or **Sex**, **Residence**, **Birthplace** or a weapon's skill on a Call of Cthulhu sheet made the server refuse the whole save. An empty box is now saved as empty.
+
 - **Saving a sheet no longer puts back hit points the DM took.** A sheet open to read did not follow hit points changed from the roster, and saving from the editor wrote back every value it had opened with, undoing the DM's change. An open sheet now follows those changes. A save made from a sheet that has changed since it was opened is refused, with a message, and the sheet opens again showing the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save either. A program saving characters through the API can ask for the same check by sending the `updatedAt` it loaded; one that leaves it out saves as before.
 
 - **A save the server refuses no longer throws away your edits.** On the full-page character editor, a refused save replaced the sheet with "Failed to Load Character", and everything typed since the last save was lost. The reason is now shown in a message and the sheet stays open with your edits, so you can correct them and save again.

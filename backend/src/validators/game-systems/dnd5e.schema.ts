@@ -319,8 +319,10 @@ export const dnd5eCharacterDataSchema = z.object({
 
   // Optional: Additional details
   playerName: z.string().min(1).optional(),
-  background: z.string().min(1).optional(),
-  alignment: z.string().min(1).optional(),
+  // Empty is allowed: these are text boxes on the sheet, and clearing one
+  // writes an empty string, which `min(1)` refused along with the whole save.
+  background: z.string().optional(),
+  alignment: z.string().optional(),
   experiencePoints: z.number().int().min(0).optional(),
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),

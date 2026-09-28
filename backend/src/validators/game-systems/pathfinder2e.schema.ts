@@ -367,7 +367,8 @@ const innateSpellSchema = z.object({
   rank: z.number().int().min(1).max(10).optional(),
   name: z.string().min(1),
   tradition: z.string().min(1).optional(),
-  frequency: z.string().min(1).optional(),
+  // A text box on the sheet; empty when cleared.
+  frequency: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -444,9 +445,11 @@ export const pathfinder2eCharacterDataSchema = z.object({
 
   // Optional: Additional details
   playerName: z.string().min(1).optional(),
-  background: z.string().min(1).optional(),
-  alignment: z.string().min(1).optional(),
-  deity: z.string().min(1).optional(),
+  // Empty is allowed: these are text boxes on the sheet, and clearing one
+  // writes an empty string, which `min(1)` refused along with the whole save.
+  background: z.string().optional(),
+  alignment: z.string().optional(),
+  deity: z.string().optional(),
   experiencePoints: z.number().int().min(0).optional(),
   heroPoints: z.number().int().min(0).max(3).optional(),
   savingThrows: savingThrowsSchema.optional(),

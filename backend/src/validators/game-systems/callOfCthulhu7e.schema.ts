@@ -217,7 +217,8 @@ const skillsSchema = z.object({
  */
 const weaponSchema = z.object({
   name: z.string().min(1),
-  skill: z.string().min(1).optional(),
+  // A text box on the sheet; empty when cleared.
+  skill: z.string().optional(),
   skillValue: z.number().int().min(0).max(100).optional(),
   damage: z.string().optional(),
   range: z.string().optional(),
@@ -334,9 +335,11 @@ export const callOfCthulhu7eCharacterDataSchema = z.object({
   // Optional: Additional details
   playerName: z.string().min(1).optional(),
   age: z.union([z.string(), z.number()]).transform(v => String(v)).optional(),
-  sex: z.string().min(1).optional(),
-  residence: z.string().min(1).optional(),
-  birthplace: z.string().min(1).optional(),
+  // Empty is allowed: these are text boxes on the sheet, and clearing one
+  // writes an empty string, which `min(1)` refused along with the whole save.
+  sex: z.string().optional(),
+  residence: z.string().optional(),
+  birthplace: z.string().optional(),
   derivedStats: derivedStatsSchema.optional(),
   skills: skillsSchema.optional(),
   combat: combatSchema.optional(),
