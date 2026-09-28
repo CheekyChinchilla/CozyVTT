@@ -64,3 +64,27 @@ it("tells the member's open connections, and everyone else in the campaign, the 
   member.disconnect();
   table.disconnect();
 });
+
+// What a member is sent of the map depends on their role: a spectator on a lit
+// map is sent no tokens. The controls followed the new role but the map the
+// page held did not, so a spectator made a player again had nothing to move
+// until the next map switch.
+it("sends the member the map the table is on again, as their new role sees it", async () => {
+  const mapId = (await prisma.map.create({
+    data: { campaignId, name: 'Shown', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+  })).id;
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
+  try {
+    const member = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const resent = waitForEvent<{ mapId: string }>(member, 'map.changed');
+
+    const res = await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'PLAYER' });
+    expect(res.status).toBe(200);
+
+    expect((await resent).mapId).toBe(mapId);
+    member.disconnect();
+  } finally {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+    await prisma.map.deleteMany({ where: { id: mapId } });
+  }
+});
