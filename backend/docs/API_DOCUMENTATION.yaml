@@ -6893,12 +6893,13 @@ paths:
         pg_dump writes is skipped, as are the archive's ownership and privilege
         statements, so it restores under this instance's database user whatever
         user the archive came from. The login sessions are not restored: new
-        archives carry none, an older archive's are emptied in the same
-        transaction, and every live socket is disconnected once the restore is
-        done, so everyone signs in again. After a successful load the migrations
-        run, so an archive from an older release comes up to date. If that step
-        fails, or copying the uploaded files fails, the response is 500 Restore
-        Incomplete and says what to do.
+        archives carry none, and an older archive's are emptied in the same
+        transaction. As soon as the load commits, every live socket is
+        disconnected and the in-memory combat state is dropped, whether or not
+        the steps after it succeed, so everyone signs in again. After a
+        successful load the migrations run, so an archive from an older release
+        comes up to date. If that step fails, or copying the uploaded files
+        fails, the response is 500 Restore Incomplete and says what to do.
       operationId: restoreBackup
       security:
         - cookieAuth: []

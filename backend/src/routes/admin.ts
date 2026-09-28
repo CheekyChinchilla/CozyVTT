@@ -1011,7 +1011,22 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       });
     }
 
-    // 6. Copy the archive's uploaded files over the existing ones. A backup
+    // 6. Everyone is signed out, as soon as the load has committed: the
+    // database is the backup's from here on, whatever the steps below do. The
+    // restored database holds no login sessions, and a socket that stayed open
+    // would keep the identity and campaign role it cached before the restore.
+    // Best-effort: the load itself is done. The in-memory combat state
+    // belonged to the old data.
+    try {
+      const io = getSocketInstance();
+      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
+      io.disconnectSockets(true);
+    } catch (error) {
+      logger.warn('Restore: live sockets could not be ended', { err: error });
+    }
+    clearAllCombatState();
+
+    // 7. Copy the archive's uploaded files over the existing ones. A backup
     // without any is fine; a copy that fails is not, and is reported after the
     // database side has been finished, so what was restored is usable.
     const extractedUploads = path.join(tempDir, 'uploads');
@@ -1026,13 +1041,16 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       }
     }
 
-    // 7. Bring a backup from an older release up to this version's schema.
+    // 8. Bring a backup from an older release up to this version's schema.
     // start.sh runs the same command on every boot, so a failure here is
     // recovered by a restart, and the response says so.
     try {
       await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
+      // TODO(restore): this return skips step 9, so a restore whose migrations
+      // failed leaves no entry in the admin log although the database was
+      // replaced. It should write the same best-effort entry before answering.
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:
@@ -1044,19 +1062,6 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
           undo,
       });
     }
-
-    // 8. Everyone is signed out. The restored database holds no login
-    // sessions, and a socket that stayed open would keep the identity and
-    // campaign role it cached before the restore. Best-effort: the restore
-    // itself is done. The in-memory combat state belonged to the old data.
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
-    clearAllCombatState();
 
     // 9. Log the restore (best-effort — DB just changed so this may use restored data)
     await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup }).catch(() => {});

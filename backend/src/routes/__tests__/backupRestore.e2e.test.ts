@@ -7,7 +7,8 @@
  * database must be written before psql loads anything, psql must load the
  * prepared copy of the dump (schema replaced, the setting an older server
  * rejects removed), migrations must run after a successful load and never
- * after a failed one, and a failed load must leave the uploads alone.
+ * after a failed one, and a failed load must leave the uploads alone. Live
+ * connections end once the load has committed, whatever fails after it.
  */
 
 jest.mock('child_process', () => ({
@@ -27,6 +28,11 @@ import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
+import {
+  clearState as clearCombatState,
+  getState as getCombatState,
+  setState as setCombatState,
+} from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
 
 const app = createTestApp();
@@ -318,8 +324,10 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
-  it('answers 500 when the load fails, runs no migration and copies no uploads', async () => {
+  it('answers 500 when the load fails, runs no migration, copies no uploads and leaves combat alone', async () => {
     const marker = `restore-test-${Date.now()}`;
+    const campaignId = `restore-combat-${Date.now()}`;
+    setCombatState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
     const calls = stubTools({ cmd: 'psql', stderr: 'ERROR:  unrecognized configuration parameter "transaction_timeout"' });
     const zip = await backupZip({
       'database.sql': DUMP_FROM_NEWER_CLIENT,
@@ -338,6 +346,8 @@ describe('POST /api/admin/backups/restore', () => {
     expect(logged).toContain('unrecognized configuration parameter');
     expect(logged).not.toContain('postgresql://');
     await expect(fs.access(path.join(process.env.UPLOAD_DIR || 'uploads', marker))).rejects.toBeDefined();
+    expect(getCombatState(campaignId).active).toBe(true);
+    clearCombatState(campaignId);
   });
 
   it('says the database was restored but not migrated when the migration run fails', async () => {
@@ -374,6 +384,38 @@ describe('POST /api/admin/backups/restore', () => {
       expect((await told).message).toMatch(/restored/i);
       expect(await dropped).toBe('io server disconnect');
     } finally {
+      await ws.close();
+    }
+  });
+
+  it('still ends every live connection and forgets combat when the migration run fails after the load', async () => {
+    // The load has committed by then, so the database is the backup's whether
+    // or not the migrations succeed, and a socket left open would keep the
+    // identity and role it cached from the database that was replaced.
+    const ws = await createWsTestServer();
+    const campaignId = `restore-combat-${Date.now()}`;
+    setCombatState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
+    try {
+      const cookie = await ws.loginAs(userId);
+      const client = await ws.connectClient(cookie);
+      const told = waitForEvent<{ message: string }>(client, 'error');
+      const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
+      const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+      const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+      const res = await restore(admin, zip);
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Restore Incomplete');
+      expect(res.body.message).toMatch(/restart/i);
+      const named = /(backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip)/.exec(res.body.message)?.[1];
+      if (named) written.push(path.join(process.env.BACKUP_DIR || 'backups', named));
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect((await told).message).toMatch(/restored/i);
+      expect(await dropped).toBe('io server disconnect');
+      expect(getCombatState(campaignId).active).toBe(false);
+    } finally {
+      clearCombatState(campaignId);
       await ws.close();
     }
   });
