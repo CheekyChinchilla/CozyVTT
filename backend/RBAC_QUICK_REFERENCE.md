@@ -420,6 +420,17 @@ The alternative, re-reading the role from the database on every request the way
 `loadCampaignMembership` does for campaign roles, would also work and is the
 more thorough fix if this ever needs revisiting.
 
+### The instance keeps an admin
+
+`isOnlyAdmin(userId)` (`services/platformAdmins.ts`) counts the admins other
+than that user. `DELETE /api/auth/account` refuses an admin for whom it is true,
+and `PUT /api/users/:id` refuses setting `platformRole` to `USER` on such an
+admin, both with `409` and a message to promote someone first. Nothing else
+grants `ADMIN` once setup has run (the first-user rule needs an empty
+instance), so an instance that lost its last admin could not get one back.
+`DELETE /api/users/:id` needs no such check: it refuses self-deletion, and the
+admin calling it remains.
+
 ### What a session alone cannot change
 
 A session cookie can be stolen, so anything that decides who can sign in from

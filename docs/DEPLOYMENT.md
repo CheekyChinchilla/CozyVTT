@@ -687,6 +687,8 @@ Beyond the platform role (Admin / User), two permissions are granted individuall
 
 Grant these sparingly: both write content visible to every user on the instance. Revoking either takes effect on the user's next request; they do not need to sign out.
 
+An instance always keeps at least one admin. While you are the only one, you cannot remove your own admin role or delete your own account; promote another user to **Admin** first. Nothing else can make someone an admin once setup has run, so this is what stops an instance ending up with nobody able to manage it.
+
 ---
 
 ## Database Backups

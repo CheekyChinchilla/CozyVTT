@@ -216,7 +216,8 @@ once even when two requests carry it at the same moment.
 ### `DELETE /api/auth/account`
 
 Permanently delete the authenticated user's account and all associated data. Any
-open game connection of the account is dropped.
+open game connection of the account is dropped. The instance's only admin is
+refused with `409` until another user has been promoted to admin.
 
 **Request:**
 ```json
@@ -1199,7 +1200,8 @@ Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
 and `bio`; an admin may change anyone's, and only an admin may set
 `platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
 Changing `platformRole` signs the user out everywhere, because the role is
-carried in the session. There is no approval field to set here.
+carried in the session. Setting it to `USER` for the instance's only admin is
+refused with `409`. There is no approval field to set here.
 
 `displayName` is trimmed and must then be 1 to 50 characters of text; anything
 else is refused with `400`. Registration applies the same rule.

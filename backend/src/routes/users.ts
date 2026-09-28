@@ -8,6 +8,7 @@ import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import { parseDisplayName } from '../validators/users';
@@ -221,6 +222,16 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         return res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid platform role',
+        });
+      }
+
+      // The instance must keep an admin (see services/platformAdmins).
+      if (platformRole === 'USER' && existingUser.platformRole === 'ADMIN' && (await isOnlyAdmin(id))) {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: id === requestingUserId
+            ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
+            : 'This is the only admin on this instance. Promote another user to admin first.',
         });
       }
 

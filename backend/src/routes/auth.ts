@@ -9,6 +9,7 @@ import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
@@ -625,6 +626,14 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Incorrect password',
+      });
+    }
+
+    // The instance must keep an admin (see services/platformAdmins).
+    if (user.platformRole === 'ADMIN' && (await isOnlyAdmin(userId))) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'You are the only admin on this instance. Promote another user to admin before deleting your account.',
       });
     }
 

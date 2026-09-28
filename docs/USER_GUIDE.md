@@ -701,6 +701,8 @@ Go to your **Profile** page and scroll to the **Danger Zone** section. Click **D
 
 > **Warning:** If you're a DM running active campaigns, deleting your account will also remove those campaigns for all players. Make sure to hand off or wrap up campaigns before deleting.
 
+If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
+
 ### I forgot my password
 
 Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
