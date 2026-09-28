@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isCampaignDm } from '@/utils/campaignRoles';
+import { isCampaignDm, campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
@@ -193,7 +193,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   // Campaigns available in the picker depend on target scope. Moving into a
   // campaign is the DM's, with token art the one thing a player may bring in;
   // the server refuses the rest, so the picker offers only what it accepts.
-  const playerOrDmCampaigns = userCampaigns.filter((c) => isCampaignDm(c, user?.id) || c.userRole === 'PLAYER');
+  const playerOrDmCampaigns = campaignsToPlaceAssetIn(userCampaigns, true, user?.id);
   const campaignsForPicker =
     moveScope === AssetScope.CAMPAIGN && currentAsset.type === AssetType.TOKEN ? playerOrDmCampaigns : dmCampaigns;
 
