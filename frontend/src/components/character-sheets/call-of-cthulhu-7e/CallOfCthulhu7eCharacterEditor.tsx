@@ -56,6 +56,7 @@ import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import { isHexColor } from '@/utils/styleAllowlists';
+import { setCoC7eSkillField } from './skillEdits';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -926,13 +927,9 @@ value={formData.derivedStats?.luck?.score}
         onChange={(skillName, field, value) => {
           setFormData({
             ...formData,
-            skills: {
-              ...formData.skills,
-              [skillName]: {
-                ...formData.skills![skillName as keyof CoC7eSkills],
-                [field]: value,
-              },
-            } as CoC7eSkills,
+            // `skillName` may name a skill inside a group, such as
+            // `fighting.brawl`; this writes it there.
+            skills: setCoC7eSkillField(formData.skills ?? {}, skillName, field, value) as CoC7eSkills,
           });
         }}
       />

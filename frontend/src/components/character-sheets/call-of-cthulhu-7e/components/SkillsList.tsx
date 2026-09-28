@@ -20,17 +20,13 @@ import type {
  * What a skill row can render.
  *
  * `CoC7eSkill` plus `language`, because the same row renders the entries of
- * `languageOther`, which carry one. A science specialisation fits too — its
- * `specialization` is required there and optional here.
+ * `languageOther`, which carry one, and `name`, which a custom skill carries. A
+ * science specialisation fits too: its `specialization` is required there and
+ * optional here.
  */
 interface Skill extends CoC7eSkill {
   language?: string;
-  /**
-   * Custom skills carry their own label. Neither `CoC7eSkill` nor the backend's
-   * `skillSchema` declares it, but it survives a save the same way the other
-   * undeclared keys do: Zod strips it on parse, and the route stores the body
-   * as sent rather than the parsed output.
-   */
+  /** A custom skill's own label; see `CoC7eCustomSkill`. */
   name?: string;
 }
 

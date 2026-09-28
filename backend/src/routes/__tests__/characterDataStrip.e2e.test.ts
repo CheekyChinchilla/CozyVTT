@@ -115,3 +115,35 @@ describe('Pathfinder 2e feat descriptions', () => {
     });
   });
 });
+
+/** A Call of Cthulhu custom skill carries its own name, which the sheet shows. */
+describe('Call of Cthulhu custom skill names', () => {
+  const coc = (): Record<string, unknown> & { skills: Record<string, unknown> } =>
+    getBlankTemplate(GameSystem.CALL_OF_CTHULHU_7E).data as Record<string, unknown> & { skills: Record<string, unknown> };
+  const withCustomSkill = (): Record<string, unknown> => {
+    const sheet = coc();
+    return {
+      ...sheet,
+      skills: {
+        ...sheet.skills,
+        customSkills: [{ name: 'Cryptography', baseValue: 1, currentValue: 40, improvementChecked: false }],
+      },
+    };
+  };
+
+  it('keeps a custom skill name when a character is updated', async () => {
+    const created = await agent
+      .post('/api/characters')
+      .send({ name: 'Custom Skill Keeper', gameSystem: 'CALL_OF_CTHULHU_7E', data: coc() });
+    expect(created.status).toBe(201);
+    const id: string = created.body.character.id;
+
+    const res = await agent.put(`/api/characters/${id}`).send({ data: withCustomSkill() });
+    expect(res.status).toBe(200);
+
+    const stored = await prisma.character.findUniqueOrThrow({ where: { id } });
+    expect((stored.data as { skills: { customSkills: unknown[] } }).skills.customSkills).toEqual([
+      { name: 'Cryptography', baseValue: 1, currentValue: 40, improvementChecked: false },
+    ]);
+  });
+});

@@ -206,7 +206,9 @@ const skillsSchema = z.object({
   swim: skillSchema,
   throw: skillSchema,
   track: skillSchema,
-  customSkills: z.array(skillSchema),
+  // A custom skill is named by the player, and the sheet and the roll list
+  // show that name.
+  customSkills: z.array(skillSchema.extend({ name: z.string().optional() })),
 });
 
 /**

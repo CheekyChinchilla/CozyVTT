@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Call of Cthulhu skills inside a group can be edited.** Changing **Fighting (Brawl)**, a **Firearms** skill, an **Other Language**, a **Science** or a custom skill in the editor did nothing: the box went back to its old value and the change was not saved. These now save like every other skill.
+
 - **Adding a cantrip, spell or focus spell no longer stops a Pathfinder 2e sheet saving.** Each was added without details the server requires, so the save was refused, and so was every save after it until the entry was deleted. Turning on spellcasting for a character, and saving a character with no spellcasting at all, were refused the same way. All of them save now.
 
 - **Pathfinder 2e spell slots show how many are used.** The **Used** count under each spell rank in the Pathfinder 2e editor never reached the read-only sheet, which always showed none used. The editor now saves it where the sheet reads it, and a count recorded on 1.4.0 is carried across the first time the sheet is saved.
