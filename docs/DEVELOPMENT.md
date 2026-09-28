@@ -383,8 +383,9 @@ Two of those deserve a note:
   `docker-compose.yml` being set to the value it prints (the file's hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
-  files and CI pin, or any line in either Dockerfile that installs it names the
-  unpinned `postgresql-client`. It also fails when `backend/scripts/restore.sh`
+  files and CI pin, when any line in either Dockerfile that installs it names the
+  unpinned `postgresql-client`, or when the stage that runs (the last one) does
+  not install it. It also fails when `backend/scripts/restore.sh`
   stops ending its load with the statements the dashboard restore ends it with,
   when the combat state's fields differ between the two packages, and when the
   special characters a password needs differ between the browser and the
