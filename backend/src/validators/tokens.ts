@@ -16,6 +16,15 @@ import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
 
 /** How many squares a token occupies. */
+/**
+ * The kinds, dispositions and display modes a token may have. The token
+ * routes check against these and the campaign importer falls back to a
+ * default outside them; both read them from here.
+ */
+export const TOKEN_TYPES = ['player', 'npc', 'object'] as const;
+export const TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'] as const;
+export const TOKEN_DISPLAY_MODES = ['pog', 'top-down', 'full-art'] as const;
+
 export const TokenSizeSchema = z.object({
   width: z.number().int().min(1).max(10),
   height: z.number().int().min(1).max(10),

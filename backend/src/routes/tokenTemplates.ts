@@ -15,6 +15,7 @@ import {
   UpdateTokenTemplateSchema,
   SaveTokenAsTemplateSchema,
 } from '../validators/tokenTemplates';
+import { TOKEN_TYPES } from '../validators/tokens';
 import { jsonOrNull } from '../utils/prisma-json';
 import logger from '../utils/logger';
 
@@ -40,7 +41,7 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     if (search && typeof search === 'string') {
       where.name = { contains: search, mode: 'insensitive' };
     }
-    if (type && typeof type === 'string' && ['player', 'npc', 'object'].includes(type)) {
+    if (type && typeof type === 'string' && (TOKEN_TYPES as readonly string[]).includes(type)) {
       where.type = type;
     }
 
