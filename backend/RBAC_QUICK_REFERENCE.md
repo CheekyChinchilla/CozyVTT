@@ -455,8 +455,9 @@ one atomic path rather than two.
 `socket.role` and `socket.campaignId` are read once, when the socket
 authenticates, and trusted by every gated handler after that. Anything that
 changes a membership therefore has to reach live connections, or the person
-keeps what they had until they reload. Three routes do, and all three are
-best-effort so a socket layer that is down cannot fail a change already written:
+keeps what they had until they reload. The routes below do, and all of them
+are best-effort so a socket layer that is down cannot fail a change already
+written:
 
 | Route | Helper |
 |---|---|
@@ -465,7 +466,7 @@ best-effort so a socket layer that is down cannot fail a change already written:
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-A sign-in that ends takes its live sockets with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`:
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does: a socket is checked against the session store only when it connects, so a session that expires from inactivity leaves an open socket running until it disconnects.
 
 | Route | Which sockets end |
 |---|---|
