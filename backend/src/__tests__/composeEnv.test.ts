@@ -11,6 +11,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { CONFIGURABLE_ASSET_TYPES } from '../utils/fileUtils';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -34,11 +35,15 @@ function keysTheBackendReads(): Set<string> {
       if (entry.isDirectory()) {
         if (entry.name !== '__tests__' && entry.name !== 'node_modules') walk(full);
       } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-        for (const m of fs.readFileSync(full, 'utf8').matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) keys.add(m[1]);
+        // process.env.NAME, and env.NAME where a module is handed the
+        // environment as a parameter (resolveBackupDir, getProxyLimitWarnings).
+        for (const m of fs.readFileSync(full, 'utf8').matchAll(/\b(?:process\.)?env\.([A-Z][A-Z0-9_]*)/g)) keys.add(m[1]);
       }
     }
   };
   walk(path.join(root, 'backend/src'));
+  // The upload limits are read by a name built from the list of types.
+  for (const type of CONFIGURABLE_ASSET_TYPES) keys.add(`MAX_${type}_SIZE_MB`);
   return keys;
 }
 
@@ -73,5 +78,18 @@ describe.each(['docker-compose.yml', 'docker-compose.dev.yml'])('%s', (file) => 
       (key) => backend.has(key) && !passed.has(key) && !(key in NOT_PASSED_THROUGH)
     );
     expect(missing).toEqual([]);
+  });
+});
+
+// Two modules read their settings through an environment object passed in
+// (so their own tests can hand them one), and one builds the names from a
+// list. The scan above has to see those too, or the check passes by not
+// looking at them.
+describe('the settings the backend reads', () => {
+  it('include those read through an injected environment object', () => {
+    const backend = keysTheBackendReads();
+    for (const key of ['NGINX_MAX_BODY_SIZE', 'MAX_MAP_SIZE_MB', 'MAX_TOKEN_SIZE_MB', 'MAX_AUDIO_SIZE_MB', 'MAX_AVATAR_SIZE_MB', 'MAX_DOCUMENT_SIZE_MB']) {
+      expect(backend).toContain(key);
+    }
   });
 });
