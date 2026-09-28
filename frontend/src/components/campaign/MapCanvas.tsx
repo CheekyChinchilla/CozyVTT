@@ -99,6 +99,7 @@ import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
+import { mapImageState } from './map/mapImageState';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -164,6 +165,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const imageState = mapImageState(currentMap, imageLoaded, imageError);
 
   // Spirit layer image
   const [spiritLayerImage, setSpiritLayerImage] = useState<HTMLImageElement | null>(null);
@@ -3928,7 +3930,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       })()}
 
       {/* Image Loading State */}
-      {currentMap && !imageLoaded && !imageError && (
+      {imageState === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-moss-green/30 border-t-moss-green rounded-full animate-spin mx-auto mb-2" />
@@ -3937,8 +3939,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </div>
       )}
 
+      {/* No Picture State: an imported map whose picture the export left out */}
+      {imageState === 'missing' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
+          <div className="glass-panel p-4 text-center max-w-sm">
+            <p className="text-sm text-brand-ink mb-1">This map has no picture.</p>
+            <p className="text-xs text-stone-gray">
+              {isDM
+                ? 'Choose one in Edit Map; its walls, tokens and fog are kept.'
+                : 'The DM has to choose one before the map can be shown.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Image Error State */}
-      {imageError && (
+      {imageState === 'error' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="glass-panel p-4 text-center">
             <p className="text-sm text-danger-ink mb-2">{imageError}</p>
@@ -3948,7 +3964,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* No Map State */}
-      {!currentMap && (
+      {imageState === 'none' && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <Grid3x3 className="w-12 h-12 text-brand-ink/30 mx-auto mb-3" />
