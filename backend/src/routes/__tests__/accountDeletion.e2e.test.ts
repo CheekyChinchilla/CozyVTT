@@ -137,3 +137,50 @@ describe('an admin deleting a user who runs their own campaigns', () => {
     expect((await prisma.campaign.findUniqueOrThrow({ where: { id: shared } })).ownerId).toBe(heir.user.id);
   });
 });
+
+// A document shared into a campaign records who shared it. Deleting that
+// person's account removed the share with them, so the campaign lost the
+// handout. The share now passes to the campaign's DM, or to its owner when
+// the DM seat was theirs.
+describe('documents the person shared into a campaign', () => {
+  const documentIds: string[] = [];
+  afterAll(async () => {
+    await prisma.asset.deleteMany({ where: { id: { in: documentIds } } });
+  });
+  const documentOf = (uploadedById: string) =>
+    prisma.asset.create({
+      data: {
+        type: 'DOCUMENT', scope: 'USER', uploadedById,
+        filename: `${randomUUID()}.md`, originalName: 'handout.md', mimeType: 'text/markdown', fileSize: 1,
+        filePath: `/nonexistent/${randomUUID()}.md`, name: 'Handout',
+      },
+    }).then((asset) => { documentIds.push(asset.id); return asset; });
+
+  it('stay shared, passed to the DM, when a former DM deletes their account', async () => {
+    const owner = await member('Docs Owner');
+    const former = await member('Docs Former DM');
+    const current = await member('Docs Current DM');
+    const campaignId = await campaignRunBy(owner.user.id, current.user.id, [former.user.id]);
+    const doc = await documentOf(former.user.id);
+    const link = await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: former.user.id } });
+
+    expect((await former.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+
+    expect((await prisma.campaignDocument.findUniqueOrThrow({ where: { id: link.id } })).linkedById).toBe(current.user.id);
+    const listed = await owner.agent.get(`/api/campaigns/${campaignId}/documents`);
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(listed.body)).toContain(doc.id);
+  });
+
+  it('pass to the owner when the person deleting their account is the DM', async () => {
+    const owner = await member('Docs Owner 2');
+    const dm = await member('Docs Sitting DM');
+    const campaignId = await campaignRunBy(owner.user.id, dm.user.id);
+    const doc = await documentOf(dm.user.id);
+    const link = await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: dm.user.id } });
+
+    expect((await dm.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+
+    expect((await prisma.campaignDocument.findUniqueOrThrow({ where: { id: link.id } })).linkedById).toBe(owner.user.id);
+  });
+});

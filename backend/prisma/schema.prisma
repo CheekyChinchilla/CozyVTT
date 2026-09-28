@@ -339,7 +339,9 @@ model CampaignDocument {
   assetId String
   asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
-  /// Who shared it, for the audit trail. Cascades with the user like the rest.
+  /// Who shared it, for the audit trail. Before a user is deleted, their
+  /// shares pass to the campaign's DM or owner (services/accountDeletion.ts),
+  /// so the cascade removes none.
   linkedById String
   linkedBy   User   @relation(fields: [linkedById], references: [id], onDelete: Cascade)
 

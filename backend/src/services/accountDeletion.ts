@@ -4,8 +4,8 @@
  * What the person leaves behind: their dice rolls and uploaded files stay,
  * owned by no one (the database sets those columns to null), as their chat
  * messages already do, so a campaign's history and the art on its maps
- * survive them. Their memberships, characters, notes and the rest go with
- * them.
+ * survive them, and documents they shared into a campaign stay shared.
+ * Their memberships, characters, notes and the rest go with them.
  *
  * A campaign needs an owner. One they own while someone else sits as its DM
  * passes to that DM. One they run themselves stops the deletion until they
@@ -57,6 +57,22 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       const dm = dmOf(campaign);
       if (dm !== undefined) await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: dm } });
     }
+    // Documents they shared into a campaign stay shared: the share passes to
+    // the campaign's DM, or to its owner when the DM seat is theirs or empty.
+    // Owned campaigns have just passed to their DM above.
+    const shares = await tx.campaignDocument.findMany({
+      where: { linkedById: userId },
+      select: {
+        id: true,
+        campaign: { select: { ownerId: true, memberships: { where: { role: 'DM' }, select: { userId: true } } } },
+      },
+    });
+    for (const share of shares) {
+      const dm = share.campaign.memberships[0]?.userId;
+      const heir = dm !== undefined && dm !== userId ? dm : share.campaign.ownerId;
+      if (heir !== userId) await tx.campaignDocument.update({ where: { id: share.id }, data: { linkedById: heir } });
+    }
+
     // The campaigns they were in, read before the cascade removes the rows.
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
       .map((m) => m.campaignId);
