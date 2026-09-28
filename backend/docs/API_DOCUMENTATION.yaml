@@ -5491,7 +5491,8 @@ paths:
         Export a campaign as a .cozyvtt ZIP archive (DM only).
         Rate limited to 1 per 5 minutes per user. The archive holds only the
         asset files the caller may read; a picture the campaign names that the
-        caller cannot read is left out, and the record keeps its address.
+        caller cannot read, or that no longer exists, is left out, and the map,
+        token, creature or template that used it is imported without a picture.
       operationId: exportCampaign
       security:
         - cookieAuth: []

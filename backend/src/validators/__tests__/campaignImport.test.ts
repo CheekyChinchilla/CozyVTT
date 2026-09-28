@@ -53,6 +53,17 @@ describe('MapDataSchema tokens', () => {
   });
 });
 
+// An export leaves out a map picture the person exporting cannot open (or
+// one deleted since), and writes the map with no picture reference. Refusing
+// that map dropped its walls, tokens and fog along with the picture.
+describe('MapDataSchema picture', () => {
+  const map = { name: 'Crypt', width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [] };
+
+  it.each([null, undefined])('takes a map whose picture was left out (%s)', (imageAssetRef) => {
+    expect(MapDataSchema.safeParse({ ...map, imageAssetRef }).success).toBe(true);
+  });
+});
+
 describe('CreatureTemplateSchema allowlist fallbacks', () => {
   const base = { name: 'Bandit', statBlock: { ac: 12, speed: '30 ft.', abilities: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 } } };
 

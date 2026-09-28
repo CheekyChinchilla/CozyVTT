@@ -514,7 +514,7 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
-- All associated asset files (map images, token images)
+- All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact, and you can choose one for it in **Edit Map** or **Edit Token**
 - Campaign settings (name, description, game system, vibe settings, spirit layer)
 
 **What's NOT included:**
