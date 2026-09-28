@@ -114,7 +114,9 @@ const LightSourceSchema = z.object({
 
 const TokenSchema = z.object({
   id: z.string().max(100).optional(),
-  name: z.string().max(200),
+  // The token routes refuse a blank name; Duplicate and Edit Token send
+  // an imported token through them.
+  name: z.string().max(200).transform((name) => name.trim() || 'Unnamed token'),
   imageUrl: z.string().max(500).optional().default(''),
   position: PositionSchema,
   size: TokenSizeSchema.catch({ width: 1, height: 1 }),
@@ -132,7 +134,8 @@ const TokenSchema = z.object({
   sightRadius: TokenSightRadiusSchema.optional(),
   displayMode: TokenDisplayModeSchema.default('pog').catch('pog'),
   statBlock: StatBlockSchema.nullable().optional(),
-  creatureTemplateId: z.string().max(100).nullable().optional(),
+  // A UUID, as the token routes require; anything else links to nothing.
+  creatureTemplateId: z.uuid().nullable().optional().catch(null),
   obscured: z.boolean().optional().default(false),
 }).strip();
 

@@ -107,6 +107,28 @@ describe('MapDataSchema token allowlists and limits', () => {
   });
 });
 
+// An imported token is stored as it arrives, and Duplicate or Edit Token
+// then sends it through the live routes, which require a name and a UUID for
+// any link. One that fell short was refused there, long after the import.
+describe('MapDataSchema token names and links', () => {
+  const map = (token: Record<string, unknown>) => ({
+    name: 'Arena', imageAssetRef: 'assets/arena.png', width: 10, height: 10, gridSize: 50, feetPerSquare: 5,
+    tokens: [{ name: 'T', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, ...token }],
+  });
+
+  it('gives a token with no name one the live routes accept', () => {
+    expect(MapDataSchema.parse(map({ name: '' })).tokens[0].name).toBe('Unnamed token');
+    expect(MapDataSchema.parse(map({ name: '   ' })).tokens[0].name).toBe('Unnamed token');
+    expect(MapDataSchema.parse(map({ name: ' Troll ' })).tokens[0].name).toBe('Troll');
+  });
+
+  it('drops a creature template link that is not a UUID, and keeps one that is', () => {
+    expect(MapDataSchema.parse(map({ creatureTemplateId: 'template-7' })).tokens[0].creatureTemplateId).toBeNull();
+    const id = '0b6f4e7c-6a55-4d4b-9c49-2c8e0d3f5a11';
+    expect(MapDataSchema.parse(map({ creatureTemplateId: id })).tokens[0].creatureTemplateId).toBe(id);
+  });
+});
+
 describe('TokenTemplateImportSchema allowlists', () => {
   it('keeps values the app knows', () => {
     const t = TokenTemplateImportSchema.parse({ name: 'Guard', type: 'npc', disposition: 'friendly', displayMode: 'top-down', size: { width: 2, height: 2 } });
