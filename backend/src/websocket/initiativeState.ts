@@ -91,6 +91,13 @@ export function removeCombatants(campaignId: string, gone: (entry: CombatantEntr
   const state = getState(campaignId);
   const kept = state.combatants.filter((c) => !gone(c));
   if (kept.length === state.combatants.length) return false;
+  // With nobody left the fight is over: an active round with no combatants
+  // can be neither advanced nor ended, since the tracker draws those controls
+  // beside a combatant and the server refuses Next and Start on an empty order.
+  if (kept.length === 0) {
+    setState(campaignId, defaultState());
+    return true;
+  }
   const currentTokenId = kept.some((c) => c.tokenId === state.currentTokenId) ? state.currentTokenId : null;
   setState(campaignId, { ...state, combatants: kept, currentTokenId });
   return true;

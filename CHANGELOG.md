@@ -90,6 +90,10 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Coming back online reconnects even while a reconnect is already being tried.** If the network came back while the table was still retrying on its own, the event was ignored, and once those retries ran out the table stayed on Connection Error until Retry was clicked.
 
+- **The initiative tracker rolls and sets initiative on the map a combatant is actually on.** A combatant follows its token to another map, but the tracker still named the map the table was showing, so rolling for it answered "Token not found" and a typed value changed the order without being saved to the token.
+
+- **Deleting the last combatant ends the fight.** Removing the only token left in the order, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared.
+
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.
 
 - **Session timeouts and the log level set in `.env` now apply under Docker.** The Docker setup never handed `SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` or `LOG_LEVEL` to the backend, so setting them in `.env` did nothing on a Docker install and nothing said so; they reach the backend now, with the same defaults as before, and a check keeps the example env file and the Docker setup in step. The guides also now say that `docker compose restart` keeps the old settings (apply a changed `.env` with `docker compose up -d`) and that `BACKUP_DIR` applies only to an install without Docker.
@@ -189,6 +193,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 ### Security
 
 - **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did.
+
+- **Players are no longer told about combatants on a map the table is not showing.** A creature added to the initiative order from a map you had prepared but not switched to, or moved there mid-fight, still appeared in every player's tracker with its name and picture, and its initiative roll was announced to them. Players now see, and hear the rolls of, only the combatants on the map the campaign is showing; the DM sees them all.
 
 - **One password rule everywhere: at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character.** The setup wizard and the register page said so but did not check for the special character, the change-password and reset pages asked for eight characters, the profile page for eight with no other rule, the user guide named no special character, and the server itself accepted eight. Every page now checks the same rule the server enforces. Passwords already set are not affected.
 

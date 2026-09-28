@@ -165,14 +165,21 @@ describe('the order is sent again when a member\'s view of it changes', () => {
     player.disconnect();
   });
 
-  it('through a map switch', async () => {
+  // A player is sent the map the table is showing and no other, so a
+  // combatant left behind on the old map leaves their tracker, and comes
+  // back with the map.
+  it('through a map switch, listing only what stands on the map shown', async () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     await addAll(dm, [HERO]);
 
     const switched = waitForEvent<State>(player, 'initiative.state');
     expect((await dmRest.put(`/api/campaigns/${campaignId}/maps/${mapB}/set-current`)).status).toBe(200);
-    expect(ids(await switched)).toEqual([HERO]);
+    expect(ids(await switched)).toEqual([]);
+
+    const back = waitForEvent<State>(player, 'initiative.state');
+    expect((await dmRest.put(`/api/campaigns/${campaignId}/maps/${mapA}/set-current`)).status).toBe(200);
+    expect(ids(await back)).toEqual([HERO]);
     dm.disconnect();
     player.disconnect();
   });

@@ -40,17 +40,21 @@ type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
 
 /**
  * The sockets in the campaign that are sent `token` at all: every DM's, and
- * a player's when the role filter keeps it for them (visible, on their
- * plane). The dice log entry for a token's roll goes to these and no one
+ * a player's when the token stands on the map the campaign is showing and the
+ * role filter keeps it for them (visible, on their plane). The dice log entry for a token's roll goes to these and no one
  * else, so a hidden or off-plane combatant the tracker keeps from a player is
  * not announced to them by its roll.
  */
 async function recipientsSentToken(
   io: Server,
   campaignId: string,
-  token: ReturnType<typeof readTokens>[number]
+  token: ReturnType<typeof readTokens>[number],
+  mapId: string
 ): Promise<Recipient[]> {
   const recipients = (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  // A token on a map the table is not showing is sent to no player at all.
+  if (campaign?.currentMapId !== mapId) return recipients.filter((r) => r.role === 'DM');
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
   return recipients.filter((r) => {
@@ -65,8 +69,8 @@ async function recipientsSentToken(
  * each as they may see it. The combatants' tokens are read as they are now,
  * so a name, picture or hit points the DM changes follow the token, and a
  * player's copy goes through the same role filter as the map itself: a hidden
- * token's entry, and hit points behind a bar the DM keeps off, never reach
- * them. The stored state is the DM's view and is not changed.
+ * token's entry, one on a map the campaign is not showing, and hit points
+ * behind a bar the DM keeps off, never reach them. The stored state is the DM's view and is not changed.
  */
 export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
   const state = getCombatState(campaignId);
@@ -89,10 +93,15 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   }
 
   const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];
-  const maps = mapIds.length === 0
-    ? []
-    : await prisma.map.findMany({ where: { id: { in: mapIds }, campaignId }, select: { tokens: true } });
+  const [maps, campaign] = await Promise.all([
+    prisma.map.findMany({ where: { id: { in: mapIds }, campaignId }, select: { id: true, tokens: true } }),
+    prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+  ]);
   const tokens = maps.flatMap((m) => readTokens(m.tokens));
+  // A player is sent the map the campaign is showing and no other, so the
+  // order names for them only what stands on it. A combatant on a prepared
+  // map, added there or moved there mid-fight, stays the DM's.
+  const shown = maps.filter((m) => m.id === campaign?.currentMapId).flatMap((m) => readTokens(m.tokens));
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
   if (overtaken()) return;
@@ -105,7 +114,7 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
       continue;
     }
     if (!r.userId) continue;
-    const forRole = filterTokensByRole(tokens, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
+    const forRole = filterTokensByRole(shown, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
     r.emit('initiative.state', projectCombatState(state, byId(forRole), false));
   }
 }
@@ -478,7 +487,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           timestamp: new Date().toISOString(),
           secret: false,
         };
-        for (const r of await recipientsSentToken(io, socket.campaignId, token)) {
+        for (const r of await recipientsSentToken(io, socket.campaignId, token, mapId)) {
           r.emit('dice.rolled', rollData);
         }
       }

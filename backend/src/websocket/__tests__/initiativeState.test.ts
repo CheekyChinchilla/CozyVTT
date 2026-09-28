@@ -7,7 +7,7 @@
  * as it is now. No database: the recipient's token list is an input.
  */
 
-import { projectCombatState, sortCombatants, type CombatState, type CombatantEntry } from '../initiativeState';
+import { projectCombatState, sortCombatants, removeCombatants, getState, setState, type CombatState, type CombatantEntry } from '../initiativeState';
 
 const hp = (current: number) => ({ current, max: 10, temp: 0 });
 const entry = (tokenId: string, extra: Partial<CombatantEntry> = {}): CombatantEntry => ({
@@ -80,5 +80,28 @@ describe('sortCombatants', () => {
     const sorted = sortCombatants(stored);
     expect(sorted).not.toBe(stored);
     expect(stored.map((c) => c.tokenId)).toEqual(['b', 'c']);
+  });
+});
+
+describe('removeCombatants', () => {
+  const combatant = (tokenId: string) => ({
+    tokenId, mapId: 'm', name: tokenId, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null,
+  });
+
+  it('drops the named entries and keeps the fight going while any remain', () => {
+    setState('c-remove-1', { active: true, round: 2, currentTokenId: 'a', combatants: [combatant('a'), combatant('b')] });
+    expect(removeCombatants('c-remove-1', (e) => e.tokenId === 'b')).toBe(true);
+    expect(getState('c-remove-1')).toMatchObject({ active: true, round: 2, currentTokenId: 'a' });
+    expect(getState('c-remove-1').combatants.map((c) => c.tokenId)).toEqual(['a']);
+  });
+
+  // With nothing left the fight cannot go on or be ended: the tracker only
+  // draws Next Turn and End Combat beside a combatant, and the server refuses
+  // Next and Start on an empty order. Deleting the last combatant's token, or
+  // the map they were all on, left the table in "Round N" until a restart.
+  it('ends the fight when the last combatant is removed', () => {
+    setState('c-remove-2', { active: true, round: 3, currentTokenId: 'a', combatants: [combatant('a')] });
+    expect(removeCombatants('c-remove-2', () => true)).toBe(true);
+    expect(getState('c-remove-2')).toEqual({ active: false, round: 0, currentTokenId: null, combatants: [] });
   });
 });
