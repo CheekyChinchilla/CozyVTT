@@ -39,9 +39,9 @@ BEGIN = '<!-- BEGIN GENERATED EVENTS -->'
 END = '<!-- END GENERATED EVENTS -->'
 
 # The "who may send it" column is read off the shared predicates in
-# services/permissions.ts and a few fixed phrases. A handler that gates inline
-# some other way is listed as "Any member": the handler is authoritative, and
-# the line above the table says so.
+# services/permissions.ts and a refusal of every non-DM. A handler that gates
+# inline some other way is listed as "Any member": the handler is
+# authoritative, and the line above the table says so.
 CAVEAT = ('_Who may send it is read from the shared permission predicates each '
           'handler calls; the handler itself is authoritative._')
 
@@ -72,44 +72,263 @@ def describe(text, index):
     return re.split(r'(?<=[.!?])\s', body)[0].strip() if body else ''
 
 
-def handler_body(text, start, handlers, i):
+def literal_end(text, i):
+    """Where the comment or string literal starting at text[i] ends; None if none does."""
+    if text.startswith('//', i):
+        end = text.find('\n', i)
+        return len(text) if end == -1 else end
+    if text.startswith('/*', i):
+        end = text.find('*/', i + 2)
+        return len(text) if end == -1 else end + 2
+    quote = text[i]
+    if quote not in '\'"`':
+        return None
+    j = i + 1
+    while j < len(text) and text[j] != quote:
+        if text[j] == '\\':
+            j += 2
+        elif quote == '`' and text.startswith('${', j):
+            j = interpolation_end(text, j + 2)
+        elif text[j] == '\n' and quote != '`':
+            return j
+        else:
+            j += 1
+    return min(j + 1, len(text))
+
+
+def interpolation_end(text, i):
+    """From just inside a template literal's `${`, the position after its `}`."""
+    depth = 0
+    while i < len(text):
+        end = literal_end(text, i)
+        if end is not None:
+            i = end
+            continue
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            if depth == 0:
+                return i + 1
+            depth -= 1
+        i += 1
+    return len(text)
+
+
+def masked(text, keep_strings=False):
     """
-    The handler from its `socket.on(` to the next one, plus the body of any
-    same-file function it calls outright (the throttled per-frame move hands
-    off to one). Only a bare call counts, not a method call: `.map(` must not
-    pull in a `const map` from elsewhere in the file. Only a function
-    definition is followed, not every `const` that shares the name.
+    The source with its comments blanked, and its string and template literals
+    too unless `keep_strings`, so a bracket or keyword inside one is not read
+    as code. Blanked characters become spaces and newlines stay, so every
+    position still matches the original. A regex literal is read as code: a
+    quote or bracket inside one would throw the matching off.
     """
-    body = text[start:handlers[i + 1].start() if i + 1 < len(handlers) else len(text)]
-    for called in set(re.findall(r'(?<![.\w])([A-Za-z_]\w*)\(', body)):
-        d = re.search(
-            r'(?:function\s+' + re.escape(called) + r'\b'
-            r'|const\s+' + re.escape(called) + r'\s*=\s*(?:async\s*)?(?:\(|[A-Za-z_]\w*\s*=>|throttle\())',
-            text)
+    out = list(text)
+    i = 0
+    while i < len(text):
+        end = literal_end(text, i)
+        if end is None:
+            i += 1
+            continue
+        if not keep_strings or text.startswith(('//', '/*'), i):
+            for k in range(i, end):
+                if out[k] != '\n':
+                    out[k] = ' '
+        i = end
+    return ''.join(out)
+
+
+def closing(code, i):
+    """The position of the bracket that closes the one at code[i]."""
+    depth = 0
+    for j in range(i, len(code)):
+        if code[j] in '([{':
+            depth += 1
+        elif code[j] in ')]}':
+            depth -= 1
+            if depth == 0:
+                return j
+    return len(code) - 1
+
+
+def statement_end(code, i):
+    """Where the statement or argument starting at code[i] ends."""
+    depth = 0
+    for j in range(i, len(code)):
+        if code[j] in '([{':
+            depth += 1
+        elif code[j] in ')]}':
+            if depth == 0:
+                return j
+            depth -= 1
+        elif code[j] in ';,' and depth == 0:
+            return j
+    return len(code)
+
+
+FUNCTION_START = re.compile(r'\s*(?:throttle\(\s*)?(?:async\b\s*)?')
+ARROW = re.compile(r'\s*(?::[^;{}]*?)?=>\s*')
+
+
+def function_body(code, i):
+    """
+    The body of the function value starting at code[i], as (start, end,
+    is_block), or None when the value is not a function. `throttle(fn, ms)`
+    counts as fn. An arrow's expression body runs to the end of its statement.
+    """
+    i = FUNCTION_START.match(code, i).end()
+    if re.compile(r'function\b').match(code, i):
+        params = code.find('(', i)
+        start = code.find('{', closing(code, params)) if params != -1 else -1
+        return (start, closing(code, start) + 1, True) if start != -1 else None
+    if code.startswith('(', i):
+        after = closing(code, i) + 1
+    else:
+        param = re.compile(r'[A-Za-z_$][\w$]*').match(code, i)
+        if not param:
+            return None
+        after = param.end()
+    arrow = ARROW.match(code, after)
+    if not arrow:
+        return None
+    start = arrow.end()
+    if code.startswith('{', start):
+        return start, closing(code, start) + 1, True
+    return start, statement_end(code, start), False
+
+
+def definition(code, name):
+    """
+    The same-file function `name`, as (definition start, body start, body end,
+    is_block), or None. A `const` counts only when its value is a function.
+    """
+    pattern = r'\bfunction\s+' + re.escape(name) + r'\b|\bconst\s+' + re.escape(name) + r'\s*='
+    for d in re.finditer(pattern, code):
+        body = function_body(code, d.start() if d.group().startswith('function') else d.end())
+        if body:
+            return (d.start(),) + body
+    return None
+
+
+def handler_body(code, m):
+    """
+    The handler registered at `m`, plus any same-file function it calls
+    outright (the throttled per-frame move hands off to one). Returns the spans
+    the permission predicates are looked for in, each function taken only to
+    the end of its own body, and the block bodies a DM-only refusal is looked
+    for in. Only a bare call counts, not a method call: `.map(` must not pull
+    in a `const map` from elsewhere in the file.
+    """
+    call_end = closing(code, m.start() + len('socket.on')) + 1
+    spans, blocks = [(m.start(), call_end)], []
+    value = re.compile(r'\s*,').match(code, m.end())
+    own = function_body(code, value.end()) if value else None
+    if own and own[2]:
+        blocks.append(own[:2])
+    for called in sorted(set(re.findall(r'(?<![.\w])([A-Za-z_]\w*)\(', code[m.start():call_end]))):
+        d = definition(code, called)
         if d:
-            nxt = text.find('socket.on(', d.end())
-            body += text[d.start():nxt if nxt != -1 else len(text)]
-    return body
+            spans.append((d[0], d[2]))
+            if d[3]:
+                blocks.append(d[1:3])
+    return spans, blocks
+
+
+IF = re.compile(r'if\s*\(')
+RETURN = re.compile(r'return\b')
+BARE_RETURN = re.compile(r'return\s*(?:;|(?=\}))')
+DM_TERM = re.compile(r"""socket\.role\s*!==?\s*(['"])DM\1""")
+
+
+def ends_in_return(code, start, end):
+    """Whether the last statement in code[start:end] is a `return;`."""
+    depth, last = 0, None
+    for j in range(start, end):
+        if code[j] in '([{':
+            depth += 1
+        elif code[j] in ')]}':
+            depth -= 1
+        elif depth == 0 and RETURN.match(code, j) and not re.match(r'[\w$.]', code[j - 1]):
+            last = j
+    return (last is not None and BARE_RETURN.match(code, last) is not None
+            and not code[statement_end(code, last) + 1:end].strip())
+
+
+def refuses_every_non_dm(code, plain, i):
+    """
+    Whether the `if` at code[i] returns for every non-DM: its branch ends in
+    `return;`, and its condition is `socket.role !== 'DM'` alone or as one side
+    of an `||`, or its branch says "Only the DM". `socket.role !== 'DM' && ...`
+    refuses only some non-DMs (the character owner test, a spectator refusal),
+    so it is not one. Nor is a branch that returns a value: that is a helper
+    answering its caller, which then decides.
+    """
+    paren = code.index('(', i)
+    close = closing(code, paren)
+    branch = re.compile(r'\s*').match(code, close + 1).end()
+    if code.startswith('{', branch):
+        branch_end = closing(code, branch)
+        returns = ends_in_return(code, branch + 1, branch_end)
+    else:
+        branch_end = statement_end(code, branch)
+        returns = BARE_RETURN.match(code, branch) is not None
+    if not returns:
+        return False
+    terms, depth, last = [], 0, paren + 1
+    for j in range(paren + 1, close):
+        if code[j] in '([{':
+            depth += 1
+        elif code[j] in ')]}':
+            depth -= 1
+        elif depth == 0 and code.startswith('||', j):
+            terms.append(plain[last:j])
+            last = j + 2
+    terms.append(plain[last:close])
+    for term in terms:
+        term = term.strip()
+        while term.startswith('(') and closing(term, 0) == len(term) - 1:
+            term = term[1:-1].strip()
+        if DM_TERM.fullmatch(term):
+            return True
+    return 'Only the DM' in plain[branch:branch_end]
+
+
+def dm_only(code, plain, start, end):
+    """
+    Whether the block body code[start:end] turns every non-DM away: an `if`
+    among its own statements that does, one inside a `try` included. One in a
+    nested block, an `else` or a callback is conditional, and does not count,
+    nor does a branch that carries on (a player's door toggle, a player's
+    initiative roll).
+    """
+    stack = []
+    for i in range(start + 1, end - 1):
+        ch = code[i]
+        if ch in '([{':
+            opens_try = ch == '{' and re.search(r'\btry\s*$', code[max(0, i - 40):i])
+            stack.append('try' if opens_try else ch)
+        elif ch in ')]}':
+            if stack:
+                stack.pop()
+        elif (ch == 'i' and all(s == 'try' for s in stack) and IF.match(code, i)
+              and not re.search(r'(?:[\w$.]|\belse\s*)$', code[max(0, i - 40):i])
+              and refuses_every_non_dm(code, plain, i)):
+            return True
+    return False
 
 
 def collect():
     """Every event, with its direction and how its handler is gated."""
     inbound, outbound = {}, {}
     for path, text in sources():
-        handlers = list(re.finditer(r"socket\.on\(\s*'([^']+)'", text))
-        for i, m in enumerate(handlers):
+        code, plain = masked(text), masked(text, keep_strings=True)
+        for m in re.finditer(r"socket\.on\(\s*'([^']+)'", text):
             name = m.group(1)
             if name in ('disconnect', 'error', 'ping'):
                 continue
-            window = text[m.end():m.end() + 900]
-            body = handler_body(text, m.end(), handlers, i)
-            # A refusal of anyone who is neither DM nor player is a spectator
-            # refusal, not a DM-only gate, whatever the first clause says.
-            dm_only = ('Only the DM' in window
-                       or ("role !== 'DM'" in window
-                           and "role !== 'DM' && socket.role !== 'PLAYER'" not in window))
+            spans, blocks = handler_body(code, m)
+            body = ''.join(text[start:end] for start, end in spans)
             inbound.setdefault(name, {
-                'dm': dm_only,
+                'dm': any(dm_only(code, plain, start, end) for start, end in blocks),
                 # The shared predicates in services/permissions.ts, which is
                 # where a handler refuses spectators or other players' tokens.
                 'controls': 'canControlToken(' in body,
