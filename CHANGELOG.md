@@ -20,14 +20,13 @@ Nothing to do beyond the usual upgrade, and nothing you have is removed. Four th
 And four things to do afterwards:
 
 - **Regenerate MFA backup codes.** Existing recovery codes no longer work, because they are now stored with the same strong hash as passwords. Sign in with the authenticator app and regenerate them from **Profile & Settings → Security → Backup Codes → Regenerate**. The authenticator app itself is unaffected.
-- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there once the upgraded stack has started; the dashboard lists only the new location. On Docker the stack creates the new folder, and both folders belong to the backend's user in the container, so the move needs `sudo`. The second command makes the moved backups readable by that user alone, as new ones are:
+- **Move old backups.** Instance backups now live in `backend/backups/`, beside uploads and never inside them. If you have backups in `backend/uploads/backups/`, move them there once the upgraded stack has started; the dashboard lists only the new location. On Docker the stack creates the new folder, and both folders belong to the backend's user in the container, so the move needs `sudo`, run through `sh -c` so that the `*` is read by an account that can see into the folder. The `chmod` makes the moved backups readable by that user alone, as new ones are:
 
   ```bash
-  sudo mv backend/uploads/backups/*.zip backend/backups/
-  sudo chmod 600 backend/backups/*.zip
+  sudo sh -c 'mv backend/uploads/backups/*.zip backend/backups/ && chmod 600 backend/backups/*.zip'
   ```
 
-  Without Docker, the folder appears the first time the Backups tab is opened; to move them before that, create it with `mkdir -p backend/backups && chmod 700 backend/backups`, then run the same two commands without `sudo`.
+  Without Docker, the folder appears the first time the Backups tab is opened; to move them before that, create it with `mkdir -p backend/backups && chmod 700 backend/backups`, then run the part in quotes on its own, without `sudo sh -c`.
 - **Check your database password.** A production instance now refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, as it always has for `SESSION_SECRET`. If `docker compose logs backend` shows that message after this upgrade, the database itself still holds the old password (the database image only reads `POSTGRES_PASSWORD` when it creates an empty database), so changing `.env` alone would lock the backend out. Do it in this order, with the stack up (the database container runs even while the backend refuses):
 
   ```bash
