@@ -518,6 +518,22 @@ describe('prepareDumpForRestore', () => {
     }
   });
 
+  // Some filesystems (NFS over its quota) report a failed write only when the
+  // file is closed, which comes after every write has returned. That error
+  // arrived once the file had been called fine, and psql loaded it.
+  it('rejects when the file cannot be closed', async () => {
+    const src = await write('database.sql', NEWER_CLIENT_DUMP);
+    const closeFails = jest.spyOn(nodeFs, 'createWriteStream').mockImplementation(() => new Writable({
+      write(_chunk, _encoding, callback) { callback(); },
+      destroy(_error, callback) { callback(Object.assign(new Error('EDQUOT: disk quota exceeded, close'), { code: 'EDQUOT' })); },
+    }) as unknown as WriteStream);
+    try {
+      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'))).rejects.toThrow(/EDQUOT/);
+    } finally {
+      closeFails.mockRestore();
+    }
+  });
+
   it('ends by emptying the login sessions an older backup carried, inside the same transaction', () => {
     // Every backup made before sessions were left out holds the session
     // table's rows, and a restore would revive each one that had not yet
