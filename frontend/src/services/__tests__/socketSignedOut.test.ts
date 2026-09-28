@@ -98,7 +98,7 @@ describe('the socket client when the server stops accepting its sign-in', () => 
 
   it('stops reconnecting at an Unauthorized refusal and asks the REST API instead', async () => {
     // The API answers 401; its interceptor does the redirect, so here it only rejects.
-    listCampaigns.mockRejectedValue(new Error('Request failed with status code 401'));
+    listCampaigns.mockRejectedValue(Object.assign(new Error('Request failed with status code 401'), { response: { status: 401 } }));
     await joined(client);
 
     // The sign-in is ended from elsewhere: the server says why and closes the socket.
@@ -114,6 +114,26 @@ describe('the socket client when the server stops accepting its sign-in', () => 
 
     expect(sockets).toHaveLength(2);
     expect(listCampaigns).toHaveBeenCalledTimes(1);
+  });
+
+  // A refusal can come from a moment the server could not read its sessions,
+  // and the check that follows can fail for the same reason. Only a 401 or a
+  // required password change says the sign-in is gone; anything else is asked
+  // again, and the client reconnects once the answer is that it is fine.
+  it('asks again after a check that fails for any other reason, then reconnects', async () => {
+    listCampaigns
+      .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+      .mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } }))
+      .mockResolvedValue({ campaigns: [] });
+    await joined(client);
+
+    current().fire('connect');
+    current().fire('error', { message: 'Unauthorized' });
+    current().fire('disconnect', 'io server disconnect');
+    expect(await nextSocket()).toBe(true);
+
+    expect(listCampaigns).toHaveBeenCalledTimes(3);
+    expect(sockets).toHaveLength(2);
   });
 
   it('reconnects as before when the REST API says the sign-in is still good', async () => {
