@@ -15,6 +15,8 @@ interface CharacterCardProps {
   /** Clicking the card body — opens the sheet to read. */
   onView: (character: Character) => void;
   onEdit: (character: Character) => void;
+  /** False hides Edit, for an owner who is a spectator in the character's campaign. */
+  canEdit?: boolean;
   onCopy: (character: Character) => void;
   onDelete: (character: Character) => void;
   onAssign: (character: Character) => void;
@@ -26,6 +28,7 @@ function CharacterCardInner({
   campaign,
   onView,
   onEdit,
+  canEdit = true,
   onCopy,
   onDelete,
   onAssign,
@@ -126,14 +129,16 @@ function CharacterCardInner({
                            bg-surface-light/95 backdrop-blur-cozy border border-brand/20"
               >
                 <div className="py-1">
-                  <button
-                    onClick={(e) => handleMenuItemClick(e, () => onEdit(character))}
-                    className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10
-                             flex items-center gap-2 transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Edit Character
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={(e) => handleMenuItemClick(e, () => onEdit(character))}
+                      className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10
+                               flex items-center gap-2 transition-colors"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit Character
+                    </button>
+                  )}
 
                   <button
                     onClick={(e) => handleMenuItemClick(e, () => onCopy(character))}

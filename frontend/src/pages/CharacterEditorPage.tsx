@@ -4,7 +4,7 @@
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { isCampaignDm } from '@/utils/campaignRoles';
+import { canEditCharacterIn } from '@/services/permissions';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucide-react';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
@@ -97,29 +97,20 @@ export default function CharacterEditorPage() {
 
   const checkEditPermission = async (char: Character): Promise<boolean> => {
     if (!user) return false;
+    if (!char.campaignId) return char.userId === user.id;
 
-    // User owns the character
-    if (char.userId === user.id) {
-      return true;
+    // In a campaign, the rule is the campaign's: its DM may edit (the person
+    // running the game now, not whoever created it), and an owner who is a
+    // spectator there may not, as the server refuses the save. Should the
+    // campaign not load, ownership alone decides and the server has the last
+    // word.
+    try {
+      const camp = await campaignService.getCampaign(char.campaignId);
+      return canEditCharacterIn(user, char, camp);
+    } catch (err) {
+      console.error('Failed to check campaign permission:', err);
+      return char.userId === user.id;
     }
-
-    // Character is assigned to a campaign — the DM of that campaign may edit it.
-    // That is the person currently running the game, not the person who created
-    // the campaign: after a handover those are different people, and asking for
-    // the owner let the previous DM keep an edit they should have lost while
-    // denying it to the DM who should have gained it.
-    if (char.campaignId) {
-      try {
-        const camp = await campaignService.getCampaign(char.campaignId);
-        if (isCampaignDm(camp, user.id)) {
-          return true;
-        }
-      } catch (err) {
-        console.error('Failed to check campaign permission:', err);
-      }
-    }
-
-    return false;
   };
 
   // ============================================

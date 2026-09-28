@@ -7,9 +7,9 @@ import { X, Shield, User as UserIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
-import { canEditCharacter, canRollAsCharacter } from '@/services/permissions';
+import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
-import type { Character, GameSystem, CampaignMembership } from '@/types';
+import type { Campaign, Character, GameSystem, CampaignMembership } from '@/types';
 
 // Import view components
 import { DnD5eCharacterView } from '../character-sheets/dnd5e/DnD5eCharacterView';
@@ -25,11 +25,13 @@ interface CharacterSheetViewerModalProps {
   character: Character;
   /**
    * Campaign context, when the sheet was opened from inside a campaign. Absent
-   * when opened from the character gallery, where there is no campaign — and a
-   * character there is always your own, so ownership alone decides editing.
+   * when opened from the character gallery, where a character is always your
+   * own; there `campaign`, the character's campaign as your campaign list
+   * gives it, says whether you are a spectator in it and so may not edit.
    */
   campaignId?: string;
   membership?: CampaignMembership;
+  campaign?: Campaign | null;
   onClose: () => void;
 }
 
@@ -37,6 +39,7 @@ export default function CharacterSheetViewerModal({
   character: initialCharacter,
   campaignId: _campaignId,
   membership,
+  campaign,
   onClose,
 }: CharacterSheetViewerModalProps) {
   const { user } = useAuth();
@@ -91,7 +94,9 @@ export default function CharacterSheetViewerModal({
   }, [socket, character.id]);
 
   // Check if user can edit
-  const canEdit = user ? canEditCharacter(user, character, membership) : false;
+  const canEdit = user
+    ? (membership ? canEditCharacter(user, character, membership) : canEditCharacterIn(user, character, campaign))
+    : false;
   // Reading someone else's sheet is deliberate — the server lets any campaign
   // member do it. Rolling from it is not: those are their modifiers.
   const canRoll = user ? canRollAsCharacter(user, character, membership) : false;
