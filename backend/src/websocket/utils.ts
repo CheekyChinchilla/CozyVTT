@@ -3,6 +3,7 @@ import { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
+import type { AuthenticatedFields } from './auth';
 
 /**
  * WebSocket Utility Functions
@@ -65,7 +66,7 @@ export type CampaignSocket = Awaited<ReturnType<Server['fetchSockets']>>[number]
  */
 export async function campaignSockets(io: Server, campaignId: string): Promise<CampaignSocket[]> {
   const sockets = await io.in(campaignId).fetchSockets();
-  return sockets.filter((s) => (s as unknown as { campaignId?: string }).campaignId === campaignId);
+  return sockets.filter((s) => (s as unknown as AuthenticatedFields).campaignId === campaignId);
 }
 
 /**
@@ -109,7 +110,7 @@ export async function getOnlineUserIds(campaignId: string): Promise<string[]> {
     // The default in-memory adapter hands back the real sockets, so the fields
     // set during authentication are readable — the same approach the secret
     // dice-roll fan-out uses.
-    const userId = (socket as unknown as { userId?: string }).userId;
+    const userId = (socket as unknown as AuthenticatedFields).userId;
     if (userId) ids.add(userId);
   }
   return [...ids];
@@ -155,7 +156,7 @@ export async function endLiveSockets(
     const io = getSocketInstance();
     let ended = 0;
     for (const socket of await io.in(userId).fetchSockets()) {
-      const sid = (socket as unknown as { sessionId?: string }).sessionId;
+      const sid = (socket as unknown as AuthenticatedFields).sessionId;
       if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
       if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
       socket.emit('error', { message: reason });
@@ -253,7 +254,7 @@ export async function applyRoleToLiveSockets(
     // The default in-memory adapter hands back the real sockets, so the fields
     // set during authentication are both readable and writable — the same
     // approach getOnlineUserIds and the secret dice-roll fan-out rely on.
-    const authed = socket as unknown as { campaignId?: string; role?: string };
+    const authed = socket as unknown as AuthenticatedFields;
     if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       authed.role = role;
       updated += 1;
@@ -287,7 +288,7 @@ export async function clearCampaignFromLiveSockets(
 
   let cleared = 0;
   for (const socket of sockets) {
-    const authed = socket as unknown as { campaignId?: string; role?: string };
+    const authed = socket as unknown as AuthenticatedFields;
     if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       socket.leave(campaignId);
       if (authed.campaignId === campaignId) {
@@ -312,7 +313,7 @@ export async function clearDeletedCampaignFromLiveSockets(campaignId: string): P
   const io = getSocketInstance();
   let cleared = 0;
   for (const socket of await io.in(campaignId).fetchSockets()) {
-    const authed = socket as unknown as { campaignId?: string; role?: string };
+    const authed = socket as unknown as AuthenticatedFields;
     socket.leave(campaignId);
     if (authed.campaignId === campaignId) {
       authed.campaignId = undefined;
