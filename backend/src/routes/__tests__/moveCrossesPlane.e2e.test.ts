@@ -128,4 +128,16 @@ describe('placing or deleting a player\'s spirit token', () => {
     await expect(across).resolves.toBeUndefined();
     player.disconnect();
   });
+
+  // A spirit-plane token handed to a player takes them across with it.
+  it('sends the order again when the token is handed to them', async () => {
+    await prisma.map.update({ where: { id: shownId }, data: { tokens: [token(SHADE, { type: 'player' }), token(WRAITH, { position: { x: 3, y: 3 } })] } });
+    combat();
+    const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const across = orderFor(player, true);
+    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`).send({ controlledBy: playerId });
+    expect(res.status).toBe(200);
+    await expect(across).resolves.toBeUndefined();
+    player.disconnect();
+  });
 });
