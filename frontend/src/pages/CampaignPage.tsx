@@ -64,7 +64,7 @@ import Tooltip from '@/components/ui/Tooltip';
 
 function CampaignPageContent() {
   const navigate = useNavigate();
-  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap } = useCampaign();
+  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
   const { user } = useAuth();
 
   /**
@@ -85,18 +85,18 @@ function CampaignPageContent() {
   // collapsed or unmounted.
   useInitiativeSync();
 
-  // After a WebSocket reconnect, refetch the current map's state via REST.
-  // The real-time stream only pushes deltas; any moves/wall edits/fog ops
-  // that broadcast while this client was offline are not replayed, so without
-  // this refresh the local map view stays frozen on pre-disconnect state
-  // until the next live event arrives (or a hard refresh). reconnectCount is
-  // 0 on initial load and ticks once per successful reconnect, so this skips
-  // the initial mount.
+  // After a WebSocket reconnect, catch up via REST. The real-time stream
+  // only pushes deltas; moves, wall edits and fog ops, a pause or an end, a
+  // member's new role and a switch to another map that broadcast while this
+  // client was offline are not replayed, so without this the page stays on
+  // its pre-disconnect state until the next live event arrives (or a hard
+  // refresh). reconnectCount is 0 on initial load and ticks once per
+  // successful reconnect, so this skips the initial mount.
   useEffect(() => {
     if (reconnectCount > 0) {
-      refreshCurrentMap();
+      catchUpAfterReconnect();
     }
-    // refreshCurrentMap is stable enough for this trigger pattern
+    // catchUpAfterReconnect is stable enough for this trigger pattern
   }, [reconnectCount]);
 
   // A player changing their character's token image rewrites the image on every
