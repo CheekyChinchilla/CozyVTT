@@ -13,7 +13,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
-import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 
 jest.setTimeout(30000);
 
@@ -78,4 +78,25 @@ it('tells an open page of every wall change made over the API', async () => {
   expect((await dm.put(base).send({ segments: [wall(), wall()] })).status).toBe(200);
   expect((await replaced).segments).toHaveLength(2);
   player.disconnect();
+});
+
+// The same rule as the socket edits: a map the DM is preparing is theirs
+// alone, so its walls reach the DM's pages and no player's.
+it("tells only the DM's pages of a wall added to a prepared map", async () => {
+  const preparedId = (await prisma.map.create({
+    data: { campaignId, name: 'Prepared', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+  })).id;
+  try {
+    const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const quiet = expectNoEvent(player, 'wall:added', 800);
+    const toDm = waitForEvent<{ mapId: string }>(dmPage, 'wall:added');
+    expect((await dm.post(`/api/campaigns/${campaignId}/maps/${preparedId}/walls`).send(wall())).status).toBe(201);
+    expect((await toDm).mapId).toBe(preparedId);
+    await quiet;
+    player.disconnect();
+    dmPage.disconnect();
+  } finally {
+    await prisma.map.deleteMany({ where: { id: preparedId } });
+  }
 });

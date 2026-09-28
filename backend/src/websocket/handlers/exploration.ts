@@ -36,7 +36,8 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
    * A DM may name another member and write that player's memory: Player
    * Preview records what the previewed token has seen, so a table the DM
    * drives alone still accrues it. The user's whole memory is then sent to
-   * their own sockets and to every DM's, so a preview follows it live.
+   * their own sockets and to the DM sockets previewing them, so a preview
+   * follows it live (broadcastExplorationState).
    */
   socket.on('exploration:reveal', async (data: unknown) => {
     try {
@@ -51,16 +52,13 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const { mapId, cells, userId: named } = parsed.data;
 
       // A prepared map is the DM's until they switch to it, for writes as
-      // for reads (canReadMap).
+      // for reads (canReadMap). A report is sent by the page on its own and
+      // can cross a map switch, or memory being turned off, in flight, so
+      // one that no longer applies is dropped without an error: the page
+      // shows socket errors in the dice panel.
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
-      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
-        socket.emit('error', { message: 'Map not found' });
-        return;
-      }
-      if (!map.explorationEnabled) {
-        socket.emit('error', { message: 'Explored memory is off for this map' });
-        return;
-      }
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
+      if (!map.explorationEnabled) return;
 
       const isDM = socket.role === 'DM';
       let userId = socket.userId;
@@ -111,6 +109,12 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:request', async (data: { mapId?: unknown; userId?: unknown }) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
+      const userId = socket.role === 'DM' && typeof data?.userId === 'string' ? data.userId : socket.userId;
+      // A DM naming a player is previewing them: that player's memory is
+      // the one this socket follows from now on (broadcastExplorationState).
+      // Before the limit, so a preview switched faster than it allows still
+      // follows the player now shown; it reads nothing.
+      if (socket.role === 'DM') socket.previewingMemoryOf = userId === socket.userId ? undefined : userId;
       if (!stateRequestAllowed(socket, 'exploration:request')) return;
       const mapId = typeof data?.mapId === 'string' ? data.mapId : null;
       if (!mapId) return;
@@ -122,10 +126,6 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
 
-      const userId = socket.role === 'DM' && typeof data.userId === 'string' ? data.userId : socket.userId;
-      // A DM naming a player is previewing them: that player's memory is
-      // the one this socket follows from now on (broadcastExplorationState).
-      if (socket.role === 'DM') socket.previewingMemoryOf = userId === socket.userId ? undefined : userId;
       const row = await prisma.mapExploration.findUnique({
         where: { mapId_userId: { mapId, userId } },
         select: { explored: true },

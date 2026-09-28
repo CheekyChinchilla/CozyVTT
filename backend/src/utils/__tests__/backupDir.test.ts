@@ -59,6 +59,36 @@ describeWhereModesApply('ensureBackupDir', () => {
     warned.mockRestore();
   });
 
+  // Some mounts (SMB without Unix extensions, vfat with 'quiet') accept a
+  // chmod and ignore it. Saying the folder was made private there would say
+  // the opposite of what is true, every time the list is opened.
+  it('says it could not make the folder private when a chmod is accepted and ignored', async () => {
+    const dir = path.join(root, 'backups');
+    await fs.mkdir(dir, { mode: 0o755 });
+    await fs.chmod(dir, 0o755);
+    const ignored = jest.spyOn(fs, 'chmod').mockResolvedValue(undefined);
+    const warned = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    try {
+      await ensureBackupDir(dir);
+      expect(warned).toHaveBeenCalledWith(expect.stringMatching(/Could not make the backups folder private/), expect.objectContaining({ dir }));
+      expect(warned).not.toHaveBeenCalledWith(expect.stringMatching(/^Made the backups folder private/), expect.anything());
+    } finally {
+      warned.mockRestore();
+      ignored.mockRestore();
+    }
+  });
+
+  // A folder its own user cannot open (a mistyped `chmod 600` on the folder
+  // itself, say) has no bits for anyone else either. It was left as it was,
+  // and every backup vanished from the list.
+  it('gives its own user back a folder they cannot open', async () => {
+    const dir = path.join(root, 'backups');
+    await fs.mkdir(dir, { mode: 0o700 });
+    await fs.chmod(dir, 0o600);
+    await ensureBackupDir(dir);
+    expect((await fs.stat(dir)).mode & 0o777).toBe(0o700);
+  });
+
   it('says nothing about a folder that was already private', async () => {
     const dir = path.join(root, 'backups');
     await fs.mkdir(dir, { mode: 0o700 });

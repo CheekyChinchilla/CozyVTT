@@ -53,6 +53,17 @@ export function canEditCharacterIn(
 }
 
 /**
+ * Why `user` may not edit `character`, once canEditCharacterIn has said no.
+ * An owner is refused only for being a spectator in its campaign, so they are
+ * told that, not that only the owner may edit it.
+ */
+export function characterEditRefusal(user: Pick<User, 'id'>, character: Pick<Character, 'userId'>): string {
+  return character.userId === user.id
+    ? "You watch this character's campaign as a spectator, so you cannot edit the character there. Ask its DM to make you a player."
+    : 'You do not have permission to edit this character. Only its owner or the DM of its campaign can edit it.';
+}
+
+/**
  * Check if a user can view a character
  * In campaign context, all members can view characters
  * @param user - Current user

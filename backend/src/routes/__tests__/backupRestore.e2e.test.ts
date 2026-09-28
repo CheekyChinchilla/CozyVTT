@@ -352,6 +352,29 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
+  // The backup is unpacked into the temporary folder before anything else:
+  // a folder that cannot be made there, or fills while unpacking, was
+  // answered "An unexpected error occurred", with no word that nothing had
+  // changed.
+  it('says the temporary folder could not be used, and that nothing changed, when it cannot be made', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const original = fs.mkdtemp.bind(fs);
+    const refused = jest.spyOn(fs, 'mkdtemp').mockImplementation(((prefix: string) =>
+      prefix.includes('cozyvtt-restore-')
+        ? Promise.reject(Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' }))
+        : original(prefix)) as never);
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/temporary folder/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
+    } finally {
+      refused.mockRestore();
+    }
+  });
+
   it('says the temporary folder could not take the working copy, and that nothing changed, when writing it fails', async () => {
     const calls = stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -545,11 +568,12 @@ describe('POST /api/admin/backups', () => {
     clock.mockRestore();
   });
 
-  // A backup's file exists from the moment its name is taken: empty while
-  // pg_dump runs, part-written while it is zipped. It was listed as a finished
-  // backup all that time, so it could be downloaded half-made or deleted from
-  // under the backup writing it.
-  it('leaves a backup out of the list, and will not hand it out or delete it, until it is written', async () => {
+  // A backup's file used to exist under its name from the moment the name was
+  // taken: empty while pg_dump ran, part-written while it was zipped. A
+  // backend stopped in between left that file behind, listed and downloadable
+  // as a finished backup. It is now written under a name the list never
+  // shows, and renamed once it is complete.
+  it('writes a backup under a name no backup has until it is complete', async () => {
     stubTools();
     const stub = execFileMock.getMockImplementation();
     let release = () => {};
@@ -561,38 +585,34 @@ describe('POST /api/admin/backups', () => {
       started();
       void held.then(() => stub?.(cmd, ...rest));
     });
-    const before = new Set(await fs.readdir(BACKUP_DIR).catch(() => []));
+    const named = (files: string[]) => files.filter((f) => /^backup-.*\.zip$/.test(f));
+    const before = named(await fs.readdir(BACKUP_DIR).catch(() => []));
     const making = admin.post('/api/admin/backups').then((res) => res);
     try {
       await dumping;
-      const name = (await fs.readdir(BACKUP_DIR)).find((f) => !before.has(f));
-      expect(name).toBeDefined();
-
+      expect(named(await fs.readdir(BACKUP_DIR))).toEqual(before);
       const listed = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
-      expect(listed).not.toContain(name);
-      expect((await admin.get(`/api/admin/backups/${name}/download`)).status).toBe(409);
-      expect((await admin.delete(`/api/admin/backups/${name}`)).status).toBe(409);
+      expect(listed.sort()).toEqual([...before].sort());
     } finally {
       release();
     }
     const made = await making;
-    const name = made.body.filename;
     expect(made.status).toBe(201);
+    const name = made.body.filename;
+    expect(named(await fs.readdir(BACKUP_DIR))).toContain(name);
+    expect((await fs.readdir(BACKUP_DIR)).filter((f) => f.endsWith('.partial'))).toEqual([]);
     const after = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(after).toContain(name);
     // The next case counts on having this second's name to itself.
     await fs.rm(path.join(BACKUP_DIR, name), { force: true });
   });
 
-  it('leaves out an empty backup file, which a backend stopped partway through a backup leaves behind', async () => {
-    const empty = 'backup-2026-01-02T03-04-05.zip';
-    await fs.writeFile(path.join(BACKUP_DIR, empty), '');
-    try {
-      const listed = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
-      expect(listed).not.toContain(empty);
-    } finally {
-      await fs.rm(path.join(BACKUP_DIR, empty), { force: true });
-    }
+  it('removes what a backup the backend was stopped partway through left behind', async () => {
+    const left = path.join(BACKUP_DIR, 'backup-2026-01-02T03-04-05.zip.partial');
+    await fs.writeFile(left, 'half an archive');
+    const listed = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(listed).not.toContain('backup-2026-01-02T03-04-05.zip');
+    await expect(fs.access(left)).rejects.toThrow();
   });
 
   it('gives two backups made in the same second different names, and keeps the first as it was', async () => {

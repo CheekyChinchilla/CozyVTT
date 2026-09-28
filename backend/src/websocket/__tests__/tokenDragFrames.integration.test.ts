@@ -210,5 +210,52 @@ describe('drag frames on an unlit map', () => {
     dm.disconnect();
     player.disconnect();
   });
+
+  it('stop reaching a material-plane player once the token moves to the spirit layer mid-drag', async () => {
+    await resetMap(false, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const first = waitForEvent<{ x: number }>(player, 'token.moved');
+    drag(dm, FAR, [16]);
+    expect((await first).x).toBe(16);
+
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, 5, playerId), { ...token(FAR, 16, null), layer: 'spirit' }] } });
+    const quiet = expectNoEvent(player, 'token.moved', 800);
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+    await quiet;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  // Who may see the token also turns on each player's plane, which the DM
+  // can change mid-drag without touching the token. The decision is made
+  // again at least once a second, so such a change is followed within one.
+  it('stop reaching a player who crosses to the other plane mid-drag, within a second', async () => {
+    await resetMap(false, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const first = waitForEvent<{ x: number }>(player, 'token.moved');
+    drag(dm, FAR, [16]);
+    expect((await first).x).toBe(16);
+
+    // Every player is now on the spirit plane; the dragged token is not.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
+    const later = Date.now() + 1500;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      const quiet = expectNoEvent(player, 'token.moved', 800);
+      dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+      await quiet;
+    } finally {
+      clock.mockRestore();
+      await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+    }
+
+    dm.disconnect();
+    player.disconnect();
+  });
 });
 

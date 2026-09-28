@@ -57,6 +57,7 @@ import { CampaignStatus } from '@/types';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import Tooltip from '@/components/ui/Tooltip';
+import { useOnRejoin } from '@/hooks/useOnRejoin';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -77,7 +78,7 @@ function CampaignPageContent() {
    */
   const isOwner = isCampaignOwner(campaign, user?.id);
   const canOpenSettings = userRole === 'DM' || isOwner;
-  const { socket, reconnectCount, status } = useWebSocket();
+  const { socket, joinedEpoch, status } = useWebSocket();
 
   // Mirror combat/initiative state into the game store. Owned here rather than
   // by the initiative panel so both the tracker and the map's active-token
@@ -90,14 +91,9 @@ function CampaignPageContent() {
   // member's new role and a switch to another map that broadcast while this
   // client was offline are not replayed, so without this the page stays on
   // its pre-disconnect state until the next live event arrives (or a hard
-  // refresh). reconnectCount is 0 on initial load and ticks once per
-  // successful reconnect, so this skips the initial mount.
-  useEffect(() => {
-    if (reconnectCount > 0) {
-      catchUpAfterReconnect();
-    }
-    // catchUpAfterReconnect is stable enough for this trigger pattern
-  }, [reconnectCount]);
+  // refresh). Once the connection has joined the campaign again, so nothing
+  // sent while the read is in flight is missed.
+  useOnRejoin(joinedEpoch, catchUpAfterReconnect);
 
   // A player changing their character's token image rewrites the image on every
   // token bound to that character, server-side — tokens hold their own copy. The

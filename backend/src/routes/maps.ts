@@ -64,6 +64,20 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
   }
 }
 
+/**
+ * Send the map to the table again when it is the one on screen, after a
+ * change to what players are sent. The change is saved by then, so a failure
+ * here is logged, never answered as the change having failed.
+ */
+async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadcastMapData>[2]): Promise<void> {
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    if (campaign?.currentMapId === map.id) await broadcastMapData(getSocketInstance(), campaignId, map);
+  } catch (err) {
+    logger.warn('Map not re-sent to the table; the change stands', { err, mapId: map.id });
+  }
+}
+
 // The token shape lives in websocket/shared.ts — see the note there on why this
 // file no longer keeps its own copy.
 
@@ -161,14 +175,8 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     // the read rule then saw a legitimate-looking reference and allowed it.
     // Refusing the reference is the half of that fix that stops it being
     // created in the first place.
-    const referenced = [normalizedImageUrl, normalizedSpiritLayerUrl].filter(
-      (url): url is string => typeof url === 'string' && url.length > 0
-    );
-    const isAdmin = req.session.platformRole === 'ADMIN';
-    for (const url of referenced) {
-      const assetId = extractAssetId(url);
-      if (!assetId) continue;
-      if (!(await canReadAssetById(assetId, req.session.userId!, isAdmin))) {
+    for (const url of [normalizedImageUrl, normalizedSpiritLayerUrl]) {
+      if (!(await canReferenceAsset(url, req.session.userId!))) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to that image',
@@ -472,13 +480,15 @@ router.get(
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
       }
 
-      // Resolve asset file path
-      const assetId = path.basename(map.imageUrl);
-      const asset = await prisma.asset.findUnique({
-        where: { id: assetId },
-        select: { filePath: true },
-      });
-      if (!asset) {
+      // Resolve asset file path. The file goes into the download, so the
+      // caller must be able to read it, and the address is read the way the
+      // reference check reads it: a map could otherwise name another user's
+      // private file and hand it over here.
+      const assetId = extractAssetId(map.imageUrl);
+      const asset = assetId
+        ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
+        : null;
+      if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
       }
 
@@ -716,7 +726,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         });
       }
       // A picture the DM may read, as on create (canReferenceAsset)
-      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.imageUrl))) {
+      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.imageUrl = normalizedImageUrl;
@@ -733,7 +743,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       }
       // Normalize to full path (or null)
       const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
-      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.spiritLayerUrl))) {
+      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
@@ -803,12 +813,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      if (campaign?.currentMapId === id) {
-        try {
-          await broadcastMapData(getSocketInstance(), campaignId, updatedMap);
-        } catch { /* non-fatal */ }
-      }
+      await resendIfCurrent(campaignId, updatedMap);
     }
 
     return res.status(200).json({ map: updatedMap });
@@ -1057,7 +1062,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
     // Art the DM may read: a token's art counts as the campaign using it.
-    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -1133,6 +1138,11 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
       return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
     });
+
+    // A player's spirit-layer token placed on the map the table is on moves
+    // them to the spirit plane, which changes what they are sent of the
+    // order. Skipped while nothing is in it.
+    await resendInitiative(campaignId);
 
     return res.status(201).json({
       message: 'Token added successfully',
@@ -1339,7 +1349,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const nextImageUrl = updates.imageUrl === undefined
       ? undefined
       : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
-    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, req.session.platformRole === 'ADMIN', existingToken.imageUrl))) {
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -1559,8 +1569,12 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     });
 
     // The entry goes with the token, and the order is sent again without it.
+    // Any other token's deletion can move its controller between planes (a
+    // player's spirit-layer token), so the order is sent again then too.
     if (removeCombatants(campaignId, (c) => c.tokenId === tokenId)) {
       await resendInitiative(campaignId, { evenWhenEmpty: true });
+    } else {
+      await resendInitiative(campaignId);
     }
 
     return res.status(200).json({
@@ -1996,12 +2010,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
     // See PUT /:id: a lighting change alters which tokens players are sent,
     // and only the map the table is on is anyone's canvas.
     if (updated.lightingEnabled !== map.lightingEnabled) {
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      if (campaign?.currentMapId === id) {
-        try {
-          await broadcastMapData(getSocketInstance(), campaignId, updated);
-        } catch { /* non-fatal */ }
-      }
+      await resendIfCurrent(campaignId, updated);
     }
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });

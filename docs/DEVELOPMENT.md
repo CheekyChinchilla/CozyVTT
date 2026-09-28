@@ -383,8 +383,9 @@ Two of those deserve a note:
   `docker-compose.yml` being set to the value it prints (the file's hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
-  files and CI pin, or any line in either Dockerfile that installs it names the
-  unpinned `postgresql-client`. It also fails when `backend/scripts/restore.sh`
+  files and CI pin, when any line in either Dockerfile that installs it names the
+  unpinned `postgresql-client`, or when the stage that runs (the last one) does
+  not install it. It also fails when `backend/scripts/restore.sh`
   stops ending its load with the statements the dashboard restore ends it with,
   when the combat state's fields differ between the two packages, and when the
   special characters a password needs differ between the browser and the
@@ -404,6 +405,40 @@ Two of those deserve a note:
 request. Note that it **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
+
+### Before a release: rehearse the upgrade
+
+The suites run against an empty test database. None of them upgrades an
+instance that already holds data, and none loads a backup into a real
+PostgreSQL with `psql`: they check the file `psql` is handed and the
+arguments it runs with, because the suites run where the client tools need
+not be installed. Self-hosters upgrade with `git pull` and
+`docker compose up -d --build` and nothing else, so before a release is
+tagged, rehearse exactly that:
+
+1. In a second checkout (`git worktree add ../cozy-rehearsal <previous-tag>`),
+   copy `.env.example` to `.env`, give it ports of its own (`HTTP_PORT`,
+   `HTTPS_PORT`) and its own secrets, and start the production stack with
+   `docker compose up -d --build`. Its containers are named `cozyvtt-*`, like
+   a real instance's, so do this on a machine that is not running one.
+2. Seed it through the app: an admin, a player with two-factor sign-in on,
+   a campaign with a lit map (walls, a light, a hidden token with notes, some
+   revealed fog) and a character; then make a backup from the Admin Dashboard
+   and one with `./backend/scripts/backup.sh`.
+3. Record a fingerprint of the data with `psql` in the database container:
+   an `md5` of each map's tokens, walls, lights and fog, of each character's
+   data, and each user's two-factor state, with the row counts.
+4. Check out the release commit in the same folder and run
+   `docker compose up -d --build`, as a self-hoster would.
+5. Check that the migrations applied (`docker compose logs backend`), the
+   fingerprints are unchanged, `/health` answers through the bundled nginx,
+   the old passwords still sign in, the player is sent nothing the DM hid,
+   the previous release's dashboard backup restores on the new code, a new
+   backup downloads and restores, and `backup.sh` then `restore.sh` work.
+6. Open the campaign in a browser as the DM and as the player.
+
+Take the rehearsal down afterwards with `docker compose down -v` in that
+checkout, which deletes its database, and `git worktree remove`.
 
 ---
 

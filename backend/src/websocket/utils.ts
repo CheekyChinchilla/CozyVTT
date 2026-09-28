@@ -42,6 +42,22 @@ export function broadcastToCampaign(campaignId: string, event: string, data: unk
 }
 
 /**
+ * Tell each campaign's open pages that its roster changed for `userId`: they
+ * left it (removed, or their account deleted) or their role changed. Every
+ * page keeps the member list and the roster panel it loaded, and refreshes
+ * both on this. Never throws: the change is already saved.
+ */
+export function announceRosterChange(userId: string, campaignIds: string[], action: 'member.left' | 'member.role'): void {
+  for (const campaignId of campaignIds) {
+    try {
+      broadcastToCampaign(campaignId, 'roster.updated', { action, userId, campaignId });
+    } catch (error) {
+      logger.warn('roster.updated not broadcast; the change stands', { err: error, campaignId, userId });
+    }
+  }
+}
+
+/**
  * Broadcast an event to a specific user (all their connected sockets)
  * @param userId - User ID
  * @param event - Event name

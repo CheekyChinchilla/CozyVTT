@@ -9,7 +9,7 @@
 // the new choice, never with the one the listener was first registered under.
 // ============================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface ExplorationState {
   mapId: string;
@@ -22,7 +22,7 @@ export interface ExplorationState {
 export interface ExplorationSocket {
   on(event: 'exploration:state', handler: (data: ExplorationState) => void): unknown;
   off(event: 'exploration:state', handler: (data: ExplorationState) => void): unknown;
-  emit(event: 'exploration:request', data: { mapId: string; userId: string }): unknown;
+  emit(event: 'exploration:request', data: { mapId: string; userId?: string }): unknown;
 }
 
 export interface ExplorationSocketSource {
@@ -59,6 +59,18 @@ export function useExploredMemory(
     if (!mapId || !active || !exploringAs || !joinedEpoch) return;
     socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
   }, [socket, mapId, active, exploringAs, joinedEpoch]);
+
+  // The server sends a player's memory to the DM sockets following them, and
+  // a socket follows whoever its last request named. When a preview ends,
+  // ask as nobody, which stops the following: otherwise the DM went on being
+  // sent that player's whole memory on every reveal.
+  const followed = useRef<string | null>(null);
+  useEffect(() => {
+    const was = followed.current;
+    followed.current = exploringAs;
+    if (was === null || exploringAs !== null || !joinedEpoch) return;
+    socket?.getSocket()?.emit('exploration:request', { mapId: mapId ?? '' });
+  }, [socket, mapId, exploringAs, joinedEpoch]);
 
   // Keyed on the rejoin as well: a reconnect throws the socket away and
   // builds a new one, and the request above already follows the rejoin. The

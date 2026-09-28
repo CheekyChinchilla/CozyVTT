@@ -424,7 +424,11 @@ class ApiClient {
     // restore as failed while the server went on to replace the database.
     const response = await this.client.post<RestoreReply>('/api/admin/backups/restore', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: LONG_ADMIN_REQUEST_MS,
+      // No limit of the page's own: it would count the upload, which nginx's
+      // ten minutes do not, and a slow upload then ran the page out of time
+      // while the server went on restoring. nginx still ends a restore that
+      // goes silent for ten minutes.
+      timeout: 0,
     });
     return response.data;
   }

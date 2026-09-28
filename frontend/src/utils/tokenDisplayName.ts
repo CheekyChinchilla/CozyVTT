@@ -25,7 +25,21 @@ export function tokenDisplayName(token: NamedToken): string {
   return token.name.trim() === '' ? UNKNOWN_CREATURE : token.name;
 }
 
+/** Whether a token may not be named in front of everyone. */
+function unnamedInPublic(token: NamedToken): boolean {
+  return token.obscured === true || token.visible === false || token.layer === 'spirit';
+}
+
 /** The name to use in front of everyone. */
 export function tokenPublicName(token: NamedToken): string {
-  return token.obscured || token.visible === false || token.layer === 'spirit' ? UNKNOWN_CREATURE : tokenDisplayName(token);
+  return unnamedInPublic(token) ? UNKNOWN_CREATURE : tokenDisplayName(token);
+}
+
+/**
+ * The name a roll from a character's sheet goes under when it is made from
+ * this token: none of its own (the character's name) unless the token may
+ * not be named in front of everyone.
+ */
+export function characterRollPublicName(token: NamedToken | undefined): string | undefined {
+  return token && unnamedInPublic(token) ? UNKNOWN_CREATURE : undefined;
 }

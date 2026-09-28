@@ -8,7 +8,7 @@ import { rememberMeMaxAge } from '../config/session';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { endLiveSockets } from '../websocket/utils';
+import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
 import { requireAuth } from '../middleware/auth';
@@ -586,9 +586,14 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
+    // The campaigns they were in, read before the cascade removes the rows.
+    const campaignIds = (await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
+      .map((m) => m.campaignId);
+
     // Delete the user (cascades to memberships, characters, messages, etc.)
     await prisma.user.delete({ where: { id: userId } });
     await endLiveSockets(userId, 'Your account was deleted.');
+    announceRosterChange(userId, campaignIds, 'member.left');
 
     // Destroy the session
     req.session.destroy(() => {});

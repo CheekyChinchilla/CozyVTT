@@ -88,3 +88,44 @@ it("sends the order again when a move takes a player's spirit token off the map"
   await expect(Promise.race([back, new Promise((_r, reject) => setTimeout(() => reject(new Error('order not sent again')), 3000))])).resolves.toBeUndefined();
   player.disconnect();
 });
+
+// Placing such a token, or deleting it, moves the player between planes the
+// same way; neither route sent the order again unless the token itself was
+// in it.
+describe('placing or deleting a player\'s spirit token', () => {
+  const combat = () => setState(campaignId, {
+    active: true, round: 1, currentTokenId: null,
+    combatants: [{ tokenId: WRAITH, mapId: shownId, name: 'Wraith', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null }],
+  });
+  /** Resolves when the player is sent an order that does, or does not, list the wraith. */
+  const orderFor = (player: import('socket.io-client').Socket, withWraith: boolean) => Promise.race([
+    new Promise<void>((resolve) => {
+      player.on('initiative.state', (state: { combatants: Array<{ tokenId: string }> }) => {
+        if (state.combatants.some((c) => c.tokenId === WRAITH) === withWraith) resolve();
+      });
+    }),
+    new Promise<void>((_r, reject) => setTimeout(() => reject(new Error('order not sent again')), 3000)),
+  ]);
+
+  it('sends the order again when the token is deleted', async () => {
+    await prisma.map.update({ where: { id: shownId }, data: { tokens: [token(SHADE, { controlledBy: playerId, type: 'player' }), token(WRAITH, { position: { x: 3, y: 3 } })] } });
+    combat();
+    const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const back = orderFor(player, false);
+    expect((await dm.delete(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`)).status).toBe(200);
+    await expect(back).resolves.toBeUndefined();
+    player.disconnect();
+  });
+
+  it('sends the order again when the token is placed', async () => {
+    await prisma.map.update({ where: { id: shownId }, data: { tokens: [token(WRAITH, { position: { x: 3, y: 3 } })] } });
+    combat();
+    const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const across = orderFor(player, true);
+    const res = await dm.post(`/api/campaigns/${campaignId}/maps/${shownId}/tokens`)
+      .send({ name: 'Shade', position: { x: 2, y: 2 }, layer: 'spirit', controlledBy: playerId, type: 'player' });
+    expect(res.status).toBe(201);
+    await expect(across).resolves.toBeUndefined();
+    player.disconnect();
+  });
+});

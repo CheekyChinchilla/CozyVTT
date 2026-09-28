@@ -7,7 +7,8 @@ import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permis
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets } from '../websocket/utils';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
+import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
@@ -873,6 +874,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     } catch (error) {
       logger.error('Member removed but live sockets were not updated', { err: error, userId, campaignId });
     }
+    announceRosterChange(userId, [campaignId], 'member.left');
 
     return res.status(200).json({
       message: 'Member removed successfully',
@@ -978,8 +980,15 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       // And every open page, the member's own included, so the controls
       // follow the role without a reload (the client patches its list).
       broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
+      // The roster panel groups members by role from its own list.
+      announceRosterChange(userId, [campaignId], 'member.role');
       // Their copy of the initiative order follows the role.
       await resendInitiative(campaignId);
+      // So does what they are sent of the map the table is on: a spectator
+      // on a lit map is sent no tokens, a player their own and what they see.
+      const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
+      if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
     } catch (error) {
       logger.error('Member role updated but live sockets were not', { err: error, userId, campaignId });
     }
@@ -2071,7 +2080,11 @@ router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, 
 
     logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
 
-    const result = await exportCampaign(campaignId, { includeAudio, includeTokens });
+    const result = await exportCampaign(
+      campaignId,
+      { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
+      { includeAudio, includeTokens }
+    );
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);

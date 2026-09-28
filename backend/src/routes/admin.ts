@@ -744,10 +744,35 @@ const TOOL_MISSING_REPLY = {
   message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
 };
 
+/** The backups folder refused a new backup (its owner or mode, a full disk). */
+class BackupFolderUnusable extends Error {
+  constructor(readonly code: string | undefined) {
+    super('backups folder unusable');
+  }
+}
+
+/** Errors that come from the filesystem refusing a folder or running out of room. */
+const FOLDER_ERRORS = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EDQUOT', 'ENOENT', 'ENOTDIR']);
+
+function backupFolderReply(what: string) {
+  return {
+    error: 'Backup Failed',
+    message: `${what} in the backups folder (${BACKUP_DIR}). Check that it exists, that the backend's user owns it and can write to it, and that its disk has room.`,
+  };
+}
+
+/**
+ * What to do about a temporary folder a backup or restore could not use.
+ * Under Docker it is inside the backend container, on the disk Docker keeps
+ * its containers on, and TMPDIR in .env does not reach the container.
+ */
+const TEMP_FOLDER_ADVICE =
+  'Check that it exists and that the backend can write to it. If it is full, free some space on the disk it is on (under Docker, the disk Docker keeps its containers on); on an install without Docker you can also set TMPDIR to a folder with more room.';
+
 function tempFolderReply() {
   return {
     error: 'Backup Failed',
-    message: `The backup could not use the temporary folder (${os.tmpdir()}). Check that it exists and that the backend can write to it; if it is full or read-only, set TMPDIR to another folder.`,
+    message: `The backup could not use the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE}`,
   };
 }
 
@@ -759,40 +784,56 @@ function tempFolderReply() {
  * the dashboard lists.
  */
 /**
- * A backup file of its own, opened exclusively. The name is the second the
- * backup was asked for; two asked for in the same second, or a restore's
- * safety copy taken in the second a backup was made, used to be given the
- * same name, and the later one silently replaced the earlier. While the name
- * is taken, `-2`, `-3` and so on follow it.
+ * A backup name of its own, and the partial file to write it into. The name
+ * is the second the backup was asked for; two asked for in the same second,
+ * or a restore's safety copy taken in the second a backup was made, used to
+ * be given the same name, and the later one silently replaced the earlier.
+ * While the name is taken, `-2`, `-3` and so on follow it. A name is ours
+ * once we hold its partial file, opened exclusively, and no finished backup
+ * has it: a finished one is only ever renamed from a partial its writer held.
  */
 async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }> {
   const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
   for (let n = 1; ; n++) {
     const filename = n === 1 ? `backup-${timestamp}.zip` : `backup-${timestamp}-${n}.zip`;
+    const partialPath = path.join(BACKUP_DIR, filename + PARTIAL);
+    let handle: FileHandle;
     try {
       // 'wx' refuses an existing file instead of truncating it. Readable by the
       // backend's own user alone: the archive holds every password hash, MFA
       // secret and backup code on the instance.
-      const handle = await fs.open(path.join(BACKUP_DIR, filename), 'wx', 0o600);
-      return { filename, handle };
+      handle = await fs.open(partialPath, 'wx', 0o600);
     } catch (error) {
-      if (errorCode(error) !== 'EEXIST') throw error;
+      const code = errorCode(error);
+      if (code === 'EEXIST') continue;
+      if (code !== undefined && FOLDER_ERRORS.has(code)) throw new BackupFolderUnusable(code);
+      throw error;
     }
+    if (await exists(path.join(BACKUP_DIR, filename))) {
+      await handle.close();
+      await fs.unlink(partialPath).catch(() => {});
+      continue;
+    }
+    return { filename, handle };
   }
 }
 
 /**
- * Backups being written now. Each one's file exists from the moment its name
- * is taken, empty while pg_dump runs and part-written while it is zipped, so
- * the list leaves it out and download and delete refuse it until it is done.
+ * Backups being written now, by name. Each is written to its name plus
+ * PARTIAL, which the list never shows, and renamed once it is complete, so a
+ * backup the backend is stopped partway through never appears as a backup.
  */
 const backupsInProgress = new Set<string>();
+const PARTIAL = '.partial';
+
+const exists = (file: string) => fs.access(file).then(() => true, () => false);
 
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
   await ensureBackupDir(BACKUP_DIR);
   const { filename, handle } = await openNewBackup();
   backupsInProgress.add(filename);
   const zipPath = path.join(BACKUP_DIR, filename);
+  const partialPath = zipPath + PARTIAL;
   // The stream takes the handle over once it exists; until then a failure
   // has to close it here.
   let streamed = false;
@@ -836,12 +877,13 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.finalize();
     });
 
+    // Complete: only now does it take a backup's name.
+    await fs.rename(partialPath, zipPath);
     const stat = await fs.stat(zipPath);
     return { filename, sizeBytes: stat.size };
   } catch (error) {
-    // Leave no partial ZIP behind: the dashboard would list it as a backup
     if (!streamed) await handle.close().catch(() => {});
-    await fs.unlink(zipPath).catch(() => {});
+    await fs.unlink(partialPath).catch(() => {});
     throw error;
   } finally {
     backupsInProgress.delete(filename);
@@ -849,10 +891,6 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
   }
 }
 
-const BACKUP_IN_PROGRESS_REPLY = {
-  error: 'Backup In Progress',
-  message: 'This backup is still being written. Try again when it appears in the list.',
-};
 
 // ============================================
 // POST /api/admin/backups
@@ -883,6 +921,10 @@ router.post('/backups', async (req, res) => {
       logger.error('Backup could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
       return res.status(500).json(tempFolderReply());
     }
+    if (error instanceof BackupFolderUnusable) {
+      logger.error('Backup could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+      return res.status(500).json(backupFolderReply('The backup could not be written'));
+    }
     if (error instanceof DumpFailed) {
       logger.error('pg_dump error', { stderr: error.stderr, code: error.code });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
@@ -900,21 +942,30 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
-    const found = await Promise.all(
+    // A partial file no backup here is writing was left by a backend stopped
+    // partway through one; it can never be finished, and it is the size of a
+    // backup.
+    for (const f of files) {
+      const name = f.endsWith(PARTIAL) ? f.slice(0, -PARTIAL.length) : null;
+      if (name === null || !BACKUP_FILENAME_RE.test(name) || backupsInProgress.has(name)) continue;
+      await fs.unlink(path.join(BACKUP_DIR, f))
+        .then(() => logger.warn('Removed an unfinished backup left by a stopped backend', { file: f }))
+        .catch(() => {});
+    }
+    const backups = await Promise.all(
       files
-        .filter(f => BACKUP_FILENAME_RE.test(f) && !backupsInProgress.has(f))
+        .filter(f => BACKUP_FILENAME_RE.test(f))
         .map(async f => {
           const stat = await fs.stat(path.join(BACKUP_DIR, f));
           return { filename: f, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() };
         })
     );
-    // An empty file is a backup the backend stopped writing (it was restarted
-    // or killed while pg_dump ran); it holds nothing to download or restore.
-    const backups = found.filter(b => b.sizeBytes > 0);
     backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return res.json({ backups });
-  } catch {
-    return res.json({ backups: [] });
+  } catch (error) {
+    // Not an empty list: that reads as every backup being gone.
+    logger.error('Backups folder could not be read', { code: errorCode(error), dir: BACKUP_DIR });
+    return res.status(500).json(backupFolderReply('The list of backups could not be read'));
   }
 });
 
@@ -927,9 +978,6 @@ router.get('/backups/:filename/download', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
-  }
-  if (backupsInProgress.has(filename)) {
-    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
@@ -951,9 +999,6 @@ router.delete('/backups/:filename', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
-  }
-  if (backupsInProgress.has(filename)) {
-    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
@@ -991,16 +1036,35 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
 
     // The backup is unpacked, and the copy psql loads written, in a folder
     // only the backend's user can open: both are the whole database.
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
+    // Nothing has changed until the safety copy: a temporary folder that
+    // cannot be made, or fills while the backup is unpacked, says so.
+    const tempFolderRefused = (error: unknown) => {
+      logger.error('Restore could not use its temporary folder', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not unpack the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
+      });
+    };
+    try {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
+    } catch (error) {
+      return tempFolderRefused(error);
+    }
 
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
     // the entry count and total decompressed size (zip-bomb protection).
     const directory = await unzipper.Open.file(uploadedZip);
-    await extractArchiveSafely(directory, tempDir, {
-      maxFiles: RESTORE_MAX_FILES,
-      maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
-    });
+    try {
+      await extractArchiveSafely(directory, tempDir, {
+        maxFiles: RESTORE_MAX_FILES,
+        maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      if (code !== undefined && FOLDER_ERRORS.has(code)) return tempFolderRefused(error);
+      throw error;
+    }
 
     // 2. Validate the backup contains database.sql
     const sqlPath = path.join(tempDir, 'database.sql');
@@ -1031,7 +1095,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
       return res.status(500).json({
         error: 'Restore Failed',
-        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). If that folder is full, free some space or set TMPDIR to another folder. Nothing was changed.`,
+        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
       });
     }
     const { skipped, refused } = prepared;
@@ -1057,6 +1121,11 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       if (error instanceof TempFolderUnusable) {
         logger.error('Backup before restore could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
         return res.status(500).json({ ...tempFolderReply(), message: `${tempFolderReply().message} Nothing was restored.` });
+      }
+      if (error instanceof BackupFolderUnusable) {
+        logger.error('Backup before restore could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+        const reply = backupFolderReply('A backup of the current database could not be written');
+        return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was restored.` });
       }
       if (error instanceof DumpFailed) {
         logger.error('pg_dump error before restore', { stderr: error.stderr, code: error.code });

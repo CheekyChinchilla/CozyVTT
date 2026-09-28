@@ -111,6 +111,13 @@ class SocketClient {
    */
   private listeners = new Map<string, Set<StoredCallback>>();
 
+  /**
+   * Told each time a socket this client built on its own, after the server
+   * closed the last one, has joined the campaign. Whoever connected listens
+   * on the socket it was handed; this is how it learns there is a new one.
+   */
+  private rebuiltCallbacks = new Set<() => void>();
+
   constructor() {
     // Socket will be initialized when connect() is called
   }
@@ -291,7 +298,15 @@ class SocketClient {
       setTimeout(() => { void this.checkSignIn(); }, delay);
       return;
     }
+    // The checks spent the attempts; the reconnect they lead to gets its own.
+    this.reconnectAttempts = 0;
     this.reconnect();
+  }
+
+  /** Call `callback` whenever this client has replaced its socket on its own; returns the unsubscribe. */
+  onRebuilt(callback: () => void): () => void {
+    this.rebuiltCallbacks.add(callback);
+    return () => { this.rebuiltCallbacks.delete(callback); };
   }
 
   private reconnect() {
@@ -306,9 +321,11 @@ class SocketClient {
     setTimeout(() => {
       this.reconnectAttempts++;
       if (this.campaignId) {
-        this.connect(this.campaignId).catch((error) => {
-          console.error('[Socket] Reconnection error:', error);
-        });
+        this.connect(this.campaignId)
+          .then(() => { for (const callback of this.rebuiltCallbacks) callback(); })
+          .catch((error) => {
+            console.error('[Socket] Reconnection error:', error);
+          });
       }
     }, delay);
   }

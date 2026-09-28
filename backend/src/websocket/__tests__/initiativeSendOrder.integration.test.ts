@@ -47,6 +47,20 @@ const entry = (tokenId: string, type: 'npc' | 'player') => ({
 });
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Until a roll is waiting for the map lock the test holds: it has read the
+ * order by then. Seen in pg_locks as an advisory lock not yet granted, so a
+ * slow machine only waits longer, where a fixed pause could come too soon.
+ */
+async function rollWaitingForLock(): Promise<void> {
+  for (let tries = 0; tries < 100; tries++) {
+    const [{ n }] = await prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`;
+    if (n > 0) return;
+    await pause(50);
+  }
+  throw new Error('the roll never reached the map lock');
+}
+
 beforeAll(async () => {
   const [dmUser, playerUser] = await Promise.all(['dm', 'player'].map((name) =>
     prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Order ${name}` } })));
@@ -142,14 +156,16 @@ it('does not bring back a fight the DM ended while a roll was in progress', asyn
   await holding;
 
   player.emit('initiative.roll', { tokenId: HERO, mapId });
-  await pause(400);
+  await rollWaitingForLock();
   const ended = waitForEvent<{ combatants: unknown[] }>(dm, 'initiative.state');
   dm.emit('initiative.end');
   expect((await ended).combatants).toEqual([]);
 
+  // The roll's dice log entry goes out once it has written the order.
+  const rolled = waitForEvent(player, 'dice.rolled');
   release();
   await holder;
-  await pause(600);
+  await rolled;
   expect(getState(campaignId).combatants).toEqual([]);
   player.disconnect();
 });
@@ -165,14 +181,15 @@ it("does not bring back a combatant the DM removed while the DM's own roll for i
   await holding;
 
   dm.emit('initiative.roll', { tokenId: GOBLIN, mapId });
-  await pause(400);
+  await rollWaitingForLock();
   const removed = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(dm, 'initiative.state');
   dm.emit('initiative.remove', { tokenId: GOBLIN });
   expect((await removed).combatants.map((c) => c.tokenId)).toEqual([HERO]);
 
+  const rolled = waitForEvent(dm, 'dice.rolled');
   release();
   await holder;
-  await pause(600);
+  await rolled;
   expect(getState(campaignId).combatants.map((c) => c.tokenId)).toEqual([HERO]);
 });
 

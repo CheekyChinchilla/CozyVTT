@@ -7,7 +7,7 @@ import { sanitizeUser, hashPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { endLiveSockets } from '../websocket/utils';
+import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import crypto from 'crypto';
 import logger from '../utils/logger';
@@ -403,6 +403,10 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
       where: { uploadedById: id, scope: 'USER' },
     });
 
+    // The campaigns they were in, read before the cascade removes the rows.
+    const campaignIds = (await prisma.campaignMembership.findMany({ where: { userId: id }, select: { campaignId: true } }))
+      .map((m) => m.campaignId);
+
     // Delete user (cascades to related data)
     await prisma.user.delete({
       where: { id },
@@ -412,6 +416,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     // session, so it has to go too.
     await destroyUserLoginSessions(id);
     await endLiveSockets(id, 'Your account was deleted.');
+    announceRosterChange(id, campaignIds, 'member.left');
 
     return res.status(200).json({
       message: 'User deleted successfully',

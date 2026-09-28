@@ -253,7 +253,10 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
     for (const line of RESTORE_TRAILER) await write(line + '\n');
     if (failure.error) throw failure.error;
     out.end();
-    await once(out, 'finish');
+    // Until the file is closed, not only written: some filesystems (NFS over
+    // its quota) report a failed write only when it is closed, after 'finish'.
+    await once(out, 'close');
+    if (failure.error) throw failure.error;
   } catch (err) {
     out.destroy();
     throw err;

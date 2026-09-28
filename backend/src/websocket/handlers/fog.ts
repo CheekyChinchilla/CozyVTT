@@ -11,6 +11,7 @@ import logger from '../../utils/logger';
 import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
+import { bestEffort } from '../utils';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -59,7 +60,9 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       await prisma.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
 
-      await broadcastFogState(io, socket.campaignId, mapId, fog);
+      // Saved: failing to tell the table is logged, not reported as failed.
+      const campaignId = socket.campaignId;
+      await bestEffort('fog:cells', () => broadcastFogState(io, campaignId, mapId, fog));
     } catch (error) {
       logger.error('fog:operation failed', { err: error });
       socket.emit('error', { message: 'Failed to apply fog operation' });

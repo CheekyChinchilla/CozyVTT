@@ -25,9 +25,11 @@ const fakeSocket = {
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: vi.fn().mockResolvedValue(undefined) } }));
 const clientConnect = vi.fn().mockResolvedValue(undefined);
+const rebuiltCallbacks: Array<() => void> = [];
 vi.mock('@/services/socket', () => ({
   default: {
     connect: (id: string) => clientConnect(id),
+    onRebuilt: (cb: () => void) => { rebuiltCallbacks.push(cb); return () => {}; },
     isConnectInProgress: () => false,
     disconnect: vi.fn(),
     getSocket: () => fakeSocket,
@@ -46,6 +48,7 @@ function Probe() {
 
 describe('connection status across socket.io reconnects', () => {
   beforeEach(() => {
+    rebuiltCallbacks.length = 0;
     for (const k of Object.keys(socketHandlers)) delete socketHandlers[k];
     for (const k of Object.keys(managerHandlers)) delete managerHandlers[k];
   });
@@ -67,6 +70,27 @@ describe('connection status across socket.io reconnects', () => {
 
     act(() => managerHandlers.reconnect_failed!());
     expect(screen.getByTestId('status').textContent).toBe('error:1');
+  });
+
+  // After a server-side disconnect the client builds a new socket itself,
+  // and the listeners above stay on the one it threw away: the badge said
+  // "Disconnected" over a working connection, and nothing keyed on the status
+  // or the reconnect count ran again.
+  it('comes back to connected, and counts a reconnect, when the client rebuilds the socket itself', async () => {
+    render(<WebSocketProvider><Probe /></WebSocketProvider>);
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected:0'));
+
+    act(() => socketHandlers.disconnect?.('io server disconnect'));
+    expect(screen.getByTestId('status').textContent).toBe('disconnected:0');
+
+    for (const k of Object.keys(socketHandlers)) delete socketHandlers[k];
+    expect(rebuiltCallbacks.length).toBeGreaterThan(0);
+    act(() => { for (const cb of rebuiltCallbacks) cb(); });
+    expect(screen.getByTestId('status').textContent).toBe('connected:1');
+
+    // The new socket's drops are heard too.
+    act(() => socketHandlers.disconnect?.('transport close'));
+    expect(screen.getByTestId('status').textContent).toBe('disconnected:1');
   });
 
   // While socket.io retries on its own the status is 'connecting'. The network

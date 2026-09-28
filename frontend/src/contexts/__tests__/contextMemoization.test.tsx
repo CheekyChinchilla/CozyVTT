@@ -42,6 +42,7 @@ vi.mock('@/services/socket', () => ({
     // client does. It did not, and the provider threw on mount.
     on: vi.fn(),
     off: vi.fn(),
+    onRebuilt: vi.fn().mockReturnValue(() => {}),
     connect: vi.fn(),
     disconnect: vi.fn(),
     getSocket: vi.fn().mockReturnValue(null),

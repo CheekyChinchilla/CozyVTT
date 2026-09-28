@@ -104,6 +104,18 @@ describe('the PostgreSQL client the backend image installs', () => {
     expect(unpinned).toEqual([]);
   });
 
+  // Per file, the checks above were satisfied by any stage: the builder stage
+  // of Dockerfile.prod installs the client too, so the production stage, the
+  // image that runs pg_dump and psql, could lose it and every check passed.
+  it('is installed in the stage that runs, in every Dockerfile', () => {
+    const missing = clientFiles.filter((f) => {
+      const stages = instructions(f).join('\n').split(/^FROM\s/m);
+      const last = stages[stages.length - 1];
+      return !/\bapk add\b[^\n]*postgresql\d+-client/.test(last);
+    });
+    expect(missing).toEqual([]);
+  });
+
   it('is pinned against one server major, the same in both compose files and CI', () => {
     expect(new Set(servers).size).toBe(1);
   });

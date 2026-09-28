@@ -88,7 +88,7 @@ import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
-import { tokenDisplayName, tokenPublicName, UNKNOWN_CREATURE } from '@/utils/tokenDisplayName';
+import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
@@ -4135,8 +4135,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       statBlock: token.statBlock || null,
                       sightRadius: token.sightRadius ?? null,
                     });
+                    showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
                   } catch (err) {
-                    console.error('Failed to save token as template:', err);
+                    showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
                   }
                 }}
               >
@@ -4333,7 +4334,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           anchorY={rollPicker.y}
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
-          publicName={tokens.find((t) => t.id === rollPicker.tokenId)?.obscured ? UNKNOWN_CREATURE : undefined}
+          publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId))}
           onRoll={(expression, purpose, characterName) =>
             socket?.emitDiceRoll({ expression, purpose, characterName })
           }

@@ -109,12 +109,14 @@ describe('exploration:reveal', () => {
     p1.disconnect();
   });
 
-  it('is refused while explored memory is off for the map', async () => {
+  // The page reports on its own, and a report can cross the DM turning
+  // memory off; an error would land in the player's dice panel.
+  it('is dropped quietly while explored memory is off for the map', async () => {
     await prisma.map.update({ where: { id: mapId }, data: { explorationEnabled: false } });
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const denial = waitForEvent<{ message: string }>(p1, 'error');
+    const quiet = expectNoEvent(p1, 'error', 500);
     p1.emit('exploration:reveal', { mapId, cells: [0] });
-    expect((await denial).message).toMatch(/off/);
+    await quiet;
     expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
     p1.disconnect();
   });
@@ -162,6 +164,51 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     expect(got.userId).toBe(p1Id);
     expect(got.cells).toEqual([2, 3]);
     p1.disconnect();
+    dm.disconnect();
+  });
+
+  // Closing the preview asks as nobody, which is how a DM socket stops
+  // following the player it previewed.
+  it('stops following a player once the DM asks as nobody', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const opened = waitForEvent(dm, 'exploration:state');
+    dm.emit('exploration:request', { mapId, userId: p1Id });
+    await opened;
+    dm.emit('exploration:request', { mapId: '' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const quiet = expectNoEvent(dm, 'exploration:state', 600);
+    const echoed = waitForEvent(p1, 'exploration:state');
+    p1.emit('exploration:reveal', { mapId, cells: [5] });
+    await echoed;
+    await quiet;
+    p1.disconnect();
+    dm.disconnect();
+  });
+
+  // Switching the preview between players quickly can run past the request
+  // limit. The dropped request still names who the DM is now previewing, or
+  // the socket went on following the previous player and never heard the
+  // new one's memory grow.
+  it('follows the player a DM previews even when the request for them is over the limit', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const p2 = await server.connectAndAuth(p2Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const states: Array<StateEvent & { userId: string | null }> = [];
+    dm.on('exploration:state', (d: StateEvent & { userId: string | null }) => states.push(d));
+    for (let i = 0; i < 5; i++) dm.emit('exploration:request', { mapId, userId: p1Id });
+    dm.emit('exploration:request', { mapId, userId: p2Id });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const echoed = waitForEvent<StateEvent>(p2, 'exploration:state');
+    p2.emit('exploration:reveal', { mapId, cells: [4] });
+    await echoed;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(states.some((d) => d.userId === p2Id && d.cells.includes(4))).toBe(true);
+    p2.disconnect();
     dm.disconnect();
   });
 

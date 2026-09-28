@@ -362,7 +362,7 @@ export default function AdminPage() {
     try {
       setBackups(await adminService.listBackups());
     } catch (err: unknown) {
-      setBackupsError(err instanceof Error ? err.message : 'Failed to load backups');
+      setBackupsError(apiErrorMessage(err) ?? 'Failed to load backups');
     } finally {
       setBackupsLoading(false);
     }

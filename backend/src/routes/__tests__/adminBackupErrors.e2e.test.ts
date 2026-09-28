@@ -26,7 +26,7 @@ import fs from 'fs/promises';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
@@ -46,8 +46,15 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await cleanupUsers([adminId]);
-  fsSync.rmSync(BACKUP_DIR, { recursive: true, force: true });
+  try {
+    await cleanupUsers([adminId]);
+  } finally {
+    // The shared afterAll in helpers/jest.afterEnv.ts is declared first, so it
+    // has already let the clients go, and the clean-up above opened this one
+    // again.
+    await prisma.$disconnect();
+    fsSync.rmSync(BACKUP_DIR, { recursive: true, force: true });
+  }
 });
 
 it('says pg_dump is missing when pg_dump cannot be started', async () => {
@@ -66,5 +73,30 @@ it('does not blame pg_dump when the temporary folder cannot be used', async () =
   expect(res.status).toBe(500);
   expect(res.body.message).not.toMatch(/not installed/);
   expect(res.body.message).toMatch(/temporary/i);
+  // TMPDIR in .env never reaches the backend container, so the advice has
+  // to say what to do under Docker too.
+  expect(res.body.message).toMatch(/under Docker/);
   expect(execFileMock).not.toHaveBeenCalled();
+});
+
+// A backups folder the backend cannot use (one on a share whose owner it
+// could not change, say) looked like no backups at all: the list came back
+// empty with no error, and a new backup failed with a bare "Failed".
+describe('a backups folder the backend cannot use', () => {
+  const denied = () => Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+
+  it('is named when the list cannot be read', async () => {
+    jest.spyOn(fs, 'readdir').mockRejectedValueOnce(denied());
+    const res = await admin.get('/api/admin/backups');
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/backups folder/);
+  });
+
+  it('is named when a backup cannot be written there', async () => {
+    jest.spyOn(fs, 'open').mockRejectedValueOnce(denied());
+    const res = await admin.post('/api/admin/backups');
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/backups folder/);
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
 });

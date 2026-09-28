@@ -181,19 +181,24 @@ describe('a player writing to a prepared map', () => {
     dm.disconnect();
   });
 
-  it('refuses writing explored memory there', async () => {
+  // A report of explored cells is sent by the page on its own, not by the
+  // player, and one for the map just left can cross a map switch in flight.
+  // It is dropped without an error, which the page shows in the dice panel.
+  it('drops a report of explored memory there, quietly', async () => {
     await prisma.map.update({ where: { id: preparedId }, data: { lightingEnabled: true, explorationEnabled: true } });
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const quiet = expectNoEvent(player, 'error', 500);
     player.emit('exploration:reveal', { mapId: preparedId, cells: [1, 2] });
-    expect((await refused).message).toBe('Map not found');
+    await quiet;
     expect(await prisma.mapExploration.count({ where: { mapId: preparedId, userId: playerId } })).toBe(0);
     player.disconnect();
   });
 
   it('refuses rolling initiative for their token there', async () => {
+    // Before the fight starts, when a player may roll: during one a player's
+    // roll is refused anyway, and could not show the map rule doing its work.
     setState(campaignId, {
-      active: true, round: 1, currentTokenId: null,
+      active: false, round: 0, currentTokenId: null,
       combatants: [{ tokenId: SCOUT, mapId: preparedId, name: 'Scout', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
     });
     const player = await server.connectAndAuth(playerCookie, campaignId);

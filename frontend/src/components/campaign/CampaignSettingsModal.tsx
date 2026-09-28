@@ -94,7 +94,10 @@ export default function CampaignSettingsModal({
   const [deletingCampaign, setDeletingCampaign] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Sync form values when modal opens or campaign changes
+  // Seed the form when the dialog opens, or for another campaign. Not on
+  // every campaign object: the page fetches the same campaign again when
+  // someone joins or leaves and after a reconnect, and re-seeding then threw
+  // away what the DM was typing and jumped back to the first tab.
   useEffect(() => {
     if (isOpen && campaign) {
       setName(campaign.name);
@@ -104,7 +107,7 @@ export default function CampaignSettingsModal({
       setDeleteConfirmName('');
       setActiveTab(isDmViewer ? 'general' : 'members');
     }
-  }, [isOpen, campaign]);
+  }, [isOpen, campaign?.id]);
 
   if (!campaign) return null;
 

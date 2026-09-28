@@ -11,7 +11,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { CONFIGURABLE_ASSET_TYPES, fileSizeLimitVar } from '../utils/fileUtils';
+import { CONFIGURABLE_ASSET_TYPES, fileSizeLimitVar, resolveFileSizeLimits } from '../utils/fileUtils';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -87,6 +87,14 @@ describe.each(['docker-compose.yml', 'docker-compose.dev.yml'])('%s', (file) => 
 // list. The scan above has to see those too, or the check passes by not
 // looking at them.
 describe('the settings the backend reads', () => {
+  // The names above come from fileSizeLimitVar, not from a scan, so check the
+  // backend really reads them: a limit read under another name would leave
+  // docker-compose.yml passing names nothing uses.
+  it.each([...CONFIGURABLE_ASSET_TYPES])('read the %s upload limit under the name the check expects', (type) => {
+    const limits = resolveFileSizeLimits({ [fileSizeLimitVar(type)]: '7' });
+    expect(limits[type]).toBe(7 * 1024 * 1024);
+  });
+
   it('include those read through an injected environment object', () => {
     const backend = keysTheBackendReads();
     for (const key of ['NGINX_MAX_BODY_SIZE', 'MAX_MAP_SIZE_MB', 'MAX_TOKEN_SIZE_MB', 'MAX_AUDIO_SIZE_MB', 'MAX_AVATAR_SIZE_MB', 'MAX_DOCUMENT_SIZE_MB']) {

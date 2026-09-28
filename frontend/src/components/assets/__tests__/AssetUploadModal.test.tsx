@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import AssetUploadModal from '../AssetUploadModal';
 import { AssetType } from '@/types';
 import type { Campaign } from '@/types';
@@ -41,5 +41,26 @@ describe('uploading token art', () => {
     campaigns = [campaign('played', 'PLAYER'), campaign('watched', 'SPECTATOR')];
     open();
     expect(await screen.findByText('Campaign')).toBeInTheDocument();
+  });
+});
+
+// The campaigns on offer depend on the kind of asset. A player who chose
+// Campaign for token art and then switched to a map kept that choice with the
+// button gone, and the upload was refused after the file had been sent.
+describe('switching to a kind of asset the chosen campaign does not take', () => {
+  beforeEach(() => { campaigns = []; });
+
+  it('goes back to Personal', async () => {
+    campaigns = [campaign('played', 'PLAYER')];
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    fireEvent.click(await screen.findByText('Token'));
+    fireEvent.click(await screen.findByText('Campaign'));
+    expect(screen.getByText('Shared with all members of the selected campaign.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Map'));
+
+    expect(screen.queryByText('Campaign')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shared with all members of the selected campaign.')).not.toBeInTheDocument();
+    expect(screen.getByText(/Yours, and usable in all your campaigns/)).toBeInTheDocument();
   });
 });

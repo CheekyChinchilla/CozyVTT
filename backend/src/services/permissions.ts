@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility } from '../utils/spirit-layer';
-import { extractAssetId } from '../utils/asset-urls';
+import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
 
 /**
  * Permission Verification Helpers
@@ -712,11 +712,14 @@ export async function canReadAssetById(
 export async function canReferenceAsset(
   address: string | null | undefined,
   userId: string,
-  isAdmin: boolean,
   stored?: string | null
 ): Promise<boolean> {
   if (!address) return true;
   if (stored !== undefined && address === stored) return true;
+  // One reading of an address for every reader: an address on this server
+  // that is not an asset's exact address was accepted here as naming no
+  // asset, and the exports, reading it their own way, found one in it.
+  if (isSameOriginPath(address) && !isExactAssetAddress(address)) return false;
   const assetId = extractAssetId(address);
   if (!assetId) return true;
   const asset = await prisma.asset.findUnique({
@@ -724,5 +727,8 @@ export async function canReferenceAsset(
     select: { id: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
-  return canReadAsset(asset, userId, isAdmin);
+  // Never as an administrator: an admin may read any file, but a stored
+  // reference opens the asset to everyone at the table, as setting a scene's
+  // music does (handlers/atmosphere.ts).
+  return canReadAsset(asset, userId, false);
 }

@@ -65,10 +65,24 @@ export function extractAssetId(url: string | null | undefined): string | null {
 
   if (isUUID(url)) return url;
 
-  const match = url.match(/\/api\/assets\/(?:maps|tokens|avatars|audio)\/([^/?#]+)/);
+  const match = url.match(/\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/([^/?#]+)/);
   if (match && isUUID(match[1])) return match[1];
 
   return null;
+}
+
+/**
+ * An address that points at this server: a path, relative or not. Stored as
+ * a picture, it is requested by every viewer's browser with their session,
+ * so the only such addresses a record may hold are an asset's own.
+ */
+export function isSameOriginPath(url: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(url) && (url.startsWith('/') || url.includes('..') || url.includes('\\'));
+}
+
+/** Exactly `/api/assets/{dir}/{uuid}` for one of the asset directories, and nothing more. */
+export function isExactAssetAddress(url: string): boolean {
+  return /^\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url);
 }
 
 /**

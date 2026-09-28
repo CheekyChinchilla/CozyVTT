@@ -62,7 +62,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
   const [tagInput, setTagInput] = useState('');
 
   // Campaign selection state
-  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[] | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(defaultCampaignId ?? '');
 
   // When type is AVATAR, always force USER scope
@@ -87,10 +87,27 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
   // Campaigns shown in dropdown: those the server lets this user put this
   // kind of asset into (the DM's for anything, a player's for token art).
-  const dropdownCampaigns = campaignsToPlaceAssetIn(allCampaigns, assetType === AssetType.TOKEN, user?.id);
+  const dropdownCampaigns = campaignsToPlaceAssetIn(allCampaigns ?? [], assetType === AssetType.TOKEN, user?.id);
 
   // Whether the Campaign scope option should be available
   const hasCampaignAccess = dropdownCampaigns.length > 0;
+
+  // Switching to a kind of asset the chosen campaign does not take (a
+  // player's map, say) takes the choice back, once the list has arrived, so
+  // an upload the server would refuse is never sent. A campaign the dialog
+  // was opened for is left as it is.
+  const offeredIds = dropdownCampaigns.map((c) => c.id).join(',');
+  useEffect(() => {
+    if (defaultCampaignId || allCampaigns === null || assetScope !== AssetScope.CAMPAIGN) return;
+    const offered = offeredIds === '' ? [] : offeredIds.split(',');
+    if (offered.includes(selectedCampaignId)) return;
+    if (offered.length === 0) {
+      setAssetScope(AssetScope.USER);
+      setSelectedCampaignId('');
+    } else {
+      setSelectedCampaignId(offered.length === 1 ? offered[0] : '');
+    }
+  }, [defaultCampaignId, allCampaigns, assetScope, offeredIds, selectedCampaignId]);
 
   // Reset form — returns to default values (honouring any locked defaults)
   const resetForm = () => {

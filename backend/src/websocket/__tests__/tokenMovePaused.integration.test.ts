@@ -178,3 +178,45 @@ describe('a pause landing in the middle of a drag', () => {
   });
 });
 
+
+// Any refusal of a drop after the drag began leaves the same mismatch: the
+// DM taking the token back mid-drag, say, refuses the drop for want of
+// control. Every screen that saw the frames is told where the token is.
+describe('control taken away in the middle of a drag', () => {
+  afterAll(async () => {
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+  });
+
+  it('puts the token back for the mover and everyone who saw the drag', async () => {
+    await setStatus('ACTIVE');
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const framed = waitForEvent<{ x: number }>(dm, 'token.moved');
+    player.emit('token.move.start', { tokenId: OWN, mapId });
+    player.emit('token.move', { tokenId: OWN, mapId, x: 4, y: 4 });
+    expect((await framed).x).toBe(4);
+
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, null), token(NPC, null)] } });
+    const toDm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(dm, 'token.moved');
+    const toMover = waitForEvent<{ x: number; movedBy: string | null }>(player, 'token.moved');
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 5, y: 5 });
+    expect(await toDm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
+    expect(await toMover).toMatchObject({ x: 1, movedBy: null });
+    expect(await positionOf(OWN)).toEqual({ x: 1, y: 1 });
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('sends a drop that never began as a drag nothing but the refusal', async () => {
+    await setStatus('ACTIVE');
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const quiet = expectNoEvent(player, 'token.moved', 600);
+    player.emit('token.move.end', { tokenId: NPC, mapId, x: 5, y: 5 });
+    expect((await refused).message).toMatch(/permission/i);
+    await quiet;
+    player.disconnect();
+  });
+});

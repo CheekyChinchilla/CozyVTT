@@ -8,12 +8,11 @@
  *
  * What these tests do not do: load a prepared file into a real PostgreSQL.
  * They check the text psql is handed and the arguments it is run with. The
- * suites run where the PostgreSQL client tools are not installed (the backend
- * image has them; a developer's machine and the CI test job need not), so a
- * test that needed psql would be skipped there and prove nothing. Restoring a
- * real backup end to end is part of the upgrade rehearsal before a release:
- * restore a backup from the previous release onto a fresh stack and check the
- * data survives.
+ * suites run where the PostgreSQL client tools need not be installed (the
+ * backend image has them; a developer's machine need not), so a test that
+ * needed psql would be skipped there and prove nothing. Restoring a real
+ * backup end to end is part of the upgrade rehearsal before a release, in
+ * docs/DEVELOPMENT.md ("Before a release: rehearse the upgrade").
  */
 
 import nodeFs, { type ReadStream, type WriteStream } from 'fs';
@@ -516,6 +515,22 @@ describe('prepareDumpForRestore', () => {
     } finally {
       slowly.mockRestore();
       full.mockRestore();
+    }
+  });
+
+  // Some filesystems (NFS over its quota) report a failed write only when the
+  // file is closed, which comes after every write has returned. That error
+  // arrived once the file had been called fine, and psql loaded it.
+  it('rejects when the file cannot be closed', async () => {
+    const src = await write('database.sql', NEWER_CLIENT_DUMP);
+    const closeFails = jest.spyOn(nodeFs, 'createWriteStream').mockImplementation(() => new Writable({
+      write(_chunk, _encoding, callback) { callback(); },
+      destroy(_error, callback) { callback(Object.assign(new Error('EDQUOT: disk quota exceeded, close'), { code: 'EDQUOT' })); },
+    }) as unknown as WriteStream);
+    try {
+      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'))).rejects.toThrow(/EDQUOT/);
+    } finally {
+      closeFails.mockRestore();
     }
   });
 
