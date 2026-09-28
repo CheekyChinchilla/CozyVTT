@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/contexts/ToastContext';
+import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import api from '@/services/api';
 import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
@@ -75,6 +77,7 @@ function getEffectiveType(token: Token): TokenType {
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
   const { socket } = useWebSocket();
   const { campaign, currentMap } = useCampaign();
+  const { showToast } = useToast();
 
   // Local editable state (mirrors token, updates on save)
   const [name, setName] = useState(token.name);
@@ -118,9 +121,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       onTokenUpdate(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
+      // Say why, or the edit stays in the field looking saved. A token from
+      // an earlier release can hold more than the server now accepts (notes
+      // past 5,000 characters, a name past 200), and the reason names the field.
       console.error('NpcQuickEditor: failed to update token', err);
+      showToast(apiErrorMessage(err) || 'Could not save that change to the token', 'error');
     }
-  }, [campaignId, mapId, token.id, onTokenUpdate, socket]);
+  }, [campaignId, mapId, token.id, onTokenUpdate, socket, showToast]);
 
   // ── HP adjustment ──
   const adjustHp = useCallback(async (delta: number) => {
