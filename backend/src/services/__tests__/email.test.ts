@@ -17,6 +17,7 @@ import {
   sendInvitationEmail,
   sendPasswordResetEmail,
   sendCampaignInvitationEmail,
+  sendEmailChangedNotice,
 } from '../email';
 
 interface MailArgs { to: string; subject: string; html: string }
@@ -68,6 +69,15 @@ describe('email HTML escaping', () => {
     await sendPasswordResetEmail('p@x.test', 'tok', IMG);
     expect(sent().html).not.toContain(IMG);
     expect(sent().html).toContain('&lt;img');
+  });
+
+  it('email changed: goes to the old address, with both addresses and the name escaped', async () => {
+    await sendEmailChangedNotice('old<a>@x.test', 'new"b"@x.test', IMG);
+    const { to, html } = sent();
+    expect(to).toBe('old<a>@x.test');
+    expect(html).not.toContain(IMG);
+    expect(html).toContain('old&lt;a&gt;@x.test');
+    expect(html).toContain('new&quot;b&quot;@x.test');
   });
 
   it('SMTP test: the name is escaped', async () => {

@@ -215,6 +215,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **Changing an account's email address, or turning on MFA, now needs the current password.** Someone who got hold of a signed-in browser could change the account's address and then use **Forgot password?** to set a new password from their own mailbox, or set up an authenticator of their own so the owner could no longer sign in. Both now ask for the current password; an administrator changing another person's address still does not need theirs. When an address changes, the old address is emailed to say so (if the instance can send email), and any reset or invitation link already sent stops working. Turning MFA on also signs out your other devices, as turning it off already did.
+
 - **A password-reset or invitation link stops working once the password has been settled another way.** An unused link kept working after you asked for a newer one, after you used a different link, after you changed your password and after an administrator reset it, so an old email could still set a new password and, since a reset signs out every device, lock you out. Now only the newest link works, and using one, changing your password or an administrator's reset cancels the rest. A link also sets the password only once, even when it is opened twice at the same moment.
 
 - **An account registered while admin approval is required can no longer sign in before it is approved.** A new account was created approved and marked as waiting a moment later, so a sign-in in between kept its access, and if that second step failed the account stayed approved for good. It is now created waiting for approval in the first place.

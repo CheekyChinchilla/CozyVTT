@@ -236,8 +236,8 @@ class ApiClient {
   // MFA
   // ============================================
 
-  async mfaSetup(): Promise<MFASetupResponse> {
-    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup');
+  async mfaSetup(password: string): Promise<MFASetupResponse> {
+    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password });
     return response.data;
   }
 

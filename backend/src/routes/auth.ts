@@ -637,11 +637,21 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
  * POST /api/auth/mfa/setup
  * Generate TOTP secret and QR code for authenticated user.
  * Stores the secret in DB (not yet enabled until verified).
- * Requires: Authentication
+ * Requires: Authentication + current password. Enrolling an authenticator
+ * decides who can sign in from then on, so a session alone is not enough, as
+ * with turning MFA off.
  */
-router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
+router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
+    const { password } = req.body;
+
+    if (typeof password !== 'string' || password === '') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Enter your current password to set up MFA',
+      });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -653,6 +663,10 @@ router.post('/mfa/setup', requireAuth, async (req: Request, res: Response) => {
         error: 'Bad Request',
         message: 'MFA is already enabled. Disable it first to set it up again.',
       });
+    }
+
+    if (!(await verifyPassword(user.passwordHash, password))) {
+      return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 
     // Generate TOTP secret
@@ -744,6 +758,12 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
         mfaBackupCodes: hashedCodes,
       },
     });
+
+    // Turning the second factor on is a change to how the account is
+    // protected, often made because something looked wrong, so the sessions
+    // opened without it end. This one is kept, as when MFA is turned off.
+    await destroyUserLoginSessions(userId, req.sessionID);
+    await endLiveSockets(userId, 'Two-factor authentication was turned on from another device. Sign in again.', { exceptSessionId: req.sessionID });
 
     return res.status(200).json({
       message: 'MFA enabled successfully. Save these backup codes securely — they will not be shown again.',

@@ -575,10 +575,22 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled.
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. Rate limited (5 failures/15min).
       operationId: mfaSetup
       security:
         - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  description: The user's current password
       responses:
         '200':
           description: MFA setup initiated
@@ -597,13 +609,21 @@ paths:
                     description: TOTP secret for manual entry
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Not authenticated, or the password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/auth/mfa/verify:
     post:
       tags:
         - MFA
       summary: Complete MFA setup
-      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Rate limited (5/15min).
+      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Ends the user's other login sessions; the session making the request stays signed in. Rate limited (5/15min).
       operationId: mfaVerifySetup
       security:
         - cookieAuth: []
@@ -964,7 +984,10 @@ paths:
       tags:
         - Users
       summary: Update user
-      description: Update user profile (own profile or admin). Admin can change platformRole, which ends every login session the target has, because the role is carried in the session. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+      description: |
+        Update user profile (own profile or admin). Admin can change platformRole, which ends every login session the target has, because the role is carried in the session. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+
+        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
       security:
         - cookieAuth: []
@@ -996,6 +1019,9 @@ paths:
                   type: string
                   enum: [ADMIN, USER]
                   description: Admin only
+                currentPassword:
+                  type: string
+                  description: Required when changing your own email
       responses:
         '200':
           description: User updated
@@ -1010,6 +1036,12 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Not authenticated, or the current password given for an email change is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':

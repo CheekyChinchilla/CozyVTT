@@ -413,12 +413,33 @@ one that stays in use does not expire on its own.
 actually changes, and `DELETE /api/users/:id` calls it too, because the session
 outlives the row it points at and nothing checks the user still exists. The same
 helper ends a user's other sessions on a self-service password change and on
-disabling MFA, with `exceptSessionId` keeping the device making the request
-signed in.
+turning MFA on or off, with `exceptSessionId` keeping the device making the
+request signed in.
 
 The alternative, re-reading the role from the database on every request the way
 `loadCampaignMembership` does for campaign roles, would also work and is the
 more thorough fix if this ever needs revisiting.
+
+### What a session alone cannot change
+
+A session cookie can be stolen, so anything that decides who can sign in from
+then on also asks for the current password:
+
+| Change | Route | Password field |
+|---|---|---|
+| Password | `POST /api/auth/change-password` | `currentPassword` |
+| Own email address | `PUT /api/users/:id` with `email`, when `:id` is the caller | `currentPassword` |
+| Start MFA enrolment | `POST /api/auth/mfa/setup` | `password` |
+| Turn MFA off | `POST /api/auth/mfa/disable` | `password` |
+| Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
+| Delete own account | `DELETE /api/auth/account` | `password` |
+
+An admin changing someone else's email gives no password, since they do not
+have it. The email check runs before the new address is looked up, so a
+session without the password cannot use it to learn which addresses have
+accounts. A new address also voids the account's unused reset and invitation
+links (`voidOutstandingResetLinks`), and the old address is sent a notice when
+SMTP is configured.
 
 ---
 
@@ -491,7 +512,7 @@ The routes below end a sign-in's live sockets along with it, through `endLiveSoc
 |---|---|
 | `POST /api/users/:id/reset-password`, `DELETE /api/users/:id`, `PUT /api/users/:id` (platform role changed) | every socket of that user |
 | `POST /api/auth/reset-password` (emailed link) | every socket of that user; this route now also destroys their login sessions |
-| `POST /api/auth/change-password`, `POST /api/auth/mfa/disable` | every socket but those of the sign-in making the change |
+| `POST /api/auth/change-password`, `POST /api/auth/mfa/verify` (MFA turned on), `POST /api/auth/mfa/disable` | every socket but those of the sign-in making the change |
 | `POST /api/auth/logout` | the sockets of that sign-in only |
 | `DELETE /api/auth/account` | every socket of that user |
 | `POST /api/admin/backups/restore` | every socket on the instance, and the in-memory combat state is dropped |

@@ -1204,6 +1204,12 @@ carried in the session. There is no approval field to set here.
 `displayName` is trimmed and must then be 1 to 50 characters of text; anything
 else is refused with `400`. Registration applies the same rule.
 
+Changing **your own** `email` needs `currentPassword` in the same request (`400`
+without it, `401` when it is wrong); an admin changing someone else's does not.
+When the address changes, any unused password-reset or invitation link for the
+account stops working, and the old address is emailed a notice if the instance
+has SMTP configured.
+
 ---
 
 ### `POST /api/users/:id/reset-password` *(Admin only)*

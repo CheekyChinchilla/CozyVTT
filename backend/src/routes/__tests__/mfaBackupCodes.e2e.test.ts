@@ -21,7 +21,7 @@ let userId: string;
 let email: string;
 
 async function enableMfa(agent: ReturnType<typeof request.agent>): Promise<string[]> {
-  const setup = await agent.post('/api/auth/mfa/setup').send({});
+  const setup = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
   expect(setup.status).toBe(200);
   const secret: string = setup.body.secret;
   const token = speakeasy.totp({ secret, encoding: 'base32' });

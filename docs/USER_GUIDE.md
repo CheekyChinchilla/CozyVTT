@@ -638,7 +638,9 @@ emailed and not used.
 
 ### Multi-Factor Authentication (MFA)
 
-For extra account security, enable **MFA** in the Security section. You'll use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+For extra account security, enable **MFA** in the Security section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+
+**Turning MFA on signs you out everywhere else**, as turning it off does: any other browser or device signed in to your account is signed out, and the one you are using stays where it is.
 
 You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
 
