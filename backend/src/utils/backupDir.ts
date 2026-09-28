@@ -48,8 +48,11 @@ export async function ensureBackupDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   try {
     const previous = (await fs.stat(dir)).mode & 0o777;
-    if ((previous & 0o077) === 0) return;
+    if (previous === 0o700) return;
     await fs.chmod(dir, 0o700);
+    // Only the owner's own bits were wrong (it could not open its folder):
+    // put right, and nothing to warn anyone about.
+    if ((previous & 0o077) === 0) return;
     // Some mounts accept a chmod and ignore it; only say it worked if it did.
     const now = (await fs.stat(dir)).mode & 0o777;
     if ((now & 0o077) !== 0) {

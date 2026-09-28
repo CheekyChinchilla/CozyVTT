@@ -78,6 +78,17 @@ describeWhereModesApply('ensureBackupDir', () => {
     }
   });
 
+  // A folder its own user cannot open (a mistyped `chmod 600` on the folder
+  // itself, say) has no bits for anyone else either. It was left as it was,
+  // and every backup vanished from the list.
+  it('gives its own user back a folder they cannot open', async () => {
+    const dir = path.join(root, 'backups');
+    await fs.mkdir(dir, { mode: 0o700 });
+    await fs.chmod(dir, 0o600);
+    await ensureBackupDir(dir);
+    expect((await fs.stat(dir)).mode & 0o777).toBe(0o700);
+  });
+
   it('says nothing about a folder that was already private', async () => {
     const dir = path.join(root, 'backups');
     await fs.mkdir(dir, { mode: 0o700 });
