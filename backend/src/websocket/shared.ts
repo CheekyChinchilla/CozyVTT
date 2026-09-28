@@ -106,19 +106,19 @@ export class RateLimiter {
 // Rate limiter instances (shared across handler modules)
 export const diceRollLimiter = new RateLimiter();
 export const chatMessageLimiter = new RateLimiter();
-export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second per socket
+export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second per user
 
 // flood ceilings for the high-frequency map surfaces. Generous
 // enough that no legitimate interaction is ever throttled (a drag emits ~60
 // token.move/s; human wall/light edits are a few per second) — these exist to
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
-export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events/second per user
-export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per socket
+export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events (start, frames, end)/second per user
+export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per user
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.
-export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per socket
+export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per user
 // Explored-memory reveals arrive as a player's vision moves; a client sends
 // at most a few a second. Over-limit reveals are dropped silently.
 export const explorationRevealLimiter = new RateLimiter(); // Max 10 reveals/second per user
