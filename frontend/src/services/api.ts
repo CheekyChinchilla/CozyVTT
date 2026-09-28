@@ -53,6 +53,7 @@ import type {
   RosterMember,
   CampaignMembership,
 } from '@/types';
+import { withKnownDisposition } from '@/utils/creatureDisposition';
 
 // ============================================
 // API Client Configuration
@@ -981,22 +982,22 @@ class ApiClient {
     params?: { search?: string; source?: string; cr?: string; gameSystem?: string; limit?: number; offset?: number }
   ): Promise<{ creatures: CreatureTemplate[]; total: number; limit: number; offset: number }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures`, { params });
-    return response.data;
+    return { ...response.data, creatures: response.data.creatures.map(withKnownDisposition) };
   }
 
   async getCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/${creatureId}`);
-    return response.data;
+    return withKnownDisposition(response.data);
   }
 
   async createCreature(campaignId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures`, data);
-    return response.data;
+    return withKnownDisposition(response.data);
   }
 
   async updateCreature(campaignId: string, creatureId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/creatures/${creatureId}`, data);
-    return response.data;
+    return withKnownDisposition(response.data);
   }
 
   async deleteCreature(campaignId: string, creatureId: string): Promise<{ message: string }> {
@@ -1016,12 +1017,12 @@ class ApiClient {
 
   async duplicateCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/${creatureId}/duplicate`);
-    return response.data;
+    return withKnownDisposition(response.data);
   }
 
   async listCreatureFavorites(campaignId: string): Promise<{ favoriteIds: string[]; creatures: CreatureTemplate[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/favorites/list`);
-    return response.data;
+    return { ...response.data, creatures: response.data.creatures.map(withKnownDisposition) };
   }
 
   async toggleCreatureFavorite(campaignId: string, creatureId: string): Promise<{ favorited: boolean }> {
