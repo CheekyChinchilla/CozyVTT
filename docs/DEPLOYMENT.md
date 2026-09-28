@@ -785,7 +785,7 @@ docker compose restart backend
 rm restore-me.sql.gz
 ```
 
-A database-only backup (the kind a restore makes first) has no uploaded files, and the first `unzip` line of that pair then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu).
+A database-only backup (the kind a restore makes first) has no uploaded files, and the `unzip` for the uploaded files then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu). Without Docker, run `restore.sh` with `DATABASE_URL` set, as in [Via the included scripts](#via-the-included-scripts), unpack the uploaded files into your uploads folder, and restart the backend the way you run it.
 
 **A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
 
