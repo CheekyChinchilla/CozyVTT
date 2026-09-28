@@ -153,3 +153,26 @@ it('does not bring back a fight the DM ended while a roll was in progress', asyn
   expect(getState(campaignId).combatants).toEqual([]);
   player.disconnect();
 });
+
+it("does not bring back a combatant the DM removed while the DM's own roll for it was in progress", async () => {
+  setState(campaignId, { active: true, round: 1, currentTokenId: null, combatants: [entry(GOBLIN, 'npc'), entry(HERO, 'player')] });
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let locked!: () => void;
+  const holding = new Promise<void>((resolve) => { locked = resolve; });
+  const holder = withMapsLocked([mapId], async () => { locked(); await gate; });
+  await holding;
+
+  dm.emit('initiative.roll', { tokenId: GOBLIN, mapId });
+  await pause(400);
+  const removed = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(dm, 'initiative.state');
+  dm.emit('initiative.remove', { tokenId: GOBLIN });
+  expect((await removed).combatants.map((c) => c.tokenId)).toEqual([HERO]);
+
+  release();
+  await holder;
+  await pause(600);
+  expect(getState(campaignId).combatants.map((c) => c.tokenId)).toEqual([HERO]);
+});
+

@@ -470,9 +470,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       await setTokenInitiative(mapId, tokenId, rolledValue);
 
       // Update in-memory state — add to combatants if not already present.
-      // Only for a DM: a player's roll is rejected above unless the token is
-      // already a combatant, and if it has left the order since, the order
-      // is left as it is.
+      // Only for a DM, and only a token that was not in the order when the
+      // roll began: a player's roll is rejected above unless the token is
+      // already a combatant, and a combatant that has left the order since
+      // stays out.
       //
       // The order as it is now, not the copy read before the awaits above:
       // a concurrent roll re-sorts it, a remove shortens it, and the DM may
@@ -483,7 +484,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         current.combatants[combatantIndex].initiative = rolledValue;
         current.combatants = sortCombatants(current.combatants);
         setCombatState(socket.campaignId, current);
-      } else if (socket.role === 'DM') {
+      } else if (socket.role === 'DM' && existingIndex === -1) {
+        // The DM's roll adds a token that was not in the order when the roll
+        // began. One that was, and is gone now, was removed meanwhile (or
+        // the fight ended), and stays out.
         current.combatants.push({
           tokenId,
           mapId,
