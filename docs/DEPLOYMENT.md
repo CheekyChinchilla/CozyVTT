@@ -689,16 +689,44 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 **Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand.
 
-To keep them in another folder under Docker, use a personal `docker-compose.override.yml` (see [Optional: avoid the conflicts entirely](#optional-avoid-the-conflicts-entirely-advanced)) and add these lines to it, with your own folder in place of `/srv/cozyvtt-backups`:
+To keep them in another folder under Docker, name that folder in a small file of your own, `docker-compose.override.yml`, next to `docker-compose.yml`. Docker Compose reads it automatically on top of the shipped file, and `git pull` never touches it.
 
-```yaml
+**Do not start from `docker-compose.override.example.yml` for this.** That example is for running your own reverse proxy: it switches off the bundled nginx, and on a default install that takes your site offline.
+
+First, check whether you already have an override file. From the CozyVTT folder:
+
+```bash
+ls docker-compose.override.yml
+```
+
+**If it says `No such file or directory`** (the usual case on a default install), create the file with only these lines, using your own folder in place of `/srv/cozyvtt-backups`:
+
+```bash
+cat > docker-compose.override.yml <<'EOF'
 services:
   backend:
     volumes:
       - /srv/cozyvtt-backups:/app/backups
+EOF
 ```
 
-If your override file already has a `backend:` section, for example the `ports` lines from the example file, put `volumes:` and the line below it inside that section; a second `backend:` does not work. Your line names the same place inside the container as the shipped `./backend/backups` line (`/app/backups`), so it replaces that line instead of adding to it. Apply it and check the result:
+**If it prints `docker-compose.override.yml`**, you already have one, usually from setting up an external reverse proxy. Do not run the command above, which would replace it. Open it in a text editor instead (for example `nano docker-compose.override.yml`) and add the two `volumes:` lines to its `backend:` section, lined up with `ports:`, leaving everything else as it is; a second `backend:` does not work. With the example file's proxy settings, the result looks like this:
+
+```yaml
+services:
+  nginx:
+    profiles: ["disabled"]
+  backend:
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - /srv/cozyvtt-backups:/app/backups
+  frontend:
+    ports:
+      - "127.0.0.1:8080:80"
+```
+
+Your line names the same place inside the container as the shipped `./backend/backups` line (`/app/backups`), so it replaces that line instead of adding to it. Apply it and check the result:
 
 ```bash
 docker compose up -d
@@ -711,6 +739,14 @@ It should print your folder once, like this:
         source: /srv/cozyvtt-backups
         target: /app/backups
 ```
+
+On a default install, also check the site is still up:
+
+```bash
+docker compose config --services
+```
+
+The list should include `nginx`, the bundled web server that answers your visitors. If it is missing, your override file is switching nginx off (it holds the `profiles: ["disabled"]` line from the example file); take the `nginx:` line and the `profiles:` line under it out of the file and run `docker compose up -d` again.
 
 The backend takes ownership of the new folder when it starts. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
 
