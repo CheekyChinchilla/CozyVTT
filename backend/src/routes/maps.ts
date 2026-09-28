@@ -9,7 +9,7 @@ import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
@@ -715,6 +715,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
           message: 'Invalid map imageUrl',
         });
       }
+      // A picture the DM may read, as on create (canReferenceAsset)
+      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.imageUrl))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
       updateData.imageUrl = normalizedImageUrl;
       updateData.baseLayerUrl = normalizedImageUrl; // Keep both in sync
     }
@@ -728,7 +732,11 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         });
       }
       // Normalize to full path (or null)
-      updateData.spiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
+      const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
+      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.spiritLayerUrl))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
+      updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
     }
 
     if (lightingEnabled !== undefined) {
@@ -1048,6 +1056,10 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     const normalizedTokenImageUrl = shapes.value.imageUrl
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
+    // Art the DM may read: a token's art counts as the campaign using it.
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
 
     // Control can only be given to a player of this campaign: the DM needs no
     // naming, and a spectator controls nothing. A token bound to a character
@@ -1323,10 +1335,18 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       }
     }
 
+    // New art the DM may read; the art already on the token may stay.
+    const nextImageUrl = updates.imageUrl === undefined
+      ? undefined
+      : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, req.session.platformRole === 'ADMIN', existingToken.imageUrl))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     // Build updated token (merge updates with existing)
     const changes: Partial<Token> = {
       ...(shapes.value.name && { name: shapes.value.name }),
-      ...(updates.imageUrl !== undefined && { imageUrl: shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
+      ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
       ...(position && { position }),
       ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),

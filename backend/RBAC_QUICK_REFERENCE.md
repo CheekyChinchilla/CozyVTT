@@ -280,9 +280,12 @@ visible on it included.
 Putting an asset *into* a campaign's library, by uploading at CAMPAIGN scope or
 by moving one there (`PATCH /api/assets/:id/scope`), is the DM's
 (`canPlaceAssetAtScope`); a player may add token art, since they upload their
-own character's, and a spectator adds nothing. A character's `tokenImageUrl`
-is checked with `canReadAssetById` before it is stored, like a map's images,
-so pointing at an asset never grants the right to read it. A map's use counts
+own character's, and a spectator adds nothing. Every route that stores a
+reference to an asset checks it with `canReferenceAsset` first: map create and
+update (image and spirit layer), token create and update, token and creature
+templates, and a character's `tokenImageUrl`. So pointing at an asset never
+grants the right to read it. An update may send back the address already
+stored even if it can no longer be read. A map's use counts
 for a player only while it is the campaign's current map (`canReadMap`): the
 artwork and token art of a prepared map stay the DM's until they switch to it.
 The list and detail
