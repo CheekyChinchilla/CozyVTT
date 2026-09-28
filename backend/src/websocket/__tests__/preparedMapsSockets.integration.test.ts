@@ -181,12 +181,15 @@ describe('a player writing to a prepared map', () => {
     dm.disconnect();
   });
 
-  it('refuses writing explored memory there', async () => {
+  // A report of explored cells is sent by the page on its own, not by the
+  // player, and one for the map just left can cross a map switch in flight.
+  // It is dropped without an error, which the page shows in the dice panel.
+  it('drops a report of explored memory there, quietly', async () => {
     await prisma.map.update({ where: { id: preparedId }, data: { lightingEnabled: true, explorationEnabled: true } });
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const quiet = expectNoEvent(player, 'error', 500);
     player.emit('exploration:reveal', { mapId: preparedId, cells: [1, 2] });
-    expect((await refused).message).toBe('Map not found');
+    await quiet;
     expect(await prisma.mapExploration.count({ where: { mapId: preparedId, userId: playerId } })).toBe(0);
     player.disconnect();
   });

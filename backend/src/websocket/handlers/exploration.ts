@@ -51,16 +51,13 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const { mapId, cells, userId: named } = parsed.data;
 
       // A prepared map is the DM's until they switch to it, for writes as
-      // for reads (canReadMap).
+      // for reads (canReadMap). A report is sent by the page on its own and
+      // can cross a map switch, or memory being turned off, in flight, so
+      // one that no longer applies is dropped without an error: the page
+      // shows socket errors in the dice panel.
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
-      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
-        socket.emit('error', { message: 'Map not found' });
-        return;
-      }
-      if (!map.explorationEnabled) {
-        socket.emit('error', { message: 'Explored memory is off for this map' });
-        return;
-      }
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
+      if (!map.explorationEnabled) return;
 
       const isDM = socket.role === 'DM';
       let userId = socket.userId;

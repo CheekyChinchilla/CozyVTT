@@ -109,12 +109,14 @@ describe('exploration:reveal', () => {
     p1.disconnect();
   });
 
-  it('is refused while explored memory is off for the map', async () => {
+  // The page reports on its own, and a report can cross the DM turning
+  // memory off; an error would land in the player's dice panel.
+  it('is dropped quietly while explored memory is off for the map', async () => {
     await prisma.map.update({ where: { id: mapId }, data: { explorationEnabled: false } });
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const denial = waitForEvent<{ message: string }>(p1, 'error');
+    const quiet = expectNoEvent(p1, 'error', 500);
     p1.emit('exploration:reveal', { mapId, cells: [0] });
-    expect((await denial).message).toMatch(/off/);
+    await quiet;
     expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
     p1.disconnect();
   });
