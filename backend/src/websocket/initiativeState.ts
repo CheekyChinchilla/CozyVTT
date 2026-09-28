@@ -52,6 +52,28 @@ export function getVersion(campaignId: string): number {
   return versions.get(campaignId) ?? 0;
 }
 
+/**
+ * Sends of the whole order to a campaign, numbered as they start. The
+ * version above changes only with the order itself, but a send also carries
+ * each combatant's token as it is now, and a token change (hit points, a
+ * hidden creature) starts a send without changing the order. A send that a
+ * later whole-campaign send has started behind is dropped, since the later
+ * one reads newer tokens and reaches everyone.
+ */
+const sends = new Map<string, number>();
+
+/** Number a send of the whole order to the campaign as it starts. */
+export function startSend(campaignId: string): number {
+  const next = (sends.get(campaignId) ?? 0) + 1;
+  sends.set(campaignId, next);
+  return next;
+}
+
+/** The number of the most recent whole-campaign send to have started. */
+export function latestSend(campaignId: string): number {
+  return sends.get(campaignId) ?? 0;
+}
+
 function defaultState(): CombatState {
   return {
     active: false,
