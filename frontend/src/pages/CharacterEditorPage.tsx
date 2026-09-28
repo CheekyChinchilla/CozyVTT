@@ -4,7 +4,7 @@
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { canEditCharacterIn } from '@/services/permissions';
+import { canEditCharacterIn, characterEditRefusal } from '@/services/permissions';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucide-react';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
@@ -62,9 +62,7 @@ export default function CharacterEditorPage() {
         // Check permissions
         const canEdit = await checkEditPermission(fetchedCharacter);
         if (!canEdit) {
-          setPermissionError(
-            'You do not have permission to edit this character. Only the owner or the DM of the assigned campaign can edit characters.'
-          );
+          setPermissionError(characterEditRefusal(user, fetchedCharacter));
           return;
         }
 

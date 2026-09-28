@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '../permissions';
+import { canEditCharacter, canEditCharacterIn, canRollAsCharacter, characterEditRefusal } from '../permissions';
 import { CampaignRole } from '@/types';
 import type { User, CampaignMembership, Campaign } from '@/types';
 
@@ -117,3 +117,15 @@ describe('canEditCharacterIn', () => {
   });
 });
 
+
+// A refused owner is refused for being a spectator in the character's
+// campaign, and was told only the owner could edit it.
+describe('characterEditRefusal', () => {
+  it('tells an owner the refusal is for being a spectator there', () => {
+    expect(characterEditRefusal(user(OWNER), character(OWNER))).toMatch(/spectator/);
+  });
+
+  it('tells anyone else who may edit', () => {
+    expect(characterEditRefusal(user(OTHER), character(OWNER))).toMatch(/owner or the DM/);
+  });
+});
