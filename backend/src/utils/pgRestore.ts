@@ -39,7 +39,9 @@ export const RESTORE_PREAMBLE = ['DROP SCHEMA public CASCADE;', 'CREATE SCHEMA p
  * before that carries them, and a restore would bring back each sign-in
  * that had not yet expired, ones ended since by a password change or an
  * account removal included. So a restore ends by emptying the table, which
- * a very old backup may not have at all, hence the check.
+ * a very old backup may not have at all, hence the check. The restore
+ * script (backend/scripts/restore.sh) appends the same statement, and
+ * keepInStep.test.ts fails if the two differ.
  */
 export const RESTORE_TRAILER = [
   "DO $$ BEGIN IF to_regclass('public.session') IS NOT NULL THEN DELETE FROM public.session; END IF; END $$;",

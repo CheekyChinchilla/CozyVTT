@@ -738,6 +738,21 @@ script runs `psql` in its restricted mode, which needs a PostgreSQL release
 from August 2025 or later; on Docker that is the database container's own
 `psql`, and `docker compose pull database` brings an older image up to date.
 
+**Restart the backend as soon as a restore finishes.** The restore empties the
+login sessions an older backup carried, as part of that same single step, so
+every sign-in has ended and everyone signs in again. The script cannot reach
+the running backend, though: a game table that is already open keeps its live
+connection, with the identity and campaign role it had before the restore,
+until the backend restarts. The restart also brings a backup from an older
+CozyVTT up to this version. The script prints the command when it finishes:
+
+```bash
+docker compose restart backend
+```
+
+Without Docker, run `cd backend && npx prisma migrate deploy`, then restart the
+backend the way you normally start it.
+
 The script unpacks the whole backup into a working file before it loads
 anything, in `/tmp` unless `TMPDIR` says otherwise, so that folder needs room
 for the unpacked backup, which can be several times the size of the `.sql.gz`.

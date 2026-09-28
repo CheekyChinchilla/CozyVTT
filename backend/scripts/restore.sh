@@ -55,7 +55,11 @@ fi
 # dump follows, without the lines this server would reject or that name the
 # database user of the instance the backup came from (SET transaction_timeout,
 # ALTER ... OWNER TO, GRANT, REVOKE) and without the dump's own \restrict
-# lines. Table rows (COPY blocks) are copied through untouched.
+# lines. Table rows (COPY blocks) are copied through untouched. The file ends
+# by emptying the login sessions, in the same transaction as the load: every
+# backup made before sessions were left out of backups carries them, and
+# restoring one would sign back in whoever had not yet expired, including
+# sign-ins ended since by a password change or a removed account.
 #
 # Outside its rows, the dump must end with pg_dump's closing line, create the
 # User and _prisma_migrations tables, and hold nothing but SQL: a psql
@@ -73,10 +77,16 @@ if ! PREPARED=$(mktemp "$SCRATCH/cozyvtt-restore.XXXXXX"); then
 fi
 trap 'rm -f "$PREPARED"' EXIT
 RESTRICT_KEY=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+# The same statement as RESTORE_TRAILER in backend/src/utils/pgRestore.ts;
+# keepInStep.test.ts fails if they differ. A very old backup has no session table.
+RESTORE_TRAILER=$(cat <<'SQL'
+DO $$ BEGIN IF to_regclass('public.session') IS NOT NULL THEN DELETE FROM public.session; END IF; END $$;
+SQL
+)
 
 echo "🔍 Checking $BACKUP_FILE..."
 set +e
-gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
+gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" -v trailer="$RESTORE_TRAILER" '
   BEGIN {
     print "\\restrict " key
     print "SET client_min_messages = warning;"
@@ -116,6 +126,7 @@ gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" '
       print "❌ This file cannot be restored because " refused ". Nothing was changed." > "/dev/stderr"
       exit 3
     }
+    print trailer
   }
 ' > "$PREPARED"
 CHECK=("${PIPESTATUS[@]}")
@@ -179,12 +190,14 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     if docker compose exec -T "$DB_SERVICE" \
         psql -U "$DB_USER" -d "$DB_NAME" -q -o /dev/null \
         -v ON_ERROR_STOP=1 --single-transaction < "$PREPARED"; then
-      echo "✅ Restore complete."
+      echo "✅ Restore complete. Every sign-in has ended, so everyone signs in again."
       echo ""
       echo "Next steps:"
-      echo "  - Restart the backend, which brings an older backup up to this version:"
-      echo "                            docker compose restart backend"
-      echo "  - Verify the app:         curl http://localhost/health"
+      echo "  - Restart the backend now:  docker compose restart backend"
+      echo "    It brings an older backup up to this version and ends the game connections"
+      echo "    still open, which keep the identity and role they had before the restore"
+      echo "    until the backend restarts."
+      echo "  - Verify the app:           curl http://localhost/health"
       exit 0
     else
       report_failure
@@ -232,11 +245,12 @@ if psql \
     -q -o /dev/null \
     -v ON_ERROR_STOP=1 \
     --single-transaction < "$PREPARED"; then
-  echo "✅ Restore complete."
+  echo "✅ Restore complete. Every sign-in has ended, so everyone signs in again."
   echo ""
   echo "Next steps:"
   echo "  - Bring an older backup up to this version:  cd backend && npx prisma migrate deploy"
-  echo "  - Restart the backend"
+  echo "  - Restart the backend now. That ends the game connections still open, which keep"
+  echo "    the identity and role they had before the restore until the backend restarts."
   echo "  - Verify the app:                            curl http://localhost/health"
 else
   report_failure
