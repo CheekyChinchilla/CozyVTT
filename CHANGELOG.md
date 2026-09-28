@@ -98,6 +98,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Creatures and token templates imported with unusual values can be placed on the map.** A creature or token template brought in by an earlier release could carry a disposition, display mode or kind the app does not know ("Hostile" with a capital letter, for example), and placing it was refused. Such a value is now read as the default (hostile, or none for a template; pog; object), and the creature or template places normally; edit it in its library to change it.
 
+- **A game table that reconnects after the server closed its connection shows that it is connected.** When the server closed a table's connection, after a restart or a moment when it could not check the sign-in, the page opened a new one that worked, but the badge stayed on Disconnected, the session being paused or ended never reached it, and the chat and map were not caught up until a reload. It now shows Connected and catches up as after any other reconnect.
+
 - **A game table whose sign-in has ended goes to the sign-in page.** When a password change on another device, an admin reset or a restore ended a sign-in, its open game tables kept trying to reconnect every second or two for as long as the tab stayed open, showing a disconnected badge and nothing else. They now stop and go to the sign-in page, and a connection that the server keeps closing is retried a few times and then left to the Retry button.
 
 - **Coming back online reconnects even while a reconnect is already being tried.** If the network came back while the table was still retrying on its own, the event was ignored, and once those retries ran out the table stayed on Connection Error until Retry was clicked.

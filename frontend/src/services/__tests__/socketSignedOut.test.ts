@@ -136,6 +136,44 @@ describe('the socket client when the server stops accepting its sign-in', () => 
     expect(sockets).toHaveLength(2);
   });
 
+  // The check counts against the same attempts as the reconnect it leads to,
+  // so the last check the budget allowed could succeed and still be thrown
+  // away by reconnect() finding the budget spent.
+  it('reconnects when only the last check it makes succeeds', async () => {
+    const unavailable = () => Object.assign(new Error('Request failed with status code 503'), { response: { status: 503 } });
+    for (let i = 0; i < 5; i++) listCampaigns.mockRejectedValueOnce(unavailable());
+    listCampaigns.mockResolvedValue({ campaigns: [] });
+    await joined(client);
+
+    current().fire('connect');
+    current().fire('error', { message: 'Unauthorized' });
+    current().fire('disconnect', 'io server disconnect');
+    expect(await nextSocket()).toBe(true);
+
+    expect(listCampaigns).toHaveBeenCalledTimes(6);
+    expect(sockets).toHaveLength(2);
+  });
+
+  // The page's connection status listens on the socket it was handed. A
+  // socket the client builds on its own must be announced, or the page keeps
+  // showing the old one as disconnected while the new one works.
+  it('tells its subscribers once a socket it rebuilt itself has joined', async () => {
+    listCampaigns.mockResolvedValue({ campaigns: [] });
+    const rebuilt = vi.fn();
+    client.onRebuilt(rebuilt);
+    await joined(client);
+
+    current().fire('disconnect', 'io server disconnect');
+    expect(await nextSocket()).toBe(true);
+    expect(rebuilt).not.toHaveBeenCalled();
+    current().fire('connect');
+    current().fire('connected');
+    current().fire('authenticated');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(rebuilt).toHaveBeenCalledTimes(1);
+  });
+
   it('reconnects as before when the REST API says the sign-in is still good', async () => {
     listCampaigns.mockResolvedValue({ campaigns: [] });
     await joined(client);

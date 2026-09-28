@@ -14,6 +14,7 @@ import {
   useMemo,
 } from 'react';
 import { useParams } from 'react-router-dom';
+import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
 import api from '@/services/api';
 import { errorMessage } from '@/utils/errors';
@@ -120,6 +121,60 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return () => { socketClient.off('authenticated', onJoined); };
   }, []);
 
+  // Wire up the full lifecycle on the raw socket so the status badge stays
+  // in sync across drops and auto-reconnects. Run for every socket the page
+  // uses: the one connect() is handed and each one the client builds itself.
+  const attachLifecycle = useCallback((socket: Socket) => {
+    // Flip to 'disconnected' on every drop, not only the first: a single
+    // `.once('disconnect')` left the badge stuck after the first drop while
+    // socket.io reconnected underneath.
+    socket.on('disconnect', () => {
+      if (!isMountedRef.current) return;
+      setStatus('disconnected');
+    });
+
+    // The reconnect lifecycle belongs to the Manager (`socket.io`), not the
+    // Socket: socket.io-client v4 never emits `reconnect_attempt`,
+    // `reconnect` or `reconnect_failed` on the Socket itself. Listening
+    // there left the badge on "disconnected" after every automatic
+    // reconnect, and everything keyed on `status` returning to
+    // 'connected' waited for an event that never came.
+    const manager = socket.io;
+
+    // Reconnect attempt (socket.io is actively retrying)
+    manager.on('reconnect_attempt', () => {
+      if (!isMountedRef.current) return;
+      setStatus('connecting');
+    });
+
+    // Successful reconnect — flip back to 'connected' and signal consumers
+    manager.on('reconnect', () => {
+      if (!isMountedRef.current) return;
+      setStatus('connected');
+      setReconnectCount((c) => c + 1);
+    });
+
+    // Final reconnect failure (socket.io gave up)
+    manager.on('reconnect_failed', () => {
+      if (!isMountedRef.current) return;
+      setStatus('error');
+      setError('Connection lost. Click Retry to try again.');
+    });
+  }, []);
+
+  // After the server closes a socket the client builds a new one itself. The
+  // listeners above stay on the one it threw away, so the badge said
+  // "Disconnected" over a working connection and nothing keyed on the status
+  // or the reconnect count ran again.
+  useEffect(() => socketClient.onRebuilt(() => {
+    if (!isMountedRef.current) return;
+    setStatus('connected');
+    setError(null);
+    setReconnectCount((c) => c + 1);
+    const socket = socketClient.getSocket();
+    if (socket) attachLifecycle(socket);
+  }), [attachLifecycle]);
+
   // Connect to WebSocket
   const connect = useCallback(async (id: string) => {
     // Use ref to check status without creating a dependency
@@ -147,56 +202,17 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       connectedCampaignRef.current = id;
 
       // Detect reconnect-to-same-campaign on the manual path (Retry button,
-      // navigator.onLine handler). The .on('reconnect') listener below only
-      // fires on socket.io's internal auto-reconnect; manual re-connects go
-      // through here. Either way, reconnectCount must tick so consumers
+      // navigator.onLine handler). The Manager's 'reconnect' listener in
+      // attachLifecycle only fires on socket.io's internal auto-reconnect;
+      // manual re-connects go through here. Either way, reconnectCount must tick so consumers
       // (ChatPanel, CampaignPage) refetch missed state.
       if (previouslyConnectedCampaignRef.current === id) {
         setReconnectCount((c) => c + 1);
       }
       previouslyConnectedCampaignRef.current = id;
 
-      // Wire up the full lifecycle on the raw socket so the status badge stays
-      // in sync across drops and auto-reconnects. Previously a single
-      // `.once('disconnect')` would leave the UI stuck after the first drop —
-      // even though socket.io was happily reconnecting underneath, the badge
-      // never flipped back to green.
       const socket = socketClient.getSocket();
-      if (socket) {
-        // Disconnect — flip to 'disconnected' on every drop, not just the first
-        socket.on('disconnect', () => {
-          if (!isMountedRef.current) return;
-          setStatus('disconnected');
-        });
-
-        // The reconnect lifecycle belongs to the Manager (`socket.io`), not the
-        // Socket: socket.io-client v4 never emits `reconnect_attempt`,
-        // `reconnect` or `reconnect_failed` on the Socket itself. Listening
-        // there left the badge on "disconnected" after every automatic
-        // reconnect, and everything keyed on `status` returning to
-        // 'connected' waited for an event that never came.
-        const manager = socket.io;
-
-        // Reconnect attempt (socket.io is actively retrying)
-        manager.on('reconnect_attempt', () => {
-          if (!isMountedRef.current) return;
-          setStatus('connecting');
-        });
-
-        // Successful reconnect — flip back to 'connected' and signal consumers
-        manager.on('reconnect', () => {
-          if (!isMountedRef.current) return;
-          setStatus('connected');
-          setReconnectCount((c) => c + 1);
-        });
-
-        // Final reconnect failure (socket.io gave up)
-        manager.on('reconnect_failed', () => {
-          if (!isMountedRef.current) return;
-          setStatus('error');
-          setError('Connection lost. Click Retry to try again.');
-        });
-      }
+      if (socket) attachLifecycle(socket);
 
       const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
       heartbeatCleanupRef.current = cleanup || null;
@@ -208,7 +224,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         connectedCampaignRef.current = null;
       }
     }
-  }, []); // No dependencies - stable reference
+  }, [attachLifecycle]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
