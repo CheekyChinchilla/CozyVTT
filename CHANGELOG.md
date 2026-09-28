@@ -96,7 +96,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **The initiative tracker rolls and sets initiative on the map a combatant is actually on.** A combatant follows its token to another map, but the tracker still named the map the table was showing, so rolling for it answered "Token not found" and a typed value changed the order without being saved to the token.
 
-- **Deleting the last combatant ends the fight.** Removing the only token left in the order, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared.
+- **Removing the last combatant ends the fight.** Removing the only combatant left with the tracker's Remove button, deleting its token, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared. Removing the combatant whose turn it is also passes the turn to the next one in the order, as **Next** does, where it used to jump to the top.
 
 - **Duplicate works on a token whose controller has left or stopped playing.** A token keeps the name of whoever controlled it after they leave the campaign, become a spectator or take over as DM, and duplicating it was refused because only a player can be given a token. The copy is now made with no controller in that case.
 
