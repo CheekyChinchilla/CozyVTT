@@ -156,14 +156,20 @@ export function previewTokens(
  */
 export function previewMemoryUser(
   selection: PreviewSelection | null,
-  tokens: ReadonlyArray<Token>
+  tokens: ReadonlyArray<Token>,
+  memberships: ReadonlyArray<Pick<CampaignMembership, 'userId' | 'role'>>
 ): string | null {
   if (!selection) return null;
   switch (selection.kind) {
     case 'player':
       return selection.userId;
-    case 'token':
-      return tokens.find((t) => t.id === selection.tokenId)?.controlledBy ?? null;
+    case 'token': {
+      // Only a player of the campaign has memory to show or write: a token
+      // still names whoever controlled it after they leave or stop playing,
+      // and the server refuses to write memory for someone not in it.
+      const controller = tokens.find((t) => t.id === selection.tokenId)?.controlledBy ?? null;
+      return controller && memberships.some((m) => m.userId === controller && m.role === 'PLAYER') ? controller : null;
+    }
     case 'party':
       return null;
   }

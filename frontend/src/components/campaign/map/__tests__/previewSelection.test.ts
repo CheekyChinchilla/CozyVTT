@@ -117,8 +117,10 @@ describe('tokensShownInPreview', () => {
 });
 
 describe('previewMemoryUser', () => {
+  const seated = [member('dm', 'DM', 'The DM'), member('alice', 'PLAYER', 'Alice'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
+
   it('a player preview shows that player\'s remembered ground', () => {
-    expect(previewMemoryUser({ kind: 'player', userId: 'bob' }, all)).toBe('bob');
+    expect(previewMemoryUser({ kind: 'player', userId: 'bob' }, all, seated)).toBe('bob');
   });
 
   it("a token preview shows the memory of whoever controls it", () => {
@@ -126,21 +128,33 @@ describe('previewMemoryUser', () => {
     // "what does this character know", and what they have already explored is
     // part of that. Memory belongs to a person, so it comes from the token's
     // controller.
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'hero' }, all)).toBe('alice');
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'wizard' }, all)).toBe('bob');
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'hero' }, all, seated)).toBe('alice');
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'wizard' }, all, seated)).toBe('bob');
   });
 
   it('shows none for a token nobody controls, and none for a token that has gone', () => {
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'goblin' }, all)).toBeNull();
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'orphan' }, all)).toBeNull();
-    expect(previewMemoryUser({ kind: 'token', tokenId: 'not-on-this-map' }, all)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'goblin' }, all, seated)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'orphan' }, all, seated)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'not-on-this-map' }, all, seated)).toBeNull();
   });
 
   it('shows none for the party, where several memories would be laid over each other', () => {
-    expect(previewMemoryUser({ kind: 'party' }, all)).toBeNull();
-    expect(previewMemoryUser(null, all)).toBeNull();
+    expect(previewMemoryUser({ kind: 'party' }, all, seated)).toBeNull();
+    expect(previewMemoryUser(null, all, seated)).toBeNull();
+  });
+
+  // Memory is written as the previewed person, and the server takes that
+  // only for a member of the campaign. A token still names whoever controlled
+  // it after they leave or stop playing; its preview then shows and writes no
+  // memory, rather than having every write refused.
+  it("shows none for a token whose controller has left the campaign or only watches it", () => {
+    const leftBehind = token({ id: 'left', name: 'Left', type: TokenType.PLAYER, controlledBy: 'carol' });
+    const watched = token({ id: 'watched', name: 'Watched', type: TokenType.PLAYER, controlledBy: 'watcher' });
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'left' }, [leftBehind], seated)).toBeNull();
+    expect(previewMemoryUser({ kind: 'token', tokenId: 'watched' }, [watched], seated)).toBeNull();
   });
 });
+
 
 describe('previewOptions', () => {
   const members = [member('dm', 'DM', 'The DM'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];

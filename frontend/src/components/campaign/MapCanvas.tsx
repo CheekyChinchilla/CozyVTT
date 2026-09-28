@@ -1139,7 +1139,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // player's own, or the player the DM is previewing as; the DM's own view
   // explores as nobody.
   const explorationEnabled = currentMap?.explorationEnabled ?? true;
-  const exploringAs = previewing ? previewMemoryUser(previewSelection, tokens) : (isDM ? null : user?.id ?? null);
+  const exploringAs = previewing ? previewMemoryUser(previewSelection, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
   const { exploredCells, addExplored } = useExploredMemory(
     socket,
     currentMap?.id,
