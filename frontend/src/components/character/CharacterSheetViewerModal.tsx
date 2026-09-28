@@ -32,6 +32,12 @@ interface CharacterSheetViewerModalProps {
   campaignId?: string;
   membership?: CampaignMembership;
   campaign?: Campaign | null;
+  /**
+   * The name rolls go under in the dice log, when the sheet was opened from a
+   * token that may not be named in front of everyone. The character's name
+   * otherwise.
+   */
+  publicName?: string;
   onClose: () => void;
 }
 
@@ -40,6 +46,7 @@ export default function CharacterSheetViewerModal({
   campaignId: _campaignId,
   membership,
   campaign,
+  publicName,
   onClose,
 }: CharacterSheetViewerModalProps) {
   const { user } = useAuth();
@@ -148,7 +155,7 @@ export default function CharacterSheetViewerModal({
     if (socket) {
       // Named so the panel heads the entry with the character whose sheet this
       // is, not with whoever happens to be reading it.
-      socket.emitDiceRoll({ expression, purpose, characterName: character.name });
+      socket.emitDiceRoll({ expression, purpose, characterName: publicName ?? character.name });
     }
   };
 

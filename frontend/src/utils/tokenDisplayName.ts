@@ -16,6 +16,7 @@ export interface NamedToken {
   obscured?: boolean;
   visible?: boolean;
   layer?: string;
+  controlledBy?: string | null;
 }
 
 export const UNKNOWN_CREATURE = 'Unknown creature';
@@ -38,8 +39,12 @@ export function tokenPublicName(token: NamedToken): string {
 /**
  * The name a roll from a character's sheet goes under when it is made from
  * this token: none of its own (the character's name) unless the token may
- * not be named in front of everyone.
+ * not be named in front of everyone. The dice log already names whoever
+ * rolled, so a roll by the token's own controller (a player who has crossed
+ * to the spirit plane, say) keeps the character's name: going unnamed would
+ * hide nothing.
  */
-export function characterRollPublicName(token: NamedToken | undefined): string | undefined {
-  return token && unnamedInPublic(token) ? UNKNOWN_CREATURE : undefined;
+export function characterRollPublicName(token: NamedToken | undefined, rollerId: string | undefined): string | undefined {
+  if (!token || (rollerId !== undefined && token.controlledBy === rollerId)) return undefined;
+  return unnamedInPublic(token) ? UNKNOWN_CREATURE : undefined;
 }

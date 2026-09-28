@@ -198,7 +198,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [isMoveToMapLoading, setIsMoveToMapLoading] = useState(false);
 
   // Character sheet viewer state
-  const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null);
+  // The sheet opened from a token's menu, with the token it was opened from.
+  const [viewingSheet, setViewingSheet] = useState<{ character: Character; tokenId: string } | null>(null);
 
   // Roll picker (right-click token → Roll...). Carries the token as well as the
   // character because initiative belongs to the token on the map, not to the
@@ -3990,10 +3991,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   const characterId = contextMenu.token.characterId!;
+                  const tokenId = contextMenu.token.id;
                   setContextMenu(null);
                   try {
                     const { character } = await api.getCharacter(characterId);
-                    setViewingCharacter(character);
+                    setViewingSheet({ character, tokenId });
                   } catch (err) {
                     console.error('Failed to load character sheet:', err);
                   }
@@ -4310,15 +4312,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* Character Sheet Viewer (opened from token context menu) */}
-      {viewingCharacter && campaign && (() => {
+      {viewingSheet && campaign && (() => {
         const membership = campaign.memberships?.find((m) => m.userId === user?.id);
         if (!membership) return null;
         return (
           <CharacterSheetViewerModal
-            character={viewingCharacter}
+            character={viewingSheet.character}
             campaignId={campaign.id}
             membership={membership}
-            onClose={() => setViewingCharacter(null)}
+            // Rolls from it reach the whole table, as from Roll... below.
+            publicName={characterRollPublicName(tokens.find((t) => t.id === viewingSheet.tokenId), user?.id)}
+            onClose={() => setViewingSheet(null)}
           />
         );
       })()}
@@ -4334,7 +4338,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           anchorY={rollPicker.y}
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
-          publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId))}
+          publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
           onRoll={(expression, purpose, characterName) =>
             socket?.emitDiceRoll({ expression, purpose, characterName })
           }
