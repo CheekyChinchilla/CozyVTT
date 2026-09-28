@@ -16,6 +16,7 @@ import {
 } from '../../utils/rules/initiative';
 import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
+import { withMapsLocked } from '../../utils/mapTokens';
 import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
 import { canControlToken } from '../../services/permissions';
 import {
@@ -155,6 +156,22 @@ export async function resendInitiative(campaignId: string, options: { evenWhenEm
   await resendInitiativeState(io, campaignId);
 }
 
+/**
+ * Store a token's initiative on its map, in the list as it is under the map's
+ * lock like every other write to a map's tokens. A token no longer on the
+ * map is left alone.
+ */
+async function setTokenInitiative(mapId: string, tokenId: string, value: number | null): Promise<void> {
+  await withMapsLocked([mapId], async (tx) => {
+    const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const tokens = readTokens(fresh.tokens);
+    const index = tokens.findIndex((t) => t.id === tokenId);
+    if (index === -1) return;
+    tokens[index] = { ...tokens[index], initiative: value };
+    await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+  });
+}
+
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {
   /** Send the order to every member, each as they may see it, after a change. */
   async function broadcastInitiativeState(campaignId: string) {
@@ -261,12 +278,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const map = await prisma.map.findUnique({ where: { id: mapId } });
       if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
 
-      const tokens = readTokens(map.tokens);
-      const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
-      if (tokenIndex !== -1) {
-        tokens[tokenIndex] = { ...tokens[tokenIndex], initiative: value };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-      }
+      await setTokenInitiative(mapId, tokenId, value);
 
       // Update in-memory combat state
       const state = getCombatState(socket.campaignId);
@@ -429,19 +441,9 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         rolledValue = rollResult.total;
       }
 
-      // Persist to token.
-      //
-      // Re-read rather than writing back the copy fetched before the character
-      // lookups above: those are awaits, and the whole token array is rewritten
-      // in one field, so a token someone moved in the meantime would be silently
-      // put back where it was.
-      const freshMap = await prisma.map.findUnique({ where: { id: mapId }, select: { tokens: true } });
-      const freshTokens = freshMap && Array.isArray(freshMap.tokens) ? readTokens(freshMap.tokens) : tokens;
-      const freshIndex = freshTokens.findIndex((t) => t.id === tokenId);
-      if (freshIndex !== -1) {
-        freshTokens[freshIndex] = { ...freshTokens[freshIndex], initiative: rolledValue };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(freshTokens) } });
-      }
+      // Persist to token, in the list as it is under the map's lock: the
+      // copy fetched before the character lookups above is stale by now.
+      await setTokenInitiative(mapId, tokenId, rolledValue);
 
       // Update in-memory state — add to combatants if not already present.
       // Only reachable for a DM: a player's roll is rejected above unless the

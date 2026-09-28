@@ -13,6 +13,7 @@ import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
+import { withMapsLocked } from '../utils/mapTokens';
 
 const router = Router();
 
@@ -620,17 +621,22 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
         for (const map of boundMaps) {
           if (spectatorIn.has(map.campaignId)) continue;
-          const tokens = readTokens(map.tokens);
-          let mapChanged = false;
-
-          const nextTokens = tokens.map((token) => {
-            if (token?.characterId !== updatedCharacter.id) return token;
-            mapChanged = true;
-            return { ...token, imageUrl: updateData.tokenImageUrl ?? '' };
+          // Rewritten from the list as it is under the map's lock, like every
+          // other write to a map's tokens; the list the query above returned
+          // only says which maps to visit.
+          const mapChanged = await withMapsLocked([map.id], async (tx) => {
+            const fresh = await tx.map.findUniqueOrThrow({ where: { id: map.id }, select: { tokens: true } });
+            let changed = false;
+            const nextTokens = readTokens(fresh.tokens).map((token) => {
+              if (token?.characterId !== updatedCharacter.id) return token;
+              changed = true;
+              return { ...token, imageUrl: updateData.tokenImageUrl ?? '' };
+            });
+            if (changed) await tx.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
+            return changed;
           });
 
           if (mapChanged) {
-            await prisma.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
             tokensChanged = true;
             campaignsWithChangedTokens.add(map.campaignId);
           }

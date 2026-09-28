@@ -10,7 +10,8 @@ import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
 import { isValidSpiritStyle } from '../../utils/styleAllowlists';
 import { Token, broadcastMapData } from '../shared';
-import { toJson } from '../../utils/prisma-json';
+import { readTokens, toJson } from '../../utils/prisma-json';
+import { withMapsLocked } from '../../utils/mapTokens';
 import { getState as getCombatState } from '../initiativeState';
 import { resendInitiativeState } from './initiative';
 import { campaignSockets } from '../utils';
@@ -142,26 +143,24 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         return;
       }
 
-      // Find and update the token
-      const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
-      const tokenIndex = tokensArray.findIndex((t) => t.id === tokenId);
+      // Find and update the token, in the list as it is under the map's
+      // lock, like every other write to a map's tokens: a move or an add
+      // landing meanwhile used to be written away.
+      const updatedTokens = await withMapsLocked([mapId], async (tx) => {
+        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+        const tokens = readTokens(fresh.tokens);
+        const index = tokens.findIndex((t) => t.id === tokenId);
+        if (index === -1) return null;
+        tokens[index] = { ...tokens[index], visible };
+        await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+        return tokens;
+      });
+      const token: Token | undefined = updatedTokens?.find((t) => t.id === tokenId);
 
-      if (tokenIndex === -1) {
+      if (!updatedTokens || !token) {
         socket.emit('error', { message: 'Token not found' });
         return;
       }
-
-      const token = tokensArray[tokenIndex];
-      token.visible = visible;
-
-      // Save updated tokens to database
-      const updatedTokens = [...tokensArray];
-      updatedTokens[tokenIndex] = token;
-
-      await prisma.map.update({
-        where: { id: mapId },
-        data: { tokens: toJson(updatedTokens) },
-      });
 
       // The DM's own clients get the toggle with the token. Then everyone,
       // the DM included, gets the map again as they may see it: a player is
