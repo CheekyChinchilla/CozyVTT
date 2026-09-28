@@ -2727,7 +2727,14 @@ paths:
       tags:
         - Sessions
       summary: Resume last session
-      description: 'Resume the most recently paused session (DM only). The table is left exactly as it is: everything is stored as it is played, and the snapshot taken at pause is a record kept with the session, never written back.'
+      description: >
+        Reopen the campaign's most recently started session (DM only), whether
+        it was paused or ended: its end time is cleared, the campaign is set
+        ACTIVE, and `session.resumed` is broadcast. The campaign's current
+        status is not checked, so a call while a session is running succeeds
+        too and posts another "resumed" message. The table is left exactly
+        as it is: everything is stored as it is played, and the snapshot taken
+        at pause is a record kept with the session, never written back.
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -2744,15 +2751,20 @@ paths:
                   message:
                     type: string
                   session:
-                    $ref: '#/components/schemas/Session'
-        '400':
-          description: No ended session to resume
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      sessionNumber:
+                        type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign has never had a session
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '403':
-          $ref: '#/components/responses/Forbidden'
 
   # ============================================
   # CHARACTERS
@@ -4025,8 +4037,9 @@ paths:
         `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
         UUIDs. A `characterId` must name a character of this campaign, or the
         request is refused with 400; a token bound to a character is
-        controlled by that character's owner unless `controlledBy` says
-        otherwise.
+        controlled by that character's owner, while the owner is a player of
+        this campaign, unless `controlledBy` says otherwise. A character
+        owned by the DM or a spectator gives its token no controller.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -6487,7 +6500,7 @@ paths:
 #
 # session.resumed:
 #   payload: { sessionId: string, sessionNumber: number, startedAt: string }
-#   description: Session resumed (state restored from saved snapshot).
+#   description: Session resumed. Nothing is restored: the table stays as it is.
 #
 # character.hp.updated:
 #   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
@@ -6886,10 +6899,14 @@ paths:
         psql present in the backend image. The archive's database.sql is
         checked before anything runs: it must be a complete pg_dump of a
         CozyVTT database (pg_dump's closing line present, the User and
-        _prisma_migrations tables created) holding nothing but SQL; a psql
-        backslash command, a COPY that is not table data, or a transaction
-        statement makes the archive invalid. A refused archive answers 400 with
-        the reason and changes nothing. A database-only backup of the current
+        _prisma_migrations tables created) holding nothing but SQL; a line
+        that starts with a psql backslash command, a COPY that is not table
+        data, or a transaction statement makes the archive invalid. These
+        checks are not a sandbox: the SQL runs with the database owner's full
+        rights, which on the Docker setup include running programs in the
+        database container, so restore only archives made on an instance you
+        trust. A refused archive answers 400 with the reason and changes
+        nothing. A database-only backup of the current
         database is then written to the backup list, named in the response as
         safetyBackup, so the restore can be undone. The public schema is
         dropped and recreated from the archive in a single transaction that
@@ -7661,9 +7678,10 @@ components:
           nullable: true
           description: >
             Who controls the token. Omitted with a characterId naming a
-            character of this campaign: that character's owner. Explicit
-            null: nobody (the DM). A value must name a player of this
-            campaign (400 otherwise).
+            character of this campaign: that character's owner if the owner
+            is a player of this campaign, otherwise nobody. Explicit null:
+            nobody (the DM). A value must name a player of this campaign (400
+            otherwise).
         rotation:
           type: number
           minimum: 0

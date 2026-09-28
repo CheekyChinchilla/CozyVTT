@@ -315,7 +315,7 @@ Areas open up as you explore. If your DM is using **dynamic lighting** as well, 
 
 Two things worth knowing:
 
-- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it.
+- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
 
 ### Sound and weather on the map
@@ -351,7 +351,7 @@ The **Initiative** tab in the right sidebar shows the turn order. As the DM adds
 *Screenshot pending — Initiative tracker during combat.*
 
 You'll see:
-- **The combatants the DM has not hidden** in order, highest initiative first (a hidden creature isn't listed until it's revealed; one that is merely out of your sight, in the dark or under fog, is)
+- **The combatants in the fight**, in order, highest initiative first. A creature isn't listed while the DM has it hidden, while it stands on a map the DM hasn't switched to, or while it is on the other plane when your DM uses the spirit realm; one that is merely out of your sight, in the dark or under fog, is listed
 - **Current turn** highlighted
 - **HP** for a creature once the DM has turned its HP bar on, and for any creature token you control; it follows the token as the DM changes it. Your own character's hit points are on your sheet and roster card, not in the tracker
 
@@ -423,7 +423,7 @@ Your DM can still roll for you (and re-roll, or type a value in by hand) — han
 
 **Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
 
-If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all.
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 

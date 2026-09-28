@@ -75,7 +75,7 @@ router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Respons
 // ============================================
 // LIST — GET /
 // Returns SRD + campaign-specific templates, with search/filter support.
-// Any campaign member can list.
+// DM only: a template carries the DM's notes, stat block and hit points.
 // ============================================
 
 router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {

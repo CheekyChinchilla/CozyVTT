@@ -521,7 +521,7 @@ It's your DM's way of setting the tone without breaking the narrative.
 
 ### The Initiative Tracker
 
-The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for creatures whose HP bar the DM has turned on and for any creature token you control; your own character's hit points are on your sheet and roster card, not in the tracker. A creature the DM has hidden is not listed; one that is merely out of your sight is.
+The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for creatures whose HP bar the DM has turned on and for any creature token you control; your own character's hit points are on your sheet and roster card, not in the tracker. A creature the DM has hidden is not listed, nor one on a map the DM has not switched to, nor one on the other plane when the DM uses the spirit layer; one that is merely out of your sight is.
 
 *Screenshot pending — Initiative tracker panel during combat.*
 

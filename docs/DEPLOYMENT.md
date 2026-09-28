@@ -77,7 +77,7 @@ docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt W
 echo "$NEW_PASSWORD"
 ```
 
-Use your own user name in place of `cozyvtt` if you set `DATABASE_USER`. Then put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` too if you wrote that by hand), and restart:
+The command uses the default names. If you changed them in `.env`, put your `DATABASE_USER` in place of `cozyvtt` after `-U` and after `ALTER USER`, and your `DATABASE_NAME` in place of `cozyvtt` after `-d`. Then put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` too if you wrote that by hand), and restart:
 
 ```bash
 docker compose up -d
@@ -687,7 +687,38 @@ Grant these sparingly: both write content visible to every user on the instance.
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. To keep them elsewhere under Docker, change the `./backend/backups` volume line in your `docker-compose.override.yml`; `BACKUP_DIR` applies only to an install without Docker, and a location inside `uploads/` is refused either way.
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand.
+
+To keep them in another folder under Docker, use a personal `docker-compose.override.yml` (see [Optional: avoid the conflicts entirely](#optional-avoid-the-conflicts-entirely-advanced)) and add these lines to it, with your own folder in place of `/srv/cozyvtt-backups`:
+
+```yaml
+services:
+  backend:
+    volumes:
+      - /srv/cozyvtt-backups:/app/backups
+```
+
+If your override file already has a `backend:` section, for example the `ports` lines from the example file, put `volumes:` and the line below it inside that section; a second `backend:` does not work. Your line names the same place inside the container as the shipped `./backend/backups` line (`/app/backups`), so it replaces that line instead of adding to it. Apply it and check the result:
+
+```bash
+docker compose up -d
+docker compose config | grep -B1 'target: /app/backups'
+```
+
+It should print your folder once, like this:
+
+```
+        source: /srv/cozyvtt-backups
+        target: /app/backups
+```
+
+The backend takes ownership of the new folder when it starts. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
+
+```bash
+sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
+```
+
+**Do not pick a folder inside `backend/uploads/`.** A backup holds every credential on the instance, and `uploads/` is the folder you may sync or copy anywhere. Under Docker nothing stops you: the backend sees only its own `/app/backups` and cannot tell where that is on the host. `BACKUP_DIR` applies only to an install without Docker, and there a folder inside the uploads directory is refused.
 
 **Admin Dashboard → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
 
@@ -699,9 +730,9 @@ docker compose logs backend | grep -i restore
 
 **A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
 
-**Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with full rights. The restore lets nothing through but SQL, and refuses a file that would run a command on the server, but SQL alone is enough to put anything at all in your database.
+**Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
-A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once:
+A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (the first `cozyvtt` is the database, the second the user):
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
@@ -769,44 +800,55 @@ If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
 ```
 
-### Via Command Line
-
-A bare version by hand, if you would rather not use the scripts. It makes none
-of the checks above, and it does not replace the schema first, so a table added
-to CozyVTT since the backup was made keeps its current rows:
+Under Docker, the scripts take the database's user and name from
+`DATABASE_USER` and `DATABASE_NAME` in their environment, not from `.env`, and
+assume `cozyvtt` for both. If you changed either in `.env`, put the same values
+in front of the command, for example:
 
 ```bash
-# Create a backup
-docker compose exec database \
-  pg_dump -U cozyvtt cozyvtt --no-owner --no-privileges | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
-
-# Check the backup file is complete before going near the database
-gzip -t backup_YYYYMMDD_HHMMSS.sql.gz && echo "archive is complete"
-
-# Restore from a backup
-gunzip -c backup_YYYYMMDD_HHMMSS.sql.gz | \
-  docker compose exec -T database psql -U cozyvtt cozyvtt \
-    -v ON_ERROR_STOP=1 --single-transaction
+DATABASE_USER=myuser DATABASE_NAME=mydb ./backend/scripts/backup.sh
 ```
 
-> **Keep those last two options if you change this command.** A backup starts by
-> deleting the tables it is about to rewrite. Without `ON_ERROR_STOP=1` psql
-> carries on past a failure and still reports success, and without
-> `--single-transaction` a failure partway through leaves the tables deleted and
-> not replaced. Together they make the restore all or nothing. The restore
-> script already passes both.
+### Via Command Line
+
+If you would rather not use the backup script, this one command makes the same
+backup by hand (with the default `cozyvtt` names; put yours in place of both if
+you changed them):
+
+```bash
+docker compose exec -T database \
+  pg_dump -U cozyvtt -d cozyvtt --no-owner --no-privileges \
+    --exclude-table-data=public.session \
+  | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+```
+
+`--exclude-table-data=public.session` leaves the login sessions out, as the
+dashboard and the script do, so restoring the file cannot sign back in someone
+who was signed out after it was made.
+
+To restore it, use `restore.sh` from the section above, which accepts this file
+too. Piping this file straight into `psql` does not replace anything on an
+instance that is already set up: its tables already exist, so the load fails,
+and depending on the options it either changes nothing or leaves a mix of old
+and new rows. `restore.sh` replaces the tables first, loads the backup in one
+step that is undone if any part fails, and empties the login sessions.
 
 ### Automated Daily Backups (cron)
+
+Run the backup script from cron. It keeps 30 days of backups in `./backups`,
+like it does when you run it by hand:
 
 ```bash
 crontab -e
 
-# Daily at 3 AM, keep 30 days of history
-0 3 * * * cd /path/to/cozyvtt && \
-  docker compose exec -T database pg_dump -U cozyvtt cozyvtt --no-owner --no-privileges \
-  | gzip > /backups/cozyvtt_$(date +\%Y\%m\%d).sql.gz && \
-  find /backups -name "cozyvtt_*.sql.gz" -mtime +30 -delete
+# Add this line: daily at 3 AM, with the output kept in backup.log
+0 3 * * * cd /path/to/cozyvtt && ./backend/scripts/backup.sh >> backup.log 2>&1
 ```
+
+Put the folder you installed CozyVTT into in place of `/path/to/cozyvtt`, and
+the `DATABASE_USER=... DATABASE_NAME=...` prefix in front of the script if you
+changed those names. The user whose crontab this is needs to be able to run
+`docker compose` without `sudo`.
 
 ---
 
@@ -936,7 +978,7 @@ docker compose logs backend | grep -i migrat
 
 Database migrations run automatically via `prisma migrate deploy` on every startup. Downtime is typically under 30 seconds while containers restart.
 
-> **Back up before you upgrade.** See [Database Backups](#database-backups) — one `pg_dump` command, and back up `backend/uploads/` alongside it.
+> **Back up before you upgrade.** See [Database Backups](#database-backups): one command, `./backend/scripts/backup.sh`, and back up `backend/uploads/` alongside it.
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 

@@ -2058,8 +2058,11 @@ export default function AdminPage() {
                       NGINX_MAX_BODY_SIZE={requiredProxyBodyMB(serverConfig.uploadLimits)}M
                     </code>{' '}
                     in your <code className="font-mono bg-warm-gray/10 px-1 rounded">.env</code> and
-                    restart. Cloudflare-proxied setups (including Tunnels) also cap request bodies at
-                    100 MB on Free/Pro plans.
+                    apply it with{' '}
+                    <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose up -d</code>
+                    ; <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose restart</code>{' '}
+                    keeps the old value. Cloudflare-proxied setups (including Tunnels) also cap request
+                    bodies at 100 MB on Free/Pro plans.
                   </p>
                 </div>
               ) : (
