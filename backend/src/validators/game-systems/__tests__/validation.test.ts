@@ -230,9 +230,8 @@ describe('Game Systems Validation', () => {
     });
 
     describe('the four proficiency boxes', () => {
-      // Declared rather than left to survive by accident: the route stores the
-      // body as sent, so an undeclared field persisted silently — which is how
-      // the built-in templates came to seed fields nothing read.
+      // Declared because the editor writes them: the routes store the parsed
+      // sheet, so an undeclared field would be dropped on save.
       const sheetWith = (proficiencies: unknown) => {
         const example = loadExampleJSON('DnD_5e_character.json');
         return { ...example.data, proficiencies };

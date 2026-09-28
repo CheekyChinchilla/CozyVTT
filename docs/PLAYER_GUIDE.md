@@ -493,6 +493,8 @@ If you leave the editor with changes you haven't saved, you'll be asked to confi
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the sheet opens again showing the new version; make your changes again there. A sheet you only have open to read follows hit point changes by itself.
+
 > **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Exporting and Importing

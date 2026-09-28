@@ -319,8 +319,10 @@ export const dnd5eCharacterDataSchema = z.object({
 
   // Optional: Additional details
   playerName: z.string().min(1).optional(),
-  background: z.string().min(1).optional(),
-  alignment: z.string().min(1).optional(),
+  // Empty is allowed: these are text boxes on the sheet, and clearing one
+  // writes an empty string, which `min(1)` refused along with the whole save.
+  background: z.string().optional(),
+  alignment: z.string().optional(),
   experiencePoints: z.number().int().min(0).optional(),
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),
@@ -356,10 +358,10 @@ export const dnd5eCharacterDataSchema = z.object({
   // The four proficiency boxes as the player typed them: armour, weapons,
   // tools and languages, each free text.
   //
-  // This was already being stored, but only because PUT /characters/:id writes
-  // the body as sent rather than Zod's parsed output — the field was undeclared
-  // and survived by accident. That is precisely how the built-in templates came
-  // to seed fields nothing read, so it is declared properly here.
+  // Declared because the editor writes it: the routes store Zod's parsed
+  // sheet, so an undeclared field is dropped on save. It was stored before this
+  // only because the routes then kept the body as sent, which is also how the
+  // built-in templates came to seed fields nothing read.
   //
   // `proficienciesAndLanguages` below is the same four boxes flattened into one
   // list, kept for exports and for sheets written before this existed. It

@@ -13,6 +13,7 @@ import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import { withMapsLocked } from '../utils/mapTokens';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
@@ -116,9 +117,11 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       where: { id: userId },
       select: { displayName: true },
     });
+    // A sheet in the shape of a version before 1.3.0 has its older fields
+    // moved where the sheet reads them first, since validation drops them.
     const dataWithIdentity = applyIdentityToSheet(
       finalGameSystem as GameSystem | null,
-      data as Record<string, unknown> | undefined,
+      migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
     );
@@ -466,7 +469,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: parsed.error.issues[0]?.message ?? 'Invalid character data',
       });
     }
-    const { name, data, tokenImageUrl, gameSystem } = parsed.data;
+    const { name, data, tokenImageUrl, gameSystem, updatedAt: loadedAt } = parsed.data;
 
     // Find character first to check authorization
     const character = await prisma.character.findUnique({
@@ -516,10 +519,15 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     // Validate data update if character has gameSystem. What gets stored is
     // the schema's parsed output, so a key the sheet does not declare never
-    // reaches the database.
+    // reaches the database. A sheet still carrying fields from before 1.3.0
+    // has them moved where the sheet reads them first, or that would drop
+    // their content before `migrate:sheet-fields` could move it.
     let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
-      const validationResult = validateCharacterData(character.gameSystem as GameSystem, data);
+      const validationResult = validateCharacterData(
+        character.gameSystem as GameSystem,
+        migrateLegacySheetFields(character.gameSystem, data)
+      );
       if (!validationResult.success) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -567,18 +575,32 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       updateData.tokenImageUrl = normalizedTokenImageUrl;
     }
 
-    const updatedCharacter = await prisma.character.update({
-      where: { id },
-      data: updateData,
-      include: {
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const withCampaign = { campaign: { select: { id: true, name: true } } } as const;
+    let updatedCharacter;
+    if (loadedAt !== undefined) {
+      // Saved only if the character is still the version the caller loaded.
+      // Checked in the write itself, so a change landing after the read above
+      // is caught too. Without it, a sheet open while the DM took hit points
+      // put the old number back on its next save.
+      const { count } = await prisma.character.updateMany({
+        where: { id, updatedAt: new Date(loadedAt) },
+        data: updateData,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'CHARACTER_CHANGED',
+          message: 'This character was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id }, include: withCampaign });
+    } else {
+      updatedCharacter = await prisma.character.update({
+        where: { id },
+        data: updateData,
+        include: withCampaign,
+      });
+    }
 
     // A map token stores its own COPY of the character's image, taken when it
     // was placed — there is no Token table, tokens live as JSON on the map. So

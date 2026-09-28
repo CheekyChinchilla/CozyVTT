@@ -30,6 +30,60 @@ interface CharacterHpData {
   [key: string]: unknown;
 }
 
+type Refusal = { error: string };
+
+/**
+ * The sheet with `delta` applied to its current hit points, clamped to 0 and
+ * the maximum, or why it cannot be.
+ *
+ * Only the HP-bearing corners of the sheet are described: the blob is a full
+ * character in one of several systems, and nothing else is read or written.
+ * The values stay `unknown` until the checks below establish they are numbers.
+ */
+function applyHpDelta(
+  gameSystem: string | null,
+  stored: unknown,
+  delta: number
+): { data: CharacterHpData; hp: { current: number; max: number; temp: number } } | Refusal {
+  const charData = stored as CharacterHpData;
+  switch (gameSystem) {
+    case 'DND_5E':
+    case 'PATHFINDER_2E': {
+      if (!charData?.hp || typeof charData.hp.maximum !== 'number') {
+        return { error: 'Character does not have HP tracking' };
+      }
+      const max = charData.hp.maximum;
+      const temp = typeof charData.hp.temporary === 'number' ? charData.hp.temporary : 0;
+      const current = Math.max(0, Math.min(max, (typeof charData.hp.current === 'number' ? charData.hp.current : max) + delta));
+      return { data: { ...charData, hp: { ...charData.hp, current } }, hp: { current, max, temp } };
+    }
+    case 'CALL_OF_CTHULHU_7E': {
+      if (!charData?.derivedStats?.hp || typeof charData.derivedStats.hp.maximum !== 'number') {
+        return { error: 'Character does not have HP tracking' };
+      }
+      const max = charData.derivedStats.hp.maximum;
+      const current = Math.max(0, Math.min(max, (typeof charData.derivedStats.hp.current === 'number' ? charData.derivedStats.hp.current : max) + delta));
+      return {
+        data: { ...charData, derivedStats: { ...charData.derivedStats, hp: { ...charData.derivedStats.hp, current } } },
+        hp: { current, max, temp: 0 },
+      };
+    }
+    default:
+      return { error: 'HP tracking not supported for this game system' };
+  }
+}
+
+/** The sheet with one die spent from the pool at `index`, or why it cannot be. */
+function spendHitDie(stored: unknown, index: number): { data: CharacterHitDiceData } | Refusal {
+  const charData = stored as CharacterHitDiceData;
+  const pools = Array.isArray(charData?.hitDice) ? (charData.hitDice as HitDiceEntry[]) : null;
+  if (!pools || !pools[index]) return { error: 'No hit dice pool at that position' };
+  const remaining = typeof pools[index].remaining === 'number' ? (pools[index].remaining as number) : 0;
+  if (remaining <= 0) return { error: 'No hit dice remaining to spend' };
+  const hitDice = pools.map((entry, at) => (at === index ? { ...entry, remaining: remaining - 1 } : entry));
+  return { data: { ...charData, hitDice } };
+}
+
 export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocket): void {
   socket.on('character.hp.update', async (data: { characterId: string; delta: number }) => {
     try {
@@ -79,52 +133,23 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // System-aware HP read + apply delta.
-      //
-      // Only the HP-bearing corners of the sheet are described here: the blob is
-      // a full character in one of several systems, and this handler reads and
-      // writes nothing else. The values stay `unknown` because the guards below
-      // are what establish they are numbers — those guards are pre-existing, and
-      // typing them out is the whole reason this is no longer `any`.
-      const charData = character.data as unknown as CharacterHpData;
-      let current: number;
-      let max: number;
-      let temp: number;
-
-      switch (character.gameSystem) {
-        case 'DND_5E':
-        case 'PATHFINDER_2E': {
-          if (!charData.hp || typeof charData.hp.maximum !== 'number') {
-            socket.emit('error', { message: 'Character does not have HP tracking' });
-            return;
-          }
-          max = charData.hp.maximum;
-          temp = typeof charData.hp.temporary === 'number' ? charData.hp.temporary : 0;
-          current = Math.max(0, Math.min(max, (typeof charData.hp.current === 'number' ? charData.hp.current : max) + delta));
-          charData.hp.current = current;
-          break;
-        }
-        case 'CALL_OF_CTHULHU_7E': {
-          if (!charData.derivedStats?.hp || typeof charData.derivedStats.hp.maximum !== 'number') {
-            socket.emit('error', { message: 'Character does not have HP tracking' });
-            return;
-          }
-          max = charData.derivedStats.hp.maximum;
-          temp = 0;
-          current = Math.max(0, Math.min(max, (typeof charData.derivedStats.hp.current === 'number' ? charData.derivedStats.hp.current : max) + delta));
-          charData.derivedStats.hp.current = current;
-          break;
-        }
-        default:
-          socket.emit('error', { message: 'HP tracking not supported for this game system' });
-          return;
-      }
-
-      // Save updated character data
-      await prisma.character.update({
-        where: { id: characterId },
-        data: { data: toJson(charData) },
+      // Read and written under the row's lock, afresh. Reading before the
+      // lock and writing the whole sheet back undid any save that landed in
+      // between; a save arriving now waits for this one instead.
+      const outcome = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${characterId} FOR UPDATE`;
+        const fresh = await tx.character.findUnique({ where: { id: characterId }, select: { data: true } });
+        if (!fresh) return { error: 'Character not found' } as const;
+        const applied = applyHpDelta(character.gameSystem, fresh.data, delta);
+        if ('error' in applied) return applied;
+        await tx.character.update({ where: { id: characterId }, data: { data: toJson(applied.data) } });
+        return applied;
       });
+      if ('error' in outcome) {
+        socket.emit('error', { message: outcome.error });
+        return;
+      }
+      const { current, max, temp } = outcome.hp;
 
       // Broadcast updated HP to all campaign members
       io.to(socket.campaignId!).emit('character.hp.updated', {
@@ -190,26 +215,21 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      const charData = character.data as unknown as CharacterHitDiceData;
-      const pools = Array.isArray(charData.hitDice) ? (charData.hitDice as HitDiceEntry[]) : null;
-      if (!pools || !pools[index]) {
-        socket.emit('error', { message: 'No hit dice pool at that position' });
-        return;
-      }
-
-      const entry = pools[index];
-      const remaining = typeof entry.remaining === 'number' ? entry.remaining : 0;
-      if (remaining <= 0) {
-        socket.emit('error', { message: 'No hit dice remaining to spend' });
-        return;
-      }
-
-      entry.remaining = remaining - 1;
-
-      const updated = await prisma.character.update({
-        where: { id: characterId },
-        data: { data: toJson(charData) },
+      // Under the row's lock and read afresh, for the reason given for hit
+      // points above.
+      const outcome = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${characterId} FOR UPDATE`;
+        const fresh = await tx.character.findUnique({ where: { id: characterId }, select: { data: true } });
+        if (!fresh) return { error: 'Character not found' } as const;
+        const spent = spendHitDie(fresh.data, index);
+        if ('error' in spent) return spent;
+        return { updated: await tx.character.update({ where: { id: characterId }, data: { data: toJson(spent.data) } }) };
       });
+      if ('error' in outcome) {
+        socket.emit('error', { message: outcome.error });
+        return;
+      }
+      const updated = outcome.updated;
 
       // The sheet blob changed, so this goes out as `character.updated` — the
       // event an open character sheet already refreshes on — rather than a

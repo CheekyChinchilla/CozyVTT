@@ -993,6 +993,11 @@ export interface UpdateCharacterRequest {
   name?: string;
   data?: CharacterData;
   tokenImageUrl?: string;
+  /**
+   * The character's `updatedAt` as the sheet was loaded. The server refuses the
+   * save with 409 if the character has changed since.
+   */
+  updatedAt?: string;
 }
 
 // Map

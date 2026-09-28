@@ -91,6 +91,25 @@ describe('readProficiencyGroups', () => {
     });
   });
 
+  describe('a sheet written before 1.3.0', () => {
+    // Those templates kept a flat list under `proficiencies` and the
+    // languages in a list of their own.
+    it('reads the flat list and the separate languages', () => {
+      const sheet = { proficiencies: ['All armor', 'Simple weapons'], languages: ['Common', 'Druidic'] };
+      expect(readProficiencyGroups(sheet)).toEqual(
+        groups({ armor: 'All armor', weapons: 'Simple weapons', languages: 'Common, Druidic' })
+      );
+    });
+
+    it('adds old languages missing from the boxes to Languages', () => {
+      const sheet = {
+        proficiencies: { armor: '', weapons: '', tools: '', languages: 'Elvish' },
+        languages: ['Common', 'elvish'],
+      };
+      expect(readProficiencyGroups(sheet).languages).toBe('Elvish, Common');
+    });
+  });
+
   it.each([
     ['nothing at all', undefined],
     ['an empty sheet', {}],

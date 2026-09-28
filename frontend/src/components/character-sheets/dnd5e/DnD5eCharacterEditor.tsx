@@ -27,6 +27,7 @@ import type {
   DnD5eSavingThrows,
   DnD5eSkills,
   DnD5eSpellcasting,
+  DnD5eSpellSlots,
   DnD5eAppearance,
   DnD5ePersonality,
   SheetChrome,
@@ -63,15 +64,16 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
-import { isHexColor } from '@/utils/styleAllowlists';
+import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 
 /**
  * The sheet as this editor holds it.
  *
  * `proficiencies` used to be redeclared here, because the game system's own
- * type did not describe it and it survived a save only by accident — the route
- * stores the body as sent rather than Zod's parsed output. It is a declared
- * field on both sides now, so this adds nothing but the editor's own chrome.
+ * type did not describe it; it was saved only because the route then stored
+ * the body as sent. The route stores the schema's parsed sheet now, and the
+ * field is declared on both sides, so this adds nothing but the editor's own
+ * chrome.
  */
 type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 
@@ -171,6 +173,37 @@ function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
 }
 
 /**
+ * All nine spell slot levels, from whatever the sheet stored.
+ *
+ * The schema requires every level once `slots` is present, so a sheet stored
+ * with none, or a block the editor makes up for a sheet with no spellcasting,
+ * would have its first slot edit, or its first save, refused.
+ */
+function withAllSlotLevels(stored: unknown): DnD5eSpellSlots {
+  const source = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const levels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((level) => {
+    const slot = (typeof source[level] === 'object' && source[level] !== null ? source[level] : {}) as Record<string, unknown>;
+    return [level, { total: count(slot.total), expended: count(slot.expended) }] as const;
+  });
+  return Object.fromEntries(levels) as unknown as DnD5eSpellSlots;
+}
+
+/**
+ * Drop the separate `languages` list a sheet written before 1.3.0 carries.
+ *
+ * The form's proficiency boxes are read from the stored sheet, which puts
+ * those languages in the Languages box, so from here on the box is the only
+ * copy. Kept, it would put a language back on every save after the player
+ * deleted it from the box.
+ */
+function withoutOrphanLanguages(sheet: DnD5eFormData): DnD5eFormData {
+  const settled = { ...sheet };
+  delete (settled as Record<string, unknown>).languages;
+  return settled;
+}
+
+/**
  * DnD5eCharacterEditor - Editable D&D 5e character sheet
  */
 export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
@@ -191,7 +224,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Form state - initialize with character data
   const [formData, setFormData] = useState<DnD5eFormData>(() => ({
-    ...withoutOrphanFeatures(data),
+    ...withoutOrphanLanguages(withoutOrphanFeatures(data)),
     // Ensure nested objects exist.
     //
     // TODO(typing): `{}` is not a valid container — none of these has its keys,
@@ -204,17 +237,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     skills: (data.skills || {}) as DnD5eSkills,
     hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
     deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    // Same TODO(typing) as the containers above: this default omits `class`
-    // and its `slots` has none of the nine levels, both of which the type
-    // requires and the sheet below reads. Cast rather than corrected.
-    spellcasting: (data.spellcasting || {
-      ability: '',
-      spellSaveDC: 0,
-      spellAttackBonus: 0,
-      cantrips: [],
-      slots: {},
-      spells: [],
-    }) as DnD5eSpellcasting,
+    // Same TODO(typing) as the containers above: this default omits `class`,
+    // which the type requires. Cast rather than corrected.
+    spellcasting: (data.spellcasting
+      ? { ...data.spellcasting, slots: withAllSlotLevels(data.spellcasting.slots) }
+      : {
+          ability: '',
+          spellSaveDC: 0,
+          spellAttackBonus: 0,
+          cantrips: [],
+          slots: withAllSlotLevels(undefined),
+          spells: [],
+        }) as DnD5eSpellcasting,
     currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: data.inventory || [],
     attacks: data.attacks || [],
@@ -298,10 +332,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (isHexColor(data.themeColor)) {
-        // Custom hex color
-        setCustomColorHex(data.themeColor);
-        setIsCustomColor(true);
+      } else {
+        // Custom hex colour, a three-digit one expanded, so it opens as itself
+        // rather than as the default preset.
+        const hex = toStoredHexColor(data.themeColor);
+        if (hex) {
+          setCustomColorHex(hex);
+          setIsCustomColor(true);
+        }
       }
     }
   }, [data.themeColor]);
@@ -310,6 +348,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
     setIsCustomColor(true);
+    setErrors((prev) => ({ ...prev, themeColor: '' }));
   };
 
   // Handle preset color selection
@@ -667,6 +706,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       newErrors.characterName = 'Character name is required';
     }
 
+    // The server refuses a colour it cannot read, and the whole save with it.
+    if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
+      newErrors.themeColor = HEX_COLOUR_HINT;
+      setShowColorPicker(true);
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -698,7 +743,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Include color customization in saved data
       const updatedData = {
         ...formData,
-        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+        themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : selectedColor.name,
       };
 
       // Proficiencies.
@@ -935,9 +980,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                     }}
                     placeholder="#b91c1c"
+                    aria-label="Custom colour hex code"
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #b91c1c)</div>
+                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
 

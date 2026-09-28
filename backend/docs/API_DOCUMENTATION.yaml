@@ -3019,6 +3019,11 @@ paths:
         - If the character has no `gameSystem`, no validation occurs.
         - A new `tokenImageUrl` follows the rule on create (403 otherwise); the
           address already stored may be sent back unchanged.
+        - Send `updatedAt` as the character was loaded to have the save refused
+          with 409 if the character has changed since, by another save or by a
+          hit point or hit dice change made over the socket. Without it the
+          save is made whatever changed in between. A 200 response carries the
+          new `updatedAt` for the next save.
       operationId: updateCharacter
       security:
         - cookieAuth: []
@@ -3048,6 +3053,11 @@ paths:
                   type: string
                   deprecated: true
                   description: DEPRECATED - Cannot change gameSystem after creation. Will return 400 error.
+                updatedAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    The character's `updatedAt` as the caller loaded it. Optional. When sent and the character has changed since, the save is refused with 409 and nothing is written.
       responses:
         '200':
           description: Character updated
@@ -3087,6 +3097,21 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The character changed after the `updatedAt` sent. Nothing was saved; load the character again and reapply the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: CHARACTER_CHANGED
+                  message:
+                    type: string
 
     delete:
       tags:

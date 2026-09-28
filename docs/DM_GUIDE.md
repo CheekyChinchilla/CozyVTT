@@ -274,6 +274,8 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
+> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back: they are told, and the sheet opens again with your change on it. The same goes the other way when you are editing a sheet the player changes.
+
 **What each system offers.** The rolls on the menu depend on your campaign's game system, because not every system has something meaningful to compute from a stat block:
 
 | System | Stat-block rolls |

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.4.0
 
-Nothing to do beyond the usual upgrade, and nothing you have is removed. Four things you will notice:
+Nothing to do beyond the usual upgrade, and nothing you have is removed, with one exception: a field on a character sheet that its game system does not define is dropped the next time that sheet is saved (see **Character sheets keep only the fields the sheet defines** under Fixed). Fields that the built-in sheets of earlier versions wrote are moved to where the sheet reads them first. Four things you will notice:
 
 - **Fog of war now hides the map.** Areas you have not revealed are solid black for players from the moment the map loads, where they used to show the artwork through a tint. Every map you already have keeps fog on with the same areas revealed; a map you create from now on starts with fog off.
 - **Dynamic lighting now limits sight.** Every map you already have gets **Global Illumination** switched on, so it looks exactly as it did: everything in line of sight is lit. Untick it in Edit Map or at the top of the Lights panel when you want lights and darkvision to matter. A player, or a spectator, with no token on a lit map is now sent no tokens at all and sees darkness. A spectator cannot be given a token to look through, so to let one watch a lit map, turn dynamic lighting off for it.
@@ -90,6 +90,28 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 - **A display name is now checked by the server: 1 to 50 characters once spaces at either end are trimmed.** The sign-up and profile pages already limited names, but the server took a name of only spaces, which showed as a blank to everyone at the table, a name of any length, or a value that was not text at all, which failed with a server error. Signing up and editing a profile now refuse these with a message saying what is wrong. Names already stored are not changed.
 
 - **Accepting an invitation brings only characters that could join the campaign anyway.** The invitation offered, and the server accepted, a Flexible character for a campaign with a game system, and any character for a Flexible campaign, although assigning the same character from the Characters page refused both. Both now follow one rule: a character joins a campaign of its own game system, and a Flexible character a Flexible campaign. Characters already in a campaign stay where they are. Accepting the same invitation twice at the same moment now joins once and turns the second away with a message, where the second failed with a server error, and a request with a malformed character list is refused with a message. Accepting two invitations at once with the same character used to list it in both campaigns while it sat in one; now only one of them brings it.
+
+- **A Call of Cthulhu possession keeps notes that contain a dash.** The possessions box reads each line as "Item - notes", and cut a note like "sharp - old" short at its own dash as soon as anything in the box was edited. Only the first " - " on a line now separates the item from its notes.
+
+- **A D&D 5e character with no spellcasting details can be saved.** A character created through the API, or imported, without them could not be saved from the editor at all; the built-in templates always include them. It now saves, with every spell slot level empty.
+
+- **Clearing a text box no longer stops a sheet saving.** Emptying **Background** or **Alignment** on a D&D 5e or Pathfinder 2e sheet, **Deity** or an innate spell's frequency on a Pathfinder 2e sheet, or **Sex**, **Residence**, **Birthplace** or a weapon's skill on a Call of Cthulhu sheet made the server refuse the whole save. An empty box is now saved as empty.
+
+- **Saving a sheet no longer puts back hit points the DM took.** A sheet open to read did not follow hit points changed from the roster, and saving from the editor wrote back every value it had opened with, undoing the DM's change. An open sheet now follows those changes. A save made from a sheet that has changed since it was opened is refused, with a message, and the sheet opens again showing the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save either. A program saving characters through the API can ask for the same check by sending the `updatedAt` it loaded; one that leaves it out saves as before.
+
+- **A save the server refuses no longer throws away your edits.** On the full-page character editor, a refused save replaced the sheet with "Failed to Load Character", and everything typed since the last save was lost. The reason is now shown in a message and the sheet stays open with your edits, so you can correct them and save again.
+
+- **A short colour code such as `#fff` works as a sheet's header colour.** A header colour must now be a preset or a `#RRGGBB` colour, so the three-digit form every browser also understands is saved in its six-digit form, and one already on a sheet opens as that colour. A colour that is not finished, such as `#12`, is pointed out in the colour picker before anything is sent, where it used to stop the whole save.
+
+- **A D&D 5e character made before 1.3.0 keeps its proficiencies and languages.** The built-in templates of those versions stored them as plain lists the sheet did not read, so it showed none, and the first save in the editor replaced them with four empty boxes. The sheet now reads them into the boxes, so they show and are saved. Saving any character made before 1.3.0 also moves its other older fields to where the sheet reads them, as the `migrate:sheet-fields` command does, so nothing depends on having run the command first.
+
+- **Call of Cthulhu skills inside a group can be edited.** Changing **Fighting (Brawl)**, a **Firearms** skill, an **Other Language**, a **Science** or a custom skill in the editor did nothing: the box went back to its old value and the change was not saved. These now save like every other skill.
+
+- **Adding a cantrip, spell or focus spell no longer stops a Pathfinder 2e sheet saving.** Each was added without details the server requires, so the save was refused, and so was every save after it until the entry was deleted. Turning on spellcasting for a character, and saving a character with no spellcasting at all, were refused the same way. All of them save now.
+
+- **Pathfinder 2e spell slots show how many are used.** The **Used** count under each spell rank in the Pathfinder 2e editor never reached the read-only sheet, which always showed none used. The editor now saves it where the sheet reads it, and a count recorded on 1.4.0 is carried across the first time the sheet is saved.
+
+- **Pathfinder 2e feat descriptions show on the sheet.** The box under each feat in the Pathfinder 2e editor was saved, but only ever shown in the editor. The read-only sheet now shows it under the feat's name.
 
 - **A wall changed through the API shows up on open pages at once.** The API's wall routes saved the change without telling anyone, so an open page kept its old walls, and on a lit map its old line of sight, until it loaded the map again. They now tell every open page as a change made on the map does.
 
@@ -209,7 +231,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Only the DM's messages are shown as DM messages.** A player could send a chat message marked as coming from the DM, and it appeared with the DM's gold styling and badge. Who sent it is now taken from the sender's role in the campaign, not from the message.
 
-- **Character sheets keep only the fields the sheet defines.** A sheet saved through the API could carry extra keys the game system never defined, and they were stored untouched. The server now stores exactly what the sheet schema accepts. The header colour chosen on a sheet is part of that, so it is kept.
+- **Character sheets keep only the fields the sheet defines.** A sheet could carry extra keys the game system never defined, and they were stored untouched: any key a program sent through the API, and a few the sheets themselves wrote into places nothing reads. The server now stores exactly what the sheet schema accepts, so such a key is dropped the next time the sheet is saved. Everything the editors let you fill in is defined, including the header colour, a Pathfinder 2e feat's description and a Call of Cthulhu custom skill's name, and the fields the built-in sheets of versions before 1.3.0 wrote are moved to where the sheet reads them before anything is dropped.
 
 - **Campaign settings are checked before they are saved.** Updating a campaign accepted any value for any field: a name of any length, an unknown status, atmosphere settings that were not even an object. Each field is now validated and a bad one is refused with a message saying which.
 

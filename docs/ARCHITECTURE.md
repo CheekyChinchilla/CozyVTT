@@ -668,9 +668,12 @@ Character data round-trips as JSON:
 
 ```
 User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
-→ CharacterEditorPage sends PUT /api/characters/:id { data }
+→ CharacterEditorPage sends PUT /api/characters/:id { data, updatedAt }
+→ Backend moves any pre-1.3.0 fields into the ones the sheet reads (utils/sheetFieldMigrations)
 → Backend validates data against the game-system Zod schema (mostly optional fields)
-→ Stored as character.data in PostgreSQL
+→ The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
+  does not declare is dropped; a stale updatedAt (the character changed since the
+  sheet was loaded) is refused with 409 and nothing is written
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```
