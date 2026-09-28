@@ -1116,6 +1116,27 @@ describe('spirit layer filtering', () => {
     dm.disconnect();
   });
 
+  // A hidden spirit token does not take its player across, so they may not
+  // act on it. token.move.start and token.move.end refuse; the frames in
+  // between used to go out anyway, to the DM and any player who could see
+  // the plane.
+  it('drops the drag frames of a player who has not crossed over', async () => {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+    const tokens = seedTokens();
+    tokens[2].controlledBy = player1Id;
+    tokens[2].visible = false;
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const quiet = expectNoEvent(dm, 'token.moved', 800);
+    player.emit('token.move', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 16, y: 16 });
+    await expect(quiet).resolves.toBeUndefined();
+
+    player.disconnect();
+    dm.disconnect();
+  });
+
   it('a player without control cannot move a spirit token', async () => {
     // Spirit layer globally enabled (so the player can SEE it), but the token
     // is not theirs — the controlledBy permission check still applies.
