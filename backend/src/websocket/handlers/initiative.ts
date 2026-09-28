@@ -6,7 +6,7 @@
 // ============================================
 
 import { Server } from 'socket.io';
-import { AuthenticatedSocket } from '../auth';
+import { AuthenticatedSocket, type AuthenticatedFields } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import {
@@ -33,12 +33,10 @@ import { campaignSockets, getSocketInstance } from '../utils';
 import { diceRollLimiter, stateRequestAllowed } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
-interface Recipient {
-  userId?: string;
-  role?: string;
+type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
   emit(event: 'initiative.state', state: CombatState): unknown;
   emit(event: 'dice.rolled', roll: Record<string, unknown>): unknown;
-}
+};
 
 /**
  * The sockets in the campaign that are sent `token` at all: every DM's, and

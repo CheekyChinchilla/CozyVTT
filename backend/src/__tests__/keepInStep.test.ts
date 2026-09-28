@@ -1,5 +1,5 @@
 /**
- * Two facts recorded in more than one place, with nothing keeping them in
+ * Facts recorded in more than one place, with nothing keeping them in
  * step but a comment. A comment is not a check, so these are.
  *
  * The nginx stamp. `docker compose up -d --build` leaves a running container
@@ -17,6 +17,11 @@
  * in its own awk step, apart from the Admin Dashboard's restore, and has to
  * end the load with the same statements, or a backup restored from the
  * command line brings back what the dashboard's restore removes.
+ *
+ * The combat state. The server sends it and the client reads it, and each
+ * package declares it; the first field added to it after the split already
+ * disagreed (required on one side, optional on the other). The fields are
+ * compared here, comments aside.
  */
 
 import crypto from 'crypto';
@@ -86,5 +91,25 @@ describe('backend/scripts/restore.sh', () => {
       }
       expect(lines).toContain(statement);
     }
+  });
+});
+
+/** An interface's fields, one per line, with comments and spacing removed. */
+function interfaceFields(source: string, name: string): string[] {
+  const m = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(source);
+  if (!m) throw new Error(`no interface ${name}; update this test with the declaration`);
+  return m[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+describe('the combat state the server sends and the client reads', () => {
+  const server = read('backend/src/websocket/initiativeState.ts');
+  const client = read('frontend/src/types/index.ts');
+
+  it.each(['CombatantEntry', 'CombatState'])('%s has the same fields on both sides', (name) => {
+    expect(interfaceFields(client, name)).toEqual(interfaceFields(server, name));
   });
 });

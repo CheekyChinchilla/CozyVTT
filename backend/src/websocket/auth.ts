@@ -22,6 +22,15 @@ export interface AuthenticatedSocket extends Socket {
 }
 
 /**
+ * The fields authentication sets on a socket. `fetchSockets()` hands back a
+ * RemoteSocket, whose type does not know about them; with the default
+ * in-memory adapter the objects are the sockets themselves, so the fields are
+ * there to read and write. Casting to this, not to a literal of its own,
+ * keeps the fields declared once.
+ */
+export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId'>;
+
+/**
  * Authenticate an incoming WebSocket connection via the shared Express session.
  * Attaches userId to the socket on success.
  */

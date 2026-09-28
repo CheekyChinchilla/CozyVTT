@@ -1310,8 +1310,8 @@ export interface DmTransferredBroadcast {
 
 export interface CombatantEntry {
   tokenId: string;
-  /** The map the token is on. */
-  mapId?: string;
+  /** The map the token is on; the server always sends it. */
+  mapId: string;
   name: string;
   imageUrl: string;
   initiative: number | null;

@@ -19,6 +19,8 @@ import { renderHook } from '@testing-library/react';
 class FakeSocket {
   handlers = new Map<string, Set<(data: unknown) => void>>();
   connected = false;
+  /** How many times the state was asked for on this socket. */
+  requests = 0;
 
   on(event: string, cb: (data: unknown) => void) {
     if (!this.handlers.has(event)) this.handlers.set(event, new Set());
@@ -34,8 +36,9 @@ class FakeSocket {
   disconnect() {
     this.connected = false;
   }
-  emit() {
-    /* outbound, irrelevant here */
+  emit(event: string) {
+    // Outbound: only the state requests are counted.
+    if (event === 'initiative.request_state') this.requests += 1;
   }
   fire(event: string, data?: unknown) {
     for (const cb of this.handlers.get(event) ?? []) cb(data);
@@ -64,7 +67,10 @@ vi.mock('@/stores/gameStore', () => ({
 
 // The hook reads the client off the context; the provider itself is not under
 // test, so stand in for it with the real singleton client.
-let clientForContext: any;
+/** The socket client the app uses; the tests import the module fresh each time. */
+type SocketClient = (typeof import('@/services/socket'))['default'];
+
+let clientForContext: SocketClient | undefined;
 let contextStatus = 'connected';
 let contextJoinedEpoch = 1;
 vi.mock('@/contexts/WebSocketContext', () => ({
@@ -88,7 +94,7 @@ async function connect(client: { connect: (id: string) => Promise<void> }, campa
 }
 
 describe('useInitiativeSync listener lifecycle', () => {
-  let client: any;
+  let client: SocketClient;
   let useInitiativeSync: typeof import('../useInitiativeSync').useInitiativeSync;
 
   beforeEach(async () => {
@@ -152,7 +158,7 @@ describe('useInitiativeSync listener lifecycle', () => {
  * state was never asked for again: the tracker froze until a reload.
  */
 describe('useInitiativeSync across a dropped connection', () => {
-  let client: any;
+  let client: SocketClient;
   let useInitiativeSync: typeof import('../useInitiativeSync').useInitiativeSync;
 
   beforeEach(async () => {
@@ -168,9 +174,8 @@ describe('useInitiativeSync across a dropped connection', () => {
 
   it('asks for the state once the campaign is joined, and again after each rejoin, never before', async () => {
     await connect(client);
-    const requests = () => (current() as any).requests;
-    (current() as any).requests = 0;
-    current().emit = function (this: any, event: string) { if (event === 'initiative.request_state') this.requests += 1; } as any;
+    const requests = () => current().requests;
+    current().requests = 0;
 
     contextJoinedEpoch = 0;
     const hook = renderHook(() => useInitiativeSync());

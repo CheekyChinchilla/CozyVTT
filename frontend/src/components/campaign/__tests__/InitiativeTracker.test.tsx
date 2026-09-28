@@ -32,7 +32,7 @@ const token = (id: string, name: string): Token => ({
 });
 
 const entry = (tokenId: string, name: string, initiative: number): CombatantEntry => ({
-  tokenId, name, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
+  tokenId, mapId: 'map-1', name, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
 });
 
 beforeEach(() => {
