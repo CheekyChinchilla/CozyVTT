@@ -55,3 +55,35 @@ describe('the name a stat-block roll is filed under', () => {
     expect(rollScimitar(token({ visible: false }))).toBe('Unknown creature');
   });
 });
+
+function rollCustom(t: Token): string | undefined {
+  const onRoll = vi.fn();
+  render(<NpcRollPicker token={t} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+  fireEvent.change(screen.getByPlaceholderText('e.g. 2d6+3'), { target: { value: '1d20+2' } });
+  fireEvent.click(screen.getByTitle('Roll'));
+  expect(onRoll).toHaveBeenCalledTimes(1);
+  return (onRoll.mock.calls[0] as [string, string, string | undefined])[2];
+}
+
+// The custom roll box at the foot of the picker files its roll under the
+// token's name too, and the guide promises the same rule there.
+describe('the name a custom roll from the picker is filed under', () => {
+  it("is the token's for an ordinary creature", () => {
+    expect(rollCustom(token({}))).toBe('Goblin Boss');
+  });
+
+  it.each([
+    ['an obscured token', { obscured: true }],
+    ['a hidden token', { visible: false }],
+    ['a token on the spirit layer, which players on the material plane are not sent', { layer: TokenLayer.SPIRIT }],
+  ])('is Unknown creature for %s', (_what, over) => {
+    expect(rollCustom(token(over as Partial<Token>))).toBe('Unknown creature');
+  });
+});
+
+describe('a stat-block roll for a spirit-plane creature', () => {
+  it('is filed under Unknown creature, since the dice log reaches players on the material plane', () => {
+    expect(rollScimitar(token({ layer: TokenLayer.SPIRIT }))).toBe('Unknown creature');
+  });
+});
+

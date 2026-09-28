@@ -283,7 +283,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 | Call of Cthulhu 7e | Custom Roll only — a percentile system has no d20 rolls to offer |
 | Shadowrun 6e | Custom Roll only — a dice-pool system has no d20 rolls to offer |
 
-If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured or hidden token is named *Unknown creature* there.
+If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured or hidden token, or one on the spirit layer, is named *Unknown creature* there, since the Dice panel reaches players who are not sent it.
 
 *Screenshot pending — NPC roll picker with stat-block-derived options.*
 
