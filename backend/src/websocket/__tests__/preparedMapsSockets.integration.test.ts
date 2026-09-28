@@ -134,3 +134,52 @@ describe('a token moved on a prepared map', () => {
     player.disconnect();
   });
 });
+
+// A player's writes follow the same rule as their reads: a map the DM has
+// prepared is not theirs to change until it is shown, even where it holds a
+// token they control or an unlocked door.
+describe('a player writing to a prepared map', () => {
+  const SCOUT = 'scout-token';
+  const door = { id: randomUUID(), x1: 0, y1: 50, x2: 50, y2: 50, type: 'door-closed' };
+  beforeEach(() => prisma.map.update({
+    where: { id: preparedId },
+    data: {
+      wallSegments: [wall, door],
+      tokens: [{
+        id: SCOUT, name: 'Scout', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 },
+        layer: 'token', visible: true, controlledBy: playerId, rotation: 0, conditions: [], metadata: {},
+      }],
+    },
+  }));
+  const stored = () => prisma.map.findUniqueOrThrow({ where: { id: preparedId }, select: { tokens: true, wallSegments: true } });
+
+  it.each(['token.move.start', 'token.move.end'])('refuses %s on their own token there', async (event) => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    player.emit(event, { tokenId: SCOUT, mapId: preparedId, x: 4, y: 4 });
+    expect((await refused).message).toBe('Map not found');
+    const tokens = (await stored()).tokens as Array<{ id: string; position: { x: number } }>;
+    expect(tokens.find((t) => t.id === SCOUT)?.position.x).toBe(1);
+    player.disconnect();
+  });
+
+  it('drops their drag frames for a token there', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const quiet = expectNoEvent(dm, 'token.moved', 800);
+    player.emit('token.move', { tokenId: SCOUT, mapId: preparedId, x: 4, y: 4 });
+    await quiet;
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('refuses opening a door there', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('wall:update', { mapId: preparedId, segment: { ...door, type: 'door-open' } });
+    expect((await refused).message).toBe('Map not found');
+    const walls = (await stored()).wallSegments as Array<{ id: string; type: string }>;
+    expect(walls.find((w) => w.id === door.id)?.type).toBe('door-closed');
+    player.disconnect();
+  });
+});

@@ -112,8 +112,13 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, wallSegments: true } });
-      if (!map || map.campaignId !== socket.campaignId) {
+      // A player may toggle doors only on the map the campaign is showing;
+      // a prepared map is the DM's until they switch to it.
+      const map = await prisma.map.findUnique({
+        where: { id: mapId },
+        select: { campaignId: true, wallSegments: true, campaign: { select: { currentMapId: true } } },
+      });
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         socket.emit('error', { message: 'Map not found' });
         return;
       }

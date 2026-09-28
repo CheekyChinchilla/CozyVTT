@@ -167,12 +167,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       dragRecipients.delete(tokenId);
 
       // Fetch the map, with the campaign's status for the pause rule below
+      // and its current map: a map the DM is preparing is not a player's to
+      // touch until it is shown (canReadMap, the rule its fetch applies)
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        include: { campaign: { select: { status: true } } },
+        include: { campaign: { select: { status: true, currentMapId: true } } },
       });
 
-      if (!map || map.campaignId !== socket.campaignId) {
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         socket.emit('error', { message: 'Map not found' });
         return;
       }
@@ -241,10 +243,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // instead of two is the meaningful per-frame win).
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true, campaign: { select: { status: true } } },
+        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true, campaign: { select: { status: true, currentMapId: true } } },
       });
 
-      if (!map || map.campaignId !== socket.campaignId) {
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         return; // Silently ignore invalid map during rapid updates
       }
 
@@ -314,13 +316,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Fetch the map, with the campaign's status for the pause rule below
-      // and its current map for who is told
+      // and its current map, for whether this socket may move tokens on it
+      // and who is told
       const map = await prisma.map.findUnique({
         where: { id: mapId },
         include: { campaign: { select: { status: true, currentMapId: true } } },
       });
 
-      if (!map || map.campaignId !== socket.campaignId) {
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         socket.emit('error', { message: 'Map not found' });
         return;
       }

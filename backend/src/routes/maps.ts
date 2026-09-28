@@ -1137,9 +1137,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const updates = req.body;
 
     // Fetch the map, with the campaign's status for the pause rule below
+    // and its current map for the read rule
     const map = await prisma.map.findUnique({
       where: { id: mapId },
-      include: { campaign: { select: { status: true } } },
+      include: { campaign: { select: { status: true, currentMapId: true } } },
     });
 
     if (!map) {
@@ -1171,6 +1172,13 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
         error: 'Forbidden',
         message: 'You are not a member of this campaign',
       });
+    }
+
+    // A player may change tokens only on the map the campaign is showing, as
+    // they may only fetch that one: a prepared map answers as if it were not
+    // here, even where it holds a token they control.
+    if (!canReadMap(membership.role, mapId, map.campaign.currentMapId)) {
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
     }
 
     // Get existing tokens array

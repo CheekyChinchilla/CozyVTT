@@ -261,8 +261,12 @@ list holds the current map alone), `GET .../maps/:id` and its `walls` and
 `lights` (404 for any other map), the `maps` array of
 `GET /api/campaigns/:campaignId`, and the `walls:request`, `lights:request`,
 `fog:request_state` and `exploration:request` socket events (answered with
-nothing). A map the DM has prepared but not switched to is therefore the DM's
-alone, tokens left visible on it included.
+nothing). It gates writes too: a player's `PUT .../maps/:id/tokens/:tokenId`
+(404), `token.move.start`, `token.move` and `token.move.end`, and a door
+toggled with `wall:update` (answered with `error`, frames dropped) all refuse
+any map but the current one, even a token the player controls on it. A map the
+DM has prepared but not switched to is therefore the DM's alone, tokens left
+visible on it included.
 
 ## Reading an asset: access follows use
 

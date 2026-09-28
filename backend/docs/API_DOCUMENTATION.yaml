@@ -4077,7 +4077,9 @@ paths:
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
         `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
-        DM may move tokens at any time.
+        DM may move tokens at any time. On a map the campaign is not showing, a
+        player's update answers 404, as fetching that map does, even for a
+        token they control; the DM may update tokens on any map.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,

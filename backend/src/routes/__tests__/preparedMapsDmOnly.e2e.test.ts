@@ -119,6 +119,26 @@ describe('a prepared map', () => {
     expect(ids(mine.body.campaign.maps)).toEqual([preparedId, shownId].sort());
   });
 
+  // The DM may stage the party's tokens on a map before showing it. A
+  // player's own token there is still not theirs to move until it is shown,
+  // and the reply to a move carried the map it was on.
+  it("refuses a player's move of their own token on it, and tells them nothing of it", async () => {
+    const scout = { ...aboleth, id: 'scout', name: 'Scout', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, controlledBy: playerId };
+    await prisma.map.update({ where: { id: preparedId }, data: { tokens: [aboleth, scout] } });
+    const res = await player
+      .put(`/api/campaigns/${campaignId}/maps/${preparedId}/tokens/scout`)
+      .send({ position: { x: 4, y: 4 } });
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain('Aboleth');
+    const stored = await prisma.map.findUniqueOrThrow({ where: { id: preparedId }, select: { tokens: true } });
+    expect((stored.tokens as Array<{ id: string; position: { x: number } }>).find((t) => t.id === 'scout')?.position.x).toBe(1);
+    // The DM may move it.
+    const theirs = await dm
+      .put(`/api/campaigns/${campaignId}/maps/${preparedId}/tokens/scout`)
+      .send({ position: { x: 4, y: 4 } });
+    expect(theirs.status).toBe(200);
+  });
+
   it('reaches the player once the DM switches to it', async () => {
     expect((await dm.put(`/api/campaigns/${campaignId}/maps/${preparedId}/set-current`)).status).toBe(200);
     const theirs = await player.get(`/api/campaigns/${campaignId}/maps/${preparedId}`);
