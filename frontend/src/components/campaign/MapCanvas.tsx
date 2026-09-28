@@ -81,7 +81,7 @@ import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenControl';
 import { dmTokenControls } from '@/utils/tokenControls';
-import { tokenCopyRequest, clampTokenPosition } from '@/utils/tokenCopy';
+import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
@@ -4097,6 +4097,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       // two tokens on one sheet would follow the same hit
                       // points and both count as that player's own.
                       characterId: null,
+                      controlledBy: copyController(token.controlledBy, campaign?.memberships),
                       hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
                       conditions: [],
                     });

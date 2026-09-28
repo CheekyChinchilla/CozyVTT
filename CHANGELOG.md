@@ -74,6 +74,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Duplicate works on a token whose controller has left or stopped playing.** A token keeps the name of whoever controlled it after they leave the campaign, become a spectator or take over as DM, and duplicating it was refused because only a player can be given a token. The copy is now made with no controller in that case.
+
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.
 
 - **Session timeouts and the log level set in `.env` now apply under Docker.** The Docker setup never handed `SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` or `LOG_LEVEL` to the backend, so setting them in `.env` did nothing on a Docker install and nothing said so; they reach the backend now, with the same defaults as before, and a check keeps the example env file and the Docker setup in step. The guides also now say that `docker compose restart` keeps the old settings (apply a changed `.env` with `docker compose up -d`) and that `BACKUP_DIR` applies only to an install without Docker.
