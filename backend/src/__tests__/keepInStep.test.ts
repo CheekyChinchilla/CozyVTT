@@ -12,6 +12,11 @@
  * The database client. The backend image installs a pinned PostgreSQL client
  * major for pg_dump and psql, and the server image is pinned separately in
  * three files. A client older than the server cannot dump it.
+ *
+ * The combat state. The server sends it and the client reads it, and each
+ * package declares it; the first field added to it after the split already
+ * disagreed (required on one side, optional on the other). The fields are
+ * compared here, comments aside.
  */
 
 import crypto from 'crypto';
@@ -65,5 +70,25 @@ describe('the PostgreSQL client the backend image installs', () => {
 
   it('is not older than the server image, or pg_dump refuses to dump it', () => {
     expect(clients[0]).toBeGreaterThanOrEqual(servers[0]);
+  });
+});
+
+/** An interface's fields, one per line, with comments and spacing removed. */
+function interfaceFields(source: string, name: string): string[] {
+  const m = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(source);
+  if (!m) throw new Error(`no interface ${name}; update this test with the declaration`);
+  return m[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+describe('the combat state the server sends and the client reads', () => {
+  const server = read('backend/src/websocket/initiativeState.ts');
+  const client = read('frontend/src/types/index.ts');
+
+  it.each(['CombatantEntry', 'CombatState'])('%s has the same fields on both sides', (name) => {
+    expect(interfaceFields(client, name)).toEqual(interfaceFields(server, name));
   });
 });

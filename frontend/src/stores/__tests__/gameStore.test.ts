@@ -205,7 +205,7 @@ describe('combat state', () => {
   it('does not re-render turn subscribers when only a combatant HP ticks', () => {
     let renders = 0;
     const combatants = [
-      { tokenId: 'a', name: 'A', imageUrl: '', initiative: 10, hp: { current: 9, max: 10, temp: 0 }, type: 'npc' as const, disposition: null },
+      { tokenId: 'a', mapId: 'map-1', name: 'A', imageUrl: '', initiative: 10, hp: { current: 9, max: 10, temp: 0 }, type: 'npc' as const, disposition: null },
     ];
     useGameStore.getState().setCombatState(makeCombat({ combatants }));
 
