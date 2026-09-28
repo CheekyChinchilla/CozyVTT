@@ -60,6 +60,8 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // The table is on this map; a player is sent the order for no other.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   dm = request.agent(app);
   expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();

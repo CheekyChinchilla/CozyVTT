@@ -26,6 +26,7 @@ let p1Id: string;
 let specId: string;
 let campaignId: string;
 let mapId: string;
+let cryptId: string;
 let dmCookie: string;
 let p1Cookie: string;
 let specCookie: string;
@@ -33,7 +34,7 @@ let specCookie: string;
 type Entry = { tokenId: string; hp: { current: number; max: number; temp: number } | null; name: string; type?: string };
 type State = { active: boolean; currentTokenId: string | null; combatants: Entry[] };
 
-const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled', SPIRIT = 'spirit';
+const HERO = 'hero', GOBLIN = 'goblin', SHOWN = 'shown', HIDDEN = 'hidden', VEILED = 'veiled', SPIRIT = 'spirit', LURKER = 'lurker';
 const hp = (current: number, max: number) => ({ current, max, temp: 0 });
 
 beforeAll(async () => {
@@ -68,6 +69,16 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // The map the table is showing; a player is sent that one and no other.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
+  // A map the DM has prepared, with a visible creature waiting on it.
+  cryptId = (await prisma.map.create({
+    data: {
+      campaignId, name: 'The Crypt', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
+      width: 10, height: 10, gridSize: 50, annotations: [],
+      tokens: [{ ...base, id: LURKER, name: 'Crypt Lurker', position: { x: 1, y: 1 }, visible: true, controlledBy: null, hp: hp(9, 9), showHpBar: true }],
+    },
+  })).id;
   server = await createWsTestServer();
   [dmCookie, p1Cookie, specCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(specId)]);
 });
@@ -233,6 +244,43 @@ describe("an initiative roll's dice log entry", () => {
     const roll = await toP1;
     expect(roll.characterName).toBe('Goblin');
     expect(roll.purpose).toBe('Goblin Initiative');
+
+    dm.disconnect();
+    p1.disconnect();
+  });
+});
+
+// A combatant follows its token, so the DM can add one standing on a map the
+// table is not showing, or move one there mid-fight. A player is not sent that
+// map at all, so the order must not name what stands on it, nor its roll.
+describe('a combatant on a map the campaign is not showing', () => {
+  it('is listed to the DM and not to a player', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const added = waitForEvent<State>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: LURKER, mapId: cryptId });
+    expect(byId(await added, LURKER)?.name).toBe('Crypt Lurker');
+
+    const toP1 = waitForEvent<State>(p1, 'initiative.state');
+    p1.emit('initiative.request_state');
+    expect(byId(await toP1, LURKER)).toBeUndefined();
+
+    dm.disconnect();
+    p1.disconnect();
+  });
+
+  it("has its initiative roll reach the DM and not a player", async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const p1 = await server.connectAndAuth(p1Cookie, campaignId);
+    const added = waitForEvent<State>(dm, 'initiative.state');
+    dm.emit('initiative.add', { tokenId: LURKER, mapId: cryptId });
+    await added;
+
+    const toDm = waitForEvent<{ characterName: string }>(dm, 'dice.rolled');
+    const silence = expectNoEvent(p1, 'dice.rolled', 800);
+    dm.emit('initiative.roll', { tokenId: LURKER, mapId: cryptId });
+    expect((await toDm).characterName).toBe('Crypt Lurker');
+    await expect(silence).resolves.toBeUndefined();
 
     dm.disconnect();
     p1.disconnect();
