@@ -14,7 +14,7 @@ import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { getState as getCombatState } from '../initiativeState';
 import { resendInitiativeState } from './initiative';
-import { campaignSockets } from '../utils';
+import { bestEffort, campaignSockets } from '../utils';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -53,26 +53,23 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         timestamp: new Date().toISOString(),
       });
 
-      // Also broadcast updated filtered map data so clients update their spirit layer rendering
-      // Fetch the campaign's current map to send role-filtered updates
-      const campaignForMap = await prisma.campaign.findUnique({
-        where: { id: socket.campaignId },
-        select: { currentMapId: true },
-      });
-
-      if (campaignForMap?.currentMapId) {
-        const currentMap = await prisma.map.findUnique({
-          where: { id: campaignForMap.currentMapId },
+      // Also broadcast updated filtered map data so clients update their spirit layer rendering.
+      // The change is saved by now: a failure to tell the table is logged,
+      // and the chat notice below still goes out.
+      const campaignId = socket.campaignId;
+      await bestEffort('spirit_layer.toggle re-send', async () => {
+        const campaignForMap = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { currentMapId: true },
         });
-
-        if (currentMap) {
-          await broadcastMapData(io, socket.campaignId, currentMap);
-        }
+        if (!campaignForMap?.currentMapId) return;
+        const currentMap = await prisma.map.findUnique({ where: { id: campaignForMap.currentMapId } });
+        if (currentMap) await broadcastMapData(io, campaignId, currentMap);
         // Which plane a player sees decides which combatants they are sent
-        if (getCombatState(socket.campaignId).combatants.length > 0) {
-          await resendInitiativeState(io, socket.campaignId);
+        if (getCombatState(campaignId).combatants.length > 0) {
+          await resendInitiativeState(io, campaignId);
         }
-      }
+      });
 
       // Send system message
       await sendSystemMessage(
@@ -168,21 +165,26 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       // their plane, in their sight on a lit map), and never with the DM's
       // notes. This used to hand every player the whole token.
       const toggled = { mapId, tokenId, visible, token, toggledBy: socket.userId, timestamp: new Date().toISOString() };
-      for (const s of await campaignSockets(io, socket.campaignId)) {
-        if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
-      }
-      // Only when this is the map the table is on: map.changed puts every
-      // client onto the map it carries.
-      const campaign = await prisma.campaign.findUnique({ where: { id: socket.campaignId }, select: { currentMapId: true } });
-      if (campaign?.currentMapId === mapId) {
-        await broadcastMapData(io, socket.campaignId, { ...map, tokens: toJson(updatedTokens) });
-      }
-      // Any token: revealing or hiding a player's own spirit-plane token
-      // moves them between planes, which changes what they are sent of the
-      // whole order, not only an entry of that token.
-      if (getCombatState(socket.campaignId).combatants.length > 0) {
-        await resendInitiativeState(io, socket.campaignId);
-      }
+      const campaignId = socket.campaignId;
+      // The token is saved by now: a failure to tell the table is logged,
+      // not reported to the DM as a failed toggle.
+      await bestEffort('spirit_layer.token.toggle re-send', async () => {
+        for (const s of await campaignSockets(io, campaignId)) {
+          if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
+        }
+        // Only when this is the map the table is on: map.changed puts every
+        // client onto the map it carries.
+        const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+        if (campaign?.currentMapId === mapId) {
+          await broadcastMapData(io, campaignId, { ...map, tokens: toJson(updatedTokens) });
+        }
+        // Any token: revealing or hiding a player's own spirit-plane token
+        // moves them between planes, which changes what they are sent of the
+        // whole order, not only an entry of that token.
+        if (getCombatState(campaignId).combatants.length > 0) {
+          await resendInitiativeState(io, campaignId);
+        }
+      });
 
       logger.debug('spirit_layer.token.toggle', { tokenId, visible, userId: socket.userId, mapId });
     } catch (error) {
