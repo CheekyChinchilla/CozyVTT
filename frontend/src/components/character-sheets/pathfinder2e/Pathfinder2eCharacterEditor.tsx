@@ -51,6 +51,7 @@ import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { isHexColor } from '@/utils/styleAllowlists';
+import { readPf2eSpellSlots } from './spellcastingEntries';
 
 /**
  * The sheet as this editor holds it.
@@ -72,7 +73,7 @@ interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChr
  * tolerating a bare string. The schema wants objects, so that defence only ever
  * mattered for sheets written before the shape settled.
  */
-interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips' | 'slots'> {
+interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips'> {
   /**
    * Objects only. A stored ritual may be a bare name — that is all the schema
    * allowed until recently — so the initializer below normalises one into
@@ -81,15 +82,6 @@ interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'can
    */
   rituals?: { name: string; rank: number }[];
   cantrips?: (PF2eCantrip | string)[];
-  /**
-   * TODO(typing) — `used` vs `expended`. The slot boxes read and write `used`,
-   * but both the shared type and the schema call the field `expended`. On a
-   * character made from the blank template the save still succeeds, because
-   * the template seeds all ten ranks with `{ total, expended }` and `used`
-   * rides along as an extra key — but nothing else ever reads it, and
-   * `expended` stays at whatever it was. Verified against the validator.
-   */
-  slots?: Partial<Record<keyof PF2eSpellSlots, { total: number; expended?: number; used?: number }>>;
 }
 
 interface Pathfinder2eCharacterEditorProps {
@@ -227,7 +219,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     spellcasting: data.spellcasting ? {
       ...data.spellcasting,
       cantrips: data.spellcasting.cantrips || [],
-      slots: data.spellcasting.slots || {},
+      slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
       focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
       innateSpells: data.spellcasting.innateSpells || [],
@@ -1337,7 +1329,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
           <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Slots (Rank 1-10)</h3>
           <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] || { total: 0, used: 0 };
+              const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] ?? { total: 0, expended: 0 };
               return (
                 <div key={rank} className="bg-white border border-stone-200 rounded-lg p-2">
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
@@ -1345,7 +1337,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
                     <NumberField
 min={0} max={20} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                     <NumberField
-min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.used`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded text-xs text-center text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
+min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded text-xs text-center text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                   </div>
                 </div>
               );

@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Pathfinder 2e spell slots show how many are used.** The **Used** count under each spell rank in the Pathfinder 2e editor never reached the read-only sheet, which always showed none used. The editor now saves it where the sheet reads it, and a count recorded on 1.4.0 is carried across the first time the sheet is saved.
+
 - **Pathfinder 2e feat descriptions are kept and shown.** The box under each feat in the Pathfinder 2e editor is saved with the sheet again, and the read-only sheet now shows it under the feat's name. It only ever showed in the editor before.
 
 - **A wall changed through the API shows up on open pages at once.** The API's wall routes saved the change without telling anyone, so an open page kept its old walls, and on a lit map its old line of sight, until it loaded the map again. They now tell every open page as a change made on the map does.
