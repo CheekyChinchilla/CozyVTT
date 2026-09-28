@@ -4025,8 +4025,9 @@ paths:
         `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
         UUIDs. A `characterId` must name a character of this campaign, or the
         request is refused with 400; a token bound to a character is
-        controlled by that character's owner unless `controlledBy` says
-        otherwise.
+        controlled by that character's owner, while the owner is a player of
+        this campaign, unless `controlledBy` says otherwise. A character
+        owned by the DM or a spectator gives its token no controller.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -7660,9 +7661,10 @@ components:
           nullable: true
           description: >
             Who controls the token. Omitted with a characterId naming a
-            character of this campaign: that character's owner. Explicit
-            null: nobody (the DM). A value must name a player of this
-            campaign (400 otherwise).
+            character of this campaign: that character's owner if the owner
+            is a player of this campaign, otherwise nobody. Explicit null:
+            nobody (the DM). A value must name a player of this campaign (400
+            otherwise).
         rotation:
           type: number
           minimum: 0

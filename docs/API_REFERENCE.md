@@ -284,7 +284,7 @@ Create a new campaign. The authenticated user becomes the DM.
 
 ### `GET /api/campaigns/:id`
 
-Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/campaigns/:campaignId/maps/:id` and `GET /api/characters/:id`.
+Get a single campaign's details. The embedded `maps` and `characters` arrays contain **metadata only** (id, name, and summary fields) — not full map token/wall/fog/light blobs or full character sheets. Fetch those on demand via `GET /api/campaigns/:campaignId/maps/:id` and `GET /api/characters/:id`. As with the map list, a player or spectator is given only the map the campaign is currently showing.
 
 ---
 
@@ -665,7 +665,7 @@ Assign a character to a campaign.
 
 ### `GET /api/campaigns/:id/maps`
 
-List all maps in a campaign.
+List the campaign's maps. The DM gets every map. Anyone else gets only the map the campaign is currently showing, or an empty list when it is showing none: a map the DM has prepared stays theirs until they switch the table to it.
 
 ---
 
@@ -912,7 +912,7 @@ List the current user's favorited creatures in this campaign. DM only, like the 
 
 ### `POST /api/campaigns/:id/creatures/:creatureId/favorite`
 
-Toggle favorite for the current user in this campaign. If already favorited, removes the favorite; otherwise, adds it.
+Toggle favorite for the current user in this campaign (DM only). If already favorited, removes the favorite; otherwise, adds it.
 
 **Response:**
 ```json

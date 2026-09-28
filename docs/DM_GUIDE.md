@@ -219,7 +219,7 @@ Tokens support three display modes that control how they appear on the map:
 
 Set the display mode when creating a token, or change it later from the Token Manager or Edit Token.
 
-**Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the token's name. Player tokens are blue; creatures are red when hostile, teal when friendly and amber when neutral; objects and creatures with no disposition are grey — making it easy to distinguish dispositions at a glance. An obscured token is grey with a question mark whatever it is.
+**Colored-Letter Placeholders:** Tokens without an image show a colored circle with the first letter of the token's name. Player tokens are blue; creatures are red when hostile, teal when friendly and amber when neutral; objects and creatures with no disposition are grey — making it easy to distinguish dispositions at a glance. An obscured token keeps its color and letter on your own map, with a small **?** badge as a reminder; players who do not control it, and **Preview Player View**, see a grey circle with a question mark whatever it is.
 
 ### Editing Tokens During Play
 

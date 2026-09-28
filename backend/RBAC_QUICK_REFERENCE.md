@@ -108,7 +108,8 @@ identity from it and no sight on a lit map.
 and in the client alike; a token bound to one of their characters is not theirs
 by that alone. A token created with a `characterId` and no `controlledBy` is
 given the character's owner as controller, provided the character belongs to
-the campaign.
+the campaign and its owner is a `PLAYER` member of it (`canHoldTokens`). A
+character owned by the DM or a spectator gives its token no controller.
 
 #### Which token fields a player may change
 
