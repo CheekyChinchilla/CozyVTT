@@ -4084,7 +4084,8 @@ paths:
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,
-        that they may see (see the Token schema); `fogData` is null for them, and
+        that they may see (see the Token schema), and `token` is null when the
+        map would not send them the updated token (hidden, or on the other plane); `fogData` is null for them, and
         `spiritLayerUrl` too unless they can see the spirit layer (crossed over, or
         revealed campaign-wide).
 

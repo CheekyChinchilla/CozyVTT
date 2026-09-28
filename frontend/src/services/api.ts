@@ -881,7 +881,8 @@ class ApiClient {
     return response.data;
   }
 
-  async updateToken(campaignId: string, mapId: string, tokenId: string, data: UpdateTokenRequest): Promise<{ message: string; token: Token }> {
+  /** `token` is null when the caller is not sent the token, e.g. a player's own token the DM has hidden. */
+  async updateToken(campaignId: string, mapId: string, tokenId: string, data: UpdateTokenRequest): Promise<{ message: string; token: Token | null }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`, data);
     return response.data;
   }

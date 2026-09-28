@@ -557,7 +557,12 @@ describe('map token validation', () => {
       await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
       const res = await player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ position: { x: 15, y: 14 } });
       expect(res.status).toBe(200);
-      expect(res.body.token.position).toEqual({ x: 15, y: 14 });
+      const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      expect((stored.tokens as Array<{ id: string; position: object }>).find((t) => t.id === wispId)?.position).toEqual({ x: 15, y: 14 });
+      // Still hidden by the DM, so the reply leaves it out, as the map in the
+      // same reply does.
+      expect(res.body.token).toBeNull();
+      expect(JSON.stringify(res.body)).not.toContain('Wisp');
     });
   });
 
