@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
-import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema } from './tokens';
+import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -38,9 +38,9 @@ const PositionSchema = z.object({
 // stored value the routes refuse would otherwise vanish for players (the role
 // filter matches layers exactly) or fail the next time the DM edited it.
 const TokenLayerSchema = z.enum(['token', 'spirit']).default('token').catch('token');
-const TokenTypeSchema = z.enum(['player', 'npc', 'object']);
-const TokenDispositionSchema = z.enum(['friendly', 'neutral', 'hostile']).nullable().default(null).catch(null);
-const TokenDisplayModeSchema = z.enum(['pog', 'top-down', 'full-art']);
+const TokenTypeSchema = z.enum(TOKEN_TYPES);
+const TokenDispositionSchema = z.enum(TOKEN_DISPOSITIONS).nullable().default(null).catch(null);
+const TokenDisplayModeSchema = z.enum(TOKEN_DISPLAY_MODES);
 const ImportHpSchema = TokenHpSchema.nullable().optional().catch(null);
 
 // Conditions are kept one at a time, so an over-long entry costs itself and
@@ -114,7 +114,9 @@ const LightSourceSchema = z.object({
 
 const TokenSchema = z.object({
   id: z.string().max(100).optional(),
-  name: z.string().max(200),
+  // The token routes refuse a blank name; Duplicate and Edit Token send
+  // an imported token through them.
+  name: z.string().max(200).transform((name) => name.trim() || 'Unnamed token'),
   imageUrl: z.string().max(500).optional().default(''),
   position: PositionSchema,
   size: TokenSizeSchema.catch({ width: 1, height: 1 }),
@@ -132,7 +134,8 @@ const TokenSchema = z.object({
   sightRadius: TokenSightRadiusSchema.optional(),
   displayMode: TokenDisplayModeSchema.default('pog').catch('pog'),
   statBlock: StatBlockSchema.nullable().optional(),
-  creatureTemplateId: z.string().max(100).nullable().optional(),
+  // A UUID, as the token routes require; anything else links to nothing.
+  creatureTemplateId: z.uuid().nullable().optional().catch(null),
   obscured: z.boolean().optional().default(false),
 }).strip();
 
@@ -172,7 +175,7 @@ export const CreatureTemplateSchema = z.object({
   // Allowlisted like the live create and update paths; a value outside it
   // falls back to the importer's default instead of being stored as a fourth
   // disposition the app cannot draw
-  disposition: z.enum(['friendly', 'neutral', 'hostile']).optional().catch(undefined),
+  disposition: z.enum(TOKEN_DISPOSITIONS).optional().catch(undefined),
   displayMode: TokenDisplayModeSchema.optional().catch(undefined),
 }).strip();
 

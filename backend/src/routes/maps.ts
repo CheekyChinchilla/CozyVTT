@@ -11,7 +11,7 @@ import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
-import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema } from '../validators/tokens';
+import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
@@ -67,9 +67,9 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
 // The token shape lives in websocket/shared.ts — see the note there on why this
 // file no longer keeps its own copy.
 
-const VALID_TOKEN_TYPES = ['player', 'npc', 'object'];
-const VALID_TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
-const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
+const VALID_TOKEN_TYPES: readonly string[] = TOKEN_TYPES;
+const VALID_TOKEN_DISPOSITIONS: readonly string[] = TOKEN_DISPOSITIONS;
+const VALID_DISPLAY_MODES: readonly string[] = TOKEN_DISPLAY_MODES;
 
 /**
  * Map CRUD Routes
