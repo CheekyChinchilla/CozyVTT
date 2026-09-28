@@ -15,6 +15,7 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -195,6 +196,24 @@ describe("a character's token image", () => {
       await prisma.character.update({ where: { id: created.body.character.id }, data: { campaignId } });
     }
     expect((await player.get(`/api/assets/tokens/${victim}`)).status).toBe(403);
+  });
+
+  // The sheet editors send the stored picture back with every save. Once it
+  // could no longer be read (its campaign left, its asset deleted), every
+  // save of the sheet was refused, although nothing about the picture changed.
+  it('keeps a stored picture the member can no longer read when the save leaves it as it was', async () => {
+    const theirs = await makeAsset('TOKEN', 'USER', dmId, 'dm-picture-kept');
+    const created = await player.post('/api/characters').send({ name: 'Kept' });
+    expect(created.status).toBe(201);
+    await prisma.character.update({ where: { id: created.body.character.id }, data: { tokenImageUrl: `/api/assets/tokens/${theirs}` } });
+    const saved = await player.put(`/api/characters/${created.body.character.id}`).send({ name: 'Kept again', tokenImageUrl: `/api/assets/tokens/${theirs}` });
+    expect(saved.status).toBe(200);
+  });
+
+  it('may point at a picture that no longer exists, which names nothing', async () => {
+    const gone = randomUUID();
+    const created = await player.post('/api/characters').send({ name: 'From an old template', tokenImageUrl: `/api/assets/tokens/${gone}` });
+    expect(created.status).toBe(201);
   });
 
   it('may point at an asset the member can read', async () => {

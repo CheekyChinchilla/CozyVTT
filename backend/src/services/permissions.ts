@@ -701,10 +701,12 @@ export async function canReadAssetById(
  *
  * Pass the address exactly as it will be stored, since normalising can turn
  * an address that names no asset into one that does. An address that names
- * no asset, or none, is fine. So is the address already stored on the record
- * being updated (`stored`): refusing it would refuse every unrelated edit of
- * a record whose picture has since been deleted or become unreadable, and
- * keeping it grants nothing it did not already.
+ * no asset, or none, is fine, and so is one naming an asset that does not
+ * exist: it grants nothing, and a picture deleted since a template or a token
+ * was made would otherwise refuse every copy of it. So is the address already
+ * stored on the record being updated (`stored`): refusing it would refuse
+ * every unrelated edit of a record whose picture has since become unreadable,
+ * and keeping it grants nothing it did not already.
  */
 export async function canReferenceAsset(
   address: string | null | undefined,
@@ -716,5 +718,10 @@ export async function canReferenceAsset(
   if (stored !== undefined && address === stored) return true;
   const assetId = extractAssetId(address);
   if (!assetId) return true;
-  return canReadAssetById(assetId, userId, isAdmin);
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+  });
+  if (!asset) return true;
+  return canReadAsset(asset, userId, isAdmin);
 }
