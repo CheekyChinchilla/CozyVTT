@@ -765,7 +765,7 @@ normalisation may still hold a bare id, so clients should tolerate both when rea
 
 ### `GET /api/campaigns/:id/creatures`
 
-List creature templates available in this campaign (SRD + campaign-specific custom creatures). Any campaign member can list.
+List creature templates available in this campaign (SRD + campaign-specific custom creatures). DM only: a template carries the DM's notes, stat block and hit points.
 
 **Query params:**
 - `search` — Filter by name (case-insensitive partial match)
@@ -789,7 +789,7 @@ List creature templates available in this campaign (SRD + campaign-specific cust
 
 ### `GET /api/campaigns/:id/creatures/:creatureId`
 
-Get a single creature template. Any campaign member can view.
+Get a single creature template. DM only.
 
 ---
 
@@ -898,7 +898,7 @@ Duplicate any creature (including SRD) as a new custom creature in this campaign
 
 ### `GET /api/campaigns/:id/creatures/favorites/list`
 
-List the current user's favorited creatures in this campaign. Any campaign member can list their own favorites.
+List the current user's favorited creatures in this campaign. DM only, like the library it points into.
 
 **Response:**
 ```json
