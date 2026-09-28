@@ -29,7 +29,7 @@ import {
   type CombatantSource,
   type CombatState,
 } from '../initiativeState';
-import { campaignSockets, getSocketInstance } from '../utils';
+import { campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
 import { diceRollLimiter, stateRequestAllowed } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
@@ -54,10 +54,10 @@ async function recipientsSentToken(
   const recipients = (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   // A token on a map the table is not showing is sent to no player at all.
-  if (campaign?.currentMapId !== mapId) return recipients.filter((r) => r.role === 'DM');
+  if (campaign?.currentMapId !== mapId) return stillInCampaign(recipients, campaignId).filter((r) => r.role === 'DM');
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
-  return recipients.filter((r) => {
+  return stillInCampaign(recipients, campaignId).filter((r) => {
     if (r.role === 'DM') return true;
     if (!r.userId) return false;
     return filterTokensByRole([token], r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId).length > 0;
@@ -88,7 +88,9 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   // repeat.
   if (state.combatants.length === 0) {
     const nothing = new Map<string, CombatantSource>();
-    for (const r of recipients) r.emit('initiative.state', projectCombatState(state, nothing, r.role === 'DM'));
+    for (const r of stillInCampaign(recipients, campaignId)) {
+      r.emit('initiative.state', projectCombatState(state, nothing, r.role === 'DM'));
+    }
     return;
   }
 
@@ -108,7 +110,7 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
   const byId = (list: CombatantSource[]) => new Map(list.map((t) => [t.id, t]));
 
   const forDM = byId(tokens);
-  for (const r of recipients) {
+  for (const r of stillInCampaign(recipients, campaignId)) {
     if (r.role === 'DM') {
       r.emit('initiative.state', projectCombatState(state, forDM, true));
       continue;

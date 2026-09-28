@@ -485,7 +485,11 @@ another tab is untouched. `authenticate` keeps a socket in one campaign room:
 it handles the events one at a time per socket and leaves every other campaign
 room on each success, and every fan-out that walks a room and reads each
 socket's role goes through `campaignSockets`, which skips a socket whose
-`campaignId` is not that room.
+`campaignId` is not that room. A fan-out that awaits anything between that
+fetch and reading the roles filters again with `stillInCampaign` right before
+it sends, and a drag's frames, whose recipients are decided once per drag, go
+only to those still in the room, so a socket that switches campaigns mid-way
+is not sent the old campaign's view under its new role.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
 per request. Platform role is a different matter, see below.

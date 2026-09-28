@@ -10,7 +10,7 @@ import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
 import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
-import { campaignSockets } from './utils';
+import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
 
@@ -284,7 +284,7 @@ export async function broadcastMapData(io: Server, campaignId: string, map: MapD
     campaignId,
     members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
   );
-  for (const s of members) {
+  for (const s of stillInCampaign(members, campaignId)) {
     const member = s as unknown as AuthenticatedSocket;
     const spiritVisible = member.role === 'DM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
     const mapData = filterMapData(map, member.role || 'PLAYER', spiritVisible, member.userId);

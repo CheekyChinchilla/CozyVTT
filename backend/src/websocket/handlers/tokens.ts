@@ -14,7 +14,7 @@ import { Token, tokenMoveLimiter, limiterKey } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
-import { campaignSockets } from '../utils';
+import { campaignSockets, stillInCampaign } from '../utils';
 
 /** Why a socket may not move a token, in the words the client already shows. */
 const moveRefusal = (role: string | undefined): string =>
@@ -56,7 +56,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       .filter((a) => a.role !== 'DM' && a.userId)
       .map((a) => a.userId as string);
     const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
-    for (const s of members) {
+    for (const s of stillInCampaign(members, campaignId)) {
       if (s.id === socket.id) continue;
       const member = s as unknown as AuthenticatedSocket;
       // A map the DM is preparing is theirs until they switch to it.
@@ -110,7 +110,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       .filter((a) => a.role !== 'DM' && a.userId)
       .map((a) => a.userId as string);
     const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
-    for (const s of members) {
+    for (const s of stillInCampaign(members, campaignId)) {
       if (!includeSender && s.id === socket.id) continue;
       const recipient = s as unknown as AuthenticatedSocket;
       if (!canReadMap(recipient.role, mapId, currentMapId)) continue;
@@ -131,10 +131,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     payload: Record<string, unknown>
   ): Promise<void> {
     const recipients = await dragRecipientsFor(mapId, token.id);
-    if (token.obscured !== true) {
-      for (const id of recipients) io.to(id).emit(event, { ...payload, movedBy: socket.userId });
-      return;
-    }
+    // Decided once for the whole drag, so each frame goes only to those of
+    // them still in this campaign: a socket that authenticated into another
+    // since is not sent its old table's token positions. Reading the room
+    // is in memory, with no database work per frame.
     for (const s of await campaignSockets(io, socket.campaignId!)) {
       if (recipients.has(s.id)) {
         s.emit(event, { ...payload, movedBy: moverShownTo(token, s as unknown as AuthenticatedSocket) });
@@ -394,7 +394,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           .filter((a) => a.role !== 'DM' && a.userId)
           .map((a) => a.userId as string);
         const spiritVisibility = await getSpiritVisibilityBatch(socket.campaignId, playerIds);
-        for (const s of members) {
+        for (const s of stillInCampaign(members, socket.campaignId)) {
           const authedSocket = s as unknown as AuthenticatedSocket;
           if (authedSocket.role === 'DM') {
             s.emit('token.moved', { tokenId, mapId, x, y, movedBy: socket.userId });
