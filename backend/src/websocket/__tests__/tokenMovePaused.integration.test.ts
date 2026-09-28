@@ -95,6 +95,16 @@ describe.each(['PAUSED', 'INACTIVE'] as const)('while the campaign is %s', (stat
     player.disconnect();
   });
 
+  // A pause can land after the player picked the token up. Their screen has
+  // already drawn the drop, so the refusal also tells it where the token is.
+  it('sends the refused mover the token\'s stored position, so their screen puts it back', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const back = waitForEvent<{ tokenId: string; x: number; y: number }>(player, 'token.moved');
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 5, y: 5 });
+    expect(await back).toMatchObject({ tokenId: OWN, x: 1, y: 1 });
+    player.disconnect();
+  });
+
   it('refuses a player starting a move', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const dm = await server.connectAndAuth(dmCookie, campaignId);

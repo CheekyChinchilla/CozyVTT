@@ -353,6 +353,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // And the same session rule: a player's move waits for the session.
       if (!canMoveTokensNow(socket.role, map.campaign.status)) {
         socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
+        // A pause can land after the token was picked up, and the mover's
+        // screen has already drawn the drop. Tell it where the token is.
+        socket.emit('token.moved', {
+          tokenId, mapId, x: token.position.x, y: token.position.y, movedBy: socket.userId ?? null,
+        });
         return;
       }
 
