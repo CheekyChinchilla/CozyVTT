@@ -506,11 +506,11 @@ function onMouseMove(event) {
   // Client can send as fast as needed
 }
 
-// Receive updates from others
+// Receive updates. The sender is left out of drag frames, so apply every
+// token.moved: one naming yourself confirms your drop, and one after a refused
+// drop puts the token back.
 socket.on('token.moved', (data) => {
-  if (data.movedBy !== myUserId) {
-    updateTokenPosition(data.tokenId, data.x, data.y);
-  }
+  updateTokenPosition(data.tokenId, data.x, data.y);
 });
 ```
 
