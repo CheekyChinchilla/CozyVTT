@@ -5,11 +5,8 @@
 // anything, which is half of how a "strictly typed" project accumulated 326 of
 // them across both projects.
 //
-// `@typescript-eslint/no-explicit-any` is an **error** here. The `overrides`
-// block at the bottom is a shrinking allowlist of files that still carry the
-// legacy usages — new files, and any file cleaned up, are held to the rule.
-// Entries come off the list as each cluster is converted; when the list is
-// empty the block goes with it. Do not add to it.
+// `@typescript-eslint/no-explicit-any` is an **error** here, and it applies to
+// every file, tests included. There is no allowlist; do not add one.
 module.exports = {
   root: true,
   env: { node: true, es2022: true },
@@ -55,19 +52,4 @@ module.exports = {
     'prefer-const': 'off',
     'no-useless-escape': 'off',
   },
-  overrides: [
-    {
-      // Legacy `any`. Shrinking — see the note at the top of this file.
-      files: [
-      'src/__tests__/helpers/websocket-test-server.ts',
-      'src/middleware/auth.test.ts',
-      'src/middleware/passwordChange.test.ts',
-      'src/routes/__tests__/auth.e2e.test.ts',
-      'src/routes/__tests__/game-systems.e2e.test.ts',
-      'src/validators/__tests__/userPreferences.test.ts',
-      'src/validators/game-systems/__tests__/validation.test.ts',
-      ],
-      rules: { '@typescript-eslint/no-explicit-any': 'off' },
-    },
-  ],
 };

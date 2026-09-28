@@ -107,8 +107,8 @@ describe('Game Systems - E2E Tests', () => {
         data: { data: updatedData },
       });
 
-      expect((character.data as any).level).toBe(6);
-      expect((character.data as any).stats.strength.score).toBe(17);
+      expect((character.data as unknown as typeof updatedData).level).toBe(6);
+      expect((character.data as unknown as typeof updatedData).stats.strength.score).toBe(17);
     });
 
     it('should assign D&D 5e character to campaign', async () => {

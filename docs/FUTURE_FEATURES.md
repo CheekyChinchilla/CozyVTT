@@ -223,12 +223,12 @@ _Nothing in progress._
   complete, the guide must not invent routes. Worth revisiting only if the guide
   starts being treated as exhaustive again.
 
-- **`any` in test files.** The burn-down cleared every explicit `any` from
-  production code in both projects; roughly 75 remain across ten test files,
-  which are the only entries left in the two ESLint allowlists (eight backend,
-  two frontend). Scoped out of
-  that work deliberately so the diffs stayed readable. The allowlist is the
-  to-do list.
+- **`any` in test files.** *Finished.* The burn-down cleared every explicit
+  `any` from production code in both projects first, and the test files were
+  left for later so those diffs stayed readable. They have since been cleared
+  too, in both projects, and both ESLint allowlists are gone:
+  `@typescript-eslint/no-explicit-any` now applies to every file, tests
+  included. Nothing is left to do here.
 
 - **Campaign creation is uncapped, so the per-campaign notes limit is not a real
   ceiling.** A personal note is capped at 100,000 characters and 200 notes per
