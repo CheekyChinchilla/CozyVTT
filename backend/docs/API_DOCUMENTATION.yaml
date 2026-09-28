@@ -4205,7 +4205,8 @@ paths:
                   nullable: true
                   description: DM only.
                 hp:
-                  $ref: '#/components/schemas/TokenHp'
+                  allOf:
+                    - $ref: '#/components/schemas/TokenHp'
                   nullable: true
                   description: DM only.
                 showHpBar:
@@ -7607,7 +7608,8 @@ components:
           nullable: true
           description: NPC attitude toward the party
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
           description: Hit points / health for this token
         showHpBar:
@@ -7726,7 +7728,8 @@ components:
           enum: [friendly, neutral, hostile]
           nullable: true
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
         showHpBar:
           type: boolean
@@ -7753,7 +7756,8 @@ components:
           type: integer
           nullable: true
         hp:
-          $ref: '#/components/schemas/TokenHp'
+          allOf:
+            - $ref: '#/components/schemas/TokenHp'
           nullable: true
         type:
           type: string

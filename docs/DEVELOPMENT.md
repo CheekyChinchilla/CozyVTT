@@ -378,13 +378,17 @@ Two of those deserve a note:
   it ends; if you see that error again, look there first, not at the code.
   That disconnect runs before a file's own top-level `afterAll`, so a file
   that cleans up the database there ends it with `prisma.$disconnect()`.
-- **Two build facts are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
+- **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
   files and CI pin, or any line in either Dockerfile that installs it names the
-  unpinned `postgresql-client`.
+  unpinned `postgresql-client`. It also fails when `backend/scripts/restore.sh`
+  stops ending its load with the statements the dashboard restore ends it with,
+  when the combat state's fields differ between the two packages, and when the
+  special characters a password needs differ between the browser and the
+  server.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
