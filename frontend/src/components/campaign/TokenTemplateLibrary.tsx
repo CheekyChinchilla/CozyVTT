@@ -24,6 +24,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
 import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
@@ -159,8 +160,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
-    } catch {
-      setError('Failed to place token on map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }

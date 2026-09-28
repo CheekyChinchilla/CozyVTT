@@ -26,6 +26,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
@@ -243,8 +244,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
-    } catch {
-      setError('Failed to place creature on map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }

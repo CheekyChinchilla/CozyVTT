@@ -712,7 +712,8 @@ export async function canReadAssetById(
 export async function canReferenceAsset(
   address: string | null | undefined,
   userId: string,
-  stored?: string | null
+  stored?: string | null,
+  campaignId?: string
 ): Promise<boolean> {
   if (!address) return true;
   if (stored !== undefined && address === stored) return true;
@@ -730,5 +731,29 @@ export async function canReferenceAsset(
   // Never as an administrator: an admin may read any file, but a stored
   // reference opens the asset to everyone at the table, as setting a scene's
   // music does (handlers/atmosphere.ts).
-  return canReadAsset(asset, userId, false);
+  if (await canReadAsset(asset, userId, false)) return true;
+  // A copy of something already in this campaign (Duplicate, Save as
+  // Template, placing from a template) names a picture stored here already.
+  // The read grant turns on a reference existing in the campaign, so another
+  // one here grants no one anything, even when the picture can no longer be
+  // read (its uploader has left).
+  return campaignId !== undefined && (await addressUsedInCampaign(address, campaignId));
+}
+
+/** Whether a record of the campaign already stores exactly this picture address. */
+async function addressUsedInCampaign(address: string, campaignId: string): Promise<boolean> {
+  const [templates, creatures, characters] = await Promise.all([
+    prisma.tokenTemplate.count({ where: { campaignId, imageUrl: address } }),
+    prisma.creatureTemplate.count({ where: { campaignId, imageUrl: address } }),
+    prisma.character.count({ where: { campaignId, tokenImageUrl: address } }),
+  ]);
+  if (templates + creatures + characters > 0) return true;
+  const maps = await prisma.map.findMany({
+    where: { campaignId },
+    select: { imageUrl: true, baseLayerUrl: true, spiritLayerUrl: true, tokens: true },
+  });
+  return maps.some((m) =>
+    m.imageUrl === address || m.baseLayerUrl === address || m.spiritLayerUrl === address
+    || readTokens(m.tokens).some((t) => t.imageUrl === address)
+  );
 }

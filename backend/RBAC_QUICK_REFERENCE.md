@@ -287,7 +287,11 @@ update (image and spirit layer), token create and update, token and creature
 templates, and a character's `tokenImageUrl`. So pointing at an asset never
 grants the right to read it. An update may send back the address already
 stored even if it can no longer be read, and an address naming an asset that
-does not exist is accepted, since it grants nothing. The check never counts a
+does not exist is accepted, since it grants nothing. So is a picture a record
+of the same campaign already stores (a copy: Duplicate, Save as Template,
+placing from a template), since the read grant turns on a reference existing
+in the campaign and another one there grants no one anything; a copy into a
+different campaign is checked in full. The check never counts a
 platform admin's right to read any file: a stored reference shows the asset
 to the whole table, so an admin who is a campaign's DM may reference only what
 they could read as that DM. An address on this server must be exactly an

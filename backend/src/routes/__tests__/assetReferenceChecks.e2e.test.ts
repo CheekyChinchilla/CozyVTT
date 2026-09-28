@@ -36,6 +36,7 @@ let dm: ReturnType<typeof request.agent>;
 let privateId: string;
 let outsiderId: string | undefined;
 let adminId: string | undefined;
+let departedId: string | undefined;
 let ownId: string;
 const assetIds: string[] = [];
 
@@ -80,7 +81,7 @@ afterAll(async () => {
   await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, ...[outsiderId, adminId].filter((id): id is string => id !== undefined)]);
+  await cleanupUsers([dmId, playerId, ...[outsiderId, adminId, departedId].filter((id): id is string => id !== undefined)]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -177,6 +178,36 @@ describe('an update that leaves a stored reference as it was', () => {
       data: { campaignId, name: 'Old', imageUrl: strandedUrl, baseLayerUrl: strandedUrl, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
     });
     expect((await dm.put(url(`${base}/maps/${other.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+  });
+});
+
+// A copy of something already in the campaign (Duplicate, Save as Template,
+// placing from a template) names a picture already stored here. When that
+// picture can no longer be read, its uploader having left, say, every copy
+// was refused, though another reference in the same campaign grants no one
+// anything the first did not.
+describe('a copy naming a picture already used in the campaign', () => {
+  let usedUrl: string;
+  let otherUrl: string;
+  beforeAll(async () => {
+    const outsider = await createTestUser({ displayName: 'Refs Departed' });
+    departedId = outsider.id;
+    usedUrl = `/api/assets/tokens/${await makeAsset(departedId, 'departed-used')}`;
+    otherUrl = `/api/assets/tokens/${await makeAsset(departedId, 'departed-unused')}`;
+    await prisma.tokenTemplate.create({
+      data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+    });
+    expect((await dm.get(usedUrl)).status).toBe(403);
+  });
+
+  it('goes through, even when the picture can no longer be read', async () => {
+    expect((await dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Copy', position: { x: 4, y: 4 }, imageUrl: usedUrl })).status).toBe(201);
+    expect((await dm.post(url(`${base}/token-templates`)).send({ name: 'Copy', imageUrl: usedUrl })).status).toBe(201);
+    expect((await dm.post(url(`${base}/creatures`)).send({ name: 'Copy', statBlock: commoner, imageUrl: usedUrl })).status).toBe(201);
+  });
+
+  it('is still refused for a picture the campaign does not already use', async () => {
+    expect((await dm.post(url(`${base}/token-templates`)).send({ name: 'Other', imageUrl: otherUrl })).status).toBe(403);
   });
 });
 
