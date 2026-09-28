@@ -162,6 +162,26 @@ describe("a character's token image", () => {
     expect((await player.get(url)).status).toBe(403);
   });
 
+  // The write check reads the asset id out of the address and asks whether
+  // the member may read it. The read side once granted on any stored address
+  // merely containing an asset's id, so an address the write check read as
+  // naming no asset, or a different one, still opened the private one.
+  it.each([
+    ['with a character after the id', (victim: string) => `${victim}#`],
+    ['inside a longer path segment', (victim: string) => `/api/assets/tokens/x${victim}`],
+    ['under a directory that is not an image type', (victim: string) => `/api/assets/documents/${victim}`],
+    ['after a readable asset', (victim: string, mine: string) => `/api/assets/tokens/${mine}/../${victim}`],
+  ])("grants nothing when the private asset's id is written %s", async (_how, address) => {
+    const victim = await makeAsset('TOKEN', 'USER', dmId, 'dm-private-smuggled');
+    const mine = await makeAsset('TOKEN', 'USER', playerId, 'my-cover-token');
+    const created = await player.post('/api/characters').send({ name: 'Smuggler', tokenImageUrl: address(victim, mine) });
+    if (created.status === 201) {
+      // Bring it into the campaign the DM shares with the player.
+      await prisma.character.update({ where: { id: created.body.character.id }, data: { campaignId } });
+    }
+    expect((await player.get(`/api/assets/tokens/${victim}`)).status).toBe(403);
+  });
+
   it('may point at an asset the member can read', async () => {
     const mine = await makeAsset('TOKEN', 'USER', playerId, 'my-token');
     const created = await player.post('/api/characters').send({ name: 'Pictured', tokenImageUrl: `/api/assets/tokens/${mine}` });

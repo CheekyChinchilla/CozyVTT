@@ -532,36 +532,50 @@ export async function assetUsedInUserCampaign(
   // A map's own layers first: that is the common case, and it answers without
   // reading any JSON. The spirit layer counts only where the viewer may see
   // that plane; the map keeps it from everyone else, and so does this.
-  const mapLayer = await prisma.map.findFirst({
+  // Every address below is matched on the asset it names, read by the same
+  // extractAssetId the write routes check before storing one. The database
+  // search only narrows the rows: an address that merely contains the id
+  // (the id with a character after it, inside a longer segment, under
+  // another directory, after a different asset) names no asset, or another,
+  // to the write check, so it must grant nothing here either.
+  const names = (address: string | null | undefined): boolean => extractAssetId(address) === assetId;
+
+  const mapLayers = await prisma.map.findMany({
     where: {
       AND: [readableMaps, { OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }] }],
     },
-    select: { id: true },
+    select: { imageUrl: true, baseLayerUrl: true },
   });
-  if (mapLayer) return true;
+  if (mapLayers.some((m) => names(m.imageUrl) || names(m.baseLayerUrl))) return true;
   const spiritLayers = await prisma.map.findMany({
     where: { AND: [readableMaps, { spiritLayerUrl: { contains: assetId } }] },
-    select: { campaignId: true },
+    select: { campaignId: true, spiritLayerUrl: true },
   });
-  for (const map of new Set(spiritLayers.map((m) => m.campaignId))) {
+  for (const map of new Set(spiritLayers.filter((m) => names(m.spiritLayerUrl)).map((m) => m.campaignId))) {
     if (await getSpiritVisibility(map, userId)) return true;
   }
 
-  const [character, creature, tokenTemplate] = await Promise.all([
-    prisma.character.findFirst({
+  const [characters, creatures, tokenTemplates] = await Promise.all([
+    prisma.character.findMany({
       where: { campaignId: { in: campaignIds }, tokenImageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { tokenImageUrl: true },
     }),
-    prisma.creatureTemplate.findFirst({
+    prisma.creatureTemplate.findMany({
       where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { imageUrl: true },
     }),
-    prisma.tokenTemplate.findFirst({
+    prisma.tokenTemplate.findMany({
       where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { imageUrl: true },
     }),
   ]);
-  if (character || creature || tokenTemplate) return true;
+  if (
+    characters.some((c) => names(c.tokenImageUrl)) ||
+    creatures.some((c) => names(c.imageUrl)) ||
+    tokenTemplates.some((t) => names(t.imageUrl))
+  ) {
+    return true;
+  }
 
   // The track a campaign is playing. The DM sets it and every player's browser
   // fetches it, so it is used by the whole table for as long as it is set.
@@ -582,7 +596,7 @@ export async function assetUsedInUserCampaign(
     select: { tokens: true },
   });
   return maps.some((map) =>
-    readTokens(map.tokens).some((token) => token?.imageUrl?.includes(assetId))
+    readTokens(map.tokens).some((token) => names(token?.imageUrl))
   );
 }
 
