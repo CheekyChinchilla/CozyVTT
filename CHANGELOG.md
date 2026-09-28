@@ -76,6 +76,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **The initiative tracker rolls and sets initiative on the map a combatant is actually on.** A combatant follows its token to another map, but the tracker still named the map the table was showing, so rolling for it answered "Token not found" and a typed value changed the order without being saved to the token.
 
+- **Deleting the last combatant ends the fight.** Removing the only token left in the order, or deleting the map every combatant stood on, left the tracker showing "Round N" with nobody in it and no way to end it; the fight now ends and the tracker is cleared.
+
 - **The Admin Dashboard's message when the backup tools are missing names the right fix.** It told you to rebuild the backend image to include a package the image does not use; it now says the backend's own Dockerfile installs the PostgreSQL client tools, so rebuilding from the current source is the fix.
 
 - **Session timeouts and the log level set in `.env` now apply under Docker.** The Docker setup never handed `SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` or `LOG_LEVEL` to the backend, so setting them in `.env` did nothing on a Docker install and nothing said so; they reach the backend now, with the same defaults as before, and a check keeps the example env file and the Docker setup in step. The guides also now say that `docker compose restart` keeps the old settings (apply a changed `.env` with `docker compose up -d`) and that `BACKUP_DIR` applies only to an install without Docker.
