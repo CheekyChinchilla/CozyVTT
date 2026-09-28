@@ -18,7 +18,7 @@ jest.mock('child_process', () => ({
 
 import { execFile } from 'child_process';
 import fsSync from 'fs';
-import fs from 'fs/promises';
+import fs, { type FileHandle } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
@@ -331,10 +331,13 @@ describe('POST /api/admin/backups/restore', () => {
     // A stream error with no listener is an uncaught exception, which took
     // the whole backend down in the middle of a restore.
     const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
-    const proto = Object.getPrototypeOf(probe) as { createWriteStream: () => NodeJS.WritableStream };
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
     await probe.close();
-    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(() => {
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
       const stream = new PassThrough();
+      // A real stream closes the file when it is destroyed; this stand-in
+      // does the same, or the backup's handle is left open.
+      stream.on('close', () => { void this.close(); });
       process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
       return stream;
     });
