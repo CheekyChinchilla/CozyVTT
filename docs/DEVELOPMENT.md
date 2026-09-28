@@ -413,10 +413,12 @@ turning on one day, but it is its own burn-down and mixing it into other work
 would make it impossible to say what caused a regression.
 
 **No `any`.** `@typescript-eslint/no-explicit-any` is an **error** in both
-packages, not a warning. There is a small `overrides` allowlist covering some
-test files; it is meant to shrink and never to grow. When a type resists, reach
-for `unknown` plus a narrowing helper — `frontend/src/utils/errors.ts` and
-`backend/src/utils/prisma-json.ts` exist for the two common cases.
+packages, not a warning, and it applies to every file, tests included. There is
+no allowlist; do not add one. When a type resists, reach for `unknown` plus a
+narrowing helper — `frontend/src/utils/errors.ts` and
+`backend/src/utils/prisma-json.ts` exist for the two common cases. A test double
+that is partial on purpose, such as a mock Express request, is built as a plain
+object and cast once through `unknown` to the type it stands in for.
 
 ### Linting
 

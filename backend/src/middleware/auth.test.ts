@@ -6,33 +6,38 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import type { SessionData } from 'express-session';
 import { requireAuth, requireAdmin, requireRole, optionalAuth } from './auth';
 
 // ============================================
 // Helpers
 // ============================================
 
-function mockReq(sessionOverrides: Record<string, any> = {}): Partial<Request> {
+function mockReq(sessionOverrides: Partial<SessionData> = {}): Partial<Request> {
   return {
+    // Minimal express-session shape. Partial on purpose: the middleware only
+    // reads session fields, so the cookie is empty and the methods are bare mocks.
     session: {
       ...sessionOverrides,
-      // Minimal express-session shape
       id: 'test-session-id',
-      cookie: {} as any,
+      cookie: {},
       regenerate: jest.fn(),
       destroy: jest.fn(),
       reload: jest.fn(),
       resetMaxAge: jest.fn(),
       save: jest.fn(),
       touch: jest.fn(),
-    } as any,
+    } as unknown as Request['session'],
   };
 }
 
+// The refusal tests pass `{ status }` alone, cast to Response. Partial on
+// purpose: the middleware replies with res.status(...).json(...), and `json`
+// is reached through the value `status` returns.
 function mockRes(): { status: jest.Mock; json: jest.Mock; res: Partial<Response> } {
   const json = jest.fn();
   const status = jest.fn().mockReturnValue({ json });
-  const res = { status, json } as any;
+  const res: Partial<Response> = { status, json };
   return { status, json, res };
 }
 
@@ -57,7 +62,7 @@ describe('requireAuth', () => {
   it('returns 401 when session has no userId', () => {
     const req = mockReq() as Request;
     const { status, json } = mockRes();
-    requireAuth(req, { status } as any, mockNext);
+    requireAuth(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(401);
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'Unauthorized' })
@@ -68,7 +73,7 @@ describe('requireAuth', () => {
   it('returns 401 when mfaPending is set, even with a userId', () => {
     const req = mockReq({ userId: 'user-123', mfaPending: true }) as Request;
     const { status, json } = mockRes();
-    requireAuth(req, { status } as any, mockNext);
+    requireAuth(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(401);
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('MFA') })
@@ -92,7 +97,7 @@ describe('requireAdmin', () => {
   it('returns 401 when not authenticated', () => {
     const req = mockReq() as Request;
     const { status, json } = mockRes();
-    requireAdmin(req, { status } as any, mockNext);
+    requireAdmin(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(401);
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'Unauthorized' })
@@ -102,7 +107,7 @@ describe('requireAdmin', () => {
   it('returns 403 for an authenticated non-admin user', () => {
     const req = mockReq({ userId: 'user-456', platformRole: 'USER' }) as Request;
     const { status, json } = mockRes();
-    requireAdmin(req, { status } as any, mockNext);
+    requireAdmin(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(403);
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'Forbidden' })
@@ -126,7 +131,7 @@ describe('requireRole', () => {
   it('returns 401 when not authenticated', () => {
     const req = mockReq() as Request;
     const { status, json } = mockRes();
-    requireRole('ADMIN')(req, { status } as any, mockNext);
+    requireRole('ADMIN')(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(401);
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Unauthorized' }));
   });
@@ -134,7 +139,7 @@ describe('requireRole', () => {
   it('returns 403 when the session role does not match', () => {
     const req = mockReq({ userId: 'user-123', platformRole: 'USER' }) as Request;
     const { status, json } = mockRes();
-    requireRole('ADMIN')(req, { status } as any, mockNext);
+    requireRole('ADMIN')(req, { status } as unknown as Response, mockNext);
     expect(status).toHaveBeenCalledWith(403);
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Forbidden' }));
     expect(mockNext).not.toHaveBeenCalled();
