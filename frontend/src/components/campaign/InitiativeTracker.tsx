@@ -368,13 +368,23 @@ export default function InitiativeTracker() {
     socket.emitInitiativeRemove({ tokenId });
   }, [socket]);
 
+  /**
+   * The map a combatant's token is on. An entry follows its token to another
+   * map, so the one the table is showing is only the fallback.
+   */
+  const mapOf = useCallback((tokenId: string): string | null =>
+    combatState.combatants.find((c) => c.tokenId === tokenId)?.mapId ?? mapId,
+  [combatState.combatants, mapId]);
+
   const handleSetInitiative = useCallback((tokenId: string, value: number | null) => {
-    if (!socket || !mapId) return;
-    socket.emitInitiativeSet({ tokenId, mapId, value });
-  }, [socket, mapId]);
+    const onMap = mapOf(tokenId);
+    if (!socket || !onMap) return;
+    socket.emitInitiativeSet({ tokenId, mapId: onMap, value });
+  }, [socket, mapOf]);
 
   const handleRollForToken = useCallback((tokenId: string) => {
-    if (!socket || !mapId) return;
+    const onMap = mapOf(tokenId);
+    if (!socket || !onMap) return;
 
     // No expression is sent. The server derives initiative from the combatant's
     // character sheet or stat block — it holds both, and this panel holds
@@ -384,8 +394,8 @@ export default function InitiativeTracker() {
     // This used to send a flat `1d20` for everything, so a Dexterity 20 rogue
     // rolled exactly what a Dexterity 8 wizard did.
     const token = tokens.find((t) => t.id === tokenId);
-    socket.emitInitiativeRoll({ tokenId, mapId, characterName: token ? tokenPublicName(token) : undefined });
-  }, [socket, mapId, tokens]);
+    socket.emitInitiativeRoll({ tokenId, mapId: onMap, characterName: token ? tokenPublicName(token) : undefined });
+  }, [socket, mapOf, tokens]);
 
   const handleStart = useCallback(() => {
     if (!socket) return;
