@@ -5470,7 +5470,10 @@ paths:
       summary: Copy template to another campaign
       description: |
         Copy a token template to another campaign. The authenticated user must
-        be the DM of **both** the source and target campaigns.
+        be the DM of **both** the source and target campaigns. The template's
+        picture is checked as a new reference in the target campaign: an
+        existing asset the caller cannot read, and the target campaign does
+        not already use, answers 403 and nothing is copied.
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []

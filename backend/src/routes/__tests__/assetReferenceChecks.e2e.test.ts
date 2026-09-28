@@ -189,13 +189,15 @@ describe('an update that leaves a stored reference as it was', () => {
 describe('a copy naming a picture already used in the campaign', () => {
   let usedUrl: string;
   let otherUrl: string;
+  let theirsId: string;
   beforeAll(async () => {
     const outsider = await createTestUser({ displayName: 'Refs Departed' });
     departedId = outsider.id;
     usedUrl = `/api/assets/tokens/${await makeAsset(departedId, 'departed-used')}`;
     otherUrl = `/api/assets/tokens/${await makeAsset(departedId, 'departed-unused')}`;
+    theirsId = randomUUID();
     await prisma.tokenTemplate.create({
-      data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+      data: { id: theirsId, campaignId, createdById: dmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
     });
     expect((await dm.get(usedUrl)).status).toBe(403);
   });
@@ -208,6 +210,27 @@ describe('a copy naming a picture already used in the campaign', () => {
 
   it('is still refused for a picture the campaign does not already use', async () => {
     expect((await dm.post(url(`${base}/token-templates`)).send({ name: 'Other', imageUrl: otherUrl })).status).toBe(403);
+  });
+
+  // Copying a template to another campaign stores its picture there, where
+  // nothing used it: the first reference, and from then on the reason the
+  // other campaign's members may read it.
+  it('is refused when a template is copied into another campaign that does not use it', async () => {
+    const elsewhere = (await createTestCampaign(dmId, { name: 'Asset references, elsewhere' })).id;
+    try {
+      await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: elsewhere, role: 'DM', characterIds: [] } });
+      const res = await dm.post(url(`${base}/token-templates/${theirsId}/copy-to/${elsewhere}`));
+      expect(res.status).toBe(403);
+      expect(await prisma.tokenTemplate.count({ where: { campaignId: elsewhere } })).toBe(0);
+
+      const own = await prisma.tokenTemplate.create({
+        data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Mine', imageUrl: `/api/assets/tokens/${ownId}`, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+      });
+      expect((await dm.post(url(`${base}/token-templates/${own.id}/copy-to/${elsewhere}`))).status).toBe(201);
+    } finally {
+      await prisma.tokenTemplate.deleteMany({ where: { campaignId: elsewhere } });
+      await cleanupCampaigns([elsewhere]);
+    }
   });
 });
 
