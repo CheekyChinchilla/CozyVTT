@@ -8,6 +8,7 @@ import { rememberMeMaxAge } from '../config/session';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
@@ -372,6 +373,9 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
     if (user) {
       const token = crypto.randomUUID();
 
+      // Only the newest link works. This also voids a pending invitation,
+      // whose replacement goes to the same address.
+      await voidOutstandingResetLinks(user.id);
       await prisma.passwordResetToken.create({
         data: {
           userId: user.id,
@@ -426,7 +430,6 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // Find valid token
     const resetToken = await prisma.passwordResetToken.findUnique({
       where: { token },
-      include: { user: true },
     });
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
@@ -445,21 +448,37 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
       });
     }
 
-    // Hash and update password
     const passwordHash = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: resetToken.userId },
-      data: {
-        passwordHash,
-        mustChangePassword: false,
-      },
+
+    // Claim the link and set the password together. The claim is a
+    // conditional write, so of two requests carrying the same link only one
+    // finds it unused; the other changes nothing. The account's other links
+    // are voided in the same step, since the password they would set is
+    // settled now.
+    const claimed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.passwordResetToken.updateMany({
+        where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
+        data: { used: true },
+      });
+      if (claim.count === 0) return false;
+
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: {
+          passwordHash,
+          mustChangePassword: false,
+        },
+      });
+      await voidOutstandingResetLinks(resetToken.userId, tx);
+      return true;
     });
 
-    // Mark token as used
-    await prisma.passwordResetToken.update({
-      where: { id: resetToken.id },
-      data: { used: true },
-    });
+    if (!claimed) {
+      return res.status(400).json({
+        error: 'Invalid Token',
+        message: 'This password reset link is invalid or has expired',
+      });
+    }
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,
@@ -536,6 +555,9 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
 
     // Lift the gate for this session immediately (see middleware/passwordChange.ts)
     req.session.mustChangePassword = false;
+
+    // A reset link issued before the change would undo it.
+    await voidOutstandingResetLinks(user.id);
 
     // Changing a password is how someone recovers an account they think is
     // compromised, so the sessions opened with the old one have to end. This

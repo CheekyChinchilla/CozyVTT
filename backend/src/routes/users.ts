@@ -7,6 +7,7 @@ import { sanitizeUser, hashPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import { parseDisplayName } from '../validators/users';
@@ -476,6 +477,9 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       },
     });
 
+    // A reset link issued before this would replace the temporary password.
+    await voidOutstandingResetLinks(id);
+
     // End any sessions the user already has open — otherwise they keep full
     // access on the old session and the forced-change gate would only take
     // effect at their next login
@@ -521,10 +525,7 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     }
 
     // Invalidate any existing unused tokens for this user
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: id, used: false },
-      data: { used: true },
-    });
+    await voidOutstandingResetLinks(id);
 
     const token = crypto.randomUUID();
     await prisma.passwordResetToken.create({

@@ -199,7 +199,9 @@ Get the currently authenticated user.
 Change the authenticated user's password. Every other sign-in of the account is
 signed out, open game connections included; the session making the change stays.
 A reset through the emailed link (`POST /api/auth/reset-password`) signs out
-every sign-in, since nobody is signed in to keep.
+every sign-in, since nobody is signed in to keep. Either way, the account's
+unused reset and invitation links stop working, and a link sets the password
+once even when two requests carry it at the same moment.
 
 **Request:**
 ```json
@@ -1208,7 +1210,8 @@ else is refused with `400`. Registration applies the same rule.
 
 Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
 sessions the user currently has open are signed out** — otherwise they would keep browsing on the
-old session and the forced change would only apply at their next login.
+old session and the forced change would only apply at their next login. Any reset or invitation
+link the user has not used stops working.
 
 **Response:**
 ```json

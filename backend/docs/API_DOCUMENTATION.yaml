@@ -459,6 +459,7 @@ paths:
       description: |
         Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration).
         If SMTP is not configured, returns a message to contact the administrator.
+        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does.
         Rate limited (5/15min).
       operationId: forgotPassword
       security: []
@@ -492,7 +493,7 @@ paths:
       tags:
         - Authentication
       summary: Reset password with token
-      description: Reset password using a valid token from a password reset email. Token must not be expired or used. Rate limited (5/15min).
+      description: Reset password using a valid token from a password reset email or invitation. Token must not be expired or used. A token sets the password once, even when two requests carry it at the same moment, and using it voids the account's other unused tokens. Rate limited (5/15min).
       operationId: resetPassword
       security: []
       requestBody:
@@ -531,7 +532,7 @@ paths:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false. Ends the user's other login sessions; the session making the request stays signed in.
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false. Ends the user's other login sessions; the session making the request stays signed in. Voids the user's unused password-reset and invitation links.
       operationId: changePassword
       security:
         - cookieAuth: []
@@ -1051,7 +1052,7 @@ paths:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []

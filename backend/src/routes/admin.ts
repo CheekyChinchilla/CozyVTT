@@ -26,6 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
@@ -453,10 +454,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     }
 
     // Invalidate outstanding links so only the newest one works
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: id, used: false },
-      data: { used: true },
-    });
+    await voidOutstandingResetLinks(id);
 
     const token = crypto.randomUUID();
     await prisma.passwordResetToken.create({
