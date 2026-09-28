@@ -340,7 +340,7 @@ export default function MFASetupPage() {
                     key={i}
                     className="text-sm font-mono text-brand-ink text-center py-1.5 px-2 rounded bg-paper/60 border border-moss-green/10"
                   >
-                    {code.slice(0, 4)}-{code.slice(4)}
+                    {code}
                   </code>
                 ))}
               </div>
