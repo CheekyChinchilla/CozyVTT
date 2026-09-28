@@ -71,6 +71,20 @@ export async function campaignSockets(io: Server, campaignId: string): Promise<C
 }
 
 /**
+ * Run the part of a handler that tells the table about a change it has
+ * already saved. A failure there is logged and goes no further: the change
+ * stands, so answering the sender that it failed would be wrong, and what the
+ * handler does next (a chat notice, the order re-sent) still happens.
+ */
+export async function bestEffort(what: string, tell: () => Promise<void>): Promise<void> {
+  try {
+    await tell();
+  } catch (error) {
+    logger.warn(`${what} failed; the change stands`, { err: error });
+  }
+}
+
+/**
  * Those of `sockets` that still belong to the campaign. campaignSockets
  * checks when it fetches; a fan-out that awaits anything after that, a
  * database read say, calls this again right before it reads each socket's

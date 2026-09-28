@@ -32,7 +32,7 @@ import {
   type CombatantSource,
   type CombatState,
 } from '../initiativeState';
-import { campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
+import { bestEffort, campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
 import { diceRollLimiter, stateRequestAllowed } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
@@ -491,7 +491,11 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // thrown. A Call of Cthulhu investigator's initiative is simply their
       // Dexterity, and a dice-log entry claiming otherwise would be a lie. The
       // value still reaches everyone through the initiative broadcast below.
-      if (rollResult) {
+      const campaignId = socket.campaignId;
+      const roll = rollResult;
+      // The roll is stored and ordered by now: a failure to write its dice
+      // log entry is logged, and the new order below still goes out.
+      if (roll) await bestEffort('initiative.roll dice log', async () => {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
         // The server names the token; a name the client sends is not used.
         // An obscured token is not named in the dice log even to the DM, since
@@ -503,17 +507,17 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           characterName: publicName,
           expression: usedExpression,
           result: rolledValue,
-          breakdown: rollResult,
+          breakdown: roll,
           purpose: `${publicName} Initiative`,
           timestamp: new Date().toISOString(),
           secret: false,
         };
-        for (const r of await recipientsSentToken(io, socket.campaignId, token, mapId)) {
+        for (const r of await recipientsSentToken(io, campaignId, token, mapId)) {
           r.emit('dice.rolled', rollData);
         }
-      }
+      });
 
-      await broadcastInitiativeState(socket.campaignId);
+      await broadcastInitiativeState(campaignId);
       logger.debug('initiative.roll', {
         rolled: !!rollResult, result: rolledValue, name: token.name, campaignId: socket.campaignId,
       });
