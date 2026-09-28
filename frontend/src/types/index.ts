@@ -1297,6 +1297,13 @@ export interface CharacterHpUpdatedBroadcast {
  * The DM seat moved to another member. Campaign ownership is a separate thing
  * and does not move with it.
  */
+/** A member's role in a campaign changed (`campaign.role.changed`). */
+export interface MemberRoleChangedBroadcast {
+  campaignId: string;
+  userId: string;
+  role: CampaignRole;
+}
+
 export interface DmTransferredBroadcast {
   campaignId: string;
   /** Null only if the campaign somehow had no DM to demote. */

@@ -28,6 +28,7 @@ import type {
   CharacterHpUpdateEvent,
   CharacterHpUpdatedBroadcast,
   DmTransferredBroadcast,
+  MemberRoleChangedBroadcast,
   HitDiceSpendEvent,
   CombatState,
   InitiativeAddEvent,
@@ -547,6 +548,14 @@ class SocketClient {
    */
   onDmTransferred(callback: EventCallback<DmTransferredBroadcast>) {
     this.addListener('campaign.dm.transferred', callback);
+  }
+
+  /**
+   * A member's role changed. Everyone in the campaign hears it: the member's
+   * own page has to change its controls, and everyone else's roster its list.
+   */
+  onMemberRoleChanged(callback: EventCallback<MemberRoleChangedBroadcast>) {
+    this.addListener('campaign.role.changed', callback);
   }
 
   /**

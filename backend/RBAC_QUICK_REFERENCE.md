@@ -468,7 +468,7 @@ written:
 | Route | Helper |
 |---|---|
 | `PUT /api/campaigns/:id/dm` | `applyRoleToLiveSockets(userId, campaignId, role)` for both seats |
-| `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)` |
+| `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)`, then `campaign.role.changed` to the campaign so every open page, the member's own included, updates its controls |
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 

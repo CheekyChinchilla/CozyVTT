@@ -17,10 +17,11 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { withMemberRole } from '@/utils/campaignRoles';
 
 // ============================================
 // Types
@@ -53,6 +54,11 @@ interface CampaignContextState {
    * (e.g. token positions moved by other players during the drop).
    */
   refreshCurrentMap: () => Promise<void>;
+  /**
+   * After a reconnect: re-read what arrives only as events (the session's
+   * state, members' roles, the map the table is on) and reload that map.
+   */
+  catchUpAfterReconnect: () => Promise<void>;
   setCurrentMap: (map: Map | null) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
@@ -251,6 +257,37 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     }
   }, [campaign?.id, currentMap?.id]);
 
+  // Events sent while this page was offline are not replayed: a pause or an
+  // end, a member's role, a switch to another map. Re-read them without the
+  // full reload's loading screen, then load the map the table is on now,
+  // which may not be the one this page had (a player may no longer read it).
+  const catchUpAfterReconnect = useCallback(async () => {
+    const campaignId = campaign?.id;
+    if (!campaignId) return;
+    let mapId = currentMap?.id ?? null;
+    try {
+      const fresh = await campaignService.getCampaign(campaignId);
+      setCampaign((prev) =>
+        prev && prev.id === fresh.id
+          ? { ...prev, status: fresh.status, memberships: fresh.memberships, currentMapId: fresh.currentMapId }
+          : prev
+      );
+      setActiveSession(fresh.activeSession ?? null);
+      mapId = fresh.currentMapId ?? null;
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', err);
+    }
+    if (!mapId) return;
+    try {
+      const { map, spiritVisible } = await api.getMap(campaignId, mapId);
+      setCurrentMap(map);
+      useGameStore.getState().setTokens(map.tokens || []);
+      setPlayerSpiritVisible(spiritVisible ?? false);
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', err);
+    }
+  }, [campaign?.id, currentMap?.id]);
+
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
   const updateVibe = useCallback((period: string, hue: string, filter: string) => {
     setCampaign((prev) => (prev ? { ...prev, currentVibe: period } : null));
@@ -336,6 +373,30 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, []);
 
+  /**
+   * A member's role changed, possibly this user's own. The server has
+   * already applied it to what it accepts, so the page follows: `userRole`
+   * is read from the membership list. The `authenticated` reply also carries
+   * this user's role, which catches a change made while this page was
+   * offline and never heard.
+   */
+  useEffect(() => {
+    const handleRoleChanged = (data: MemberRoleChangedBroadcast) => {
+      setCampaign((prev) => (prev && prev.id === data.campaignId ? withMemberRole(prev, data.userId, data.role) : prev));
+    };
+    const handleAuthenticated = (data: { campaignId?: string; userId?: string; role?: CampaignRole }) => {
+      if (!data?.campaignId || !data.userId || !data.role) return;
+      const { campaignId, userId, role } = data;
+      setCampaign((prev) => (prev && prev.id === campaignId ? withMemberRole(prev, userId, role) : prev));
+    };
+    socketClient.onMemberRoleChanged(handleRoleChanged);
+    socketClient.on('authenticated', handleAuthenticated);
+    return () => {
+      socketClient.off('campaign.role.changed', handleRoleChanged);
+      socketClient.off('authenticated', handleAuthenticated);
+    };
+  }, []);
+
   // Update spirit layer enabled/style in local campaign state
   const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
     setCampaign((prev) =>
@@ -375,6 +436,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    catchUpAfterReconnect,
     setCurrentMap,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
@@ -403,6 +465,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    catchUpAfterReconnect,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     playerSpiritVisible,

@@ -1556,7 +1556,7 @@ paths:
       tags:
         - Campaigns
       summary: Change member role
-      description: Change a member's role (DM only, one DM per campaign enforced)
+      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it.
       operationId: changeMemberRole
       security:
         - cookieAuth: []

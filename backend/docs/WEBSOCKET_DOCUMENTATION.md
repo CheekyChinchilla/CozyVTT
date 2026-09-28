@@ -1043,6 +1043,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
 | `campaign.dm.transferred` | `campaigns.ts` |
+| `campaign.role.changed` | `campaigns.ts` |
 | `character.hp.updated` | `characters.ts` |
 | `character.updated` | `characters.ts` |
 | `chat.message` | `chat.ts` |
