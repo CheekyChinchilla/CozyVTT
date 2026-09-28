@@ -123,6 +123,9 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       if (!map.explorationEnabled) return;
 
       const userId = socket.role === 'DM' && typeof data.userId === 'string' ? data.userId : socket.userId;
+      // A DM naming a player is previewing them: that player's memory is
+      // the one this socket follows from now on (broadcastExplorationState).
+      if (socket.role === 'DM') socket.previewingMemoryOf = userId === socket.userId ? undefined : userId;
       const row = await prisma.mapExploration.findUnique({
         where: { mapId_userId: { mapId, userId } },
         select: { explored: true },
