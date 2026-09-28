@@ -195,8 +195,10 @@ describe('a player writing to a prepared map', () => {
   });
 
   it('refuses rolling initiative for their token there', async () => {
+    // Before the fight starts, when a player may roll: during one a player's
+    // roll is refused anyway, and could not show the map rule doing its work.
     setState(campaignId, {
-      active: true, round: 1, currentTokenId: null,
+      active: false, round: 0, currentTokenId: null,
       combatants: [{ tokenId: SCOUT, mapId: preparedId, name: 'Scout', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
     });
     const player = await server.connectAndAuth(playerCookie, campaignId);
