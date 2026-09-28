@@ -107,7 +107,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
     const data = parsed.data;
     // A picture the DM may read: a template's picture counts as the campaign using it.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!))) {
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const template = await prisma.tokenTemplate.create({
@@ -163,7 +163,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     const data = parsed.data;
     // A new picture the DM may read; the one already stored may stay.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, existing.imageUrl))) {
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const updated = await prisma.tokenTemplate.update({
@@ -235,7 +235,7 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     const data = parsed.data;
     // A picture the DM may read: a template's picture counts as the campaign using it.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!))) {
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const template = await prisma.tokenTemplate.create({

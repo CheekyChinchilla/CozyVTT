@@ -176,7 +176,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     // Refusing the reference is the half of that fix that stops it being
     // created in the first place.
     for (const url of [normalizedImageUrl, normalizedSpiritLayerUrl]) {
-      if (!(await canReferenceAsset(url, req.session.userId!))) {
+      if (!(await canReferenceAsset(url, req.session.userId!, undefined, campaignId))) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to that image',
@@ -726,7 +726,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         });
       }
       // A picture the DM may read, as on create (canReferenceAsset)
-      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl))) {
+      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl, campaignId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.imageUrl = normalizedImageUrl;
@@ -743,7 +743,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       }
       // Normalize to full path (or null)
       const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
-      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl))) {
+      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl, campaignId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
@@ -1062,7 +1062,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
     // Art the DM may read: a token's art counts as the campaign using it.
-    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -1349,7 +1349,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const nextImageUrl = updates.imageUrl === undefined
       ? undefined
       : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
-    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl))) {
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 

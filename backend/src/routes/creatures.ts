@@ -198,7 +198,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
     // A picture the DM may read: a creature's picture counts as the campaign using it.
     const imageUrl = normalizeAssetUrl(data.imageUrl || null, 'tokens');
-    if (!(await canReferenceAsset(imageUrl, req.session.userId!))) {
+    if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -271,7 +271,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     // A new picture the DM may read; the one already stored may stay.
     const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
-    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl))) {
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
