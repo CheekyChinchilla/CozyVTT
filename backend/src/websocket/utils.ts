@@ -104,6 +104,7 @@ export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T
  * screen, the DM's sockets for any other. A prepared map's layout is the
  * DM's until they switch to it, on the live connection as on its fetch.
  * `exceptSocketId` leaves out the sender where the event is not echoed.
+ * Best-effort: a failure is logged and goes no further.
  */
 export async function emitToMapReaders(
   io: Server,
@@ -113,16 +114,22 @@ export async function emitToMapReaders(
   data: unknown,
   exceptSocketId?: string
 ): Promise<void> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-  const currentMapId = campaign?.currentMapId ?? null;
-  if (currentMapId === mapId) {
-    const room = io.to(campaignId);
-    (exceptSocketId ? room.except(exceptSocketId) : room).emit(event, data);
-    return;
-  }
-  for (const s of await campaignSockets(io, campaignId)) {
-    if (s.id === exceptSocketId) continue;
-    if (canReadMap((s as unknown as AuthenticatedFields).role, mapId, currentMapId)) s.emit(event, data);
+  // Every caller has saved its change by now: failing to tell the table is
+  // logged, never turned into a reply that the change failed.
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    const currentMapId = campaign?.currentMapId ?? null;
+    if (currentMapId === mapId) {
+      const room = io.to(campaignId);
+      (exceptSocketId ? room.except(exceptSocketId) : room).emit(event, data);
+      return;
+    }
+    for (const s of await campaignSockets(io, campaignId)) {
+      if (s.id === exceptSocketId) continue;
+      if (canReadMap((s as unknown as AuthenticatedFields).role, mapId, currentMapId)) s.emit(event, data);
+    }
+  } catch (error) {
+    logger.warn(`${event} not broadcast; the change stands`, { err: error, mapId });
   }
 }
 
