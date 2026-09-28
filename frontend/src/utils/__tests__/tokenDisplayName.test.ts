@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenDisplayName, tokenPublicName } from '../tokenDisplayName';
+import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '../tokenDisplayName';
 
 describe('tokenDisplayName', () => {
   it('names a token this viewer was sent whole', () => {
@@ -36,3 +36,19 @@ describe('tokenPublicName on the spirit layer', () => {
   });
 });
 
+
+// A roll from a token bound to a character is filed under the character's
+// name. From a token players are not sent, or may not name, it must be filed
+// under no name at all, as the stat-block roll already was.
+describe('characterRollPublicName', () => {
+  it('keeps the character name for a token the table can see and name', () => {
+    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: true, layer: 'token' })).toBeUndefined();
+    expect(characterRollPublicName(undefined)).toBeUndefined();
+  });
+
+  it('files a roll from an obscured, hidden or spirit-plane token under no name', () => {
+    expect(characterRollPublicName({ name: 'Shadow Assassin', obscured: true })).toBe('Unknown creature');
+    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: false })).toBe('Unknown creature');
+    expect(characterRollPublicName({ name: 'Shadow Assassin', layer: 'spirit' })).toBe('Unknown creature');
+  });
+});
