@@ -174,7 +174,9 @@ socket.on('error', (data) => {
 ```
 1. Client emits 'authenticate' with campaignId
 2. Server validates:
-   - User is logged in (session exists)
+   - The sign-in the connection was opened under still exists (checked on
+     every `authenticate`, not only when the connection opened); if it has
+     ended, the server answers `error` "Unauthorized" and closes the connection
    - User is member of campaign
 3. The socket leaves every other campaign room it is in; each of those
    campaigns gets 'user.left' and a fresh 'presence.state'
@@ -235,7 +237,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`
+**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, or ended by a password change); sign in again.
 
 #### `authenticated`
 **Direction:** Server → Client

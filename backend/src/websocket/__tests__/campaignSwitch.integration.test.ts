@@ -284,4 +284,20 @@ describe('authenticating into another campaign on the same socket', () => {
     host.disconnect();
     switcher.disconnect();
   });
+
+  // The handshake checks the sign-in; nothing checked it again after that,
+  // so a connection whose sign-in had ended (signed out, expired, or ended by
+  // a password change) could still join any other campaign of the user's.
+  it('refuses to move a socket whose sign-in has ended into another campaign', async () => {
+    const cookie = await server.loginAs(switcherId);
+    const switcher = await server.connectAndAuth(cookie, campaignA);
+    await server.logout(cookie);
+
+    const joined = expectNoEvent(switcher, 'authenticated', 800);
+    const refused = waitForEvent<{ message: string }>(switcher, 'error');
+    switcher.emit('authenticate', { campaignId: campaignB });
+    expect((await refused).message).toBe('Unauthorized');
+    await expect(joined).resolves.toBeUndefined();
+    switcher.disconnect();
+  });
 });

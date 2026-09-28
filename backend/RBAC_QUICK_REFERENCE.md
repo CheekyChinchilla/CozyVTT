@@ -468,7 +468,7 @@ written:
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does: a socket is checked against the session store only when it connects, so a session that expires from inactivity leaves an open socket running until it disconnects.
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
 
 | Route | Which sockets end |
 |---|---|
