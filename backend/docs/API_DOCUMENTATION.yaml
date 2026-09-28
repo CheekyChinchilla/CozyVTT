@@ -329,6 +329,9 @@ paths:
                   minLength: 12
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
       responses:
         '201':
           description: User registered successfully
@@ -980,6 +983,9 @@ paths:
               properties:
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
                 email:
                   type: string
                   format: email

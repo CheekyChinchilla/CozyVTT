@@ -2,6 +2,7 @@ import argon2 from 'argon2';
 import { prisma } from '../config/database';
 import { User, PlatformRole } from '@prisma/client';
 import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
+import { parseDisplayName } from '../validators/users';
 
 /**
  * Authentication Service
@@ -77,9 +78,14 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     throw new Error(passwordValidation.errors.join(', '));
   }
 
+  const parsedName = parseDisplayName(input.displayName);
+  if (!parsedName.ok) {
+    throw new Error(parsedName.message);
+  }
+  const displayName = parsedName.name;
+
   // Sanitize inputs
   const email = sanitizeInput(input.email.toLowerCase());
-  const displayName = sanitizeInput(input.displayName);
 
   // Hash before the transaction: Argon2 is deliberately slow, and holding the
   // registration lock across it would serialise every signup on the hash.

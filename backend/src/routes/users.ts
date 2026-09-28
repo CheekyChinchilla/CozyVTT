@@ -9,6 +9,7 @@ import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
+import { parseDisplayName } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 
@@ -129,7 +130,14 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     const updateData: Prisma.UserUpdateInput = {};
 
     if (displayName !== undefined) {
-      updateData.displayName = sanitizeInput(displayName);
+      const parsedName = parseDisplayName(displayName);
+      if (!parsedName.ok) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: parsedName.message,
+        });
+      }
+      updateData.displayName = parsedName.name;
     }
 
     if (email !== undefined) {
