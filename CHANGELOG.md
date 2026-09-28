@@ -207,7 +207,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Names and descriptions typed by a user no longer render as HTML in emails.** A display name, campaign name or campaign description containing HTML tags was pasted into the invitation, welcome and password-reset emails as markup. Every such value is now shown exactly as typed.
 
-- **The two-factor endpoints now have their own attempt limits.** Confirming a code when setting up two-factor authentication, turning it off, and regenerating backup codes were only covered by the general request cap. Each now shuts off after several failed attempts, the same protection the login screen already had.
+- **Two-factor setup, turning it off and regenerating backup codes now have attempt limits.** Each was only covered by the general request cap. Confirming a code while setting up two-factor authentication now has a limit of its own, five wrong codes in fifteen minutes. Turning two-factor off and regenerating backup codes, which both ask for your password, share the sign-in page's allowance: five failed attempts in fifteen minutes from one address, counted together with failed sign-ins and password resets.
 
 - **Signing in starts a fresh session each time.** CozyVTT now issues a new session identifier whenever you log in, finish two-factor verification, or register, so a session cannot be carried across the moment you authenticate. This is a standard hardening step and changes nothing you will notice.
 
