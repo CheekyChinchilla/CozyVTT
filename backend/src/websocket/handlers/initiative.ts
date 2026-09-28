@@ -26,6 +26,8 @@ import {
   sortCombatants,
   projectCombatState,
   getVersion,
+  startSend,
+  latestSend,
   type CombatantEntry,
   type CombatantSource,
   type CombatState,
@@ -76,10 +78,13 @@ async function recipientsSentToken(
 export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
   const state = getCombatState(campaignId);
   const version = getVersion(campaignId);
+  // A send to everyone is numbered; a reply to one socket takes the number
+  // of the last send to everyone.
+  const sendNumber = only ? latestSend(campaignId) : startSend(campaignId);
   // A change that lands while this send is still reading starts its own
-  // send with the newer state; this one would arrive after it and show the
-  // older, so it is dropped instead. Checked before every emit.
-  const overtaken = () => getVersion(campaignId) !== version;
+  // send with the newer state or tokens; this one would arrive after it and
+  // show the older, so it is dropped instead. Checked before every emit.
+  const overtaken = () => getVersion(campaignId) !== version || latestSend(campaignId) !== sendNumber;
   const recipients: Recipient[] = only ?? (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
   if (recipients.length === 0 || overtaken()) return;
 
@@ -446,17 +451,21 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       await setTokenInitiative(mapId, tokenId, rolledValue);
 
       // Update in-memory state — add to combatants if not already present.
-      // Only reachable for a DM: a player's roll is rejected above unless the
-      // token is already a combatant.
+      // Only for a DM: a player's roll is rejected above unless the token is
+      // already a combatant, and if it has left the order since, the order
+      // is left as it is.
       //
-      // Re-found rather than reusing the index taken before the awaits above:
-      // a concurrent roll re-sorts this array and a concurrent remove shortens
-      // it, so a stale index would write the value onto the wrong combatant.
-      const combatantIndex = state.combatants.findIndex((c) => c.tokenId === tokenId);
+      // The order as it is now, not the copy read before the awaits above:
+      // a concurrent roll re-sorts it, a remove shortens it, and the DM may
+      // have ended the fight, which writing the old copy back would undo.
+      const current = getCombatState(socket.campaignId);
+      const combatantIndex = current.combatants.findIndex((c) => c.tokenId === tokenId);
       if (combatantIndex !== -1) {
-        state.combatants[combatantIndex].initiative = rolledValue;
-      } else {
-        state.combatants.push({
+        current.combatants[combatantIndex].initiative = rolledValue;
+        current.combatants = sortCombatants(current.combatants);
+        setCombatState(socket.campaignId, current);
+      } else if (socket.role === 'DM') {
+        current.combatants.push({
           tokenId,
           mapId,
           name: token.name,
@@ -466,9 +475,9 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           type: token.type ?? 'npc',
           disposition: token.disposition ?? null,
         });
+        current.combatants = sortCombatants(current.combatants);
+        setCombatState(socket.campaignId, current);
       }
-      state.combatants = sortCombatants(state.combatants);
-      setCombatState(socket.campaignId, state);
 
       // Announce the roll in the dice log — but only when dice were actually
       // thrown. A Call of Cthulhu investigator's initiative is simply their
