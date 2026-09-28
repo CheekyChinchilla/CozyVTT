@@ -8,14 +8,14 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
+import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * fog:operation — DM applies a fog operation (reveal/hide cells).
-   * Throttled to 10 operations/second per socket.
+   * Throttled to 10 operations/second per user, across all their sockets.
    * DM receives full fogState; players receive only revealed cell indices.
    */
   socket.on('fog:operation', async (data: { mapId: string; operation: unknown }) => {
@@ -26,8 +26,8 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
-      // Throttle: max 10 fog ops/second
-      if (!fogOperationLimiter.check(socket.id, 10, 1000)) {
+      // Throttle: max 10 fog ops/second per user
+      if (!fogOperationLimiter.check(limiterKey(socket), 10, 1000)) {
         return; // Silently drop — brush strokes fire fast, flooding is expected
       }
 

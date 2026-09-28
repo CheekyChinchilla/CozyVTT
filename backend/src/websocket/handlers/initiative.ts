@@ -18,7 +18,7 @@ import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
-import { canControlToken } from '../../services/permissions';
+import { canControlToken, canRollDice } from '../../services/permissions';
 import {
   getState as getCombatState,
   setState as setCombatState,
@@ -319,14 +319,22 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
 
+      // A spectator may not roll, as with dice.roll, and is told so before
+      // anything is read. The token check below refuses one too, for a role
+      // that changes while this handler waits on the database.
+      if (!canRollDice(socket.role)) {
+        socket.emit('error', { message: 'Spectators cannot roll initiative' });
+        return;
+      }
+
       const { tokenId, mapId, expression } = data;
       if (!tokenId || !mapId) { socket.emit('error', { message: 'tokenId and mapId required' }); return; }
 
-      // A player's initiative roll is a dice roll: it writes the map, tells
-      // the table and re-sends the order, and it used to bypass the ceiling
-      // dice.roll applies. The DM rolls for a whole encounter at once and is
-      // not counted; a spectator is refused below whatever the count.
-      if (socket.role === 'PLAYER' && !diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
+      // An initiative roll is a dice roll: it writes the map, tells the table
+      // and re-sends the order, and it used to bypass the ceiling dice.roll
+      // applies. Every roll but the DM's is counted; the DM rolls for a whole
+      // encounter at once.
+      if (socket.role !== 'DM' && !diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
         socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
         return;
       }

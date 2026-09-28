@@ -10,7 +10,7 @@ import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/wal
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { mapEditLimiter, stateRequestAllowed } from '../shared';
+import { mapEditLimiter, limiterKey, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -25,7 +25,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can add light sources' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, light } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -67,7 +67,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can remove light sources' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, lightId } = data;
       if (!mapId || !lightId) { socket.emit('error', { message: 'mapId and lightId required' }); return; }
@@ -100,7 +100,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can update light sources' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, light } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -144,7 +144,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can replace light sources' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, lights } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }

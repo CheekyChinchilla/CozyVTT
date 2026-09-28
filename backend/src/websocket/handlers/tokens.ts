@@ -153,6 +153,13 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
+      // Flood ceiling: drop excess starts silently. A start reads the whole
+      // map before any of its refusals, and a drag sends one, so it shares
+      // the per-user budget of token.move and token.move.end.
+      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
+        return;
+      }
+
       const { tokenId, mapId } = data;
 
       if (!tokenId || !mapId) {
@@ -309,7 +316,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Flood ceiling: drop excess finalize writes silently. Shares the
-      // per-socket budget with token.move; a normal drag stays far under it.
+      // per-user budget with token.move; a normal drag stays far under it.
       if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
         return;
       }

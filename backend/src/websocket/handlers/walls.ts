@@ -11,7 +11,7 @@ import { WallSegmentSchema, WallSegmentsArraySchema } from '../../validators/wal
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { mapEditLimiter, stateRequestAllowed } from '../shared';
+import { mapEditLimiter, limiterKey, stateRequestAllowed } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 
@@ -26,7 +26,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can add wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, segment } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -68,7 +68,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can remove wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, segmentId } = data;
       if (!mapId || !segmentId) { socket.emit('error', { message: 'mapId and segmentId required' }); return; }
@@ -102,7 +102,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Spectators cannot open or close doors' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, segment } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -175,7 +175,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can replace wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(socket.id, 40, 1000)) return; // 9.3 flood ceiling
+      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, segments } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
