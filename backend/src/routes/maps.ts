@@ -64,6 +64,20 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
   }
 }
 
+/**
+ * Send the map to the table again when it is the one on screen, after a
+ * change to what players are sent. The change is saved by then, so a failure
+ * here is logged, never answered as the change having failed.
+ */
+async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadcastMapData>[2]): Promise<void> {
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    if (campaign?.currentMapId === map.id) await broadcastMapData(getSocketInstance(), campaignId, map);
+  } catch (err) {
+    logger.warn('Map not re-sent to the table; the change stands', { err, mapId: map.id });
+  }
+}
+
 // The token shape lives in websocket/shared.ts — see the note there on why this
 // file no longer keeps its own copy.
 
@@ -797,12 +811,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      if (campaign?.currentMapId === id) {
-        try {
-          await broadcastMapData(getSocketInstance(), campaignId, updatedMap);
-        } catch { /* non-fatal */ }
-      }
+      await resendIfCurrent(campaignId, updatedMap);
     }
 
     return res.status(200).json({ map: updatedMap });
@@ -1990,12 +1999,7 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
     // See PUT /:id: a lighting change alters which tokens players are sent,
     // and only the map the table is on is anyone's canvas.
     if (updated.lightingEnabled !== map.lightingEnabled) {
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      if (campaign?.currentMapId === id) {
-        try {
-          await broadcastMapData(getSocketInstance(), campaignId, updated);
-        } catch { /* non-fatal */ }
-      }
+      await resendIfCurrent(campaignId, updated);
     }
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });

@@ -115,3 +115,14 @@ it('a wall added stands, and is not reported as failed, when telling the table f
   expect((stored.wallSegments as Array<{ id: string }>).some((w) => w.id === segment.id)).toBe(true);
 });
 
+
+it('a fog change stands, and is not reported as failed, when telling the table fails', async () => {
+  await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: true } });
+  jest.spyOn(prisma.campaign, 'findUnique').mockImplementationOnce(boom as never);
+  const noError = expectNoEvent(dm, 'error', 800);
+  dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1] } });
+  await expect(noError).resolves.toBeUndefined();
+  const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
+  expect((stored.fogData as { revealed: boolean[] } | null)?.revealed.slice(0, 2)).toEqual([true, true]);
+  await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
+});
