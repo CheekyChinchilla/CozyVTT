@@ -37,14 +37,24 @@ export function isInside(child: string, parent: string): boolean {
  * Each archive is written 600, but the folder's listing (every backup's name,
  * date and size) followed the process umask, usually 755, on an install
  * without Docker; only the container's start script set 700. `mkdir`'s mode
- * applies only to a folder it creates, so an existing one is chmodded too. A
- * mount that does not take a mode is logged and otherwise left alone, since
- * refusing the backup would be worse than a folder listing others can read.
+ * applies only to a folder it creates, so an existing one is chmodded too,
+ * and that is logged: a folder BACKUP_DIR names may have been shared on
+ * purpose with an account that copies backups off the machine, and it should
+ * not stop working without a word. A mount that does not take a mode is
+ * logged and otherwise left alone, since refusing the backup would be worse
+ * than a folder listing others can read.
  */
 export async function ensureBackupDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   try {
+    const previous = (await fs.stat(dir)).mode & 0o777;
+    if ((previous & 0o077) === 0) return;
     await fs.chmod(dir, 0o700);
+    logger.warn(
+      'Made the backups folder private to the backend user: it holds every password hash and MFA secret. ' +
+        'Another account that read backups from it can no longer do so; copy them out as the backend user instead.',
+      { dir, previousMode: previous.toString(8) }
+    );
   } catch (error) {
     logger.warn('Could not make the backups folder private to the backend user', { dir, err: error });
   }
