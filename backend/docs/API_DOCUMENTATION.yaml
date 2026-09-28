@@ -2812,6 +2812,11 @@ paths:
           `campaignId` column, in one transaction — both are needed, because the
           campaign roster and the token permission checks read the membership,
           not the column.
+        - A `tokenImageUrl` on this server must be an asset's exact address
+          (`/api/assets/<kind>/<id>`), and one naming an existing asset must
+          name one the caller can read; otherwise the answer is 403 and nothing
+          is created. An address naming an asset that no longer exists is
+          accepted.
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -2879,8 +2884,9 @@ paths:
                           type: string
         '403':
           description: >
-            The caller is not a member of the campaign named by `campaignId`.
-            Nothing is created.
+            The caller is not a member of the campaign named by `campaignId`,
+            or `tokenImageUrl` names a picture the caller may not use. Nothing
+            is created.
         '404':
           description: No campaign exists with the id given in `campaignId`
 
@@ -2925,6 +2931,8 @@ paths:
         - If the character has a `gameSystem`, data updates are validated against
           that system's Zod schema.
         - If the character has no `gameSystem`, no validation occurs.
+        - A new `tokenImageUrl` follows the rule on create (403 otherwise); the
+          address already stored may be sent back unchanged.
       operationId: updateCharacter
       security:
         - cookieAuth: []
@@ -3808,7 +3816,12 @@ paths:
       tags:
         - Maps
       summary: Create map
-      description: Create a new map for the campaign (DM only)
+      description: >-
+        Create a new map for the campaign (DM only). An image address on this
+        server must be an asset's exact address (`/api/assets/<kind>/<id>`),
+        and one naming an existing asset must name one the caller can read, or
+        the request answers 403, unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that
+        no longer exists is accepted.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -3909,7 +3922,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted. The address already stored may be
         sent back unchanged.
       operationId: updateMap
@@ -4056,7 +4069,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted.
       operationId: addToken
       security:
@@ -4117,7 +4130,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted. The address already stored may be
         sent back unchanged.
 
@@ -4973,7 +4986,7 @@ paths:
     post:
       tags: [Creatures]
       summary: Create custom creature
-      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: createCreature
       security:
         - cookieAuth: []
@@ -5057,7 +5070,7 @@ paths:
     put:
       tags: [Creatures]
       summary: Update custom creature
-      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateCreature
       security:
         - cookieAuth: []
@@ -5329,7 +5342,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Create token template
-      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -5378,7 +5391,7 @@ paths:
     put:
       tags: [Token Templates]
       summary: Update token template
-      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -5418,7 +5431,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Save token as template
-      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
