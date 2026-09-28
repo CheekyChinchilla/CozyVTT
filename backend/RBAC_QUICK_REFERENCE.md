@@ -33,6 +33,14 @@ router.get('/api/campaigns/:campaignId', campaignMember, handler);
 router.put('/api/campaigns/:campaignId', campaignDM, handler);
 ```
 
+#### Characters in a campaign
+Any member may read a character assigned to the campaign, and the DM may edit
+it, only while its owner is still a member (`ownerStillIn` in
+`routes/characters.ts`). Removing a member takes their characters out of the
+campaign in the same transaction; a character left naming a campaign by a
+removal from before that is its owner's alone, and its saves are not sent to
+that campaign.
+
 #### 5. Campaign DM or Player (Excludes Spectators)
 `campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
 today. Where spectators are refused, the handler does it: `dice.roll` (socket)

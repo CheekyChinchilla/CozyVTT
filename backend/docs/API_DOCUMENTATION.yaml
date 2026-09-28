@@ -1524,7 +1524,7 @@ paths:
       tags:
         - Campaigns
       summary: Remove member
-      description: Remove a member from campaign (DM only). The sitting DM and the campaign owner cannot be removed; both return 400.
+      description: Remove a member from campaign (DM only). The sitting DM and the campaign owner cannot be removed; both return 400. The member's characters are taken out of the campaign in the same step (their `campaignId` becomes null), and a character still naming a campaign its owner has left is readable and editable by its owner alone.
       operationId: removeMember
       security:
         - cookieAuth: []

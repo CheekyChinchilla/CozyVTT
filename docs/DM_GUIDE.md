@@ -570,6 +570,11 @@ To remove a player from your campaign, open **Campaign Settings** and find the p
 They stop being able to chat, roll or move anything, and stop seeing what the
 rest of the table is doing, without waiting for them to close the page.
 
+**Their characters leave with them.** Each of their characters is taken out of
+the campaign: it stays theirs, but you and the other players can no longer open
+or edit its sheet, and nothing they change on it reaches your table. A token on
+the map that was bound to one of those characters stays where it is.
+
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
 a player and you cannot remove them. Hand the seat back if you want to step away

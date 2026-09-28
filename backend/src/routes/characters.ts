@@ -17,6 +17,19 @@ import { withMapsLocked } from '../utils/mapTokens';
 
 const router = Router();
 
+/**
+ * Whether a character's owner is still a member of the campaign it names. A
+ * member removed before removals took their characters out of the campaign
+ * left characters naming it; those are the owner's alone.
+ */
+async function ownerStillIn(ownerId: string, campaignId: string): Promise<boolean> {
+  const owner = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId: ownerId, campaignId } },
+    select: { userId: true },
+  });
+  return owner !== null;
+}
+
 
 /**
  * Character Management Routes
@@ -336,8 +349,9 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         },
       });
 
-      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in the campaign
-      if (membership) {
+      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in
+      // the campaign, while the owner is still a member of it.
+      if (membership && (await ownerStillIn(character.userId, character.campaignId))) {
         return res.status(200).json({ character });
       }
     }
@@ -482,7 +496,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: 'Spectators cannot edit a character in this campaign',
       });
     }
-    const isAuthorized = character.userId === userId || membership?.role === 'DM';
+    const isAuthorized =
+      character.userId === userId ||
+      (membership?.role === 'DM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -643,10 +659,16 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       await resendInitiative(affectedCampaignId);
     }
 
-    // Broadcast character update to campaign if character is in a campaign
-    if (updatedCharacter.campaignId) {
+    // Broadcast character update to campaign if character is in a campaign,
+    // and its owner is still a member there: a character a removal left
+    // naming the campaign is not that table's to read.
+    const sheetCampaignId =
+      updatedCharacter.campaignId && (await ownerStillIn(updatedCharacter.userId, updatedCharacter.campaignId))
+        ? updatedCharacter.campaignId
+        : null;
+    if (sheetCampaignId) {
       try {
-        broadcastToCampaign(updatedCharacter.campaignId, 'character.updated', {
+        broadcastToCampaign(sheetCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           character: updatedCharacter,
           userId,
@@ -676,7 +698,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           readJsonObject(updatedCharacter.data)
         );
         if (currentHp && !sameCharacterHp(previousHp, currentHp)) {
-          broadcastToCampaign(updatedCharacter.campaignId, 'character.hp.updated', {
+          broadcastToCampaign(sheetCampaignId, 'character.hp.updated', {
             characterId: updatedCharacter.id,
             hp: currentHp,
           });
@@ -698,7 +720,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // that a token moved on, which is all a repaint needs.
     try {
       for (const affectedCampaignId of campaignsWithChangedTokens) {
-        if (affectedCampaignId === updatedCharacter.campaignId) continue;
+        if (affectedCampaignId === sheetCampaignId) continue;
         broadcastToCampaign(affectedCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           tokensChanged: true,

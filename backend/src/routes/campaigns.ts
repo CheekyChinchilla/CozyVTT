@@ -284,11 +284,16 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
     const maps = spiritVisible
       ? shown
       : shown.map((m) => ({ ...m, spiritLayerUrl: null }));
+    // A character is the campaign's while its owner is a member. One a
+    // removal left naming the campaign (removals now take it out) is not.
+    const memberIds = new Set(campaignRest.memberships.map((m) => m.userId));
+    const characters = campaignRest.characters.filter((c) => memberIds.has(c.userId));
 
     return res.status(200).json({
       campaign: {
         ...campaignRest,
         maps,
+        characters,
         activeSession: (_sessions && _sessions.length > 0) ? _sessions[0] : null,
         userRole: role,
       },
@@ -855,15 +860,21 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
       });
     }
 
-    // Delete the membership
-    await prisma.campaignMembership.delete({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
+    // Delete the membership, and take their characters out of the campaign
+    // with it: a character that still named the campaign stayed readable by
+    // every member and editable by the DM, and each save the owner made was
+    // still sent to the table they had left.
+    await prisma.$transaction([
+      prisma.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } }),
+      prisma.campaignMembership.delete({
+        where: {
+          userId_campaignId: {
+            userId,
+            campaignId,
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     // A socket caches the campaign from when it authenticated, so without this
     // the person carries on playing until they close the tab. Best-effort: the
