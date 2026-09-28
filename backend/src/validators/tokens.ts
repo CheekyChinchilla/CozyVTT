@@ -8,8 +8,8 @@
  * the sheet then rendered it — HP written in the character-sheet shape came out
  * as "8/undefined" on every reader.
  *
- * CLAUDE.md is explicit that validation is the real boundary, since types are
- * erased at runtime. One declaration here, imported by both.
+ * Validation is the real boundary, since types are erased at runtime. One
+ * declaration here, imported by both.
  */
 
 import { z } from 'zod';
