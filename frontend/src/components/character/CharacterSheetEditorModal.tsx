@@ -16,6 +16,7 @@ import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfi
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
 import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { isStaleCharacterSave, STALE_CHARACTER_REOPEN } from '@/utils/staleCharacter';
 import type { CharacterData } from '@/types';
 
 interface CharacterSheetEditorModalProps {
@@ -32,6 +33,10 @@ export default function CharacterSheetEditorModal({
   const [saving, setSaving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const { showToast } = useToast();
+  // The version the editor opened. The character handed in here can be
+  // refreshed while the editor is open, since the sheet behind it follows the
+  // table, but the editor's form is not, so its save is made from this one.
+  const [loadedAt] = useState(character.updatedAt);
 
   // Handle save. The editors pass a freshly-uploaded token image URL as the
   // third argument — forward it so the character's token actually updates.
@@ -42,6 +47,7 @@ export default function CharacterSheetEditorModal({
       setSaving(true);
       await api.updateCharacter(character.id, {
         data,
+        updatedAt: loadedAt,
         ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
       });
 
@@ -54,6 +60,15 @@ export default function CharacterSheetEditorModal({
       onClose();
     } catch (error) {
       console.error('Error saving character:', error);
+
+      // Saving over a newer version would undo it. The sheet behind is loaded
+      // again and the editor, holding the old one, is closed.
+      if (isStaleCharacterSave(error)) {
+        showToast(STALE_CHARACTER_REOPEN, 'error');
+        onSaved?.();
+        onClose();
+        return;
+      }
 
       // Show detailed error message
       const message = apiErrorMessage(error) || 'Failed to save character. Please try again.';

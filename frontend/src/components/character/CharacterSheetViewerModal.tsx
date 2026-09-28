@@ -93,10 +93,24 @@ export default function CharacterSheetViewerModal({
       }
     };
 
+    // Hit points changed at the table (the roster's +/- buttons) arrive as
+    // `character.hp.updated`, carrying only the numbers. The character is
+    // loaded again, so the sheet shows them and an edit opened from here
+    // starts from the current version.
+    const handleHpUpdate = (data: { characterId: string }) => {
+      if (data.characterId !== character.id) return;
+      api
+        .getCharacter(character.id)
+        .then(({ character: fresh }) => setCharacter(fresh))
+        .catch((error: unknown) => console.error('Error refreshing character after an HP change:', error));
+    };
+
     socket.on('character.updated', handleCharacterUpdate);
+    socket.on('character.hp.updated', handleHpUpdate);
 
     return () => {
       socket.off('character.updated', handleCharacterUpdate);
+      socket.off('character.hp.updated', handleHpUpdate);
     };
   }, [socket, character.id]);
 

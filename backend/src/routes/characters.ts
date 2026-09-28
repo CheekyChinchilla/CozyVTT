@@ -448,7 +448,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: parsed.error.issues[0]?.message ?? 'Invalid character data',
       });
     }
-    const { name, data, tokenImageUrl, gameSystem } = parsed.data;
+    const { name, data, tokenImageUrl, gameSystem, updatedAt: loadedAt } = parsed.data;
 
     // Find character first to check authorization
     const character = await prisma.character.findUnique({
@@ -552,18 +552,32 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       updateData.tokenImageUrl = normalizedTokenImageUrl;
     }
 
-    const updatedCharacter = await prisma.character.update({
-      where: { id },
-      data: updateData,
-      include: {
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const withCampaign = { campaign: { select: { id: true, name: true } } } as const;
+    let updatedCharacter;
+    if (loadedAt !== undefined) {
+      // Saved only if the character is still the version the caller loaded.
+      // Checked in the write itself, so a change landing after the read above
+      // is caught too. Without it, a sheet open while the DM took hit points
+      // put the old number back on its next save.
+      const { count } = await prisma.character.updateMany({
+        where: { id, updatedAt: new Date(loadedAt) },
+        data: updateData,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'CHARACTER_CHANGED',
+          message: 'This character was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id }, include: withCampaign });
+    } else {
+      updatedCharacter = await prisma.character.update({
+        where: { id },
+        data: updateData,
+        include: withCampaign,
+      });
+    }
 
     // A map token stores its own COPY of the character's image, taken when it
     // was placed — there is no Token table, tokens live as JSON on the map. So

@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Saving a sheet no longer puts back hit points the DM took.** A sheet open to read did not follow hit points changed from the roster, and saving from the editor wrote back every value it had opened with, undoing the DM's change. An open sheet now follows those changes. A save made from a sheet that has changed since it was opened is refused, with a message, and the sheet opens again showing the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save either. A program saving characters through the API can ask for the same check by sending the `updatedAt` it loaded; one that leaves it out saves as before.
+
 - **A save the server refuses no longer throws away your edits.** On the full-page character editor, a refused save replaced the sheet with "Failed to Load Character", and everything typed since the last save was lost. The reason is now shown in a message and the sheet stays open with your edits, so you can correct them and save again.
 
 - **A short colour code such as `#fff` works as a sheet's header colour.** A header colour must now be a preset or a `#RRGGBB` colour, so the three-digit form every browser also understands is saved in its six-digit form, and one already on a sheet opens as that colour. A colour that is not finished, such as `#12`, is pointed out in the colour picker before anything is sent, where it used to stop the whole save.

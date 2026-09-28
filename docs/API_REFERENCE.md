@@ -629,18 +629,22 @@ Get a single character. Returns full character data including the JSON sheet dat
 
 ### `PUT /api/characters/:id`
 
-Save character data. Accepts partial data — only provided fields are updated.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped.
+
+Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
 **Request:**
 ```json
 {
   "data": {
-    "name": "Thorin Ironforge",
-    "hitPoints": { "current": 10, "maximum": 12 }
+    "characterName": "Thorin Ironforge",
+    "hp": { "current": 10, "maximum": 12, "temporary": 0 }
   },
-  "tokenImageUrl": "https://..."
+  "updatedAt": "2026-09-28T08:15:02.117Z"
 }
 ```
+
+(The `data` above is cut short; a real D&D 5e sheet also needs `class`, `level`, `race`, `proficiencyBonus` and `stats`.)
 
 ---
 
