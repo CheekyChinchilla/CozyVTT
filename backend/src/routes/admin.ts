@@ -755,12 +755,17 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
   await ensureBackupDir(BACKUP_DIR);
   const { filename, handle } = await openNewBackup();
   const zipPath = path.join(BACKUP_DIR, filename);
-  const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
   // The stream takes the handle over once it exists; until then a failure
   // has to close it here.
   let streamed = false;
+  let dumpDir: string | null = null;
 
   try {
+    // pg_dump creates its file with the default mode, which on a host without
+    // Docker leaves the whole database readable by every local account for as
+    // long as the backup runs. mkdtemp makes a folder only this user can open.
+    dumpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-db-'));
+    const sqlPath = path.join(dumpDir, 'database.sql');
     try {
       await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
@@ -797,7 +802,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     await fs.unlink(zipPath).catch(() => {});
     throw error;
   } finally {
-    await fs.unlink(sqlPath).catch(() => {});
+    if (dumpDir !== null) await fs.rm(dumpDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -919,12 +924,16 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
   }
 
   const uploadedZip = req.file.path;
-  const tempDir = path.join(os.tmpdir(), `cozyvtt-restore-${Date.now()}`);
+  let tempDir: string | null = null;
 
   try {
     // The upload is a backup too, written by multer with the default mode;
     // close it to everyone but the backend's user before anything else.
     await fs.chmod(uploadedZip, 0o600);
+
+    // The backup is unpacked, and the copy psql loads written, in a folder
+    // only the backend's user can open: both are the whole database.
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
 
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
@@ -1086,7 +1095,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
   } finally {
     // Always clean up temp files
     await fs.unlink(uploadedZip).catch(() => {});
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    if (tempDir !== null) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 });
 

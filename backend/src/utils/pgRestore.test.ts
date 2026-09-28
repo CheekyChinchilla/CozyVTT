@@ -307,6 +307,15 @@ describe('prepareDumpForRestore', () => {
     expect(result.refused).toBeNull();
   });
 
+  it('writes the file psql loads readable by its owner alone, since it is the whole database', async () => {
+    const src = await write('database.sql', NEWER_CLIENT_DUMP);
+    const dest = path.join(dir, 'restore.sql');
+
+    await prepareDumpForRestore(src, dest);
+
+    expect((await fs.stat(dest)).mode & 0o077).toBe(0);
+  });
+
   describe('what psql is allowed to run', () => {
     it('opens with a restricted-mode line under a new key each time, so psql runs no command the backup holds', async () => {
       const src = await write('database.sql', NEWER_CLIENT_DUMP);
