@@ -1827,12 +1827,18 @@ paths:
         in the same transaction.
 
         Validation:
+        - `characterIds`, when sent, must be a list of at most 50 non-empty ids.
         - The invitation must belong to the authenticated user and be `PENDING`.
+          It is accepted once: a second accept, even one sent at the same moment,
+          answers 400 `Invitation already processed`.
         - Expired invitations are rejected.
         - All `characterIds` must belong to the user and not already be assigned
-          to a campaign.
-        - If the campaign has a `gameSystem` set, each character's `gameSystem`
-          must either be null or match the campaign's.
+          to a campaign. One assigned elsewhere while the accept runs makes it
+          answer 400 and change nothing.
+        - Each character's `gameSystem` must be the campaign's: a character with
+          a system joins only a campaign with the same one, and a character with
+          none (Flexible) only a campaign with none. The same rule as
+          `POST /api/characters/{id}/assign`.
 
         On success, also broadcasts a `roster.updated` event over the WebSocket
         to all current campaign members.
@@ -1853,6 +1859,7 @@ paths:
               properties:
                 characterIds:
                   type: array
+                  maxItems: 50
                   items: { type: string, format: uuid }
             example:
               characterIds:
@@ -1870,8 +1877,9 @@ paths:
                     $ref: '#/components/schemas/CampaignMembership'
         '400':
           description: |
-            Invitation already processed, expired, or character validation failed
-            (not owned by user, already assigned, or game-system mismatch).
+            Invitation already processed, expired, `characterIds` malformed, or
+            character validation failed (not owned by user, already assigned, or
+            game-system mismatch).
           content:
             application/json:
               schema:

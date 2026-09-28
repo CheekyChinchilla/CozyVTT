@@ -9,8 +9,16 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
+import { acceptInvitationSchema } from '../validators/invitations';
+import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
 const router = Router();
+
+/**
+ * A check that failed inside the accept transaction, answered as a 400. Thrown
+ * so the transaction rolls back whatever it had already written.
+ */
+class AcceptRefused extends Error {}
 
 /**
  * GET /api/invitations
@@ -62,7 +70,14 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
   try {
     const userId = req.session.userId!;
     const { id: invitationId } = req.params;
-    const { characterIds = [] } = req.body;
+    const parsed = acceptInvitationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid character selection',
+      });
+    }
+    const { characterIds } = parsed.data;
 
     // Verify invitation exists and belongs to user
     const invitation = await prisma.campaignInvitation.findUnique({
@@ -108,52 +123,64 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
         });
       }
 
-      // Check game system compatibility
-      if (invitation.campaign.gameSystem) {
-        const incompatibleCharacter = characters.find(
-          (c) => c.gameSystem && c.gameSystem !== invitation.campaign.gameSystem
-        );
-        if (incompatibleCharacter) {
-          return res.status(400).json({
-            message: `Character "${incompatibleCharacter.name}" is not compatible with campaign game system`,
-          });
-        }
+      // The same rule as assigning a character from the Characters page.
+      const incompatibleCharacter = characters.find(
+        (c) => !systemsCompatible(c.gameSystem, invitation.campaign.gameSystem)
+      );
+      if (incompatibleCharacter) {
+        return res.status(400).json({
+          message: `Character "${incompatibleCharacter.name}" is not compatible with campaign game system`,
+        });
       }
     }
 
-    // Use transaction to ensure consistency
-    const result = await prisma.$transaction(async (tx) => {
-      // Update invitation status
-      await tx.campaignInvitation.update({
-        where: { id: invitationId },
-        data: { status: 'ACCEPTED' },
-      });
+    // Use transaction to ensure consistency. The checks above ran outside it,
+    // so the two that another request can change meanwhile are made again by
+    // the writes themselves: the invitation is accepted only while it is still
+    // pending, and a character is brought only while it is still in no
+    // campaign. Either failing undoes the rest.
+    const result = await prisma
+      .$transaction(async (tx) => {
+        const accepted = await tx.campaignInvitation.updateMany({
+          where: { id: invitationId, status: 'PENDING' },
+          data: { status: 'ACCEPTED' },
+        });
+        if (accepted.count === 0) throw new AcceptRefused('Invitation already processed');
 
-      // Create campaign membership
-      const membership = await tx.campaignMembership.create({
-        data: {
-          userId,
-          campaignId: invitation.campaignId,
-          role: 'PLAYER',
-          characterIds,
-        },
-      });
-
-      // Assign characters to campaign
-      if (characterIds.length > 0) {
-        await tx.character.updateMany({
-          where: {
-            id: { in: characterIds },
-            userId,
-          },
+        // Create campaign membership
+        const membership = await tx.campaignMembership.create({
           data: {
+            userId,
             campaignId: invitation.campaignId,
+            role: 'PLAYER',
+            characterIds,
           },
         });
-      }
 
-      return membership;
-    });
+        // Assign characters to campaign
+        if (characterIds.length > 0) {
+          const assigned = await tx.character.updateMany({
+            where: {
+              id: { in: characterIds },
+              userId,
+              campaignId: null,
+            },
+            data: {
+              campaignId: invitation.campaignId,
+            },
+          });
+          if (assigned.count !== characterIds.length) {
+            throw new AcceptRefused('A selected character has just been assigned to a campaign');
+          }
+        }
+
+        return membership;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof AcceptRefused) return error;
+        throw error;
+      });
+    if (result instanceof AcceptRefused) return res.status(400).json({ message: result.message });
 
     // Broadcast roster.updated to campaign members
     try {
