@@ -3258,7 +3258,7 @@ paths:
                       type: object
                       properties:
                         path: { type: string, example: 'stats.strength' }
-                        message: { type: string, example: 'Expected number, received string' }
+                        message: { type: string, example: 'Invalid input: expected number, received string' }
                         code: { type: string, example: 'invalid_type' }
               examples:
                 valid:
@@ -3271,7 +3271,7 @@ paths:
                     isValid: false
                     errors:
                       - path: 'stats.strength'
-                        message: 'Expected number, received string'
+                        message: 'Invalid input: expected number, received string'
                         code: 'invalid_type'
         '400':
           description: Character has no game system assigned.
@@ -8516,7 +8516,7 @@ components:
             message: Character data does not match the campaign's game system schema.
             details:
               field: 'data.stats.strength'
-              issue: 'Expected number, received string'
+              issue: 'Invalid input: expected number, received string'
 
     RateLimited:
       description: |
