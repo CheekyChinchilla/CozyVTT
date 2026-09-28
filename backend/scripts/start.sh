@@ -12,10 +12,18 @@ set -e
 # dashboard writes backups there as appuser.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /app/uploads /app/logs /app/backups
-  chown -R appuser:appgroup /app/uploads /app/logs /app/backups
+  chown -R appuser:appgroup /app/uploads /app/logs
   # Backups hold every credential on the instance: the directory is the
-  # backend user's alone, on the host as in the container.
-  chmod 700 /app/backups
+  # backend user's alone, on the host as in the container. The backups
+  # folder may be a NAS or USB mount that refuses an owner or mode change;
+  # that is said, and the backend still starts (the dashboard reports it if
+  # it then cannot write there).
+  if ! chown -R appuser:appgroup /app/backups 2>/dev/null; then
+    echo "⚠️  Could not give the backups folder to the backend user; if backups fail, check the folder's owner." >&2
+  fi
+  if ! chmod 700 /app/backups 2>/dev/null; then
+    echo "⚠️  Could not make the backups folder private (mode 700); its listing may be readable by other accounts." >&2
+  fi
   exec su-exec appuser "$0" "$@"
 fi
 

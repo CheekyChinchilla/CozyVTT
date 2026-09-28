@@ -748,7 +748,7 @@ docker compose config --services
 
 The list should include `nginx`, the bundled web server that answers your visitors. If it is missing, your override file is switching nginx off (it holds the `profiles: ["disabled"]` line from the example file); take the `nginx:` line and the `profiles:` line under it out of the file and run `docker compose up -d` again.
 
-The backend takes ownership of the new folder when it starts. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
+The backend takes ownership of the new folder when it starts and makes it private to itself. On a NAS or USB drive that does not accept Linux owners or permissions, it cannot; it still starts, and its log (`docker compose logs backend`) says so. Backups there are then readable by whoever can read that drive, so choose one only you can reach. Backups already in `backend/backups/` stay there; to move the ones you want to keep:
 
 ```bash
 sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
