@@ -141,6 +141,15 @@ const TokenSchema = z.object({
 
 // ── Map data ────────────────────────────────────────────────────────────────
 
+// TODO(import): one field over its limit refuses the whole map, walls and
+// tokens included, and the import result still reports the archive's map
+// count. An archive written by 1.4.0 can hit this: that release stored token
+// notes and names of any length, and wrote imageAssetRef as null when a map's
+// picture had been deleted. The same limits were in 1.4.0's importer, so this
+// is not new. A token over a limit should be imported with that field cut
+// back or dropped, a map with no picture should import (Map.imageUrl is
+// required, so it needs a placeholder), and the result should count the maps
+// actually created.
 export const MapDataSchema = z.object({
   name: z.string().min(1).max(200),
   imageAssetRef: z.string().max(200),
