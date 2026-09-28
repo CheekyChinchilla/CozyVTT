@@ -660,7 +660,14 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
-Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`: `sudo mv backend/uploads/backups/*.zip backend/backups/`.
+Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`, and the second command makes the moved backups readable by that user alone, as new ones are:
+
+```bash
+sudo mv backend/uploads/backups/*.zip backend/backups/
+sudo chmod 600 backend/backups/*.zip
+```
+
+Without Docker, `backend/backups/` appears the first time the Backups tab is opened; to move them before that, create it with `mkdir -p backend/backups && chmod 700 backend/backups`, then run the same two commands without `sudo`.
 
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
