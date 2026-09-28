@@ -13,6 +13,7 @@ import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/
 import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
+import logger from '../utils/logger';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -276,11 +277,18 @@ export interface HandlerContext {
 /**
  * Send every connected member the map as they are allowed to see it: the DM
  * everything, each player only what their role, plane and sight permit. One
- * resync path for a map switch, a spirit-realm crossing, and a lighting or
- * Global Illumination change, so a player is never left holding a token the
- * server would no longer send them, or missing one it now would.
+ * resync path for a map switch, a spirit-realm crossing, a lighting or
+ * Global Illumination change, and a light, wall or door change on a lit map,
+ * so a player is never left holding a token the server would no longer send
+ * them, or missing one it now would. `players` leaves out the DM, who is
+ * sent everything whatever the light.
  */
-export async function broadcastMapData(io: Server, campaignId: string, map: MapData): Promise<void> {
+export async function broadcastMapData(
+  io: Server,
+  campaignId: string,
+  map: MapData,
+  audience: 'everyone' | 'players' = 'everyone'
+): Promise<void> {
   const members = await campaignSockets(io, campaignId);
   const visibility = await getSpiritVisibilityBatch(
     campaignId,
@@ -288,8 +296,47 @@ export async function broadcastMapData(io: Server, campaignId: string, map: MapD
   );
   for (const s of stillInCampaign(members, campaignId)) {
     const member = s as unknown as AuthenticatedSocket;
+    if (audience === 'players' && member.role === 'DM') continue;
     const spiritVisible = member.role === 'DM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
     const mapData = filterMapData(map, member.role || 'PLAYER', spiritVisible, member.userId);
     s.emit('map.changed', { mapId: map.id, mapData, spiritVisible });
   }
+}
+
+/**
+ * On a lit map, which tokens a player is sent depends on the lights, walls
+ * and doors. After any of them changes, players are sent the map again as
+ * they can now see it: a creature a new light shows, or a door opens onto,
+ * appears at once, and one whose light goes out leaves their browser. Only
+ * for the map the table is on, since players are sent no other.
+ *
+ * Changes come in bursts (a wall drawn as two segments, a replace after a
+ * drag), so one re-send per map follows the last change of a burst by
+ * SIGHT_RESEND_MS. Best-effort: the change is saved by then, so a failure is
+ * logged and nothing else.
+ */
+const SIGHT_RESEND_MS = 150;
+const pendingSightResends = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function resendSightAfterChange(io: Server, campaignId: string, mapId: string): void {
+  const key = `${campaignId}:${mapId}`;
+  const pending = pendingSightResends.get(key);
+  if (pending) clearTimeout(pending);
+  const timer = setTimeout(() => {
+    pendingSightResends.delete(key);
+    void (async () => {
+      try {
+        const [map, campaign] = await Promise.all([
+          prisma.map.findUnique({ where: { id: mapId } }),
+          prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+        ]);
+        if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
+        await broadcastMapData(io, campaignId, map, 'players');
+      } catch (err) {
+        logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
+      }
+    })();
+  }, SIGHT_RESEND_MS);
+  timer.unref?.();
+  pendingSightResends.set(key, timer);
 }
