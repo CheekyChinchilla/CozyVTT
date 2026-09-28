@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
+import { apiErrorStatus } from '@/utils/errors';
 import type {
   Map as CampaignMap,
   TokenMoveStartEvent,
@@ -277,7 +278,17 @@ class SocketClient {
   private async checkSignIn(): Promise<void> {
     try {
       await api.listCampaigns();
-    } catch {
+    } catch (error) {
+      // Signed out or held for a password change: the API client sends the
+      // page to sign in, and there is nothing to reconnect to. Anything else
+      // (the network, a server that could not read its sessions) says nothing
+      // about the sign-in, so ask again after a while, within the attempts.
+      const status = apiErrorStatus(error);
+      if (status === 401 || status === 403) return;
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+      const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 30000);
+      this.reconnectAttempts++;
+      setTimeout(() => { void this.checkSignIn(); }, delay);
       return;
     }
     this.reconnect();
