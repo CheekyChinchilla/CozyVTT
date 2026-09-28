@@ -63,9 +63,9 @@ import {
  * The sheet as this editor holds it.
  *
  * `PF2eCharacterData` plus `themeColor`, the header colour chosen in the
- * editor. It is not part of the game system, but it is saved with the sheet:
- * `PUT /characters/:id` validates the body and stores it as sent, rather than
- * storing Zod's parsed output, so a key the schema does not declare survives.
+ * editor. It is not part of the game system, but every system's schema
+ * declares it, so it is saved with the sheet. The server stores the schema's
+ * parsed sheet, so anything this editor writes has to be declared there too.
  */
 interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
   /** Absent, not null, for a sheet with none: the schema refuses null. */

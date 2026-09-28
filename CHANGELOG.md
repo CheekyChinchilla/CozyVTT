@@ -95,7 +95,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Pathfinder 2e spell slots show how many are used.** The **Used** count under each spell rank in the Pathfinder 2e editor never reached the read-only sheet, which always showed none used. The editor now saves it where the sheet reads it, and a count recorded on 1.4.0 is carried across the first time the sheet is saved.
 
-- **Pathfinder 2e feat descriptions are kept and shown.** The box under each feat in the Pathfinder 2e editor is saved with the sheet again, and the read-only sheet now shows it under the feat's name. It only ever showed in the editor before.
+- **Pathfinder 2e feat descriptions show on the sheet.** The box under each feat in the Pathfinder 2e editor was saved, but only ever shown in the editor. The read-only sheet now shows it under the feat's name.
 
 - **A wall changed through the API shows up on open pages at once.** The API's wall routes saved the change without telling anyone, so an open page kept its old walls, and on a lit map its old line of sight, until it loaded the map again. They now tell every open page as a change made on the map does.
 
@@ -213,7 +213,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 - **Only the DM's messages are shown as DM messages.** A player could send a chat message marked as coming from the DM, and it appeared with the DM's gold styling and badge. Who sent it is now taken from the sender's role in the campaign, not from the message.
 
-- **Character sheets keep only the fields the sheet defines.** A sheet saved through the API could carry extra keys the game system never defined, and they were stored untouched. The server now stores exactly what the sheet schema accepts. The header colour chosen on a sheet is part of that, so it is kept.
+- **Character sheets keep only the fields the sheet defines.** A sheet could carry extra keys the game system never defined, and they were stored untouched: any key a program sent through the API, and a few the sheets themselves wrote into places nothing reads. The server now stores exactly what the sheet schema accepts, so such a key is dropped the next time the sheet is saved. Everything the editors let you fill in is defined, including the header colour, a Pathfinder 2e feat's description and a Call of Cthulhu custom skill's name, and the fields the built-in sheets of versions before 1.3.0 wrote are moved to where the sheet reads them before anything is dropped.
 
 - **Campaign settings are checked before they are saved.** Updating a campaign accepted any value for any field: a name of any length, an unknown status, atmosphere settings that were not even an object. Each field is now validated and a bad one is refused with a message saying which.
 

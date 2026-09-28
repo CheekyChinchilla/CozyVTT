@@ -69,9 +69,10 @@ import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
  * The sheet as this editor holds it.
  *
  * `proficiencies` used to be redeclared here, because the game system's own
- * type did not describe it and it survived a save only by accident — the route
- * stores the body as sent rather than Zod's parsed output. It is a declared
- * field on both sides now, so this adds nothing but the editor's own chrome.
+ * type did not describe it; it was saved only because the route then stored
+ * the body as sent. The route stores the schema's parsed sheet now, and the
+ * field is declared on both sides, so this adds nothing but the editor's own
+ * chrome.
  */
 type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 

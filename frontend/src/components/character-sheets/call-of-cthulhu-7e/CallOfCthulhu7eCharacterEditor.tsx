@@ -35,15 +35,17 @@ import { apiErrorMessage } from '@/utils/errors';
 
 /**
  * The sheet as this editor holds it: `CoC7eCharacterData` plus `themeColor`,
- * the header colour chosen in the editor. It is not part of the game system but
- * it is saved with the sheet, because `PUT /characters/:id` validates the body
- * and stores it as sent rather than storing Zod's parsed output.
+ * the header colour chosen in the editor. It is not part of the game system,
+ * but every system's schema declares it, so it is saved with the sheet. The
+ * server stores the schema's parsed sheet, so anything this editor writes has
+ * to be declared there too.
  */
 interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
   /**
-   * Not declared by `CoC7eCharacterData`, which keeps the investigator's name
-   * at the top level as `investigatorName`. Only the token-upload filename
-   * reads this, so a sheet without it simply falls back to "Investigator".
+   * Not declared by `CoC7eCharacterData` or the schema, which keep the
+   * investigator's name at the top level as `investigatorName`, so the server
+   * drops it on save. Only the token-upload filename reads it, and falls back
+   * to "Investigator" without it.
    */
   personalDetails?: { name?: string };
 }
