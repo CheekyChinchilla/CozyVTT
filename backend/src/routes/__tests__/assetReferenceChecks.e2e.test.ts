@@ -21,6 +21,7 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { randomUUID } from 'crypto';
 import request from 'supertest';
+import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
@@ -33,6 +34,8 @@ let campaignId: string;
 let mapId: string;
 let dm: ReturnType<typeof request.agent>;
 let privateId: string;
+let outsiderId: string | undefined;
+let adminId: string | undefined;
 let ownId: string;
 const assetIds: string[] = [];
 
@@ -77,7 +80,7 @@ afterAll(async () => {
   await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([dmId, playerId, ...[outsiderId, adminId].filter((id): id is string => id !== undefined)]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -131,14 +134,103 @@ describe('an update naming an asset the DM cannot read', () => {
 });
 
 describe('an update that leaves a stored reference as it was', () => {
-  it('goes through, even when the asset can no longer be read', async () => {
-    // A template whose picture was set before the check, or whose asset has
-    // since gone; renaming it re-sends the stored address.
-    const stale = `/api/assets/tokens/${randomUUID()}`;
+  // A picture that exists but that the DM can no longer read: its uploader is
+  // in no campaign with them (a player who has left, say), so the reference
+  // grants no one anything. An edit re-sends the stored address, and refusing
+  // it would refuse every edit of the record. An asset that no longer exists
+  // would not do: that is accepted whatever the record holds.
+  let strandedUrl: string;
+  beforeAll(async () => {
+    const outsider = await createTestUser({ displayName: 'Refs Outsider' });
+    outsiderId = outsider.id;
+    strandedUrl = `/api/assets/tokens/${await makeAsset(outsiderId, 'stranded')}`;
+    expect((await dm.get(strandedUrl)).status).toBe(403);
+  });
+
+  it('goes through for a token template', async () => {
     const template = await prisma.tokenTemplate.create({
-      data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Old', imageUrl: stale, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+      data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Old', imageUrl: strandedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
     });
-    const res = await dm.put(url(`${base}/token-templates/${template.id}`)).send({ name: 'Renamed', imageUrl: stale });
-    expect(res.status).toBe(200);
+    expect((await dm.put(url(`${base}/token-templates/${template.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+  });
+
+  it('goes through for a creature template', async () => {
+    const creature = await prisma.creatureTemplate.create({
+      data: { campaignId, createdById: dmId, name: 'Old', imageUrl: strandedUrl, statBlock: commoner },
+    });
+    expect((await dm.put(url(`${base}/creatures/${creature.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+  });
+
+  it('goes through for a token', async () => {
+    const tokenId = randomUUID();
+    const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const tokens = Array.isArray(map.tokens) ? map.tokens : [];
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { tokens: [...tokens, { id: tokenId, name: 'Old', imageUrl: strandedUrl, position: { x: 3, y: 3 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, rotation: 0, conditions: [], metadata: {}, type: 'npc' }] },
+    });
+    expect((await dm.put(url(`${base}/maps/${mapId}/tokens/${tokenId}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+  });
+
+  it('goes through for a map', async () => {
+    const other = await prisma.map.create({
+      data: { campaignId, name: 'Old', imageUrl: strandedUrl, baseLayerUrl: strandedUrl, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+    });
+    expect((await dm.put(url(`${base}/maps/${other.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+  });
+});
+
+describe('creating a map', () => {
+  // As on every other route: a picture deleted since the list was loaded
+  // grants nothing, and is not a reason to refuse.
+  it('accepts a picture that no longer exists', async () => {
+    const res = await dm.post(url(`${base}/maps`)).send({ name: 'Gone', imageUrl: `/api/assets/maps/${randomUUID()}`, width: 10, height: 10, gridSize: 50 });
+    expect(res.status).toBe(201);
+  });
+
+  it("refuses a player's private picture", async () => {
+    const res = await dm.post(url(`${base}/maps`)).send({ name: 'Theirs', imageUrl: `/api/assets/maps/${privateId}`, width: 10, height: 10, gridSize: 50 });
+    expect(res.status).toBe(403);
+  });
+});
+
+// Storing a reference opens the asset to everyone at the table, so it needs
+// more than an administrator's right to read any file: the DM must be able to
+// read it as the DM, as setting a scene's music already requires.
+describe('a DM who is also an administrator', () => {
+  let adminCampaignId: string;
+  let adminMapId: string;
+  let admin: ReturnType<typeof request.agent>;
+  beforeAll(async () => {
+    const adminUser = await createTestUser({ displayName: 'Refs Admin DM', role: PlatformRole.ADMIN });
+    adminId = adminUser.id;
+    adminCampaignId = (await createTestCampaign(adminId, { name: 'Admin refs' })).id;
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: adminId, campaignId: adminCampaignId, role: 'DM', characterIds: [] },
+        { userId: playerId, campaignId: adminCampaignId, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    adminMapId = (await prisma.map.create({
+      data: { campaignId: adminCampaignId, name: 'Admin map', imageUrl: `/api/assets/maps/${ownId}`, baseLayerUrl: `/api/assets/maps/${ownId}`, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+    })).id;
+    admin = request.agent(app);
+    expect((await admin.post('/api/auth/login').send({ email: adminUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  });
+  afterAll(async () => {
+    await prisma.map.deleteMany({ where: { campaignId: adminCampaignId } });
+    await prisma.tokenTemplate.deleteMany({ where: { campaignId: adminCampaignId } });
+    await prisma.creatureTemplate.deleteMany({ where: { campaignId: adminCampaignId } });
+    await cleanupCampaigns([adminCampaignId]);
+  });
+
+  it("cannot put a player's private picture in front of the table", async () => {
+    const privateUrl = `/api/assets/tokens/${privateId}`;
+    const at = (p: string) => `/api/campaigns/${adminCampaignId}${p}`;
+    expect((await admin.post(at('/token-templates')).send({ name: 'Imp', imageUrl: privateUrl })).status).toBe(403);
+    expect((await admin.post(at('/creatures')).send({ name: 'Imp', statBlock: commoner, imageUrl: privateUrl })).status).toBe(403);
+    expect((await admin.post(at(`/maps/${adminMapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: privateUrl })).status).toBe(403);
+    expect((await admin.put(at(`/maps/${adminMapId}`)).send({ imageUrl: `/api/assets/maps/${privateId}` })).status).toBe(403);
+    expect((await admin.post(at('/maps')).send({ name: 'Theirs', imageUrl: `/api/assets/maps/${privateId}`, width: 10, height: 10, gridSize: 50 })).status).toBe(403);
   });
 });

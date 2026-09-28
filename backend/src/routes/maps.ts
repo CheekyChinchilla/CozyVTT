@@ -8,8 +8,8 @@ import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
-import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { normalizeAssetUrl } from '../utils/asset-urls';
+import { canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
@@ -161,14 +161,8 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     // the read rule then saw a legitimate-looking reference and allowed it.
     // Refusing the reference is the half of that fix that stops it being
     // created in the first place.
-    const referenced = [normalizedImageUrl, normalizedSpiritLayerUrl].filter(
-      (url): url is string => typeof url === 'string' && url.length > 0
-    );
-    const isAdmin = req.session.platformRole === 'ADMIN';
-    for (const url of referenced) {
-      const assetId = extractAssetId(url);
-      if (!assetId) continue;
-      if (!(await canReadAssetById(assetId, req.session.userId!, isAdmin))) {
+    for (const url of [normalizedImageUrl, normalizedSpiritLayerUrl]) {
+      if (!(await canReferenceAsset(url, req.session.userId!))) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to that image',
@@ -716,7 +710,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         });
       }
       // A picture the DM may read, as on create (canReferenceAsset)
-      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.imageUrl))) {
+      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.imageUrl = normalizedImageUrl;
@@ -733,7 +727,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       }
       // Normalize to full path (or null)
       const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
-      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existingMap.spiritLayerUrl))) {
+      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
@@ -1057,7 +1051,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
     // Art the DM may read: a token's art counts as the campaign using it.
-    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -1339,7 +1333,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const nextImageUrl = updates.imageUrl === undefined
       ? undefined
       : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
-    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, req.session.platformRole === 'ADMIN', existingToken.imageUrl))) {
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 

@@ -712,7 +712,6 @@ export async function canReadAssetById(
 export async function canReferenceAsset(
   address: string | null | undefined,
   userId: string,
-  isAdmin: boolean,
   stored?: string | null
 ): Promise<boolean> {
   if (!address) return true;
@@ -724,5 +723,8 @@ export async function canReferenceAsset(
     select: { id: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
-  return canReadAsset(asset, userId, isAdmin);
+  // Never as an administrator: an admin may read any file, but a stored
+  // reference opens the asset to everyone at the table, as setting a scene's
+  // music does (handlers/atmosphere.ts).
+  return canReadAsset(asset, userId, false);
 }

@@ -143,7 +143,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // The image has to be one the caller may read. Storing an unchecked
     // reference is what let a member read a fellow member's private asset:
     // a character pointing at it counted as the campaign using it.
-    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -538,7 +538,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       // Normalize tokenImageUrl to full path (or null), and check what is stored
       const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
       // The picture already on the sheet may be sent back as it is.
-      if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN', character.tokenImageUrl))) {
+      if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, character.tokenImageUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
       updateData.tokenImageUrl = normalizedTokenImageUrl;
