@@ -19,6 +19,7 @@ import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { toJson } from '../../utils/prisma-json';
+import { setState, clearState } from '../initiativeState';
 import {
   createWsTestServer,
   waitForEvent,
@@ -223,6 +224,63 @@ describe('authenticating into another campaign on the same socket', () => {
     host.emit('map.change', { mapId: mapA });
     await expect(nothing).resolves.toBeUndefined();
 
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  // A fan-out picks its sockets, reads the database, then reads each
+  // socket's role. A switch that lands in between must not get the old
+  // campaign's data worked out for the new campaign's role.
+  it('never answers a request from the room it left with the new role', async () => {
+    const entry = (tokenId: string, name: string) => ({
+      tokenId, mapId: mapA, name, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null,
+    });
+    setState(campaignA, { active: true, round: 1, currentTokenId: null, combatants: [entry(SEEN_TOKEN, 'Guard'), entry(HIDDEN_TOKEN, 'Assassin')] });
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+
+    // Hold the request's first database read until the switch has finished.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let reading!: () => void;
+    const reached = new Promise<void>((resolve) => { reading = resolve; });
+    const findMany = prisma.map.findMany.bind(prisma.map);
+    const held = jest.spyOn(prisma.map, 'findMany').mockImplementationOnce(((args: never) => {
+      reading();
+      return gate.then(() => findMany(args));
+    }) as never);
+
+    const sent: string[] = [];
+    switcher.on('initiative.state', (state: { combatants: Array<{ tokenId: string }> }) => {
+      sent.push(...state.combatants.map((c) => c.tokenId));
+    });
+    switcher.emit('initiative.request_state');
+    await reached;
+    await reauth(switcher, campaignB);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(sent).not.toContain(HIDDEN_TOKEN);
+    held.mockRestore();
+    clearState(campaignA);
+    switcher.disconnect();
+  });
+
+  // Who a drag's frames go to is decided once, when it starts. A socket
+  // decided then and switched since must not keep receiving the old table's
+  // token positions for the rest of the drag.
+  it('stops sending a drag in the room it left to a socket that switched mid-drag', async () => {
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+    const started = waitForEvent(switcher, 'token.move.start');
+    host.emit('token.move.start', { tokenId: SEEN_TOKEN, mapId: mapA });
+    await started;
+
+    await reauth(switcher, campaignB);
+    const quiet = expectNoEvent(switcher, 'token.moved', 800);
+    host.emit('token.move', { tokenId: SEEN_TOKEN, mapId: mapA, x: 3, y: 2 });
+    await expect(quiet).resolves.toBeUndefined();
+
+    host.emit('token.move.end', { tokenId: SEEN_TOKEN, mapId: mapA, x: 2, y: 2 });
     host.disconnect();
     switcher.disconnect();
   });

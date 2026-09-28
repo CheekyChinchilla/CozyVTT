@@ -71,6 +71,19 @@ export async function campaignSockets(io: Server, campaignId: string): Promise<C
 }
 
 /**
+ * Those of `sockets` that still belong to the campaign. campaignSockets
+ * checks when it fetches; a fan-out that awaits anything after that, a
+ * database read say, calls this again right before it reads each socket's
+ * role, with no await between the check and the emits. A socket that
+ * authenticated into another campaign in the meantime carries that
+ * campaign's role, and is skipped instead of being sent this campaign's
+ * data worked out for it.
+ */
+export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T[] {
+  return sockets.filter((s) => (s as unknown as AuthenticatedFields).campaignId === campaignId);
+}
+
+/**
  * Send one of a map's live edits (its walls, lights, fog, settings, pings,
  * the explored-memory reset, the DM's editing notice) to everyone who may
  * read that map (canReadMap): the whole campaign while it is the map on
