@@ -27,6 +27,7 @@ import type {
   DnD5eSavingThrows,
   DnD5eSkills,
   DnD5eSpellcasting,
+  DnD5eSpellSlots,
   DnD5eAppearance,
   DnD5ePersonality,
   SheetChrome,
@@ -172,6 +173,23 @@ function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
 }
 
 /**
+ * All nine spell slot levels, from whatever the sheet stored.
+ *
+ * The schema requires every level once `slots` is present, so a sheet stored
+ * with none, or a block the editor makes up for a sheet with no spellcasting,
+ * would have its first slot edit, or its first save, refused.
+ */
+function withAllSlotLevels(stored: unknown): DnD5eSpellSlots {
+  const source = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const levels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((level) => {
+    const slot = (typeof source[level] === 'object' && source[level] !== null ? source[level] : {}) as Record<string, unknown>;
+    return [level, { total: count(slot.total), expended: count(slot.expended) }] as const;
+  });
+  return Object.fromEntries(levels) as unknown as DnD5eSpellSlots;
+}
+
+/**
  * Drop the separate `languages` list a sheet written before 1.3.0 carries.
  *
  * The form's proficiency boxes are read from the stored sheet, which puts
@@ -219,17 +237,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     skills: (data.skills || {}) as DnD5eSkills,
     hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
     deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    // Same TODO(typing) as the containers above: this default omits `class`
-    // and its `slots` has none of the nine levels, both of which the type
-    // requires and the sheet below reads. Cast rather than corrected.
-    spellcasting: (data.spellcasting || {
-      ability: '',
-      spellSaveDC: 0,
-      spellAttackBonus: 0,
-      cantrips: [],
-      slots: {},
-      spells: [],
-    }) as DnD5eSpellcasting,
+    // Same TODO(typing) as the containers above: this default omits `class`,
+    // which the type requires. Cast rather than corrected.
+    spellcasting: (data.spellcasting
+      ? { ...data.spellcasting, slots: withAllSlotLevels(data.spellcasting.slots) }
+      : {
+          ability: '',
+          spellSaveDC: 0,
+          spellAttackBonus: 0,
+          cantrips: [],
+          slots: withAllSlotLevels(undefined),
+          spells: [],
+        }) as DnD5eSpellcasting,
     currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: data.inventory || [],
     attacks: data.attacks || [],
