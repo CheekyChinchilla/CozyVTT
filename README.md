@@ -281,8 +281,9 @@ uploads/
   audio/       Ambient audio files
   avatars/     User profile avatars
   documents/   PDF, text and Markdown documents
-  backups/     Database backup files (pg_dump)
 ```
+
+Backups made from the Admin Panel are not kept here: they go in `backend/backups/`.
 
 ---
 
