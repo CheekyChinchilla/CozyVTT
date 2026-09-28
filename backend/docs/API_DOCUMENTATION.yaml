@@ -1116,7 +1116,34 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: The user runs a campaign they own; the message names it. Nothing was changed.
+          description: >-
+            The user runs a campaign they own. `campaigns` lists each such
+            campaign with its other members,
+            so the admin can hand the DM seat over (`PUT
+            /api/campaigns/{campaignId}/dm`) or delete the campaign and try
+            again. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
+                  campaigns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        members:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              userId: { type: string, format: uuid }
+                              displayName: { type: string }
+                              role: { type: string, enum: [PLAYER, SPECTATOR] }
 
   /api/users/{id}/reset-password:
     post:

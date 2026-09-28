@@ -787,6 +787,16 @@ export interface RosterMember {
 // Asset
 // ============================================
 
+/**
+ * A campaign that stops an account being deleted: its owner is its DM. An
+ * admin clears it by handing the DM seat to one of `members`, or deleting it.
+ */
+export interface DeletionBlocker {
+  id: string;
+  name: string;
+  members: { userId: string; displayName: string; role: string }[];
+}
+
 export interface Asset {
   id: string;
   type: AssetType;

@@ -1238,7 +1238,19 @@ link the user has not used stops working.
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account and all associated data.
+Delete a user account. Their memberships, characters, notes and dice macros go with it; their chat messages, dice rolls and uploads stay with no owner. A campaign they own passes to its sitting DM.
+
+**409** while they are the DM of a campaign they own. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again:
+
+```json
+{
+  "error": "Conflict",
+  "message": "This user runs \"Friday Game\". Hand each one's DM seat to another member, or delete it, then delete the user.",
+  "campaigns": [
+    { "id": "…", "name": "Friday Game", "members": [{ "userId": "…", "displayName": "Bob", "role": "PLAYER" }] }
+  ]
+}
+```
 
 ---
 

@@ -26,12 +26,15 @@
  * this yields `undefined` and the call site's fallback instead.
  */
 
+import type { DeletionBlocker } from '@/types';
+
 /** An axios-shaped error body, as this API returns it. */
 interface ApiErrorBody {
   message?: unknown;
   error?: unknown;
   code?: unknown;
   validationErrors?: unknown;
+  campaigns?: unknown;
 }
 
 function errorResponse(err: unknown): { status?: unknown; data?: ApiErrorBody } | undefined {
@@ -104,6 +107,32 @@ export function apiValidationIssues(err: unknown): ApiValidationIssue[] | undefi
       ...(typeof record.code === 'string' ? { code: record.code } : {}),
     };
   });
+}
+
+/**
+ * `err.response.data.campaigns` from a refused account deletion: the
+ * campaigns its user runs, and who else is in each. Entries that are not
+ * shaped like one are left out.
+ */
+export function apiDeletionBlockers(err: unknown): DeletionBlocker[] | undefined {
+  const campaigns = errorResponse(err)?.data?.campaigns;
+  if (!Array.isArray(campaigns)) return undefined;
+  const text = (value: unknown): value is string => typeof value === 'string';
+  const blockers: DeletionBlocker[] = [];
+  for (const entry of campaigns) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    if (!text(record.id) || !text(record.name) || !Array.isArray(record.members)) continue;
+    const members = record.members.flatMap((member: unknown) => {
+      if (!member || typeof member !== 'object') return [];
+      const m = member as Record<string, unknown>;
+      return text(m.userId) && text(m.displayName) && text(m.role)
+        ? [{ userId: m.userId, displayName: m.displayName, role: m.role }]
+        : [];
+    });
+    blockers.push({ id: record.id, name: record.name, members });
+  }
+  return blockers;
 }
 
 /** `err.message` when the thrown value is a real Error, or carries a string message. */

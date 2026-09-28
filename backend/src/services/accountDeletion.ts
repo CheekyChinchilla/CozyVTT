@@ -14,21 +14,48 @@
 
 import { prisma } from '../config/database';
 
+/**
+ * A campaign that stops a deletion, with the other members its DM seat could
+ * go to, so an admin can hand it over (the DM transfer route lets an admin
+ * do that) or delete it, and a user who will not cannot keep their account
+ * that way.
+ */
+export interface BlockingCampaign {
+  id: string;
+  name: string;
+  members: { userId: string; displayName: string; role: string }[];
+}
+
 export type AccountDeletion =
   | { deleted: true; campaignIds: string[] }
-  | { deleted: false; runs: string[] };
+  | { deleted: false; runs: BlockingCampaign[] };
 
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
   return prisma.$transaction(async (tx) => {
     const owned = await tx.campaign.findMany({
       where: { ownerId: userId },
-      select: { id: true, name: true, memberships: { where: { role: 'DM' }, select: { userId: true } } },
+      select: {
+        id: true,
+        name: true,
+        memberships: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
+      },
     });
-    const runs = owned.filter((c) => c.memberships.every((m) => m.userId === userId)).map((c) => c.name);
+    const dmOf = (c: (typeof owned)[number]) => c.memberships.find((m) => m.role === 'DM')?.userId;
+    const runs = owned
+      .filter((c) => dmOf(c) === undefined || dmOf(c) === userId)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        members: c.memberships
+          .filter((m) => m.userId !== userId)
+          .map((m) => ({ userId: m.userId, displayName: m.user.displayName, role: m.role })),
+      }));
     if (runs.length > 0) return { deleted: false, runs };
 
+    // Every campaign left here has a DM other than this user.
     for (const campaign of owned) {
-      await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: campaign.memberships[0].userId } });
+      const dm = dmOf(campaign);
+      if (dm !== undefined) await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: dm } });
     }
     // The campaigns they were in, read before the cascade removes the rows.
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
@@ -39,9 +66,9 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
 }
 
 /** The reason a deletion was refused, for the person or an admin. */
-export function runsCampaignsMessage(runs: string[], whose: 'you' | 'they'): string {
-  const list = runs.map((name) => `"${name}"`).join(', ');
+export function runsCampaignsMessage(runs: BlockingCampaign[], whose: 'you' | 'they'): string {
+  const list = runs.map((c) => `"${c.name}"`).join(', ');
   return whose === 'you'
     ? `You run ${list}. Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.`
-    : `This user runs ${list}. They, or you as an admin, can hand the DM seat to someone else or delete the campaign first.`;
+    : `This user runs ${list}. Hand each one's DM seat to another member, or delete it, then delete the user.`;
 }

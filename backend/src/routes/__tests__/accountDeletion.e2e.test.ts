@@ -108,3 +108,32 @@ it('refuses while the person runs a campaign of their own, and changes nothing',
   expect(res.body.message).toContain(name);
   expect(await prisma.user.findUnique({ where: { id: owner.user.id } })).not.toBeNull();
 });
+
+// An admin has to be able to remove an account that will not step down: a
+// user who runs their own campaigns cannot otherwise keep their account by
+// refusing to hand them over. The refusal lists each campaign in the way and
+// who else is in it; the admin hands the DM seat over or deletes the campaign.
+describe('an admin deleting a user who runs their own campaigns', () => {
+  it('is told which campaigns and members, and can then clear the way', async () => {
+    const admin = await member('Deletion Admin 2', PlatformRole.ADMIN);
+    const stubborn = await member('Deletion Stubborn DM');
+    const heir = await member('Deletion Heir');
+    const shared = await campaignRunBy(stubborn.user.id, stubborn.user.id, [heir.user.id]);
+    const solo = await campaignRunBy(stubborn.user.id, stubborn.user.id);
+
+    const refused = await admin.agent.delete(`/api/users/${stubborn.user.id}`);
+    expect(refused.status).toBe(409);
+    const blocking = refused.body.campaigns as Array<{ id: string; members: Array<{ userId: string; displayName: string }> }>;
+    expect(blocking.map((c) => c.id).sort()).toEqual([shared, solo].sort());
+    expect(blocking.find((c) => c.id === shared)?.members).toEqual([
+      { userId: heir.user.id, displayName: 'Deletion Heir', role: 'PLAYER' },
+    ]);
+    expect(blocking.find((c) => c.id === solo)?.members).toEqual([]);
+
+    expect((await admin.agent.put(`/api/campaigns/${shared}/dm`).send({ userId: heir.user.id })).status).toBe(200);
+    expect((await admin.agent.delete(`/api/campaigns/${solo}`)).status).toBe(200);
+
+    expect((await admin.agent.delete(`/api/users/${stubborn.user.id}`)).status).toBe(200);
+    expect((await prisma.campaign.findUniqueOrThrow({ where: { id: shared } })).ownerId).toBe(heir.user.id);
+  });
+});

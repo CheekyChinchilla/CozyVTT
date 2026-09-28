@@ -63,6 +63,7 @@ import type {
   AdminBackup,
   Asset,
   Campaign,
+  DeletionBlocker,
 } from '@/types';
 import { PlatformRole, AssetType, AssetScope } from '@/types';
 import { api, type RestoreReply } from '@/services/api';
@@ -77,8 +78,9 @@ import ThemePicker from '@/components/appearance/ThemePicker';
 import TableSkeleton from '@/components/skeletons/TableSkeleton';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiDeletionBlockers } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import DeletionBlockers from '@/components/admin/DeletionBlockers';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -187,6 +189,8 @@ export default function AdminPage() {
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [deleteEmail, setDeleteEmail] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  // Campaigns the user runs, which the server says must be handed over or deleted first.
+  const [deleteBlockers, setDeleteBlockers] = useState<DeletionBlocker[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Reset password flow
@@ -567,11 +571,17 @@ export default function AdminPage() {
       setDeleteEmail('');
       showToast(`User "${deletedName}" deleted`, 'success');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setDeleteError(apiErrorMessage(e) ?? 'Failed to delete user');
+      setDeleteError(apiErrorMessage(err) ?? 'Failed to delete user');
+      setDeleteBlockers(apiDeletionBlockers(err) ?? []);
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const clearDeleteBlocker = (campaignId: string) => {
+    const left = deleteBlockers.filter((c) => c.id !== campaignId);
+    setDeleteBlockers(left);
+    if (left.length === 0) setDeleteError('');
   };
 
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
@@ -597,6 +607,7 @@ export default function AdminPage() {
     setDeletingUser(null);
     setDeleteEmail('');
     setDeleteError('');
+    setDeleteBlockers([]);
     setDeletingUserAssetCount(0);
   };
 
@@ -1503,6 +1514,9 @@ export default function AdminPage() {
                                       )}
                                       {deleteError && (
                                         <p className="text-xs text-danger-ink mb-2">{deleteError}</p>
+                                      )}
+                                      {deleteBlockers.length > 0 && (
+                                        <DeletionBlockers campaigns={deleteBlockers} onCleared={clearDeleteBlocker} onError={setDeleteError} />
                                       )}
                                       <div className="flex items-center gap-2">
                                         <input

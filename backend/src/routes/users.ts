@@ -472,7 +472,11 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     // See services/accountDeletion.ts for what stays and what goes.
     const deletion = await deleteAccount(id);
     if (!deletion.deleted) {
-      return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'they') });
+      return res.status(409).json({
+        error: 'Conflict',
+        message: runsCampaignsMessage(deletion.runs, 'they'),
+        campaigns: deletion.runs,
+      });
     }
     const campaignIds = deletion.campaignIds;
 
