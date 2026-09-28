@@ -82,7 +82,11 @@ export function readCharacterTokenDrag(raw: string): CharacterTokenDrag | null {
  * The token to create for a dragged character.
  *
  * `type: PLAYER` is set explicitly because the server defaults a new token to
- * `npc`, and the token roster categorises by that field.
+ * `npc`, and the token roster categorises by that field. No controller is
+ * named: the server gives a character's token to its owner while they are a
+ * player, and to nobody when the owner is the DM or a spectator. Naming the
+ * owner here made placing a DM's or a spectator's character a 400, since only
+ * a player may be named.
  */
 export function characterTokenRequest(
   drag: CharacterTokenDrag,
@@ -97,7 +101,6 @@ export function characterTokenRequest(
     size: { width: 1, height: 1 },
     layer,
     visible: true,
-    controlledBy: drag.userId || null,
     type: TokenType.PLAYER,
   };
 }
