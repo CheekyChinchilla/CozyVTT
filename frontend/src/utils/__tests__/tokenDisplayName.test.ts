@@ -28,3 +28,11 @@ describe('tokenPublicName', () => {
     expect(tokenPublicName({ name: 'Goblin Boss', visible: true })).toBe('Goblin Boss');
   });
 });
+
+describe('tokenPublicName on the spirit layer', () => {
+  it('never names a spirit-plane token, which players on the material plane are not sent', () => {
+    expect(tokenPublicName({ name: 'Wraith', layer: 'spirit' })).toBe('Unknown creature');
+    expect(tokenPublicName({ name: 'Goblin Boss', layer: 'token' })).toBe('Goblin Boss');
+  });
+});
+

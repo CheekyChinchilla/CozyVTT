@@ -7,13 +7,15 @@
  * whoever is looking. The second form is for anything said in front of the
  * whole table, a roll in the dice log for instance: there an obscured token
  * is not named even by the DM, who knows perfectly well what it is, and
- * neither is a hidden one, which players are not sent at all.
+ * neither is a hidden one, which players are not sent at all, nor one on the
+ * spirit layer, which players on the material plane are not sent.
  */
 
 export interface NamedToken {
   name: string;
   obscured?: boolean;
   visible?: boolean;
+  layer?: string;
 }
 
 export const UNKNOWN_CREATURE = 'Unknown creature';
@@ -25,5 +27,5 @@ export function tokenDisplayName(token: NamedToken): string {
 
 /** The name to use in front of everyone. */
 export function tokenPublicName(token: NamedToken): string {
-  return token.obscured || token.visible === false ? UNKNOWN_CREATURE : tokenDisplayName(token);
+  return token.obscured || token.visible === false || token.layer === 'spirit' ? UNKNOWN_CREATURE : tokenDisplayName(token);
 }
