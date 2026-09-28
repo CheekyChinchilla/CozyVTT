@@ -12,6 +12,7 @@ import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { seedSrdCreatures, getSrdSeedStatus } from '../services/creatureSeed';
 import { normalizeAssetUrl } from '../utils/asset-urls';
+import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
 import { toJson } from '../utils/prisma-json';
 import logger from '../utils/logger';
@@ -195,6 +196,12 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     }
     const data = parsed.data;
 
+    // A picture the DM may read: a creature's picture counts as the campaign using it.
+    const imageUrl = normalizeAssetUrl(data.imageUrl || null, 'tokens');
+    if (!(await canReferenceAsset(imageUrl, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     const template = await prisma.creatureTemplate.create({
       data: {
         id: randomUUID(),
@@ -206,7 +213,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         alignment: data.alignment || null,
         // Stored as the canonical /api/assets/tokens/{uuid}, matching characters
         // and maps. Clients may send either a bare asset id or a full path.
-        imageUrl: normalizeAssetUrl(data.imageUrl || null, 'tokens'),
+        imageUrl,
         statBlock: toJson(data.statBlock),
         size: data.size || { width: 1, height: 1 },
         disposition: data.disposition || 'hostile',
@@ -262,6 +269,12 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(403).json({ error: 'Forbidden', message: 'Cannot edit creatures from another campaign' });
     }
 
+    // A new picture the DM may read; the one already stored may stay.
+    const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, req.session.platformRole === 'ADMIN', existing.imageUrl))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     const updated = await prisma.creatureTemplate.update({
       where: { id: creatureId },
       data: {
@@ -271,9 +284,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
         ...(data.creatureType !== undefined && { creatureType: data.creatureType }),
         ...(data.alignment !== undefined && { alignment: data.alignment }),
         // Empty string clears the image; anything else normalises to a full path.
-        ...(data.imageUrl !== undefined && {
-          imageUrl: data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null,
-        }),
+        ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
         ...(data.statBlock !== undefined && { statBlock: toJson(data.statBlock) }),
         ...(data.size !== undefined && { size: data.size }),
         ...(data.disposition !== undefined && { disposition: data.disposition }),

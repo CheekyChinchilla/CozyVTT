@@ -691,3 +691,37 @@ export async function canReadAssetById(
   if (!asset) return false;
   return canReadAsset(asset, userId, isAdmin);
 }
+
+/**
+ * May this user store this address as a reference to an asset: a map's
+ * image or spirit layer, a token's art, a template's or a character's
+ * picture. The read rule counts any stored reference as the campaign using
+ * the asset, so storing one without this check is what let a member read an
+ * asset of someone else's by naming it.
+ *
+ * Pass the address exactly as it will be stored, since normalising can turn
+ * an address that names no asset into one that does. An address that names
+ * no asset, or none, is fine, and so is one naming an asset that does not
+ * exist: it grants nothing, and a picture deleted since a template or a token
+ * was made would otherwise refuse every copy of it. So is the address already
+ * stored on the record being updated (`stored`): refusing it would refuse
+ * every unrelated edit of a record whose picture has since become unreadable,
+ * and keeping it grants nothing it did not already.
+ */
+export async function canReferenceAsset(
+  address: string | null | undefined,
+  userId: string,
+  isAdmin: boolean,
+  stored?: string | null
+): Promise<boolean> {
+  if (!address) return true;
+  if (stored !== undefined && address === stored) return true;
+  const assetId = extractAssetId(address);
+  if (!assetId) return true;
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+  });
+  if (!asset) return true;
+  return canReadAsset(asset, userId, isAdmin);
+}
