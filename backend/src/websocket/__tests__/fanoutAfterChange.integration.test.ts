@@ -35,6 +35,20 @@ const token = (id: string, extra: Record<string, unknown>) => ({
 });
 const boom = () => Promise.reject(new Error('database went away'));
 
+/**
+ * Read until `ok` holds, for up to five seconds. The handler saves after the
+ * emit has returned, so a single read after a quiet window could come before
+ * the save on a slow machine.
+ */
+async function eventually<T>(read: () => Promise<T>, ok: (value: T) => boolean): Promise<T> {
+  for (let tries = 0; tries < 50; tries++) {
+    const value = await read();
+    if (ok(value)) return value;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return read();
+}
+
 beforeAll(async () => {
   dmId = (await prisma.user.create({ data: { email: `fanout-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Fanout DM' } })).id;
   campaignId = (await prisma.campaign.create({ data: { name: `Fanout ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
@@ -85,7 +99,10 @@ it("revealing one spirit token stands when re-sending the map fails", async () =
   const noError = expectNoEvent(dm, 'error', 800);
   dm.emit('spirit_layer.token.toggle', { mapId, tokenId: GHOST, visible: true });
   await expect(noError).resolves.toBeUndefined();
-  const tokens = readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens);
+  const tokens = await eventually(
+    async () => readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens),
+    (list) => list.find((t) => t.id === GHOST)?.visible === true
+  );
   expect(tokens.find((t) => t.id === GHOST)?.visible).toBe(true);
 });
 
@@ -111,8 +128,9 @@ it('a wall added stands, and is not reported as failed, when telling the table f
   const segment = { id: randomUUID(), x1: 0, y1: 0, x2: 50, y2: 0, type: 'wall' };
   dm.emit('wall:add', { mapId, segment });
   await expect(noError).resolves.toBeUndefined();
-  const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } });
-  expect((stored.wallSegments as Array<{ id: string }>).some((w) => w.id === segment.id)).toBe(true);
+  const hasWall = (row: { wallSegments: unknown }) => (row.wallSegments as Array<{ id: string }>).some((w) => w.id === segment.id);
+  const stored = await eventually(() => prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } }), hasWall);
+  expect(hasWall(stored)).toBe(true);
 });
 
 
@@ -122,7 +140,11 @@ it('a fog change stands, and is not reported as failed, when telling the table f
   const noError = expectNoEvent(dm, 'error', 800);
   dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1] } });
   await expect(noError).resolves.toBeUndefined();
-  const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
-  expect((stored.fogData as { revealed: boolean[] } | null)?.revealed.slice(0, 2)).toEqual([true, true]);
+  const revealed = (row: { fogData: unknown }) => (row.fogData as { revealed: boolean[] } | null)?.revealed.slice(0, 2);
+  const stored = await eventually(
+    () => prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } }),
+    (row) => JSON.stringify(revealed(row)) === JSON.stringify([true, true])
+  );
+  expect(revealed(stored)).toEqual([true, true]);
   await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
 });
