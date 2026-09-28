@@ -49,7 +49,7 @@ import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
-import { isHexColor } from '@/utils/styleAllowlists';
+import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import {
   readPf2eSpellSlots,
   readPf2eCantrips,
@@ -311,9 +311,14 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (isHexColor(data.themeColor)) {
-        setCustomColorHex(data.themeColor);
-        setIsCustomColor(true);
+      } else {
+        // A three-digit colour is expanded, so it opens as itself rather than
+        // as the default preset.
+        const hex = toStoredHexColor(data.themeColor);
+        if (hex) {
+          setCustomColorHex(hex);
+          setIsCustomColor(true);
+        }
       }
     }
   }, [data.themeColor]);
@@ -321,6 +326,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
     setIsCustomColor(true);
+    setErrors((prev) => ({ ...prev, themeColor: '' }));
   };
 
   const handlePresetColorSelect = (color: typeof COLOR_PRESETS[0]) => {
@@ -657,6 +663,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.level || formData.level < 1 || formData.level > 20) {
       newErrors.level = 'Level must be between 1 and 20';
     }
+    // The server refuses a colour it cannot read, and the whole save with it.
+    if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
+      newErrors.themeColor = HEX_COLOUR_HINT;
+      setShowColorPicker(true);
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -683,7 +694,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         // Drop class-feature rows left blank. The editor keeps them while you
         // type; storage should not.
         classFeatures: readFeatureEntries(formData.classFeatures),
-        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+        themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : selectedColor.name,
       } as CharacterData;
 
       // Upload token image if a new one was selected
@@ -786,8 +797,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               <div className="flex items-center space-x-2">
                 <input type="color" value={customColorHex || '#1d4ed8'} onChange={(e) => handleCustomColorChange(e.target.value)} className="w-12 h-12 rounded cursor-pointer border-2 border-stone-300" title="Pick a custom color" />
                 <div className="flex-1">
-                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" aria-label="Custom colour hex code" className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code</div>
+                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
             </div>

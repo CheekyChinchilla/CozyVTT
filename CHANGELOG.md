@@ -81,6 +81,10 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **A save the server refuses no longer throws away your edits.** On the full-page character editor, a refused save replaced the sheet with "Failed to Load Character", and everything typed since the last save was lost. The reason is now shown in a message and the sheet stays open with your edits, so you can correct them and save again.
+
+- **A short colour code such as `#fff` works as a sheet's header colour.** A header colour must now be a preset or a `#RRGGBB` colour, so the three-digit form every browser also understands is saved in its six-digit form, and one already on a sheet opens as that colour. A colour that is not finished, such as `#12`, is pointed out in the colour picker before anything is sent, where it used to stop the whole save.
+
 - **A D&D 5e character made before 1.3.0 keeps its proficiencies and languages.** The built-in templates of those versions stored them as plain lists the sheet did not read, so it showed none, and the first save in the editor replaced them with four empty boxes. The sheet now reads them into the boxes, so they show and are saved. Saving any character made before 1.3.0 also moves its other older fields to where the sheet reads them, as the `migrate:sheet-fields` command does, so nothing depends on having run the command first.
 
 - **Call of Cthulhu skills inside a group can be edited.** Changing **Fighting (Brawl)**, a **Firearms** skill, an **Other Language**, a **Science** or a custom skill in the editor did nothing: the box went back to its old value and the change was not saved. These now save like every other skill.

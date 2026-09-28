@@ -146,20 +146,24 @@ export default function CharacterEditorPage() {
       } catch (err: unknown) {
         console.error('Failed to save character:', err);
 
-        // Show detailed validation errors if available
+        // Said in a toast, and thrown on so the sheet stays in edit mode with
+        // everything typed into it. This used to set the page's load error,
+        // which replaced the editor with "Failed to Load Character" and threw
+        // the unsaved edits away.
         const validationErrors = apiValidationIssues(err);
         if (validationErrors) {
-          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('\n');
-          setError(`Validation errors:\n${errorMessages}`);
+          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('; ');
+          showToast(`Not saved. ${errorMessages}`, 'error');
           console.error('Validation errors:', validationErrors);
         } else {
-          setError(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character');
+          showToast(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character', 'error');
         }
+        throw err;
       } finally {
         setSaving(false);
       }
     },
-    [character]
+    [character, showToast]
   );
 
   // ============================================

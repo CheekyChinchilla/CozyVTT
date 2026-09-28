@@ -63,7 +63,7 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
-import { isHexColor } from '@/utils/styleAllowlists';
+import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 
 /**
  * The sheet as this editor holds it.
@@ -312,10 +312,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (isHexColor(data.themeColor)) {
-        // Custom hex color
-        setCustomColorHex(data.themeColor);
-        setIsCustomColor(true);
+      } else {
+        // Custom hex colour, a three-digit one expanded, so it opens as itself
+        // rather than as the default preset.
+        const hex = toStoredHexColor(data.themeColor);
+        if (hex) {
+          setCustomColorHex(hex);
+          setIsCustomColor(true);
+        }
       }
     }
   }, [data.themeColor]);
@@ -324,6 +328,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
     setIsCustomColor(true);
+    setErrors((prev) => ({ ...prev, themeColor: '' }));
   };
 
   // Handle preset color selection
@@ -681,6 +686,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       newErrors.characterName = 'Character name is required';
     }
 
+    // The server refuses a colour it cannot read, and the whole save with it.
+    if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
+      newErrors.themeColor = HEX_COLOUR_HINT;
+      setShowColorPicker(true);
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -712,7 +723,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Include color customization in saved data
       const updatedData = {
         ...formData,
-        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+        themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : selectedColor.name,
       };
 
       // Proficiencies.
@@ -949,9 +960,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                     }}
                     placeholder="#b91c1c"
+                    aria-label="Custom colour hex code"
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #b91c1c)</div>
+                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
 
