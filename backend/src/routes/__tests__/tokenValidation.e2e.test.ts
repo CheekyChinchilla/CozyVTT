@@ -8,9 +8,8 @@
  *
  * The token *template* route has always validated the same shapes, so the
  * schemas existed; the map routes simply never used them. Nothing in the app's
- * own UI sends a bad shape, which is why this went unseen — but CLAUDE.md's
- * threat model is that any authenticated user may be hostile, and a DM is
- * authenticated. Types are erased at runtime, so the schema is the only thing
+ * own UI sends a bad shape, which is why this went unseen — but any
+ * authenticated user may be hostile, and a DM is authenticated. Types are erased at runtime, so the schema is the only thing
  * actually standing here.
  *
  * The visible consequence was HP written in the character-sheet shape

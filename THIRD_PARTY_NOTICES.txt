@@ -258,11 +258,6 @@ dotenv 16.6.1
   License: BSD-2-Clause
   https://github.com/motdotla/dotenv
 
-@anthropic-ai/sdk 0.85.0
-  Copyright (c) Anthropic
-  License: MIT
-  https://github.com/anthropics/anthropic-sdk-typescript
-
 openai 6.33.0
   Copyright (c) OpenAI
   License: Apache-2.0
