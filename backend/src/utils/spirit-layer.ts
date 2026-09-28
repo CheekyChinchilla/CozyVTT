@@ -95,8 +95,10 @@ export async function getSpiritVisibility(
 
   // Individual player check: are they personally in the spirit realm?
   // A player has crossed over if their token (controlledBy === userId) is on
-  // the spirit layer and visible in the campaign's current map.
-  if (campaign.currentMapId) {
+  // the spirit layer and visible in the campaign's current map. Only a
+  // player: a spectator can still be named on a token from before they were
+  // demoted, and that name is nobody's, here as in every other filter.
+  if (membership.role === 'PLAYER' && campaign.currentMapId) {
     const currentMap = await prisma.map.findUnique({
       where: { id: campaign.currentMapId },
       select: { tokens: true },
@@ -160,10 +162,7 @@ export async function getSpiritVisibilityBatch(
     campaign != null &&
     !campaign.spiritLayerEnabled &&
     campaign.currentMapId != null &&
-    uniqueIds.some((id) => {
-      const role = roleByUser.get(id);
-      return role != null && role !== 'DM';
-    });
+    uniqueIds.some((id) => roleByUser.get(id) === 'PLAYER');
 
   if (needsCrossover && campaign?.currentMapId) {
     const currentMap = await prisma.map.findUnique({
@@ -184,7 +183,8 @@ export async function getSpiritVisibilityBatch(
       result.set(userId, true);
       continue;
     }
-    result.set(userId, spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
+    // Crossing over is a player's; see getSpiritVisibility.
+    result.set(userId, role === 'PLAYER' && spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
   }
 
   return result;

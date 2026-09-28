@@ -47,7 +47,9 @@ screen; the token-image sync that route runs skips any campaign where the
 editor is a spectator. `controlledBy` may only name a player
 (`canHoldTokens`): a token cannot be created for or handed to a spectator, a
 spectator's character is placed with no controller, and what a spectator is
-sent never treats a token as theirs (`viewerIdFor` in `utils/spirit-layer.ts`).
+sent never treats a token as theirs (`viewerIdFor` in `utils/spirit-layer.ts`),
+nor does crossing into the spirit realm, which `getSpiritVisibility` counts
+for players only.
 
 ---
 

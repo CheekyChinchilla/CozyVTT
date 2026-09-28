@@ -6,7 +6,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canActOnTokenPlane, filterMapData, getSpiritVisibility, tokenForRecipient, viewerIdFor } from '../utils/spirit-layer';
+import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
@@ -1383,10 +1383,13 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // carries every token, hidden ones included, with notes, stat blocks and
     // hit points, plus the fog grid and the spirit layer, and a player moving
     // their own token could read all of it here.
+    // The token too: a player is sent it only if the map would send it to
+    // them (visible, on their plane), with the fields they may see, and
+    // otherwise null, so the reply never holds what the map beside it leaves out.
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
     return res.status(200).json({
       message: 'Token updated successfully',
-      token: isDM ? updatedToken : tokenForRecipient(updatedToken, viewerIdFor(membership.role, userId)),
+      token: isDM ? updatedToken : (filterTokensByRole([updatedToken], membership.role, spiritVisible, userId)[0] ?? null),
       map: filterMapData(updatedMap, membership.role, spiritVisible, userId),
     });
   } catch (error) {

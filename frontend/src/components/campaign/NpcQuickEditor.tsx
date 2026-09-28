@@ -118,7 +118,8 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     if (isSaving.current) return;
     try {
       const result = await api.updateToken(campaignId, mapId, token.id, changes);
-      onTokenUpdate(result.token);
+      // The DM, the only one this editor opens for, always gets the token back.
+      if (result.token) onTokenUpdate(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
       // Say why, or the edit stays in the field looking saved. A token from

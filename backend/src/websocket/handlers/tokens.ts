@@ -260,9 +260,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const movingTokens = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
       const movingToken = movingTokens.find((t) => t.id === tokenId);
 
-      // Who may move this token, the same pair of checks token.move.start
-      // makes. Nothing server-side ties a start event to the moves that follow
-      // it, so this cannot lean on that one. Refusals are silent because this
+      // Who may move this token, the same checks token.move.start makes.
+      // Nothing server-side ties a start event to the moves that follow it,
+      // so this cannot lean on that one. Refusals are silent because this
       // fires up to 60 times a second and an error per frame would be its own
       // problem; token.move.end answers properly.
       if (!movingToken) {
@@ -270,6 +270,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       if (!canControlToken(socket.role, movingToken.controlledBy, socket.userId)) {
+        return;
+      }
+
+      // The plane rule, as on the start and the drop. It reads the database
+      // only for a spirit-layer token moved by someone other than the DM.
+      if (!(await canActOnTokenPlane(socket.role, movingToken, socket.campaignId, socket.userId!))) {
         return;
       }
 
