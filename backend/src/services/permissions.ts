@@ -489,9 +489,10 @@ async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId
  * and is unchanged — being able to see the battlemap must not mean being able
  * to delete it.
  *
- * The asset id is matched as a substring of the stored URL, which is the shape
- * everything writes (`/api/assets/maps/<id>`). Ids are UUIDs, so a partial
- * collision is not a practical concern.
+ * A stored address counts only when it names this asset: it is read with
+ * extractAssetId, the reader the write routes check an address with before
+ * storing it, and the id it gives must equal `assetId`. Where a query below
+ * matches the id as a substring, that only narrows the rows it reads.
  */
 export async function assetUsedInUserCampaign(
   assetId: string,

@@ -23,7 +23,10 @@ export interface CharacterTokenDrag {
   name: string;
   /** Empty when the character has no token picture — not a reason to refuse. */
   imageUrl: string;
-  /** The player who owns the character; becomes the token's controller. */
+  /**
+   * Who owns the character. Not sent with the token: the server decides the
+   * controller (see `characterTokenRequest`).
+   */
   userId: string;
 }
 
