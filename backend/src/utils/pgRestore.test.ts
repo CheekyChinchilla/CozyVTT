@@ -5,6 +5,15 @@
  * flags asserted here are what stand between a corrupt backup file and an
  * instance with no data in it. They were missing, and a failed restore reported
  * success.
+ *
+ * What these tests do not do: load a prepared file into a real PostgreSQL.
+ * They check the text psql is handed and the arguments it is run with. The
+ * suites run where the PostgreSQL client tools are not installed (the backend
+ * image has them; a developer's machine and the CI test job need not), so a
+ * test that needed psql would be skipped there and prove nothing. Restoring a
+ * real backup end to end is part of the upgrade rehearsal before a release:
+ * restore a backup from the previous release onto a fresh stack and check the
+ * data survives.
  */
 
 import fs from 'fs/promises';
