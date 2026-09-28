@@ -81,6 +81,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Fixed
 
+- **Adding a cantrip, spell or focus spell no longer stops a Pathfinder 2e sheet saving.** Each was added without details the server requires, so the save was refused, and so was every save after it until the entry was deleted. Turning on spellcasting for a character, and saving a character with no spellcasting at all, were refused the same way. All of them save now.
+
 - **Pathfinder 2e spell slots show how many are used.** The **Used** count under each spell rank in the Pathfinder 2e editor never reached the read-only sheet, which always showed none used. The editor now saves it where the sheet reads it, and a count recorded on 1.4.0 is carried across the first time the sheet is saved.
 
 - **Pathfinder 2e feat descriptions are kept and shown.** The box under each feat in the Pathfinder 2e editor is saved with the sheet again, and the read-only sheet now shows it under the feat's name. It only ever showed in the editor before.

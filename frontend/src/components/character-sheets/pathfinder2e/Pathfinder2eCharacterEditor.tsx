@@ -29,7 +29,6 @@ import type {
   PF2eInventoryItem,
   PF2eSkills,
   PF2eSpellcasting,
-  PF2eCantrip,
   PF2eAttributes,
   PF2eSavingThrows,
   PF2ePerception,
@@ -51,7 +50,14 @@ import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { isHexColor } from '@/utils/styleAllowlists';
-import { readPf2eSpellSlots } from './spellcastingEntries';
+import {
+  readPf2eSpellSlots,
+  readPf2eCantrips,
+  newPf2eCantrip,
+  newPf2eSpell,
+  newPf2eFocusSpell,
+  newPf2eSpellcasting,
+} from './spellcastingEntries';
 
 /**
  * The sheet as this editor holds it.
@@ -62,18 +68,15 @@ import { readPf2eSpellSlots } from './spellcastingEntries';
  * storing Zod's parsed output, so a key the schema does not declare survives.
  */
 interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
-  spellcasting?: PF2eEditorSpellcasting | null;
+  /** Absent, not null, for a sheet with none: the schema refuses null. */
+  spellcasting?: PF2eEditorSpellcasting;
 }
 
 /**
- * Spellcasting as this editor manipulates it, which is not what the shared type
- * or the backend schema declare.
- *
- * `cantrips` is widened because the rendering reads `cantrip.name || cantrip`,
- * tolerating a bare string. The schema wants objects, so that defence only ever
- * mattered for sheets written before the shape settled.
+ * Spellcasting as this editor manipulates it: the shared type, with rituals
+ * narrowed to one shape.
  */
-interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips'> {
+interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals'> {
   /**
    * Objects only. A stored ritual may be a bare name — that is all the schema
    * allowed until recently — so the initializer below normalises one into
@@ -81,7 +84,6 @@ interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'can
    * The name survives, so the upgrade costs nothing.
    */
   rituals?: { name: string; rank: number }[];
-  cantrips?: (PF2eCantrip | string)[];
 }
 
 interface Pathfinder2eCharacterEditorProps {
@@ -218,14 +220,14 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
       ...data.spellcasting,
-      cantrips: data.spellcasting.cantrips || [],
+      cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
       focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
       innateSpells: data.spellcasting.innateSpells || [],
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
-    } : null,
+    } : undefined,
     // TODO(typing): `{}` has none of the keys these types require, and the
     // inputs below read straight off them. Pre-existing; cast so the
     // behaviour for a sheet stored without one is exactly what it was.
@@ -1226,7 +1228,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
       return (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6 text-center">
           <p className="text-amber-800 mb-4">No spellcasting configured</p>
-          <button onClick={() => updateField('spellcasting', { tradition: 'arcane', type: 'prepared', keyAttribute: 'intelligence', spellAttackBonus: { proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }, spellDC: { proficiencyRank: 'trained', itemBonus: 0, dc: 10 }, cantrips: [], slots: {}, spells: [], focusSpells: { focusPoints: { total: 0, current: 0 }, spells: [] }, innateSpells: [], rituals: [] })} className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800">
+          <button onClick={() => updateField('spellcasting', newPf2eSpellcasting())} className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800">
             Enable Spellcasting
           </button>
         </div>
@@ -1304,7 +1306,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Cantrips</h3>
-            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), { name: 'New Cantrip', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Cantrip</span>
             </button>
@@ -1312,7 +1314,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={typeof cantrip === 'string' ? cantrip : cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                <input type="text" value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1349,7 +1351,7 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
-            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), { name: 'New Spell', rank: 1, tradition: formData.spellcasting!.tradition, prepared: formData.spellcasting!.type === 'prepared' }]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Spell</span>
             </button>
@@ -1395,7 +1397,7 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
 min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" fallback={0} />
                 <span className="text-sm text-stone-600">/ 3</span>
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), { name: 'New Focus Spell', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>
