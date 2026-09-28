@@ -721,6 +721,36 @@ class DumpFailed extends Error {
   }
 }
 
+/** pg_dump could not be started at all: it is not installed where the backend runs. */
+class ToolMissing extends Error {
+  constructor(readonly tool: string) {
+    super(`${tool} is not installed`);
+  }
+}
+
+/**
+ * The private temporary folder the dump is written into could not be made.
+ * Its error can carry ENOENT too, which is why a missing tool is its own
+ * error: the two need different fixes.
+ */
+class TempFolderUnusable extends Error {
+  constructor(readonly code: string | undefined) {
+    super('temporary folder unusable');
+  }
+}
+
+const TOOL_MISSING_REPLY = {
+  error: 'Tool Not Available',
+  message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
+};
+
+function tempFolderReply() {
+  return {
+    error: 'Backup Failed',
+    message: `The backup could not use the temporary folder (${os.tmpdir()}). Check that it exists and that the backend can write to it; if it is full or read-only, set TMPDIR to another folder.`,
+  };
+}
+
 /**
  * Write a backup ZIP into BACKUP_DIR: a pg_dump of the database (flags
  * explained in utils/pgRestore.ts), plus the uploaded files when asked. Create
@@ -764,12 +794,16 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     // pg_dump creates its file with the default mode, which on a host without
     // Docker leaves the whole database readable by every local account for as
     // long as the backup runs. mkdtemp makes a folder only this user can open.
-    dumpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-db-'));
+    try {
+      dumpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-db-'));
+    } catch (mkdtempError: unknown) {
+      throw new TempFolderUnusable(errorCode(mkdtempError));
+    }
     const sqlPath = path.join(dumpDir, 'database.sql');
     try {
       await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
-      if (errorCode(execError) === 'ENOENT') throw execError;
+      if (errorCode(execError) === 'ENOENT') throw new ToolMissing('pg_dump');
       throw new DumpFailed(errorCode(execError), errorStderr(execError));
     }
 
@@ -828,11 +862,12 @@ router.post('/backups', async (req, res) => {
 
     return res.status(201).json({ filename, sizeBytes, createdAt: new Date().toISOString() });
   } catch (error) {
-    if (errorCode(error) === 'ENOENT') {
-      return res.status(500).json({
-        error: 'Tool Not Available',
-        message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
-      });
+    if (error instanceof ToolMissing) {
+      return res.status(500).json(TOOL_MISSING_REPLY);
+    }
+    if (error instanceof TempFolderUnusable) {
+      logger.error('Backup could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
+      return res.status(500).json(tempFolderReply());
     }
     if (error instanceof DumpFailed) {
       logger.error('pg_dump error', { stderr: error.stderr, code: error.code });
@@ -983,11 +1018,12 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     try {
       safetyBackup = (await writeBackupZip(dbUrl, false)).filename;
     } catch (error) {
-      if (errorCode(error) === 'ENOENT') {
-        return res.status(500).json({
-          error: 'Tool Not Available',
-          message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
-        });
+      if (error instanceof ToolMissing) {
+        return res.status(500).json(TOOL_MISSING_REPLY);
+      }
+      if (error instanceof TempFolderUnusable) {
+        logger.error('Backup before restore could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
+        return res.status(500).json({ ...tempFolderReply(), message: `${tempFolderReply().message} Nothing was restored.` });
       }
       if (error instanceof DumpFailed) {
         logger.error('pg_dump error before restore', { stderr: error.stderr, code: error.code });

@@ -200,7 +200,7 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
-- **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did.
+- **On an install without Docker, the backups folder is private too.** Each backup was already readable by the backend's user alone, but the folder holding them was left open to other accounts on the machine, which could list every backup's name, date and size. The backend now makes the folder private whenever it uses it, as the Docker setup already did. When it closes up a folder that already existed, the backend's log says so and gives the old permissions, since another account that copied backups from it will no longer be able to.
 
 - **Players are no longer told about combatants on a map the table is not showing.** A creature added to the initiative order from a map you had prepared but not switched to, or moved there mid-fight, still appeared in every player's tracker with its name and picture, and its initiative roll was announced to them. Players now see, and hear the rolls of, only the combatants on the map the campaign is showing; the DM sees them all.
 
