@@ -24,6 +24,9 @@ node_modules/
 # ---- Build output -----------------------------------------------------------
 dist/
 build/
+# Python bytecode, written beside scripts/*.py whenever the doc checks run
+__pycache__/
+*.pyc
 
 # ---- Logs -------------------------------------------------------------------
 logs/
