@@ -51,10 +51,21 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Until a roll is waiting for the map lock the test holds: it has read the
  * order by then. Seen in pg_locks as an advisory lock not yet granted, so a
  * slow machine only waits longer, where a fixed pause could come too soon.
+ *
+ * Only this map's lock, in this database: pg_locks covers the whole server,
+ * and another suite running alongside has waiters of its own. The key is the
+ * one withMapsLocked takes, hashtext(mapId) as a bigint, which pg_locks shows
+ * split into its high and low 32 bits.
  */
 async function rollWaitingForLock(): Promise<void> {
   for (let tries = 0; tries < 100; tries++) {
-    const [{ n }] = await prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`;
+    const [{ n }] = await prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM pg_locks
+      WHERE locktype = 'advisory' AND NOT granted
+        AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND classid = ((hashtext(${mapId})::bigint >> 32) & 4294967295)::oid
+        AND objid = (hashtext(${mapId})::bigint & 4294967295)::oid
+        AND objsubid = 1`;
     if (n > 0) return;
     await pause(50);
   }
