@@ -353,3 +353,31 @@ describe("an admin's picture pickers", () => {
     }
   });
 });
+
+// A campaign asset stays with the campaign. Its uploader may delete or move
+// it while they are a member; once they have left, the map art the table
+// uses is the DM's to keep.
+describe("a campaign asset's uploader", () => {
+  it('may delete it while a member of the campaign', async () => {
+    const art = await makeAsset('TOKEN', 'CAMPAIGN', playerId, 'players-campaign-art');
+    expect((await player.delete(`/api/assets/${art}`)).status).toBe(200);
+  });
+
+  it('may neither delete nor move it once they have left', async () => {
+    const stamp = Date.now();
+    const leftUser = await createTestUser({ email: `scope-left-${stamp}@test.cozyvtt.local`, displayName: 'Scope Left' });
+    try {
+      const left = await login(leftUser.email);
+      const art = await makeAsset('MAP', 'CAMPAIGN', leftUser.id, 'departed-campaign-map');
+
+      expect((await left.delete(`/api/assets/${art}`)).status).toBe(403);
+      expect((await left.patch(`/api/assets/${art}/scope`).send({ scope: 'USER' })).status).toBe(403);
+      const kept = await prisma.asset.findUnique({ where: { id: art } });
+      expect(kept?.scope).toBe('CAMPAIGN');
+      expect(fs.existsSync(kept!.filePath)).toBe(true);
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: leftUser.id } });
+      await cleanupUsers([leftUser.id]);
+    }
+  });
+});

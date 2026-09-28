@@ -3387,7 +3387,7 @@ paths:
       tags:
         - Assets
       summary: Delete asset
-      description: Delete asset (owner, campaign DM, or admin)
+      description: Delete asset. A personal asset, its owner or an admin; a campaign asset, its uploader while still a member of that campaign, the campaign's DM, or an admin; a global asset, an admin or the uploading global asset manager.
       operationId: deleteAsset
       security:
         - cookieAuth: []
@@ -3428,8 +3428,8 @@ paths:
         |------|---------------|
         | Any move involving GLOBAL | Platform admin OR `globalAssetManager` |
         | USER → CAMPAIGN | Asset owner who is that campaign's DM; a player may move token art only; never a spectator |
-        | CAMPAIGN → USER | Asset owner OR DM of the source campaign |
-        | CAMPAIGN → CAMPAIGN | Asset owner OR DM of the source campaign |
+        | CAMPAIGN → USER | Asset owner while a member of the source campaign, OR its DM |
+        | CAMPAIGN → CAMPAIGN | Asset owner while a member of the source campaign, OR its DM |
         | USER → USER on a different account | Disallowed |
 
         When `scope: CAMPAIGN`, `campaignId` is required and the campaign must

@@ -1082,7 +1082,7 @@ Who may delete depends on the asset's scope:
 |---|---|
 | `GLOBAL` | A platform admin, or the uploader if they hold `globalAssetManager`. The permission covers your own global uploads — it does not let you remove another manager's |
 | `USER` | The owner, or a platform admin |
-| `CAMPAIGN` | The uploader, that campaign's DM, or a platform admin |
+| `CAMPAIGN` | The uploader while still a member of that campaign, its DM, or a platform admin |
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.

@@ -215,6 +215,8 @@ No new setting is required: backups go to `backend/backups/` on the host. (An in
 
 ### Security
 
+- **Someone who leaves a campaign can no longer delete or move the campaign's assets they uploaded.** An uploader kept the right to delete a campaign's map art or token art, or move it back into their own library, after leaving the campaign or being removed from it, taking it off every map that used it. That right now lasts only while they are a member; the DM can still delete or move it as before.
+
 - **A player removed from a campaign takes their characters with them.** Removing a member left each of their characters in the campaign, so the other players could still open the sheets, the DM could still edit them, and every change the removed player made was still sent to the table they had left. Their characters now leave the campaign with them and stay theirs. A character left behind this way by an earlier removal is treated the same: only its owner can open it.
 
 - **Exporting a campaign, or a map as a UVTT file, no longer hands over files the exporter cannot open.** A campaign's DM could give a template, token or map a picture address the image check did not recognise as naming a file (a document's address, or one with extra parts), and the exports, which read addresses their own way, then put another user's private upload into the download. Each export now includes only files the person exporting may open (a map whose picture is left out still imports, without it), and a picture address on this server has to be exactly a file's own address, or it is refused, a shared character template's picture included. That also stops a picture address pointing at another page of the app, which made every viewer's browser request that page.

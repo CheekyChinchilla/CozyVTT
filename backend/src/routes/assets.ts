@@ -577,11 +577,13 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     }
 
     let isCampaignDM = false;
+    let isCampaignMember = false;
     if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
       const membership = await prisma.campaignMembership.findUnique({
         where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
       });
       isCampaignDM = membership?.role === 'DM';
+      isCampaignMember = membership !== null;
     }
 
     // Scope-based permission matrix
@@ -602,14 +604,21 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
         });
       }
     } else if (asset.scope === 'CAMPAIGN') {
-      // Owner, campaign DM, or admin can delete campaign assets
-      if (!isOwner && !isCampaignDM && !isAdmin) {
+      // The uploader while still a member, the campaign's DM, or an admin: a
+      // campaign asset stays with the campaign once its uploader has left.
+      if (!(isOwner && isCampaignMember) && !isCampaignDM && !isAdmin) {
         return res.status(403).json({
           error: 'Forbidden',
-          message: 'Only the uploader, campaign DM, or an admin can delete campaign assets',
+          message: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
         });
       }
     }
+
+    // The record first: a delete that fails leaves the file for the record
+    // that still names it.
+    await prisma.asset.delete({
+      where: { id },
+    });
 
     // Delete file from filesystem
     try {
@@ -627,11 +636,6 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
         logger.error('Error deleting thumbnail', { err: thumbError });
       }
     }
-
-    // Delete database record
-    await prisma.asset.delete({
-      where: { id },
-    });
 
     return res.json({
       message: 'Asset deleted successfully',
@@ -1273,12 +1277,13 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
         });
       }
 
-      // Moving FROM CAMPAIGN: must be owner OR DM of the source campaign
-      if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isOwner) {
+      // Moving FROM CAMPAIGN: the owner while still a member, or the DM of
+      // the source campaign, as for a delete
+      if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
         const sourceMembership = await prisma.campaignMembership.findUnique({
           where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
         });
-        if (sourceMembership?.role !== 'DM') {
+        if (!(isOwner && sourceMembership) && sourceMembership?.role !== 'DM') {
           return res.status(403).json({
             error: 'Forbidden',
             message: 'Only the asset owner or campaign DM can move this asset',
