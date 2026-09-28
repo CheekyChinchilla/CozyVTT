@@ -198,7 +198,8 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
   let complete = false;
   const tables = new Set<string>();
 
-  const out = createWriteStream(outPath, { encoding: 'latin1' });
+  // The whole database: readable by the backend's user alone.
+  const out = createWriteStream(outPath, { encoding: 'latin1', mode: 0o600 });
   const write = async (text: string) => {
     if (!out.write(text, 'latin1')) await once(out, 'drain');
   };

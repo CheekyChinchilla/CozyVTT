@@ -46,6 +46,8 @@ interface ToolCall {
   sqlLoaded?: string;
   /** The environment the tool was started with, when the route gave it one. */
   env?: Record<string, string>;
+  /** The tool's `--file` once it has been written or read: its permission bits, its folder's, and what else that folder holds. */
+  file?: { mode: number; dir: string; dirMode: number; beside: string[] };
 }
 
 type Done = (err: Error | null, out?: { stdout: string; stderr: string }) => void;
@@ -66,15 +68,52 @@ function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
       }
     };
     const fileFlag = args.indexOf('--file');
-    if (cmd === 'psql' && fileFlag >= 0) {
-      fs.readFile(args[fileFlag + 1], 'utf8').then((sql) => { call.sqlLoaded = sql; finish(); }, finish);
-    } else if (cmd === 'pg_dump' && fileFlag >= 0) {
-      fs.writeFile(args[fileFlag + 1], SAFETY_DUMP).then(finish, finish);
-    } else {
-      finish();
-    }
+    const file = fileFlag >= 0 ? args[fileFlag + 1] : undefined;
+    const touch = async () => {
+      if (file === undefined) return;
+      // pg_dump creates its file with the default mode, as this does.
+      if (cmd === 'pg_dump') await fs.writeFile(file, SAFETY_DUMP);
+      else if (cmd === 'psql') call.sqlLoaded = await fs.readFile(file, 'utf8');
+      else return;
+      const dir = path.dirname(file);
+      call.file = {
+        mode: (await fs.stat(file)).mode & 0o777,
+        dir,
+        dirMode: (await fs.stat(dir)).mode & 0o777,
+        beside: await fs.readdir(dir),
+      };
+    };
+    touch().then(finish, finish);
   });
   return calls;
+}
+
+/**
+ * Run with os.tmpdir() pointing at a folder every account on the machine can
+ * read and write, as a shared host's /tmp is. What the route puts there while
+ * it works is a copy of the whole database.
+ */
+async function withSharedTmp(run: (tmp: string) => Promise<void>): Promise<void> {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-shared-tmp-'));
+  await fs.chmod(tmp, 0o777);
+  // Jest gives each test file its own copy of process.env, which os.tmpdir() does not read.
+  const tmpdir = jest.spyOn(os, 'tmpdir').mockReturnValue(tmp);
+  try {
+    await run(tmp);
+  } finally {
+    tmpdir.mockRestore();
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+}
+
+/** What is left in `dir` once a restore's clean-up, which runs after it has answered, has had time to finish. */
+async function leftIn(dir: string): Promise<string[]> {
+  for (let tries = 0; tries < 50; tries++) {
+    const left = await fs.readdir(dir);
+    if (left.length === 0) return left;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return fs.readdir(dir);
 }
 
 /** What the stubbed pg_dump writes when the route takes its safety copy. */
@@ -420,6 +459,37 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
+  it('unpacks the backup and writes the file psql loads where no other account can read them, and removes both', async () => {
+    await withSharedTmp(async (tmp) => {
+      const calls = stubTools();
+      const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+      const res = await restore(admin, zip);
+
+      expect(res.status).toBe(200);
+      written.push(path.join(process.env.BACKUP_DIR || 'backups', res.body.safetyBackup));
+      const loaded = calls.find((c) => c.cmd === 'psql')?.file;
+      expect(loaded).toBeDefined();
+      expect(path.dirname(loaded!.dir)).toBe(tmp);
+      expect(loaded!.beside).toEqual(expect.arrayContaining(['database.sql', 'restore.sql']));
+      expect(loaded!.dirMode & 0o077).toBe(0);
+      expect(loaded!.mode & 0o077).toBe(0);
+      const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
+      expect(dumped!.dirMode & 0o077).toBe(0);
+      expect(await leftIn(tmp)).toEqual([]);
+    });
+  });
+
+  it('removes the unpacked backup when it is refused', async () => {
+    await withSharedTmp(async (tmp) => {
+      stubTools();
+      const res = await restore(admin, await backupZip({ 'database.sql': '' }));
+
+      expect(res.status).toBe(400);
+      expect(await leftIn(tmp)).toEqual([]);
+    });
+  });
+
   it('refuses anyone who is not a platform administrator', async () => {
     const calls = stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -468,6 +538,35 @@ describe('POST /api/admin/backups', () => {
     const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(names).toEqual(expect.arrayContaining([first.body.filename, second.body.filename]));
     expect((await fs.stat(path.join(dir(), second.body.filename))).mode & 0o777).toBe(0o600);
+  });
+
+  it('has pg_dump write into a folder no other account can open, and leaves nothing behind', async () => {
+    await withSharedTmp(async (tmp) => {
+      const calls = stubTools();
+
+      const res = await admin.post('/api/admin/backups');
+
+      expect(res.status).toBe(201);
+      written.push(path.join(dir(), res.body.filename));
+      const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
+      expect(dumped).toBeDefined();
+      expect(path.dirname(dumped!.dir)).toBe(tmp);
+      expect(dumped!.dirMode & 0o077).toBe(0);
+      expect(await fs.readdir(tmp)).toEqual([]);
+    });
+  });
+
+  it('removes the dump and its folder when pg_dump fails', async () => {
+    await withSharedTmp(async (tmp) => {
+      const calls = stubTools({ cmd: 'pg_dump', stderr: 'pg_dump: error: connection failed' });
+
+      const res = await admin.post('/api/admin/backups');
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Backup Failed');
+      expect(calls.find((c) => c.cmd === 'pg_dump')?.file?.dirMode).toBe(0o700);
+      expect(await fs.readdir(tmp)).toEqual([]);
+    });
   });
 
   it("names a restore's safety copy apart from a backup made in the same second, and leaves that backup alone", async () => {

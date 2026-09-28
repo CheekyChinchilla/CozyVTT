@@ -20,6 +20,19 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/cozyvtt_${TIMESTAMP}.sql.gz"
 
+# umask covers only what this creates. A folder that already exists, and the
+# dumps an older version of this script wrote into it, kept whatever mode
+# they had, usually readable by every account, so both are closed up here.
+# A folder or file this user does not own is left as it is, with a warning:
+# refusing the backup would be worse.
+mkdir -p "$BACKUP_DIR"
+if ! chmod 700 "$BACKUP_DIR" 2>/dev/null; then
+  echo "⚠️  Could not make $BACKUP_DIR readable by $(id -un) alone; check who owns it."
+fi
+if ! find "$BACKUP_DIR" -maxdepth 1 -type f -name 'cozyvtt_*.sql.gz' -exec chmod 600 {} + 2>/dev/null; then
+  echo "⚠️  Could not make every backup in $BACKUP_DIR readable by $(id -un) alone; check who owns them."
+fi
+
 # ------------------------------------------------------------------
 # Docker deployments: run pg_dump inside the database container.
 #
@@ -47,8 +60,6 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     echo "  User:   $DB_USER"
     echo "  Output: $BACKUP_FILE"
     echo ""
-
-    mkdir -p "$BACKUP_DIR"
 
     if docker compose exec -T "$DB_SERVICE" \
         pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-privileges \
@@ -94,8 +105,6 @@ echo "  DB:     $DB_NAME"
 echo "  User:   $DB_USER"
 echo "  Output: $BACKUP_FILE"
 echo ""
-
-mkdir -p "$BACKUP_DIR"
 
 # Run pg_dump
 # --no-owner --no-privileges: the dump then restores under whatever database
