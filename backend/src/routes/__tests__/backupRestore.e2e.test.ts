@@ -352,6 +352,29 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
+  // The backup is unpacked into the temporary folder before anything else:
+  // a folder that cannot be made there, or fills while unpacking, was
+  // answered "An unexpected error occurred", with no word that nothing had
+  // changed.
+  it('says the temporary folder could not be used, and that nothing changed, when it cannot be made', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const original = fs.mkdtemp.bind(fs);
+    const refused = jest.spyOn(fs, 'mkdtemp').mockImplementation(((prefix: string) =>
+      prefix.includes('cozyvtt-restore-')
+        ? Promise.reject(Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' }))
+        : original(prefix)) as never);
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/temporary folder/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
+    } finally {
+      refused.mockRestore();
+    }
+  });
+
   it('says the temporary folder could not take the working copy, and that nothing changed, when writing it fails', async () => {
     const calls = stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });

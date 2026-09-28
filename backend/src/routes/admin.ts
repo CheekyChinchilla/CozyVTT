@@ -744,6 +744,23 @@ const TOOL_MISSING_REPLY = {
   message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
 };
 
+/** The backups folder refused a new backup (its owner or mode, a full disk). */
+class BackupFolderUnusable extends Error {
+  constructor(readonly code: string | undefined) {
+    super('backups folder unusable');
+  }
+}
+
+/** Errors that come from the filesystem refusing a folder or running out of room. */
+const FOLDER_ERRORS = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EDQUOT', 'ENOENT', 'ENOTDIR']);
+
+function backupFolderReply(what: string) {
+  return {
+    error: 'Backup Failed',
+    message: `${what} in the backups folder (${BACKUP_DIR}). Check that it exists, that the backend's user owns it and can write to it, and that its disk has room.`,
+  };
+}
+
 /**
  * What to do about a temporary folder a backup or restore could not use.
  * Under Docker it is inside the backend container, on the disk Docker keeps
@@ -787,8 +804,10 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
       // secret and backup code on the instance.
       handle = await fs.open(partialPath, 'wx', 0o600);
     } catch (error) {
-      if (errorCode(error) !== 'EEXIST') throw error;
-      continue;
+      const code = errorCode(error);
+      if (code === 'EEXIST') continue;
+      if (code !== undefined && FOLDER_ERRORS.has(code)) throw new BackupFolderUnusable(code);
+      throw error;
     }
     if (await exists(path.join(BACKUP_DIR, filename))) {
       await handle.close();
@@ -902,6 +921,10 @@ router.post('/backups', async (req, res) => {
       logger.error('Backup could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
       return res.status(500).json(tempFolderReply());
     }
+    if (error instanceof BackupFolderUnusable) {
+      logger.error('Backup could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+      return res.status(500).json(backupFolderReply('The backup could not be written'));
+    }
     if (error instanceof DumpFailed) {
       logger.error('pg_dump error', { stderr: error.stderr, code: error.code });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
@@ -939,8 +962,10 @@ router.get('/backups', async (_req, res) => {
     );
     backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return res.json({ backups });
-  } catch {
-    return res.json({ backups: [] });
+  } catch (error) {
+    // Not an empty list: that reads as every backup being gone.
+    logger.error('Backups folder could not be read', { code: errorCode(error), dir: BACKUP_DIR });
+    return res.status(500).json(backupFolderReply('The list of backups could not be read'));
   }
 });
 
@@ -1011,16 +1036,35 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
 
     // The backup is unpacked, and the copy psql loads written, in a folder
     // only the backend's user can open: both are the whole database.
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
+    // Nothing has changed until the safety copy: a temporary folder that
+    // cannot be made, or fills while the backup is unpacked, says so.
+    const tempFolderRefused = (error: unknown) => {
+      logger.error('Restore could not use its temporary folder', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not unpack the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
+      });
+    };
+    try {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
+    } catch (error) {
+      return tempFolderRefused(error);
+    }
 
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
     // the entry count and total decompressed size (zip-bomb protection).
     const directory = await unzipper.Open.file(uploadedZip);
-    await extractArchiveSafely(directory, tempDir, {
-      maxFiles: RESTORE_MAX_FILES,
-      maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
-    });
+    try {
+      await extractArchiveSafely(directory, tempDir, {
+        maxFiles: RESTORE_MAX_FILES,
+        maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      if (code !== undefined && FOLDER_ERRORS.has(code)) return tempFolderRefused(error);
+      throw error;
+    }
 
     // 2. Validate the backup contains database.sql
     const sqlPath = path.join(tempDir, 'database.sql');
@@ -1077,6 +1121,11 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       if (error instanceof TempFolderUnusable) {
         logger.error('Backup before restore could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
         return res.status(500).json({ ...tempFolderReply(), message: `${tempFolderReply().message} Nothing was restored.` });
+      }
+      if (error instanceof BackupFolderUnusable) {
+        logger.error('Backup before restore could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+        const reply = backupFolderReply('A backup of the current database could not be written');
+        return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was restored.` });
       }
       if (error instanceof DumpFailed) {
         logger.error('pg_dump error before restore', { stderr: error.stderr, code: error.code });

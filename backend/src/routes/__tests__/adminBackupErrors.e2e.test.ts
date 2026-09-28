@@ -78,3 +78,25 @@ it('does not blame pg_dump when the temporary folder cannot be used', async () =
   expect(res.body.message).toMatch(/under Docker/);
   expect(execFileMock).not.toHaveBeenCalled();
 });
+
+// A backups folder the backend cannot use (one on a share whose owner it
+// could not change, say) looked like no backups at all: the list came back
+// empty with no error, and a new backup failed with a bare "Failed".
+describe('a backups folder the backend cannot use', () => {
+  const denied = () => Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+
+  it('is named when the list cannot be read', async () => {
+    jest.spyOn(fs, 'readdir').mockRejectedValueOnce(denied());
+    const res = await admin.get('/api/admin/backups');
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/backups folder/);
+  });
+
+  it('is named when a backup cannot be written there', async () => {
+    jest.spyOn(fs, 'open').mockRejectedValueOnce(denied());
+    const res = await admin.post('/api/admin/backups');
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/backups folder/);
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+});
