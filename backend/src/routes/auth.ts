@@ -12,6 +12,7 @@ import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
+import { verifyTotpOnce, forgetTotpSteps } from '../utils/totp';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
@@ -109,6 +110,25 @@ export const mfaLoginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+});
+
+/**
+ * MFA login verification, per account: 5 failed codes per 15 minutes for one
+ * account, from wherever they come. The limiter above counts per address, so
+ * someone who already has the password could otherwise spread their guesses
+ * at the code across many addresses. Keyed on the account the pending sign-in
+ * belongs to, which the password step put in the session; a request with no
+ * sign-in pending is refused by the handler and not counted here.
+ */
+export const mfaAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Rate Limited', message: 'Too many MFA login attempts for this account, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req) => !req.session?.mfaPendingUserId,
+  keyGenerator: (req) => `mfa-account:${req.session.mfaPendingUserId}`,
 });
 
 /**
@@ -680,6 +700,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
       where: { id: userId },
       data: { mfaSecret: secret.base32 },
     });
+    forgetTotpSteps(userId);
 
     // Generate QR code as a data URL
     const otpauthUrl = speakeasy.otpauthURL({
@@ -731,13 +752,8 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
       return res.status(400).json({ error: 'Bad Request', message: 'MFA is already enabled' });
     }
 
-    // Verify TOTP token
-    const isValid = speakeasy.totp.verify({
-      secret: user.mfaSecret,
-      encoding: 'base32',
-      token: token.toString(),
-      window: 1, // Allow 30s clock drift
-    });
+    // Verify TOTP token (once: see utils/totp)
+    const isValid = verifyTotpOnce(userId, user.mfaSecret, String(token));
 
     if (!isValid) {
       return res.status(401).json({
@@ -780,7 +796,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
  * Verify TOTP or backup code during login MFA flow.
  * Requires: mfaPending session state (set by /login when user has MFA enabled)
  */
-router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
   try {
     if (!req.session.mfaPending || !req.session.mfaPendingUserId) {
       return res.status(401).json({
@@ -816,13 +832,9 @@ router.post('/mfa/verify-login', mfaLoginLimiter, async (req: Request, res: Resp
     let remainingBackupCodes: number | undefined;
 
     if (token) {
-      // Verify TOTP token
-      const isValid = speakeasy.totp.verify({
-        secret: user.mfaSecret,
-        encoding: 'base32',
-        token: token.toString(),
-        window: 1,
-      });
+      // Verify TOTP token. A code that has been accepted once, here or when
+      // MFA was turned on, is refused: see utils/totp.
+      const isValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
       if (!isValid) {
         return res.status(401).json({
@@ -939,13 +951,8 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
       return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 
-    // Verify TOTP token
-    const tokenValid = speakeasy.totp.verify({
-      secret: user.mfaSecret,
-      encoding: 'base32',
-      token: token.toString(),
-      window: 1,
-    });
+    // Verify TOTP token (once: see utils/totp)
+    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, String(token));
 
     if (!tokenValid) {
       return res.status(401).json({ error: 'Invalid Code', message: 'Invalid authentication code' });
@@ -960,6 +967,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
         mfaBackupCodes: [],
       },
     });
+    forgetTotpSteps(userId);
 
     // Turning the second factor off is a change to how the account is
     // protected, so the sessions opened while it was on end with it. This one

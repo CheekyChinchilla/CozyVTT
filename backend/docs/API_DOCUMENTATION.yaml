@@ -623,7 +623,7 @@ paths:
       tags:
         - MFA
       summary: Complete MFA setup
-      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Ends the user's other login sessions; the session making the request stays signed in. Rate limited (5/15min).
+      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Ends the user's other login sessions; the session making the request stays signed in. The code counts as used, so it cannot then sign in. Rate limited (5/15min).
       operationId: mfaVerifySetup
       security:
         - cookieAuth: []
@@ -667,7 +667,8 @@ paths:
       description: |
         Complete MFA verification during login flow. Requires a pending MFA session from `/api/auth/login`.
         Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use.
-        Rate limited (5/15min, separate from setup verification).
+        A TOTP code is accepted once: one from the same 30-second step as a code already accepted for the account, or an earlier step, is refused.
+        Rate limited (5 failures/15min per address, separate from setup verification, and 5 failures/15min per account from any address).
       operationId: mfaVerifyLogin
       security: []
       requestBody:
@@ -714,7 +715,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code. Admin accounts cannot disable MFA. Ends the user's other login sessions; the session making the request stays signed in.
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used. Admin accounts cannot disable MFA. Ends the user's other login sessions; the session making the request stays signed in.
       operationId: mfaDisable
       security:
         - cookieAuth: []
