@@ -401,7 +401,10 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
   A refused `token.move.end` is also answered with a `token.moved` carrying
   the token's stored position and `movedBy: null`, to the sender and to
   everyone the drag's frames went to, since a pause can land mid-drag after
-  those screens have drawn the frames and the drop
+  those screens have drawn the frames and the drop. So is a drop refused
+  because control of the token, or the sender's plane, changed after the
+  drag began; a drop of a token the sender never dragged gets only the
+  `error`
 
 **Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. Who that is gets decided on this event or the first frame, and the drag's frames reuse it; it is decided again when the token is hidden, shown or moved to the other plane mid-drag, and at least once a second, so a player who changes plane or leaves the map the table is on stops receiving the frames within a second. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**

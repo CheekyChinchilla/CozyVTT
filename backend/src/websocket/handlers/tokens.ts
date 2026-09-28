@@ -369,34 +369,49 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // went to is kept for a refused drop, below.
       const sawTheDrag = dragRecipients.get(tokenId)?.deciding;
       dragRecipients.delete(tokenId);
+      const campaignId = socket.campaignId;
+
+      /**
+       * A drop refused after the token was picked up: the mover's screen has
+       * already drawn it, and the frames reached everyone the drag went to.
+       * Tell them all where the token is; the correction names no mover,
+       * since nobody moved it. Only when the drag began here with frames
+       * this socket was allowed to send (`sawTheDrag`), or `moverMaySee`
+       * says the mover may be told regardless: otherwise a drop naming a
+       * token this socket never dragged would learn where it stands.
+       */
+      const putBack = async (moverMaySee: boolean) => {
+        if (!sawTheDrag && !moverMaySee) return;
+        const back = { tokenId, mapId, x: token.position.x, y: token.position.y, movedBy: null };
+        socket.emit('token.moved', back);
+        if (!sawTheDrag) return;
+        const recipients = await sawTheDrag;
+        for (const s of await campaignSockets(io, campaignId)) {
+          if (recipients.has(s.id)) s.emit('token.moved', back);
+        }
+      };
 
       // See token.move.start: one rule, shared with the REST update route.
+      // Control can be taken away mid-drag (a demotion, a new controller).
       if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
         socket.emit('error', { message: moveRefusal(socket.role) });
+        await putBack(false);
         return;
       }
 
       // The same plane rule the REST update route applies.
       if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
         socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
+        await putBack(false);
         return;
       }
 
       // And the same session rule: a player's move waits for the session.
+      // A pause can land after the token was picked up; the mover controls
+      // the token, so they may always be told where it is.
       if (!canMoveTokensNow(socket.role, map.campaign.status)) {
         socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
-        // A pause can land after the token was picked up: the mover's screen
-        // has already drawn the drop, and the frames sent before the pause
-        // reached everyone the drag went to. Tell them all where the token
-        // is. The correction names no mover, since nobody moved it.
-        const back = { tokenId, mapId, x: token.position.x, y: token.position.y, movedBy: null };
-        socket.emit('token.moved', back);
-        if (sawTheDrag) {
-          const recipients = await sawTheDrag;
-          for (const s of await campaignSockets(io, socket.campaignId)) {
-            if (recipients.has(s.id)) s.emit('token.moved', back);
-          }
-        }
+        await putBack(true);
         return;
       }
 
