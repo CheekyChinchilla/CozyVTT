@@ -49,6 +49,10 @@ import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tes
 
 const app = createTestApp();
 
+/** Where the row says the file is: the response no longer says, since where a file sits on the server is the server's business. */
+const storedPath = async (id: string) =>
+  (await prisma.asset.findUniqueOrThrow({ where: { id }, select: { filePath: true } })).filePath;
+
 /** A tiny valid PNG. */
 const PNG = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154' +
@@ -93,7 +97,7 @@ describe('asset upload paths', () => {
     const res = await upload('TOKEN', 'goblin.png', PNG, 'image/png');
     expect(res.status).toBe(201);
 
-    const stored = res.body.asset.filePath.replace(/\\/g, '/');
+    const stored = (await storedPath(res.body.asset.id)).replace(/\\/g, '/');
     expect(stored).toContain('/tokens/');
     expect(stored).not.toContain('/maps/');
   });
@@ -101,25 +105,25 @@ describe('asset upload paths', () => {
   it('writes a map image under maps', async () => {
     const res = await upload('MAP', 'battlemap.png', PNG, 'image/png');
     expect(res.status).toBe(201);
-    expect(res.body.asset.filePath.replace(/\\/g, '/')).toContain('/maps/');
+    expect((await storedPath(res.body.asset.id)).replace(/\\/g, '/')).toContain('/maps/');
   });
 
   it('writes audio under audio', async () => {
     const res = await upload('AUDIO', 'ambience.mp3', MP3, 'audio/mpeg');
     expect(res.status).toBe(201);
-    expect(res.body.asset.filePath.replace(/\\/g, '/')).toContain('/audio/');
+    expect((await storedPath(res.body.asset.id)).replace(/\\/g, '/')).toContain('/audio/');
   });
 
   it('leaves the file readable at the path it recorded', async () => {
     const res = await upload('TOKEN', 'reachable.png', PNG, 'image/png');
     expect(res.status).toBe(201);
     // The whole point of the move: the database and the disk must still agree.
-    expect(fs.existsSync(res.body.asset.filePath)).toBe(true);
+    expect(fs.existsSync((await storedPath(res.body.asset.id)))).toBe(true);
   });
 
   it('records a size matching the file actually on disk', async () => {
     const res = await upload('TOKEN', 'sized.png', PNG, 'image/png');
     expect(res.status).toBe(201);
-    expect(fs.statSync(res.body.asset.filePath).size).toBe(res.body.asset.fileSize);
+    expect(fs.statSync((await storedPath(res.body.asset.id))).size).toBe(res.body.asset.fileSize);
   });
 });

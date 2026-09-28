@@ -63,6 +63,30 @@ function normalizePath(filePath: string): string {
 }
 
 /**
+ * What a client is told about an asset. Selected, not included: where a file
+ * sits on the server is the server's business, so filePath and thumbnailPath
+ * stay out of every response, the one that creates or changes the row
+ * included.
+ */
+const ASSET_PUBLIC_SELECT = {
+  id: true,
+  type: true,
+  scope: true,
+  uploadedById: true,
+  campaignId: true,
+  filename: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  name: true,
+  description: true,
+  tags: true,
+  createdAt: true,
+  uploadedBy: { select: { id: true, displayName: true } },
+  campaign: { select: { id: true, name: true } },
+} satisfies Prisma.AssetSelect;
+
+/**
  * Whether this request may read an asset's bytes.
  *
  * The map and token routes asked this in identical, separately-written blocks,
@@ -214,27 +238,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     // Get total count for pagination
     const total = await prisma.asset.count({ where });
 
-    // Get paginated assets. Selected, not included: where a file sits on the
-    // server is the server's business, so filePath and thumbnailPath stay out.
+    // Get paginated assets.
     const assets = await prisma.asset.findMany({
       where,
-      select: {
-        id: true,
-        type: true,
-        scope: true,
-        uploadedById: true,
-        campaignId: true,
-        filename: true,
-        originalName: true,
-        mimeType: true,
-        fileSize: true,
-        name: true,
-        description: true,
-        tags: true,
-        createdAt: true,
-        uploadedBy: { select: { id: true, displayName: true } },
-        campaign: { select: { id: true, name: true } },
-      },
+      select: ASSET_PUBLIC_SELECT,
       orderBy: {
         createdAt: 'desc',
       },
@@ -425,20 +432,7 @@ router.post(
           description: description || null,
           tags: tagArray,
         },
-        include: {
-          uploadedBy: {
-            select: {
-              id: true,
-              displayName: true,
-            },
-          },
-          campaign: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        select: ASSET_PUBLIC_SELECT,
       });
 
       return res.status(201).json({
@@ -478,23 +472,7 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     const asset = await prisma.asset.findUnique({
       where: { id },
-      select: {
-        id: true,
-        type: true,
-        scope: true,
-        uploadedById: true,
-        campaignId: true,
-        filename: true,
-        originalName: true,
-        mimeType: true,
-        fileSize: true,
-        name: true,
-        description: true,
-        tags: true,
-        createdAt: true,
-        uploadedBy: { select: { id: true, displayName: true } },
-        campaign: { select: { id: true, name: true } },
-      },
+      select: ASSET_PUBLIC_SELECT,
     });
 
     if (!asset) {
@@ -769,6 +747,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
         description: description || null,
         tags: [],
       },
+      select: ASSET_PUBLIC_SELECT,
     });
 
     return res.status(201).json({ asset });
@@ -823,6 +802,7 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
     const updated = await prisma.asset.update({
       where: { id: asset.id },
       data: { fileSize: bytes.length },
+      select: ASSET_PUBLIC_SELECT,
     });
 
     return res.status(200).json({ asset: updated });
@@ -1319,10 +1299,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
         scope: scope as AssetScope,
         campaignId: resolvedCampaignId,
       },
-      include: {
-        uploadedBy: { select: { id: true, displayName: true } },
-        campaign: { select: { id: true, name: true } },
-      },
+      select: ASSET_PUBLIC_SELECT,
     });
 
     return res.json({ message: 'Asset scope updated successfully', asset: updated });

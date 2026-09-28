@@ -55,6 +55,10 @@ import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tes
 
 const app = createTestApp();
 
+/** Where the row says the file is: the response no longer says, since where a file sits on the server is the server's business. */
+const storedPath = async (id: string) =>
+  (await prisma.asset.findUniqueOrThrow({ where: { id }, select: { filePath: true } })).filePath;
+
 /** Small enough to write inline, real enough for file-type to identify. */
 const PDF = Buffer.from(
   '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
@@ -111,13 +115,13 @@ describe('POST /api/assets/upload with type DOCUMENT', () => {
       const res = await upload('rules.pdf', PDF, 'application/pdf');
       expect(res.status).toBe(201);
       expect(res.body.asset.type).toBe('DOCUMENT');
-      expect(res.body.asset.filePath.replace(/\\/g, '/')).toContain('/documents/');
+      expect((await storedPath(res.body.asset.id)).replace(/\\/g, '/')).toContain('/documents/');
     });
 
     it('a plain text file', async () => {
       const res = await upload('notes.txt', TEXT, 'text/plain');
       expect(res.status).toBe(201);
-      expect(res.body.asset.filePath.replace(/\\/g, '/')).toContain('/documents/');
+      expect((await storedPath(res.body.asset.id)).replace(/\\/g, '/')).toContain('/documents/');
     });
 
     it('a Markdown file', async () => {
@@ -128,8 +132,8 @@ describe('POST /api/assets/upload with type DOCUMENT', () => {
     it('leaves the file readable at the recorded path', async () => {
       const res = await upload('reachable.txt', TEXT, 'text/plain');
       expect(res.status).toBe(201);
-      expect(fs.existsSync(res.body.asset.filePath)).toBe(true);
-      expect(fs.readFileSync(res.body.asset.filePath)).toEqual(TEXT);
+      expect(fs.existsSync((await storedPath(res.body.asset.id)))).toBe(true);
+      expect(fs.readFileSync((await storedPath(res.body.asset.id)))).toEqual(TEXT);
     });
 
     it('HTML named .md, because it is text and the serving route neutralises it', async () => {

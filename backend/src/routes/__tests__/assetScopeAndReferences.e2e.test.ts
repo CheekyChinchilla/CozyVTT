@@ -23,6 +23,21 @@ const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-asset-scope-')
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import request from 'supertest';
+
+// file-type is ESM-only and Jest cannot load it; the upload route identifies
+// a real PNG by its signature, as the library would.
+jest.mock('file-type', () => {
+  const realFs = jest.requireActual('fs') as typeof import('fs');
+  const detect = (buffer: Buffer) =>
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      ? { ext: 'png', mime: 'image/png' }
+      : undefined;
+  return {
+    fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => detect(buffer)),
+    fileTypeFromFile: jest.fn(async (filePath: string) => detect(realFs.readFileSync(filePath))),
+  };
+});
+
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,
@@ -181,8 +196,69 @@ describe('what the asset library tells a member', () => {
     expect(listed).not.toHaveProperty('thumbnailPath');
     const one = await player.get(`/api/assets/${id}`);
     expect(one.status).toBe(200);
-    expect(one.body).not.toHaveProperty('filePath');
-    expect(one.body).not.toHaveProperty('thumbnailPath');
+    expect(one.body.asset).toMatchObject({ id, name: 'listed-map' });
+    expect(one.body.asset).not.toHaveProperty('filePath');
+    expect(one.body.asset).not.toHaveProperty('thumbnailPath');
+  });
+
+  it('nor on an upload, a typed document, an edit of it, or a scope change', async () => {
+    const noPaths = (asset: Record<string, unknown>) => {
+      expect(asset).toHaveProperty('id');
+      expect(asset).not.toHaveProperty('filePath');
+      expect(asset).not.toHaveProperty('thumbnailPath');
+    };
+    // A real 1x1 PNG: the upload route decodes what it is given, unlike makeAsset.
+    const realPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const uploaded = await dm
+      .post('/api/assets/upload')
+      .attach('file', realPng, 'tiny.png')
+      .field('type', 'MAP')
+      .field('scope', 'CAMPAIGN')
+      .field('campaignId', campaignId)
+      .field('name', 'uploaded-map');
+    expect(uploaded.status).toBe(201);
+    assetIds.push(uploaded.body.asset.id);
+    noPaths(uploaded.body.asset);
+
+    const doc = await dm.post('/api/assets/documents').send({ name: 'Handout', format: 'md', content: '# Hello', scope: 'CAMPAIGN', campaignId });
+    expect(doc.status).toBe(201);
+    assetIds.push(doc.body.asset.id);
+    noPaths(doc.body.asset);
+
+    const edited = await dm.put(`/api/assets/documents/${doc.body.asset.id}/content`).send({ content: '# Hello again' });
+    expect(edited.status).toBe(200);
+    noPaths(edited.body.asset);
+
+    const moved = await dm.patch(`/api/assets/${doc.body.asset.id}/scope`).send({ scope: 'USER' });
+    expect(moved.status).toBe(200);
+    noPaths(moved.body.asset);
+  });
+
+  it('keeps a spirit layer image hidden when it is also the base layer of a prepared map, not of the current one', async () => {
+    const shared = await makeAsset('MAP', 'CAMPAIGN', dmId, 'shared-plane-image');
+    const url = `/api/assets/maps/${shared}`;
+    const current = await prisma.map.create({
+      data: {
+        campaignId, name: 'Shown', imageUrl: '/api/assets/maps/placeholder', baseLayerUrl: '/api/assets/maps/placeholder',
+        spiritLayerUrl: url, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
+      },
+    });
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId, name: 'Prepared', imageUrl: url, baseLayerUrl: url,
+        width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
+      },
+    });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false, currentMapId: current.id } });
+
+    // The prepared map is not sent to a player, so being its base layer opens nothing.
+    expect((await player.get(url)).status).toBe(403);
+    expect((await player.get(`/api/assets/${shared}`)).status).toBe(403);
+
+    // Once that map is the one the campaign shows, the image is openly on the table.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: prepared.id } });
+    expect((await player.get(url)).status).toBe(200);
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   });
 
   it('keeps the spirit layer image from a player who has not crossed over, and shows it once they have', async () => {
