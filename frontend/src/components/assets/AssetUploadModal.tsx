@@ -2,13 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Upload, FileImage, FileAudio, User, MapPin, Loader, Tag as TagIcon, Globe, Users } from 'lucide-react';
 import { api } from '../../services/api';
-import { Asset, AssetType, AssetScope, PlatformRole, Campaign, CampaignRole } from '../../types';
+import { Asset, AssetType, AssetScope, PlatformRole, Campaign } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import campaignService from '../../services/campaign.service';
 import { Button, Modal } from '@/components/ui';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
+import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -84,18 +85,12 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     }
   }, [isOpen, defaultCampaignId]);
 
-  // Campaigns shown in dropdown:
-  // TOKEN uploads: any campaign membership (players can upload tokens)
-  // All other types: DM-only campaigns
-  const dropdownCampaigns = assetType === AssetType.TOKEN
-    ? allCampaigns
-    : allCampaigns.filter((c) =>
-        c.ownerId === user?.id ||
-        c.memberships?.some((m) => m.userId === user?.id && m.role === CampaignRole.DM)
-      );
+  // Campaigns shown in dropdown: those the server lets this user put this
+  // kind of asset into (the DM's for anything, a player's for token art).
+  const dropdownCampaigns = campaignsToPlaceAssetIn(allCampaigns, assetType === AssetType.TOKEN, user?.id);
 
   // Whether the Campaign scope option should be available
-  const hasCampaignAccess = allCampaigns.length > 0;
+  const hasCampaignAccess = dropdownCampaigns.length > 0;
 
   // Reset form — returns to default values (honouring any locked defaults)
   const resetForm = () => {
@@ -423,7 +418,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                 {dropdownCampaigns.length === 0 && (
                   <p className="mt-2 text-sm text-stone-gray/70">
                     {assetType === AssetType.TOKEN
-                      ? 'You need to be a member of a campaign to upload tokens.'
+                      ? 'You need to play in or run a campaign to upload tokens to it.'
                       : 'You need to be a DM of a campaign to upload campaign assets.'}
                   </p>
                 )}

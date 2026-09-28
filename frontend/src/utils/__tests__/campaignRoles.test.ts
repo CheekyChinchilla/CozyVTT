@@ -24,6 +24,7 @@ import {
   ownerDiffersFromDm,
   isCampaignOwner,
   isCampaignDm,
+  campaignsToPlaceAssetIn,
 } from '../campaignRoles';
 
 const member = (
@@ -142,3 +143,29 @@ describe('campaignRoles', () => {
     });
   });
 });
+
+// Putting an asset into a campaign is the DM's, with token art the one thing
+// a player may bring in; a spectator brings in nothing. The server decides
+// this (canPlaceAssetAtScope); the pickers offer only what it accepts.
+describe('campaignsToPlaceAssetIn', () => {
+  const watched = {
+    id: 'c3',
+    ownerId: 'creator',
+    memberships: [member('creator', CampaignRole.DM, 'Original Creator'), member('watcher', CampaignRole.SPECTATOR, 'Watcher')],
+  } as unknown as Campaign;
+  const all = [handedOver, untouched, watched];
+  const ids = (list: Campaign[]) => list.map((c) => c.id);
+
+  it('offers token art in the campaigns someone runs or plays in, and none they only watch', () => {
+    expect(ids(campaignsToPlaceAssetIn(all, true, 'bystander'))).toEqual(['c1', 'c2']);
+    expect(ids(campaignsToPlaceAssetIn(all, true, 'watcher'))).toEqual([]);
+  });
+
+  it('offers any other asset only in the campaigns someone runs, whoever owns them', () => {
+    expect(ids(campaignsToPlaceAssetIn(all, false, 'runner'))).toEqual(['c1']);
+    // The creator handed c1 over and runs c2 and c3.
+    expect(ids(campaignsToPlaceAssetIn(all, false, 'creator'))).toEqual(['c2', 'c3']);
+    expect(ids(campaignsToPlaceAssetIn(all, false, 'bystander'))).toEqual([]);
+  });
+});
+

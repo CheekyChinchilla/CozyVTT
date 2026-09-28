@@ -12,9 +12,9 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { canEditCharacter, canRollAsCharacter } from '../permissions';
+import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '../permissions';
 import { CampaignRole } from '@/types';
-import type { User, CampaignMembership } from '@/types';
+import type { User, CampaignMembership, Campaign } from '@/types';
 
 const OWNER = 'user-owner';
 const OTHER = 'user-other';
@@ -90,3 +90,30 @@ describe('canEditCharacter', () => {
     expect(canEditCharacter(user(OWNER), character(OWNER), undefined)).toBe(true);
   });
 });
+
+/**
+ * The same rule from outside the campaign: the Characters page and the full
+ * editor hold the character's campaign (with the user's role in it), not a
+ * membership. They offered Edit to an owner who is a spectator there, and
+ * the save was refused.
+ */
+describe('canEditCharacterIn', () => {
+  const campaign = (userRole?: CampaignRole, memberships: Array<{ userId: string; role: CampaignRole }> = []) =>
+    ({ userRole, memberships }) as unknown as Campaign;
+
+  it('refuses an owner who is a spectator in the character\'s campaign', () => {
+    expect(canEditCharacterIn(user(OWNER), character(OWNER), campaign(CampaignRole.SPECTATOR))).toBe(false);
+    expect(canEditCharacterIn(user(OWNER), character(OWNER), campaign(undefined, [{ userId: OWNER, role: CampaignRole.SPECTATOR }]))).toBe(false);
+  });
+
+  it('lets an owner who plays in it, or whose character is in no campaign, edit', () => {
+    expect(canEditCharacterIn(user(OWNER), character(OWNER), campaign(CampaignRole.PLAYER))).toBe(true);
+    expect(canEditCharacterIn(user(OWNER), character(OWNER), null)).toBe(true);
+  });
+
+  it("lets the campaign's DM edit someone else's character, and nobody else", () => {
+    expect(canEditCharacterIn(user(OTHER), character(OWNER), campaign(CampaignRole.DM))).toBe(true);
+    expect(canEditCharacterIn(user(OTHER), character(OWNER), campaign(CampaignRole.PLAYER))).toBe(false);
+  });
+});
+

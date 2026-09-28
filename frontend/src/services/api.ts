@@ -395,7 +395,9 @@ class ApiClient {
   }
 
   async createAdminBackup(): Promise<AdminBackup> {
-    const response = await this.client.post<AdminBackup>('/api/admin/backups');
+    // Dumping and zipping the whole database takes minutes on a large
+    // instance; the bundled nginx allows this route ten minutes.
+    const response = await this.client.post<AdminBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
     return response.data;
   }
 
@@ -416,8 +418,13 @@ class ApiClient {
   async restoreAdminBackup(file: File): Promise<RestoreReply> {
     const formData = new FormData();
     formData.append('backup', file);
+    // A restore writes a safety copy of the current database, then loads the
+    // backup and migrates it: minutes on a large instance, and the bundled
+    // nginx allows this route ten minutes. Giving up sooner reported a
+    // restore as failed while the server went on to replace the database.
     const response = await this.client.post<RestoreReply>('/api/admin/backups/restore', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: LONG_ADMIN_REQUEST_MS,
     });
     return response.data;
   }
@@ -1143,5 +1150,8 @@ class ApiClient {
 }
 
 // Export singleton instance
+/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/nginx.conf). */
+const LONG_ADMIN_REQUEST_MS = 600_000;
+
 export const api = new ApiClient();
 export default api;

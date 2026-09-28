@@ -96,3 +96,24 @@ export function isCampaignDm(
   if (campaign.userRole) return campaign.userRole === 'DM';
   return campaign.memberships?.some((m) => m.userId === userId && m.role === 'DM') ?? false;
 }
+
+/**
+ * The campaigns this user may put an asset of a kind into: every campaign
+ * they run, and for token art every campaign they play in, since players
+ * upload their own character's. A spectator puts nothing in. The server
+ * decides the same (canPlaceAssetAtScope); offering more only leads to a
+ * refusal after the file has been sent.
+ */
+export function campaignsToPlaceAssetIn<T extends Pick<Campaign, 'memberships' | 'userRole'>>(
+  campaigns: T[],
+  isTokenArt: boolean,
+  userId: string | null | undefined
+): T[] {
+  return campaigns.filter((c) => {
+    if (isCampaignDm(c, userId)) return true;
+    if (!isTokenArt || !userId) return false;
+    const role = c.userRole ?? c.memberships?.find((m) => m.userId === userId)?.role;
+    return role === 'PLAYER';
+  });
+}
+
