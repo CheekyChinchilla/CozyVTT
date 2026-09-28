@@ -40,6 +40,7 @@ import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
+import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -264,7 +265,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(entries).toEqual(['database.sql']);
 
     // Readable by the backend's user alone: it holds every credential on the instance.
-    expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+    await expectFileMode(file, 0o777, 0o600);
   });
 
   it('keeps the database password off the command line of every tool it runs', async () => {
@@ -499,10 +500,10 @@ describe('POST /api/admin/backups/restore', () => {
       expect(loaded).toBeDefined();
       expect(path.dirname(loaded!.dir)).toBe(tmp);
       expect(loaded!.beside).toEqual(expect.arrayContaining(['database.sql', 'restore.sql']));
-      expect(loaded!.dirMode & 0o077).toBe(0);
-      expect(loaded!.mode & 0o077).toBe(0);
+      expectModeBits(loaded!.dirMode, 0o077, 0);
+      expectModeBits(loaded!.mode, 0o077, 0);
       const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
-      expect(dumped!.dirMode & 0o077).toBe(0);
+      expectModeBits(dumped!.dirMode, 0o077, 0);
       expect(await leftIn(tmp)).toEqual([]);
     });
   });
@@ -561,7 +562,7 @@ describe('POST /api/admin/backups', () => {
     expect((await fs.stat(firstFile)).size).toBe(marked);
     const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(names).toEqual(expect.arrayContaining([first.body.filename, second.body.filename]));
-    expect((await fs.stat(path.join(BACKUP_DIR, second.body.filename))).mode & 0o777).toBe(0o600);
+    await expectFileMode(path.join(BACKUP_DIR, second.body.filename), 0o777, 0o600);
   });
 
   it('has pg_dump write into a folder no other account can open, and leaves nothing behind', async () => {
@@ -574,7 +575,7 @@ describe('POST /api/admin/backups', () => {
       const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
       expect(dumped).toBeDefined();
       expect(path.dirname(dumped!.dir)).toBe(tmp);
-      expect(dumped!.dirMode & 0o077).toBe(0);
+      expectModeBits(dumped!.dirMode, 0o077, 0);
       expect(await fs.readdir(tmp)).toEqual([]);
     });
   });
@@ -587,7 +588,7 @@ describe('POST /api/admin/backups', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Backup Failed');
-      expect(calls.find((c) => c.cmd === 'pg_dump')?.file?.dirMode).toBe(0o700);
+      expectModeBits(calls.find((c) => c.cmd === 'pg_dump')?.file?.dirMode, 0o777, 0o700);
       expect(await fs.readdir(tmp)).toEqual([]);
     });
   });

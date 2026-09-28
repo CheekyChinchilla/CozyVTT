@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { resolveBackupDir, isInside, ensureBackupDir } from '../backupDir';
 import logger from '../logger';
+import { describeWhereModesApply } from '../../__tests__/helpers/fileModes';
 
 describe('resolveBackupDir', () => {
   it('defaults to a backups directory beside uploads, never inside it', () => {
@@ -33,7 +34,7 @@ describe('isInside', () => {
 // The deployment guide promises the folder is its user's alone, as the
 // archives in it are. Only the Docker start script made it so; an install
 // without Docker got whatever the process umask gave, usually 755.
-describe('ensureBackupDir', () => {
+describeWhereModesApply('ensureBackupDir', () => {
   let root: string;
   beforeEach(async () => { root = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-backupdir-')); });
   afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });

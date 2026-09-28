@@ -21,6 +21,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Readable, Writable } from 'stream';
+import { itWhereModesApply } from '../__tests__/helpers/fileModes';
 import {
   buildDumpArgs,
   buildRestoreArgs,
@@ -318,7 +319,7 @@ describe('prepareDumpForRestore', () => {
     expect(result.refused).toBeNull();
   });
 
-  it('writes the file psql loads readable by its owner alone, since it is the whole database', async () => {
+  itWhereModesApply('writes the file psql loads readable by its owner alone, since it is the whole database', async () => {
     const src = await write('database.sql', NEWER_CLIENT_DUMP);
     const dest = path.join(dir, 'restore.sql');
 
