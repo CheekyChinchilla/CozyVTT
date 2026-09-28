@@ -50,6 +50,12 @@ export async function ensureBackupDir(dir: string): Promise<void> {
     const previous = (await fs.stat(dir)).mode & 0o777;
     if ((previous & 0o077) === 0) return;
     await fs.chmod(dir, 0o700);
+    // Some mounts accept a chmod and ignore it; only say it worked if it did.
+    const now = (await fs.stat(dir)).mode & 0o777;
+    if ((now & 0o077) !== 0) {
+      logger.warn('Could not make the backups folder private to the backend user: its filesystem ignored the change', { dir, mode: now.toString(8) });
+      return;
+    }
     logger.warn(
       'Made the backups folder private to the backend user: it holds every password hash and MFA secret. ' +
         'Another account that read backups from it can no longer do so; copy them out as the backend user instead.',
