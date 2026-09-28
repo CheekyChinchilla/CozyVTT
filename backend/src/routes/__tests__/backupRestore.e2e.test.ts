@@ -347,6 +347,54 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Restore Failed');
       expect(res.body.message).toMatch(/backup of the current database/i);
+      // A full disk is the backups folder's problem, and freeing room there
+      // keeps the undo; the command-line restore takes no safety copy.
+      expect(res.body.message).toMatch(/backups folder/);
+      expect(res.body.message).toMatch(/Nothing was restored/);
+    } finally {
+      failing.mockRestore();
+    }
+  });
+
+  it('names the backups folder when a new backup fills its disk', async () => {
+    stubTools();
+    const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
+    await probe.close();
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
+      const stream = new PassThrough();
+      stream.on('close', () => { void this.close(); });
+      process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      return stream;
+    });
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/backups folder/);
+    } finally {
+      failing.mockRestore();
+    }
+  });
+
+  // The uploaded backup is saved into the backups folder before the route
+  // runs, so a folder the backend cannot write to refused it there, and the
+  // page said only "An unexpected error occurred".
+  it('names the backups folder, and says nothing changed, when the uploaded backup cannot be saved there', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const original = fsSync.createWriteStream;
+    const failing = jest.spyOn(fsSync, 'createWriteStream').mockImplementation((file, options) => {
+      if (!String(file).includes('restore-temp-')) return original(file, options);
+      const stream = original(path.join(SCRATCH, 'upload-probe'), options);
+      process.nextTick(() => stream.destroy(Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })));
+      return stream;
+    });
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/backups folder/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
     } finally {
       failing.mockRestore();
     }
