@@ -12,6 +12,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { setState, getState, clearState } from '../initiativeState';
 
 jest.setTimeout(20000);
 
@@ -111,6 +112,12 @@ describe('a token moved on a prepared map', () => {
       tokens: [{
         id: STAGED, name: 'Staged', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 },
         layer: 'token', visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
+      }, {
+        // The party staged beside it: on a lit map this token would see the
+        // staged one, so what keeps its moves from the player is the map
+        // rule, not the dark.
+        id: 'party-token', name: 'Party', imageUrl: '', position: { x: 2, y: 1 }, size: { width: 1, height: 1 },
+        layer: 'token', visible: true, controlledBy: playerId, rotation: 0, conditions: [], metadata: {}, type: 'player',
       }],
     },
   });
@@ -171,6 +178,30 @@ describe('a player writing to a prepared map', () => {
     await quiet;
     player.disconnect();
     dm.disconnect();
+  });
+
+  it('refuses writing explored memory there', async () => {
+    await prisma.map.update({ where: { id: preparedId }, data: { lightingEnabled: true, explorationEnabled: true } });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('exploration:reveal', { mapId: preparedId, cells: [1, 2] });
+    expect((await refused).message).toBe('Map not found');
+    expect(await prisma.mapExploration.count({ where: { mapId: preparedId, userId: playerId } })).toBe(0);
+    player.disconnect();
+  });
+
+  it('refuses rolling initiative for their token there', async () => {
+    setState(campaignId, {
+      active: true, round: 1, currentTokenId: null,
+      combatants: [{ tokenId: SCOUT, mapId: preparedId, name: 'Scout', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
+    });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('initiative.roll', { tokenId: SCOUT, mapId: preparedId });
+    expect((await refused).message).toBe('Map not found');
+    expect(getState(campaignId).combatants[0].initiative).toBeNull();
+    clearState(campaignId);
+    player.disconnect();
   });
 
   it('refuses opening a door there', async () => {
