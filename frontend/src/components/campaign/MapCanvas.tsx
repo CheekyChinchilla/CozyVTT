@@ -4135,8 +4135,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       statBlock: token.statBlock || null,
                       sightRadius: token.sightRadius ?? null,
                     });
+                    showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
                   } catch (err) {
-                    console.error('Failed to save token as template:', err);
+                    showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
                   }
                 }}
               >
