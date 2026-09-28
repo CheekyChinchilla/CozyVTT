@@ -628,8 +628,8 @@ In the **Security** section, enter your current password and your new password (
 
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
-game table on it is disconnected in the same moment; the one you are using stays
-where it is. If you ever think somebody else has got into your account, changing
+game table on it is disconnected in the same moment and taken to the sign-in
+page; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
 your password is what removes them. Turning off MFA does the same thing, and so
 does resetting your password from the sign-in page's **Forgot password?** link,
 which signs out every device, the one you are holding included.
