@@ -11,7 +11,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { CONFIGURABLE_ASSET_TYPES } from '../utils/fileUtils';
+import { CONFIGURABLE_ASSET_TYPES, fileSizeLimitVar } from '../utils/fileUtils';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -42,8 +42,9 @@ function keysTheBackendReads(): Set<string> {
     }
   };
   walk(path.join(root, 'backend/src'));
-  // The upload limits are read by a name built from the list of types.
-  for (const type of CONFIGURABLE_ASSET_TYPES) keys.add(`MAX_${type}_SIZE_MB`);
+  // The upload limits are read by a name built from the list of types, so ask
+  // the backend for those names; a copy of the template here would go stale.
+  for (const type of CONFIGURABLE_ASSET_TYPES) keys.add(fileSizeLimitVar(type));
   return keys;
 }
 

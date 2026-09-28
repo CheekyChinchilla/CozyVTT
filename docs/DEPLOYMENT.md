@@ -660,7 +660,14 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
-Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`: `sudo mv backend/uploads/backups/*.zip backend/backups/`.
+Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`, and the second command makes the moved backups readable by that user alone, as new ones are:
+
+```bash
+sudo mv backend/uploads/backups/*.zip backend/backups/
+sudo chmod 600 backend/backups/*.zip
+```
+
+Without Docker, `backend/backups/` appears the first time the Backups tab is opened; to move them before that, create it with `mkdir -p backend/backups && chmod 700 backend/backups`, then run the same two commands without `sudo`.
 
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
@@ -763,6 +770,23 @@ Before anything is touched, the file is checked: it has to be a complete `pg_dum
 ```bash
 docker compose logs backend | grep -i restore
 ```
+
+**If the dashboard cannot back up the database as it is, it restores nothing.** That backup is what lets a restore be undone, so without it the dashboard stops and says so. It happens when the database itself is damaged, or when it runs a newer PostgreSQL than the backend's tools (the log then says `server version mismatch`). To restore anyway, take the database out of the dashboard backup and load it with the restore script, which asks you to confirm and makes no copy first. From the CozyVTT folder, with the stack running and your backup's name in place of the example:
+
+```bash
+(umask 077; sudo unzip -p backend/backups/backup-2026-01-01T03-00-00.zip database.sql | gzip > restore-me.sql.gz)
+./backend/scripts/restore.sh restore-me.sql.gz
+```
+
+Then put the backup's uploaded files back over the existing ones, restart the backend (which also brings an older backup up to this version), and delete the working copy, which holds every credential:
+
+```bash
+sudo unzip -o backend/backups/backup-2026-01-01T03-00-00.zip 'uploads/*' -d backend/
+docker compose restart backend
+rm restore-me.sql.gz
+```
+
+A database-only backup (the kind a restore makes first) has no uploaded files, and the first `unzip` line of that pair then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu).
 
 **A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
 

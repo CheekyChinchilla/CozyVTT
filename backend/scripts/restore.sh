@@ -135,7 +135,12 @@ set -e
 if [[ "${CHECK[1]}" -eq 3 ]]; then
   exit 1
 fi
-if [[ "${CHECK[0]}" -ne 0 || "${CHECK[1]}" -ne 0 ]]; then
+# The trailer is the last thing written, so a file that does not end with it
+# was cut short. awk's status alone does not say: busybox awk, the one on
+# Alpine, exits 0 when its writes fail.
+TRAILER_LINES=$(printf '%s\n' "$RESTORE_TRAILER" | wc -l | tr -d ' ')
+if [[ "${CHECK[0]}" -ne 0 || "${CHECK[1]}" -ne 0 ]] \
+    || [[ "$(tail -n "$TRAILER_LINES" "$PREPARED")" != "$RESTORE_TRAILER" ]]; then
   echo "❌ Could not write the unpacked backup to $SCRATCH. Nothing was changed."
   echo "   The whole backup is unpacked there before anything is loaded, so the folder"
   echo "   needs room for all of it. If the messages above say no space is left, run it"

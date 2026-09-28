@@ -18,7 +18,7 @@ jest.mock('child_process', () => ({
 
 import { execFile } from 'child_process';
 import fsSync from 'fs';
-import fs from 'fs/promises';
+import fs, { type FileHandle } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
@@ -40,6 +40,7 @@ import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
+import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -264,7 +265,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(entries).toEqual(['database.sql']);
 
     // Readable by the backend's user alone: it holds every credential on the instance.
-    expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+    await expectFileMode(file, 0o777, 0o600);
   });
 
   it('keeps the database password off the command line of every tool it runs', async () => {
@@ -331,10 +332,13 @@ describe('POST /api/admin/backups/restore', () => {
     // A stream error with no listener is an uncaught exception, which took
     // the whole backend down in the middle of a restore.
     const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
-    const proto = Object.getPrototypeOf(probe) as { createWriteStream: () => NodeJS.WritableStream };
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
     await probe.close();
-    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(() => {
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
       const stream = new PassThrough();
+      // A real stream closes the file when it is destroyed; this stand-in
+      // does the same, or the backup's handle is left open.
+      stream.on('close', () => { void this.close(); });
       process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
       return stream;
     });
@@ -343,6 +347,29 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Restore Failed');
       expect(res.body.message).toMatch(/backup of the current database/i);
+    } finally {
+      failing.mockRestore();
+    }
+  });
+
+  it('says the temporary folder could not take the working copy, and that nothing changed, when writing it fails', async () => {
+    const calls = stubTools();
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    // Only the file psql would load fails, as it does when the temporary
+    // folder fills while the unpacked backup is copied into it.
+    const original = fsSync.createWriteStream;
+    const failing = jest.spyOn(fsSync, 'createWriteStream').mockImplementation((file, options) => {
+      if (!String(file).endsWith('restore.sql')) return original(file, options);
+      const stream = original(path.join(SCRATCH, 'restore-probe'), options);
+      process.nextTick(() => stream.destroy(Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })));
+      return stream;
+    });
+    try {
+      const res = await restore(admin, zip);
+      expect(res.status).toBe(500);
+      expect(res.body.message).toMatch(/temporary folder/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
     } finally {
       failing.mockRestore();
     }
@@ -473,10 +500,10 @@ describe('POST /api/admin/backups/restore', () => {
       expect(loaded).toBeDefined();
       expect(path.dirname(loaded!.dir)).toBe(tmp);
       expect(loaded!.beside).toEqual(expect.arrayContaining(['database.sql', 'restore.sql']));
-      expect(loaded!.dirMode & 0o077).toBe(0);
-      expect(loaded!.mode & 0o077).toBe(0);
+      expectModeBits(loaded!.dirMode, 0o077, 0);
+      expectModeBits(loaded!.mode, 0o077, 0);
       const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
-      expect(dumped!.dirMode & 0o077).toBe(0);
+      expectModeBits(dumped!.dirMode, 0o077, 0);
       expect(await leftIn(tmp)).toEqual([]);
     });
   });
@@ -518,6 +545,56 @@ describe('POST /api/admin/backups', () => {
     clock.mockRestore();
   });
 
+  // A backup's file exists from the moment its name is taken: empty while
+  // pg_dump runs, part-written while it is zipped. It was listed as a finished
+  // backup all that time, so it could be downloaded half-made or deleted from
+  // under the backup writing it.
+  it('leaves a backup out of the list, and will not hand it out or delete it, until it is written', async () => {
+    stubTools();
+    const stub = execFileMock.getMockImplementation();
+    let release = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let started = () => {};
+    const dumping = new Promise<void>((resolve) => { started = resolve; });
+    execFileMock.mockImplementation((cmd: string, ...rest: unknown[]) => {
+      if (cmd !== 'pg_dump') return stub?.(cmd, ...rest);
+      started();
+      void held.then(() => stub?.(cmd, ...rest));
+    });
+    const before = new Set(await fs.readdir(BACKUP_DIR).catch(() => []));
+    const making = admin.post('/api/admin/backups').then((res) => res);
+    try {
+      await dumping;
+      const name = (await fs.readdir(BACKUP_DIR)).find((f) => !before.has(f));
+      expect(name).toBeDefined();
+
+      const listed = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+      expect(listed).not.toContain(name);
+      expect((await admin.get(`/api/admin/backups/${name}/download`)).status).toBe(409);
+      expect((await admin.delete(`/api/admin/backups/${name}`)).status).toBe(409);
+    } finally {
+      release();
+    }
+    const made = await making;
+    const name = made.body.filename;
+    expect(made.status).toBe(201);
+    const after = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+    expect(after).toContain(name);
+    // The next case counts on having this second's name to itself.
+    await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+  });
+
+  it('leaves out an empty backup file, which a backend stopped partway through a backup leaves behind', async () => {
+    const empty = 'backup-2026-01-02T03-04-05.zip';
+    await fs.writeFile(path.join(BACKUP_DIR, empty), '');
+    try {
+      const listed = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
+      expect(listed).not.toContain(empty);
+    } finally {
+      await fs.rm(path.join(BACKUP_DIR, empty), { force: true });
+    }
+  });
+
   it('gives two backups made in the same second different names, and keeps the first as it was', async () => {
     stubTools();
     const first = await admin.post('/api/admin/backups');
@@ -535,7 +612,7 @@ describe('POST /api/admin/backups', () => {
     expect((await fs.stat(firstFile)).size).toBe(marked);
     const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(names).toEqual(expect.arrayContaining([first.body.filename, second.body.filename]));
-    expect((await fs.stat(path.join(BACKUP_DIR, second.body.filename))).mode & 0o777).toBe(0o600);
+    await expectFileMode(path.join(BACKUP_DIR, second.body.filename), 0o777, 0o600);
   });
 
   it('has pg_dump write into a folder no other account can open, and leaves nothing behind', async () => {
@@ -548,7 +625,7 @@ describe('POST /api/admin/backups', () => {
       const dumped = calls.find((c) => c.cmd === 'pg_dump')?.file;
       expect(dumped).toBeDefined();
       expect(path.dirname(dumped!.dir)).toBe(tmp);
-      expect(dumped!.dirMode & 0o077).toBe(0);
+      expectModeBits(dumped!.dirMode, 0o077, 0);
       expect(await fs.readdir(tmp)).toEqual([]);
     });
   });
@@ -561,7 +638,7 @@ describe('POST /api/admin/backups', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Backup Failed');
-      expect(calls.find((c) => c.cmd === 'pg_dump')?.file?.dirMode).toBe(0o700);
+      expectModeBits(calls.find((c) => c.cmd === 'pg_dump')?.file?.dirMode, 0o777, 0o700);
       expect(await fs.readdir(tmp)).toEqual([]);
     });
   });

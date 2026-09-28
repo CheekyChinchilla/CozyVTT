@@ -330,7 +330,8 @@ def collect():
             if name in ('disconnect', 'error', 'ping'):
                 continue
             spans, blocks = handler_body(code, m)
-            body = ''.join(text[start:end] for start, end in spans)
+            # Comments blanked, so a gate that is commented out is not counted.
+            body = ''.join(plain[start:end] for start, end in spans)
             inbound.setdefault(name, {
                 'dm': any(dm_only(code, plain, start, end) for start, end in blocks),
                 # The shared predicates in services/permissions.ts, which is

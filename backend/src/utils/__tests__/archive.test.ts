@@ -4,6 +4,7 @@ import path from 'path';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
 import { extractArchiveSafely } from '../archive';
+import { expectFileMode } from '../../__tests__/helpers/fileModes';
 
 /** A ZIP holding the given files. */
 async function zipOf(entries: Record<string, string>): Promise<Buffer> {
@@ -36,7 +37,7 @@ describe('extractArchiveSafely', () => {
 
     await extractArchiveSafely(directory, dest, LIMITS);
 
-    expect((await fs.stat(dest)).mode & 0o077).toBe(0);
+    await expectFileMode(dest, 0o077, 0);
     expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
     expect(await fs.readFile(path.join(dest, 'uploads/a/b.txt'), 'utf8')).toBe('b');
   });

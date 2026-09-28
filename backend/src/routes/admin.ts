@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection } from '../utils/pgRestore';
+import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
@@ -781,9 +781,17 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
   }
 }
 
+/**
+ * Backups being written now. Each one's file exists from the moment its name
+ * is taken, empty while pg_dump runs and part-written while it is zipped, so
+ * the list leaves it out and download and delete refuse it until it is done.
+ */
+const backupsInProgress = new Set<string>();
+
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
   await ensureBackupDir(BACKUP_DIR);
   const { filename, handle } = await openNewBackup();
+  backupsInProgress.add(filename);
   const zipPath = path.join(BACKUP_DIR, filename);
   // The stream takes the handle over once it exists; until then a failure
   // has to close it here.
@@ -836,9 +844,15 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     await fs.unlink(zipPath).catch(() => {});
     throw error;
   } finally {
+    backupsInProgress.delete(filename);
     if (dumpDir !== null) await fs.rm(dumpDir, { recursive: true, force: true }).catch(() => {});
   }
 }
+
+const BACKUP_IN_PROGRESS_REPLY = {
+  error: 'Backup In Progress',
+  message: 'This backup is still being written. Try again when it appears in the list.',
+};
 
 // ============================================
 // POST /api/admin/backups
@@ -886,14 +900,17 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
-    const backups = await Promise.all(
+    const found = await Promise.all(
       files
-        .filter(f => BACKUP_FILENAME_RE.test(f))
+        .filter(f => BACKUP_FILENAME_RE.test(f) && !backupsInProgress.has(f))
         .map(async f => {
           const stat = await fs.stat(path.join(BACKUP_DIR, f));
           return { filename: f, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() };
         })
     );
+    // An empty file is a backup the backend stopped writing (it was restarted
+    // or killed while pg_dump ran); it holds nothing to download or restore.
+    const backups = found.filter(b => b.sizeBytes > 0);
     backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return res.json({ backups });
   } catch {
@@ -910,6 +927,9 @@ router.get('/backups/:filename/download', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
+  }
+  if (backupsInProgress.has(filename)) {
+    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
@@ -931,6 +951,9 @@ router.delete('/backups/:filename', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
+  }
+  if (backupsInProgress.has(filename)) {
+    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
@@ -1001,7 +1024,17 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
     // dropped from the header. See utils/pgRestore.ts for why each matters.
     // A refused file has changed nothing, and no tool has run yet.
     const restorePath = path.join(tempDir, 'restore.sql');
-    const { skipped, refused } = await prepareDumpForRestore(sqlPath, restorePath);
+    let prepared: PreparedDump;
+    try {
+      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+    } catch (error) {
+      logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). If that folder is full, free some space or set TMPDIR to another folder. Nothing was changed.`,
+      });
+    }
+    const { skipped, refused } = prepared;
     if (refused !== null) {
       return res.status(400).json({
         error: 'Invalid Backup',
@@ -1032,7 +1065,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       }
       return res.status(500).json({
         error: 'Restore Failed',
-        message: 'A backup of the current database could not be written, so nothing was restored. Check server logs for details.',
+        message: 'A backup of the current database could not be written, so nothing was restored. The reason is in the server log. If the database cannot be backed up as it is, the deployment guide shows how to restore this backup from the command line.',
       });
     }
     const undo = `The database as it was before is saved as ${safetyBackup} in the backup list.`;

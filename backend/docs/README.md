@@ -73,6 +73,8 @@ test does, so it does not read as DM only. A rule written inline instead of
 through the shared predicates in `services/permissions.ts` is not seen, which
 is one more reason to use them; the line above the table says the handler is
 authoritative.
+Comments are blanked before any of this is read, so a gate that is commented
+out changes the row just as deleting it would.
 
 ### Validate
 

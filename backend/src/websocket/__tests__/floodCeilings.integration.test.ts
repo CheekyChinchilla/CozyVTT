@@ -42,13 +42,30 @@ const PAWN = 'pawn';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Emit `event` with `data` `times` over, and count the `error` replies that arrive within `windowMs`. */
-async function errorsFrom(client: ClientSocket, event: string, data: unknown, times: number, windowMs = 700): Promise<number> {
+/**
+ * Emit `event` with `data` `times` over, and count the `error` replies that
+ * arrive within `windowMs`. With `expected`, stop 100 ms after that many have
+ * arrived: a case that follows with a second batch needs it to land inside the
+ * same one-second limit window, and a fixed wait leaves too little of that
+ * window on a slow machine.
+ */
+async function errorsFrom(
+  client: ClientSocket,
+  event: string,
+  data: unknown,
+  times: number,
+  { windowMs = 700, expected }: { windowMs?: number; expected?: number } = {}
+): Promise<number> {
   let count = 0;
-  const onError = () => { count += 1; };
+  let settle = () => {};
+  const settled = new Promise<void>((resolve) => { settle = resolve; });
+  const onError = () => {
+    count += 1;
+    if (count === expected) setTimeout(settle, 100);
+  };
   client.on('error', onError);
   for (let i = 0; i < times; i += 1) client.emit(event, data);
-  await sleep(windowMs);
+  await Promise.race([sleep(windowMs), settled]);
   client.off('error', onError);
   return count;
 }
@@ -114,7 +131,7 @@ describe.each([
     const first = await server.connectAndAuth(cookie(), campaignId);
     const second = await server.connectAndAuth(cookie(), campaignId);
 
-    expect(await errorsFrom(first, event, { mapId, ...payload }, ceiling)).toBe(ceiling);
+    expect(await errorsFrom(first, event, { mapId, ...payload }, ceiling, { expected: ceiling })).toBe(ceiling);
     expect(await errorsFrom(second, event, { mapId, ...payload }, 5)).toBe(0);
 
     first.disconnect();
@@ -135,7 +152,7 @@ describe('token.move.start', () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const first = await server.connectAndAuth(playerCookie, campaignId);
     const second = await server.connectAndAuth(playerCookie, campaignId);
-    expect(await errorsFrom(first, 'token.move.end', { tokenId: PAWN, mapId }, 150)).toBe(150);
+    expect(await errorsFrom(first, 'token.move.end', { tokenId: PAWN, mapId }, 150, { expected: 150 })).toBe(150);
     const reads = jest.spyOn(prisma.map, 'findUnique');
 
     const quiet = expectNoEvent(dm, 'token.move.start', 500);

@@ -122,7 +122,7 @@ describe('a token moved on a prepared map', () => {
     },
   });
 
-  it.each([[false, 'an unlit'], [true, 'a lit']])('reaches no player, drag or drop, on %s map', async (lit) => {
+  it.each([['an unlit', false], ['a lit', true]])('reaches no player, drag or drop, on %s map', async (_label, lit) => {
     await staged(lit as boolean);
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
@@ -130,6 +130,7 @@ describe('a token moved on a prepared map', () => {
       expectNoEvent(player, 'token.move.start', 800),
       expectNoEvent(player, 'token.moved', 800),
       expectNoEvent(player, 'token:appeared', 800),
+      expectNoEvent(player, 'token:disappeared', 800),
     ]);
     const done = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
     dm.emit('token.move.start', { tokenId: STAGED, mapId: preparedId });
