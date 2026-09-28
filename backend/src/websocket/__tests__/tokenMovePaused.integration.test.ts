@@ -150,3 +150,31 @@ describe('while the campaign is ACTIVE', () => {
     player.disconnect();
   });
 });
+
+// The pause lands mid-drag: the frames sent before it reached the table, so
+// the refused drop has to put the token back on every screen that saw them,
+// not only the mover's. The correction names no mover, so a client that
+// ignores its own moves still applies it.
+describe('a pause landing in the middle of a drag', () => {
+  afterAll(() => setStatus('ACTIVE'));
+
+  it('puts the token back for everyone who saw the drag', async () => {
+    await setStatus('ACTIVE');
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const framed = waitForEvent<{ x: number }>(dm, 'token.moved');
+    player.emit('token.move.start', { tokenId: OWN, mapId });
+    player.emit('token.move', { tokenId: OWN, mapId, x: 4, y: 4 });
+    expect((await framed).x).toBe(4);
+
+    await setStatus('PAUSED');
+    const toDm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(dm, 'token.moved');
+    const toMover = waitForEvent<{ movedBy: string | null }>(player, 'token.moved');
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 5, y: 5 });
+    expect(await toDm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
+    expect((await toMover).movedBy).toBeNull();
+    player.disconnect();
+    dm.disconnect();
+  });
+});
+

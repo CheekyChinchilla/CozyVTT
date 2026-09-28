@@ -398,9 +398,10 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
 - Nobody but the DM while the session is paused or has ended (campaign
   status `PAUSED` or `INACTIVE`): a player's `token.move.start` and
   `token.move.end` answer `error`, and their `token.move` frames are dropped.
-  A refused `token.move.end` is also answered with a `token.moved` to the
-  sender carrying the token's stored position, since a pause can land
-  mid-drag and the sender's screen has already drawn the drop
+  A refused `token.move.end` is also answered with a `token.moved` carrying
+  the token's stored position and `movedBy: null`, to the sender and to
+  everyone the drag's frames went to, since a pause can land mid-drag after
+  those screens have drawn the frames and the drop
 
 **Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. Who that is gets decided once, on this event or the first frame, and the drag's frames reuse it. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**
