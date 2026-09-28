@@ -114,12 +114,31 @@ describe('an export', () => {
     expect(entries.some((e) => e.includes(privateId))).toBe(false);
   });
 
-  it('as a UVTT file, does not embed a map picture its caller cannot read', async () => {
-    const stolen = await prisma.map.create({
-      data: { campaignId, name: 'Stolen', imageUrl: `/api/assets/maps/x/${privateId}`, baseLayerUrl: `/api/assets/maps/x/${privateId}`, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+  const mapNaming = (name: string, address: string) =>
+    prisma.map.create({
+      data: { campaignId, name, imageUrl: address, baseLayerUrl: address, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
     });
+
+  // The picture's own address, as an older release could have stored it: the
+  // address reads cleanly, so only the read check stands in the way.
+  it('as a UVTT file, does not embed a map picture its caller cannot read', async () => {
+    const stolen = await mapNaming('Stolen', `/api/assets/maps/${privateId}`);
     const res = await attacker.get(at(`/maps/${stolen.id}/export-uvtt`));
-    expect(res.status).not.toBe(200);
+    expect(res.status).toBe(422);
     expect(JSON.stringify(res.body)).not.toContain(PNG.toString('base64').slice(0, 40));
+  });
+
+  it('as a UVTT file, does not embed one named with extra path segments either', async () => {
+    const stolen = await mapNaming('Stolen twice', `/api/assets/maps/x/${privateId}`);
+    const res = await attacker.get(at(`/maps/${stolen.id}/export-uvtt`));
+    expect(res.status).toBe(422);
+    expect(JSON.stringify(res.body)).not.toContain(PNG.toString('base64').slice(0, 40));
+  });
+
+  it('as a UVTT file, embeds a map picture its caller can read', async () => {
+    const own = await mapNaming('Own', `/api/assets/maps/${ownId}`);
+    const res = await attacker.get(at(`/maps/${own.id}/export-uvtt`));
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).toContain(PNG.toString('base64').slice(0, 40));
   });
 });

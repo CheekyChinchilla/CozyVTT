@@ -28,6 +28,13 @@ info:
     All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
     Login via `/api/auth/login` to obtain a session cookie.
 
+    A request that changes something (POST, PUT, PATCH or DELETE) and that a
+    browser marks as sent from another site (`Sec-Fetch-Site` of `same-site`
+    or `cross-site`, which includes another port of the same host) is refused
+    with 403 unless its `Origin` is exactly `CORS_ORIGIN`. A client that is not
+    a browser sends no such header and is unaffected. Request bodies are JSON;
+    a form-encoded body is not read.
+
     ## MFA Flow
     If a user has MFA enabled, `/api/auth/login` returns `{ mfaRequired: true }` instead of a full session.
     The client must then call `/api/auth/mfa/verify-login` with a TOTP code or backup code to complete authentication.
@@ -37,19 +44,30 @@ info:
     - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches, chats and pings; keeps their own notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character)
 
     ## Rate Limiting
-    - Global API limit: 300 requests per minute per IP (all `/api/*` routes)
-    - Credential endpoints (login, register, reset-password, MFA login verify):
-      5 **failed** requests per 15 minutes. Successful requests are not counted,
-      so getting your password right never moves you towards a lockout.
+    The HTTP limits are counted per client address as the backend sees it: the
+    last address in `X-Forwarded-For`, since the backend trusts one proxy. The
+    bundled nginx puts the visitor's own address there, taken from a tunnel or
+    proxy in front of it only when that connects from a private address. Behind
+    a proxy that does not pass the visitor's address on, every client shares one
+    allowance. Uploads and the WebSocket limits are counted per user.
+    - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
+    - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/disable`
+      and `/mfa/backup-codes`): one shared allowance of 5 **failed** requests per
+      15 minutes. Successful requests are not counted, so getting your password
+      right never moves you towards a lockout.
+    - `POST /api/auth/register`: 10 requests per hour, counted whether or not
+      they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
       or not they succeed. That endpoint answers identically for a known and an
       unknown address, so successes cannot be skipped without removing the limit
       on the mail it sends
-    - MFA setup verification: 5 attempts per 15 minutes
+    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
     - MFA login verification: 5 attempts per 15 minutes (separate limit)
     - Asset uploads and typed documents (`POST /api/assets/upload`, `POST /api/assets/documents`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
-    - Chat messages: 5 per minute (WebSocket)
+    - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
+      cooldown (off by default), which allows each member one message per 1 to
+      300 seconds, as the DM sets it
     - Dice rolls: 30 per minute (WebSocket)
     - Token movement: 60 per second (WebSocket, throttled)
 
@@ -329,6 +347,9 @@ paths:
                   minLength: 12
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
       responses:
         '201':
           description: User registered successfully
@@ -456,6 +477,7 @@ paths:
       description: |
         Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration).
         If SMTP is not configured, returns a message to contact the administrator.
+        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does.
         Rate limited (5/15min).
       operationId: forgotPassword
       security: []
@@ -489,7 +511,7 @@ paths:
       tags:
         - Authentication
       summary: Reset password with token
-      description: Reset password using a valid token from a password reset email. Token must not be expired or used. Rate limited (5/15min).
+      description: Reset password using a valid token from a password reset email or invitation. Token must not be expired or used. A token sets the password once, even when two requests carry it at the same moment, and using it voids the account's other unused tokens. Rate limited (5/15min).
       operationId: resetPassword
       security: []
       requestBody:
@@ -528,7 +550,7 @@ paths:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false. Ends the user's other login sessions; the session making the request stays signed in.
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false. Ends the user's other login sessions; the session making the request stays signed in. Voids the user's unused password-reset and invitation links.
       operationId: changePassword
       security:
         - cookieAuth: []
@@ -571,10 +593,22 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled.
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. Rate limited (5 failures/15min).
       operationId: mfaSetup
       security:
         - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  description: The user's current password
       responses:
         '200':
           description: MFA setup initiated
@@ -593,13 +627,21 @@ paths:
                     description: TOTP secret for manual entry
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Not authenticated, or the password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/auth/mfa/verify:
     post:
       tags:
         - MFA
       summary: Complete MFA setup
-      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Rate limited (5/15min).
+      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Ends the user's other login sessions; the session making the request stays signed in. The code counts as used, so it cannot then sign in. Rate limited (5/15min).
       operationId: mfaVerifySetup
       security:
         - cookieAuth: []
@@ -642,8 +684,9 @@ paths:
       summary: Verify MFA during login
       description: |
         Complete MFA verification during login flow. Requires a pending MFA session from `/api/auth/login`.
-        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use.
-        Rate limited (5/15min, separate from setup verification).
+        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use, exactly once even when two requests carry the same code; the second is answered 401.
+        A TOTP code is accepted once: one from the same 30-second step as a code already accepted for the account, or an earlier step, is refused.
+        Rate limited (5 failures/15min per address, separate from setup verification, and 5 failures/15min per account from any address).
       operationId: mfaVerifyLogin
       security: []
       requestBody:
@@ -690,7 +733,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code. Admin accounts cannot disable MFA. Ends the user's other login sessions; the session making the request stays signed in.
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used. Admin accounts cannot disable MFA. Ends the user's other login sessions; the session making the request stays signed in.
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -772,8 +815,11 @@ paths:
       summary: Delete own account
       description: |
         Self-service permanent account deletion. Requires the current
-        password as confirmation. Cascades to delete memberships, characters,
-        and messages owned by the user.
+        password as confirmation. Deletes the user's memberships, characters,
+        personal notes and dice macros. Their chat messages, dice rolls and
+        uploaded assets stay, with the user field set to null. A campaign the
+        user owns passes to its sitting DM; while the user is that DM the
+        deletion is refused with 409 and nothing changes.
       operationId: deleteOwnAccount
       security:
         - cookieAuth: []
@@ -793,7 +839,7 @@ paths:
               password: hunter2-correct-horse-battery
       responses:
         '200':
-          description: Account deleted; session destroyed.
+          description: Account deleted; every login session of the account ended, on every device.
           content:
             application/json:
               schema:
@@ -812,6 +858,15 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            The caller is the instance's only admin (another user has to be promoted
+            to admin first), or runs a campaign they own (the message names it).
+            Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -960,7 +1015,10 @@ paths:
       tags:
         - Users
       summary: Update user
-      description: Update user profile (own profile or admin). Admin can change platformRole, which ends every login session the target has, because the role is carried in the session. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+      description: |
+        Update user profile (own profile or admin). Admin can change platformRole, which ends every login session the target has, because the role is carried in the session. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+
+        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
       security:
         - cookieAuth: []
@@ -980,6 +1038,9 @@ paths:
               properties:
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
                 email:
                   type: string
                   format: email
@@ -989,6 +1050,9 @@ paths:
                   type: string
                   enum: [ADMIN, USER]
                   description: Admin only
+                currentPassword:
+                  type: string
+                  description: Required when changing your own email
       responses:
         '200':
           description: User updated
@@ -1003,16 +1067,28 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Not authenticated, or the current password given for an email change is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Setting platformRole to USER would leave the instance without an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     delete:
       tags:
         - Users
       summary: Delete user
-      description: Delete user account (Admin only, cannot delete self). Ends every login session the deleted user had.
+      description: Delete user account (Admin only, cannot delete self). Ends every login session the deleted user had. What stays and what goes, and the 409 for a user who runs a campaign they own, are as for `DELETE /api/auth/account`.
       operationId: deleteUser
       security:
         - cookieAuth: []
@@ -1039,13 +1115,42 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            The user runs a campaign they own. `campaigns` lists each such
+            campaign with its other members,
+            so the admin can hand the DM seat over (`PUT
+            /api/campaigns/{campaignId}/dm`) or delete the campaign and try
+            again. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  message: { type: string }
+                  campaigns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        members:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              userId: { type: string, format: uuid }
+                              displayName: { type: string }
+                              role: { type: string, enum: [PLAYER, SPECTATOR] }
 
   /api/users/{id}/reset-password:
     post:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []
@@ -1371,7 +1476,7 @@ paths:
       tags:
         - Campaigns
       summary: Delete campaign
-      description: Delete campaign (owner or admin only)
+      description: Delete campaign (owner or admin only). The campaign's library assets become their uploaders' personal (`USER`) assets in the same transaction as the delete, so a failed delete changes neither, and an asset written into the campaign while it is being deleted goes the same way.
       operationId: deleteCampaign
       security:
         - cookieAuth: []
@@ -1524,7 +1629,7 @@ paths:
       tags:
         - Campaigns
       summary: Remove member
-      description: Remove a member from campaign (DM only). The sitting DM and the campaign owner cannot be removed; both return 400.
+      description: Remove a member from campaign (DM only). The sitting DM and the campaign owner cannot be removed; both return 400. The member's characters are taken out of the campaign in the same step (their `campaignId` becomes null), and a character still naming a campaign its owner has left is readable and editable by its owner alone.
       operationId: removeMember
       security:
         - cookieAuth: []
@@ -1556,7 +1661,7 @@ paths:
       tags:
         - Campaigns
       summary: Change member role
-      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it.
+      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it, with a `roster.updated`; the initiative order and the map on screen are sent again as the new role sees it.
       operationId: changeMemberRole
       security:
         - cookieAuth: []
@@ -1609,7 +1714,10 @@ paths:
         The campaign's owner is NOT changed: ownership and the DM role are
         separate, which lets an owner hand the game to someone else and remain at
         the table as a player. Callable by the sitting DM, the campaign owner
-        (even when they are not the DM), or a platform admin.
+        (even when they are not the DM), or a platform admin. Both members'
+        open connections take their new roles at once; `campaign.dm.transferred`
+        and a `roster.updated` for each go to the campaign, and the initiative
+        order and the map on screen are sent again as each new role sees it.
       operationId: transferDM
       security:
         - cookieAuth: []
@@ -1813,12 +1921,18 @@ paths:
         in the same transaction.
 
         Validation:
+        - `characterIds`, when sent, must be a list of at most 50 non-empty ids.
         - The invitation must belong to the authenticated user and be `PENDING`.
+          It is accepted once: a second accept, even one sent at the same moment,
+          answers 400 `Invitation already processed`.
         - Expired invitations are rejected.
         - All `characterIds` must belong to the user and not already be assigned
-          to a campaign.
-        - If the campaign has a `gameSystem` set, each character's `gameSystem`
-          must either be null or match the campaign's.
+          to a campaign. One assigned elsewhere while the accept runs makes it
+          answer 400 and change nothing.
+        - Each character's `gameSystem` must be the campaign's: a character with
+          a system joins only a campaign with the same one, and a character with
+          none (Flexible) only a campaign with none. The same rule as
+          `POST /api/characters/{id}/assign`.
 
         On success, also broadcasts a `roster.updated` event over the WebSocket
         to all current campaign members.
@@ -1839,6 +1953,7 @@ paths:
               properties:
                 characterIds:
                   type: array
+                  maxItems: 50
                   items: { type: string, format: uuid }
             example:
               characterIds:
@@ -1856,8 +1971,9 @@ paths:
                     $ref: '#/components/schemas/CampaignMembership'
         '400':
           description: |
-            Invitation already processed, expired, or character validation failed
-            (not owned by user, already assigned, or game-system mismatch).
+            Invitation already processed, expired, `characterIds` malformed, or
+            character validation failed (not owned by user, already assigned, or
+            game-system mismatch).
           content:
             application/json:
               schema:
@@ -2809,6 +2925,11 @@ paths:
           `campaignId` column, in one transaction — both are needed, because the
           campaign roster and the token permission checks read the membership,
           not the column.
+        - A `tokenImageUrl` on this server must be an asset's exact address
+          (`/api/assets/<kind>/<id>`), and one naming an existing asset must
+          name one the caller can read; otherwise the answer is 403 and nothing
+          is created. An address naming an asset that no longer exists is
+          accepted.
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -2876,8 +2997,9 @@ paths:
                           type: string
         '403':
           description: >
-            The caller is not a member of the campaign named by `campaignId`.
-            Nothing is created.
+            The caller is not a member of the campaign named by `campaignId`,
+            or `tokenImageUrl` names a picture the caller may not use. Nothing
+            is created.
         '404':
           description: No campaign exists with the id given in `campaignId`
 
@@ -2922,6 +3044,13 @@ paths:
         - If the character has a `gameSystem`, data updates are validated against
           that system's Zod schema.
         - If the character has no `gameSystem`, no validation occurs.
+        - A new `tokenImageUrl` follows the rule on create (403 otherwise); the
+          address already stored may be sent back unchanged.
+        - Send `updatedAt` as the character was loaded to have the save refused
+          with 409 if the character has changed since, by another save or by a
+          hit point or hit dice change made over the socket. Without it the
+          save is made whatever changed in between. A 200 response carries the
+          new `updatedAt` for the next save.
       operationId: updateCharacter
       security:
         - cookieAuth: []
@@ -2951,6 +3080,11 @@ paths:
                   type: string
                   deprecated: true
                   description: DEPRECATED - Cannot change gameSystem after creation. Will return 400 error.
+                updatedAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    The character's `updatedAt` as the caller loaded it. Optional. When sent and the character has changed since, the save is refused with 409 and nothing is written.
       responses:
         '200':
           description: Character updated
@@ -2990,6 +3124,21 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The character changed after the `updatedAt` sent. Nothing was saved; load the character again and reapply the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: CHARACTER_CHANGED
+                  message:
+                    type: string
 
     delete:
       tags:
@@ -3222,6 +3371,15 @@ paths:
             type: integer
             default: 50
             maximum: 100
+        - name: usable
+          in: query
+          description: >-
+            `true` lists only assets the caller may put on a map, token or
+            creature: global ones, their own personal ones, and those of
+            campaigns they belong to. Without it, a platform admin is listed
+            every asset on the instance; for anyone else the two are the same.
+          schema:
+            type: boolean
       responses:
         '200':
           description: List of assets
@@ -3367,7 +3525,7 @@ paths:
       tags:
         - Assets
       summary: Delete asset
-      description: Delete asset (owner, campaign DM, or admin)
+      description: Delete asset. A personal asset, its owner or an admin; a campaign asset, its uploader while still a member of that campaign, the campaign's DM, or an admin; a global asset, an admin or the uploading global asset manager.
       operationId: deleteAsset
       security:
         - cookieAuth: []
@@ -3408,8 +3566,8 @@ paths:
         |------|---------------|
         | Any move involving GLOBAL | Platform admin OR `globalAssetManager` |
         | USER → CAMPAIGN | Asset owner who is that campaign's DM; a player may move token art only; never a spectator |
-        | CAMPAIGN → USER | Asset owner OR DM of the source campaign |
-        | CAMPAIGN → CAMPAIGN | Asset owner OR DM of the source campaign |
+        | CAMPAIGN → USER | Asset owner while a member of the source campaign, OR its DM |
+        | CAMPAIGN → CAMPAIGN | Asset owner while a member of the source campaign, OR its DM |
         | USER → USER on a different account | Disallowed |
 
         When `scope: CAMPAIGN`, `campaignId` is required and the campaign must
@@ -3805,7 +3963,12 @@ paths:
       tags:
         - Maps
       summary: Create map
-      description: Create a new map for the campaign (DM only)
+      description: >-
+        Create a new map for the campaign (DM only). An image address on this
+        server must be an asset's exact address (`/api/assets/<kind>/<id>`),
+        and one naming an existing asset must name one the caller can read, or
+        the request answers 403, unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that
+        no longer exists is accepted.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -3906,7 +4069,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted. The address already stored may be
         sent back unchanged.
       operationId: updateMap
@@ -4053,7 +4216,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted.
       operationId: addToken
       security:
@@ -4114,7 +4277,7 @@ paths:
         (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
         one the caller can read, or the request answers 403 (the right to read
         an asset follows its use, so storing a reference is checked like
-        reading it). An address naming an asset that no longer exists is
+        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
         accepted. The address already stored may be
         sent back unchanged.
 
@@ -4970,7 +5133,7 @@ paths:
     post:
       tags: [Creatures]
       summary: Create custom creature
-      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: createCreature
       security:
         - cookieAuth: []
@@ -5054,7 +5217,7 @@ paths:
     put:
       tags: [Creatures]
       summary: Update custom creature
-      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateCreature
       security:
         - cookieAuth: []
@@ -5326,7 +5489,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Create token template
-      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -5375,7 +5538,7 @@ paths:
     put:
       tags: [Token Templates]
       summary: Update token template
-      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -5415,7 +5578,7 @@ paths:
     post:
       tags: [Token Templates]
       summary: Save token as template
-      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise); an address naming an asset that no longer exists is accepted.
+      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
@@ -5445,7 +5608,10 @@ paths:
       summary: Copy template to another campaign
       description: |
         Copy a token template to another campaign. The authenticated user must
-        be the DM of **both** the source and target campaigns.
+        be the DM of **both** the source and target campaigns. The template's
+        picture is checked as a new reference in the target campaign: an
+        existing asset the caller cannot read, and the target campaign does
+        not already use, answers 403 and nothing is copied.
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []
@@ -5488,7 +5654,8 @@ paths:
         Export a campaign as a .cozyvtt ZIP archive (DM only).
         Rate limited to 1 per 5 minutes per user. The archive holds only the
         asset files the caller may read; a picture the campaign names that the
-        caller cannot read is left out, and the record keeps its address.
+        caller cannot read, or that no longer exists, is left out, and the map,
+        token, creature or template that used it is imported without a picture.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -6128,7 +6295,7 @@ paths:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read. A backup directory that cannot be read answers 500, not an empty list.
       security:
         - cookieAuth: []
       responses:
@@ -6155,6 +6322,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The backup directory could not be read (error `Backup Failed`; the message names the directory)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/admin/backups/{filename}/download:
     get:
@@ -6606,7 +6779,11 @@ paths:
     post:
       tags: [Character Templates]
       summary: Publish a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: >-
+        Any signed-in user may publish a template. A `tokenImageUrl`, when
+        given, must name a global asset by its own address
+        (`/api/assets/tokens/<id>`, with nothing after the id) or by its bare
+        id; anything else is refused with 400.
       operationId: createCharacterTemplate
       security:
         - cookieAuth: []
@@ -6644,7 +6821,9 @@ paths:
     put:
       tags: [Character Templates]
       summary: Update a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: >-
+        The template's author, a user with the `templateEditor` flag, or a
+        platform ADMIN. `tokenImageUrl` follows the rule on create.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -6667,7 +6846,7 @@ paths:
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
-      description: Requires the `templateEditor` flag or platform ADMIN.
+      description: The template's author, a user with the `templateEditor` flag, or a platform ADMIN.
       operationId: deleteCharacterTemplate
       security:
         - cookieAuth: []
@@ -7317,6 +7496,7 @@ components:
           type: string
           format: date-time
         uploadedBy:
+          nullable: true
           type: object
           properties:
             id:
@@ -7448,6 +7628,8 @@ components:
         uploadedById:
           type: string
           format: uuid
+          nullable: true
+          description: Null once the uploader's account is deleted; the asset stays.
         campaignId:
           type: string
           format: uuid

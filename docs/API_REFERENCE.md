@@ -34,9 +34,9 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 ### Session Cookie
 
-- **Cookie name:** `cozyvtt.sid` (configured by `SESSION_SECRET`)
-- **Flags:** `httpOnly`, `secure` (in production), `sameSite: lax`
-- **Duration:** 24 hours standard; 30 days with "remember me"
+- **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
+- **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days)
 
 ### Error Responses for Unauthenticated Requests
 
@@ -199,7 +199,9 @@ Get the currently authenticated user.
 Change the authenticated user's password. Every other sign-in of the account is
 signed out, open game connections included; the session making the change stays.
 A reset through the emailed link (`POST /api/auth/reset-password`) signs out
-every sign-in, since nobody is signed in to keep.
+every sign-in, since nobody is signed in to keep. Either way, the account's
+unused reset and invitation links stop working, and a link sets the password
+once even when two requests carry it at the same moment.
 
 **Request:**
 ```json
@@ -213,8 +215,10 @@ every sign-in, since nobody is signed in to keep.
 
 ### `DELETE /api/auth/account`
 
-Permanently delete the authenticated user's account and all associated data. Any
-open game connection of the account is dropped.
+Permanently delete the authenticated user's account and all associated data.
+Every sign-in of the account ends, on every device, and any open game connection
+of the account is dropped. The instance's only admin is
+refused with `409` until another user has been promoted to admin.
 
 **Request:**
 ```json
@@ -629,18 +633,22 @@ Get a single character. Returns full character data including the JSON sheet dat
 
 ### `PUT /api/characters/:id`
 
-Save character data. Accepts partial data — only provided fields are updated.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped.
+
+Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
 **Request:**
 ```json
 {
   "data": {
-    "name": "Thorin Ironforge",
-    "hitPoints": { "current": 10, "maximum": 12 }
+    "characterName": "Thorin Ironforge",
+    "hp": { "current": 10, "maximum": 12, "temporary": 0 }
   },
-  "tokenImageUrl": "https://..."
+  "updatedAt": "2026-09-28T08:15:02.117Z"
 }
 ```
+
+(The `data` above is cut short; a real D&D 5e sheet also needs `class`, `level`, `race`, `proficiencyBonus` and `stats`.)
 
 ---
 
@@ -1082,7 +1090,7 @@ Who may delete depends on the asset's scope:
 |---|---|
 | `GLOBAL` | A platform admin, or the uploader if they hold `globalAssetManager`. The permission covers your own global uploads — it does not let you remove another manager's |
 | `USER` | The owner, or a platform admin |
-| `CAMPAIGN` | The uploader, that campaign's DM, or a platform admin |
+| `CAMPAIGN` | The uploader while still a member of that campaign, its DM, or a platform admin |
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
@@ -1197,7 +1205,17 @@ Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
 and `bio`; an admin may change anyone's, and only an admin may set
 `platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
 Changing `platformRole` signs the user out everywhere, because the role is
-carried in the session. There is no approval field to set here.
+carried in the session. Setting it to `USER` for the instance's only admin is
+refused with `409`. There is no approval field to set here.
+
+`displayName` is trimmed and must then be 1 to 50 characters of text; anything
+else is refused with `400`. Registration applies the same rule.
+
+Changing **your own** `email` needs `currentPassword` in the same request (`400`
+without it, `401` when it is wrong); an admin changing someone else's does not.
+When the address changes, any unused password-reset or invitation link for the
+account stops working, and the old address is emailed a notice if the instance
+has SMTP configured.
 
 ---
 
@@ -1205,7 +1223,8 @@ carried in the session. There is no approval field to set here.
 
 Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
 sessions the user currently has open are signed out** — otherwise they would keep browsing on the
-old session and the forced change would only apply at their next login.
+old session and the forced change would only apply at their next login. Any reset or invitation
+link the user has not used stops working.
 
 **Response:**
 ```json
@@ -1219,7 +1238,19 @@ old session and the forced change would only apply at their next login.
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account and all associated data.
+Delete a user account. Their memberships, characters, notes and dice macros go with it; their chat messages, dice rolls and uploads stay with no owner. A campaign they own passes to its sitting DM.
+
+**409** while they are the DM of a campaign they own. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again:
+
+```json
+{
+  "error": "Conflict",
+  "message": "This user runs \"Friday Game\". Hand each one's DM seat to another member, or delete it, then delete the user.",
+  "campaigns": [
+    { "id": "…", "name": "Friday Game", "members": [{ "userId": "…", "displayName": "Bob", "role": "PLAYER" }] }
+  ]
+}
+```
 
 ---
 

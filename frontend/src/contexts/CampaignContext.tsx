@@ -135,8 +135,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   // The campaign the page shows now, for work that finishes after an await.
+  // None once the page closes: the next campaign's page reads the same token
+  // store, and a late answer for this one would write over it.
   const shownCampaignId = useRef<string | null>(null);
-  useEffect(() => { shownCampaignId.current = campaign?.id ?? null; }, [campaign?.id]);
+  useEffect(() => {
+    shownCampaignId.current = campaign?.id ?? null;
+    return () => { shownCampaignId.current = null; };
+  }, [campaign?.id]);
   const [currentMap, setCurrentMap] = useState<Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -63,4 +63,21 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
     expect(screen.queryByText('Shared with all members of the selected campaign.')).not.toBeInTheDocument();
     expect(screen.getByText(/Yours, and usable in all your campaigns/)).toBeInTheDocument();
   });
+
+  // A campaign the user picked, and the new kind of asset cannot go into,
+  // is taken back and nothing put in its place: the one campaign left may
+  // be one they never meant to share the file with.
+  it('asks for a campaign again, and does not pick the other one', async () => {
+    campaigns = [campaign('home', 'DM'), campaign('friday', 'PLAYER')];
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    fireEvent.click(await screen.findByText('Token'));
+    fireEvent.click(await screen.findByText('Campaign'));
+    const select = await screen.findByRole('combobox');
+    fireEvent.change(select, { target: { value: 'friday' } });
+    expect((select as HTMLSelectElement).value).toBe('friday');
+
+    fireEvent.click(screen.getByText('Map'));
+
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('');
+  });
 });

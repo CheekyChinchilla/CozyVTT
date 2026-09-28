@@ -236,8 +236,8 @@ class ApiClient {
   // MFA
   // ============================================
 
-  async mfaSetup(): Promise<MFASetupResponse> {
-    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup');
+  async mfaSetup(password: string): Promise<MFASetupResponse> {
+    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password });
     return response.data;
   }
 
@@ -783,6 +783,8 @@ class ApiClient {
     limit?: number;
     search?: string;
     uploadedBy?: string;
+    /** Only what the caller may put on a map or token; see GET /api/assets. */
+    usable?: boolean;
   }): Promise<AssetListResponse> {
     const response = await this.client.get<AssetListResponse>('/api/assets', { params });
     return response.data;

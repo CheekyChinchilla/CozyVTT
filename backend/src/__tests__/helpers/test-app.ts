@@ -23,6 +23,7 @@
 import express from 'express';
 import session from 'express-session';
 import { bodyParsers } from '../../middleware/bodyParsers';
+import { originCheck } from '../../middleware/originCheck';
 import { errorHandler } from '../../middleware/errorHandler';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
@@ -37,11 +38,13 @@ import userRoutes from '../../routes/users';
 import mapRoutes from '../../routes/maps';
 import configRoutes from '../../routes/config';
 import adminRoutes from '../../routes/admin';
+import invitationRoutes from '../../routes/invitations';
 
 export function createTestApp(): express.Express {
   const app = express();
 
   app.use(bodyParsers());
+  app.use(originCheck);
 
   // Memory store — no PostgreSQL needed for tests
   app.use(
@@ -74,6 +77,7 @@ export function createTestApp(): express.Express {
   app.use('/api/character-templates', characterTemplateRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/assets', assetRoutes);
+  app.use('/api/invitations', invitationRoutes);
 
   // Catch-all 404
   app.use('*', (_req, res) => {

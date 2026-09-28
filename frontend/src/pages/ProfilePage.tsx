@@ -918,9 +918,13 @@ export default function ProfilePage() {
                     <p className="font-semibold">This will permanently delete:</p>
                     <ul className="list-disc list-inside text-xs space-y-0.5">
                       <li>Your account and profile</li>
-                      <li>All campaigns you own</li>
-                      <li>All characters and messages</li>
+                      <li>Your characters, personal notes and saved rolls</li>
                     </ul>
+                    <p className="text-xs">
+                      Your chat messages, dice rolls and uploaded files stay where they are, no longer linked to you.
+                      A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
+                      to another DM, or deleted, first.
+                    </p>
                   </div>
                 </div>
 

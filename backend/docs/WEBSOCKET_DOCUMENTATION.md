@@ -144,6 +144,11 @@ const socket = io('http://localhost:4000', {
 });
 ```
 
+A handshake a browser marks as made from another site (`Sec-Fetch-Site` of
+`same-site` or `cross-site`) is refused unless its `Origin` is exactly
+`CORS_ORIGIN`, as the HTTP API refuses such a request. A program that is not
+a browser sends no such header and connects as above.
+
 ---
 
 ## Authentication
@@ -404,7 +409,9 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
   those screens have drawn the frames and the drop. So is a drop refused
   because control of the token, or the sender's plane, changed after the
   drag began; a drop of a token the sender never dragged gets only the
-  `error`
+  `error`. The correction goes only to those the map fetch would send the
+  token to now, sight on a lit map included, so a token hidden or moved to
+  the other plane since the drag began is not placed on anyone's screen
 
 **Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who could see the token where the drag began. Who that is gets decided on this event or the first frame, and the drag's frames reuse it; it is decided again when the token is hidden, shown or moved to the other plane mid-drag, and at least once a second, so a player who changes plane or leaves the map the table is on stops receiving the frames within a second. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**

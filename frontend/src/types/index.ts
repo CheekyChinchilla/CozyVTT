@@ -582,7 +582,8 @@ export interface CampaignDocument {
   mimeType: string;
   fileSize: number;
   createdAt: string;
-  uploadedBy: { id: string; displayName: string };
+  /** Null once the uploader's account is deleted. */
+  uploadedBy: { id: string; displayName: string } | null;
   linkedAt: string;
   linkedBy: { id: string; displayName: string };
   /**
@@ -786,11 +787,22 @@ export interface RosterMember {
 // Asset
 // ============================================
 
+/**
+ * A campaign that stops an account being deleted: its owner is its DM. An
+ * admin clears it by handing the DM seat to one of `members`, or deleting it.
+ */
+export interface DeletionBlocker {
+  id: string;
+  name: string;
+  members: { userId: string; displayName: string; role: string }[];
+}
+
 export interface Asset {
   id: string;
   type: AssetType;
   scope: AssetScope;
-  uploadedById: string;
+  /** Null once the uploader's account is deleted: the file stays, owned by no one. */
+  uploadedById: string | null;
   campaignId: string | null;
   filename: string;
   originalName: string;
@@ -801,7 +813,7 @@ export interface Asset {
   tags: string[];
   createdAt: string;
   /** Populated by backend include — available in list responses */
-  uploadedBy?: { id: string; displayName: string };
+  uploadedBy?: { id: string; displayName: string } | null;
   campaign?: { id: string; name: string } | null;
 }
 
@@ -849,7 +861,8 @@ export interface MessageMetadata {
 export interface DiceRoll {
   id: string;
   campaignId: string;
-  userId: string;
+  /** Null once the roller's account is deleted. */
+  userId: string | null;
   expression: string;
   result: number;
   breakdown: DiceRollBreakdown;
@@ -990,6 +1003,11 @@ export interface UpdateCharacterRequest {
   name?: string;
   data?: CharacterData;
   tokenImageUrl?: string;
+  /**
+   * The character's `updatedAt` as the sheet was loaded. The server refuses the
+   * save with 409 if the character has changed since.
+   */
+  updatedAt?: string;
 }
 
 // Map
@@ -1132,8 +1150,9 @@ export interface DiceRolledEvent {
    * or replayed from history, carries one and dedupes on it.
    */
   id?: string;
-  userId: string;
-  userName: string;
+  /** Null for a roll whose roller has since deleted their account. */
+  userId: string | null;
+  userName: string | null;
   characterName: string | null;
   expression: string;
   result: number;

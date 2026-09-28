@@ -121,7 +121,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const getAssetUrl = (): string => {
     if (currentAsset.type === AssetType.MAP) return api.getAssetUrl(currentAsset.id, 'maps');
     if (currentAsset.type === AssetType.TOKEN) return api.getAssetUrl(currentAsset.id, 'tokens');
-    if (currentAsset.type === AssetType.AVATAR) return api.getAssetUrl(currentAsset.uploadedById, 'avatars');
+    if (currentAsset.type === AssetType.AVATAR) return currentAsset.uploadedById ? api.getAssetUrl(currentAsset.uploadedById, 'avatars') : '';
     if (currentAsset.type === AssetType.AUDIO) return api.getAssetUrl(currentAsset.id, 'audio');
     return '';
   };

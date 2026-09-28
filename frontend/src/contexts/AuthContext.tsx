@@ -178,12 +178,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // MFA Setup (for current user)
   // ============================================
 
-  const setupMFA = useCallback(async (): Promise<MFASetupResponse> => {
+  const setupMFA = useCallback(async (password: string): Promise<MFASetupResponse> => {
     if (!authenticated) {
       throw new Error('Must be authenticated to setup MFA');
     }
 
-    return await authService.setupMFA();
+    return await authService.setupMFA(password);
   }, [authenticated]);
 
   const completeMFASetup = useCallback(async (token: string): Promise<MFAVerifyResponse> => {

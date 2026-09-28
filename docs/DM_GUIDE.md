@@ -274,6 +274,8 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
+> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back: they are told, and the sheet opens again with your change on it. The same goes the other way when you are editing a sheet the player changes.
+
 **What each system offers.** The rolls on the menu depend on your campaign's game system, because not every system has something meaningful to compute from a stat block:
 
 | System | Stat-block rolls |
@@ -514,7 +516,7 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
-- All associated asset files (map images, token images)
+- All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact, and you can choose one for it in **Edit Map** or **Edit Token**
 - Campaign settings (name, description, game system, vibe settings, spirit layer)
 
 **What's NOT included:**
@@ -569,6 +571,11 @@ To remove a player from your campaign, open **Campaign Settings** and find the p
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the
 rest of the table is doing, without waiting for them to close the page.
+
+**Their characters leave with them.** Each of their characters is taken out of
+the campaign: it stays theirs, but you and the other players can no longer open
+or edit its sheet, and nothing they change on it reaches your table. A token on
+the map that was bound to one of those characters stays where it is.
 
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as

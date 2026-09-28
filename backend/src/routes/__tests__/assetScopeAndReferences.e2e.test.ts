@@ -324,3 +324,60 @@ describe('what the asset library tells a member', () => {
     expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(200);
   });
 });
+
+// The pickers that choose a map or token picture list what the caller may
+// use. An admin's listing is every asset on the instance, and the reference
+// check holds an admin to the same rule as anyone, so an admin DM was
+// offered other people's private pictures that saving then refused.
+describe("an admin's picture pickers", () => {
+  it('list only what the admin may use when asked for usable assets', async () => {
+    const stamp = Date.now();
+    const adminUser = await createTestUser({ email: `scope-admin-${stamp}@test.cozyvtt.local`, displayName: 'Scope Admin', role: 'ADMIN' });
+    try {
+      const admin = await login(adminUser.email);
+      const theirs = await makeAsset('MAP', 'USER', playerId, 'players-private-map');
+      const own = await makeAsset('MAP', 'USER', adminUser.id, 'admins-own-map');
+
+      const everything = await admin.get('/api/assets?type=MAP&limit=100');
+      expect(everything.status).toBe(200);
+      expect(everything.body.assets.map((a: { id: string }) => a.id)).toEqual(expect.arrayContaining([theirs, own]));
+
+      const usable = await admin.get('/api/assets?type=MAP&limit=100&usable=true');
+      expect(usable.status).toBe(200);
+      const ids = usable.body.assets.map((a: { id: string }) => a.id);
+      expect(ids).toContain(own);
+      expect(ids).not.toContain(theirs);
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: adminUser.id } });
+      await cleanupUsers([adminUser.id]);
+    }
+  });
+});
+
+// A campaign asset stays with the campaign. Its uploader may delete or move
+// it while they are a member; once they have left, the map art the table
+// uses is the DM's to keep.
+describe("a campaign asset's uploader", () => {
+  it('may delete it while a member of the campaign', async () => {
+    const art = await makeAsset('TOKEN', 'CAMPAIGN', playerId, 'players-campaign-art');
+    expect((await player.delete(`/api/assets/${art}`)).status).toBe(200);
+  });
+
+  it('may neither delete nor move it once they have left', async () => {
+    const stamp = Date.now();
+    const leftUser = await createTestUser({ email: `scope-left-${stamp}@test.cozyvtt.local`, displayName: 'Scope Left' });
+    try {
+      const left = await login(leftUser.email);
+      const art = await makeAsset('MAP', 'CAMPAIGN', leftUser.id, 'departed-campaign-map');
+
+      expect((await left.delete(`/api/assets/${art}`)).status).toBe(403);
+      expect((await left.patch(`/api/assets/${art}/scope`).send({ scope: 'USER' })).status).toBe(403);
+      const kept = await prisma.asset.findUnique({ where: { id: art } });
+      expect(kept?.scope).toBe('CAMPAIGN');
+      expect(fs.existsSync(kept!.filePath)).toBe(true);
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: leftUser.id } });
+      await cleanupUsers([leftUser.id]);
+    }
+  });
+});

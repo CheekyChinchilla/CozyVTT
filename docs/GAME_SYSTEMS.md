@@ -447,10 +447,11 @@ function createBlankMySystemCharacter(): MySystemCharacterData {
 > **A template may only write fields the schema declares.** Every one of the
 > original four had drifted: they seeded fields no reader knew about, so the
 > data was stored and never shown. A D&D 5e Fighter's Features tab was blank
-> while "Second Wind" sat in the character's own row. This survives because
-> `PUT /api/characters/:id` stores the body as sent rather than Zod's parsed
-> output, so an undeclared field is saved rather than rejected — validating a
-> template proves it is acceptable, not that it is complete.
+> while "Second Wind" sat in the character's own row. The routes now store the
+> schema's parsed sheet, and Zod drops a key the schema does not declare
+> without complaint, so such a field is lost on the first save, silently. That
+> is also why validating a template proves it is acceptable, not that it is
+> complete.
 >
 > `templateSchemaParity.test.ts` compares each template's top-level keys against
 > its schema and fails on any extra. Run the suite after editing a template.
@@ -624,6 +625,20 @@ Check it mechanically rather than by eye: list the fields the editor writes,
 list the fields the view reads, and diff the two. A field declared in the type
 and the Zod schema but present in neither is also a gap — it means the sheet
 cannot record something the server will happily store.
+
+**The editor must write only what the schema declares, in the shape it
+declares.** The server stores the schema's parsed sheet, so a key the editor
+writes and the schema does not declare is dropped on save with no error, and an
+entry missing a field the schema requires makes every save fail. Both have
+happened: Pathfinder 2e feat descriptions were dropped, and adding a cantrip
+blocked saving. Type each entry an editor creates with the sheet's interface
+from `frontend/src/types/game-systems/`, which follows the schema, so a missing
+field fails to compile, and give a field the editor writes a declaration in the
+schema before anything else. A text box the player can clear writes an empty
+string, so its field must accept one. `editorShapes.test.ts`, beside the
+schemas, parses a sheet holding everything each editor writes and fails when
+the schema refuses or drops any of it; add to it when an editor gains a
+field.
 
 **Derive what the sheet can work out; store what it cannot.** The 5e sheet's own
 skills (`customSkills`) record a name, an ability and a proficiency level, and

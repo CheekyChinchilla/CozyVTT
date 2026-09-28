@@ -14,7 +14,7 @@ import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
@@ -26,6 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
@@ -453,10 +454,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     }
 
     // Invalidate outstanding links so only the newest one works
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: id, used: false },
-      data: { used: true },
-    });
+    await voidOutstandingResetLinks(id);
 
     const token = crypto.randomUUID();
     await prisma.passwordResetToken.create({
@@ -754,6 +752,12 @@ class BackupFolderUnusable extends Error {
 /** Errors that come from the filesystem refusing a folder or running out of room. */
 const FOLDER_ERRORS = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EDQUOT', 'ENOENT', 'ENOTDIR']);
 
+/** A backups-folder failure as BackupFolderUnusable, anything else as it came. */
+function inBackupsFolder(error: unknown): unknown {
+  const code = errorCode(error);
+  return code !== undefined && FOLDER_ERRORS.has(code) ? new BackupFolderUnusable(code) : error;
+}
+
 function backupFolderReply(what: string) {
   return {
     error: 'Backup Failed',
@@ -806,8 +810,7 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
     } catch (error) {
       const code = errorCode(error);
       if (code === 'EEXIST') continue;
-      if (code !== undefined && FOLDER_ERRORS.has(code)) throw new BackupFolderUnusable(code);
-      throw error;
+      throw inBackupsFolder(error);
     }
     if (await exists(path.join(BACKUP_DIR, filename))) {
       await handle.close();
@@ -829,7 +832,7 @@ const PARTIAL = '.partial';
 const exists = (file: string) => fs.access(file).then(() => true, () => false);
 
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
-  await ensureBackupDir(BACKUP_DIR);
+  await ensureBackupDir(BACKUP_DIR).catch((error: unknown) => { throw inBackupsFolder(error); });
   const { filename, handle } = await openNewBackup();
   backupsInProgress.add(filename);
   const zipPath = path.join(BACKUP_DIR, filename);
@@ -862,8 +865,9 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       const archive = archiver('zip', { zlib: { level: 6 } });
       // Both ends can fail: the archive while reading, the file while
       // writing (a full disk). A stream error with nobody listening is an
-      // uncaught exception, which exits the process mid-backup.
-      output.on('error', reject);
+      // uncaught exception, which exits the process mid-backup. Creating the
+      // file on a full disk succeeds; running out of room shows up here.
+      output.on('error', (error) => reject(inBackupsFolder(error)));
       output.on('close', resolve);
       archive.on('error', reject);
       archive.pipe(output);
@@ -878,7 +882,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     });
 
     // Complete: only now does it take a backup's name.
-    await fs.rename(partialPath, zipPath);
+    await fs.rename(partialPath, zipPath).catch((error: unknown) => { throw inBackupsFolder(error); });
     const stat = await fs.stat(zipPath);
     return { filename, sizeBytes: stat.size };
   } catch (error) {
@@ -1021,7 +1025,23 @@ router.delete('/backups/:filename', async (req, res) => {
 // uploaded files over the existing ones. A backup of the database as it was
 // is written first, so the database half can be undone.
 // ============================================
-router.post('/backups/restore', restoreUpload.single('backup'), async (req, res) => {
+/**
+ * The uploaded backup is saved into the backups folder before the route
+ * runs, so a folder the backend cannot write to, or whose disk is full,
+ * refuses it here. Say which folder, and that nothing changed.
+ */
+const takeRestoreUpload: RequestHandler = (req, res, next) => {
+  restoreUpload.single('backup')(req, res, (error?: unknown) => {
+    if (!error) return next();
+    const folderError = inBackupsFolder(error);
+    if (!(folderError instanceof BackupFolderUnusable)) return next(error);
+    logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
+    const reply = backupFolderReply('The uploaded backup could not be saved');
+    return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was changed.` });
+  });
+};
+
+router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Bad Request', message: 'No backup file provided' });
   }

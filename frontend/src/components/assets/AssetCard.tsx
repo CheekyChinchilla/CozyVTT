@@ -64,8 +64,9 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
     if (asset.type === AssetType.TOKEN) {
       return api.getAssetUrl(asset.id, 'tokens');
     }
+    // An avatar is served by its owner's id; a deleted account's has none.
     if (asset.type === AssetType.AVATAR) {
-      return api.getAssetUrl(asset.uploadedById, 'avatars');
+      return asset.uploadedById ? api.getAssetUrl(asset.uploadedById, 'avatars') : '';
     }
     // For audio, return a default icon
     return '';

@@ -569,8 +569,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
     // Custom skills
     if (Array.isArray(data.skills.customSkills)) {
       for (const cs of data.skills.customSkills) {
-        // A custom skill carries its own label. Declared by neither the type
-        // nor the schema, but it round-trips — see SkillsList for why.
+        // A custom skill carries its own label, and is left out without one.
         const named = cs as { name?: string; currentValue?: number };
         if (!named.name || typeof named.currentValue !== 'number') continue;
         skills.push({

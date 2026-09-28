@@ -13,6 +13,7 @@ import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
 import { bodyParsers } from './middleware/bodyParsers';
+import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
@@ -87,6 +88,10 @@ app.use(
     credentials: true,
   })
 );
+
+// A browser request from another site, a same-site page on another port
+// included, changes nothing. See middleware/originCheck.ts.
+app.use(originCheck);
 
 // General API rate limiter — applied to all /api/* routes
 // Stricter per-endpoint limiters (auth, file uploads) are applied inside each router

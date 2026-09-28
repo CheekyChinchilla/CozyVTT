@@ -99,4 +99,12 @@ describe('a backups folder the backend cannot use', () => {
     expect(res.body.message).toMatch(/backups folder/);
     expect(execFileMock).not.toHaveBeenCalled();
   });
+
+  it('is named when the folder is missing and cannot be made', async () => {
+    jest.spyOn(fs, 'mkdir').mockRejectedValueOnce(denied());
+    const res = await admin.post('/api/admin/backups');
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/backups folder/);
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
 });

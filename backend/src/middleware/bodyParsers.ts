@@ -24,10 +24,11 @@ import express from 'express';
  */
 export const MAX_REQUEST_BODY = '1mb';
 
-/** The body parsers, in the order they must be mounted. */
+/**
+ * The body parsers, in the order they must be mounted. JSON only: the web
+ * client sends nothing else, and a plain HTML form (urlencoded) is the one
+ * body another site can post without asking first.
+ */
 export function bodyParsers(): express.RequestHandler[] {
-  return [
-    express.json({ limit: MAX_REQUEST_BODY }),
-    express.urlencoded({ extended: true, limit: MAX_REQUEST_BODY }),
-  ];
+  return [express.json({ limit: MAX_REQUEST_BODY })];
 }

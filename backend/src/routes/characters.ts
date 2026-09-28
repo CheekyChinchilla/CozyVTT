@@ -13,9 +13,24 @@ import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import { withMapsLocked } from '../utils/mapTokens';
+import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
 const router = Router();
+
+/**
+ * Whether a character's owner is still a member of the campaign it names. A
+ * member removed before removals took their characters out of the campaign
+ * left characters naming it; those are the owner's alone.
+ */
+async function ownerStillIn(ownerId: string, campaignId: string): Promise<boolean> {
+  const owner = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId: ownerId, campaignId } },
+    select: { userId: true },
+  });
+  return owner !== null;
+}
 
 
 /**
@@ -79,6 +94,12 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
+      // TODO(rules): a gameSystem sent with the campaignId is not checked
+      // against the campaign's, so the API creates a Pathfinder 2e character
+      // straight into a D&D 5e campaign, or a typed one into a Flexible
+      // campaign, which assigning and accepting an invitation both refuse.
+      // It should answer 400 unless systemsCompatible(gameSystem, the
+      // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
         // Prisma's GameSystem is a string-literal union; cast to the local enum
         // type finalGameSystem was inferred from (identical string values).
@@ -96,9 +117,11 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       where: { id: userId },
       select: { displayName: true },
     });
+    // A sheet in the shape of a version before 1.3.0 has its older fields
+    // moved where the sheet reads them first, since validation drops them.
     const dataWithIdentity = applyIdentityToSheet(
       finalGameSystem as GameSystem | null,
-      data as Record<string, unknown> | undefined,
+      migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
     );
@@ -336,8 +359,9 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         },
       });
 
-      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in the campaign
-      if (membership) {
+      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in
+      // the campaign, while the owner is still a member of it.
+      if (membership && (await ownerStillIn(character.userId, character.campaignId))) {
         return res.status(200).json({ character });
       }
     }
@@ -445,7 +469,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: parsed.error.issues[0]?.message ?? 'Invalid character data',
       });
     }
-    const { name, data, tokenImageUrl, gameSystem } = parsed.data;
+    const { name, data, tokenImageUrl, gameSystem, updatedAt: loadedAt } = parsed.data;
 
     // Find character first to check authorization
     const character = await prisma.character.findUnique({
@@ -482,7 +506,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: 'Spectators cannot edit a character in this campaign',
       });
     }
-    const isAuthorized = character.userId === userId || membership?.role === 'DM';
+    const isAuthorized =
+      character.userId === userId ||
+      (membership?.role === 'DM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -493,10 +519,15 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     // Validate data update if character has gameSystem. What gets stored is
     // the schema's parsed output, so a key the sheet does not declare never
-    // reaches the database.
+    // reaches the database. A sheet still carrying fields from before 1.3.0
+    // has them moved where the sheet reads them first, or that would drop
+    // their content before `migrate:sheet-fields` could move it.
     let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
-      const validationResult = validateCharacterData(character.gameSystem as GameSystem, data);
+      const validationResult = validateCharacterData(
+        character.gameSystem as GameSystem,
+        migrateLegacySheetFields(character.gameSystem, data)
+      );
       if (!validationResult.success) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -544,18 +575,32 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       updateData.tokenImageUrl = normalizedTokenImageUrl;
     }
 
-    const updatedCharacter = await prisma.character.update({
-      where: { id },
-      data: updateData,
-      include: {
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const withCampaign = { campaign: { select: { id: true, name: true } } } as const;
+    let updatedCharacter;
+    if (loadedAt !== undefined) {
+      // Saved only if the character is still the version the caller loaded.
+      // Checked in the write itself, so a change landing after the read above
+      // is caught too. Without it, a sheet open while the DM took hit points
+      // put the old number back on its next save.
+      const { count } = await prisma.character.updateMany({
+        where: { id, updatedAt: new Date(loadedAt) },
+        data: updateData,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'CHARACTER_CHANGED',
+          message: 'This character was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id }, include: withCampaign });
+    } else {
+      updatedCharacter = await prisma.character.update({
+        where: { id },
+        data: updateData,
+        include: withCampaign,
+      });
+    }
 
     // A map token stores its own COPY of the character's image, taken when it
     // was placed — there is no Token table, tokens live as JSON on the map. So
@@ -643,10 +688,16 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       await resendInitiative(affectedCampaignId);
     }
 
-    // Broadcast character update to campaign if character is in a campaign
-    if (updatedCharacter.campaignId) {
+    // Broadcast character update to campaign if character is in a campaign,
+    // and its owner is still a member there: a character a removal left
+    // naming the campaign is not that table's to read.
+    const sheetCampaignId =
+      updatedCharacter.campaignId && (await ownerStillIn(updatedCharacter.userId, updatedCharacter.campaignId))
+        ? updatedCharacter.campaignId
+        : null;
+    if (sheetCampaignId) {
       try {
-        broadcastToCampaign(updatedCharacter.campaignId, 'character.updated', {
+        broadcastToCampaign(sheetCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           character: updatedCharacter,
           userId,
@@ -676,7 +727,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           readJsonObject(updatedCharacter.data)
         );
         if (currentHp && !sameCharacterHp(previousHp, currentHp)) {
-          broadcastToCampaign(updatedCharacter.campaignId, 'character.hp.updated', {
+          broadcastToCampaign(sheetCampaignId, 'character.hp.updated', {
             characterId: updatedCharacter.id,
             hp: currentHp,
           });
@@ -698,7 +749,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // that a token moved on, which is all a repaint needs.
     try {
       for (const affectedCampaignId of campaignsWithChangedTokens) {
-        if (affectedCampaignId === updatedCharacter.campaignId) continue;
+        if (affectedCampaignId === sheetCampaignId) continue;
         broadcastToCampaign(affectedCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           tokensChanged: true,
@@ -900,11 +951,8 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     // typed characters must match the campaign's game system exactly.
     const charSystem = character.gameSystem;
     const campSystem = campaign.gameSystem;
-    const systemsCompatible =
-      (!charSystem && !campSystem) ||
-      (charSystem && campSystem && charSystem === campSystem);
 
-    if (!systemsCompatible) {
+    if (!systemsCompatible(charSystem, campSystem)) {
       const charLabel = charSystem ?? 'flexible';
       const campLabel = campSystem ?? 'flexible';
       return res.status(400).json({

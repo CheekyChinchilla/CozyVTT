@@ -309,6 +309,12 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
       return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
+    // The copy stores the picture in the target campaign, which may not use
+    // it yet: checked there, as any other new reference is.
+    if (!(await canReferenceAsset(source.imageUrl, userId, undefined, targetCampaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     // Create the copy in the target campaign
     const copy = await prisma.tokenTemplate.create({
       data: {

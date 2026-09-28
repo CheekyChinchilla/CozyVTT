@@ -42,13 +42,22 @@ describe('tokenPublicName on the spirit layer', () => {
 // under no name at all, as the stat-block roll already was.
 describe('characterRollPublicName', () => {
   it('keeps the character name for a token the table can see and name', () => {
-    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: true, layer: 'token' })).toBeUndefined();
-    expect(characterRollPublicName(undefined)).toBeUndefined();
+    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: true, layer: 'token' }, 'dm')).toBeUndefined();
+    expect(characterRollPublicName(undefined, 'dm')).toBeUndefined();
   });
 
   it('files a roll from an obscured, hidden or spirit-plane token under no name', () => {
-    expect(characterRollPublicName({ name: 'Shadow Assassin', obscured: true })).toBe('Unknown creature');
-    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: false })).toBe('Unknown creature');
-    expect(characterRollPublicName({ name: 'Shadow Assassin', layer: 'spirit' })).toBe('Unknown creature');
+    expect(characterRollPublicName({ name: 'Shadow Assassin', obscured: true }, 'dm')).toBe('Unknown creature');
+    expect(characterRollPublicName({ name: 'Shadow Assassin', visible: false }, 'dm')).toBe('Unknown creature');
+    expect(characterRollPublicName({ name: 'Shadow Assassin', layer: 'spirit' }, 'dm')).toBe('Unknown creature');
+  });
+
+  // The dice log already says who rolled, so a player's own token hides
+  // nothing by going unnamed; a player who has crossed to the spirit plane
+  // still rolls as their character.
+  it('keeps the character name when the roller controls the token', () => {
+    expect(characterRollPublicName({ name: 'Alice', layer: 'spirit', controlledBy: 'alice' }, 'alice')).toBeUndefined();
+    expect(characterRollPublicName({ name: 'Alice', obscured: true, controlledBy: 'alice' }, 'alice')).toBeUndefined();
+    expect(characterRollPublicName({ name: 'Alice', layer: 'spirit', controlledBy: 'alice' }, 'dm')).toBe('Unknown creature');
   });
 });

@@ -56,7 +56,7 @@ Your DM invites you by picking your account from a list of the people on your in
 1. **Log in** to CozyVTT
 2. On your **Dashboard**, you'll see a **Pending Invitations** banner at the top
 3. The banner shows the campaign name and your DM's name
-4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already)
+4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already). Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
 5. Or click **Decline** if it's not for you
 
 *Screenshot pending — Pending invitation banner.*
@@ -493,6 +493,8 @@ If you leave the editor with changes you haven't saved, you'll be asked to confi
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the sheet opens again showing the new version; make your changes again there. A sheet you only have open to read follows hit point changes by itself.
+
 > **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Exporting and Importing
@@ -528,7 +530,7 @@ Click your name or avatar at the top of the dashboard to reach your **Profile & 
 
 **Change Password:** In the Security section, enter your current password and your new password (twice), then save.
 
-**Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe.
+**Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Enter your current password to begin, scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe. Turning MFA on signs out your other devices.
 
 *Screenshot pending — MFA setup with QR code.*
 

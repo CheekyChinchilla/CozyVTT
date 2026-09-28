@@ -284,11 +284,16 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
     const maps = spiritVisible
       ? shown
       : shown.map((m) => ({ ...m, spiritLayerUrl: null }));
+    // A character is the campaign's while its owner is a member. One a
+    // removal left naming the campaign (removals now take it out) is not.
+    const memberIds = new Set(campaignRest.memberships.map((m) => m.userId));
+    const characters = campaignRest.characters.filter((c) => memberIds.has(c.userId));
 
     return res.status(200).json({
       campaign: {
         ...campaignRest,
         maps,
+        characters,
         activeSession: (_sessions && _sessions.length > 0) ? _sessions[0] : null,
         userRole: role,
       },
@@ -533,14 +538,23 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
 
     // Convert CAMPAIGN-scoped assets to USER scope before deleting.
     // Each asset is reassigned to its uploader's personal library.
-    await prisma.asset.updateMany({
-      where: { campaignId, scope: 'CAMPAIGN' },
-      data: { scope: 'USER', campaignId: null },
-    });
-
-    await prisma.campaign.delete({
-      where: { id: campaignId },
-    });
+    //
+    // One transaction, so a delete that fails leaves the library as it was.
+    // The campaign's row is locked first: an asset written into the campaign
+    // holds a share lock on that row until it commits, so none can land
+    // between the two writes and be left a campaign asset with no campaign,
+    // which the permission check lets anyone read. The array form has no
+    // time limit, which a large campaign's cascade may need.
+    await prisma.$transaction([
+      prisma.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`,
+      prisma.asset.updateMany({
+        where: { campaignId, scope: 'CAMPAIGN' },
+        data: { scope: 'USER', campaignId: null },
+      }),
+      prisma.campaign.delete({
+        where: { id: campaignId },
+      }),
+    ]);
 
     // The live half of the cascade: sockets still in the room would keep
     // relaying to each other and fail every write against the missing row.
@@ -855,15 +869,21 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
       });
     }
 
-    // Delete the membership
-    await prisma.campaignMembership.delete({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
+    // Delete the membership, and take their characters out of the campaign
+    // with it: a character that still named the campaign stayed readable by
+    // every member and editable by the DM, and each save the owner made was
+    // still sent to the table they had left.
+    await prisma.$transaction([
+      prisma.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } }),
+      prisma.campaignMembership.delete({
+        where: {
+          userId_campaignId: {
+            userId,
+            campaignId,
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     // A socket caches the campaign from when it authenticated, so without this
     // the person carries on playing until they close the tab. Best-effort: the
@@ -887,6 +907,22 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     });
   }
 });
+
+/**
+ * What the open pages need after members' roles change, the new roles
+ * already applied to their live connections: the roster panel regroups
+ * (it groups by role from its own list), and each copy of the initiative
+ * order and of the map the table is on is sent again as the new roles see
+ * it. A spectator on a lit map is sent no tokens, a player their own and
+ * what they see, a DM every hidden creature and its notes.
+ */
+async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
+  for (const userId of userIds) announceRosterChange(userId, [campaignId], 'member.role');
+  await resendInitiative(campaignId);
+  const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
+  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+}
 
 /**
  * PUT /api/campaigns/:campaignId/members/:userId/role
@@ -980,15 +1016,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       // And every open page, the member's own included, so the controls
       // follow the role without a reload (the client patches its list).
       broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
-      // The roster panel groups members by role from its own list.
-      announceRosterChange(userId, [campaignId], 'member.role');
-      // Their copy of the initiative order follows the role.
-      await resendInitiative(campaignId);
-      // So does what they are sent of the map the table is on: a spectator
-      // on a lit map is sent no tokens, a player their own and what they see.
-      const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-      const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
-      if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+      await followNewRoles(campaignId, [userId]);
     } catch (error) {
       logger.error('Member role updated but live sockets were not', { err: error, userId, campaignId });
     }
@@ -1122,14 +1150,13 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
       }
       await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
-      // Both copies of the initiative order follow the new roles.
-      await resendInitiative(campaignId);
 
       broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
         campaignId,
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
       });
+      await followNewRoles(campaignId, outgoing ? [outgoing.userId, incomingId] : [incomingId]);
     } catch (error) {
       logger.error('DM transfer committed but live sockets were not updated', {
         err: error,

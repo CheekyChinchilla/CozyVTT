@@ -97,6 +97,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       }
 
       await onSave({ sections }, true, newTokenImageUrl);
+    } catch (error) {
+      // Whoever hosts the sheet says why; the sections stay as typed.
+      console.error('Error saving character:', error);
     } finally {
       setIsSaving(false);
     }

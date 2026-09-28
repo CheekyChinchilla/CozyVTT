@@ -23,17 +23,19 @@ const email = (name: string) => `paused-${name}-${runId}@test.cozyvtt.local`;
 let server: WsTestServer;
 let dmId: string;
 let playerId: string;
+let otherId: string;
 let campaignId: string;
 let mapId: string;
 let dmCookie: string;
 let playerCookie: string;
+let otherCookie: string;
 
 const OWN = 'own-token';
 const NPC = 'npc-token';
 
-const token = (id: string, controlledBy: string | null) => ({
+const token = (id: string, controlledBy: string | null, changes: Record<string, unknown> = {}) => ({
   id, name: id, imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token', visible: true,
-  controlledBy, rotation: 0, conditions: [], metadata: {},
+  controlledBy, rotation: 0, conditions: [], metadata: {}, ...changes,
 });
 
 const setStatus = (status: 'ACTIVE' | 'PAUSED' | 'INACTIVE') =>
@@ -44,19 +46,21 @@ const positionOf = async (id: string) => {
 };
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
-    ['dm', 'player'].map((name) =>
+  const [dm, player, other] = await Promise.all(
+    ['dm', 'player', 'other'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Paused ${name}` } })
     )
   );
   dmId = dm.id;
   playerId = player.id;
+  otherId = other.id;
   const campaign = await prisma.campaign.create({ data: { name: `Paused ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   const map = await prisma.map.create({
@@ -69,7 +73,7 @@ beforeAll(async () => {
   // Players are told of moves on the map the campaign is showing.
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [dmCookie, playerCookie, otherCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(otherId)]);
 });
 
 beforeEach(async () => {
@@ -81,7 +85,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, otherId] } } });
   await prisma.$disconnect();
 });
 
@@ -218,5 +222,64 @@ describe('control taken away in the middle of a drag', () => {
     expect((await refused).message).toMatch(/permission/i);
     await quiet;
     player.disconnect();
+  });
+});
+
+// The put-back tells a screen where the token stands, so it goes only to a
+// screen the map fetch would give the token to now. A drag entry outlives a
+// drag the client abandons without a drop (a cancelled hold sends one frame
+// back to the start and no token.move.end), and by the time a drop names the
+// token again the DM may have hidden it and moved it somewhere secret.
+describe('a drop long after a drag, once the token is hidden', () => {
+  afterAll(async () => {
+    await setStatus('ACTIVE');
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+  });
+
+  const abandonedDrag = async () => {
+    await setStatus('ACTIVE');
+    await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const other = await server.connectAndAuth(otherCookie, campaignId);
+    const framed = waitForEvent<{ x: number }>(other, 'token.moved');
+    player.emit('token.move.start', { tokenId: OWN, mapId });
+    player.emit('token.move', { tokenId: OWN, mapId, x: 4, y: 4 });
+    expect((await framed).x).toBe(4);
+    return { player, other };
+  };
+
+  it('tells neither the sender nor the drag\'s watchers where it went, when control is gone', async () => {
+    const { player, other } = await abandonedDrag();
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { tokens: [token(OWN, null, { visible: false, position: { x: 9, y: 9 } }), token(NPC, null)] },
+    });
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const quietSender = expectNoEvent(player, 'token.moved', 600);
+    const quietWatcher = expectNoEvent(other, 'token.moved', 600);
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 0, y: 0 });
+    expect((await refused).message).toMatch(/permission/i);
+    await quietSender;
+    await quietWatcher;
+    player.disconnect();
+    other.disconnect();
+  });
+
+  it('tells neither the sender nor the drag\'s watchers where it went, when the session is paused', async () => {
+    const { player, other } = await abandonedDrag();
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { tokens: [token(OWN, playerId, { visible: false, position: { x: 9, y: 9 } }), token(NPC, null)] },
+    });
+    await setStatus('PAUSED');
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const quietSender = expectNoEvent(player, 'token.moved', 600);
+    const quietWatcher = expectNoEvent(other, 'token.moved', 600);
+    player.emit('token.move.end', { tokenId: OWN, mapId, x: 0, y: 0 });
+    expect((await refused).message).toMatch(/paused|session/i);
+    await quietSender;
+    await quietWatcher;
+    player.disconnect();
+    other.disconnect();
   });
 });

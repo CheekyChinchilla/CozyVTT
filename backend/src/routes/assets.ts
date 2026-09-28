@@ -149,11 +149,12 @@ function handleAssetCaching(
  *   - type: Filter by AssetType (MAP, TOKEN, AUDIO, AVATAR)
  *   - scope: Filter by AssetScope (GLOBAL, CAMPAIGN)
  *   - campaignId: Filter by campaign (requires CAMPAIGN scope or returns campaign-specific assets)
+ *   - usable: 'true' applies the member scope rules to an admin too (the pickers)
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { type, scope, campaignId, page, limit, search, uploadedBy } = req.query;
+    const { type, scope, campaignId, page, limit, search, uploadedBy, usable } = req.query;
 
     // Pagination parameters
     const pageNum = parseInt(page as string) || 1;
@@ -216,8 +217,11 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId as string]);
         if (hidden.length > 0) where.id = { notIn: hidden };
       }
-    } else if (!isAdmin) {
-      // Non-admin: enforce three-scope visibility rules
+    } else if (!isAdmin || usable === 'true') {
+      // Non-admin: enforce three-scope visibility rules. So for an admin who
+      // asks for what they may use (`usable=true`, the map and token picture
+      // pickers): the reference check holds an admin to the same rule, so
+      // anything else on the instance would be offered and then refused.
       const userMemberships = await prisma.campaignMembership.findMany({
         where: { userId },
         select: { campaignId: true },
@@ -573,11 +577,13 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     }
 
     let isCampaignDM = false;
+    let isCampaignMember = false;
     if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
       const membership = await prisma.campaignMembership.findUnique({
         where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
       });
       isCampaignDM = membership?.role === 'DM';
+      isCampaignMember = membership !== null;
     }
 
     // Scope-based permission matrix
@@ -598,14 +604,21 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
         });
       }
     } else if (asset.scope === 'CAMPAIGN') {
-      // Owner, campaign DM, or admin can delete campaign assets
-      if (!isOwner && !isCampaignDM && !isAdmin) {
+      // The uploader while still a member, the campaign's DM, or an admin: a
+      // campaign asset stays with the campaign once its uploader has left.
+      if (!(isOwner && isCampaignMember) && !isCampaignDM && !isAdmin) {
         return res.status(403).json({
           error: 'Forbidden',
-          message: 'Only the uploader, campaign DM, or an admin can delete campaign assets',
+          message: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
         });
       }
     }
+
+    // The record first: a delete that fails leaves the file for the record
+    // that still names it.
+    await prisma.asset.delete({
+      where: { id },
+    });
 
     // Delete file from filesystem
     try {
@@ -623,11 +636,6 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
         logger.error('Error deleting thumbnail', { err: thumbError });
       }
     }
-
-    // Delete database record
-    await prisma.asset.delete({
-      where: { id },
-    });
 
     return res.json({
       message: 'Asset deleted successfully',
@@ -1269,12 +1277,13 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
         });
       }
 
-      // Moving FROM CAMPAIGN: must be owner OR DM of the source campaign
-      if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isOwner) {
+      // Moving FROM CAMPAIGN: the owner while still a member, or the DM of
+      // the source campaign, as for a delete
+      if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
         const sourceMembership = await prisma.campaignMembership.findUnique({
           where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
         });
-        if (sourceMembership?.role !== 'DM') {
+        if (!(isOwner && sourceMembership) && sourceMembership?.role !== 'DM') {
           return res.status(403).json({
             error: 'Forbidden',
             message: 'Only the asset owner or campaign DM can move this asset',

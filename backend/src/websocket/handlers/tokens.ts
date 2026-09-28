@@ -8,6 +8,7 @@ import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filterTokensByLighting, viewerIdFor } from '../../utils/spirit-layer';
+import type { Map as MapRow } from '@prisma/client';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter, limiterKey } from '../shared';
@@ -66,19 +67,33 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
     for (const s of stillInCampaign(members, campaignId)) {
       if (s.id === socket.id) continue;
-      const member = s as unknown as AuthenticatedSocket;
-      // A map the DM is preparing is theirs until they switch to it.
-      if (!canReadMap(member.role, mapId, map.campaign.currentMapId)) continue;
-      if (member.role === 'DM') { ids.add(s.id); continue; }
-      if (!member.userId) continue;
-      const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
-      const seen = filterTokensByLighting(
-        forRole, viewerIdFor(member.role, member.userId), map.wallSegments as unknown as WallSegment[],
-        map.width, map.height, map.gridSize, map.lightingEnabled, map.lights, map.globalIllumination
-      );
-      if (seen.some((t) => t.id === tokenId)) ids.add(s.id);
+      if (fetchWouldSend(s as unknown as AuthenticatedSocket, map, tokens, tokenId, spiritVisibility)) ids.add(s.id);
     }
     return ids;
+  }
+
+  /**
+   * Whether opening the map now would give this member the token: every DM,
+   * and a player for whom the role filter keeps it (visible, on their plane)
+   * and, on a lit map, whose tokens can see it. A map the DM is preparing is
+   * theirs until they switch to it.
+   */
+  function fetchWouldSend(
+    member: AuthenticatedSocket,
+    map: MapRow & { campaign: { currentMapId: string | null } },
+    tokens: Token[],
+    tokenId: string,
+    spiritVisibility: Map<string, boolean>
+  ): boolean {
+    if (!canReadMap(member.role, map.id, map.campaign.currentMapId)) return false;
+    if (member.role === 'DM') return true;
+    if (!member.userId) return false;
+    const forRole = filterTokensByRole(tokens, member.role ?? 'PLAYER', spiritVisibility.get(member.userId) ?? false, member.userId);
+    const seen = filterTokensByLighting(
+      forRole, viewerIdFor(member.role, member.userId), map.wallSegments as unknown as WallSegment[],
+      map.width, map.height, map.gridSize, map.lightingEnabled, map.lights, map.globalIllumination
+    );
+    return seen.some((t) => t.id === tokenId);
   }
 
   /**
@@ -374,20 +389,29 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       /**
        * A drop refused after the token was picked up: the mover's screen has
        * already drawn it, and the frames reached everyone the drag went to.
-       * Tell them all where the token is; the correction names no mover,
-       * since nobody moved it. Only when the drag began here with frames
-       * this socket was allowed to send (`sawTheDrag`), or `moverMaySee`
-       * says the mover may be told regardless: otherwise a drop naming a
-       * token this socket never dragged would learn where it stands.
+       * Tell them where the token is; the correction names no mover, since
+       * nobody moved it. Only when the drag began here with frames this
+       * socket was allowed to send (`sawTheDrag`), or `evenWithoutDrag` says
+       * the mover is told regardless. And only a screen that opening the map
+       * now would give the token to: the drag may be long over (a cancelled
+       * hold sends no token.move.end), and the DM may since have hidden the
+       * token and moved it somewhere secret.
        */
-      const putBack = async (moverMaySee: boolean) => {
-        if (!sawTheDrag && !moverMaySee) return;
+      const putBack = async (evenWithoutDrag: boolean) => {
+        if (!sawTheDrag && !evenWithoutDrag) return;
+        const recipients = sawTheDrag ? await sawTheDrag : new Set<string>();
+        const told = stillInCampaign(await campaignSockets(io, campaignId), campaignId)
+          .filter((s) => s.id === socket.id || recipients.has(s.id));
+        const playerIds = told
+          .map((s) => s as unknown as AuthenticatedSocket)
+          .filter((a) => a.role !== 'DM' && a.userId)
+          .map((a) => a.userId as string);
+        const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
         const back = { tokenId, mapId, x: token.position.x, y: token.position.y, movedBy: null };
-        socket.emit('token.moved', back);
-        if (!sawTheDrag) return;
-        const recipients = await sawTheDrag;
-        for (const s of await campaignSockets(io, campaignId)) {
-          if (recipients.has(s.id)) s.emit('token.moved', back);
+        for (const s of told) {
+          if (fetchWouldSend(s as unknown as AuthenticatedSocket, map, tokensArray, tokenId, spiritVisibility)) {
+            s.emit('token.moved', back);
+          }
         }
       };
 
@@ -408,7 +432,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       // And the same session rule: a player's move waits for the session.
       // A pause can land after the token was picked up; the mover controls
-      // the token, so they may always be told where it is.
+      // the token, so they are told where it is whenever they may see it.
       if (!canMoveTokensNow(socket.role, map.campaign.status)) {
         socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
         await putBack(true);

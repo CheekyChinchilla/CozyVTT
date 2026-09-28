@@ -90,6 +90,12 @@ about; the list is not exhaustive.
   map, one row per map and user, cascading on delete of either. One `ALTER
   TABLE ... ADD COLUMN` with a default, one `CREATE TABLE`, two indexes and two
   foreign keys. Nothing existing is altered; the table starts empty.
+- `20260928120000_keep_rolls_and_uploads_of_deleted_accounts` - `Asset.uploadedById`
+  and `DiceRoll.userId` become nullable, and their foreign keys change from
+  refusing a user's deletion to setting the column to null, as
+  `Message.userId` already did. Two `DROP NOT NULL` and the two foreign keys
+  dropped and re-added in one transaction. No row is changed or removed; it
+  only lets an account with rolls or uploads be deleted.
 
 ## Data migrations (one-off scripts)
 
@@ -110,10 +116,17 @@ sheets created from them hold content in fields nothing displays: a D&D 5e
 Fighter's features, its armour and weapon proficiencies, a Pathfinder 2e
 character's strikes and class features.
 
-Reading is already fixed for D&D 5e — those sheets display correctly with no
+Reading is already fixed for D&D 5e: those sheets display correctly with no
 migration at all. **Pathfinder 2e sheets need this script** to show their
 strikes and class features, and running it also tidies the 5e duplicates away
 so the same fact is not stored twice.
+
+The same transforms, in `src/utils/sheetFieldMigrations.ts`, run on every
+character the API creates or saves, before the sheet is validated. Validation
+drops a field the schema does not declare, so without them the first save of
+such a sheet would lose the content this script exists to move. A sheet that
+is saved is therefore moved already, and the script finds nothing to do for
+it.
 
 ```bash
 # Report what would change, without writing anything

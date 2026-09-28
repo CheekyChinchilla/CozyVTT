@@ -425,10 +425,10 @@ sequenceDiagram
     S->>DB: Verify argon2id hash
     DB-->>S: User record
     S->>DB: Create session record
-    S-->>C: Set-Cookie: session_id (httpOnly, secure, sameSite=lax)
+    S-->>C: Set-Cookie: cozyvtt.sid (httpOnly, sameSite=lax, Secure over HTTPS)
 
     Note over C,S: Subsequent requests
-    C->>S: GET /api/campaigns (Cookie: session_id)
+    C->>S: GET /api/campaigns (Cookie: cozyvtt.sid)
     S->>DB: Look up session
     DB-->>S: Session + user id
     S->>S: req.user = user
@@ -478,7 +478,7 @@ equivalent: `loadCampaignMembership` reads the membership per request.
 
 ### MFA (TOTP)
 
-MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Backup codes are SHA-256 hashed before storage and shown to the user only once.
+MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
 
 ---
 
@@ -668,9 +668,12 @@ Character data round-trips as JSON:
 
 ```
 User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
-→ CharacterEditorPage sends PUT /api/characters/:id { data }
+→ CharacterEditorPage sends PUT /api/characters/:id { data, updatedAt }
+→ Backend moves any pre-1.3.0 fields into the ones the sheet reads (utils/sheetFieldMigrations)
 → Backend validates data against the game-system Zod schema (mostly optional fields)
-→ Stored as character.data in PostgreSQL
+→ The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
+  does not declare is dropped; a stale updatedAt (the character changed since the
+  sheet was loaded) is refused with 409 and nothing is written
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```

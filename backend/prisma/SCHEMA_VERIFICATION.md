@@ -121,7 +121,7 @@
 - ✅ id: uuid (primary key)
 - ✅ type: AssetType enum
 - ✅ scope: AssetScope enum
-- ✅ uploadedById: foreign key to User
+- ✅ uploadedById: nullable foreign key to User, set to null when the user is deleted
 - ✅ campaignId: nullable foreign key with cascade delete
 - ✅ filePath: string (relative path)
 - ✅ tags: string array

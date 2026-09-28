@@ -1400,10 +1400,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     }
     const { token: updatedToken, map: updatedMap } = written;
 
-    // A combatant's own change follows the token. A layer or visibility
-    // change on any token may move its controller between planes, which
-    // changes what they are sent of the whole order.
-    if (updates.layer !== undefined || shapes.value.visible !== undefined) {
+    // A combatant's own change follows the token. A layer, visibility or
+    // controller change on any token may move a player between planes,
+    // which changes what they are sent of the whole order.
+    if (updates.layer !== undefined || shapes.value.visible !== undefined || updates.controlledBy !== undefined) {
       await resendInitiative(campaignId);
     } else {
       await resendInitiativeFor(campaignId, tokenId);

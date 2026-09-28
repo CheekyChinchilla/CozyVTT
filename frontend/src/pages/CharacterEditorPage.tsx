@@ -18,6 +18,7 @@ import { CharacterSheetRouter } from '@/components/character-sheets/CharacterShe
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { isStaleCharacterSave, STALE_CHARACTER_RELOADED } from '@/utils/staleCharacter';
 import type { CharacterData } from '@/types';
 
 export default function CharacterEditorPage() {
@@ -40,6 +41,9 @@ export default function CharacterEditorPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  // Changed to open a fresh sheet on a character loaded again, discarding the
+  // editor's own copy of the old one.
+  const [sheetKey, setSheetKey] = useState(0);
 
 
   // ============================================
@@ -130,10 +134,14 @@ export default function CharacterEditorPage() {
         // the *old* column value on every save, which counted as an explicit
         // name and suppressed the sync, so renaming on the sheet never reached
         // the gallery or the title bar from this page.
-        // Use the new tokenImageUrl if provided, otherwise keep the existing one
         const updated = await characterService.updateCharacter(character.id, {
           data,
-          tokenImageUrl: tokenImageUrl !== undefined ? tokenImageUrl : (character.tokenImageUrl || undefined),
+          // The version the sheet was opened on, so a save made after the
+          // character changed elsewhere is refused and cannot undo that change.
+          updatedAt: character.updatedAt,
+          // Only a newly uploaded picture. Sending back the one this page
+          // loaded would put it back if it had been changed since.
+          ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
         });
 
         // Update local state
@@ -146,20 +154,36 @@ export default function CharacterEditorPage() {
       } catch (err: unknown) {
         console.error('Failed to save character:', err);
 
-        // Show detailed validation errors if available
+        if (isStaleCharacterSave(err)) {
+          showToast(STALE_CHARACTER_RELOADED, 'error');
+          try {
+            setCharacter(await characterService.getCharacter(character.id));
+            setHasUnsavedChanges(false);
+            setSheetKey((key) => key + 1);
+          } catch (reloadError) {
+            console.error('Failed to reload character:', reloadError);
+          }
+          throw err;
+        }
+
+        // Said in a toast, and thrown on so the sheet stays in edit mode with
+        // everything typed into it. This used to set the page's load error,
+        // which replaced the editor with "Failed to Load Character" and threw
+        // the unsaved edits away.
         const validationErrors = apiValidationIssues(err);
         if (validationErrors) {
-          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('\n');
-          setError(`Validation errors:\n${errorMessages}`);
+          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('; ');
+          showToast(`Not saved. ${errorMessages}`, 'error');
           console.error('Validation errors:', validationErrors);
         } else {
-          setError(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character');
+          showToast(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character', 'error');
         }
+        throw err;
       } finally {
         setSaving(false);
       }
     },
-    [character]
+    [character, showToast]
   );
 
   // ============================================
@@ -366,6 +390,7 @@ export default function CharacterEditorPage() {
       {/* Character Sheet Editor */}
       <div className="p-4">
         <CharacterSheetRouter
+          key={sheetKey}
           onDirtyChange={setHasUnsavedChanges}
           character={character}
           mode="edit"

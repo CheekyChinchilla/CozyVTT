@@ -295,6 +295,46 @@ export async function sendPasswordResetEmail(
 }
 
 /**
+ * Tell an account's previous address that its email was changed.
+ *
+ * Reset links go to the account's address, so whoever changes it can reset the
+ * password from then on. The old address is the one the owner still reads if
+ * the change was not theirs, and this is what lets them know. The caller
+ * decides whether SMTP is configured and must not fail the change if this
+ * throws.
+ */
+export async function sendEmailChangedNotice(
+  oldEmail: string,
+  newEmail: string,
+  displayName: string
+): Promise<void> {
+  const transporter = createTransporter();
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const instanceName = getInstanceName();
+
+  const content =
+    h2('Your email address was changed') +
+    p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
+    p(
+      `The email address for your ${escapeHtml(instanceName)} account was changed from ` +
+      `<strong>${escapeHtml(oldEmail)}</strong> to <strong>${escapeHtml(newEmail)}</strong>. ` +
+      'Sign-in and password-reset emails now go to the new address.'
+    ) +
+    warningBox(
+      '<strong>If you did not make this change, contact your administrator straight away.</strong> ' +
+      'Whoever made it can now reset the password from the new address.'
+    );
+
+  await transporter.sendMail({
+    from: fromAddress,
+    to: oldEmail,
+    subject: `Your ${instanceName} email address was changed`,
+    html: emailLayout(content, `The email address for your ${instanceName} account was changed.`),
+  });
+  logger.info('Email sent', { type: 'email_changed', to: oldEmail });
+}
+
+/**
  * Send a campaign invitation email when a DM invites a player
  */
 export async function sendCampaignInvitationEmail(

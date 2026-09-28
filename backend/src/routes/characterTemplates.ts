@@ -21,7 +21,7 @@ import {
   CreateCharacterTemplateSchema,
   UpdateCharacterTemplateSchema,
 } from '../validators/characterTemplates';
-import { extractAssetId, normalizeAssetUrl } from '../utils/asset-urls';
+import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils/asset-urls';
 import { toJson } from '../utils/prisma-json';
 import logger from '../utils/logger';
 
@@ -72,9 +72,12 @@ async function resolveTemplateImage(
 ): Promise<{ url: string | null } | { error: string }> {
   if (!tokenImageUrl) return { url: null };
 
+  // Every viewer's browser requests the stored address with their own
+  // session, so it is an asset's own address and nothing more, or the bare id
+  // it is built from: dot segments or a query could send it to another page.
   const assetId = extractAssetId(tokenImageUrl);
-  if (!assetId) {
-    return { error: 'Token image must reference an uploaded asset' };
+  if (!assetId || (assetId !== tokenImageUrl && !isExactAssetAddress(tokenImageUrl))) {
+    return { error: "Token image must be an uploaded asset's own address, such as /api/assets/tokens/<id>" };
   }
 
   const asset = await prisma.asset.findUnique({

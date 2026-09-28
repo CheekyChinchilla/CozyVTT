@@ -29,6 +29,8 @@ vi.mock('@/services/socket', () => ({
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
 
 import { CampaignProvider, useCampaign } from '../CampaignContext';
+import { useGameStore } from '@/stores/gameStore';
+import type { Token } from '@/types';
 
 const campaignAs = (status: string, currentMapId: string, role: string) => ({
   id: 'c1', name: 'Test', status, currentMapId, maps: [], memberships: [{ userId: 'me', role }],
@@ -127,4 +129,35 @@ it('writes nothing once the page has moved to another campaign', async () => {
   await act(async () => { releaseMap(); await catching; });
   expect(latest!.campaign?.id).toBe('c2');
   expect(latest!.currentMap?.id).toBe('mB');
+});
+
+// The app reaches another campaign through the dashboard, which unmounts this
+// provider; the next campaign's page reads the same token store. A catch-up
+// still waiting when the page closed wrote its campaign's tokens into it.
+it('writes nothing once the page has closed', async () => {
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'PLAYER'));
+  const view = render(
+    <MemoryRouter initialEntries={['/campaigns/c1']}>
+      <Routes>
+        <Route path="/campaigns/:id" element={<CampaignProvider><Probe /></CampaignProvider>} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(latest?.currentMap?.id).toBe('m1'));
+
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'PLAYER'));
+  let releaseMap: () => void = () => {};
+  getMap.mockImplementationOnce((_c: string, mapId: string) => new Promise((resolve) => {
+    releaseMap = () => resolve({ map: { id: mapId, tokens: [{ id: 'from-c1' }] }, spiritVisible: false });
+  }));
+  let catching: Promise<void> = Promise.resolve();
+  act(() => { catching = latest!.catchUpAfterReconnect(); });
+  await waitFor(() => expect(getMap).toHaveBeenLastCalledWith('c1', 'm1'));
+
+  // Back to the dashboard, and into another campaign, whose page loads its own tokens.
+  view.unmount();
+  act(() => { useGameStore.getState().setTokens([{ id: 'from-c2' } as Token]); });
+
+  await act(async () => { releaseMap(); await catching; });
+  expect(Object.keys(useGameStore.getState().tokens)).toEqual(['from-c2']);
 });
