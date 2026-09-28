@@ -9,6 +9,12 @@
  * worker and reached PostgreSQL's connection ceiling late in the run, with
  * unrelated suites failing on "too many clients already". Every file now
  * lets both clients go when it finishes.
+ *
+ * This hook is declared before anything in the test file, and jest runs a
+ * file's top-level afterAll hooks in the order they were declared, so it runs
+ * first. A file whose own afterAll then queries the database, to clean up,
+ * opens a client again, and has to end that afterAll with its own
+ * `$disconnect()`.
  */
 afterAll(async () => {
   const cached = (global as unknown as { prisma?: { $disconnect(): Promise<void> } }).prisma;

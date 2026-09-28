@@ -376,6 +376,8 @@ Two of those deserve a note:
   Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
   `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
   it ends; if you see that error again, look there first, not at the code.
+  That disconnect runs before a file's own top-level `afterAll`, so a file
+  that cleans up the database there ends it with `prisma.$disconnect()`.
 - **Two build facts are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which
