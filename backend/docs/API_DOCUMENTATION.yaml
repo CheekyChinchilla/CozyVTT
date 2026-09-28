@@ -6117,7 +6117,7 @@ paths:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup still being written is left out until it is finished, and so is an empty file, which is what a backup the backend stopped writing leaves behind.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read.
       security:
         - cookieAuth: []
       responses:
@@ -6176,8 +6176,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          description: The backup is still being written
 
   /api/admin/backups/{filename}:
     delete:
@@ -6204,8 +6202,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          description: The backup is still being written
 
 # ============================================
 # WEBSOCKET EVENTS

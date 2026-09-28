@@ -759,40 +759,54 @@ function tempFolderReply() {
  * the dashboard lists.
  */
 /**
- * A backup file of its own, opened exclusively. The name is the second the
- * backup was asked for; two asked for in the same second, or a restore's
- * safety copy taken in the second a backup was made, used to be given the
- * same name, and the later one silently replaced the earlier. While the name
- * is taken, `-2`, `-3` and so on follow it.
+ * A backup name of its own, and the partial file to write it into. The name
+ * is the second the backup was asked for; two asked for in the same second,
+ * or a restore's safety copy taken in the second a backup was made, used to
+ * be given the same name, and the later one silently replaced the earlier.
+ * While the name is taken, `-2`, `-3` and so on follow it. A name is ours
+ * once we hold its partial file, opened exclusively, and no finished backup
+ * has it: a finished one is only ever renamed from a partial its writer held.
  */
 async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }> {
   const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
   for (let n = 1; ; n++) {
     const filename = n === 1 ? `backup-${timestamp}.zip` : `backup-${timestamp}-${n}.zip`;
+    const partialPath = path.join(BACKUP_DIR, filename + PARTIAL);
+    let handle: FileHandle;
     try {
       // 'wx' refuses an existing file instead of truncating it. Readable by the
       // backend's own user alone: the archive holds every password hash, MFA
       // secret and backup code on the instance.
-      const handle = await fs.open(path.join(BACKUP_DIR, filename), 'wx', 0o600);
-      return { filename, handle };
+      handle = await fs.open(partialPath, 'wx', 0o600);
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
+      continue;
     }
+    if (await exists(path.join(BACKUP_DIR, filename))) {
+      await handle.close();
+      await fs.unlink(partialPath).catch(() => {});
+      continue;
+    }
+    return { filename, handle };
   }
 }
 
 /**
- * Backups being written now. Each one's file exists from the moment its name
- * is taken, empty while pg_dump runs and part-written while it is zipped, so
- * the list leaves it out and download and delete refuse it until it is done.
+ * Backups being written now, by name. Each is written to its name plus
+ * PARTIAL, which the list never shows, and renamed once it is complete, so a
+ * backup the backend is stopped partway through never appears as a backup.
  */
 const backupsInProgress = new Set<string>();
+const PARTIAL = '.partial';
+
+const exists = (file: string) => fs.access(file).then(() => true, () => false);
 
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
   await ensureBackupDir(BACKUP_DIR);
   const { filename, handle } = await openNewBackup();
   backupsInProgress.add(filename);
   const zipPath = path.join(BACKUP_DIR, filename);
+  const partialPath = zipPath + PARTIAL;
   // The stream takes the handle over once it exists; until then a failure
   // has to close it here.
   let streamed = false;
@@ -836,12 +850,13 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.finalize();
     });
 
+    // Complete: only now does it take a backup's name.
+    await fs.rename(partialPath, zipPath);
     const stat = await fs.stat(zipPath);
     return { filename, sizeBytes: stat.size };
   } catch (error) {
-    // Leave no partial ZIP behind: the dashboard would list it as a backup
     if (!streamed) await handle.close().catch(() => {});
-    await fs.unlink(zipPath).catch(() => {});
+    await fs.unlink(partialPath).catch(() => {});
     throw error;
   } finally {
     backupsInProgress.delete(filename);
@@ -849,10 +864,6 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
   }
 }
 
-const BACKUP_IN_PROGRESS_REPLY = {
-  error: 'Backup In Progress',
-  message: 'This backup is still being written. Try again when it appears in the list.',
-};
 
 // ============================================
 // POST /api/admin/backups
@@ -900,17 +911,24 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
-    const found = await Promise.all(
+    // A partial file no backup here is writing was left by a backend stopped
+    // partway through one; it can never be finished, and it is the size of a
+    // backup.
+    for (const f of files) {
+      const name = f.endsWith(PARTIAL) ? f.slice(0, -PARTIAL.length) : null;
+      if (name === null || !BACKUP_FILENAME_RE.test(name) || backupsInProgress.has(name)) continue;
+      await fs.unlink(path.join(BACKUP_DIR, f))
+        .then(() => logger.warn('Removed an unfinished backup left by a stopped backend', { file: f }))
+        .catch(() => {});
+    }
+    const backups = await Promise.all(
       files
-        .filter(f => BACKUP_FILENAME_RE.test(f) && !backupsInProgress.has(f))
+        .filter(f => BACKUP_FILENAME_RE.test(f))
         .map(async f => {
           const stat = await fs.stat(path.join(BACKUP_DIR, f));
           return { filename: f, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() };
         })
     );
-    // An empty file is a backup the backend stopped writing (it was restarted
-    // or killed while pg_dump ran); it holds nothing to download or restore.
-    const backups = found.filter(b => b.sizeBytes > 0);
     backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return res.json({ backups });
   } catch {
@@ -927,9 +945,6 @@ router.get('/backups/:filename/download', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
-  }
-  if (backupsInProgress.has(filename)) {
-    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
@@ -951,9 +966,6 @@ router.delete('/backups/:filename', async (req, res) => {
 
   if (!BACKUP_FILENAME_RE.test(filename)) {
     return res.status(400).json({ error: 'Bad Request', message: 'Invalid backup filename' });
-  }
-  if (backupsInProgress.has(filename)) {
-    return res.status(409).json(BACKUP_IN_PROGRESS_REPLY);
   }
 
   const filepath = path.join(BACKUP_DIR, filename);
