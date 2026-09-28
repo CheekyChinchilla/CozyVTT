@@ -771,6 +771,23 @@ Before anything is touched, the file is checked: it has to be a complete `pg_dum
 docker compose logs backend | grep -i restore
 ```
 
+**If the dashboard cannot back up the database as it is, it restores nothing.** That backup is what lets a restore be undone, so without it the dashboard stops and says so. It happens when the database itself is damaged, or when it runs a newer PostgreSQL than the backend's tools (the log then says `server version mismatch`). To restore anyway, take the database out of the dashboard backup and load it with the restore script, which asks you to confirm and makes no copy first. From the CozyVTT folder, with the stack running and your backup's name in place of the example:
+
+```bash
+(umask 077; sudo unzip -p backend/backups/backup-2026-01-01T03-00-00.zip database.sql | gzip > restore-me.sql.gz)
+./backend/scripts/restore.sh restore-me.sql.gz
+```
+
+Then put the backup's uploaded files back over the existing ones, restart the backend (which also brings an older backup up to this version), and delete the working copy, which holds every credential:
+
+```bash
+sudo unzip -o backend/backups/backup-2026-01-01T03-00-00.zip 'uploads/*' -d backend/
+docker compose restart backend
+rm restore-me.sql.gz
+```
+
+A database-only backup (the kind a restore makes first) has no uploaded files, and the first `unzip` line of that pair then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu).
+
 **A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.

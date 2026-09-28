@@ -1065,7 +1065,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       }
       return res.status(500).json({
         error: 'Restore Failed',
-        message: 'A backup of the current database could not be written, so nothing was restored. Check server logs for details.',
+        message: 'A backup of the current database could not be written, so nothing was restored. The reason is in the server log. If the database cannot be backed up as it is, the deployment guide shows how to restore this backup from the command line.',
       });
     }
     const undo = `The database as it was before is saved as ${safetyBackup} in the backup list.`;
