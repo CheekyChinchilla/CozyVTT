@@ -240,6 +240,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The API's character validation check reports real problems.** It answered "valid" for every sheet. Saving a sheet was never affected.
 
+- **Guides and in-app text corrected.** The user, player and DM guides now name controls as they appear on screen and describe what players see during play. The deployment guide's API checks work as printed, it shows how to install PostgreSQL 15 on Ubuntu 22.04, and the restore script says how to find the port to check afterwards. In the app, the pause banners say that a player's dice rolls stay on their own screen while paused (they were described as secret), the account and campaign deletion warnings say what is kept, and the upload window names its scopes in plain words.
+
 - **Developer documentation corrections.** The live-event reference now shows who may send each event, and its check fails when the reference is out of date. The API reference describes what the session pause and end routes return.
 
 ### Security
@@ -350,7 +352,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Backups are kept outside the uploads folder**, in `backend/backups/`, so syncing uploads off-site no longer copies them. See the upgrade note for moving old ones.
 
-- **A production instance refuses to start with the placeholder database password**, as it already did for `SESSION_SECRET`. See the upgrade note.
+- **A production instance refuses to start with the placeholder database password**, as it already did for `SESSION_SECRET`. The message prints the commands to change it, filled in with your own database user and database name. See the upgrade note.
 
 - **The bundled nginx no longer saves a huge upload to the restore address from anyone who sends one.** Uploads now go straight to the backend, which refuses anyone but an administrator before reading.
 
