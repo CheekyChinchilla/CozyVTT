@@ -153,6 +153,21 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   supported server range has to be checked for the target major first.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
+- **Move to Node.js 24.** Everything runs on Node 20, which reached the end of
+  its upstream support on 30 April 2026, so it no longer gets security fixes.
+  Node 24 is the current long-term release. The version is written in several
+  places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
+  in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
+  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the two
+  `node-version: 20` lines in `.github/workflows/ci.yml`, `engines` and
+  `@types/node` in the two `package.json` files, and the Node version the
+  README, `docs/DEVELOPMENT.md` and `docs/DEPLOYMENT.md` ask for. A newer
+  `node:*-alpine` image may sit on a newer Alpine, so check that
+  `postgresql16-client` is still packaged there (the `keepInStep` test fails if
+  the client falls behind the server). Run the full gates and an upgrade
+  rehearsal on the new image, and add a check that fails when the places above
+  disagree. **Do** in 1.5.1 or 1.6.
+
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
   — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept
