@@ -339,6 +339,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
           },
           sanity: {
+            // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
+            // an investigator with POW 100 and no Sanity yet gets 100 for both
+            // of these and the sheet cannot be saved. Cap the starting value at
+            // 99 and the current value at maxSanity.
             starting: prev.derivedStats?.sanity?.starting ?? pow,
             maximum: maxSanity,
             current: prev.derivedStats?.sanity?.current ?? pow,
@@ -1031,6 +1035,11 @@ value={formData.wealth?.cash}
               : ''
           }
           onChange={(e) => {
+            // TODO(sheets): this parses and re-renders on every keystroke, so a
+            // new line typed at the end is dropped as an empty line, and a " -
+            // " typed before any notes is dropped because an item with no notes
+            // renders without it. Pasting works. Keep the raw text while the
+            // box has focus and parse it on blur.
             const lines = e.target.value.split('\n').filter(line => line.trim());
             // Split at the first " - " only: the notes may hold one too.
             const possessions = lines.map(line => {
@@ -1121,6 +1130,10 @@ value={formData.wealth?.cash}
                   ...formData,
                   spellsAndMythos: {
                     cthulhuMythos: formData.spellsAndMythos?.cthulhuMythos ?? 0,
+                    // TODO(sheets): trimming and dropping empty lines on every
+                    // keystroke eats a new line or a space typed at the end, so
+                    // a two-word spell cannot be typed in order. Keep the raw
+                    // text while the box has focus and split it on blur.
                     spells: e.target.value.split('\n').map((line) => line.trim()).filter(Boolean),
                   },
                 });

@@ -61,6 +61,10 @@ export default function MFAVerifyPage() {
     } catch (err) {
       console.error('MFA verification error:', err);
 
+      // TODO(accounts): apiErrorText returns the reply's short label, such as
+      // "Invalid Code" or "Rate Limited", so the sentence in its message is
+      // never shown, here and in the backup-code handler below. Show
+      // apiErrorMessage(err) first.
       const serverError = apiErrorText(err);
       if (serverError) {
         setError(serverError);
@@ -327,6 +331,10 @@ export default function MFAVerifyPage() {
 
         {/* Back to Login */}
         <div className="text-center pt-4 border-t border-warm-gray/20">
+          {/* TODO(accounts): mfaPending is still true when this navigates,
+             so the login page sends the user straight back to this one. End
+             the pending sign-in first, in AuthContext and on the server,
+             then go to the login page. */}
           <button
             onClick={() => navigate('/auth/login')}
             className="text-sm text-warm-gray hover:text-brand-ink transition-colors"

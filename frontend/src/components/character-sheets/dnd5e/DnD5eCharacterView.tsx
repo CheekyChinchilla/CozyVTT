@@ -159,6 +159,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
+    // TODO(ui): the header text is always white, so a pale custom colour such
+    // as white makes the character's name unreadable. Choose the text colour
+    // from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-white p-6 rounded-t-lg relative'
       : `bg-gradient-to-r ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;

@@ -407,6 +407,14 @@ export default function ChatPanel() {
     try {
       console.log('[ChatPanel] Sending message:', content);
 
+      // TODO(play): this is sent with no acknowledgement. Sent while the
+      // connection is dropping, the message is lost: the client drops it once
+      // its socket is gone, or socket.io delivers it on reconnect before the
+      // socket has rejoined the campaign, which the server refuses. Either
+      // way the optimistic copy below stays "sending…" for good. Emit with an
+      // ack and offer a resend when it fails, or hold it until the socket has
+      // rejoined.
+      //
       // Emit to WebSocket (campaignId comes from server-side socket.campaignId)
       socket.emitChatMessage({
         content,

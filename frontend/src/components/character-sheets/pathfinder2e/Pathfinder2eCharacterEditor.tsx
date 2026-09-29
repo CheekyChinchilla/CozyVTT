@@ -135,6 +135,9 @@ const shouldUseWhiteText = (hexColor: string): boolean => {
   return luminance < 0.5;
 };
 
+// TODO(sheets): the inventory's Bulk box stores what is typed as a string, so
+// an item typed as "2" counts as 0 here and in bulkToNumber in BulkTracker, and
+// only light items add to the total. Read a numeric string as its number.
 const calculateTotalBulk = (inventory: PF2eInventoryItem[]): number => {
   return inventory.reduce((total, item) => {
     let itemBulk = 0;
@@ -396,6 +399,15 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
+      // TODO(sheets): the built-in templates store skill and lore attributes
+      // abbreviated ("str", "int") and spellcasting as "Arcane", "Prepared" and
+      // "int", but this effect, the lore and spellcasting effects below and the
+      // spell list compare them with full lowercase names. A template-made
+      // sheet opened here has every skill and lore total recomputed without
+      // its attribute modifier, which the next save stores (the Level 1
+      // Fighter's Athletics +6 becomes +3); spell totals ignore the key
+      // attribute, and spells added start unprepared. Resolve an abbreviated
+      // or capitalised value the way pf2eClassDC does.
       const attribute = updatedSkills[skill].attribute;
       const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
@@ -953,6 +965,12 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
+          {/* TODO(sheets): this box, and the speeds, resistances,
+             immunities, weaknesses, conditions, strike traits and languages
+             boxes, splits, trims and re-joins the text on every keystroke,
+             so a comma or a trailing space typed at the end vanishes before
+             the next word; pasting a whole list works. Keep the raw text
+             while the box has focus and split it on blur. */}
           <input type="text" value={(formData.perception?.senses || []).join(', ')} onChange={(e) => updateField('perception.senses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
@@ -1638,6 +1656,11 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+                  {/* TODO(sheets): a feat from the built-in templates holds
+                     its text in notes, which the view shows and this box
+                     does not, so the editor opens it empty and the notes can
+                     be neither changed nor removed. Show notes here when
+                     there is no description, and keep one field. */}
                   <textarea value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               ))}

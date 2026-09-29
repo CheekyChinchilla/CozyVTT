@@ -158,6 +158,11 @@ export function readProficiencyGroups(sheet: unknown): ProficiencyGroups {
     seen.add(key);
     return true;
   });
+  // TODO(sheets): an entry the language list does not know, such as "Druidic"
+  // or "Thieves' Cant", is guessed into Weapons here, and withLanguages then
+  // skips it as already present even when the sheet's own languages list names
+  // it. Take the entries of oldLanguages out of the flat list before guessing,
+  // so the languages the sheet recorded land under Languages.
   return withLanguages(categorizeProficiencyList(unique), oldLanguages);
 }
 

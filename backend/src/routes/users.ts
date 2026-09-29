@@ -172,6 +172,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
               message: 'Enter your current password to change your email address',
             });
           }
+          // TODO(accounts): a wrong password here counts only against the
+          // general API limit, so a stolen session can guess the password
+          // through this check. Limit failed checks as credentialLimiter does;
+          // see the matching TODO on POST /change-password in auth.ts.
           if (!(await verifyPassword(existingUser.passwordHash, currentPassword))) {
             return res.status(401).json({
               error: 'Authentication Failed',

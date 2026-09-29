@@ -154,6 +154,11 @@ export default function CharacterEditorPage() {
       } catch (err: unknown) {
         console.error('Failed to save character:', err);
 
+        // TODO(sheets): this page has no live connection, so hit points changed
+        // at the table since it opened make its next save stale, and the reload
+        // below throws away everything the user typed. Offer to keep the edits,
+        // for instance by carrying the table's changed fields into the form and
+        // saving again.
         if (isStaleCharacterSave(err)) {
           showToast(STALE_CHARACTER_RELOADED, 'error');
           try {

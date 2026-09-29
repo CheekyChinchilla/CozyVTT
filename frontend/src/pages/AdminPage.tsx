@@ -791,6 +791,9 @@ export default function AdminPage() {
     }
   };
 
+  // TODO(ui): the bin button in the Backups list calls this directly, so one
+  // click deletes a backup for good with no confirmation. Ask first, naming
+  // the file, with a ConfirmDialog as the restore below does.
   const handleDeleteBackup = async (filename: string) => {
     setDeletingBackupFile(filename);
     try {

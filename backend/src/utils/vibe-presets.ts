@@ -88,6 +88,11 @@ export function preserveAtmosphereAudio(incoming: unknown, stored?: unknown): un
   return next;
 }
 
+// TODO(cleanup): PUT /campaigns/:id/vibe validates with this function and PUT
+// /campaigns/:id with VibeSettingsSchema in validators/campaigns.ts, and the
+// two disagree: a period name may be 50 characters here and 100 there, and only
+// this one requires enabled, at least one period and unique names. Validate
+// both routes with one schema.
 /**
  * Validate a vibe settings object structure.
  * Returns null if valid, or an error message string if invalid.

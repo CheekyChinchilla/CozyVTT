@@ -217,6 +217,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
       heartbeatCleanupRef.current = cleanup || null;
     } catch (err) {
+      // TODO(play): suspected, not reproduced. The client does not close its
+      // socket on connect_error, so socket.io keeps retrying underneath, but
+      // attachLifecycle was never run for that socket. When it later joins, the
+      // badge stays on Connection Error and whatever waits for status
+      // 'connected', such as the session listeners in CampaignPage, never
+      // registers until Retry. Attach the lifecycle before the first connect
+      // settles, or close the socket when it fails.
       console.error('[WebSocket] Connection failed:', err);
       if (isMountedRef.current) {
         setStatus('error');

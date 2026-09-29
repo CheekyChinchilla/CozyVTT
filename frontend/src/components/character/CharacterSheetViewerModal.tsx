@@ -175,6 +175,9 @@ export default function CharacterSheetViewerModal({
 
   // Passed to the sheet views only when this viewer may roll; without it the
   // stats render as plain text rather than clickable rolls.
+  // TODO(ui): on the Characters page there is no socket, yet the owner still
+  // gets this handler, so the stats look clickable and a click rolls nothing.
+  // Pass a handler only when there is a live socket to roll on.
   const rollHandler = canRoll ? handleRoll : undefined;
 
   // Spending follows the same rule as rolling. The server checks it again —

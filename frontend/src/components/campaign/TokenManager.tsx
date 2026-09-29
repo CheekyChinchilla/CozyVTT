@@ -248,6 +248,9 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setSightRadius(0);
       setPlaceHidden(tokenType === TokenType.OBJECT);
     } catch {
+      // TODO(ui): a refusal is reported only as this fixed sentence, without
+      // the reason the server gave. Show apiErrorMessage(err) first, as the
+      // move to another map below does.
       setError('Failed to add token to map');
     } finally {
       setIsAdding(false);
@@ -825,6 +828,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                     Hidden
                                   </span>
                                 )}
+                                {/* TODO(ui): players holds only members whose role is
+                                   PLAYER, so a token still naming someone who became a
+                                   spectator or left the campaign shows a "Player" chip.
+                                   Show the chip only when the controller is found, or
+                                   say the controller is no longer a player. */}
                                 {token.controlledBy && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-warm-amber/10 text-warm-amber">
                                     {players.find((p) => p.userId === token.controlledBy)?.user?.displayName ?? 'Player'}
@@ -861,6 +869,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                 )}
                               </button>
 
+                              {/* TODO(tokens): this is offered for objects too, while
+                                 the map's right-click menu keeps objects on the
+                                 material plane. Render it only when
+                                 dmTokenControls(token.type).crossPlanes holds, as the
+                                 menu does. */}
                               {/* Spirit layer toggle */}
                               <button
                                 onClick={() => handleToggleLayer(token)}

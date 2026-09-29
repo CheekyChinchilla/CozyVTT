@@ -268,6 +268,13 @@ class SocketClient {
         reject(new Error('Failed to reconnect after maximum attempts'));
       });
 
+      // TODO(play): when the server ends a table's sign-in (a password
+      // changed elsewhere, a platform role changed, the account deleted) it
+      // sends the reason here before closing the socket, and it is only
+      // written to the console; the Dice tab shows it only if it is open at
+      // the time. Show the reason to the user, in a toast or on the
+      // connection badge.
+      //
       // Error events from server
       this.socket.on('error', (error) => {
         console.error('[Socket] Server error event:', error);

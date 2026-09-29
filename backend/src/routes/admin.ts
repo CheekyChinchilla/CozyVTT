@@ -278,6 +278,10 @@ router.post('/users', async (req, res) => {
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
+    // TODO(accounts): this name skips parseDisplayName, the check sign-up and
+    // profile edits use, and is stored sanitised and cut to 50 characters, so a
+    // name typed as "<>" is saved empty. Validate it with parseDisplayName and
+    // answer 400 when it fails, here and in the invite route below.
     const rawName = typeof displayName === 'string' && displayName.trim()
       ? displayName
       : email.split('@')[0];
@@ -1034,6 +1038,10 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
   restoreUpload.single('backup')(req, res, (error?: unknown) => {
     if (!error) return next();
     const folderError = inBackupsFolder(error);
+    // TODO(restore): the file filter's refusal of a name not ending in .zip
+    // takes this path to the generic error handler, which answers 500 "An
+    // unexpected error occurred" in production. Answer 400 with the filter's
+    // own message.
     if (!(folderError instanceof BackupFolderUnusable)) return next(error);
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
@@ -1074,6 +1082,10 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
     // the entry count and total decompressed size (zip-bomb protection).
+    // TODO(restore): a file named .zip that is not a ZIP throws here and
+    // reaches the catch at the end, which answers "An unexpected error occurred
+    // during restore". Answer 400 saying the file is not a ZIP archive, as the
+    // database.sql check below does for a ZIP that is not a backup.
     const directory = await unzipper.Open.file(uploadedZip);
     try {
       await extractArchiveSafely(directory, tempDir, {

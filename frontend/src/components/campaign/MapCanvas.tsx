@@ -1020,6 +1020,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     if (!socket) return;
 
+    // TODO(play): suspected, not reproduced. This handler is registered once,
+    // so it reads userRole and campaign from the render that registered it,
+    // while the role can change without a reload, as in a DM handover. A former
+    // DM's handler then still skips the spirit-realm update below, which may
+    // leave a stale "Spirit Realm" badge, and a new DM's may play the crossing
+    // sound. Read both through refs, or list them as dependencies.
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
       setCurrentMap(mapData);
       useGameStore.getState().setTokens(mapData.tokens || []);
@@ -1177,6 +1183,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const socketInstance = socket.getSocket();
     if (!socketInstance) return;
 
+    // TODO(maps): the DM's page skips every wall event below, taking each for
+    // the echo of its own edit. A player's door toggle, or a wall change made
+    // through the REST API, then never reaches the DM's canvas or preview until
+    // reload, and the DM's next walls:replace sends the stale list and undoes
+    // that change for everyone. Skip only the echo of this page's own emit and
+    // apply the rest.
     const handleWallAdded = (data: { mapId: string; segment: WallSegment }) => {
       // DM already applied the change optimistically before emitting; skip the echo to
       // avoid reverting local state with stale data from the closed-over wallSegments.
@@ -1275,6 +1287,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socketInstance.on('map:settings:updated', handleSettingsUpdated);
 
     // Light source events
+    // Same TODO(maps) as the wall handlers above: these skip every light event
+    // on the DM's page, so a light changed through the REST API does not reach
+    // the DM's canvas until reload.
     const handleLightAdded = (data: { mapId: string; light: LightSource }) => {
       if (isDM) return; // DM applied optimistically
       if (!currentMap || data.mapId !== currentMap.id) return;
@@ -2391,6 +2406,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
+    // TODO(maps): this checks isDM and not previewing, so during a player-view
+    // preview, where no light markers are drawn, a click still places, selects
+    // or drags a light with nothing on screen to show it. Ignore the light
+    // tool while previewing.
     // Light tool: place or select/drag
     if (lightMode && isDM) {
       const mapPx = screenToMapPx(screenX, screenY);
@@ -2433,6 +2452,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
+    // TODO(maps): a door is found by distance alone. A player can open one none
+    // of their tokens can see, a click in darkness answers "This door is
+    // locked." for a door they had no way to know of, and a spectator gets the
+    // toggle, applied here before the server refuses it, which leaves their
+    // page out of step. Offer the toggle only to players and the DM, and only
+    // for doors the viewer can see; the server's wall:update needs the same
+    // sight check.
     // Door interaction: click near a door segment to toggle open/closed (all roles)
     if (!wallMode && !fogMode && !lightMode) {
       const mapPx = screenToMapPx(screenX, screenY);
@@ -3422,6 +3448,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         {userRole === 'DM' && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
+            {/* TODO(ui): while dmShowSpiritTokens is true the tokens are
+               shown, yet the title says "Hiding spirit tokens (click to
+               show)"; both branches say click to show. It should read
+               "Spirit tokens shown, click to hide" in that case. */}
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
@@ -3668,6 +3698,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </DmToolPanelContainer>
       )}
 
+      {/* TODO(maps): the button that ends a preview renders only while
+         lighting or fog is on, and nothing else resets dmPreviewPlayerView,
+         so turning both off during a preview leaves the DM in the player's
+         view until one is turned back on or the page reloads. End the
+         preview when both go off, or keep the button while previewing. */}
       {/* DM Preview Player View — shown when dynamic lighting is enabled */}
       {userRole === 'DM' && ((currentMap?.lightingEnabled ?? false) || fogEnabled) && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
@@ -4173,6 +4208,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     try {
                       await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
                     } catch (err) {
+                      // TODO(ui): this failure, and those of Obscure, Send to
+                      // Spirit Realm and Return to Material Plane below, go only
+                      // to the console, so the DM sees the menu close and nothing
+                      // change. Show them in a toast with apiErrorMessage(err),
+                      // as Save as Template above does.
                       console.error('Failed to toggle token visibility:', err);
                     }
                   }}

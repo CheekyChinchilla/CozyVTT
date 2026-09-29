@@ -110,6 +110,10 @@ function validateSheet(
 ): { ok: true } | { ok: false; message: string; issues?: unknown[] } {
   if (gameSystem === null || gameSystem === undefined) return { ok: true };
 
+  // TODO(sheets): the parsed sheet is thrown away, so the create and update
+  // routes store the template exactly as sent, fields the schema would strip
+  // included, while a character is stored as the schema's output. Return
+  // result.data and store that, as the character routes do.
   const result = validateCharacterData(gameSystem, (data as object) || {});
   if (result.success) return { ok: true };
 

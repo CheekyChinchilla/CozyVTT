@@ -524,6 +524,11 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
  * POST /api/auth/change-password
  * Change password for authenticated user
  */
+// TODO(accounts): this route, DELETE /account below and the current-password
+// check on an email change in users.ts have no attempt limit of their own, only
+// the general API limit of 300 requests a minute by default, so a stolen
+// session could guess the password through them. Limit failed password checks
+// on all three, as credentialLimiter does for /mfa/disable.
 router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -604,6 +609,8 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
  * DELETE /api/auth/account
  * Self-service account deletion. Requires password confirmation.
  */
+// Same TODO(accounts) as POST /change-password above: failed password checks
+// here have no attempt limit of their own.
 router.delete('/account', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;

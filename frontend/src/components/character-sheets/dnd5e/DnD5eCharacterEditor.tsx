@@ -614,6 +614,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   useEffect(() => {
     if (!formData.spellcasting) return;
 
+    // TODO(sheets): while no spellcasting ability is named, this effect keeps
+    // the stored DC at 8 + proficiency and the attack at proficiency. Naming
+    // the ability afterwards makes the backfill read that stored total as
+    // hand-typed, so it records minus the ability's modifier as the other bonus
+    // and the DC and attack do not move. The conversion should apply only to a
+    // total the sheet was loaded with, never to one this effect wrote.
     const dcBackfill = dnd5eBackfilledSpellSaveDCBonus(formData);
     const attackBackfill = dnd5eBackfilledSpellAttackBonus(formData);
 

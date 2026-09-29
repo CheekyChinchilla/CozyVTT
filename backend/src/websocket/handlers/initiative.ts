@@ -499,11 +499,18 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const roll = rollResult;
       // The roll is stored and ordered by now: a failure to write its dice
       // log entry is logged, and the new order below still goes out.
+      // TODO(play): this entry is only broadcast. Unlike a roll made in dice.ts
+      // it is never written to the diceRoll table, so it is gone from the dice
+      // log on reload. Store it as other rolls are stored.
       if (roll) await bestEffort('initiative.roll dice log', async () => {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
         // The server names the token; a name the client sends is not used.
         // An obscured token is not named in the dice log even to the DM, since
         // one entry reaches everyone who is sent the token.
+        // TODO(play): who rolled is not considered, so a player rolling for
+        // their own obscured token sees it logged as "Unknown creature", while
+        // a roll from their sheet names the character. Send the roller the
+        // token's name and everyone else the placeholder.
         const publicName = token.obscured === true ? 'Unknown creature' : token.name;
         const rollData = {
           userId: socket.userId,

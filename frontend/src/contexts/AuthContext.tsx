@@ -169,6 +169,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setMustChangePassword(response.mustChangePassword || false);
 
     // Show warning if backup codes are running low
+    // TODO(accounts): after a backup-code sign-in the server sends how many
+    // codes are left, with a warning at three or fewer, but the warning is only
+    // logged here, so a user can spend the last code without knowing. Show it
+    // to the user after sign-in; showing the count in the profile's two-factor
+    // section would also need the server to report it there.
     if (response.warning) {
       console.warn('MFA Warning:', response.warning);
     }

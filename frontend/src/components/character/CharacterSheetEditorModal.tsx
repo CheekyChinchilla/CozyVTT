@@ -76,6 +76,10 @@ export default function CharacterSheetEditorModal({
 
       if (validationErrors) {
         console.error('Validation errors:', validationErrors);
+        // TODO(ui): the message here is "Character data does not match game
+        // system schema" and the issues go only to the console, so the user is
+        // not told which field to fix. List each issue's path and message, as
+        // CharacterEditorPage does.
         showToast(`Validation Error: ${message}`, 'error');
       } else {
         showToast(message, 'error');

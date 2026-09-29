@@ -37,6 +37,8 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Check if current user can delete this asset
+  // TODO(assets): the server also lets the DM of a campaign asset's campaign
+  // delete it; offer Delete to that DM, as AssetDetailPanel should.
   const canDelete =
     user?.id === asset.uploadedById || user?.platformRole === 'ADMIN';
 

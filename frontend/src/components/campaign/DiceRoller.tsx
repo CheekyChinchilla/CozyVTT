@@ -264,6 +264,11 @@ export default function DiceRoller() {
         if (cancelled) return;
         const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
 
+        // TODO(play): suspected, not reproduced. This merge only adds, and
+        // the DM's clear reaches only members online at the time, so a member
+        // who was offline then keeps the cleared rolls after rejoining, until
+        // they reload. On a rejoin, take the server's list as the history,
+        // keeping only rolls that arrived live since it was fetched.
         setRolls((prev) => {
           // Merge rather than replace: a roll can land live between mount and
           // this response, and it must not be lost or duplicated.
