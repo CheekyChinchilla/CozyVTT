@@ -54,12 +54,12 @@ Either way you end up with a password only you know. Pick something you'll actua
 Your DM invites you by picking your account from a list of the people on your instance. Here's what happens next:
 
 1. **Log in** to CozyVTT
-2. On your **Dashboard**, you'll see a **Pending Invitations** banner at the top
-3. The banner shows the campaign name and your DM's name
-4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already). Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
+2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards
+3. Each invitation shows the campaign name and, after **DM:**, the campaign's owner (usually the DM)
+4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
 5. Or click **Decline** if it's not for you
 
-*Screenshot pending — Pending invitation banner.*
+*Screenshot pending — Pending invitations section.*
 
 If you haven't created a character yet, you can accept the invitation without one and assign a character later. Jump to [Creating Your Character](#creating-your-character) and come back.
 
@@ -90,7 +90,7 @@ Ask your DM which system you're playing:
 
 ### Step 2: Fill Out Your Sheet
 
-After selecting a system, you're taken to the **Character Editor**. This is your character sheet — fill it out just like you would on paper.
+Give your character a name and click **Create Character**. The dialog closes, **Character created successfully!** appears, and the new character is on your Characters page. Choose **Edit Character** from its card's menu (**⋮**) to open the **Character Editor**. This is your character sheet — fill it out just like you would on paper.
 
 *Screenshot pending — Character editor (D&D 5e example).*
 
@@ -168,7 +168,7 @@ You can keep documents of your own too, from **Documents** on your dashboard: up
 
 When you first load the campaign page, CozyVTT connects to the live session. Look for the **connection indicator** in the header — it turns green when you're successfully connected. If you see a loading spinner, just wait a moment.
 
-If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, a message appears and you can refresh the page to reconnect manually.
+If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, the indicator turns red and shows a **Retry** button; click it to reconnect.
 
 ### If your DM hands you the game
 
@@ -259,14 +259,14 @@ One thing to know: if the DM has **paused** the session, your rolls are worked o
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it by clicking and dragging, unless the session is paused or has ended.
+When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. You can't move it while the session is paused or has ended.
 
-*GIF pending — Clicking and dragging a player token across the map.*
+*GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
 **When you can't move your token:**
-- If the session is **Paused**, token movement is disabled until the DM resumes. If the DM pauses while you are dragging, your token goes back to where it was
+- If the session is **Paused**, token movement is disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
 - If your token hasn't been placed by the DM yet, it won't appear on the map
 - If the DM has handed control of your character's token to someone else, or to nobody, it is not yours to move until they set you as its controller in **Edit Token**
 - If the DM has ended the session (status shows "Inactive"), movement is disabled until the next one starts
@@ -365,6 +365,8 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 - **On the map** — right-click your token, choose **Roll...**, and pick **Roll Initiative** at the top of the menu
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
+
+Roll before the DM clicks **Start Combat**. Once combat has started, the dice icon and **Roll Initiative** are no longer offered to you, and the server refuses a roll; if your initiative needs changing, ask your DM.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -493,7 +495,7 @@ If you leave the editor with changes you haven't saved, you'll be asked to confi
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 
-**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the sheet opens again showing the new version; make your changes again there. A sheet you only have open to read follows hit point changes by itself.
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the new version is loaded; make your changes again on it. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
 
 > **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
@@ -560,7 +562,7 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 |--------|--------------|
 | Preparation | No session has been run yet — you can move your token |
 | 🟢 Live | Session is active — you can move your token |
-| 🟡 Paused | DM paused — token movement disabled, rolls are secret |
+| 🟡 Paused | DM paused — token movement disabled, and your rolls stay in your own browser: the DM and other players don't see them |
 | ⚫ Inactive | The last session has ended — token movement disabled |
 
 The campaign card on the dashboard calls a **Live** campaign **Active**.
@@ -581,7 +583,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 **I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
 
-**I lost connection.** Refresh the page — your session state is saved on the server.
+**I lost connection.** Click **Retry** beside the connection indicator in the header. Your session state is saved on the server.
 
 **Someone edited my character.** Only you and your campaign's DM can edit your characters. If you have concerns, speak with your platform administrator.
 

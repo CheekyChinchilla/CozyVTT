@@ -30,6 +30,23 @@ export function databaseCredentialProblem(databaseUrl: string | undefined): stri
 }
 
 /**
+ * The database user and name a URL connects as, for the commands the refusal
+ * prints: DATABASE_USER and DATABASE_NAME may have been changed in .env. The
+ * shipped defaults when the URL names neither, or cannot be read.
+ */
+function connectionNames(databaseUrl: string | undefined): { user: string; database: string } {
+  try {
+    const url = new URL(databaseUrl ?? '');
+    return {
+      user: decodeURIComponent(url.username) || 'cozyvtt',
+      database: decodeURIComponent(url.pathname.slice(1)) || 'cozyvtt',
+    };
+  } catch {
+    return { user: 'cozyvtt', database: 'cozyvtt' };
+  }
+}
+
+/**
  * Called once at startup. Production exits; anything else warns, so a
  * developer's throwaway database keeps working.
  */
@@ -42,9 +59,10 @@ export function enforceDatabaseCredential(
   if (env.NODE_ENV === 'production') {
     // An instance that has already run keeps the password its database was
     // created with, whatever .env says, so the order of the steps matters.
+    const { user, database } = connectionNames(env.DATABASE_URL);
     logger.error(
       `[FATAL] ${problem}. On Docker, change it inside the database first: ` +
-        `docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt WITH PASSWORD '<new>';" ` +
+        `docker compose exec database psql -U ${user} -d ${database} -c "ALTER USER ${user} WITH PASSWORD '<new>';" ` +
         '(openssl rand -hex 24 makes a good one), then set DATABASE_PASSWORD in .env to the same value, ' +
         'update DATABASE_URL too if you wrote it by hand, and run docker compose up -d. ' +
         'See docs/DEPLOYMENT.md, "Changing the database password".'

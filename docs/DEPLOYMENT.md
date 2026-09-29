@@ -118,11 +118,12 @@ docker compose logs backend | grep -i migrat
 docker compose exec backend wget -qO- http://localhost:4000/health
 
 # The API answers on the same address as the site — this must be JSON, not a web page
-curl -si http://localhost/api/setup/status | head -3
+curl -s -w '\n%{http_code} %{content_type}\n' http://localhost/api/setup/status
 ```
 
-That last check should show `content-type: application/json` followed by something like
-`{"setupCompleted":false,"hasUsers":false,"needsSetup":true}`. If it shows `content-type: text/html`,
+That last check should print something like
+`{"setupCompleted":false,"hasUsers":false,"needsSetup":true}` and, on the line below it,
+`200 application/json; charset=utf-8`. If it prints a web page and its last line ends in `text/html`,
 your `/api` requests are landing on the web pages instead of the API — see
 [Using an External Reverse Proxy](#using-an-external-reverse-proxy).
 
@@ -209,12 +210,12 @@ There's a second catch. Out of the box, the backend and frontend use `expose`, w
    ```bash
    docker compose down     # also stops the old nginx container
    docker compose up -d
-   curl -si https://your-domain.com/api/setup/status | head -3
+   curl -s -w '\n%{http_code} %{content_type}\n' https://your-domain.com/api/setup/status
    ```
 
    Use `down` first: deleting the `nginx` block from the file does **not** stop a container that is already running, and a leftover nginx still holding port 80 will confuse things. Your database is stored in a volume and is not affected by `down` (only `down -v` would erase it).
 
-   You should see `content-type: application/json` and a line like `{"setupCompleted":false,...}`. If you see `content-type: text/html`, your proxy is sending `/api` to the frontend instead of the backend. If you see `502`, nothing is listening where your proxy is pointing — usually step 2 was skipped.
+   You should see a line like `{"setupCompleted":false,...}` and, below it, `200 application/json; charset=utf-8`. If you see a web page whose last line ends in `text/html`, your proxy is sending `/api` to the frontend instead of the backend. If the last line starts with `502`, nothing is listening where your proxy is pointing — usually step 2 was skipped.
 
 5. **Check the security headers still arrive:**
 
@@ -301,7 +302,7 @@ After editing `~/.cloudflared/config.yml`, restart the tunnel and re-run the che
 
 ```bash
 sudo systemctl restart cloudflared
-curl -si https://cozyvtt.example.com/api/setup/status | head -3
+curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/setup/status
 ```
 
 ### Visitor addresses and sign-in limits
@@ -502,6 +503,19 @@ sudo apt-get install -y nodejs
 
 ### 2. Install PostgreSQL 15
 
+Ubuntu's own package archive carries a single PostgreSQL version per release (14 on Ubuntu 22.04), so `postgresql-15` comes from the PostgreSQL project's package repository. Add it first:
+
+```bash
+sudo apt-get install -y curl ca-certificates
+sudo install -d /usr/share/postgresql-common/pgdg
+sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+. /etc/os-release
+echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $VERSION_CODENAME-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+sudo apt-get update
+```
+
+The `apt-get update` output should include lines starting `Get:` or `Hit:` for `https://apt.postgresql.org/pub/repos/apt`. Then install PostgreSQL and create the database:
+
 ```bash
 sudo apt-get install -y postgresql-15
 sudo -u postgres createuser cozyvtt
@@ -655,7 +669,7 @@ SMTP_SECURE=false   # true for port 465 (TLS), false for port 587 (STARTTLS)
 APP_URL=https://your-domain.com
 ```
 
-Test from **Admin Dashboard → Settings → Test Email** after deploying.
+Test it after deploying with **Send Test Email** on the **Settings** tab of the Admin Panel.
 
 #### What SMTP unlocks
 
@@ -729,6 +743,8 @@ Without Docker, `backend/backups/` appears the first time the Backups tab is ope
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
 Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for its folder and the dumps in it, including any an earlier version left readable. While a backup or a restore runs, the working copy of the database it keeps in the system's temporary folder (`/tmp` unless `TMPDIR` says otherwise) sits in a folder of its own with the same protection, and is removed when it finishes, whether it worked or not. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
+
+If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind: on Docker it stays in the container's `/tmp` until the container is recreated, for example with `docker compose up -d --force-recreate backend`, and on a manual install until you delete it.
 
 For large or multi-server deployments, consider mounting an S3-compatible object store (MinIO, AWS S3) as a FUSE filesystem at `backend/uploads/`. No code changes required.
 
@@ -887,7 +903,8 @@ another instance are ignored, as the dashboard ignores them, so a backup made
 under a different database user name still restores. Like the dashboard, the
 script runs `psql` in its restricted mode, which needs a PostgreSQL release
 from August 2025 or later; on Docker that is the database container's own
-`psql`, and `docker compose pull database` brings an older image up to date.
+`psql`, and `docker compose pull database` followed by
+`docker compose up -d database` brings an older image up to date.
 
 **Restart the backend as soon as a restore finishes.** The restore empties the
 login sessions an older backup carried, as part of that same single step, so
@@ -1049,20 +1066,32 @@ docker compose exec database pg_isready -U cozyvtt
 **Check it:**
 
 ```bash
-curl -si https://your-domain.com/api/setup/status | head -3
+curl -s -w '\n%{http_code} %{content_type}\n' https://your-domain.com/api/setup/status
 ```
+
+Look at the last line it prints:
 
 | What you see | What it means | Fix |
 |---|---|---|
-| `content-type: application/json` | The API is fine — the problem is elsewhere | Check `docker compose logs backend` |
-| `content-type: text/html` | `/api` is being answered by the web pages instead of the backend | Add the `/api/...` → backend route to your proxy |
-| `502` or a connection error | Nothing is listening where your proxy points | Open the backend port — see [Option A](#option-a--remove-the-nginx-service-most-common) step 2 |
+| `200 application/json; charset=utf-8` | The API is fine — the problem is elsewhere | Check `docker compose logs backend` |
+| A web page, then `200 text/html` | `/api` is being answered by the web pages instead of the backend | Add the `/api/...` → backend route to your proxy |
+| `502 …`, or `000` (no connection at all) | Nothing is listening where your proxy points | Open the backend port — see [Option A](#option-a--remove-the-nginx-service-most-common) step 2 |
 
 ### Setup fails with "An error occurred during setup" (502)
 
 Same root cause as above: the browser reached the wizard (served by the frontend), but the request that creates your admin account goes to the backend, which your proxy can't reach. Run the same check.
 
 If you removed the bundled `nginx` service, the usual culprit is a missing `ports` entry on the **backend** service — it is `expose`-only by default, which means "reachable from other containers" but not from your proxy.
+
+### The site answers 502 after `docker compose up -d` recreated the backend
+
+When `docker compose up -d` recreates only the backend (after you change `.env`, for example), the bundled nginx can keep using the old backend container's address, so everything sent to the backend answers **502 Bad Gateway**: the pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
+
+```bash
+docker compose restart nginx
+```
+
+It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again.
 
 ### Live features don't work (dice, token movement, chat)
 
@@ -1215,9 +1244,9 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    ```
 7. Confirm the API is reachable through the tunnel, not just the web pages:
    ```bash
-   curl -si https://cozyvtt.example.com/api/setup/status | head -3
+   curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/setup/status
    ```
-   You want `content-type: application/json`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
+   You want a line of JSON and, below it, `200 application/json; charset=utf-8`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
 8. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
 Once running, you can **close ports 80 and 443 on your VPS firewall entirely** — only SSH (port 22, or your chosen alternative) needs to be reachable, and even that you can put behind Cloudflare Access if you want.

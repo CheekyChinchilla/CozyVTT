@@ -195,7 +195,7 @@ export default function DmLightControls({
           {/* Warning when lighting is off */}
           {!lightingEnabled && (
             <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
-              Dynamic lighting is off. Enable it in Map Settings for lights to affect player visibility.
+              Dynamic lighting is off. Enable it in Edit Map for lights to affect player visibility.
             </div>
           )}
 

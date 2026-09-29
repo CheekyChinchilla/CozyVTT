@@ -32,7 +32,7 @@ import { getState as getCombatState, setState as setCombatState, removeCombatant
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -1663,6 +1663,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 
     // The same events the socket wall edits send, to those who may read the map.
     await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: updated.wallSegments });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segments: updated.wallSegments });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
@@ -1698,6 +1699,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     });
 
     await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment: parsed.data });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
   } catch (error) {
     logger.error('Error adding wall segment', { err: error });
@@ -1724,6 +1726,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
 
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
     await tellMapReaders(campaignId, id, 'wall:removed', { mapId: id, segmentId: sid });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
     logger.error('Error deleting wall segment', { err: error });
@@ -1758,6 +1761,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
@@ -1808,6 +1812,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
     });
 
     await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: updated.lights });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ lights: updated.lights });
   } catch (error) {
     logger.error('Error replacing light sources:', error);
@@ -1843,6 +1848,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     });
 
     await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: parsed.data });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: parsed.data, total: (updated.lights as unknown as LightSource[]).length });
   } catch (error) {
     logger.error('Error adding light source:', error);
@@ -1876,6 +1882,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ light: existing[idx] });
   } catch (error) {
     logger.error('Error updating light source:', error);
@@ -1903,6 +1910,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
 
     await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
     logger.error('Error deleting light source:', error);

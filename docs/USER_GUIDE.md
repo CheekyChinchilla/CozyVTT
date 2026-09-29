@@ -231,7 +231,7 @@ Click **Create Character** to open the character creation dialog. Choose your **
 
 *Screenshot pending — New character dialog with game system selector.*
 
-After choosing a system, you'll be taken to the **Character Editor**.
+Give the character a name and click **Create Character**. The dialog closes, **Character created successfully!** appears, and the new character is added to your Characters page. Choose **Edit Character** from its card's menu (**⋮**) to fill in the sheet in the **Character Editor**.
 
 ### The Character Editor
 
@@ -315,7 +315,7 @@ The action-economy tactician's dream:
 
 For when the vibes turn from cozy to eldritch:
 
-- Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU, LCK)
+- Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU), plus a separate Luck Score
 - Derived stats: HP, Sanity, Magic Points, Movement Rate
 - Skills with base values and advancement tracking
 - Weapons and attacks
@@ -609,13 +609,13 @@ An admin upload UI is on the roadmap — see [Future Features](FUTURE_FEATURES.m
 
 ## Your Profile
 
-Click your display name or avatar at the top of the dashboard to reach your **Profile & Settings** page.
+Click your avatar (the round picture at the top right of the dashboard) to reach your **Profile & Settings** page.
 
 *Screenshot pending — Profile page.*
 
 ### Updating Your Profile
 
-Click **Edit** next to your display name or bio to change them. Click **Save** when you're done.
+Click **Edit** next to your display name or bio to change them. Click **Save Changes** when you're done.
 
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
@@ -624,7 +624,7 @@ Click on your current avatar (or the placeholder) to open the avatar uploader. C
 
 ### Changing Your Password
 
-In the **Security** section, enter your current password and your new password (twice, to confirm), then click **Save**.
+In the **Security** section, enter your current password and your new password (twice, to confirm), then click **Change Password**.
 
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
@@ -681,7 +681,7 @@ This is usually a loading issue. Refresh the page. If the problem persists, chec
 
 ### I lost connection mid-session
 
-CozyVTT will automatically try to reconnect if you lose connection briefly. Your session state (token positions, chat, etc.) is preserved. If reconnection fails, refresh the page — everything should be right where you left it.
+CozyVTT will automatically try to reconnect if you lose connection briefly. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away appear once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If reconnection fails, refresh the page — everything should be right where you left it.
 
 ### Someone else is editing my character
 
@@ -693,11 +693,11 @@ Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversat
 
 ### How do I change my email address?
 
-Email addresses cannot be changed by users directly. Contact your platform administrator — they can update it from the Admin Panel.
+Email addresses cannot be changed from the app. Contact your platform administrator. The Admin Panel has no control for it either: an admin changes it through the API, with `PUT /api/users/:id` (see the [API Reference](API_REFERENCE.md)).
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, so the table's history and the art on its maps are not lost. Every other browser or device signed in to the account is signed out at the same moment.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, and documents you shared into a campaign stay shared, so the table's history, its handouts and the art on its maps are not lost. Every other browser or device signed in to the account is signed out at the same moment.
 
 > **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 

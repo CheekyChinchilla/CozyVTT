@@ -897,7 +897,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-danger-ink">Delete Account</h3>
                 <p className="text-xs text-warm-gray">
-                  Permanently delete your account and all data. This cannot be undone.
+                  Permanently delete your account, characters and personal notes. This cannot be undone.
                 </p>
               </div>
               {!deleteConfirmOpen && (

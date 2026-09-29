@@ -202,7 +202,8 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
       echo "    It brings an older backup up to this version and ends the game connections"
       echo "    still open, which keep the identity and role they had before the restore"
       echo "    until the backend restarts."
-      echo "  - Verify the app:           curl http://localhost/health"
+      echo "  - Verify the app:           curl http://localhost:PORT/health"
+      echo "    where PORT is HTTP_PORT from your .env (80 if it is not set)."
       exit 0
     else
       report_failure
@@ -256,7 +257,8 @@ if psql \
   echo "  - Bring an older backup up to this version:  cd backend && npx prisma migrate deploy"
   echo "  - Restart the backend now. That ends the game connections still open, which keep"
   echo "    the identity and role they had before the restore until the backend restarts."
-  echo "  - Verify the app:                            curl http://localhost/health"
+  echo "  - Verify the app:                            curl http://localhost:PORT/health"
+  echo "    where PORT is the backend's PORT setting (4000 if it is not set)."
 else
   report_failure
   exit 1

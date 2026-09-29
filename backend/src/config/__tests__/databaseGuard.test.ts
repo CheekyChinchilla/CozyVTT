@@ -1,4 +1,5 @@
 import { databaseCredentialProblem, enforceDatabaseCredential } from '../databaseGuard';
+import logger from '../../utils/logger';
 
 describe('databaseCredentialProblem', () => {
   it('accepts a real password', () => {
@@ -32,6 +33,26 @@ describe('enforceDatabaseCredential', () => {
     const exit = jest.fn();
     enforceDatabaseCredential({ DATABASE_URL: placeholder, NODE_ENV: 'development' }, exit);
     expect(exit).not.toHaveBeenCalled();
+  });
+
+  it('prints commands for the user and database the URL names', () => {
+    const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    enforceDatabaseCredential(
+      { DATABASE_URL: 'postgresql://tabletop:CHANGE_ME@database:5432/games', NODE_ENV: 'production' },
+      jest.fn()
+    );
+    const message = String(logged.mock.calls[0][0]);
+    logged.mockRestore();
+    expect(message).toContain(`docker compose exec database psql -U tabletop -d games -c "ALTER USER tabletop WITH PASSWORD '<new>';"`);
+    expect(message).not.toContain('cozyvtt');
+  });
+
+  it('prints the default names for the shipped URL', () => {
+    const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    enforceDatabaseCredential({ DATABASE_URL: placeholder, NODE_ENV: 'production' }, jest.fn());
+    const message = String(logged.mock.calls[0][0]);
+    logged.mockRestore();
+    expect(message).toContain(`docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt WITH PASSWORD '<new>';"`);
   });
 
   it('does nothing with a real password in production', () => {

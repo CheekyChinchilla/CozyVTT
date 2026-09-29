@@ -559,8 +559,11 @@ uploads/
   avatars/       {userId}_avatar.{ext}
   documents/    global/{id}.{ext}             Global and personal documents
                 campaigns/{campaignId}/{id}.{ext}
-  backups/      cozyvtt_{timestamp}.sql.gz
 ```
+
+Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
+`backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
+directory (`backend/src/utils/backupDir.ts`).
 
 ### Upload Pipeline
 

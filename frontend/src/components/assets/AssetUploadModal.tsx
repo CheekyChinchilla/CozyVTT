@@ -292,11 +292,18 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     [AssetScope.GLOBAL]: 'Available to all users across all campaigns on this platform.',
   };
 
+  // The scope in words, for the locked context banner
+  const scopeWords: Record<AssetScope, string> = {
+    [AssetScope.USER]: 'personal',
+    [AssetScope.CAMPAIGN]: 'campaign',
+    [AssetScope.GLOBAL]: 'global',
+  };
+
   // Locked context banner label
   const lockedLabel = defaultType && defaultScope
-    ? `Uploading as a ${defaultScope} ${defaultType.toLowerCase()} asset`
+    ? `Uploading as a ${scopeWords[defaultScope]} ${defaultType.toLowerCase()} asset`
     : defaultScope
-    ? `Scope locked to ${defaultScope}`
+    ? `Scope locked to ${scopeWords[defaultScope]}`
     : defaultCampaignId
     ? 'Campaign locked for this upload'
     : null;

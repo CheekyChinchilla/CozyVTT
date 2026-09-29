@@ -817,7 +817,9 @@ paths:
         Self-service permanent account deletion. Requires the current
         password as confirmation. Deletes the user's memberships, characters,
         personal notes and dice macros. Their chat messages, dice rolls and
-        uploaded assets stay, with the user field set to null. A campaign the
+        uploaded assets stay, with the user field set to null, and documents
+        they shared into a campaign stay shared (the share passes to the
+        campaign's DM, or its owner). A campaign the
         user owns passes to its sitting DM; while the user is that DM the
         deletion is refused with 409 and nothing changes.
       operationId: deleteOwnAccount
@@ -3258,7 +3260,7 @@ paths:
                       type: object
                       properties:
                         path: { type: string, example: 'stats.strength' }
-                        message: { type: string, example: 'Expected number, received string' }
+                        message: { type: string, example: 'Invalid input: expected number, received string' }
                         code: { type: string, example: 'invalid_type' }
               examples:
                 valid:
@@ -3271,7 +3273,7 @@ paths:
                     isValid: false
                     errors:
                       - path: 'stats.strength'
-                        message: 'Expected number, received string'
+                        message: 'Invalid input: expected number, received string'
                         code: 'invalid_type'
         '400':
           description: Character has no game system assigned.
@@ -4576,7 +4578,10 @@ paths:
         Each wall route tells connected clients of the change with the event
         the matching socket edit sends (`walls:replaced`, `wall:added`,
         `wall:updated`, `wall:removed`): to every member for the map the
-        campaign is showing, and to the DM's connections for any other.
+        campaign is showing, and to the DM's connections for any other. On a
+        lit map that the campaign is showing, each player is then sent
+        `map.changed` with the map as they can now see it, since walls and
+        doors decide which tokens a player is sent.
       operationId: replaceWalls
       security:
         - cookieAuth: []
@@ -4771,6 +4776,11 @@ paths:
       description: |
         Replaces the map's entire light list atomically. Used when committing
         a large batch of changes or restoring saved lighting state. DM only.
+
+        Each light route tells connected clients of the change with the event
+        the matching socket edit sends. On a lit map that the campaign is
+        showing, each player is then sent `map.changed` with the map as they
+        can now see it, since lights decide which tokens a player is sent.
       operationId: replaceLights
       security:
         - cookieAuth: []
@@ -8516,7 +8526,7 @@ components:
             message: Character data does not match the campaign's game system schema.
             details:
               field: 'data.stats.strength'
-              issue: 'Expected number, received string'
+              issue: 'Invalid input: expected number, received string'
 
     RateLimited:
       description: |
