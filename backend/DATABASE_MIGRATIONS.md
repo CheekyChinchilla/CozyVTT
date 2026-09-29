@@ -130,11 +130,16 @@ it.
 
 ```bash
 # Report what would change, without writing anything
-docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend npm run migrate:sheet-fields
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js
 ```
+
+The production image has no `src/` and no `ts-node`, so `npm run
+migrate:sheet-fields` (which runs the TypeScript source) works only in a
+development checkout. Outside Docker, run the compiled file from `backend/`
+after `npm run build`.
 
 Safe to run more than once — a sheet already converted is skipped. Each
 character is written in its own transaction, so an interruption cannot leave one

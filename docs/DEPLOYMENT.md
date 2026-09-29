@@ -363,7 +363,14 @@ git pull           # get the update
 git stash pop      # re-apply your edits
 ```
 
-If `git stash pop` reports a conflict, the file will contain both versions marked with `<<<<<<<` and `>>>>>>>` lines — open it, keep the lines you want, delete the markers, then `docker compose up -d --build`.
+If `git stash pop` reports a conflict, the file will contain both versions marked with `<<<<<<<`, `=======` and `>>>>>>>` lines. Open it, keep the lines you want, and delete the markers. Then tell Git you are done, and throw away the copy it kept of your edits (they are in the file now):
+
+```bash
+git reset          # mark the conflict as settled; your edits stay in the file
+git stash drop     # the stash is kept after a conflict; this removes it
+```
+
+Then `docker compose up -d --build`. Skip these two commands and the next `git pull` or `git stash` refuses to run.
 
 > ⚠️ **Don't "fix" this with `git checkout -- docker-compose.yml`.** That throws your customizations away and restores the shipped file — you'd lose your ports, your proxy setup, everything you changed.
 
@@ -606,6 +613,15 @@ server {
         proxy_set_header        X-Forwarded-Proto $scheme;
         proxy_read_timeout      600s;
         proxy_send_timeout      600s;
+    }
+
+    # Health check → backend, so an uptime monitor gets the backend's own
+    # answer (503 when the database is unreachable) and not the web page
+    location = /health {
+        proxy_pass         http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_read_timeout 10s;
     }
 
     # API → backend
@@ -1139,11 +1155,13 @@ Characters made from the built-in templates of those versions keep some of their
 
 ```bash
 # See what would change, without writing anything
-docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend npm run migrate:sheet-fields
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js
 ```
+
+Without Docker, run the same two commands from the `backend` folder, without `docker compose exec backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
 
 Running it twice is harmless. Details in
 [backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).

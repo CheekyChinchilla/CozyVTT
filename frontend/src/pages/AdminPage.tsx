@@ -2780,7 +2780,7 @@ export default function AdminPage() {
       <ConfirmDialog
         isOpen={showRestoreConfirm}
         title="Restore Backup"
-        message="WARNING: This will permanently overwrite the entire database and all uploaded files with the contents of the backup. This cannot be undone. Are you sure you want to continue?"
+        message="This replaces the whole database with the backup's and copies the backup's uploaded files over yours, and it signs everyone out, you included. A backup of the database as it is now is saved to the backup list first, so it can be put back. Continue?"
         confirmLabel="Restore Backup"
         variant="danger"
         isLoading={restoring}

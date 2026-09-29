@@ -52,7 +52,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
   echo "$NEW_PASSWORD"
   ```
 
-  Put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` if you wrote that by hand; use your own user name in place of `cozyvtt` if you changed `DATABASE_USER`), then run `docker compose up -d`. See [Changing the database password](docs/DEPLOYMENT.md#changing-the-database-password).
+  Put the printed value in `.env` as `DATABASE_PASSWORD`, then run `docker compose up -d`. If you changed `DATABASE_USER` or `DATABASE_NAME`, use your own names in place of `cozyvtt` (the refusal message prints the command with your names filled in). See [Changing the database password](docs/DEPLOYMENT.md#changing-the-database-password).
 - **Without Docker, make the database role own the database and its `public` schema.** Restoring a backup now recreates the `public` schema, which only its owner may do. Docker installs already have this. On a manual install, run these once, with your own names if you changed them (the second is needed on PostgreSQL 14, or on a database first created on 14, and is harmless on newer versions):
 
   ```bash
@@ -210,7 +210,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The command-line restore script no longer deletes your database before the backup has loaded.** It checks the file first, ignores ownership lines from another instance as the dashboard does, and loads the backup in one step that is undone completely if anything fails.
 
-- **Long backups and restores no longer show as failed while still running.** The page gave up after 30 seconds. It now waits ten minutes for a backup, and for a restore the upload time plus ten minutes, matching the bundled web server.
+- **Long backups and restores no longer show as failed while still running.** The page gave up after 30 seconds. It now waits ten minutes for a backup, as the bundled web server does. For a restore it sets no limit of its own, so a slow upload is not cut off; the web server still ends a restore that goes ten minutes without an answer.
 
 - **A backup appears in the list only once it is complete.** Another admin could download or delete one that was still being written. What an interrupted backup leaves behind is cleared the next time the list is opened.
 
@@ -240,7 +240,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The API's character validation check reports real problems.** It answered "valid" for every sheet. Saving a sheet was never affected.
 
-- **Guides and in-app text corrected.** The user, player and DM guides now name controls as they appear on screen and describe what players see during play. The deployment guide's API checks work as printed, it shows how to install PostgreSQL 15 on Ubuntu 22.04, and the restore script says how to find the port to check afterwards. In the app, the pause banners say that a player's dice rolls stay on their own screen while paused (they were described as secret), the account and campaign deletion warnings say what is kept, and the upload window names its scopes in plain words.
+- **Guides and in-app text corrected.** The user, player and DM guides now name controls as they appear on screen and describe what players see during play. The deployment guide's API checks work as printed, it shows how to install PostgreSQL 15 on Ubuntu 22.04, its command for moving older character sheets now works in the Docker image, its steps for a conflict after `git stash pop` finish the job, and its example nginx configuration for an install without Docker forwards `/health` to the backend. The restore script says how to find the port to check afterwards. In the app, the pause banners say that a player's dice rolls stay on their own screen while paused (they were described as secret), the account and campaign deletion warnings say what is kept, the restore confirmation mentions the safety copy (it said a restore could not be undone), and the upload window names its scopes in plain words.
 
 - **Developer documentation corrections.** The live-event reference now shows who may send each event, and its check fails when the reference is out of date. The API reference describes what the session pause and end routes return.
 
