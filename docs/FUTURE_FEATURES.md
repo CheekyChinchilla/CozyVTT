@@ -225,20 +225,10 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   `apiErrorText` in `frontend/src/utils/errors.ts`, which returns
   `data.error` — so the fix is now one helper rather than a change per page,
   plus a decision about whether any endpoint relies on `error` carrying
-  something a user should read. Note the 429
-  path is fine: the rate limiter replies with a bare string rather than JSON, so
-  the status branch handles it and the wording is already correct.
-
-- **Map events still die on a reconnect.** `frontend/src/services/socket.ts` keeps
-  a listener registry so subscriptions survive the socket being replaced, and the
-  components fixed in 1.2.2 go through it. `MapCanvas.tsx` does not: twenty subscriptions there (walls, fog, lights, spirit layer, map changes,
-  pings, token appear/disappear) still bind straight to `socket.getSocket()`, so
-  they are lost when the underlying socket is rebuilt and never re-attached. The
-  pairs are symmetric, so nothing leaks — the events simply stop arriving until
-  the page is reloaded. `token.moved` and the initiative and session listeners
-  were converted as they were touched; the rest is a mechanical sweep, changing
-  `socketInstance.on(...)` to the typed `socket.onXxx(...)` wrappers and
-  `socketInstance.off(...)` to `socket.off(...)`.
+  something a user should read. A 429 from
+  the sign-in limiter is a bare string, so the status branch handles it and the
+  wording is right; the MFA limiters in `routes/auth.ts` reply with JSON whose
+  `error` is "Rate Limited", so the MFA page shows only that label.
 
 - **Advantage on initiative.** Initiative is worked out per system in
   `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll — a
@@ -303,19 +293,12 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   sorcerer. Only affects sheets that never set it, and the DM can correct it by
   hand, so it is a default worth improving rather than a miscalculation.
 
-- **`docs/API_REFERENCE.md` covers 80 of 153 routes.** Deliberate after the
+- **`docs/API_REFERENCE.md` covers 81 of 154 routes.** Deliberate after the
   2026-09-01 documentation pass: it is a hand-written guide to the endpoints
   people ask about, and `backend/docs/API_DOCUMENTATION.yaml` is the complete
   list. `scripts/spec-coverage.py` enforces the split — the spec must be
   complete, the guide must not invent routes. Worth revisiting only if the guide
   starts being treated as exhaustive again.
-
-- **`any` in test files.** *Finished.* The burn-down cleared every explicit
-  `any` from production code in both projects first, and the test files were
-  left for later so those diffs stayed readable. They have since been cleared
-  too, in both projects, and both ESLint allowlists are gone:
-  `@typescript-eslint/no-explicit-any` now applies to every file, tests
-  included. Nothing is left to do here.
 
 - **Campaign creation is uncapped, so the per-campaign notes limit is not a real
   ceiling.** A personal note is capped at 100,000 characters and 200 notes per
@@ -331,23 +314,6 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   the DM sees a bare gateway error rather than "could not reach the creature
   source". Reproduced on 2026-09-03 with the host unreachable. Wants a timeout on
   the fetch and an error the UI can explain.
-
-- **Only maps check an asset reference at write time.** `canReadAsset` grants a
-  read when an asset is *used* by a map, character, creature template or token
-  template in a campaign the viewer and the uploader are both in. That is the
-  right rule, but only `routes/maps.ts` calls `canReadAssetById` before storing
-  a reference — `characters.ts`, `creatures.ts` and `tokenTemplates.ts` store
-  one unchecked. So a campaign co-member can point their own character's
-  `tokenImageUrl` at another member's `USER`-scoped asset and gain read access
-  to it. Low severity and not a hole anyone can walk through: it grants viewing
-  only, needs a shared campaign with the uploader, and needs the asset's UUID,
-  which the listing route never discloses (it filters `USER` assets to
-  `uploadedById: userId`). Found 2026-09-04 reviewing 1.3.0 before merge. The
-  fix is the write-time check the map route already has, applied to the other
-  three — the same one-fact-two-places shape the read side was consolidated to
-  avoid.
-
-- **Token moves bypass the spirit-plane filter.** *Fixed in 1.5.0.* The move fan-out applies `filterTokensByRole` before line of sight, and a drag's frames go only to those who could see the token where it began, so hidden tokens, DM notes and the wrong plane never reach a player on a move.
 
 - **A lit map is black for a player in the spirit realm.** Dynamic lighting draws
   vision from the player's own tokens, and a player in the spirit realm receives
