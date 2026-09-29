@@ -137,6 +137,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // and only that: the segment they send is otherwise ignored, so the door
       // stays where the DM drew it. Storing the whole segment let a player
       // move or stretch any unlocked door across the map by toggling it.
+      // TODO(maps): a player's toggle is not checked against sight, so they
+      // can open a door none of their tokens can see, and "That door is
+      // locked" tells them a door is there. Refuse a toggle of a door the
+      // player's tokens cannot see; MapCanvas should stop offering it too.
       let updated: WallSegment;
       if (socket.role !== 'DM') {
         const targetType = parsed.data.type;

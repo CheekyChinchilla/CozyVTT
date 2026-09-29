@@ -41,6 +41,11 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       },
     });
     const dmOf = (c: (typeof owned)[number]) => c.memberships.find((m) => m.role === 'DM')?.userId;
+    // TODO(accounts): only campaigns the user owns are checked. After a DM
+    // handover the DM need not be the owner, and deleting that DM's account
+    // leaves the campaign with no DM until the owner hands the seat to someone
+    // (PUT /:campaignId/dm). Refuse, and list in `runs`, every campaign the
+    // user is DM of, so an admin can hand it on first.
     const runs = owned
       .filter((c) => dmOf(c) === undefined || dmOf(c) === userId)
       .map((c) => ({
