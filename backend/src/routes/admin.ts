@@ -950,6 +950,9 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
+    // TODO(restore): a restore's upload is saved here as restore-temp-<ms>.zip
+    // and removed only when the request ends, so a backend stopped mid-restore
+    // leaves it behind for good. Clear stale restore-temp files here too.
     // A partial file no backup here is writing was left by a backend stopped
     // partway through one; it can never be finished, and it is the size of a
     // backup.

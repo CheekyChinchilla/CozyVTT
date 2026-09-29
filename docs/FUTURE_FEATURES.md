@@ -91,6 +91,7 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **The sign-in and MFA pages show the reply's short error label** ("Authentication Failed", "Invalid Code", "Rate Limited") instead of its sentence. Described under Polish / tech debt as "Sign-in errors show a status label instead of the helpful sentence" (`LoginPage.tsx`, `MFAVerifyPage.tsx`).
 - **"Back to login" on the MFA code page loops back to the code page,** because the pending sign-in is still set (`MFAVerifyPage.tsx`).
 - **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
+- **Two setup-wizard requests racing each other both change the instance's settings.** In `routes/setup.ts` only the first becomes the administrator, but the second still applies its own wizard settings (registration open, instance name), completes setup and is signed in. Only the request that created the administrator should apply settings.
 - **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
 
 ### Server and deployment
@@ -99,6 +100,7 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **The Backups list's bin icon deletes a backup without asking** (`AdminPage.tsx`).
 - **The bundled nginx keeps the backend's address from its own start,** so recreating only the backend container can leave `/api` answering 502 until nginx is restarted. A `resolver` with a variable upstream in `nginx/nginx.conf` would fix it; the file carries no TODO because any change to it needs a new `NGINX_CONF_STAMP` in `docker-compose.yml`.
 - **Restoring a file that is not a ZIP, or whose name does not end in .zip, shows only "An unexpected error occurred"** (`routes/admin.ts`).
+- **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
 
 ---
 
