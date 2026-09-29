@@ -104,7 +104,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Saving a sheet no longer undoes hit point changes the DM made.** A sheet open on the campaign page now follows hit point changes made from the roster. Saving from a sheet that has changed since it was opened is refused with a message, and the sheet reopens with the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save. A program saving through the API can ask for the same check by sending the `updatedAt` it loaded.
 
-- **A refused save keeps your edits.** The full-page character editor replaced the sheet with "Failed to Load Character" and lost everything typed since the last save. It now shows the reason and keeps the sheet open.
+- **A save refused over a bad value keeps your edits.** The full-page character editor replaced the sheet with "Failed to Load Character" and lost everything typed since the last save. It now shows the reason and keeps the sheet open, so the value can be corrected. (A save refused because the sheet changed elsewhere reloads it, as described above.)
 
 - **An emptied text box no longer stops a sheet saving.** Clearing Background or Alignment (D&D 5e and Pathfinder 2e), Deity or an innate spell's frequency (Pathfinder 2e), or Sex, Residence, Birthplace or a weapon's skill (Call of Cthulhu) made the server refuse the save. Empty boxes now save as empty.
 
