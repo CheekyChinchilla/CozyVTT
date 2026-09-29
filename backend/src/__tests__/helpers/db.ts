@@ -6,6 +6,7 @@
  * with existing data in the dev database.
  */
 
+import { randomUUID } from 'crypto';
 import { PrismaClient, PlatformRole, GameSystem } from '@prisma/client';
 import { hashPassword } from '../../services/auth';
 
@@ -14,11 +15,18 @@ export const prisma = new PrismaClient();
 // Shared plaintext password used across test helpers
 export const TEST_PASSWORD = 'TestPass1!Cozy';
 
+let emailCounter = 0;
+
 /**
- * Generate a unique test email to avoid collisions between test runs
+ * Generate a unique test email to avoid collisions between test runs.
+ *
+ * The millisecond alone is not enough: users are created several at once, and
+ * jest runs files in parallel against one database. The counter separates
+ * calls in this worker, the random part separates workers.
  */
 export function testEmail(label: string): string {
-  return `test_${label}_${Date.now()}@test.invalid`;
+  emailCounter += 1;
+  return `test_${label}_${Date.now()}_${emailCounter}_${randomUUID().slice(0, 8)}@test.invalid`;
 }
 
 /**
