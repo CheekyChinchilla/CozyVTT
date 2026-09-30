@@ -136,6 +136,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The screen and the server agree on what a player can see.** Each had its own copy of the sight calculation, and they disagreed near the edge of a light, so a creature could be drawn lit that the server never sent, or the reverse. Both now run the same code.
 
+- **Move to Map… includes maps made after the page loaded.** The right-click submenu that sends a token to another map read a list written only when the page opened, so a map created or imported during the session was missing until a reload, a renamed one kept its old name, and a deleted one was still offered. The list now follows the Map Library.
+
 - **Wall and fog changes made through the API reach players' open maps at once.** They used to show only after a reload.
 
 - **Revealed fog no longer looks lost after a refresh.** On some instances the DM's page loaded a fogged map with no fog: no tint on their own view, a fully covered Player Preview, and reveal boxes that could not be dragged. Nothing was lost on the server. The page now waits for its live connection before asking for the fog, and asks again after a reconnect, and turning fog on sends it to everyone at once. Explored memory had the same problem and the same fix.

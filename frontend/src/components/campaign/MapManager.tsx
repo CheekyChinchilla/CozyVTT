@@ -295,7 +295,7 @@ function MapCard({
 // ============================================
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
-  const { campaign, currentMap, setCurrentMap } = useCampaign();
+  const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
   const { socket } = useWebSocket();
 
   const [maps, setMaps] = useState<Map[]>([]);
@@ -362,10 +362,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   const handleCreated = (map: Map) => {
     setMaps((prev) => [map, ...prev]);
+    upsertCampaignMap(map);
   };
 
   const handleUpdated = (updated: Map) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    upsertCampaignMap(updated);
     // If the updated map is the current one, refresh context
     if (currentMap?.id === updated.id) {
       setCurrentMap(updated);
@@ -399,6 +401,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       await mapService.deleteMap(campaign.id, map.id);
       setMaps((prev) => prev.filter((m) => m.id !== map.id));
+      removeCampaignMap(map.id);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to delete map.');
     }
@@ -417,6 +420,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       const result = await mapService.importUVTT(campaign.id, file, undefined, undefined, opts);
       setMaps((prev) => [result.map, ...prev]);
+      upsertCampaignMap(result.map);
       const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
       const parts = [count(result.totalSegments, 'wall segment')];
       if (result.portalCount > 0) parts.push(count(result.portalCount, 'door'));

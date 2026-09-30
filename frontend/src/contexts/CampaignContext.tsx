@@ -61,6 +61,14 @@ interface CampaignContextState {
    */
   catchUpAfterReconnect: () => Promise<void>;
   setCurrentMap: (map: Map | null) => void;
+  /**
+   * Keep `campaign.maps` in step with the Map Library: insert a created or
+   * imported map, or replace a renamed one by id. The Move to Map… submenu
+   * reads that list, so a map missing from it cannot be a move target.
+   */
+  upsertCampaignMap: (map: Map) => void;
+  /** Drop a deleted map from `campaign.maps`. */
+  removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
   /** DM-only local preference: show both planes simultaneously or only the active one */
@@ -318,6 +326,25 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     setCampaign((prev) => (prev ? { ...prev, status } : null));
   }, []);
 
+  // Keep campaign.maps in step with the Map Library (create, rename, import).
+  const upsertCampaignMap = useCallback((map: Map) => {
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      const maps = prev.maps ?? [];
+      return maps.some((m) => m.id === map.id)
+        ? { ...prev, maps: maps.map((m) => (m.id === map.id ? map : m)) }
+        : { ...prev, maps: [map, ...maps] };
+    });
+  }, []);
+
+  // Drop a deleted map from campaign.maps.
+  const removeCampaignMap = useCallback((mapId: string) => {
+    setCampaign((prev) => {
+      if (!prev?.maps) return prev;
+      return { ...prev, maps: prev.maps.filter((m) => m.id !== mapId) };
+    });
+  }, []);
+
   // Update atmosphere effect (called by AtmospherePlayer on WS broadcast)
   const updateAtmosphereEffect = useCallback((effect: string | null) => {
     setActiveAtmosphereEffect(effect);
@@ -467,6 +494,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     refreshCurrentMap,
     catchUpAfterReconnect,
     setCurrentMap,
+    upsertCampaignMap,
+    removeCampaignMap,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     setDmViewBothPlanes,
@@ -495,6 +524,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     refreshCampaign,
     refreshCurrentMap,
     catchUpAfterReconnect,
+    upsertCampaignMap,
+    removeCampaignMap,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     playerSpiritVisible,
