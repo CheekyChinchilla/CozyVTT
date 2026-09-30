@@ -3,7 +3,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
+import { canDeleteCampaign, canTransferDM, canReadMap, canReadAsset } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
@@ -12,6 +12,7 @@ import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
@@ -471,6 +472,35 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
         error: 'Validation Error',
         message: validationError,
       });
+    }
+
+    // A period's audio names an asset the whole table fetches while that
+    // period is the vibe, so the save asks the same question the ambient
+    // setter asks: may this DM open this track to the room? Never as an
+    // admin, for the same reason the setter refuses that.
+    const checkedAudio = new Map<string, boolean>();
+    for (const period of (vibeSettings as VibeSettings).periods) {
+      if (period.audio == null) continue;
+      const assetId = vibePeriodAudioAssetId(period.audio);
+      let allowed = false;
+      if (assetId) {
+        if (checkedAudio.has(assetId)) {
+          allowed = checkedAudio.get(assetId) === true;
+        } else {
+          const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+          allowed = !!asset
+            && asset.type === 'AUDIO'
+            && !(asset.scope === 'CAMPAIGN' && asset.campaignId !== campaignId)
+            && (await canReadAsset(asset, req.session.userId!, false));
+          checkedAudio.set(assetId, allowed);
+        }
+      }
+      if (!allowed) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `The "${period.name}" period's audio must be an audio track available to this campaign, or none`,
+        });
+      }
     }
 
     // If campaign has a currentVibe, verify it still exists in the new periods

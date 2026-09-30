@@ -29,7 +29,7 @@ export const DEFAULT_VIBE_PERIODS: VibePeriod[] = [
     name: 'dawn',
     hue: '#FFB88C',
     filter: 'brightness(0.9) saturate(1.1)',
-    audio: 'birds_chirping.mp3',
+    audio: null,
   },
   {
     name: 'day',
@@ -41,13 +41,13 @@ export const DEFAULT_VIBE_PERIODS: VibePeriod[] = [
     name: 'dusk',
     hue: '#FF9966',
     filter: 'brightness(0.85) saturate(1.3) hue-rotate(10deg)',
-    audio: 'evening_breeze.mp3',
+    audio: null,
   },
   {
     name: 'night',
     hue: '#1A1A2E',
     filter: 'brightness(0.6) saturate(0.7) contrast(1.1)',
-    audio: 'night_crickets.mp3',
+    audio: null,
   },
 ];
 
