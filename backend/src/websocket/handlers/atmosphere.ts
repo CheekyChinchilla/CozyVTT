@@ -7,7 +7,7 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { readJsonObject, toJson } from '../../utils/prisma-json';
-import { canReadAsset } from '../../services/permissions';
+import { setCampaignAmbientAudio } from '../../services/atmosphereAudio';
 
 export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -72,72 +72,14 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
         socket.emit('error', { message: 'Only the DM can control ambient audio' });
         return;
       }
-      const userId = socket.userId;
 
-      let audioUrl: string | null = null;
-
-      if (data.assetId) {
-        const asset = await prisma.asset.findUnique({
-          where: { id: data.assetId },
-        });
-
-        if (!asset || asset.type !== 'AUDIO') {
-          socket.emit('error', { message: 'Audio asset not found' });
-          return;
-        }
-
-        // Verify asset is accessible to this campaign (global or belongs to this campaign)
-        if (asset.scope === 'CAMPAIGN' && asset.campaignId !== socket.campaignId) {
-          socket.emit('error', { message: 'Asset does not belong to this campaign' });
-          return;
-        }
-
-        // Never as an admin, whatever this DM's platform role. An admin may
-        // read any file, but setting one here is not reading it: it opens the
-        // file to everyone at the table. A track meant for a table belongs in
-        // the global library.
-        if (!(await canReadAsset(asset, userId, false))) {
-          socket.emit('error', { message: 'Audio asset not found' });
-          return;
-        }
-
-        audioUrl = `/api/assets/audio/${data.assetId}`;
+      const result = await setCampaignAmbientAudio(io, socket.campaignId, socket.userId, data.assetId ?? null, {
+        volume: data.volume,
+        loop: data.loop,
+      });
+      if (!result.ok) {
+        socket.emit('error', { message: result.message ?? 'Failed to set atmosphere audio' });
       }
-
-      const volume = typeof data.volume === 'number'
-        ? Math.min(1, Math.max(0, data.volume))
-        : 0.5;
-      const loop = data.loop !== false; // default true
-
-      // Persist atmosphere audio state alongside existing vibeSettings keys
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: socket.campaignId },
-        select: { vibeSettings: true },
-      });
-      const existing = readJsonObject(campaign?.vibeSettings) ?? {};
-
-      await prisma.campaign.update({
-        where: { id: socket.campaignId },
-        data: {
-          vibeSettings: toJson({
-            ...existing,
-            atmosphereAudio: data.assetId
-              ? { assetId: data.assetId, volume, loop }
-              : null,
-          }),
-        },
-      });
-
-      io.to(socket.campaignId).emit('atmosphere.audio.updated', {
-        assetId: data.assetId,
-        audioUrl,
-        volume,
-        loop,
-        setBy: socket.userId,
-        timestamp: new Date().toISOString(),
-      });
-
-      logger.info('atmosphere.audio.set', { assetId: data.assetId ?? 'none', userId: socket.userId, campaignId: socket.campaignId });
     } catch (error) {
       logger.error('atmosphere.audio.set failed', { err: error });
       socket.emit('error', { message: 'Failed to set atmosphere audio' });
