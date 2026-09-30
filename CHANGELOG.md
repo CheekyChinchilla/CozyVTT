@@ -368,7 +368,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Behind a Cloudflare Tunnel or another proxy, one person's wrong passwords no longer lock everyone out.** nginx passed every visitor on with the proxy's address, so every per-address limit was shared by everyone. It now passes on each visitor's own address, trusting the proxy's word only when it connects from a private address. The deployment guide shows how to check which address CozyVTT sees, and what to add for a proxy on a public address.
 
-- **Dependencies updated for published advisories.** Every advisory `npm audit` reported against the running application is fixed. Two remaining advisories in the routing library need a major upgrade and do not apply here, since no navigation target in the app comes from user input. The OpenAI client library, which nothing used, is removed.
+- **Dependencies updated for published advisories.** Every advisory `npm audit` reported against the running application is fixed, including two that appeared during release testing: the email library (nodemailer, moved to version 10; the advisory needed several mail servers in one process, which an instance never has) and the live-connection transport (engine.io, updated in range). Two remaining advisories in the routing library need a major upgrade and do not apply here, since no navigation target in the app comes from user input. The OpenAI client library, which nothing used, is removed.
 
 ---
 

@@ -223,7 +223,7 @@ unzipper 0.12.3
   License: MIT
   https://github.com/ZJONSSON/node-unzipper
 
-nodemailer 9.0.3
+nodemailer 10.0.12
   Copyright (c) Andris Reinman
   License: MIT-0
   https://github.com/nodemailer/nodemailer
