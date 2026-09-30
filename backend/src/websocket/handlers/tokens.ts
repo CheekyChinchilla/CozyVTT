@@ -316,8 +316,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // To those decided when the drag began (on a lit map, those who could
-      // see the token there), not decided again for every frame.
-      await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y });
+      // see the token there), not decided again for every frame. Marked as a
+      // frame: a page draws the token where it is being carried but leaves
+      // where it stands, which decides sight and explored memory, until the
+      // drop, so carrying a player's token about reveals nothing on the way.
+      await emitMoveToDragRecipients('token.moved', movingToken, mapId, { tokenId, mapId, x, y, dragging: true });
     } catch (error) {
       logger.error('token.move failed', { err: error });
     }

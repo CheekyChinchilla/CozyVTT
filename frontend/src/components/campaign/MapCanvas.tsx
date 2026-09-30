@@ -129,6 +129,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // socket handlers write there directly (outside React), and this
   // subscription is what re-renders the canvas per token change.
   const tokens = useTokenList();
+  const heldAt = useGameStore((s) => s.heldAt);
   // Whose turn it is, for the active-combatant ring. Narrow selector: this
   // changes on turn advance only, not when a combatant's HP ticks.
   const currentTurnTokenId = useCurrentTurnTokenId();
@@ -958,13 +959,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const store = useGameStore.getState();
       const token = store.tokens[event.tokenId];
       if (!token) return;
+      // Glide from where it is drawn, which is where it is held while someone
+      // carries it.
+      const from = store.heldAt[event.tokenId] ?? token.position;
 
       // Start animation from current position to new position
       setAnimatingTokens((prev) => {
         const newMap = new Map(prev);
         newMap.set(event.tokenId, {
-          fromX: token.position.x,
-          fromY: token.position.y,
+          fromX: from.x,
+          fromY: from.y,
           toX: event.x,
           toY: event.y,
           startTime: Date.now(),
@@ -974,8 +978,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       });
 
       // Store writes are synchronous — subsequent handlers in the same
-      // macro-task (e.g. token:appeared for NPCs) see the correct state.
-      store.applyTokenMove(event.tokenId, { x: event.x, y: event.y });
+      // macro-task (e.g. token:appeared for NPCs) see the correct state. A
+      // drag frame only moves where the token is drawn; sight, lighting and
+      // explored memory follow it when it is put down.
+      store.receiveTokenMove(event.tokenId, { x: event.x, y: event.y }, event.dragging === true);
     };
 
     // Listen for token moved events.
@@ -1737,6 +1743,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       tokens: drawn,
       tokenImages,
       animatingTokens,
+      heldAt,
       now: Date.now(),
       // In a preview the ghost is the token as the viewer is sent it, or
       // nothing when the viewer would not have it at all.
@@ -1758,7 +1765,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light

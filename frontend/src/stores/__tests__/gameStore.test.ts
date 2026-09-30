@@ -118,6 +118,52 @@ describe('gameStore actions', () => {
   });
 });
 
+// A token someone else is carrying: the frames move where it is drawn, and
+// only the drop moves where it stands, which is what sight, lighting and
+// explored memory read. Without that, a DM carrying a player's token about
+// showed that player everything along the way and saved it to their memory.
+describe('receiveTokenMove', () => {
+  beforeEach(() => {
+    useGameStore.getState().setTokens([makeToken('a', { position: { x: 2, y: 3 } })]);
+  });
+
+  it('a drag frame moves where the token is drawn, never where it stands', () => {
+    useGameStore.getState().receiveTokenMove('a', { x: 9, y: 3 }, true);
+    const s = useGameStore.getState();
+    expect(s.tokens.a.position).toEqual({ x: 2, y: 3 });
+    expect(s.heldAt.a).toEqual({ x: 9, y: 3 });
+  });
+
+  it('the drop moves where it stands and forgets where it was carried', () => {
+    const store = useGameStore.getState();
+    store.receiveTokenMove('a', { x: 9, y: 3 }, true);
+    store.receiveTokenMove('a', { x: 10, y: 4 }, false);
+    const s = useGameStore.getState();
+    expect(s.tokens.a.position).toEqual({ x: 10, y: 4 });
+    expect(s.heldAt.a).toBeUndefined();
+  });
+
+  it('a frame back to where it stands ends the hold, as a cancelled drag sends', () => {
+    const store = useGameStore.getState();
+    store.receiveTokenMove('a', { x: 9, y: 3 }, true);
+    store.receiveTokenMove('a', { x: 2, y: 3 }, true);
+    const s = useGameStore.getState();
+    expect(s.tokens.a.position).toEqual({ x: 2, y: 3 });
+    expect(s.heldAt.a).toBeUndefined();
+  });
+
+  it('a new token list, or the token leaving, forgets the hold', () => {
+    const store = useGameStore.getState();
+    store.receiveTokenMove('a', { x: 9, y: 3 }, true);
+    store.removeToken('a');
+    expect(useGameStore.getState().heldAt.a).toBeUndefined();
+    store.setTokens([makeToken('a')]);
+    store.receiveTokenMove('a', { x: 9, y: 3 }, true);
+    store.setTokens([makeToken('a')]);
+    expect(useGameStore.getState().heldAt).toEqual({});
+  });
+});
+
 describe('selector hooks', () => {
   it('useTokenList re-renders on token movement (canvas needs live positions)', () => {
     useGameStore.getState().setTokens([makeToken('a')]);

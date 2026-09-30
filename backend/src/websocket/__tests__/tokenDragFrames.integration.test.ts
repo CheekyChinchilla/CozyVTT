@@ -151,6 +151,32 @@ describe('drag frames on a lit map', () => {
   });
 });
 
+// A frame says where a token is being carried; the drop, where it stands. A
+// page moves sight and explored memory only for the second, so a DM carrying
+// a player's token about reveals nothing to that player on the way.
+describe('a drag frame and the drop', () => {
+  it('are told apart: every frame is marked as dragging, the drop is not', async () => {
+    await resetMap(false, false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const frame = waitForEvent<{ tokenId: string; x: number; dragging?: boolean }>(player, 'token.moved');
+    drag(dm, OWN, [7]);
+    expect(await frame).toMatchObject({ tokenId: OWN, x: 7, dragging: true });
+
+    const drop = new Promise<{ tokenId: string; x: number; dragging?: boolean }>((resolve) => {
+      player.on('token.moved', (e: { tokenId: string; x: number; dragging?: boolean }) => { if (e.x === 8) resolve(e); });
+    });
+    dm.emit('token.move.end', { tokenId: OWN, mapId, x: 8, y: 5 });
+    const dropped = await drop;
+    expect(dropped).toMatchObject({ tokenId: OWN, x: 8 });
+    expect(dropped.dragging).toBeUndefined();
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
 describe('drag frames on an unlit map', () => {
   it('still reach every player, as the map fetch sends every visible token', async () => {
     await resetMap(false, false);

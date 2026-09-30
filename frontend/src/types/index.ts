@@ -1136,6 +1136,11 @@ export interface TokenMovedEvent {
   y: number;
   /** Null for anyone but the DM and the mover while the token is obscured. */
   movedBy: string | null;
+  /**
+   * Set on a frame of a drag still in progress; absent on the drop. A frame is
+   * where the token is being carried, not where it stands.
+   */
+  dragging?: true;
 }
 
 // Dice Roll Events

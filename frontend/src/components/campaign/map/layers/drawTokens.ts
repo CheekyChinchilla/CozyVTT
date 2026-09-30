@@ -21,6 +21,11 @@ export interface TokenDrawState {
   tokens: readonly Token[];
   tokenImages: ReadonlyMap<string, HTMLImageElement>;
   animatingTokens: ReadonlyMap<string, TokenAnimation>;
+  /**
+   * Where a token someone else is carrying is drawn (the store's `heldAt`).
+   * Only its picture moves; everything else reads `token.position`.
+   */
+  heldAt: Readonly<Record<string, { x: number; y: number }>>;
   /** Timestamp for tween progress (Date.now() at frame time). */
   now: number;
   draggedToken: Token | null;
@@ -180,8 +185,9 @@ export function drawTokens(
 
     // Check if token is animating
     const animation = state.animatingTokens.get(token.id);
-    let posX = token.position.x;
-    let posY = token.position.y;
+    const at = state.heldAt[token.id] ?? token.position;
+    let posX = at.x;
+    let posY = at.y;
 
     if (animation) {
       const elapsed = state.now - animation.startTime;

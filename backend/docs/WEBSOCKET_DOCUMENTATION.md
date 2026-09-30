@@ -479,6 +479,7 @@ problem. `token.move.end` answers properly.
   mapId: string;
   x: number;
   y: number;
+  dragging: true;          // always set on a frame; absent on the drop
   movedBy: string | null;
 }
 ```
@@ -497,6 +498,8 @@ socket.on('token.move', (data) => {
 
 **Client-Side Best Practice:**
 
+> A frame is marked `dragging: true`, and the drop's `token.moved` is not. Treat a frame as where the token is being carried: draw it there, but keep the token's position, and so the sight, lighting and explored memory that follow from it, where it was until the drop arrives. A frame that returns the token to its own position ends the hold.
+>
 > A cancelled drag must send one more `token.move` back to the square the token was picked up from. The server writes nothing for a cancel, and without that frame every other client keeps showing the last position it received.
 
 ```javascript

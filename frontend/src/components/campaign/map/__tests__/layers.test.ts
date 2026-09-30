@@ -126,6 +126,7 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     tokens: [],
     tokenImages: new Map(),
     animatingTokens: new Map(),
+    heldAt: {},
     now: Date.now(),
     draggedToken: null,
     dragOffset: null,
@@ -247,6 +248,18 @@ describe('drawTokens', () => {
     expect(arcIdx).toBeGreaterThanOrEqual(0);
     expect(clipIdx).toBeGreaterThan(arcIdx);
     expect(drawIdx).toBeGreaterThan(clipIdx);
+  });
+
+  // Someone else is carrying it: drawn where the frames put it, while the
+  // position that sight and explored memory read stays where it was.
+  it('draws a token someone is carrying where it is held', () => {
+    const firstArcX = (heldAt: Record<string, { x: number; y: number }>) => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({ tokens: [makeToken('a')], tokenImages: new Map([['a', fakeImage]]), heldAt }), viewport3x3);
+      return ctx.calls.find((c) => c.method === 'arc')?.args[0];
+    };
+    expect(firstArcX({})).toBe(25);
+    expect(firstArcX({ a: { x: 2, y: 0 } })).toBe(125);
   });
 
   it('full-art tokens clip to a rounded rect, not a circle', () => {
