@@ -13,6 +13,7 @@ import {
   Search,
   Loader2,
   BookOpen,
+  Skull,
   Plus,
   Copy,
   ChevronDown,
@@ -362,7 +363,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           >
             {/* ── Header ── */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <BookOpen className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <Skull className="w-5 h-5 text-brand-ink flex-shrink-0" />
               <h2 className="flex-1 text-base font-bold text-brand-ink">
                 Creature Library
               </h2>
@@ -539,7 +540,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 </div>
               ) : creatures.length === 0 ? (
                 <div className="text-center py-12 px-6">
-                  <BookOpen className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
+                  <Skull className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
                   <p className="text-sm text-stone-gray/70">
                     {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
                   </p>

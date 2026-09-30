@@ -9,8 +9,8 @@
 import {
   Map as MapIcon,
   Swords,
-  BookOpen,
-  Package,
+  Skull,
+  Stamp,
   Ghost,
   Cloud,
   Settings,
@@ -40,8 +40,8 @@ const TOOL_GROUPS: ToolDef[][] = [
   [
     { key: 'maps', label: 'Map Library', icon: MapIcon },
     { key: 'tokens', label: 'Token Manager', icon: Swords },
-    { key: 'creatures', label: 'Creature Library', icon: BookOpen },
-    { key: 'templates', label: 'Token Templates', icon: Package },
+    { key: 'creatures', label: 'Creature Library', icon: Skull },
+    { key: 'templates', label: 'Token Templates', icon: Stamp },
   ],
   [
     { key: 'spirit', label: 'Spirit Layer', icon: Ghost },

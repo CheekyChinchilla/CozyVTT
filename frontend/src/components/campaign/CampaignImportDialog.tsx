@@ -11,8 +11,8 @@ import {
   Upload,
   FileArchive,
   Map as MapIcon,
-  Swords,
-  Package,
+  Skull,
+  Stamp,
   Music,
   Loader2,
   CheckCircle2,
@@ -203,8 +203,8 @@ export default function CampaignImportDialog({
                 {/* Archive summary */}
                 <div className="grid grid-cols-2 gap-3">
                   <StatCard icon={<MapIcon className="w-4 h-4" />} label="Maps" value={preview.mapCount} />
-                  <StatCard icon={<Swords className="w-4 h-4" />} label="Creatures" value={preview.creatureCount} />
-                  <StatCard icon={<Package className="w-4 h-4" />} label="Token Templates" value={preview.tokenTemplateCount} />
+                  <StatCard icon={<Skull className="w-4 h-4" />} label="Creatures" value={preview.creatureCount} />
+                  <StatCard icon={<Stamp className="w-4 h-4" />} label="Token Templates" value={preview.tokenTemplateCount} />
                   <StatCard icon={<Music className="w-4 h-4" />} label="Audio" value={preview.includesAudio ? 'Yes' : 'No'} />
                 </div>
 

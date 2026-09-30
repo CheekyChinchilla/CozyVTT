@@ -86,6 +86,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **New maps start with fog of war and dynamic lighting off.** The DM turns either on when a map needs it. A map imported from a Universal VTT file that brings lights starts with lighting on. Existing maps keep their settings.
 
+- **The Creature Library and Token Templates buttons have their own icons**, a skull and a stamp. The Creature Library used the same open book as Campaign documents, and Token Templates a plain box.
+
 - **Spectators can chat but can no longer roll dice.** The dice roller tells them rolling is for players, and the server refuses a roll from them.
 
 ### Fixed

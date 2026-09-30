@@ -325,7 +325,7 @@ The Creature Library is your DM-side catalog of creature templates — stat bloc
 
 ### Opening the Creature Library
 
-Click **Creature Library** in the campaign header's DM toolbar to open the Creature Library panel. The toolbar's buttons are icons; point at one to see its name. The library shows all available creature templates: both **SRD creatures** (imported from Open5e) and **custom creatures** you've created for this campaign.
+Click **Creature Library** (the skull icon) in the campaign header's DM toolbar to open the Creature Library panel. The toolbar's buttons are icons; point at one to see its name. The library shows all available creature templates: both **SRD creatures** (imported from Open5e) and **custom creatures** you've created for this campaign.
 
 ### SRD Creature Seeding
 
@@ -476,7 +476,7 @@ Token templates let you save reusable token configurations — image, stats, HP,
 
 ### Opening the Token Template Library
 
-Click **Token Templates** (the package icon) in the campaign header. The panel slides open from the left, like the Creature Library.
+Click **Token Templates** (the stamp icon) in the campaign header. The panel slides open from the left, like the Creature Library.
 
 ### Creating a Template
 
