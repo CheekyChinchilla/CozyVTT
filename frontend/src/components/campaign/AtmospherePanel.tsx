@@ -35,8 +35,8 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
-import { AssetScope } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { settableAudioAssets } from '@/utils/audioAssets';
 import type { Asset } from '@/types';
 
 // ============================================
@@ -102,21 +102,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
     setLoadingAssets(true);
     setAssetError(null);
     api.listAssets({ type: 'AUDIO' })
-      // The list is wider than what can be played here: it also carries audio
-      // belonging to other campaigns this DM is in, which the server refuses
-      // because a campaign's audio belongs to that table, and other people's
-      // personal tracks are not the DM's to open to the room. Offering one
-      // gave a button that did nothing.
-      .then((r) =>
-        setAudioAssets(
-          (r.assets || []).filter(
-            (a) =>
-              a.scope === AssetScope.GLOBAL ||
-              (a.scope === AssetScope.USER && a.uploadedById === user?.id) ||
-              (a.scope === AssetScope.CAMPAIGN && a.campaignId === campaign.id)
-          )
-        )
-      )
+      .then((r) => setAudioAssets(settableAudioAssets(r.assets || [], user?.id, campaign.id)))
       .catch(() => setAssetError('Failed to load audio assets'))
       .finally(() => setLoadingAssets(false));
   }, [isOpen, campaign, user?.id]);

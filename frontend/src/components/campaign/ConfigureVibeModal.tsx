@@ -7,24 +7,28 @@
  * Saves to PUT /api/campaigns/:id/vibe — backend validates and persists.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Plus, Trash2, RotateCcw, Music } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useAuth } from '@/contexts/AuthContext';
 import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
-import type { VibePeriod, VibeSettings } from '@/types';
+import type { Asset, VibePeriod, VibeSettings } from '@/types';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { assetScopeLabel } from '@/utils/assetUrl';
+import { settableAudioAssets } from '@/utils/audioAssets';
+import { vibePeriodAudioAssetId } from '@/utils/vibeAudio';
 
 // ============================================
 // Default presets (mirrors backend vibe-presets.ts)
 // ============================================
 
 const DEFAULT_PERIODS: VibePeriod[] = [
-  { name: 'dawn', hue: '#FFB88C', filter: 'brightness(0.9) saturate(1.1)', audio: 'birds_chirping.mp3' },
+  { name: 'dawn', hue: '#FFB88C', filter: 'brightness(0.9) saturate(1.1)', audio: null },
   { name: 'day',  hue: '#FFFACD', filter: 'brightness(1.0) saturate(1.0)', audio: null },
-  { name: 'dusk', hue: '#FF9966', filter: 'brightness(0.85) saturate(1.3) hue-rotate(10deg)', audio: 'evening_breeze.mp3' },
-  { name: 'night', hue: '#1A1A2E', filter: 'brightness(0.6) saturate(0.7) contrast(1.1)', audio: 'night_crickets.mp3' },
+  { name: 'dusk', hue: '#FF9966', filter: 'brightness(0.85) saturate(1.3) hue-rotate(10deg)', audio: null },
+  { name: 'night', hue: '#1A1A2E', filter: 'brightness(0.6) saturate(0.7) contrast(1.1)', audio: null },
 ];
 
 // ============================================
@@ -68,11 +72,14 @@ interface PeriodEditorProps {
   period: VibePeriod;
   index: number;
   canDelete: boolean;
+  /** The tracks this DM may open to the table; the picker offers nothing else. */
+  audioAssets: Asset[];
+  audioLoading: boolean;
   onChange: (index: number, updated: VibePeriod) => void;
   onDelete: (index: number) => void;
 }
 
-function PeriodEditor({ period, index, canDelete, onChange, onDelete }: PeriodEditorProps) {
+function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onChange, onDelete }: PeriodEditorProps) {
   const filterVals = parseFilter(period.filter ?? '');
 
   const updateFilterVal = (key: keyof FilterValues, val: number) => {
@@ -226,21 +233,33 @@ function PeriodEditor({ period, index, canDelete, onChange, onDelete }: PeriodEd
         </div>
       </div>
 
-      {/* Audio note */}
+      {/* Audio track */}
       <div>
         <label className="block text-xs font-medium text-stone-gray mb-1">
           <Music className="w-3 h-3 inline mr-1" />
-          Audio Note (optional)
+          Audio Track (optional)
         </label>
-        <input
-          type="text"
-          value={period.audio ?? ''}
+        <select
+          value={(() => {
+            const id = vibePeriodAudioAssetId(period.audio);
+            return id && audioAssets.some((a) => a.id === id) ? id : '';
+          })()}
           onChange={(e) => onChange(index, { ...period, audio: e.target.value || null })}
           className="input-cozy w-full"
-          placeholder="e.g. birds_chirping.mp3"
-        />
+          disabled={audioLoading}
+          aria-label={`Audio track for ${period.name}`}
+        >
+          <option value="">{audioLoading ? 'Loading audio library…' : 'No audio'}</option>
+          {audioAssets.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} ({assetScopeLabel(a.scope)})
+            </option>
+          ))}
+        </select>
         <p className="text-xs text-warm-gray mt-1">
-          Use the Atmosphere panel during a session to sync ambient audio in real time for all players.
+          Loops for everyone while this period is the vibe. A period with no
+          audio silences the table when chosen. Upload tracks in the Asset
+          Library (type: Audio).
         </p>
       </div>
     </div>
@@ -257,6 +276,7 @@ interface ConfigureVibeModalProps {
 
 export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps) {
   const { campaign, updateVibeSettings } = useCampaign();
+  const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
 
   // Initialize local state from campaign's current vibeSettings
@@ -264,6 +284,28 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
     () => (campaign?.vibeSettings?.periods ?? DEFAULT_PERIODS).map((p) => ({ ...p }))
   );
   const [isSaving, setIsSaving] = useState(false);
+
+  // The tracks the picker may offer, the same set the Atmosphere panel plays from
+  const [audioAssets, setAudioAssets] = useState<Asset[]>([]);
+  const [audioLoading, setAudioLoading] = useState(true);
+  const [audioListFailed, setAudioListFailed] = useState(false);
+  useEffect(() => {
+    if (!campaign) return;
+    let cancelled = false;
+    api.listAssets({ type: 'AUDIO' })
+      .then((r) => {
+        if (!cancelled) setAudioAssets(settableAudioAssets(r.assets || [], user?.id, campaign.id));
+      })
+      .catch(() => {
+        if (!cancelled) setAudioListFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAudioLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign, user?.id]);
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
@@ -325,6 +367,17 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
     if (!campaign) return;
 
+    // The server refuses a save whose audio is not a track this DM may set,
+    // so a free-text note from the old field, or a track that has since gone,
+    // saves as no audio. When the library failed to load the values pass
+    // through untouched, so a blip cannot silently strip every period.
+    const knownTrack = (audio: VibePeriod['audio']): string | null => {
+      const id = vibePeriodAudioAssetId(audio);
+      if (!id) return null;
+      if (audioListFailed || audioLoading) return id;
+      return audioAssets.some((a) => a.id === id) ? id : null;
+    };
+
     const newSettings: VibeSettings = {
       ...(campaign.vibeSettings ?? {}),
       enabled: true, // always keep enabled when DM is actively managing it
@@ -332,7 +385,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
         ...p,
         name: p.name.trim(),
         filter: p.filter || 'brightness(1.0) saturate(1.0)',
-        audio: p.audio ?? null, // backend requires null, not undefined
+        audio: knownTrack(p.audio),
       })),
     };
 
@@ -410,6 +463,8 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
                 period={period}
                 index={index}
                 canDelete={periods.length > 1}
+                audioAssets={audioAssets}
+                audioLoading={audioLoading}
                 onChange={handlePeriodChange}
                 onDelete={handleDeletePeriod}
               />
