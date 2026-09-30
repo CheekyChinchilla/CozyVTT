@@ -204,6 +204,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A brief database error while telling the table about a change no longer reports a saved change as failed.** This affected adding to initiative, initiative rolls, spirit-layer toggles, wall and light edits, fog strokes, and switching lighting or Global Illumination. The change stands, and the table receives it with the next update or reconnect.
 
+- **The vibe tracker says when it is off.** With the tracker switched off for a campaign, the Session tab still offered its period buttons, and clicking one did nothing visible while the server refused the change. The buttons now give way to a note saying the tracker is off and that saving the period editor turns it on.
+
 #### Player Preview
 
 - **Previewing a player adds to their explored memory as it happens.** The preview greys in ground as their token sees it, exactly as the player's own screen does, and records it for the player whether or not they are connected. A game run from one screen now builds up each player's memory.

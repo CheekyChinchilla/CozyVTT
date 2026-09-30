@@ -498,6 +498,8 @@ export interface Campaign {
 }
 
 export interface VibeSettings {
+  /** The server treats a missing flag as on, for settings saved before it existed. */
+  enabled?: boolean;
   periods: VibePeriod[];
   [key: string]: unknown;
 }

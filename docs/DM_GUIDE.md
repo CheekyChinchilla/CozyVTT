@@ -693,7 +693,7 @@ This is perfect for behind-the-screen perception checks, wandering monster rolls
 
 ### The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders.
+The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders. If the tracker has been switched off for the campaign, the panel says so in place of the periods, and saving the period editor turns it back on.
 
 Switching the period as the story moves on, from a bright afternoon to a cold night on the road, sets the mood before you say a word.
 
