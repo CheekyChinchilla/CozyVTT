@@ -37,6 +37,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { settableAudioAssets } from '@/utils/audioAssets';
+import { currentVibeTrack, stopTarget } from '@/utils/ambientFallback';
 import type { Asset } from '@/types';
 
 // ============================================
@@ -73,7 +74,7 @@ interface AtmospherePanelProps {
 // ============================================
 
 export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProps) {
-  const { campaign, activeAtmosphereEffect, activeAtmosphereAudio } = useCampaign();
+  const { campaign, currentVibe, activeAtmosphereEffect, activeAtmosphereAudio } = useCampaign();
   const { user } = useAuth();
   const { socket } = useWebSocket();
 
@@ -399,10 +400,15 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                       </p>
                       {audioAssets.map((asset) => {
                         const isPlaying = activeAtmosphereAudio?.assetId === asset.id;
+                        // Stopping an override brings the vibe's own track
+                        // back; stopping the vibe's track means silence.
+                        const vibeTrackId = currentVibeTrack(campaign?.vibeSettings, currentVibe);
+                        const onStop = stopTarget(vibeTrackId, asset.id);
                         return (
                           <button
                             key={asset.id}
-                            onClick={() => handleAudioSelect(isPlaying ? null : asset.id)}
+                            title={isPlaying && onStop ? 'Stop this track and return to the vibe audio' : undefined}
+                            onClick={() => handleAudioSelect(isPlaying ? onStop : asset.id)}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${
                               isPlaying
                                 ? 'border-moss-green bg-moss-green/10'
