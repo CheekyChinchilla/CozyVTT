@@ -310,9 +310,10 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [switchingToMap, setSwitchingToMap] = useState<Map | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  // Local active map tracking — updated after each successful switch
-  // (campaign.currentMapId is not updated by setCurrentMap, only by refreshCampaign)
-  const [activeMapId, setActiveMapId] = useState<string | null>(null);
+  // The active map comes straight from the campaign: setCurrentMap keeps
+  // campaign.currentMapId in step with every switch, so there is no separate
+  // copy here to fall out of date.
+  const activeMapId = campaign?.currentMapId ?? null;
 
   // Tokens fetched from the full current map before showing transfer UI
   const [currentMapTokens, setCurrentMapTokens] = useState<Token[]>([]);
@@ -352,11 +353,9 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   useEffect(() => {
     if (isOpen) {
-      // Sync active map from campaign on open
-      setActiveMapId(campaign?.currentMapId ?? null);
       fetchMaps();
     }
-  }, [isOpen, fetchMaps, campaign?.currentMapId]);
+  }, [isOpen, fetchMaps]);
 
   // ---- CRUD handlers ----
 
@@ -523,8 +522,6 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       setCurrentMap(fullMap);
       useGameStore.getState().setTokens(fullMap.tokens || []);
 
-      // 5. Update local active map tracking so the badge updates immediately
-      setActiveMapId(targetMap.id);
       setCurrentMapTokens([]);
 
       // 6. Notify other connected clients via WebSocket

@@ -138,6 +138,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Move to Map… includes maps made after the page loaded.** The right-click submenu that sends a token to another map read a list written only when the page opened, so a map created or imported during the session was missing until a reload, a renamed one kept its old name, and a deleted one was still offered. The list now follows the Map Library.
 
+- **The Map Library remembers which map the table is on.** After a switch, closing and reopening the library moved its Active badge back to the map the page loaded with, and offered Set Active on the map already showing, which opened a token-transfer dialog for a switch in the wrong direction. The badge now follows every switch.
+
 - **Wall and fog changes made through the API reach players' open maps at once.** They used to show only after a reload.
 
 - **Revealed fog no longer looks lost after a refresh.** On some instances the DM's page loaded a fogged map with no fog: no tint on their own view, a fully covered Player Preview, and reveal boxes that could not be dragged. Nothing was lost on the server. The page now waits for its live connection before asking for the fog, and asks again after a reconnect, and turning fog on sends it to everyone at once. Explored memory had the same problem and the same fix.

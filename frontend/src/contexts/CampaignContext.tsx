@@ -150,7 +150,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     shownCampaignId.current = campaign?.id ?? null;
     return () => { shownCampaignId.current = null; };
   }, [campaign?.id]);
-  const [currentMap, setCurrentMap] = useState<Map | null>(null);
+  const [currentMap, setCurrentMapState] = useState<Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -220,14 +220,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (data.currentMapId) {
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
-          setCurrentMap(map);
+          setCurrentMapState(map);
           useGameStore.getState().setTokens(map.tokens || []);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
-            setCurrentMap(mapMeta);
+            setCurrentMapState(mapMeta);
             useGameStore.getState().setTokens([]);
           }
         }
@@ -265,7 +265,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     if (!campaign?.id || !currentMap?.id) return;
     try {
       const { map, spiritVisible } = await api.getMap(campaign.id, currentMap.id);
-      setCurrentMap(map);
+      setCurrentMapState(map);
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
@@ -302,7 +302,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     try {
       const { map, spiritVisible } = await api.getMap(campaignId, mapId);
       if (!stillShown()) return;
-      setCurrentMap(map);
+      setCurrentMapState(map);
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
@@ -324,6 +324,19 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // Update campaign.status in local state (called by session WebSocket listeners)
   const updateCampaignStatus = useCallback((status: CampaignStatus) => {
     setCampaign((prev) => (prev ? { ...prev, status } : null));
+  }, []);
+
+  // The campaign's current map and campaign.currentMapId are one fact: every
+  // switch goes through here, so the id follows the map. The Map Library
+  // re-reads campaign.currentMapId each time it opens for its Active badge,
+  // which pointed at the map the page loaded with until this kept it current.
+  const setCurrentMap = useCallback((map: Map | null) => {
+    setCurrentMapState(map);
+    if (map) {
+      setCampaign((prev) =>
+        prev && prev.currentMapId !== map.id ? { ...prev, currentMapId: map.id } : prev,
+      );
+    }
   }, []);
 
   // Keep campaign.maps in step with the Map Library (create, rename, import).
