@@ -1770,6 +1770,10 @@ paths:
         Each period's `hue` must be a `#RRGGBB` colour and its `filter` may use
         only `brightness()`, `saturate()`, `contrast()` and `hue-rotate()`,
         the functions the atmosphere editor produces; anything else is a 400.
+        A period's `audio`, when set, must be the id of an audio asset the DM
+        may open to the table: their own, this campaign's, or a global track.
+        Anything else is a 400 naming the period. Switching to a period plays
+        its track for everyone; a period without one silences the table.
         If the current period no longer exists in the new list it is cleared.
       operationId: updateVibe
       security:
@@ -1813,6 +1817,11 @@ paths:
                           audio:
                             type: string
                             nullable: true
+                            format: uuid
+                            description: >-
+                              The id of an audio asset to play for the whole
+                              table while this period is the vibe, or null
+                              for no audio.
       responses:
         '200':
           description: Atmosphere settings updated

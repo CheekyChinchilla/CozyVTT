@@ -78,6 +78,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Fog of war can be turned on or off for each map**, at the top of the Fog of War panel or in Edit Map. While it is off, players see the whole map; revealed areas are kept for when it is turned back on.
 
+- **Each vibe period can play its own music.** The period editor's audio box, which saved a note nothing read, is now a picker offering the tracks the DM may play: their own uploads, this campaign's, and the global library. Switching to a period starts its track looping for everyone at the table, and a period with no track silences the table. The Atmosphere panel still works as a live override: stop its track, or let a non-looping one finish, and the vibe's own music returns. Notes typed into the old box do not play and are dropped the next time the periods are saved.
+
 ### Changed
 
 - **Dynamic lighting limits what players see.** A player sees what their tokens' darkvision reaches in the dark, plus whatever a light source lights. Bright light shows clearly; dim light, and darkness within darkvision, show half-dark. A token's own square is always visible. In 1.4.0 every token saw everything in line of sight whatever the light, which made lights decorative. The new per-map **Global Illumination** setting keeps that older behaviour, and it is on for maps made before this release.

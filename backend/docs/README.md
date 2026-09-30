@@ -45,7 +45,9 @@ whether it loads, and three unquoted colons once made it unloadable.
 The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
 gained or lost a gate, or a hand-edited cell. Refresh it with `--write`. It
-reads both `backend/src/websocket/` and `backend/src/routes/`, and matches
+reads `backend/src/websocket/`, `backend/src/routes/` and
+`backend/src/services/` (a service can emit too: the ambient-audio setter
+broadcasts for both the panel and the vibe switch), and matches
 `socket.emit` alongside the `broadcastToCampaign` / `broadcastToUser` helpers,
 the token move handlers' `emitMoveToVisibleSockets` /
 `emitMoveToDragRecipients`, which take the event name as their first argument,

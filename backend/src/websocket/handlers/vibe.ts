@@ -13,8 +13,9 @@ import logger from '../../utils/logger';
 
 export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * VIBE.UPDATE - DM changes the current vibe period.
-   * Updates campaign.currentVibe and broadcasts period data to all members.
+   * VIBE.UPDATE - DM changes the current vibe period and its audio follows.
+   * Updates campaign.currentVibe, broadcasts period data to all members, and
+   * sets the period's track as the table's ambient audio (none means silence).
    */
   socket.on('vibe.update', async (data: { period: string }) => {
     try {

@@ -1042,7 +1042,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `token.move` | DM, or the token's player while the session is live | — |
 | `token.move.end` | DM, or the token's player while the session is live | User finishes dragging (final position) Updates database and broadcasts to campaign |
 | `token.move.start` | DM, or the token's player while the session is live | User begins dragging a token Validates permission and broadcasts to campaign |
-| `vibe.update` | DM only | DM changes the current vibe period. |
+| `vibe.update` | DM only | DM changes the current vibe period and its audio follows. |
 | `wall:add` | DM only | DM adds a single wall segment. |
 | `wall:remove` | DM only | DM removes a wall segment by id. |
 | `wall:update` | DM; a player may toggle an unlocked door | Update a wall segment; a player may only open or close an unlocked door, and cannot move it. |
@@ -1053,7 +1053,7 @@ _Who may send it is read from the shared permission predicates each handler call
 
 | Event | Emitted from |
 | --- | --- |
-| `atmosphere.audio.updated` | `atmosphere.ts` |
+| `atmosphere.audio.updated` | `atmosphereAudio.ts` |
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
 | `campaign.dm.transferred` | `campaigns.ts` |

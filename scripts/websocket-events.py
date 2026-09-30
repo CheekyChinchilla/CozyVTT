@@ -33,6 +33,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 HANDLERS = [
     'backend/src/websocket/**/*.ts',
     'backend/src/routes/**/*.ts',
+    # A service can emit too: the ambient-audio setter broadcasts
+    # atmosphere.audio.updated for both the panel handler and the vibe switch.
+    'backend/src/services/**/*.ts',
 ]
 DOC = 'backend/docs/WEBSOCKET_DOCUMENTATION.md'
 BEGIN = '<!-- BEGIN GENERATED EVENTS -->'

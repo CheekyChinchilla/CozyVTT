@@ -693,7 +693,7 @@ This is perfect for behind-the-screen perception checks, wandering monster rolls
 
 ### The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders. If the tracker has been switched off for the campaign, the panel says so in place of the periods, and saving the period editor turns it back on.
+The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders. Each period can also carry an **audio track**, picked from the same set the Atmosphere panel plays: switching to that period starts the track looping for everyone at the table, and switching to a period without one silences the table. If the tracker has been switched off for the campaign, the panel says so in place of the periods, and saving the period editor turns it back on.
 
 Switching the period as the story moves on, from a bright afternoon to a cold night on the road, sets the mood before you say a word.
 
@@ -1176,6 +1176,8 @@ Upload audio files to your Asset Library (type: **Audio**), then select them in 
 - Use ambient sounds (rain, tavern chatter, dungeon drips) to set the scene without narrating it
 
 **Which tracks you can play.** The panel lists your own audio, anything in the global library, and audio uploaded to this campaign. Audio belonging to a *different* campaign is not offered, even one you play in, because it belongs to that table.
+
+**Vibes carry their own music.** A track picked in the period editor starts whenever you switch to that period. The Atmosphere panel then acts as a live override: stop its track, or let a non-looping one finish, and the vibe's music comes back on its own. Stopping the vibe's own track from the panel silences the table until the next vibe switch. The return after a finished one-shot is sent by your browser, so keep your tab open while one plays.
 
 **What your players can hear.** The sound is not relayed from your computer; each player's browser fetches the track from your CozyVTT instance. So while a track is playing, everyone in the campaign can fetch that one track, including a track from your personal library. Stop it, and it is private to you again. Nothing else in your library is exposed, and no one can browse or list your audio.
 
