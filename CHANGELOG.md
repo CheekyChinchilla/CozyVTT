@@ -142,6 +142,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A map with no picture says so.** A map whose picture is missing, such as one imported from an archive that left the picture out, used to show an empty map. It now says "This map has no picture", and tells the DM to choose one in Edit Map.
 
+- **Dim light looks dim on maps that remember explored areas.** On a map with **Remember Explored Areas** on, the half-darkness that marks dim light was taken away wherever the player had already been, and that includes everything they can see, so dim light looked as clear as bright. Dim light now shows half-dark there too. The edges of each light's bright and dim areas also fade softly into the next, where they used to end in hard circles.
+
 - **Carrying a player's token no longer reveals the map to them.** When the DM picked a player's token up and moved it about, the player's screen showed, and remembered, everything the token could see along the way, even if the DM then put it back. The player still sees the token being carried, but what they see and remember now follows it only where it is put down, as it already did when players move their own tokens. The same applied to a DM previewing a player while that player dragged their own token.
 
 - **A token picked up and put back returns for everyone.** Cancelling a drag (right-click, leaving the map, or dropping on an occupied square) left the token where the cursor had been on other people's screens until it next moved.

@@ -664,23 +664,27 @@ describe('computeVisionState', () => {
  * which a refactor could otherwise drop in silence.
  */
 describe('drawDynamicLighting', () => {
-  interface OpCall { method: string; op: string; fillStyle: string }
+  interface OpCall { method: string; op: string; fillStyle: string; src?: unknown }
 
-  /** A context that records the composite operation and fill style in force at each call. */
-  function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[] } {
+  /**
+   * A context that records the composite operation and fill style in force at
+   * each call, what each drawImage draws from, and every radial gradient made.
+   */
+  function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[]; gradients: number[][] } {
     const ops: OpCall[] = [];
+    const gradients: number[][] = [];
     const gradient = { addColorStop: () => {} };
     const ctx = {
       globalCompositeOperation: 'source-over',
-      fillStyle: '', filter: 'none', globalAlpha: 1,
-      createRadialGradient: () => gradient,
+      fillStyle: '', filter: 'none', globalAlpha: 1, imageSmoothingEnabled: true,
+      createRadialGradient: (...args: number[]) => { gradients.push(args); return gradient; },
     } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
       'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
-      (ctx as unknown as Record<string, unknown>)[m] = () =>
-        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle) });
+      (ctx as unknown as Record<string, unknown>)[m] = (...args: unknown[]) =>
+        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), src: args[0] });
     }
-    return { ctx, ops };
+    return { ctx, ops, gradients };
   }
 
   /** A holder whose canvas is already the right size, so ensureCanvas reuses it. */
@@ -707,6 +711,8 @@ describe('drawDynamicLighting', () => {
     const gi = opts.globalIllumination ?? false;
     const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], viewport, { globalIllumination: gi });
 
+    const lightHolder = holderFor(lightOnly.ctx, W, H);
+    const coverageHolder = holderFor(coverage.ctx, W, H);
     drawDynamicLighting(main.ctx, {
       myTokens,
       enabledLights: opts.withLight ? [light] : [],
@@ -715,21 +721,44 @@ describe('drawDynamicLighting', () => {
       lightVision: vision.lightVision,
       globalIllumination: gi,
       lightingCanvas: holderFor(lighting.ctx, W, H),
-      coverageCanvas: holderFor(coverage.ctx, W, H),
-      lightCanvas: holderFor(lightOnly.ctx, W, H),
+      coverageCanvas: coverageHolder,
+      lightCanvas: lightHolder,
       explored,
       terrainCanvas,
       memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
       memoryCanvas: holderFor(memory.ctx, W, H),
     }, viewport);
 
-    return { main, lighting, lightOnly, coverage, memoryMask, memory };
+    return { main, lighting, lightOnly, coverage, memoryMask, memory, explored, lightCanvas: lightHolder.current, coverageCanvas: coverageHolder.current };
   }
 
-  it('leaves remembered cells out of the darkness, so the memory pass can dim them instead', () => {
-    const { lighting } = run({ withLight: false, withMemory: true });
-    // The coverage mask and the explored raster are both cut out of the darkness.
-    expect(lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(2);
+  // Remembered ground out of sight is dimmed by the memory pass, so it comes
+  // out of the darkness. Ground in sight is remembered too, though, and taking
+  // all of it out left dim light as clear as bright on any map that remembers:
+  // the darkness is cut by the explored raster less what is in sight now.
+  it('takes only remembered ground out of sight out of the darkness, so dim light in sight stays dim', () => {
+    const { lighting, lightOnly, explored, lightCanvas, coverageCanvas } = run({ withLight: false, withMemory: true });
+    const cuts = lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out');
+    expect(cuts.map((c) => c.src)).toEqual([coverageCanvas, lightCanvas]);
+    expect(lighting.ops.some((c) => c.method === 'drawImage' && c.src === explored)).toBe(false);
+    // The spent light canvas holds the explored raster, less what is in sight.
+    const scratch = lightOnly.ops.filter((c) => c.method === 'drawImage');
+    expect(scratch.filter((c) => c.src === explored && c.op === 'source-over')).toHaveLength(1);
+    expect(scratch.filter((c) => c.src === coverageCanvas && c.op === 'destination-out')).toHaveLength(3);
+  });
+
+  // Hard circles read as stickers on the map; each zone's edge now fades over
+  // a band centred on its radius, so bright blends into dim and dim into dark.
+  it('feathers each light zone into the next with a radial gradient across its edge', () => {
+    const { lightOnly } = run({ withLight: true });
+    // light: bright 1 square (50 px), dim 2 squares (100 px), at (75, 75)
+    const bands = lightOnly.gradients.map(([, , r0, , , r1]) => [r0, r1]);
+    expect(bands).toHaveLength(2);
+    for (const [[r0, r1], radius] of [[bands[0], 100], [bands[1], 50]] as const) {
+      expect(r0).toBeLessThan(radius);
+      expect(r1).toBeGreaterThan(radius);
+      expect((r0 + r1) / 2).toBeCloseTo(radius);
+    }
   });
 
   it('draws remembered ground as a grey, darker copy of the terrain, masked to what is out of sight', () => {

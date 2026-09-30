@@ -134,18 +134,25 @@ export function drawDynamicLighting(
     tracePoly(lightCtx, poly);
     lightCtx.clip();
 
-    if (dimRadiusPx > 0) {
-      lightCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    // Each zone adds half, so inside the bright radius the two make a whole.
+    // Its edge fades over a band centred on the radius, so bright blends into
+    // dim and dim into dark, where a hard circle read as a sticker on the map.
+    // Only the picture is feathered: which tokens are seen is decided by the
+    // radii themselves (visibilityRule).
+    const zone = (radiusPx: number) => {
+      const band = Math.min(viewport.gridSize * 0.6, radiusPx * 0.35);
+      const inner = radiusPx - band / 2;
+      const outer = radiusPx + band / 2;
+      const fade = lightCtx.createRadialGradient(light.x, light.y, inner, light.x, light.y, outer);
+      fade.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+      fade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      lightCtx.fillStyle = fade;
       lightCtx.beginPath();
-      lightCtx.arc(light.x, light.y, dimRadiusPx, 0, Math.PI * 2);
+      lightCtx.arc(light.x, light.y, outer, 0, Math.PI * 2);
       lightCtx.fill();
-    }
-    if (brightRadiusPx > 0) {
-      lightCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      lightCtx.beginPath();
-      lightCtx.arc(light.x, light.y, brightRadiusPx, 0, Math.PI * 2);
-      lightCtx.fill();
-    }
+    };
+    if (dimRadiusPx > 0) zone(dimRadiusPx);
+    if (brightRadiusPx > 0) zone(brightRadiusPx);
     lightCtx.restore();
   }
 
@@ -257,8 +264,22 @@ export function drawDynamicLighting(
   offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
   offCtx.globalCompositeOperation = 'destination-out';
   offCtx.drawImage(coverage, 0, 0);
-  // Remembered cells are dimmed by the pass above, not blacked out here.
-  if (state.explored) offCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+  if (state.explored) {
+    // Remembered ground out of sight is dimmed by the memory pass above, not
+    // blacked out here. Only out of sight: ground in sight is remembered too,
+    // and taking all of it out of the darkness left dim light as clear as
+    // bright. The light layer is spent by now and serves as scratch: the
+    // explored raster, less what is in sight, as the memory mask is built.
+    lightCtx.globalCompositeOperation = 'source-over';
+    lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = false;
+    lightCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = true;
+    lightCtx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0);
+    lightCtx.globalCompositeOperation = 'source-over';
+    offCtx.drawImage(lightLayer, 0, 0);
+  }
   offCtx.globalCompositeOperation = 'source-over';
 
   // Composite onto main canvas with soft blur edge
