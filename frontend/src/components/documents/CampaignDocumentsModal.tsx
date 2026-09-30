@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { BookOpen, ExternalLink, FilePlus, Link2, Loader2, Unlink, Upload } from 'lucide-react';
+import { BookOpen, ExternalLink, FilePlus, Link2, Loader2, Trash2, Unlink, Upload } from 'lucide-react';
 import { Modal, Button } from '@/components/ui';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import DocumentReader, { documentFormat, FORMAT_LABEL } from './DocumentReader';
@@ -39,6 +39,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
 
   const [reading, setReading] = useState<CampaignDocument | null>(null);
   const [toUnshare, setToUnshare] = useState<CampaignDocument | null>(null);
+  const [toDelete, setToDelete] = useState<CampaignDocument | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   // DM only: what could be shared.
@@ -113,6 +114,27 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     }
   };
 
+  /**
+   * Delete one of the campaign's own documents. The server lets the campaign's
+   * DM delete its campaign assets, and this is where the DM sees them; it is
+   * also the only way to remove one whose uploader has deleted their account.
+   */
+  const handleDelete = async () => {
+    if (!toDelete) return;
+    const doc = toDelete;
+    setToDelete(null);
+    setBusyId(doc.id);
+    setError(null);
+    try {
+      await api.deleteAsset(doc.id);
+      setShared((prev) => prev.filter((d) => d.id !== doc.id));
+    } catch (err) {
+      setError(apiErrorMessage(err) ?? 'Could not delete that document.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
       <Modal open={isOpen} onClose={onClose} title="Campaign documents" icon={BookOpen} size="lg">
@@ -154,7 +176,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       {doc.name}
                     </button>
                     <p className="text-[11px] text-ink-secondary truncate">
-                      {FORMAT_LABEL[documentFormat(doc.originalName)]} · shared by {doc.linkedBy.displayName}
+                      {FORMAT_LABEL[documentFormat(doc.originalName)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
                     </p>
                   </div>
                   <Button
@@ -186,6 +208,18 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       title="Stop sharing"
                     >
                       {busyId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                    </button>
+                  )}
+                  {isDM && !doc.shared && (
+                    <button
+                      type="button"
+                      onClick={() => setToDelete(doc)}
+                      disabled={busyId === doc.id}
+                      className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
+                      aria-label={`Delete ${doc.name}`}
+                      title="Delete"
+                    >
+                      {busyId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   )}
                 </li>
@@ -310,6 +344,17 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         variant="warning"
         onConfirm={handleUnshare}
         onCancel={() => setToUnshare(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={toDelete !== null}
+        title="Delete document"
+        message={`Delete "${toDelete?.name ?? ''}"? It belongs to this campaign, so it is deleted for everyone: it leaves this list and the asset library, and cannot be brought back.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setToDelete(null)}
       />
     </>
   );

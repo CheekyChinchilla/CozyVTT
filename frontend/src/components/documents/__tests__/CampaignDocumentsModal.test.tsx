@@ -28,6 +28,7 @@ vi.mock('@/services/api', () => {
     listAssets: vi.fn(),
     linkCampaignDocument: vi.fn(),
     unlinkCampaignDocument: vi.fn(),
+    deleteAsset: vi.fn(),
     getDocumentUrl: (id: string) => `/api/assets/documents/${id}`,
   };
   return { api: client, default: client };
@@ -39,6 +40,7 @@ const listCampaignDocuments = api.listCampaignDocuments as ReturnType<typeof vi.
 const listAssets = api.listAssets as ReturnType<typeof vi.fn>;
 const linkCampaignDocument = api.linkCampaignDocument as ReturnType<typeof vi.fn>;
 const unlinkCampaignDocument = api.unlinkCampaignDocument as ReturnType<typeof vi.fn>;
+const deleteAsset = api.deleteAsset as ReturnType<typeof vi.fn>;
 
 const shared = (id: string, name: string, originalName: string): CampaignDocument => ({
   id,
@@ -52,6 +54,12 @@ const shared = (id: string, name: string, originalName: string): CampaignDocumen
   linkedAt: '2026-01-02T00:00:00.000Z',
   linkedBy: { id: 'dm', displayName: 'The DM' },
   shared: true,
+});
+
+/** Uploaded into the campaign itself; "shared by" is its uploader. */
+const own = (id: string, name: string, originalName: string): CampaignDocument => ({
+  ...shared(id, name, originalName),
+  shared: false,
 });
 
 const mine = (id: string, name: string, originalName: string): Asset =>
@@ -102,6 +110,24 @@ describe('CampaignDocumentsModal', () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
       fireEvent.click(await screen.findByText('Old Handout'));
       expect(await screen.findAllByText('Old Handout')).not.toHaveLength(0);
+    });
+
+    // An uploaded document names its uploader as the one who shared it, and
+    // a deleted account leaves none; the whole list used to fail on it.
+    it('lists a campaign document whose uploader has deleted their account', async () => {
+      listCampaignDocuments.mockResolvedValue({
+        documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
+      });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      expect(await screen.findByText('Orphaned Notes')).toBeInTheDocument();
+      expect(screen.getByText(/shared by a deleted account/)).toBeInTheDocument();
+    });
+
+    it('offers no way to delete a document', async () => {
+      listCampaignDocuments.mockResolvedValue({ documents: [own('d5', 'Campaign Notes', 'notes.md')] });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      await screen.findByText('Campaign Notes');
+      expect(screen.queryByLabelText(/^delete /i)).not.toBeInTheDocument();
     });
 
     it('offers a way to open each document in a new tab', async () => {
@@ -174,6 +200,32 @@ describe('CampaignDocumentsModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /^stop sharing$/i }));
       await waitFor(() => expect(unlinkCampaignDocument).toHaveBeenCalledWith('c1', 'd1'));
       await waitFor(() => expect(screen.queryByText('Core Rules')).not.toBeInTheDocument());
+    });
+
+    // The server lets the DM delete the campaign's own assets; this is the one
+    // place the app offers it, and the only way to remove a document whose
+    // uploader has gone.
+    it('asks before deleting one of the campaign\'s own documents, then deletes it', async () => {
+      deleteAsset.mockResolvedValue({ message: 'ok' });
+      listCampaignDocuments.mockResolvedValue({
+        documents: [
+          shared('d1', 'Core Rules', 'rules.pdf'),
+          { ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null },
+        ],
+      });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Orphaned Notes');
+      // A shared document is someone's own file: it is unshared, never deleted here.
+      expect(screen.queryByLabelText('Delete Core Rules')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Delete Orphaned Notes'));
+      expect(deleteAsset).not.toHaveBeenCalled();
+      expect(await screen.findByText(/deleted for everyone/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+      await waitFor(() => expect(deleteAsset).toHaveBeenCalledWith('d5'));
+      await waitFor(() => expect(screen.queryByText('Orphaned Notes')).not.toBeInTheDocument());
+      expect(screen.getByText('Core Rules')).toBeInTheDocument();
     });
 
     it('says so when there is nothing left to share', async () => {

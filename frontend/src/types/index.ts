@@ -585,7 +585,11 @@ export interface CampaignDocument {
   /** Null once the uploader's account is deleted. */
   uploadedBy: { id: string; displayName: string } | null;
   linkedAt: string;
-  linkedBy: { id: string; displayName: string };
+  /**
+   * Who shared it. For the campaign's own document this is its uploader, so it
+   * is null once that account is deleted, as uploadedBy is.
+   */
+  linkedBy: { id: string; displayName: string } | null;
   /**
    * True when shared into the campaign by link, which the DM can undo. False
    * when it is the campaign's own document, created or uploaded at CAMPAIGN

@@ -599,7 +599,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 - **Upload** — upload a PDF, text or Markdown file straight into the campaign. It belongs to the campaign from the start, so members can read it at once with no share step.
 - **Write** — write a text or Markdown document on the spot, for a handout or the session's notes. Same as Upload: the campaign's own, readable immediately.
 
-**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove; delete them from **Documents** on your dashboard if they are no longer wanted.
+**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
 A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
 

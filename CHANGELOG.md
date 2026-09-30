@@ -74,6 +74,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Preview the map through a token.** Preview Player View can now show what a single token sees, or **All player tokens** for the whole party. This suits a table that shares one projected screen and has no player accounts to preview as.
 
+- **The DM can delete the campaign's own documents.** In the Campaign documents panel, a document uploaded or written in the campaign has a bin button for the DM, which deletes it after asking. Documents shared in from someone's own library are still only unshared there. This is also how a DM removes a document whose uploader has deleted their account, which before only an administrator could do from the app.
+
 - **Fog of war can be turned on or off for each map**, at the top of the Fog of War panel or in Edit Map. While it is off, players see the whole map; revealed areas are kept for when it is turned back on.
 
 ### Changed
@@ -90,7 +92,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Accounts
 
-- **Deleting an account works.** It failed for almost everyone: anyone who had rolled a die, uploaded a file or created a campaign. The person's chat messages, dice rolls and uploads now stay, no longer linked to anyone, so campaigns keep their history and map art. Documents they shared into a campaign stay shared, credited to the campaign's DM, or to its owner when it has no other DM. A campaign they created but someone else runs as DM passes to that DM. If a campaign they created has no other DM, the deletion is refused and names the campaign: hand the DM seat to another member, or delete the campaign, first. An administrator deleting such a user sees those campaigns in the delete panel and can hand each one to another member, or delete it, from there. The warnings on the profile page and in the admin panel now describe what actually happens.
+- **Deleting an account works.** It failed for almost everyone: anyone who had rolled a die, uploaded a file or created a campaign. The person's chat messages, dice rolls and uploads now stay, no longer linked to anyone, so campaigns keep their history and map art. Documents they shared into a campaign stay shared, credited to the campaign's DM, or to its owner when it has no other DM. Documents they uploaded into a campaign stay in it, listed as shared by "a deleted account". A campaign they created but someone else runs as DM passes to that DM. If a campaign they created has no other DM, the deletion is refused and names the campaign: hand the DM seat to another member, or delete the campaign, first. An administrator deleting such a user sees those campaigns in the delete panel and can hand each one to another member, or delete it, from there. The warnings on the profile page and in the admin panel now describe what actually happens.
 
 - **Display names are checked by the server.** A name must be 1 to 50 characters once spaces at either end are trimmed. The server used to accept a name of only spaces (shown as a blank to the table), a name of any length, or a value that was not text (which caused a server error). Signing up and editing a profile now refuse these. Names already stored are unchanged.
 

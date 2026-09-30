@@ -7518,6 +7518,10 @@ components:
           type: string
           format: date-time
         linkedBy:
+          nullable: true
+          description: >-
+            Who shared it. For the campaign's own document (`shared: false`)
+            this is its uploader, so it is null once that account is deleted.
           type: object
           properties:
             id:

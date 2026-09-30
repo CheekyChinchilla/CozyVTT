@@ -172,6 +172,37 @@ describe('documents the person shared into a campaign', () => {
     expect(JSON.stringify(listed.body)).toContain(doc.id);
   });
 
+  // The reported case: a DM uploads a document into the campaign, hands the DM
+  // seat on, and an admin deletes them. The document is the campaign's own, so
+  // it is listed with its uploader as the one who shared it, and there is none.
+  it('one uploaded into the campaign stays listed with nobody named, and the DM can delete it', async () => {
+    const admin = await member('Docs Admin', PlatformRole.ADMIN);
+    const owner = await member('Docs Owner 3');
+    const former = await member('Docs Uploading DM');
+    const current = await member('Docs New DM');
+    const campaignId = await campaignRunBy(owner.user.id, current.user.id, [former.user.id]);
+    const doc = await prisma.asset.create({
+      data: {
+        type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: former.user.id,
+        filename: `${randomUUID()}.md`, originalName: 'notes.md', mimeType: 'text/markdown', fileSize: 1,
+        filePath: `/nonexistent/${randomUUID()}.md`, name: 'Campaign Notes',
+      },
+    });
+    documentIds.push(doc.id);
+
+    expect((await admin.agent.delete(`/api/users/${former.user.id}`)).status).toBe(200);
+
+    const listed = await owner.agent.get(`/api/campaigns/${campaignId}/documents`);
+    expect(listed.status).toBe(200);
+    const entry = (listed.body.documents as { id: string; linkedBy: unknown; uploadedBy: unknown; shared: boolean }[])
+      .find((d) => d.id === doc.id);
+    expect(entry).toMatchObject({ linkedBy: null, uploadedBy: null, shared: false });
+
+    expect((await owner.agent.delete(`/api/assets/${doc.id}`)).status).toBe(403);
+    expect((await current.agent.delete(`/api/assets/${doc.id}`)).status).toBe(200);
+    expect(await prisma.asset.findUnique({ where: { id: doc.id } })).toBeNull();
+  });
+
   it('pass to the owner when the person deleting their account is the DM', async () => {
     const owner = await member('Docs Owner 2');
     const dm = await member('Docs Sitting DM');
