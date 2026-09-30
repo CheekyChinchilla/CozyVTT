@@ -29,6 +29,7 @@ import {
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { isSafeArchivePath } from '../utils/archive';
 import logger from '../utils/logger';
 
@@ -95,6 +96,34 @@ async function getMaxImportSize(): Promise<number> {
 }
 
 // ── Preview ───────────────────────────────────────────────────────
+
+/**
+ * Point each vibe period's audio at the imported copy of its asset.
+ *
+ * Returns the settings to store, or null when the archive's settings name no
+ * audio at all (nothing to change). A value that is not an asset id, or an
+ * id the archive's asset manifest does not carry, becomes no audio.
+ */
+export function remapVibePeriodAudio(
+  vibeSettings: unknown,
+  assetIdMap: Map<string, string>,
+): Record<string, unknown> | null {
+  if (!vibeSettings || typeof vibeSettings !== 'object' || Array.isArray(vibeSettings)) return null;
+  const settings = vibeSettings as Record<string, unknown>;
+  if (!Array.isArray(settings.periods)) return null;
+
+  let touched = false;
+  const periods = settings.periods.map((period) => {
+    if (!period || typeof period !== 'object' || Array.isArray(period)) return period;
+    const p = period as Record<string, unknown>;
+    if (p.audio == null) return period;
+    touched = true;
+    const oldId = vibePeriodAudioAssetId(p.audio);
+    return { ...p, audio: (oldId && assetIdMap.get(oldId)) ?? null };
+  });
+
+  return touched ? { ...settings, periods } : null;
+}
 
 export async function previewCampaignImport(
   zipBuffer: Buffer
@@ -227,6 +256,7 @@ export async function importCampaign(
 
   // 7. Import assets (so we can remap references)
   const assetRefMap = new Map<string, string>(); // old UUID → new asset URL
+  const assetIdMap = new Map<string, string>(); // old UUID → new asset id
 
   for (const [oldId, assetInfo] of Object.entries(assetManifest)) {
     // Find the file in the archive
@@ -274,6 +304,18 @@ export async function importCampaign(
 
     // Store mapping: old reference → new API URL
     assetRefMap.set(oldId, `/api/assets/${typeDir}/${newId}`);
+    assetIdMap.set(oldId, newId);
+  }
+
+  // Vibe periods name audio assets by id; point them at the imported copies.
+  // A track the archive does not carry becomes no audio, so an old note or a
+  // reference to an asset left out of the export never dangles.
+  const remappedVibe = remapVibePeriodAudio(campaignSettings.vibeSettings, assetIdMap);
+  if (remappedVibe) {
+    await prisma.campaign.update({
+      where: { id: newCampaignId },
+      data: { vibeSettings: preserveAtmosphereAudio(remappedVibe) as Prisma.InputJsonValue },
+    });
   }
 
   /** Remap an asset reference from the archive to the new URL. */
