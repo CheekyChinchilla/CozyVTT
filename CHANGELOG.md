@@ -206,6 +206,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The vibe tracker says when it is off.** With the tracker switched off for a campaign, the Session tab still offered its period buttons, and clicking one did nothing visible while the server refused the change. The buttons now give way to a note saying the tracker is off and that saving the period editor turns it on.
 
+- **The vibe period editor keeps its buttons on screen.** On an ordinary window the editor was taller than the dialog, and the Restore Defaults, Cancel and Save Periods buttons sat below the fold with nothing saying the dialog scrolls, so the editor looked like it had no save button. The period list now scrolls on its own and the buttons stay put.
+
 #### Player Preview
 
 - **Previewing a player adds to their explored memory as it happens.** The preview greys in ground as their token sees it, exactly as the player's own screen does, and records it for the player whether or not they are connected. A game run from one screen now builds up each player's memory.

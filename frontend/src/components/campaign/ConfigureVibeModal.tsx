@@ -357,7 +357,47 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
   return (
     <>
-      <Modal open onClose={handleClose} title="Configure Vibe Periods" icon={Music} size="lg" closeDisabled={isSaving}>
+      {/* fitViewport with the buttons in the Modal's own footer: the period
+          list is taller than most windows, and with the buttons at its end
+          inside one scrolling body nothing said the dialog scrolled, so the
+          editor looked like it had no save button. */}
+      <Modal
+        open
+        onClose={handleClose}
+        title="Configure Vibe Periods"
+        icon={Music}
+        size="lg"
+        closeDisabled={isSaving}
+        fitViewport
+        footer={
+          <div className="flex w-full items-center justify-between gap-3 border-t border-moss-green/20 pt-4">
+            <button
+              onClick={handleRestoreDefaults}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-stone-gray hover:bg-parchment transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Restore Defaults
+            </button>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={onClose}
+                disabled={isSaving}
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={isSaving || periods.length === 0}
+              >
+                {isSaving ? 'Saving...' : 'Save Periods'}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <p className="text-sm text-ink-muted -mt-4 mb-6">
             Define the time-of-day periods and their visual effects.
           </p>
@@ -386,34 +426,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
               Add Period
             </button>
           )}
-
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 pt-4 border-t border-moss-green/20">
-            <button
-              onClick={handleRestoreDefaults}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-stone-gray hover:bg-parchment transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Restore Defaults
-            </button>
-
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={onClose}
-                disabled={isSaving}
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || periods.length === 0}
-                
-              >
-                {isSaving ? 'Saving...' : 'Save Periods'}
-              </Button>
-            </div>
-          </div>
+        </div>
       </Modal>
 
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
