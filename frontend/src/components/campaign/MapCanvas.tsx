@@ -60,7 +60,7 @@ import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
 import {
-  previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection,
+  previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
   previewTokens,
 } from './map/previewSelection';
@@ -306,7 +306,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // comes from the grid the DM already holds, and the same visibility rule
   // decides what is drawn.
   const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
-  const previewOwn = useMemo(() => previewOwnFor(previewSelection), [previewSelection]);
+  // The plane the previewed viewer is on, by the server's rule: a player whose
+  // token has crossed to the spirit layer is sent that plane and sees through
+  // that token, so the preview draws the spirit realm as their screen does.
+  const previewedPlane = useMemo(
+    () => previewPlane(previewSelection, tokens, campaign?.spiritLayerEnabled ?? false),
+    [previewSelection, tokens, campaign?.spiritLayerEnabled]
+  );
+  const previewOwn = useMemo(() => previewOwnFor(previewSelection, previewedPlane), [previewSelection, previewedPlane]);
   // Whose tokens the preview shows whole; differs from sight only for the party.
   const previewControls = useMemo(() => previewControlsFor(previewSelection), [previewSelection]);
   const viewerOwn = previewing ? previewOwn : isOwnToken;
@@ -1659,9 +1666,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     const renderIsDM = isDM && !previewing;
     // isInSpiritRealm is true if the campaign-wide toggle is on OR this
-    // specific non-DM player has personally crossed into the spirit realm.
+    // specific non-DM player has personally crossed into the spirit realm. A
+    // preview is in it when the previewed viewer is.
     const spiritActive = campaign?.spiritLayerEnabled ?? false;
-    const isInSpiritRealm = spiritActive || (userRole !== 'DM' && playerSpiritVisible);
+    const isInSpiritRealm = previewing
+      ? previewedPlane === 'spirit'
+      : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
 
     // 1. Map image (Material Plane)
     drawMapImage(ctx, {
@@ -1701,7 +1711,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, spiritLayerImage, spiritLayerOpacity]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1735,7 +1745,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     let drawn = tokens;
     if (previewing) {
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport);
+      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
     }
 
     // 5. Tokens (+ drag ghost)
@@ -1765,7 +1775,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -2000,7 +2010,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -2084,7 +2094,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       };
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport);
+      const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
       return pickTokenAt(shown, gridX, gridY, {
         isDM: false,
         revealedCells: viewerRevealed,
@@ -2094,7 +2104,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       });
     },
-    [tokens, currentMap, tokenView, previewing, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
+    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
   );
 
   const getTokenAtPosition = useCallback(
@@ -3307,10 +3317,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {/* Spirit Layer CSS overlay — atmospheric effect of the Ethereal Plane */}
       {currentMap?.spiritLayerUrl && spiritLayerImage && (
         (() => {
-          const isDM = userRole === 'DM';
+          // A preview shows the overlay as the previewed viewer sees it.
+          const isDM = userRole === 'DM' && !previewing;
           const spiritActive = campaign?.spiritLayerEnabled ?? false;
           // Non-DM players are in spirit realm if globally enabled OR their personal token is there
-          const playerEffectivelyInSpirit = spiritActive || playerSpiritVisible;
+          const playerSpiritPersonal = previewing ? previewedPlane === 'spirit' : playerSpiritVisible;
+          const playerEffectivelyInSpirit = spiritActive || playerSpiritPersonal;
           // Show overlay only when spirit realm is actually visible to this viewer
           if (!isDM && !playerEffectivelyInSpirit) return null;
           // DM in single-plane material view: no overlay (they're not perceiving the spirit realm)
@@ -3328,7 +3340,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
           // When DM views spirit realm that's hidden from most players, reduce overlay intensity
           // Full opacity when fully active (global toggle or personal crossover)
-          const overlayOpacity = (!isDM && !spiritActive && playerSpiritVisible)
+          const overlayOpacity = (!isDM && !spiritActive && playerSpiritPersonal)
             ? 1.0   // player's own token is in spirit realm — full immersion
             : (!spiritActive ? 0.4 : 1.0); // DM hint view vs full view
 
@@ -3353,7 +3365,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-      {userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible) && (
+      {(previewing
+        ? previewedPlane === 'spirit'
+        : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
         <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-sm animate-pulse-soft">
           <Ghost className="w-3.5 h-3.5 text-spirit-purple" />
           <span className="text-xs font-semibold text-spirit-purple">Spirit Realm</span>

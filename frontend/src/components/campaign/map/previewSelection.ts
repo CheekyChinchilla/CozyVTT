@@ -14,14 +14,43 @@ import { controlsToken } from '@/utils/tokenControl';
 import { gridYToCentrePx } from './coords';
 import { tokenSentTo } from '@/utils/tokenMask';
 
+/** The plane a previewed viewer is on: what they are sent, and see through. */
+export type PreviewPlane = 'material' | 'spirit';
+
 /**
- * Whether a token can supply a preview's sight at all. The DM's token list
- * holds every token; a player is never sent one that is hidden or on the
- * spirit plane, so a preview must not look through one either. Without this
- * a hidden player token still lit its surroundings on the projector.
+ * Whether a token is on the previewed viewer's plane and so can be shown or
+ * supply sight at all. The DM's token list holds every token; a player is
+ * sent only visible tokens on their own plane (the server's
+ * filterTokensByRole), so a preview must not look through any other. Without
+ * this a hidden player token still lit its surroundings on the projector.
  */
-function suppliesPreviewSight(t: Token): boolean {
-  return t.visible && t.layer === TokenLayer.TOKEN;
+function onViewersPlane(t: Token, plane: PreviewPlane): boolean {
+  return t.visible && t.layer === (plane === 'spirit' ? TokenLayer.SPIRIT : TokenLayer.TOKEN);
+}
+
+/**
+ * Which plane the previewed viewer is on, by the server's rule
+ * (getSpiritVisibility): the spirit plane for everyone while the DM has it
+ * open to all, else for a player who controls a visible token on the spirit
+ * layer. One token: its own plane. The party is several people, so it
+ * crosses only while the plane is open to all.
+ */
+export function previewPlane(
+  selection: PreviewSelection | null,
+  tokens: ReadonlyArray<Token>,
+  spiritLayerEnabled: boolean
+): PreviewPlane {
+  if (!selection) return 'material';
+  if (spiritLayerEnabled) return 'spirit';
+  const crossedOver = (t: Token) => t.visible && t.layer === TokenLayer.SPIRIT;
+  switch (selection.kind) {
+    case 'player':
+      return tokens.some((t) => crossedOver(t) && controlsToken(t, selection.userId, 'PLAYER')) ? 'spirit' : 'material';
+    case 'token':
+      return tokens.some((t) => t.id === selection.tokenId && crossedOver(t)) ? 'spirit' : 'material';
+    case 'party':
+      return 'material';
+  }
 }
 
 export type PreviewSelection =
@@ -68,10 +97,10 @@ export function decodePreviewSelection(value: string): PreviewSelection | null {
  * player-type token, whoever controls it, which is the union an in-person
  * table wants on the projector.
  */
-export function previewOwnFor(selection: PreviewSelection | null): (t: Token) => boolean {
+export function previewOwnFor(selection: PreviewSelection | null, plane: PreviewPlane): (t: Token) => boolean {
   if (!selection) return () => false;
   const chosen = ownByKind(selection);
-  return (t) => suppliesPreviewSight(t) && chosen(t);
+  return (t) => onViewersPlane(t, plane) && chosen(t);
 }
 
 /**
@@ -106,7 +135,7 @@ function ownByKind(selection: PreviewSelection): (t: Token) => boolean {
 /**
  * The tokens a preview draws and lets the pointer find: the viewer's own,
  * plus whatever the visibility rule says the viewer can see, never one that
- * is hidden or off the material plane. `canSee` is null when the map has no
+ * is hidden or off the viewer's plane. `canSee` is null when the map has no
  * dynamic lighting, in which case every such token shows. One function, so
  * the hover panel can never name a token the canvas does not draw.
  */
@@ -114,10 +143,11 @@ export function tokensShownInPreview(
   tokens: ReadonlyArray<Token>,
   viewerOwn: (t: Token) => boolean,
   canSee: ((cx: number, cy: number) => boolean) | null,
-  viewport: { gridSize: number; mapHeight: number }
+  viewport: { gridSize: number; mapHeight: number },
+  plane: PreviewPlane
 ): Token[] {
   return tokens.filter((t) => {
-    if (!suppliesPreviewSight(t)) return false;
+    if (!onViewersPlane(t, plane)) return false;
     if (viewerOwn(t) || !canSee) return true;
     const cx = (t.position.x + t.size.width / 2) * viewport.gridSize;
     const cy = gridYToCentrePx(t.position.y, t.size.height, viewport.mapHeight, viewport.gridSize);
@@ -139,9 +169,10 @@ export function previewTokens(
   viewerOwn: (t: Token) => boolean,
   viewerControls: (t: Token) => boolean,
   canSee: ((cx: number, cy: number) => boolean) | null,
-  viewport: { gridSize: number; mapHeight: number }
+  viewport: { gridSize: number; mapHeight: number },
+  plane: PreviewPlane
 ): Token[] {
-  return tokensShownInPreview(tokens, viewerOwn, canSee, viewport).map((t) => tokenSentTo(t, viewerControls(t)));
+  return tokensShownInPreview(tokens, viewerOwn, canSee, viewport, plane).map((t) => tokenSentTo(t, viewerControls(t)));
 }
 
 /**
@@ -177,9 +208,9 @@ export function previewMemoryUser(
 
 /**
  * The picker's entries: players first, then the tokens a preview may look
- * through (visible, material plane) with player-type tokens ahead of the
- * rest, each group by name, and the party entry whenever there is a
- * player-type token to make one of.
+ * through (visible, on either plane, a spirit one named as such) with
+ * player-type tokens ahead of the rest, each group by name, and the party
+ * entry whenever there is a player-type token to make one of.
  */
 export function previewOptions(
   memberships: ReadonlyArray<Pick<CampaignMembership, 'userId' | 'role' | 'user'>>,
@@ -189,15 +220,16 @@ export function previewOptions(
     .filter((m) => (m.role as string) === 'PLAYER')
     .map((m) => ({ group: 'players', value: `player:${m.userId}`, label: m.user?.displayName ?? 'Player' }));
 
-  const material = tokens.filter(suppliesPreviewSight);
+  const seeing = tokens.filter((t) => onViewersPlane(t, 'material') || onViewersPlane(t, 'spirit'));
   const byName = (a: Token, b: Token) => a.name.localeCompare(b.name);
-  const pcs = material.filter((t) => t.type === TokenType.PLAYER).sort(byName);
-  const others = material.filter((t) => t.type !== TokenType.PLAYER).sort(byName);
+  const pcs = seeing.filter((t) => t.type === TokenType.PLAYER).sort(byName);
+  const others = seeing.filter((t) => t.type !== TokenType.PLAYER).sort(byName);
 
   const tokenEntries: PreviewOption[] = [];
   if (pcs.length > 0) tokenEntries.push({ group: 'tokens', value: PARTY, label: 'All player tokens' });
   for (const t of [...pcs, ...others]) {
-    tokenEntries.push({ group: 'tokens', value: `token:${t.id}`, label: t.name });
+    const label = t.layer === TokenLayer.SPIRIT ? `${t.name} (spirit)` : t.name;
+    tokenEntries.push({ group: 'tokens', value: `token:${t.id}`, label });
   }
   return [...players, ...tokenEntries];
 }

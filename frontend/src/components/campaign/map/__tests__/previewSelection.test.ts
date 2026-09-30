@@ -10,6 +10,7 @@ import {
   tokensShownInPreview,
   previewControlsFor,
   previewTokens,
+  previewPlane,
   type PreviewSelection,
 } from '../previewSelection';
 import type { CampaignMembership, Token } from '@/types';
@@ -65,34 +66,70 @@ describe('encoding', () => {
 
 describe('previewOwnFor', () => {
   it('a player: the tokens they control; a character binding alone is not control', () => {
-    const own = previewOwnFor({ kind: 'player', userId: 'bob' });
+    const own = previewOwnFor({ kind: 'player', userId: 'bob' }, 'material');
     expect(all.filter(own).map((t) => t.id)).toEqual(['wizard']);
-    const alice = previewOwnFor({ kind: 'player', userId: 'alice' });
+    const alice = previewOwnFor({ kind: 'player', userId: 'alice' }, 'material');
     expect(all.filter(alice).map((t) => t.id)).toEqual(['hero']);
   });
 
   it('a token: that token only, whoever controls it', () => {
-    const own = previewOwnFor({ kind: 'token', tokenId: 'goblin' });
+    const own = previewOwnFor({ kind: 'token', tokenId: 'goblin' }, 'material');
     expect(all.filter(own).map((t) => t.id)).toEqual(['goblin']);
   });
 
   it('the party: every player-type token, controlled or not', () => {
-    const own = previewOwnFor({ kind: 'party' });
+    const own = previewOwnFor({ kind: 'party' }, 'material');
     expect(all.filter(own).map((t) => t.id)).toEqual(['hero', 'wizard', 'orphan']);
   });
 
   it('nothing selected: nobody', () => {
-    expect(all.filter(previewOwnFor(null))).toEqual([]);
+    expect(all.filter(previewOwnFor(null, 'material'))).toEqual([]);
   });
 
-  it('a hidden or off-plane token never supplies sight, whichever way it is chosen', () => {
-    // The DM's list holds every token; a real player's holds neither of these.
-    const alice = previewOwnFor({ kind: 'player', userId: 'alice' });
-    expect(withUnseen.filter(alice).map((t) => t.id)).toEqual(['hero']);
-    const party = previewOwnFor({ kind: 'party' });
+  it('a hidden token, or one on the other plane, never supplies sight', () => {
+    // On the material plane a player is sent neither a hidden token nor a
+    // spirit one, and on the spirit plane no material one.
+    const alice = { kind: 'player', userId: 'alice' } as const;
+    expect(withUnseen.filter(previewOwnFor(alice, 'material')).map((t) => t.id)).toEqual(['hero']);
+    expect(withUnseen.filter(previewOwnFor(alice, 'spirit')).map((t) => t.id)).toEqual(['monk']);
+    const party = previewOwnFor({ kind: 'party' }, 'material');
     expect(withUnseen.filter(party).map((t) => t.id)).toEqual(['hero', 'wizard', 'orphan']);
-    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'rogue' }))).toEqual([]);
-    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }))).toEqual([]);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'rogue' }, 'material'))).toEqual([]);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }, 'material'))).toEqual([]);
+    expect(withUnseen.filter(previewOwnFor({ kind: 'token', tokenId: 'monk' }, 'spirit')).map((t) => t.id)).toEqual(['monk']);
+  });
+});
+
+// Which plane the previewed viewer is on, by the server's rule: the spirit
+// plane for everyone while the DM has it open, else for a player who controls
+// a visible token on the spirit layer. A preview that stayed on the material
+// plane drew a player whose token had crossed over as darkness, with no
+// token to see through, while their own screen showed the spirit layer.
+describe('previewPlane', () => {
+  const alice = { kind: 'player', userId: 'alice' } as const;
+  const bob = { kind: 'player', userId: 'bob' } as const;
+
+  it('a player with a visible token on the spirit layer is in the spirit realm', () => {
+    expect(previewPlane(alice, withUnseen, false)).toBe('spirit');
+    expect(previewPlane(bob, withUnseen, false)).toBe('material');
+  });
+
+  it('a hidden spirit token does not take its player across', () => {
+    const hiddenMonk = { ...spiritMonk, visible: false };
+    expect(previewPlane(alice, [hero, hiddenMonk], false)).toBe('material');
+  });
+
+  it('a token preview is on that token\'s plane', () => {
+    expect(previewPlane({ kind: 'token', tokenId: 'monk' }, withUnseen, false)).toBe('spirit');
+    expect(previewPlane({ kind: 'token', tokenId: 'hero' }, withUnseen, false)).toBe('material');
+  });
+
+  it('everyone is on the spirit plane while the DM has it open to all, and the party only then', () => {
+    expect(previewPlane(bob, withUnseen, true)).toBe('spirit');
+    expect(previewPlane({ kind: 'token', tokenId: 'hero' }, withUnseen, true)).toBe('spirit');
+    expect(previewPlane({ kind: 'party' }, withUnseen, true)).toBe('spirit');
+    expect(previewPlane({ kind: 'party' }, withUnseen, false)).toBe('material');
+    expect(previewPlane(null, withUnseen, false)).toBe('material');
   });
 });
 
@@ -101,18 +138,22 @@ describe('tokensShownInPreview', () => {
   const own = (t: Token) => t.id === 'hero';
 
   it('with lighting off: every visible token on the material plane', () => {
-    expect(tokensShownInPreview(withUnseen, own, null, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
+    expect(tokensShownInPreview(withUnseen, own, null, viewport, 'material').map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
+  });
+
+  it('on the spirit plane: every visible spirit token, and nothing from the material plane', () => {
+    expect(tokensShownInPreview(withUnseen, own, null, viewport, 'spirit').map((t) => t.id)).toEqual(['ghost', 'monk']);
   });
 
   it('with lighting on: the viewer\'s own tokens and whatever the rule says they can see', () => {
     // The goblin stands at the origin; everything else is placed out of sight.
     const placed = withUnseen.map((t) => (t.id === 'goblin' ? t : { ...t, position: { x: 9, y: 9 } }));
     const canSee = (cx: number, cy: number) => cx < 100 && cy > 900;
-    expect(tokensShownInPreview(placed, own, canSee, viewport).map((t) => t.id)).toEqual(['goblin', 'hero']);
+    expect(tokensShownInPreview(placed, own, canSee, viewport, 'material').map((t) => t.id)).toEqual(['goblin', 'hero']);
   });
 
   it('never a hidden or off-plane token, even one the rule could see', () => {
-    expect(tokensShownInPreview(withUnseen, own, () => true, viewport).map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
+    expect(tokensShownInPreview(withUnseen, own, () => true, viewport, 'material').map((t) => t.id)).toEqual(['goblin', 'hero', 'chest', 'wizard', 'orphan']);
   });
 });
 
@@ -159,7 +200,7 @@ describe('previewMemoryUser', () => {
 describe('previewOptions', () => {
   const members = [member('dm', 'DM', 'The DM'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
 
-  it('lists players, then the party, then player tokens, then the rest, off the material plane', () => {
+  it('lists players, then the party, then player tokens, then the rest, spirit ones named as such', () => {
     expect(previewOptions(members, all).map((o) => [o.group, o.value, o.label])).toEqual([
       ['players', 'player:bob', 'Bob'],
       ['tokens', 'party', 'All player tokens'],
@@ -167,6 +208,7 @@ describe('previewOptions', () => {
       ['tokens', 'token:orphan', 'Orphan'],
       ['tokens', 'token:wizard', 'Wizard'],
       ['tokens', 'token:chest', 'Chest'],
+      ['tokens', 'token:ghost', 'Ghost (spirit)'],
       ['tokens', 'token:goblin', 'Goblin'],
     ]);
   });
@@ -245,7 +287,7 @@ describe('previewTokens', () => {
 
   it('shows an obscured token the previewed player does not control as the server sends it', () => {
     const veiled = token({ id: 'v', name: 'Goblin Boss', imageUrl: '/api/assets/tokens/v', obscured: true, conditions: ['prone'], hp: { current: 3, max: 9, temp: 0 } });
-    const [seen] = previewTokens([veiled], nobody, nobody, null, viewport);
+    const [seen] = previewTokens([veiled], nobody, nobody, null, viewport, 'material');
     expect(seen.name).toBe('');
     expect(seen.imageUrl).toBe('');
     expect(seen.conditions).toEqual([]);
@@ -258,7 +300,7 @@ describe('previewTokens', () => {
     const own = token({ id: 'o', name: 'Familiar', obscured: true, controlledBy: 'alice' });
     const plain = token({ id: 'p', name: 'Cultist' });
     const alice = (t: Token) => t.controlledBy === 'alice';
-    const seen = previewTokens([own, plain], alice, alice, null, viewport);
+    const seen = previewTokens([own, plain], alice, alice, null, viewport, 'material');
     expect(seen.map((t) => t.name)).toEqual(['Familiar', 'Cultist']);
   });
 
@@ -266,7 +308,7 @@ describe('previewTokens', () => {
     // The hover card and the downed fade read these; a real player has neither.
     const barOff = token({ id: 'b', name: 'Orc', hp: { current: 0, max: 10, temp: 0 }, showHpBar: false, sightRadius: 12 });
     const barOn = token({ id: 'o', name: 'Ogre', hp: { current: 5, max: 9, temp: 0 }, showHpBar: true });
-    const seen = previewTokens([barOff, barOn], nobody, nobody, null, viewport);
+    const seen = previewTokens([barOff, barOn], nobody, nobody, null, viewport, 'material');
     expect(seen.find((t) => t.id === 'b')).not.toHaveProperty('hp');
     expect(seen.find((t) => t.id === 'b')).not.toHaveProperty('sightRadius');
     expect(seen.find((t) => t.id === 'o')?.hp).toEqual({ current: 5, max: 9, temp: 0 });
@@ -274,9 +316,9 @@ describe('previewTokens', () => {
 
   it('masks every obscured token in the party view, whose sight comes from tokens nobody on the screen controls alone', () => {
     const rogue = token({ id: 'r', name: 'Disguised Rogue', imageUrl: '/api/assets/tokens/r', obscured: true, controlledBy: 'alice', type: TokenType.PLAYER });
-    const party = previewOwnFor({ kind: 'party' });
+    const party = previewOwnFor({ kind: 'party' }, 'material');
     const controls = previewControlsFor({ kind: 'party' });
-    const [seen] = previewTokens([rogue], party, controls, null, viewport);
+    const [seen] = previewTokens([rogue], party, controls, null, viewport, 'material');
     expect(seen.name).toBe('');
     expect(seen.imageUrl).toBe('');
     expect(seen.controlledBy).toBeNull();
@@ -284,6 +326,6 @@ describe('previewTokens', () => {
 
   it('drops what the preview would not show at all, before masking', () => {
     const hidden = token({ id: 'h', name: 'Ambusher', visible: false, obscured: true });
-    expect(previewTokens([hidden], nobody, nobody, null, viewport)).toEqual([]);
+    expect(previewTokens([hidden], nobody, nobody, null, viewport, 'material')).toEqual([]);
   });
 });

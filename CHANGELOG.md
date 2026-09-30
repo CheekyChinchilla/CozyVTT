@@ -206,6 +206,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The preview looks only through tokens the players would have.** A hidden token no longer lends it sight, pointing at a hidden, unlit or fogged token no longer opens its details, and the picker no longer lists hidden tokens.
 
+- **Previewing a player in the spirit realm shows the spirit realm.** When the DM had sent a player's token to the spirit layer, Preview Player View for that player, or for that token, was a black screen, whatever the spirit layer settings, while the player's own screen showed the spirit layer. The preview now follows the player onto the spirit plane: the spirit layer image and tint, the "Spirit Realm" badge, only spirit-plane tokens, and sight from their spirit token. Tokens on the spirit layer are listed in the preview picker too, marked *(spirit)*.
+
 - **The preview hides the DM's light markers.** A projected screen showed where every light was. Leave the preview to move or edit a light.
 
 #### Backups and restore
