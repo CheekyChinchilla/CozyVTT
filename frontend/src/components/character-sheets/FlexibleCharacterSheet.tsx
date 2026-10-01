@@ -9,11 +9,7 @@ import { FlexibleCharacterSheetView } from './flexible/FlexibleCharacterSheetVie
 import { FlexibleCharacterSheetEdit } from './flexible/FlexibleCharacterSheetEdit';
 
 export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  // TODO(ui): `onDirtyChange` is never called, so the full-page editor's back
-  // arrow leaves a Flexible sheet without asking even with unsaved edits, and
-  // the in-page editor has to ask on every Cancel. Report it from
-  // FlexibleCharacterSheetEdit as the system editors do.
-  const { mode, character, onSave } = props;
+  const { mode, character, onSave, onDirtyChange } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   const handleCancel = () => {
@@ -33,6 +29,7 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
         character={character}
         onSave={handleSave}
         onCancel={handleCancel}
+        onDirtyChange={onDirtyChange}
       />
     );
   }

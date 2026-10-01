@@ -3,8 +3,7 @@
  *
  * It asks "Discard Changes?" only when something would be lost. It used to ask
  * every time, straight after opening and with nothing typed, which teaches
- * people to click through the one prompt that guards their edits. A Flexible
- * sheet does not say whether it has been edited, so it still always asks.
+ * people to click through the one prompt that guards their edits.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -22,6 +21,11 @@ vi.mock('@/contexts/ToastContext', () => ({
 vi.mock('@/services/api', () => ({
   api: { updateCharacter: vi.fn() },
 }));
+
+const flexible = {
+  id: 'flex-1', userId: 'u1', name: 'Freeform', gameSystem: null, data: { sections: [] },
+  updatedAt: '2026-01-01T00:00:00.000Z',
+} as unknown as Character;
 
 describe('leaving the in-page editor', () => {
   it('closes at once when nothing was changed', async () => {
@@ -55,17 +59,26 @@ describe('leaving the in-page editor', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('still asks for a Flexible sheet, which cannot say whether it was edited', async () => {
+  it('closes at once for an untouched Flexible sheet', async () => {
     const onClose = vi.fn();
-    const flexible = {
-      id: 'flex-1', userId: 'u1', name: 'Freeform', gameSystem: null, data: { sections: [] },
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    } as unknown as Character;
     render(<CharacterSheetEditorModal character={flexible} onClose={onClose} />);
 
+    await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByText('Discard Changes?')).not.toBeInTheDocument();
+  });
+
+  it('asks once a section is added to a Flexible sheet', async () => {
+    const onClose = vi.fn();
+    render(<CharacterSheetEditorModal character={flexible} onClose={onClose} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Add Section/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Attributes/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
     expect(screen.getByText('Discard Changes?')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
+
 });

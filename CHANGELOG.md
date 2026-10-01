@@ -132,11 +132,13 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Screen readers can reach the character sheet and its editor.** Both pop-ups were hidden from assistive technology, so a screen reader found no sheet, no heading and no buttons in them.
 
-- **The editor that opens over a character sheet asks "Discard Changes?" only when you have changed something.** It asked every time it was closed, even straight after opening. A Flexible sheet still always asks.
+- **The editor that opens over a character sheet asks "Discard Changes?" only when you have changed something.** It asked every time it was closed, even straight after opening.
 
 - **Escape no longer throws away edits in the sheet editor.** In the editor that opens over a character sheet, Escape closed the editor and the sheet behind it at once, losing anything typed without asking. It now does what the editor's Cancel button does, and the sheet stays open.
 
 - **The Characters page shows a sheet as it was last saved.** After saving from the editor that opens over a sheet, closing the sheet and opening it again showed the version from before the save, and a second edit made from it was refused with "This character was changed while you had it open".
+
+- **Leaving a Flexible sheet with unsaved changes asks first.** In the full-page editor the back arrow left a Flexible sheet straight away, losing anything added since the last save.
 
 #### Maps, fog and lighting
 
