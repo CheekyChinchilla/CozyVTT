@@ -5889,6 +5889,8 @@ paths:
                     properties:
                       id:
                         type: string
+                      setupCompleted:
+                        type: boolean
                       instanceName:
                         type: string
                       timezone:
@@ -5897,6 +5899,34 @@ paths:
                         type: boolean
                       requireAdminApproval:
                         type: boolean
+                      themeId:
+                        type: string
+                      customThemeColors:
+                        type: object
+                        nullable: true
+                        description: Map of theme token name to colour string, stored as the PUT request sent it.
+                        additionalProperties:
+                          type: string
+                      fontId:
+                        type: string
+                      customLogoUrl:
+                        type: string
+                        nullable: true
+                      customFaviconUrl:
+                        type: string
+                        nullable: true
+                      customMascotUrl:
+                        type: string
+                        nullable: true
+                      campaignExportSizeLimit:
+                        type: integer
+                        description: Byte ceiling for a campaign export; not changeable through this route.
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -5904,6 +5934,18 @@ paths:
     put:
       tags: [Admin]
       summary: Update system settings
+      description: |
+        Every field is optional; only the ones present are changed. `instanceName`,
+        `timezone`, `themeId` and `fontId` are trimmed, stripped of `<` and `>`, then cut
+        to their max length rather than rejected for being too long. `customThemeColors`
+        is stored exactly as sent, with no validation of its keys or values.
+
+        `customLogoUrl`, `customFaviconUrl` and `customMascotUrl` name a file this
+        instance serves: `""` or `null` clears the override back to the default, and
+        anything else must be a same-origin path starting with a single `/` (no scheme,
+        no `//`, no backslash, no control characters) or the request answers 400. These
+        images themselves are not uploaded here — replace the files in
+        `frontend/public/` and rebuild to change what the path points at.
       operationId: adminUpdateSettings
       security:
         - cookieAuth: []
@@ -5924,9 +5966,43 @@ paths:
                   type: boolean
                 requireAdminApproval:
                   type: boolean
+                themeId:
+                  type: string
+                  maxLength: 50
+                customThemeColors:
+                  type: object
+                  additionalProperties:
+                    type: string
+                fontId:
+                  type: string
+                  maxLength: 50
+                customLogoUrl:
+                  type: string
+                  nullable: true
+                  description: Same-origin path, or "" or null to clear.
+                customFaviconUrl:
+                  type: string
+                  nullable: true
+                  description: Same-origin path, or "" or null to clear.
+                customMascotUrl:
+                  type: string
+                  nullable: true
+                  description: Same-origin path, or "" or null to clear.
       responses:
         '200':
           description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  settings:
+                    type: object
+                    description: The full settings object, in the same shape as GET /api/admin/settings returns.
+        '400':
+          description: A branding URL was not a same-origin path
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -5936,7 +6012,11 @@ paths:
     get:
       tags: [Admin]
       summary: Get system activity
-      description: Returns currently-online users (via session table), recent admin actions (SystemLog), 50 most recent registrations, and 20 most recent game sessions.
+      description: |
+        Returns currently-online users, recent admin actions (SystemLog), the 50 newest
+        accounts, and the 20 most recent game sessions. "Online" means the user holds an
+        unexpired row in the session table — up to 30 days away if they signed in with
+        "remember me" — not that a socket is currently connected.
       operationId: adminGetActivity
       security:
         - cookieAuth: []
@@ -5989,12 +6069,61 @@ paths:
                           type: string
                   recentUsers:
                     type: array
-                    items:
-                      $ref: '#/components/schemas/User'
-                  recentSessions:
-                    type: array
+                    description: The 50 newest accounts. A select of seven fields, not the full User object.
                     items:
                       type: object
+                      properties:
+                        id:
+                          type: string
+                        email:
+                          type: string
+                        displayName:
+                          type: string
+                        platformRole:
+                          type: string
+                          enum: [ADMIN, USER]
+                        mfaEnabled:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastLoginAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                  recentSessions:
+                    type: array
+                    description: The 20 most recently started game sessions, newest first.
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        campaignId:
+                          type: string
+                        sessionNumber:
+                          type: integer
+                        startedAt:
+                          type: string
+                          format: date-time
+                        endedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        savedState:
+                          type: object
+                          nullable: true
+                          description: Token positions, map state and the like, as the session left them.
+                        notes:
+                          type: string
+                          nullable: true
+                        campaign:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6067,6 +6196,12 @@ paths:
         **withheld** from the response; it is returned only when the email could not be
         sent, so the admin never holds a working credential unnecessarily. To create an
         account without any password at all, use `/api/admin/users/invite`.
+
+        `displayName` defaults to the part of the email before `@` when omitted, is
+        trimmed and stripped of `<` and `>`, then cut to 50 characters rather than
+        rejected for being too long. `platformRole` is not validated against the enum:
+        any value other than exactly `"ADMIN"`, including an unrecognised string,
+        becomes `USER`.
       operationId: adminCreateUser
       security:
         - cookieAuth: []
@@ -6132,6 +6267,10 @@ paths:
         The recipient completes setup at `/accept-invite?token=…`, which submits to
         `POST /api/auth/reset-password` — invitations and password resets share the same
         token machinery.
+
+        `displayName` and `platformRole` are handled exactly as in `POST /api/admin/users`:
+        the name is cut to 50 characters rather than rejected, and any `platformRole`
+        other than exactly `"ADMIN"` becomes `USER`.
       operationId: adminInviteUser
       security:
         - cookieAuth: []
@@ -6187,7 +6326,9 @@ paths:
       summary: Resend an invitation
       description: |
         Issues a fresh invitation link and invalidates any outstanding one. Useful when the
-        original expired or never arrived. Requires SMTP.
+        original expired or never arrived. Requires SMTP. Works for any existing account,
+        not only one that was originally created through `/api/admin/users/invite` — it
+        sets a usable password-reset token regardless of how the account was created.
       operationId: adminResendInvite
       security:
         - cookieAuth: []
@@ -6216,6 +6357,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          description: The invitation email could not be sent
         '503':
           description: SMTP is not configured on this instance
 
@@ -6236,6 +6379,8 @@ paths:
       responses:
         '200':
           description: User approved
+        '400':
+          description: User is already approved
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6247,7 +6392,11 @@ paths:
     post:
       tags: [Admin]
       summary: Reset MFA for a locked-out user
-      description: Disables TOTP and clears backup codes for a user who is locked out. The user must re-enroll MFA on next login. Admin accounts will be forced to re-enroll on their next MFA-required action.
+      description: >-
+        Disables TOTP and clears backup codes for a user who is locked out, turning MFA
+        off for the account. This does not force the user to re-enroll: they sign in
+        with just their password next time, and MFA stays off until they set it up
+        again themselves.
       operationId: adminResetUserMfa
       security:
         - cookieAuth: []
@@ -6398,7 +6547,7 @@ paths:
         '200':
           description: Backup file download
           content:
-            application/octet-stream:
+            application/zip:
               schema:
                 type: string
                 format: binary
@@ -6792,10 +6941,17 @@ paths:
       tags: [Admin]
       summary: Restore the instance from a backup archive
       description: >
-        Platform ADMIN only. Replaces the database from an archive downloaded
-        earlier and copies the archive's uploaded files over the existing ones
-        (a file the archive does not have is left in place). Needs pg_dump and
-        psql present in the backend image. The archive's database.sql is
+        Platform ADMIN only. The upload is capped at 4 GB and its filename must end in
+        `.zip`. Once accepted, the archive is unpacked under a limit of 100,000 entries
+        and 10 GiB of decompressed data, and an entry whose path could escape the
+        destination folder is refused. An oversized or wrongly-named upload, an
+        uploaded file that is not actually a ZIP despite its name, or one over an
+        archive limit currently all surface as a generic 500 Internal Server Error
+        rather than a 400, and nothing is changed in any of these cases. Replaces the
+        database from an archive downloaded earlier and copies the archive's uploaded
+        files over the existing ones (a file the archive does not have is left in
+        place). Needs pg_dump and psql present in the backend image. The archive's
+        database.sql is
         checked before anything runs: it must be a complete pg_dump of a
         CozyVTT database (pg_dump's closing line present, the User and
         _prisma_migrations tables created) holding nothing but SQL; a line
@@ -6836,6 +6992,7 @@ paths:
                 backup:
                   type: string
                   format: binary
+                  description: ZIP archive, up to 4 GB. The filename must end in .zip.
       responses:
         '200':
           description: Restore completed. The session that made the request went with the old database.
@@ -6858,8 +7015,11 @@ paths:
         '500':
           description: >
             Restore Failed (nothing changed), Restore Incomplete (the database was
-            restored but migrating it or copying its files failed), or a tool is
-            not available in the image
+            restored but migrating it or copying its files failed), a tool is not
+            available in the image, or Internal Server Error for an oversized or
+            wrongly-named upload, an uploaded file that is not actually a ZIP, or an
+            archive over the entry-count or decompressed-size limit (nothing changed
+            in any of these)
 
 components:
   securitySchemes:
