@@ -39,6 +39,13 @@ interface CharacterSheetViewerModalProps {
    */
   publicName?: string;
   onClose: () => void;
+  /**
+   * Called with the character as stored, each time the sheet loads it again
+   * after its editor closes: after a save, or after a save refused because the
+   * character had changed. For a page that keeps its own copy and has no live
+   * updates to follow, such as the character gallery.
+   */
+  onCharacterChanged?: (character: Character) => void;
 }
 
 export default function CharacterSheetViewerModal({
@@ -48,6 +55,7 @@ export default function CharacterSheetViewerModal({
   campaign,
   publicName,
   onClose,
+  onCharacterChanged,
 }: CharacterSheetViewerModalProps) {
   const { user } = useAuth();
   // Optional: this modal opens both from the campaign roster, where there is a
@@ -134,6 +142,7 @@ export default function CharacterSheetViewerModal({
     try {
       const { character: updatedCharacter } = await api.getCharacter(character.id);
       setCharacter(updatedCharacter);
+      onCharacterChanged?.(updatedCharacter);
     } catch (error) {
       console.error('Error refreshing character after save:', error);
     }

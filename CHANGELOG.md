@@ -136,6 +136,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Escape no longer throws away edits in the sheet editor.** In the editor that opens over a character sheet, Escape closed the editor and the sheet behind it at once, losing anything typed without asking. It now does what the editor's Cancel button does, and the sheet stays open.
 
+- **The Characters page shows a sheet as it was last saved.** After saving from the editor that opens over a sheet, closing the sheet and opening it again showed the version from before the save, and a second edit made from it was refused with "This character was changed while you had it open".
+
 #### Maps, fog and lighting
 
 - **Fog of war hides the map from players.** Unrevealed areas are now fully opaque for players from the first moment the map shows, and hide the walls, doors and light glows beneath them. Only the player's own token shows through. The DM still sees a see-through tint so they can work under it.

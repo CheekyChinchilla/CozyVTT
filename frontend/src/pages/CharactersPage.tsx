@@ -345,6 +345,9 @@ export default function CharactersPage() {
           character={viewingCharacter}
           campaign={getCharacterCampaign(viewingCharacter)}
           onClose={() => setViewingCharacter(null)}
+          onCharacterChanged={(stored) =>
+            setCharactersData((prev) => prev.map((c) => (c.id === stored.id ? stored : c)))
+          }
         />
       )}
 
