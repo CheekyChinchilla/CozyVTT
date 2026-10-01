@@ -278,24 +278,6 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const dirtyRef = useRef(false);
   const hasInteractedRef = useRef(false);
   const cleanSnapshotRef = useRef<string | null>(null);
-  if (cleanSnapshotRef.current === null) {
-    cleanSnapshotRef.current = JSON.stringify(formData);
-  }
-  // Always the current form state, for reading inside async callbacks.
-  const latestFormDataRef = useRef(formData);
-  latestFormDataRef.current = formData;
-
-  useEffect(() => {
-    if (!hasInteractedRef.current) {
-      cleanSnapshotRef.current = JSON.stringify(formData);
-      return;
-    }
-    const dirty = JSON.stringify(formData) !== cleanSnapshotRef.current;
-    if (dirty !== dirtyRef.current) {
-      dirtyRef.current = dirty;
-      onDirtyChange?.(dirty);
-    }
-  }, [formData, onDirtyChange]);
 
   // Capture-phase, so it runs before the field's own handler updates state.
   // Pointer events are included because plenty of edits here are button
@@ -307,6 +289,34 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [customColorHex, setCustomColorHex] = useState('');
   const [isCustomColor, setIsCustomColor] = useState(false);
+
+  // The header colour and a newly chosen token picture are kept outside the
+  // form, and are unsaved changes too.
+  const sheetSnapshot = JSON.stringify({
+    formData,
+    themeColor: isCustomColor ? customColorHex : selectedColor.name,
+    tokenImage: tokenImageFile
+      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
+      : null,
+  });
+  if (cleanSnapshotRef.current === null) {
+    cleanSnapshotRef.current = sheetSnapshot;
+  }
+  // Always the current state, for reading inside async callbacks.
+  const latestSnapshotRef = useRef(sheetSnapshot);
+  latestSnapshotRef.current = sheetSnapshot;
+
+  useEffect(() => {
+    if (!hasInteractedRef.current) {
+      cleanSnapshotRef.current = sheetSnapshot;
+      return;
+    }
+    const dirty = sheetSnapshot !== cleanSnapshotRef.current;
+    if (dirty !== dirtyRef.current) {
+      dirtyRef.current = dirty;
+      onDirtyChange?.(dirty);
+    }
+  }, [sheetSnapshot, onDirtyChange]);
 
   useEffect(() => {
     if (data.themeColor) {
@@ -688,10 +698,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     // A completed save means nothing is pending any more.
     // Unless the sheet was edited again while the save was in flight, which the
     // recheck preserves.
-    const savedSnapshot = JSON.stringify(formData);
+    const savedSnapshot = sheetSnapshot;
     const markClean = () => {
       cleanSnapshotRef.current = savedSnapshot;
-      const stillDirty = JSON.stringify(latestFormDataRef.current) !== savedSnapshot;
+      const stillDirty = latestSnapshotRef.current !== savedSnapshot;
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
     };
