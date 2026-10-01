@@ -10,6 +10,9 @@ import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucid
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
 import CharacterSheetSkeleton from '@/components/skeletons/CharacterSheetSkeleton';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SignedOutNotice from '@/components/common/SignedOutNotice';
+import { useUnsavedWorkGuard } from '@/hooks/useUnsavedWorkGuard';
+import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import characterService from '@/services/character.service';
@@ -19,6 +22,7 @@ import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
 import { isStaleCharacterSave, STALE_CHARACTER_RELOADED } from '@/utils/staleCharacter';
+import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
 import type { CharacterData } from '@/types';
 
 export default function CharacterEditorPage() {
@@ -38,6 +42,7 @@ export default function CharacterEditorPage() {
   // by the sheet itself, which is the only thing that knows: it owns the form
   // state. Reset on save and whenever the sheet returns to view mode.
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const signedOut = useUnsavedWorkGuard(hasUnsavedChanges);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
@@ -144,6 +149,8 @@ export default function CharacterEditorPage() {
           ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
         });
 
+        reportSignedIn();
+
         // Update local state
         setCharacter(updated);
         setLastSaved(new Date());
@@ -153,6 +160,14 @@ export default function CharacterEditorPage() {
         }
       } catch (err: unknown) {
         console.error('Failed to save character:', err);
+
+        // Signed out meanwhile: the page has stayed put with the edits, and
+        // the notice says how to save them.
+        if (isSignedOutSave(err)) {
+          reportSignedOut();
+          showToast(SIGNED_OUT_NOT_SAVED, 'error');
+          throw err;
+        }
 
         // TODO(sheets): this page has no live connection, so hit points changed
         // at the table since it opened make its next save stale, and the reload
@@ -394,6 +409,7 @@ export default function CharacterEditorPage() {
 
       {/* Character Sheet Editor */}
       <div className="p-4">
+        {signedOut && <SignedOutNotice />}
         <CharacterSheetRouter
           key={sheetKey}
           onDirtyChange={setHasUnsavedChanges}

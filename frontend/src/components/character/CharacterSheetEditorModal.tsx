@@ -5,10 +5,12 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useUnsavedWorkGuard } from '@/hooks/useUnsavedWorkGuard';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/services/api';
 import type { Character } from '@/types';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 // Import editor components
 import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
@@ -17,6 +19,8 @@ import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
 import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
 import { isStaleCharacterSave, STALE_CHARACTER_REOPEN } from '@/utils/staleCharacter';
+import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
+import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import type { CharacterData } from '@/types';
 
 interface CharacterSheetEditorModalProps {
@@ -33,6 +37,7 @@ export default function CharacterSheetEditorModal({
   const [saving, setSaving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const signedOut = useUnsavedWorkGuard(hasUnsavedChanges);
   const { showToast } = useToast();
   // The version the editor opened. The character handed in here can be
   // refreshed while the editor is open, since the sheet behind it follows the
@@ -51,6 +56,7 @@ export default function CharacterSheetEditorModal({
         updatedAt: loadedAt,
         ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
       });
+      reportSignedIn();
 
       // Call optional callback
       if (onSaved) {
@@ -61,6 +67,14 @@ export default function CharacterSheetEditorModal({
       onClose();
     } catch (error) {
       console.error('Error saving character:', error);
+
+      // Signed out meanwhile: the editor stays open with the changes, and the
+      // notice says how to save them.
+      if (isSignedOutSave(error)) {
+        reportSignedOut();
+        showToast(SIGNED_OUT_NOT_SAVED, 'error');
+        throw error;
+      }
 
       // Saving over a newer version would undo it. The sheet behind is loaded
       // again and the editor, holding the old one, is closed.
@@ -196,6 +210,12 @@ export default function CharacterSheetEditorModal({
             <X className="w-5 h-5 text-stone-gray" />
           </button>
         </div>
+
+        {signedOut && (
+          <div className="px-4 pt-4 flex-shrink-0">
+            <SignedOutNotice />
+          </div>
+        )}
 
         {/* Visually hidden title for accessibility */}
         <h2 id="character-sheet-editor-title" className="sr-only">

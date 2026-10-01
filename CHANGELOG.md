@@ -140,6 +140,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Leaving a Flexible sheet with unsaved changes asks first.** In the full-page editor the back arrow left a Flexible sheet straight away, losing anything added since the last save.
 
+- **Being signed out no longer loses the changes in a character sheet editor.** If the browser was signed out while a sheet had unsaved changes, after an hour without activity for example, pressing Save went to the sign-in page and the changes were lost; on the Characters page this happened without any warning. The editor now stays open with the changes and says how to sign in again in a new tab, and Save then works.
+
 #### Maps, fog and lighting
 
 - **Fog of war hides the map from players.** Unrevealed areas are now fully opaque for players from the first moment the map shows, and hide the walls, doors and light glows beneath them. Only the player's own token shows through. The DM still sees a see-through tint so they can work under it.

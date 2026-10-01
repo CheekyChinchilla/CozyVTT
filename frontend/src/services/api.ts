@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { isPublicPath } from '@/utils/publicRoutes';
+import { handleUnauthorized } from '@/services/unsavedWork';
 import type {
   User,
   AuthResponse,
@@ -107,13 +107,16 @@ class ApiClient {
         if (error.response) {
           const { status, data } = error.response;
 
-          // Unauthorized - redirect to login, but only from protected pages.
+          // Unauthorized - redirect to login, but only from protected pages,
+          // and not while an editor holds unsaved changes (see unsavedWork).
           // On a public page a 401 is expected, because nobody has signed in
           // yet. The route list lives in utils/publicRoutes so it can be tested
           // against App.tsx — see the note there on why a missing entry breaks
           // tokenised links rather than merely redirecting them.
-          if (status === 401 && !isPublicPath(window.location.pathname)) {
-            window.location.href = '/auth/login';
+          if (status === 401) {
+            handleUnauthorized(window.location.pathname, () => {
+              window.location.href = '/auth/login';
+            });
           }
 
           // Forbidden

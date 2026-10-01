@@ -241,6 +241,8 @@ The Character Editor is where you fill in every detail about your character — 
 
 Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent.
 
+**If you are signed out while editing**, for example after a long break, your changes are not lost. Pressing **Save** shows "You've been signed out" above the sheet and keeps everything you typed. Click **Sign in in a new tab**, sign in there, come back to the editor and press **Save** again. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
+
 You can also click **Export** in the editor header at any time to download a JSON backup copy.
 
 ### Character Templates
@@ -629,7 +631,8 @@ In the **Security** section, enter your current password and your new password (
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
 game table on it is disconnected in the same moment and taken to the sign-in
-page; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
+page, unless a character sheet is open there with unsaved changes, which stays
+open and says how to sign in again; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
 your password is what removes them. Turning off MFA does the same thing, and so
 does resetting your password from the sign-in page's **Forgot password?** link,
 which signs out every device, the one you are holding included. Changing or
