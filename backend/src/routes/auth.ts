@@ -406,12 +406,12 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
         },
       });
 
+      // Not awaited: waiting for the mail server only for a known address
+      // would let the response time tell which addresses have accounts.
       if (isSmtpConfigured()) {
-        try {
-          await sendPasswordResetEmail(user.email, token, user.displayName);
-        } catch (emailError) {
+        sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
           logger.error('Failed to send password reset email', { err: emailError });
-        }
+        });
       }
     }
 

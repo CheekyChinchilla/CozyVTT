@@ -290,6 +290,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Only the newest password-reset or invitation link works.** Using a link, changing your password, or an administrator's reset cancels all older links, and a link sets a password only once.
 
+- **The forgot-password page no longer gives away which addresses have accounts by how long it takes.** It already answered the same for any address, but for a real one it waited for the email to be sent first, which takes noticeably longer. It now answers before sending.
+
 - **Ending a sign-in closes its live game connections too.** This covers changing your password, turning off MFA, an administrator resetting a password or changing a platform role, deleting an account, and signing out. A password change or MFA removal keeps the device it was made on, and signing out closes only that sign-in's connections. Resetting a password through **Forgot password?** now signs out every device. A connection whose sign-in has expired can no longer join a campaign.
 
 - **Deleting your own account signs it out on every device.** Other signed-in devices stayed signed in, which for an admin meant keeping admin powers.
