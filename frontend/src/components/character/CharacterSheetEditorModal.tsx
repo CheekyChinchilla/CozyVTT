@@ -105,7 +105,9 @@ export default function CharacterSheetEditorModal({
     setConfirmClose(true);
   };
 
-  const modalRef = useFocusTrap(true, onClose);
+  // Escape does what Cancel does. While the question is up, Escape is its to
+  // answer, so this one stands aside.
+  const modalRef = useFocusTrap(true, confirmClose ? undefined : handleCancel);
 
   // Render appropriate character sheet editor based on game system
   const renderCharacterEditor = () => {

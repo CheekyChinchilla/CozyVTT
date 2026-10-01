@@ -144,7 +144,9 @@ export default function CharacterSheetViewerModal({
     setShowEditor(false);
   };
 
-  const modalRef = useFocusTrap(true, onClose);
+  // Every open dialog hears Escape, so with the editor open over the sheet
+  // the sheet leaves it to the editor.
+  const modalRef = useFocusTrap(true, showEditor ? undefined : onClose);
 
   // Get game system display name
   const getSystemName = (gameSystem: GameSystem | null) => {
