@@ -53,6 +53,10 @@ desktop.ini
 docker-compose.override.yml
 docker-compose.*.local.yml
 *.local.yml
+# Throwaway stacks for rehearsing an upgrade against a real backup. They carry
+# generated secrets and point at real data. Their env file, .env.live, is
+# already covered by `.env.*` above.
+docker-compose.live.yml
 
 # ---- Secrets / keys / certs — never commit private key material ------------
 # Broad, repo-wide patterns so a key or alternately-named env file dropped
@@ -131,8 +135,3 @@ playwright-report/
 # These are copyrighted material and must never be committed — CozyVTT ships
 # rules-reference scaffolding only (see the legal note in docs/GAME_SYSTEMS.md).
 system-docs/
-
-# Throwaway local stacks used to rehearse upgrades against a real backup.
-# These carry generated secrets and point at real data; never commit them.
-.env.live
-docker-compose.live.yml
