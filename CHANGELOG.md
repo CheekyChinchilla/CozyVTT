@@ -17,7 +17,7 @@ git pull origin main
 docker compose up -d --build
 ```
 
-The database is updated automatically on the first start. The update adds three settings to every map (fog on or off, Global Illumination, and remembering explored areas), each set so that existing maps behave as they did. It adds one new, empty table for explored areas. It also lets two existing columns be empty (who made a dice roll, and who uploaded a file) so that a deleted account's rolls and uploads can stay. No existing row is changed or removed, and there is no manual data migration. No new setting is required.
+The database is updated automatically on the first start. The update adds three settings to every map (fog on or off, Global Illumination, and remembering explored areas), set so that existing maps keep their fog and Global Illumination. Remembering explored areas starts on, so players' maps begin to keep ground they have seen, in grey. It adds one new, empty table for explored areas. It also lets two existing columns be empty (who made a dice roll, and who uploaded a file) so that a deleted account's rolls and uploads can stay. No existing row is changed or removed, and there is no manual data migration. No new setting is required.
 
 If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` stops at it because this release changes that file too. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict, keep your own lines, then compare your HTTPS block with the new commented-out one and add what it has that yours lacks:
 
@@ -28,7 +28,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 #### What you will notice
 
 - **Fog of war now hides the map completely.** Players see solid black where nothing has been revealed. Existing maps keep fog on, with the same areas revealed.
-- **Existing maps look the same under dynamic lighting.** They get the new **Global Illumination** setting switched on, which keeps the old behaviour: everything in line of sight is visible. Turn it off in Edit Map, or at the top of the Lights panel, when you want lights and darkvision to matter.
+- **Existing lit maps keep line-of-sight lighting.** They get the new **Global Illumination** setting switched on, which keeps the old behaviour: everything in line of sight is visible. Turn it off in Edit Map, or at the top of the Lights panel, when you want lights and darkvision to matter. Two things do look different: unlit ground is now fully dark, where it used to be nearly dark, and ground a player has explored shows in grey.
 - **A player or spectator with no token on a lit map sees nothing.** The server sends them no tokens. To let a spectator watch a lit map, turn dynamic lighting off for that map.
 - **Players' maps remember explored areas.** On a lit map, ground a player has seen stays on their map in grey after it leaves their sight. It is on for existing maps.
 - **A token belongs to whoever is set as its controller.** Tokens keep their controller. If a character's token is set to **Nobody (DM controls)**, or to someone else, the character's player no longer counts it as theirs: it gives them no sight on a lit map, and they cannot see it through fog. Choose them in **Edit Token → Controlled By** if they should have it.
@@ -76,17 +76,19 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The DM can delete the campaign's own documents.** In the Campaign documents panel, a document uploaded or written in the campaign has a bin button for the DM, which deletes it after asking. Documents shared in from someone's own library are still only unshared there. This is also how a DM removes a document whose uploader has deleted their account, which before only an administrator could do from the app.
 
-- **Fog of war can be turned on or off for each map**, at the top of the Fog of War panel or in Edit Map. While it is off, players see the whole map; revealed areas are kept for when it is turned back on.
+- **Fog of war can be turned on or off for each map**, at the top of the Fog of War panel or in Edit Map. While it is off, players see the whole map, apart from what dynamic lighting hides; revealed areas are kept for when it is turned back on.
 
 - **Each vibe period can play its own music.** The period editor's audio box, which saved a note nothing read, is now a picker offering the tracks the DM may play: their own uploads, this campaign's, and the global library. Switching to a period starts its track looping for everyone at the table, and a period with no track silences the table. The Atmosphere panel still works as a live override: stop its track, or let a non-looping one finish, and the vibe's own music returns. Notes typed into the old box do not play and are dropped the next time the periods are saved.
 
 ### Changed
 
+- **Tied initiative keeps the order combatants were added in**, where it used to sort them by name.
+
 - **Dynamic lighting limits what players see.** A player sees what their tokens' darkvision reaches in the dark, plus whatever a light source lights. Bright light shows clearly; dim light, and darkness within darkvision, show half-dark. A token's own square is always visible. In 1.4.0 every token saw everything in line of sight whatever the light, which made lights decorative. The new per-map **Global Illumination** setting keeps that older behaviour, and it is on for maps made before this release.
 
 - **Preview Player View shows one chosen player's view.** Pick a player (or a token) and the preview draws what they see: their darkvision, the lights and doors in their sight, their fog, the areas they remember, and only the tokens they are sent. It used to combine every token's vision and show the DM's fog and every token.
 
-- **New maps start with fog of war and dynamic lighting off.** The DM turns either on when a map needs it. A map imported from a Universal VTT file that brings lights starts with lighting on. Existing maps keep their settings.
+- **New maps start with fog of war off.** The DM turns it on when a map needs it. Dynamic lighting also starts off, as before, except on a map imported from a Universal VTT file that brings lights. Existing maps keep their settings.
 
 - **The Creature Library and Token Templates buttons have their own icons**, a skull and a stamp. The Creature Library used the same open book as Campaign documents, and Token Templates a plain box.
 
@@ -108,7 +110,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Character sheets store only the fields their game system defines.** Extra keys, whether sent by a program through the API or written by older sheets into places nothing reads, are dropped the next time the sheet is saved. Everything the editors let you fill in is kept, including the header colour, a Pathfinder 2e feat's description and a Call of Cthulhu custom skill's name. Older fields are moved first (see the upgrade note above).
 
-- **Saving a sheet no longer undoes hit point changes the DM made.** A sheet open on the campaign page now follows hit point changes made from the roster. Saving from a sheet that has changed since it was opened is refused with a message, and the sheet reopens with the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save. A program saving through the API can ask for the same check by sending the `updatedAt` it loaded.
+- **Saving a sheet no longer undoes hit point changes the DM made.** A sheet open on the campaign page now follows hit point changes made from the roster. Saving from a sheet that has changed since it was opened is refused with a message, and the sheet reopens with the new values. Hit points or hit dice changed at the same moment as a save no longer undo that save. A program saving through the API can ask for the same check (see the API reference).
 
 - **A save refused over a bad value keeps your edits.** The full-page character editor replaced the sheet with "Failed to Load Character" and lost everything typed since the last save. It now shows the reason and keeps the sheet open, so the value can be corrected. (A save refused because the sheet changed elsewhere reloads it, as described above.)
 
@@ -120,7 +122,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Pathfinder 2e spells no longer stop a sheet saving.** Adding a cantrip, spell or focus spell, turning on spellcasting, or saving a character with no spellcasting at all was refused by the server. All of these save now.
 
-- **Pathfinder 2e spell slots show how many are used.** The read-only sheet now shows the **Used** count set in the editor. A count recorded on 1.4.0 carries over the first time the sheet is saved.
+- **Pathfinder 2e spell slots show how many are used.** The read-only sheet now subtracts the slots marked as used in the editor and shows how many are left. A count recorded on 1.4.0 carries over the first time the sheet is saved.
 
 - **Pathfinder 2e feat descriptions show on the read-only sheet**, under the feat's name. They were only visible in the editor.
 
@@ -132,17 +134,17 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Screen readers can reach the character sheet and its editor.** Both pop-ups were hidden from assistive technology, so a screen reader found no sheet, no heading and no buttons in them.
 
-- **The editor that opens over a character sheet asks "Discard Changes?" only when you have changed something.** It asked every time it was closed, even straight after opening. Changes from a save the server refused still count as unsaved.
+- **The editor that opens over a character sheet asks "Discard Changes?" only when you have changed something.** It asked every time it was closed, even straight after opening. Changes from a save the server refused over a bad value, or because you had been signed out, still count as unsaved.
 
 - **Escape no longer throws away edits in the sheet editor.** In the editor that opens over a character sheet, Escape closed the editor and the sheet behind it at once, losing anything typed without asking. It now does what the editor's Cancel button does, and the sheet stays open.
 
-- **The Characters page shows a sheet as it was last saved.** After saving from the editor that opens over a sheet, closing the sheet and opening it again showed the version from before the save, and a second edit made from it was refused with "This character was changed while you had it open".
+- **The Characters page shows a sheet as it was last saved.** After saving from the editor that opens over a sheet, closing the sheet and opening it again showed the version from before the save, and a second edit made from it put back what the first save had changed.
 
 - **Leaving a Flexible sheet with unsaved changes asks first.** In the full-page editor the back arrow left a Flexible sheet straight away, losing anything added since the last save.
 
-- **Being signed out no longer loses the changes in a character sheet editor.** If the browser was signed out while a sheet had unsaved changes, after the computer slept for over an hour or a password change on another device for example, pressing Save went to the sign-in page and the changes were lost; on the Characters page this happened without any warning. The editor now stays open with the changes and says how to sign in again in a new tab, and Save then works.
+- **Being signed out no longer loses the changes in a character sheet editor.** If the browser was signed out while a sheet had unsaved changes, after the computer slept for over an hour or a password change on another device for example, pressing Save went to the sign-in page and the changes were lost; from the editor that opens over a sheet, on the Characters page or in a campaign, this happened without any warning. The editor now stays open with the changes and says how to sign in again in a new tab, and Save then works.
 
-- **A character sheet editor with unsaved changes keeps you signed in.** A session ends after an hour without activity, and typing into a sheet did not count, so a long spell of writing ended in being signed out. While an editor has unsaved changes it now keeps the session going, as an open game table already did. With nothing unsaved, the hour applies as before.
+- **A character sheet editor with unsaved changes keeps you signed in.** A session ends after an hour without activity (unless you ticked Remember me when signing in), and typing into a sheet did not count, so a long spell of writing ended in being signed out. While an editor has unsaved changes it now keeps the session going, as an open game table already did. With nothing unsaved, the hour applies as before.
 
 #### Maps, fog and lighting
 
@@ -154,15 +156,15 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Move to Map… includes maps made after the page loaded.** The right-click submenu that sends a token to another map read a list written only when the page opened, so a map created or imported during the session was missing until a reload, a renamed one kept its old name, and a deleted one was still offered. The list now follows the Map Library.
 
-- **The Map Library remembers which map the table is on.** After a switch, closing and reopening the library moved its Active badge back to the map the page loaded with, and offered Set Active on the map already showing, which opened a token-transfer dialog for a switch in the wrong direction. The badge now follows every switch.
+- **The Map Library remembers which map the table is on.** After a switch, closing and reopening the library moved its Active badge back to the map the page loaded with, and offered Set Active on the map already showing, which opened a token-transfer dialog for moving tokens onto the map they were already on. The badge now follows every switch.
 
 - **Wall and fog changes made through the API reach players' open maps at once.** They used to show only after a reload.
 
-- **Revealed fog no longer looks lost after a refresh.** On some instances the DM's page loaded a fogged map with no fog: no tint on their own view, a fully covered Player Preview, and reveal boxes that could not be dragged. Nothing was lost on the server. The page now waits for its live connection before asking for the fog, and asks again after a reconnect, and turning fog on sends it to everyone at once. Explored memory had the same problem and the same fix.
+- **Revealed fog no longer looks lost after a refresh.** On some instances the DM's page loaded a fogged map with no fog: no tint on their own view, a fully covered Player Preview, and reveal boxes that could not be dragged. Nothing was lost on the server. The page now waits for its live connection before asking for the fog, and asks again after a reconnect.
 
-- **A map with no picture says so.** A map whose picture is missing, such as one imported from an archive that left the picture out, used to show an empty map. It now says "This map has no picture", and tells the DM to choose one in Edit Map.
+- **A map with no picture says so.** A map whose picture is missing, such as one imported from an archive that left the picture out, used to show "Loading map..." and never finish. It now says "This map has no picture", and tells the DM to choose one in Edit Map.
 
-- **Dim light looks dim on maps that remember explored areas.** On a map with **Remember Explored Areas** on, the half-darkness that marks dim light was taken away wherever the player had already been, and that includes everything they can see, so dim light looked as clear as bright. Dim light now shows half-dark there too. The edges of each light's bright and dim areas also fade softly into the next, where they used to end in hard circles.
+- **Light edges fade softly.** The edges of each light's bright and dim areas now fade into the next, where they used to end in hard circles.
 
 - **Carrying a player's token no longer reveals the map to them.** When the DM picked a player's token up and moved it about, the player's screen showed, and remembered, everything the token could see along the way, even if the DM then put it back. The player still sees the token being carried, but what they see and remember now follows it only where it is put down, as it already did when players move their own tokens. The same applied to a DM previewing a player while that player dragged their own token.
 
@@ -170,17 +172,17 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Tokens
 
-- **Any token can be hidden from the right-click menu.** **Hide from Players** was offered only for objects. It is now offered for every token, and the Token Manager can place a creature or object already hidden.
+- **Any token can be hidden from the right-click menu.** **Hide from Players** was offered only for objects. It is now offered for every token, and the Token Manager can now place a creature already hidden, as it already could an object.
 
 - **A token moved to another map keeps all its details.** Moving a token (when switching maps, or from the Token Manager or the right-click menu) rebuilt it from a partial copy: a player character came back as an NPC, and darkvision, hit points, disposition, stat block, art mode, rotation and notes were lost. The whole token now moves, keeping its id. A token that would hang off the edge of the new map is moved onto it. Duplicate also copies everything, except that the copy starts with fresh hit points and no conditions, is not linked to a character, and keeps its controller only if that person is still a player.
 
 - **Moving several tokens between maps no longer loses or doubles any.** They now move in one step. Changes to a map's tokens are also applied one at a time, so a player's move, a DM's add or delete, a spirit-layer reveal, an initiative roll or a character's new picture landing together no longer overwrite each other.
 
-- **A moved token keeps its controller and its initiative entry, and the table stays on its map.** A character's token set to no controller came back controlled by the character's owner, a combatant moved to another map was still looked for on the old one, and moving a token switched every player to the destination map. All three are fixed. Choosing no controller when placing or duplicating a token is respected too.
+- **A moved token keeps its initiative entry, and the table stays on its map.** A moved token came back under a new id, which left its combatant pointing at nothing, and moving a token switched every player to the destination map. Both are fixed.
 
 - **A player's token is the one they control, on screen as on the server.** The map also treated a token bound to the player's character as theirs, but the server did not. When the two differed, the player could pick the token up only for it to snap back, and on a lit map was shown ground the server sent nothing for. The map now follows the server. A token created for a character with no controller named is given to the character's owner when that owner is a player in the campaign.
 
-- **Duplicate works when a token's controller has left or stopped playing.** The copy is made with no controller. The page also keeps its member list up to date as people join and leave.
+- **The page keeps its member list up to date as people join, leave or change role.**
 
 - **Refused changes to a token now say why.** Edit Token shows the reason a change was refused, such as notes longer than the 5,000 characters now allowed; the change used to look saved and then disappear. A refused Duplicate names the stored field at fault, and **Save as Template** confirms the save or says why it failed.
 
@@ -192,13 +194,11 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Rolling or typing initiative works for a combatant on another map.** The tracker looked for the token on the map on screen, so rolling said "Token not found" and a typed value was not saved to the token.
 
-- **Removing the last combatant ends the fight.** Removing the only combatant, deleting its token, or deleting the map everyone stood on left an empty "Round N" with no way to end it. Removing the combatant whose turn it is now passes the turn to the next one, as **Next** does.
+- **Removing the last combatant ends the fight.** Removing the only combatant left an empty "Round N" with no way to end it. The fight now ends whenever the order empties, including when deleting a token or map takes out the last combatant. Removing the combatant whose turn it is now passes the turn to the next one, as **Next Turn** does.
 
-- **Ending combat reaches every screen.** An earlier update could arrive after the end and show the fight as still running. The newest state now always arrives last, and a roll that finishes after the fight ends, or after that combatant is removed, no longer brings either back.
+- **A roll that finishes after the fight ends, or after its combatant is removed, no longer brings either back.**
 
-- **Each player's tracker updates when what they may see changes**: a map switch, crossing to or from the spirit plane, a role change or DM handover, or a new picture on a bound character. A combatant whose token or map is deleted leaves the order.
-
-- **An obscured creature's turn reads "Unknown creature's turn".** The banner read "'s turn". The DM's own view of an obscured token with no picture now keeps its colour, with the **?** badge.
+- **A combatant whose token or map is deleted now leaves the order.**
 
 #### Sessions and connections
 
@@ -214,11 +214,9 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A game table whose sign-in has ended goes to the sign-in page.** It used to keep retrying for as long as the tab was open. A connection the server keeps closing is retried a few times and then left to the Retry button.
 
-- **Coming back online reconnects even while automatic retries are running.** Once those retries ran out, the table used to stay on Connection Error until Retry was clicked.
+- **Deleting a campaign removes everyone still on it from its live game**, and clears its combat state.
 
-- **Deleting a campaign disconnects everyone still on it**, and clears its combat state.
-
-- **A brief database error while telling the table about a change no longer reports a saved change as failed.** This affected adding to initiative, initiative rolls, spirit-layer toggles, wall and light edits, fog strokes, and switching lighting or Global Illumination. The change stands, and the table receives it with the next update or reconnect.
+- **A brief database error while telling the table about a change no longer reports a saved change as failed.** This affected initiative rolls and spirit-layer toggles. The change stands, and the table receives it with the next update or reconnect.
 
 - **The vibe tracker says when it is off.** With the tracker switched off for a campaign, the Session tab still offered its period buttons, and clicking one did nothing visible while the server refused the change. The buttons now give way to a note saying the tracker is off and that saving the period editor turns it on.
 
@@ -226,19 +224,13 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Player Preview
 
-- **Previewing a player adds to their explored memory as it happens.** The preview greys in ground as their token sees it, exactly as the player's own screen does, and records it for the player whether or not they are connected. A game run from one screen now builds up each player's memory.
-
-- **Previewing a single token shows its controller's explored memory.** **All player tokens** shows none, since several players' memories laid over each other would describe nobody.
-
-- **The preview looks only through tokens the players would have.** A hidden token no longer lends it sight, pointing at a hidden, unlit or fogged token no longer opens its details, and the picker no longer lists hidden tokens.
-
-- **Previewing a player in the spirit realm shows the spirit realm.** When the DM had sent a player's token to the spirit layer, Preview Player View for that player, or for that token, was a black screen, whatever the spirit layer settings, while the player's own screen showed the spirit layer. The preview now follows the player onto the spirit plane: the spirit layer image and tint, the "Spirit Realm" badge, only spirit-plane tokens, and sight from their spirit token. Tokens on the spirit layer are listed in the preview picker too, marked *(spirit)*.
+- **The preview looks only through tokens the players would have.** A hidden token no longer lends it sight, pointing at a hidden, unlit or fogged token no longer opens its details.
 
 - **The preview hides the DM's light markers.** A projected screen showed where every light was. Leave the preview to move or edit a light.
 
 #### Backups and restore
 
-- **Backups made from the Admin Dashboard restore again.** On 1.4.0 every restore failed with "Database restore failed", because the database tools in the backend image were newer than the database. The image now carries matching tools, a restore skips the setting that broke, and the backend log gives the reason for any failure. A restore now replaces the whole database and then applies this version's database updates, so a backup from an older version restores into a newer one, fresh installs included. A backup also restores onto an instance whose database user has a different name, as on a new machine with a fresh `.env`. New backups no longer record an owner. Without Docker, this needs the database ownership step in the upgrade note.
+- **Backups made from the Admin Dashboard restore again.** On 1.4.0 every restore failed with "Database restore failed", because the database tools in the backend image were newer than the database. The image now carries PostgreSQL 16 tools, the closest available to the PostgreSQL 15 database, a restore skips the setting that broke, and the backend log gives the reason for any failure. A restore now replaces the whole database and then applies this version's database updates, so a backup from an older version restores into a newer one, fresh installs included. A backup also restores onto an instance whose database user has a different name, as on a new machine with a fresh `.env`. New backups no longer record an owner. Without Docker, this needs the database ownership step in the upgrade note.
 
 - **A restore checks the file first and keeps a copy of what it replaces.** A file that is not a complete CozyVTT backup is refused, and nothing is changed. Before restoring, a backup of the current database is added to the list, so restoring the wrong file can be undone; its name is shown when the restore finishes. If that copy cannot be made, nothing is restored, and the deployment guide shows how to restore from the command line instead. A restore whose uploaded files could not be copied now says so.
 
@@ -260,15 +252,17 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Setup, imports and documentation
 
+- **A map whose picture was deleted before the campaign was exported now imports without a picture**, keeping its walls, tokens and fog. Such maps used to be left out of the import, including from archives made on 1.4.0.
+
 - **`SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` and `LOG_LEVEL` in `.env` now work on Docker.** They were never passed to the backend. The guides and the app's messages also now say that `docker compose restart` keeps the old settings (use `docker compose up -d` after changing `.env`), and that `BACKUP_DIR` is only for installs without Docker.
 
 - **The bundled web server forwards `/health` to the backend.** It used to answer 200 itself, so a dead backend looked healthy. `/health` now answers 503 when the database is unreachable. Upgrading now also recreates the web server's container, so changes to its configuration take effect.
 
 - **The deployment guide covers backups behind your own proxy**: the larger upload limit and longer wait the backup routes need, and what Cloudflare's own limits mean for backups.
 
-- **The document reader offers to open a PDF in a new tab**, for browsers such as Safari that show an embedded PDF as a blank page.
+- **Above a PDF, the document reader now says "Not showing?" and links to open it in a new tab**, for browsers such as Safari that show an embedded PDF as a blank page.
 
-- **Imported tokens and token templates are held to the same limits as ones placed by hand.** An unknown value falls back to the default, an oversized token becomes one square, an over-long condition is dropped, out-of-range hit points are cleared, a token with no name is called *Unnamed token*, and an invalid creature link is dropped. A creature stat block is the exception: an archive may carry one up to twice the in-app limit. It imports, but duplicating the token or placing that creature is refused until the stat block is shortened.
+- **Imported tokens and token templates are held to the same limits as ones placed by hand.** An unknown value falls back to the default, an oversized token becomes one square, an over-long condition is dropped, out-of-range hit points are cleared, a token with no name is called *Unnamed token*, and an invalid creature link is dropped. A creature stat block is the exception: an archive may carry one up to twice the in-app limit (two and a half times for names and speed). It imports, but duplicating the token or placing that creature is refused until the stat block is shortened.
 
 - **Imported tokens whose picture was not in the archive import with no picture.** They used to point at a file on the instance the archive came from.
 
@@ -276,7 +270,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Guides and in-app text corrected.** The user, player and DM guides now name controls as they appear on screen and describe what players see during play. The deployment guide's API checks work as printed, it shows how to install PostgreSQL 15 on Ubuntu 22.04, its command for moving older character sheets now works in the Docker image, its steps for a conflict after `git stash pop` finish the job, and its example nginx configuration for an install without Docker forwards `/health` to the backend. The restore script says how to find the port to check afterwards. In the app, the pause banners say that a player's dice rolls stay on their own screen while paused (they were described as secret), the account and campaign deletion warnings say what is kept, the restore confirmation mentions the safety copy (it said a restore could not be undone), and the upload window names its scopes in plain words.
 
-- **Developer documentation corrections.** The live-event reference now shows who may send each event, and its check fails when the reference is out of date. The API reference describes what the session pause and end routes return.
+- **Developer documentation corrections.** The live-event reference now says correctly who may send each event, and its check fails on any difference from the code. The API specification (backend/docs/API_DOCUMENTATION.yaml) is corrected throughout: rate limits, shared responses, and the fields and limits of its schemas.
 
 ### Security
 
@@ -292,7 +286,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Setting up MFA, turning it off and regenerating backup codes have attempt limits.** Confirming a code during setup allows five wrong codes in 15 minutes. Turning MFA off and regenerating backup codes share the sign-in page's limit: five failed attempts in 15 minutes from one address, counted together with failed sign-ins and password resets.
 
-- **Changing your email address, or turning on MFA, needs your current password.** Someone with access to a signed-in browser could otherwise change the address and reset the password from their own mailbox, or add their own authenticator. When an address changes, the old address is told by email (if email is set up), and any reset or invitation link already sent stops working. Turning MFA on also signs out your other devices. An administrator changing someone else's address does not need that person's password.
+- **Changing an email address through the API, or turning on MFA, needs your current password.** Someone with access to a signed-in browser could otherwise change the address and reset the password from their own mailbox, or add their own authenticator. When an address changes, the old address is told by email (if email is set up), and any reset or invitation link already sent stops working. Turning MFA on also signs out your other devices. An administrator changing someone else's address does not need that person's password.
 
 - **Only the newest password-reset or invitation link works.** Using a link, changing your password, or an administrator's reset cancels all older links, and a link sets a password only once.
 
@@ -322,7 +316,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Deleting a campaign hands its library to the uploaders and deletes the campaign in one step.** A failure between the two left the campaign in place with its files moved to their uploaders' personal libraries, and an upload made during the deletion could be left open to every signed-in user.
 
-- **Only the DM can add assets to a campaign's library, by uploading or by moving.** Moving a personal asset into a campaign only checked membership. Players may still upload token art; spectators may not. The upload window only offers campaigns you can add that kind of asset to.
+- **Only the DM can add assets to a campaign's library, by uploading or by moving.** Moving a personal asset into a campaign only checked membership. Players may still add token art; spectators may not. The upload window only offers campaigns you can add that kind of asset to.
 
 - **A picture can only be used by someone allowed to read it.** Every place a picture is chosen (a character's token image, a map's image and spirit layer, token art, and token and creature templates) now checks it exactly as it will be stored, so a member cannot point at another member's private picture to read it. This applies to a DM who is also an administrator. The picture pickers list only usable images. Saving something whose picture has not changed, and copying within a campaign (Duplicate, Save as Template, placing from a template), are never refused over a picture the campaign already uses, and a picture that has been deleted no longer blocks a save. A refused placement now says why. The asset library no longer reveals where files are stored on the server, and no longer lists or serves a map's spirit-layer image to a player who cannot see that plane.
 
@@ -346,11 +340,9 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **The initiative tracker no longer shows players exact hit points or hidden creatures.** A player sees a creature's hit points only when its HP bar is on or they control it, and does not see a hidden creature listed until it is revealed.
 
-- **An obscured token no longer reveals its controller, kind, facing or stored initiative to other players.** The masked token is built from a short list of what may be known (position, size, plane, and that it is obscured), so a token field added in a later release stays private by default. Initiative ties no longer break by name, which hinted at an obscured creature's real name.
+- **An obscured token no longer reveals its controller, kind, facing or stored initiative to other players.** The masked token is built from a short list of what may be known (position, size, plane, and that it is obscured), so a token field added in a later release stays private by default.
 
-- **Rolling initiative for a hidden creature is no longer announced to every player.** The roll now goes to the DM and to players who are sent the token on the current map; light and fog are not taken into account for this. The name in the dice log now comes from the server. Rolls from the DM's stat-block picker (custom roll box included), and from the **Roll...** menu or **View Character Sheet** of a token with a character sheet, name a hidden, spirit-layer or obscured creature *Unknown creature*. A player rolling from their own token rolls as their character, unless the token is obscured.
-
-- **Player Preview shows no more than the player is sent.** Its hover card and drag ghost showed an obscured creature's portrait, and hit points with the HP bar off; a creature at zero hit points was drawn downed while players saw it standing; and **All player tokens** showed obscured player tokens with their real names and art. The preview now applies the same rule the server does. Rolling from the right-click menu of an obscured token bound to a character names *Unknown creature*.
+- **Rolling initiative for a hidden creature is no longer announced to every player.** The roll now goes to the DM and to players who are sent the token on the current map; light and fog are not taken into account for this. The name in the dice log now comes from the server. Rolls from the DM's stat-block picker (custom roll box included), and from the **Roll...** menu or **View Character Sheet** of a token with a character sheet, name a hidden, spirit-layer or obscured creature *Unknown creature*. A player rolling from their own token rolls as their character.
 
 - **Token moves reach only the players who would be sent the token.** A hidden token's moves, with its DM notes, reached players on lit maps, and every move of a hidden token was broadcast. Moves on the spirit plane, and material-plane moves to players in the spirit realm, ignored which plane each player can see. Every move now follows the same rules as opening the map. While a token is dragged, its position goes only to the DM and to players who could see it when the drag started, checked again if the token is hidden or changes plane and at least once a second. A player can no longer move a spirit-plane token through the API while unable to see that plane.
 
@@ -360,7 +352,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A spectator never controls a token and cannot change a character.** A token that still names a spectator from their time as a player is treated as nobody's, for hit points, darkvision, obscuring, sight and the spirit plane. The DM can hand a token only to a player. A spectator cannot edit a character while they are a spectator in its campaign; the DM still can. The roster, the token editors, the Characters page and the character editor no longer offer a spectator what the server would refuse.
 
-- **A spectator cannot move or edit a token through the API, and only the DM can resize a token.** Live play already refused a spectator's moves. Size is now DM-only because a token always sees half its own footprint, so a larger token sees further.
+- **A spectator cannot move or edit a token through the API, and only the DM can resize a token.** Live play already refused a spectator's moves. Size is now DM-only because a token always sees the ground it stands on, so a larger token sees further.
 
 - **A player opening or closing a door can only change whether it is open.** A scripted client could move or stretch the door, changing what everyone on a lit map could see.
 
@@ -372,7 +364,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A character sheet's header colour is used only if it is a preset or a `#RRGGBB` colour.**
 
-- **Atmosphere filters and the spirit realm's custom colour are checked before use**, on the server and again in the browser. A campaign archive carrying anything else imports with the default.
+- **Atmosphere filters and the spirit realm's custom colour are checked before use**, on the server, and again on the map in the browser. A campaign archive carrying anything else imports with the default.
 
 #### Backups, deployment and dependencies
 
@@ -380,7 +372,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Backups no longer contain sign-in sessions, and a restore signs everyone out.** Restoring an older backup brought back its sign-ins, including ones ended since. The dashboard's restore also closes every live connection. After using the command-line restore script, restart the backend to close them; the script says so.
 
-- **Backups are readable only by the backend's user.** Dashboard and script backups were readable by every account on the server, and they hold every password hash and MFA secret. The temporary copies made during a backup or restore are private too, and the backup script also locks down an existing backups folder and older dumps in it. Copying a backup off the server by hand now needs `sudo`; downloading from the dashboard does not. On an install without Docker the backend also makes the backups folder itself private, and logs the old permissions when it changes them.
+- **Backups are readable only by the backend's user.** Dashboard and script backups were readable by every account on the server, and they hold every password hash and MFA secret. The temporary copies made during a backup or restore are private too, and the backup script also locks down an existing backups folder and older dumps in it. On Docker, copying a dashboard backup off the server by hand now needs `sudo`; downloading from the dashboard does not. On an install without Docker the backend also makes the backups folder itself private, and logs the old permissions when it changes them.
 
 - **The database password no longer shows in the server's process list during a backup or restore.**
 
@@ -392,7 +384,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Behind a Cloudflare Tunnel or another proxy, one person's wrong passwords no longer lock everyone out.** nginx passed every visitor on with the proxy's address, so every per-address limit was shared by everyone. It now passes on each visitor's own address, trusting the proxy's word only when it connects from a private address. The deployment guide shows how to check which address CozyVTT sees, and what to add for a proxy on a public address.
 
-- **Dependencies updated for published advisories.** Every advisory `npm audit` reported against the running application is fixed, including two that appeared during release testing: the email library (nodemailer, moved to version 10; the advisory needed several mail servers in one process, which an instance never has) and the live-connection transport (engine.io, updated in range). Two remaining advisories in the routing library need a major upgrade and do not apply here, since no navigation target in the app comes from user input. The OpenAI client library, which nothing used, is removed.
+- **Dependencies updated for published advisories.** Every published advisory against the running application is fixed, including the email library (nodemailer, moved to version 10; the advisory needed several mail servers in one process, which an instance never has) and the live-connection transport (engine.io, updated in range). Two remaining advisories in the routing library need a major upgrade and do not apply here: the app does not render pages on the server, and no navigation target comes from user input. The OpenAI client library, which nothing used, is removed.
 
 ---
 
