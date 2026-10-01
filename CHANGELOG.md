@@ -140,7 +140,9 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Leaving a Flexible sheet with unsaved changes asks first.** In the full-page editor the back arrow left a Flexible sheet straight away, losing anything added since the last save.
 
-- **Being signed out no longer loses the changes in a character sheet editor.** If the browser was signed out while a sheet had unsaved changes, after an hour without activity for example, pressing Save went to the sign-in page and the changes were lost; on the Characters page this happened without any warning. The editor now stays open with the changes and says how to sign in again in a new tab, and Save then works.
+- **Being signed out no longer loses the changes in a character sheet editor.** If the browser was signed out while a sheet had unsaved changes, after the computer slept for over an hour or a password change on another device for example, pressing Save went to the sign-in page and the changes were lost; on the Characters page this happened without any warning. The editor now stays open with the changes and says how to sign in again in a new tab, and Save then works.
+
+- **A character sheet editor with unsaved changes keeps you signed in.** A session ends after an hour without activity, and typing into a sheet did not count, so a long spell of writing ended in being signed out. While an editor has unsaved changes it now keeps the session going, as an open game table already did. With nothing unsaved, the hour applies as before.
 
 #### Maps, fog and lighting
 

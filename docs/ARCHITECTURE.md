@@ -157,6 +157,7 @@ src/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
 │   ├── unsavedWork.ts What a lost session does while an editor has unsaved changes
+│   ├── sessionKeepAlive.ts  Pings the session from the game table and from editors with unsaved changes
 │   └── auth.service.ts  Auth-specific API calls
 ├── hooks/
 │   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
@@ -436,7 +437,7 @@ sequenceDiagram
     S-->>C: 200 response
 ```
 
-A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
+A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
 
 ### Role-Based Authorization
 

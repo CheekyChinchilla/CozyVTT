@@ -16,8 +16,8 @@ import {
 import { useParams } from 'react-router-dom';
 import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
-import api from '@/services/api';
 import { errorMessage } from '@/utils/errors';
+import { keepSessionAlive, SESSION_KEEPALIVE_MS } from '@/services/sessionKeepAlive';
 
 // ============================================
 // Types
@@ -360,16 +360,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   // of no HTTP activity, even while actively playing.
   useEffect(() => {
     if (status !== 'connected') return;
-
-    const KEEPALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes
-    const intervalId = setInterval(async () => {
-      try {
-        await api.pingSession();
-      } catch {
-        // Silently ignore — if the session is truly dead the next page interaction will redirect to login
-      }
-    }, KEEPALIVE_INTERVAL);
-
+    const intervalId = setInterval(() => void keepSessionAlive(), SESSION_KEEPALIVE_MS);
     return () => clearInterval(intervalId);
   }, [status]);
 
