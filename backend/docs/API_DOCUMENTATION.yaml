@@ -19,14 +19,20 @@ info:
     So scripting CozyVTT is possible, and people have done it. What it does not
     come with is a promise: a script authenticates **as a specific user** and can
     do only what that user could do in the browser, the session expires after an
-    hour of inactivity (refreshed by activity), an account with MFA enabled needs
+    hour of inactivity by default (`SESSION_MAX_AGE`; 30 days when signing in
+    with `rememberMe`), an account with MFA enabled needs
     the second step, and any route here may change shape in a point release
     without notice. Treat this document as a map of the current code rather than
     a contract.
 
     ## Authentication
-    All endpoints (except `/health`, `/api/setup/*`, and public auth routes) require authentication via session cookies.
+    All endpoints (except `/health`, `/api/setup/*`, `/api/config` and the public auth routes) require authentication via session cookies.
     Login via `/api/auth/login` to obtain a session cookie.
+
+    Until the setup wizard has run, every request except `/health` and
+    `/api/setup/*` is refused with 403
+    `{ error: 'Setup Required', message, setupUrl: '/api/setup/status' }`,
+    the public routes included.
 
     A request that changes something (POST, PUT, PATCH or DELETE) and that a
     browser marks as sent from another site (`Sec-Fetch-Site` of `same-site`
@@ -51,10 +57,10 @@ info:
     a proxy that does not pass the visitor's address on, every client shares one
     allowance. Uploads and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
-    - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/disable`
-      and `/mfa/backup-codes`): one shared allowance of 5 **failed** requests per
-      15 minutes. Successful requests are not counted, so getting your password
-      right never moves you towards a lockout.
+    - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
+      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **failed**
+      requests per 15 minutes. Successful requests are not counted, so getting your
+      password right never moves you towards a lockout.
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -62,16 +68,40 @@ info:
       unknown address, so successes cannot be skipped without removing the limit
       on the mail it sends
     - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
-    - MFA login verification: 5 attempts per 15 minutes (separate limit)
-    - Asset uploads and typed documents (`POST /api/assets/upload`, `POST /api/assets/documents`):
+    - MFA login verification (`POST /api/auth/mfa/verify-login`): 5 failed attempts
+      per 15 minutes per address, and separately 5 failed attempts per 15 minutes
+      for the account, from any address
+    - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
+      `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
     - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
       cooldown (off by default), which allows each member one message per 1 to
       300 seconds, as the DM sets it
     - Dice rolls: 30 per minute (WebSocket)
-    - Token movement: 60 per second (WebSocket, throttled)
+    - Token movement: 150 events per second per user (WebSocket), shared by
+      `token.move.start`, `token.move` and `token.move.end`; events over the limit
+      are dropped without an error
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
+    The body is JSON `{ error, message }` for the global limit, uploads and the
+    MFA limits. The credential, registration and forgot-password limits answer
+    with a plain-text message instead.
+
+    ## Responses every route can give
+    These are not repeated on each operation:
+    - **401** `{ error: 'Unauthorized', message }` from any route that needs a
+      session, when there is none or when the MFA step of a sign-in is still
+      pending.
+    - **403** `{ error: 'Forbidden', message: 'You are not a member of this campaign' }`
+      from any `/api/campaigns/{campaignId}/...` route that needs membership,
+      including for a campaign id that does not exist. Such routes never answer
+      404 for an unknown campaign.
+    - **403** with `code: PASSWORD_CHANGE_REQUIRED`, and the setup-gate 403, as
+      described above.
+    - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
+      **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
+    - **500** `{ error, message }` on an unexpected error. In production the
+      message does not describe the failure.
 
     ## Forced password changes
     Accounts an admin created, or whose password an admin reset, are flagged
@@ -83,7 +113,7 @@ info:
 
     ## Real-time Events
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
-    See the WebSocket section at the bottom of this document for the full event reference.
+    The event reference is `backend/docs/WEBSOCKET_DOCUMENTATION.md`.
 
   version: 1.5.0
   contact:
@@ -94,10 +124,10 @@ info:
     url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
-  - url: https://cozyvtt.com/api
-    description: Production (replace with your self-hosted instance URL)
+  - url: https://vtt.example.com
+    description: Your instance's address. Every path below already starts with /api.
   - url: http://localhost:4000
-    description: Local development
+    description: Local development (the backend's own port)
 
 # Default security — every endpoint requires the session cookie unless it
 # explicitly overrides with `security: []` (used for public endpoints like
@@ -144,8 +174,10 @@ tags:
     description: A player's own saved dice rolls for one campaign, private to whoever saved them
   - name: Admin
     description: Admin-only platform management endpoints (requires ADMIN platform role)
-  - name: WebSocket
-    description: Real-time events via Socket.io
+  - name: Notes
+    description: A member's own private notes in a campaign
+  - name: Character Templates
+    description: Shared starter character sheets any signed-in user can copy
 
 paths:
   /health:
@@ -6406,374 +6438,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-# ============================================
-# WEBSOCKET EVENTS
-# ============================================
-#
-# Real-time events are delivered via Socket.io (WebSocket/polling transport).
-# Connect to the same server URL with a Socket.io client (withCredentials: true).
-#
-# ## Authentication Flow
-# 1. Client connects with session cookie (same credential as REST API)
-# 2. Server validates session and emits 'connected' event
-# 3. Client emits 'authenticate' with { campaignId }
-# 4. Server validates campaign membership and joins the campaign room
-# 5. Server emits 'authenticated' event — client may now send campaign events
-#
-# ## Security Model
-# - socket.campaignId is set server-side during authentication — never trust client-sent IDs
-# - Events are broadcast only to sockets in the same campaign room
-# - DM-only events are rejected with an error if called by a non-DM
-# - Spirit layer tokens are role-filtered before broadcast (non-DMs only see visible tokens)
-#
-# ─────────────────────────────────────────────
-# CLIENT → SERVER EVENTS
-# ─────────────────────────────────────────────
-#
-# authenticate:
-#   payload: { campaignId: string }
-#   response: 'authenticated' event with { userId, campaignId, role, timestamp }
-#   description: Join a campaign room. Must be called before any campaign events.
-#
-# ── Chat ────────────────────────────────────
-#
-# chat.message:
-#   payload: { content: string, type: 'PLAYER' | 'DM' }
-#   broadcast: 'chat.message' to all campaign members
-#   rate limit: 5 per minute
-#   description: Send a chat message. Message is saved to database.
-#
-# ── Dice ────────────────────────────────────
-#
-# dice.roll:
-#   payload: { expression: string, characterName?: string, purpose?: string, secret?: boolean }
-#   broadcast: 'dice.rolled' to all members (or only to roller + DM if secret: true)
-#   rate limit: 30 per minute
-#   description: Roll dice using standard notation (e.g. "1d20+5", "2d6", "4d6kh3").
-#                Supports keep-highest (kh), keep-lowest (kl), advantage (2d20kh1), disadvantage (2d20kl1).
-#                Roll is saved to database. Secret rolls are still saved for DM audit.
-#
-# dice.clearHistory:
-#   payload: none
-#   broadcast: 'dice.historyCleared' to all campaign members
-#   permission: DM only
-#   description: Clears the dice roll history in all connected clients' UI.
-#
-# ── Token Movement ───────────────────────────
-#
-# token.move.start:
-#   payload: { tokenId: string, mapId: string }
-#   broadcast: 'token.move.start' to campaign (role-filtered for spirit tokens)
-#   description: Begin dragging a token. Validates move permission (DM = any, Player = controlled tokens only).
-#
-# token.move:
-#   payload: { tokenId: string, mapId: string, x: number, y: number }
-#   broadcast: 'token.moved' to campaign (role-filtered for spirit tokens)
-#   rate limit: 60 per second (throttled via lodash)
-#   description: Live position update during drag. Not saved to database.
-#
-# token.move.end:
-#   payload: { tokenId: string, mapId: string, x: number, y: number }
-#   broadcast: 'token.move.end' to all campaign members
-#   description: Final token position. Saved to database.
-#
-# ── Map ─────────────────────────────────────
-#
-# map.change:
-#   payload: { mapId: string }
-#   broadcast: 'map.changed' to all campaign members with updated map data
-#   description: Notifies all clients that map data has changed (e.g. after token add/remove/update).
-#
-# ── Spirit Layer ─────────────────────────────
-#
-# spirit_layer.toggle:
-#   payload: { visible: boolean }
-#   broadcast: 'spirit_layer.toggled' to all campaign members
-#   permission: DM only
-#   description: Show or hide the spirit layer for all players. Saved to campaign.
-#
-# spirit_layer.token.toggle:
-#   payload: { mapId: string, tokenId: string, visible: boolean }
-#   broadcast: 'spirit_layer.token.toggled' to campaign
-#   permission: DM only
-#   description: Toggle visibility of an individual spirit layer token.
-#
-# spirit_layer.style_change:
-#   payload: { style: string }
-#   broadcast: 'spirit_layer.style_changed' to all campaign members
-#   permission: DM only
-#   description: Change the visual style of the spirit layer overlay.
-#                style is either "wispy" or "custom:#hexcolor" (e.g. "custom:#7c3aed").
-#
-# ── Vibe / Atmosphere ────────────────────────
-#
-# vibe.update:
-#   payload: { period: string }
-#   broadcast: 'vibe.updated' with { period, hue, filter, audio }
-#   permission: DM only
-#   description: Change the active time-of-day vibe. Validated against campaign.vibeSettings.periods.
-#
-# atmosphere.effect.set:
-#   payload: { effect: string | null }
-#   broadcast: 'atmosphere.effect.updated' with { effect }
-#   permission: DM only
-#   description: Set a visual overlay effect (e.g. "rain", "fog") or null to clear.
-#
-# atmosphere.audio.set:
-#   payload: { audioUrl: string | null, volume?: number }
-#   broadcast: 'atmosphere.audio.updated' with { audioUrl, volume }
-#   permission: DM only
-#   description: Set ambient background audio or null to stop. Volume is 0–1.
-#
-# ── Session ──────────────────────────────────
-#
-# session.start:
-#   payload: { mapId?: string }
-#   broadcast: 'session.started' with { sessionId, sessionNumber, startedAt }
-#   permission: DM only
-#   description: Start a new game session.
-#
-# session.pause:
-#   payload: none
-#   broadcast: 'session.paused' to all members
-#   permission: DM only
-#   description: Pause the active session. Saves current state to database.
-#
-# session.end:
-#   payload: { saveState?: boolean }
-#   broadcast: 'session.ended' to all members
-#   permission: DM only
-#   description: End the session. If saveState is true, token positions and map state are saved.
-#
-# session.resume:
-#   (Handled via REST: PUT /api/campaigns/:id/resume — triggers 'session.resumed' broadcast)
-#
-# ── Character HP ─────────────────────────────
-#
-# character.hp.update:
-#   payload: { characterId: string, delta: number }
-#   broadcast: 'character.hp.updated' with { characterId, hp: { current, max, temp } }
-#   description: Apply a HP delta to a character (positive = heal, negative = damage).
-#                Character must belong to the campaign. Saved to database.
-#
-# ── Initiative Tracker ───────────────────────
-#
-# initiative.add:
-#   payload: { tokenId: string, mapId: string }
-#   broadcast: 'initiative.state' with full CombatState to all members
-#   permission: DM only
-#   description: Add a token to the initiative order.
-#                Token's current initiative value (if set) is used automatically.
-#
-# initiative.remove:
-#   payload: { tokenId: string }
-#   broadcast: 'initiative.state' to all members
-#   permission: DM only
-#   description: Remove a token from the initiative order.
-#                If this token had the active turn, advances to the next combatant.
-#
-# initiative.set:
-#   payload: { tokenId: string, mapId: string, value: number | null }
-#   broadcast: 'initiative.state' to all members
-#   permission: DM only
-#   description: Manually set a token's initiative value. Persists to token.initiative in database.
-#                Combatants are re-sorted (descending, ties broken alphabetically).
-#
-# initiative.roll:
-#   payload: { tokenId: string, mapId: string, expression: string, characterName?: string }
-#   broadcast: 'dice.rolled' to all members + 'initiative.state' to all members
-#   permission: DM only
-#   description: Roll a dice expression for this token's initiative (e.g. "1d20+3").
-#                Result is broadcast to dice log and saved to token.initiative.
-#                Token is auto-added to initiative order if not already present.
-#
-# initiative.reorder:
-#   payload: { orderedTokenIds: string[] }
-#   broadcast: 'initiative.state' to all members
-#   permission: DM only
-#   description: Apply a custom turn order (overrides value-based sorting).
-#
-# initiative.start:
-#   payload: none
-#   broadcast: 'initiative.state' to all members
-#   permission: DM only
-#   description: Begin combat. Sets active=true, round=1, currentTokenId=first combatant.
-#                Requires at least one combatant to be added first.
-#
-# initiative.next:
-#   payload: none
-#   broadcast: 'initiative.state' to all members
-#   permission: DM only
-#   description: Advance to the next combatant. Wraps to the first combatant and increments
-#                the round counter when the last combatant's turn ends.
-#
-# initiative.end:
-#   payload: none
-#   broadcast: 'initiative.state' with empty/reset state to all members
-#   permission: DM only
-#   description: End combat and clear all initiative state.
-#                Token initiative values remain in the database; only the combat order is cleared.
-#
-# initiative.request_state:
-#   payload: none
-#   response: 'initiative.state' sent to requesting socket only
-#   description: Request the current CombatState. Called on mount and reconnect.
-#
-# ── Connection ───────────────────────────────
-#
-# sync.request:
-#   payload: { lastEventId?: string }
-#   response: 'sync.state' with full campaign state
-#   description: Request full state sync (used for reconnection recovery).
-#
-# ping:
-#   payload: none
-#   response: 'pong'
-#   description: Heartbeat to verify connection health.
-#
-# ─────────────────────────────────────────────
-# SERVER → CLIENT EVENTS
-# ─────────────────────────────────────────────
-#
-# connected:
-#   payload: { userId: string, timestamp: string }
-#   description: Initial connection established. Client should emit 'authenticate' next.
-#
-# authenticated:
-#   payload: { userId: string, campaignId: string, role: string, timestamp: string }
-#   description: Successfully joined campaign room. Client may now emit campaign events.
-#
-# user.joined:
-#   payload: { userId: string, timestamp: string }
-#   description: A campaign member connected.
-#
-# user.left:
-#   payload: { userId: string, timestamp: string }
-#   description: A campaign member disconnected.
-#
-# chat.message:
-#   payload: { id, userId, userName, content, type, timestamp }
-#   description: New chat or DM message.
-#
-# chat.system:
-#   payload: { content: string, metadata?: object, timestamp: string }
-#   description: System message (user joined/left, session started, etc.)
-#
-# dice.rolled:
-#   payload: { userId, userName, characterName, expression, result, breakdown, purpose, timestamp, secret }
-#   description: Dice roll result broadcast to all members.
-#                breakdown contains individual die results, modifiers, and total.
-#                secret rolls are still broadcast but only to the roller (and DM via dice.rolled.secret).
-#
-# dice.rolled.secret:
-#   payload: { ...dice.rolled fields, originalRoller: string, isAuditView: true }
-#   description: DM-only audit view of a secret roll made by another player.
-#
-# dice.historyCleared:
-#   payload: none
-#   description: DM cleared dice history. All clients should clear their local history.
-#
-# token.move.start:
-#   payload: { tokenId, mapId, movedBy }
-#   description: Another user began dragging a token.
-#
-# token.moved:
-#   payload: { tokenId, mapId, x, y, movedBy }
-#   description: Token position update during drag.
-#
-# token.move.end:
-#   payload: { tokenId, mapId, x, y, movedBy }
-#   description: Token drag complete. Position saved to database.
-#
-# map.changed:
-#   payload: { mapId: string, mapData: object }
-#   description: Map data updated (tokens added, removed, or modified).
-#
-# spirit_layer.toggled:
-#   payload: { visible: boolean, toggledBy: string, timestamp: string }
-#   description: Spirit layer visibility changed for this campaign.
-#
-# spirit_layer.token.toggled:
-#   payload: { tokenId: string, visible: boolean, token?: object, toggledBy: string, timestamp: string }
-#   description: Individual spirit token visibility changed.
-#
-# spirit_layer.style_changed:
-#   payload: { style: string }
-#   description: Spirit layer visual style changed.
-#
-# vibe.updated:
-#   payload: { period: string, hue: string, filter: string, audio?: string }
-#   description: Vibe/atmosphere period changed.
-#
-# atmosphere.effect.updated:
-#   payload: { effect: string | null }
-#   description: Visual atmosphere effect changed.
-#
-# atmosphere.audio.updated:
-#   payload: { audioUrl: string | null, volume: number }
-#   description: Ambient audio changed.
-#
-# session.started:
-#   payload: { sessionId: string, sessionNumber: number, startedAt: string }
-#   description: A new game session has started.
-#
-# session.paused:
-#   payload: { timestamp: string }
-#   description: Session paused by DM.
-#
-# session.ended:
-#   payload: { message: string }
-#   description: Session ended by DM.
-#
-# session.resumed:
-#   payload: { sessionId: string, sessionNumber: number, startedAt: string }
-#   description: Session resumed. Nothing is restored: the table stays as it is.
-#
-# character.hp.updated:
-#   payload: { characterId: string, hp: { current: number, max: number, temp: number } }
-#   description: A character's HP was updated. Broadcast to all campaign members.
-#                Emitted from two places: the 'character.hp.update' socket handler
-#                (the roster's +/- control) and PUT /api/characters/:id, which
-#                sends it after a sheet save when the hit points actually changed.
-#                Both matter — the campaign screen's HP cache, which feeds the
-#                roster cards and the HP bars on map tokens, is filled by this
-#                event alone.
-#
-# character.updated:
-#   payload: { characterId: string, character: object }
-#   description: Full character data was updated (e.g. after sheet save).
-#
-# initiative.state:
-#   payload:
-#     active: boolean                     — combat is running
-#     round: number                       — current round (0 if not started)
-#     currentTokenId: string | null       — tokenId of the active combatant
-#     combatants: array of:
-#       tokenId: string
-#       name: string
-#       imageUrl: string
-#       initiative: number | null
-#       hp: { current, max, temp } | null
-#       type: 'player' | 'npc' | 'object'
-#       disposition: 'friendly' | 'neutral' | 'hostile' | null
-#   description: Full initiative state broadcast after every DM mutation.
-#                Also sent to requesting client on initiative.request_state.
-#
-# sync.state:
-#   payload: { campaign, map, tokens, currentVibe, spiritLayerEnabled }
-#   description: Full campaign state for reconnection recovery.
-#
-# error:
-#   payload: { message: string }
-#   description: An error occurred processing an event (permission denied, validation failure, etc.)
-#
-# pong:
-#   payload: none
-#   description: Heartbeat response.
-
-# ============================================
-# COMPONENTS
-# ============================================
+# WebSocket events are not described here. Their reference is
+# backend/docs/WEBSOCKET_DOCUMENTATION.md, whose event table is generated from
+# the handlers by scripts/websocket-events.py.
 
   # ---------------------------------------------------------------------------
   # Shared character sheets ("character templates")
