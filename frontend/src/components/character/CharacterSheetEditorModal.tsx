@@ -32,7 +32,14 @@ export default function CharacterSheetEditorModal({
 }: CharacterSheetEditorModalProps) {
   const [saving, setSaving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { showToast } = useToast();
+  // The Flexible sheet never reports whether it has been edited, so leaving
+  // one always asks.
+  const reportsUnsavedChanges =
+    character.gameSystem === 'DND_5E' ||
+    character.gameSystem === 'PATHFINDER_2E' ||
+    character.gameSystem === 'CALL_OF_CTHULHU_7E';
   // The version the editor opened. The character handed in here can be
   // refreshed while the editor is open, since the sheet behind it follows the
   // table, but the editor's form is not, so its save is made from this one.
@@ -89,8 +96,12 @@ export default function CharacterSheetEditorModal({
     }
   };
 
-  // Handle cancel
+  // Ask before leaving only when something would be lost.
   const handleCancel = () => {
+    if (reportsUnsavedChanges && !hasUnsavedChanges) {
+      onClose();
+      return;
+    }
     setConfirmClose(true);
   };
 
@@ -105,6 +116,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'PATHFINDER_2E':
@@ -113,6 +125,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'CALL_OF_CTHULHU_7E':
@@ -121,6 +134,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'SHADOWRUN_6E':

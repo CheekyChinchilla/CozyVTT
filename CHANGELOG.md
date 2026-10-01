@@ -132,6 +132,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Screen readers can reach the character sheet and its editor.** Both pop-ups were hidden from assistive technology, so a screen reader found no sheet, no heading and no buttons in them.
 
+- **The editor that opens over a character sheet asks "Discard Changes?" only when you have changed something.** It asked every time it was closed, even straight after opening. A Flexible sheet still always asks.
+
 #### Maps, fog and lighting
 
 - **Fog of war hides the map from players.** Unrevealed areas are now fully opaque for players from the first moment the map shows, and hide the walls, doors and light glows beneath them. Only the player's own token shows through. The DM still sees a see-through tint so they can work under it.
