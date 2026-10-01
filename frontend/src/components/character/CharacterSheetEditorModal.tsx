@@ -85,6 +85,9 @@ export default function CharacterSheetEditorModal({
       } else {
         showToast(message, 'error');
       }
+      // Thrown on so the sheet knows nothing was saved: it keeps its unsaved
+      // changes, and leaving still asks before discarding them.
+      throw error;
     } finally {
       setSaving(false);
     }
