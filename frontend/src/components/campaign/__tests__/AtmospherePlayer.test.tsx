@@ -36,13 +36,14 @@ class FakeAudio {
   }
 }
 
-let lastAudio: FakeAudio | null = null;
+const created: FakeAudio[] = [];
+const lastAudio = () => created[created.length - 1];
 vi.stubGlobal(
   'Audio',
   class extends FakeAudio {
     constructor() {
       super();
-      lastAudio = this;
+      created.push(this);
     }
   },
 );
@@ -81,7 +82,7 @@ import AtmospherePlayer from '../AtmospherePlayer';
 describe('AtmospherePlayer after a track ends', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lastAudio = null;
+    created.length = 0;
     mockState.campaign = {
       id: 'c1',
       vibeSettings: {
@@ -95,21 +96,21 @@ describe('AtmospherePlayer after a track ends', () => {
 
   it("the DM's client re-asserts the vibe's track", () => {
     render(<AtmospherePlayer />);
-    lastAudio!.dispatch('ended');
+    lastAudio().dispatch('ended');
     expect(emitAtmosphereAudioSet).toHaveBeenCalledWith({ assetId: TRACK, volume: 0.7, loop: true });
   });
 
   it('with a track-less vibe the DM clears the finished track', () => {
     mockState.currentVibe = null;
     render(<AtmospherePlayer />);
-    lastAudio!.dispatch('ended');
+    lastAudio().dispatch('ended');
     expect(emitAtmosphereAudioSet).toHaveBeenCalledWith({ assetId: null, volume: 0.7, loop: true });
   });
 
   it("a player's client answers nothing", () => {
     mockState.userRole = 'PLAYER' as CampaignRole;
     render(<AtmospherePlayer />);
-    lastAudio!.dispatch('ended');
+    lastAudio().dispatch('ended');
     expect(emitAtmosphereAudioSet).not.toHaveBeenCalled();
   });
 });
