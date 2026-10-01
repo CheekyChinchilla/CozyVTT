@@ -130,6 +130,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A short colour code such as `#fff` works as a sheet's header colour.** It is saved in six-digit form. A sheet that already has one opens in the editor with that colour; the read-only view shows the default colour until the sheet is saved again. An unfinished code such as `#12` is flagged in the colour picker before anything is saved.
 
+- **Screen readers can reach the character sheet and its editor.** Both pop-ups were hidden from assistive technology, so a screen reader found no sheet, no heading and no buttons in them.
+
 #### Maps, fog and lighting
 
 - **Fog of war hides the map from players.** Unrevealed areas are now fully opaque for players from the first moment the map shows, and hide the walls, doors and light glows beneath them. Only the player's own token shows through. The DM still sees a see-through tint so they can work under it.
