@@ -26,6 +26,7 @@ import Markdown from '@/components/common/Markdown';
 import { Modal, Button, Textarea } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
 import api from '@/services/api';
+import '@/styles/note-markdown.css';
 
 export type DocumentFormat = 'pdf' | 'markdown' | 'text';
 
