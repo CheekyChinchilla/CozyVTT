@@ -4466,10 +4466,26 @@ paths:
       tags:
         - Assets
       summary: List assets
-      description: >-
-        List assets with filtering and pagination. With no `type`, documents
-        are left out: they have their own section, and are fetched by asking
-        for `type=DOCUMENT` explicitly.
+      description: |
+        List assets with filtering and pagination, newest first. With no
+        `type`, documents are left out: they have their own section, and are
+        fetched by asking for `type=DOCUMENT` explicitly.
+
+        Which assets are listed: with `campaignId`, every asset filed in that
+        campaign's library (the caller must be a member, 403 otherwise; a
+        platform admin may name any campaign, and `usable` is then ignored).
+        Without it, a non-admin sees GLOBAL assets, their own USER assets and
+        the libraries of the campaigns they belong to; a platform admin sees
+        every asset on the instance unless `usable=true` asks for the same
+        rule. A personal asset that is only *used* in one of the caller's
+        campaigns is not listed, though the file routes serve it to them.
+
+        Except for an admin naming a campaign, a spirit-layer image of a map
+        in a campaign where the caller is not the DM, and whose spirit plane
+        is still closed to them, is left out.
+
+        `type` and `scope` are not validated: a value outside their enums
+        answers 500, as does a negative `page`.
       operationId: listAssets
       security:
         - cookieAuth: []
@@ -4483,9 +4499,20 @@ paths:
           in: query
           schema:
             type: string
-            enum: [GLOBAL, CAMPAIGN]
+            enum: [GLOBAL, USER, CAMPAIGN]
         - name: campaignId
           in: query
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Filter by name (case-insensitive partial match)
+          schema:
+            type: string
+        - name: uploadedBy
+          in: query
+          description: Filter by uploader. Platform admins only; ignored for anyone else.
           schema:
             type: string
             format: uuid
@@ -4507,6 +4534,7 @@ paths:
             creature: global ones, their own personal ones, and those of
             campaigns they belong to. Without it, a platform admin is listed
             every asset on the instance; for anyone else the two are the same.
+            Ignored when `campaignId` is given.
           schema:
             type: boolean
       responses:
@@ -4532,6 +4560,15 @@ paths:
                         type: integer
                       totalPages:
                         type: integer
+        '403':
+          description: '`campaignId` names a campaign the caller is not a member of, including one that does not exist.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this campaign
 
   /api/assets/upload:
     post:
@@ -4541,7 +4578,45 @@ paths:
       description: |
         Upload a new asset file. The file is validated by **magic-byte**
         inspection (not just MIME header or extension) and rejected if the
-        detected type doesn't match the declared `type`.
+        detected type doesn't match the declared `type`; the stored file's
+        extension is then forced to match the detected type, regardless of
+        what the original filename claimed.
+
+        **Who may upload to which scope:**
+        | Scope | Who |
+        |-------|-----|
+        | USER | Anyone signed in, into their own library |
+        | GLOBAL | A platform admin, or a user granted `globalAssetManager` |
+        | CAMPAIGN | That campaign's DM; a player may upload only TOKEN art (their own character's); a spectator never |
+
+        `type: AVATAR` is always placed at USER scope, whatever `scope` is
+        sent: an avatar is always personal. A `campaignId` sent with a USER
+        or GLOBAL upload is ignored.
+
+        **Accepted content per asset type**, decided by what the bytes are,
+        not by the filename:
+        | Type | Content |
+        |------|---------|
+        | MAP | PNG, JPEG, WebP, PDF |
+        | TOKEN | PNG, JPEG, WebP, GIF |
+        | AUDIO | MPEG audio (MP3), Ogg audio, WAV |
+        | AVATAR | PNG, JPEG, WebP |
+        | DOCUMENT | PDF; plain text or Markdown |
+
+        The original filename's extension matters only where the bytes
+        cannot be identified: a MAP named `.pdf` that starts with `%PDF-`, an
+        AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
+        and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
+        with no control characters besides tab, line feed, form feed and
+        carriage return. "Ogg audio" includes Ogg FLAC and Speex, stored as
+        `.oga` and `.spx`, and MPEG audio includes layers I and II, stored as
+        `.mp1` and `.mp2`; these upload successfully but
+        `GET /api/assets/audio/{id}` answers 404 for them. Ogg Opus is
+        refused.
+
+        The stored row's `mimeType` is the content type the client declared
+        for the file part, not the detected one; the file routes do not use
+        it.
 
         **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
         environment variables (defaults shown). The effective values are
@@ -4554,11 +4629,18 @@ paths:
         | AVATAR | `MAX_AVATAR_SIZE_MB` | 2 MB |
         | DOCUMENT | `MAX_DOCUMENT_SIZE_MB` | 50 MB |
 
-        Image assets generate a 512×512 thumbnail server-side.
+        A MAP or TOKEN upload whose declared content type starts with
+        `image/` also gets a thumbnail stored beside the file, scaled to fit
+        inside 512×512 with its aspect ratio kept and never enlarged. A
+        thumbnail that cannot be made does not fail the upload. No route
+        serves thumbnails and no response mentions them; deleting the asset
+        deletes its thumbnail.
 
         **Rate limit**: 30 uploads per minute per user (configurable via
-        `ASSET_UPLOAD_RATE_LIMIT`). Sized to allow legitimate bulk-upload
-        during campaign setup while blocking obvious abuse loops.
+        `ASSET_UPLOAD_RATE_LIMIT`), one budget shared with
+        `POST /api/assets/documents` and the UVTT map import. Sized to allow
+        legitimate bulk-upload during campaign setup while blocking obvious
+        abuse loops.
       operationId: uploadAsset
       security:
         - cookieAuth: []
@@ -4575,9 +4657,11 @@ paths:
                 file:
                   type: string
                   format: binary
+                  description: Exactly one file, in a part named `file`.
                 type:
                   type: string
                   enum: [MAP, TOKEN, AUDIO, AVATAR, DOCUMENT]
+                  description: Case-sensitive.
                 scope:
                   type: string
                   enum: [GLOBAL, USER, CAMPAIGN]
@@ -4588,11 +4672,12 @@ paths:
                   description: Required if scope is CAMPAIGN
                 name:
                   type: string
+                  description: Defaults to the uploaded file's original name when omitted.
                 description:
                   type: string
                 tags:
                   type: string
-                  description: Comma-separated tags
+                  description: Comma-separated tags; each is trimmed and empty ones are dropped.
       responses:
         '201':
           description: Asset uploaded.
@@ -4607,16 +4692,32 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          description: |
-            Validation failure — missing required field, file too large for
-            its declared type, or magic-byte mismatch (file content does not
-            match declared type).
+          description: >-
+            `error` is `Validation Error` for: `type` missing or not one of
+            the five values; `scope` not one of GLOBAL, USER or CAMPAIGN;
+            `campaignId` missing for a CAMPAIGN upload; no file; a file in a
+            part not named `file`; content that cannot be identified ("Could
+            not determine file type...") or is not accepted for the declared
+            `type` ("Invalid file type..."). `error` is `File Too Large` when
+            the file exceeds its type's limit. Other multipart problems, such
+            as more than one file, answer with `Upload Error` or
+            `Validation Error`. A refused file is deleted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            GLOBAL without being an admin or global asset manager; CAMPAIGN in
+            a campaign the caller is not a member of (or that does not exist),
+            or as a player uploading anything but TOKEN, or as a spectator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the Dungeon Master can upload campaign assets
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -4625,6 +4726,16 @@ paths:
       tags:
         - Assets
       summary: Get asset metadata
+      description: >-
+        This route checks access on its own terms, not the shared read rule
+        the file-serving routes below use: a USER-scoped asset only to its
+        uploader or an admin, a CAMPAIGN-scoped one only to a member of that
+        campaign (with the spirit-layer check for a non-DM member), GLOBAL to
+        anyone signed in. It does not extend access to a caller whose
+        campaign merely *uses* the asset (a DM's personal map shown to the
+        table, a document shared with the campaign, the atmosphere track), so
+        the metadata can answer 403 for an asset whose file the same caller
+        may read.
       operationId: getAssetById
       security:
         - cookieAuth: []
@@ -4654,7 +4765,18 @@ paths:
       tags:
         - Assets
       summary: Delete asset
-      description: Delete asset. A personal asset, its owner or an admin; a campaign asset, its uploader while still a member of that campaign, the campaign's DM, or an admin; a global asset, an admin or the uploading global asset manager.
+      description: |
+        Delete asset. A personal asset, its owner or an admin; a campaign
+        asset, its uploader while still a member of that campaign, the
+        campaign's DM, or an admin; a global asset, an admin or the uploading
+        global asset manager.
+
+        Removes the database row, the file and its thumbnail (if any), and
+        for a document every share of it with a campaign. Nothing checks
+        whether a map, token, character, token template, creature or a
+        campaign's atmosphere track still names the asset: those references
+        are left in place and now point at nothing. Deleting a user's newest
+        avatar makes their previous one current.
       operationId: deleteAsset
       security:
         - cookieAuth: []
@@ -4675,6 +4797,7 @@ paths:
                 properties:
                   message:
                     type: string
+                    example: Asset deleted successfully
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -4689,20 +4812,31 @@ paths:
       summary: Change asset scope
       description: |
         Move an asset between the three scopes (`GLOBAL`, `USER`, `CAMPAIGN`).
+        A platform admin may make any move; the rules below are for everyone
+        else, and combine when a move touches more than one of their cases.
 
-        **Permission matrix:**
-        | Move | Required role |
-        |------|---------------|
-        | Any move involving GLOBAL | Platform admin OR `globalAssetManager` |
-        | USER → CAMPAIGN | Asset owner who is that campaign's DM; a player may move token art only; never a spectator |
-        | CAMPAIGN → USER | Asset owner while a member of the source campaign, OR its DM |
-        | CAMPAIGN → CAMPAIGN | Asset owner while a member of the source campaign, OR its DM |
-        | USER → USER on a different account | Disallowed |
+        **Permission matrix (non-admin):**
+        | Case | Requirement |
+        |------|-------------|
+        | Either the current or the new scope is GLOBAL | Caller has `globalAssetManager` |
+        | Current scope is USER | Caller is the asset's owner |
+        | Current scope is CAMPAIGN | Caller is the asset's owner and still a member of that campaign, or is that campaign's DM |
+        | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its DM, or a player placing TOKEN art only |
+
+        So, for example, CAMPAIGN → CAMPAIGN needs both the "current scope is
+        CAMPAIGN" and "new scope is CAMPAIGN" rows; a non-admin
+        `globalAssetManager` moving a GLOBAL asset into a campaign also has to
+        satisfy that campaign's placement rule, the same as uploading there
+        directly.
 
         When `scope: CAMPAIGN`, `campaignId` is required and the campaign must
-        exist, and the same placement rule as an upload there applies. The
-        asset's file does not move on disk — only the DB record's scope and
-        `campaignId` are updated; the uploader stays as recorded.
+        exist (404 otherwise, checked before the ownership and placement
+        rows); for
+        any other scope `campaignId` is ignored and cleared. The asset's file
+        does not move on disk: only the DB record's scope and `campaignId` are
+        updated, and the uploader stays as recorded. Moving an asset to USER
+        therefore makes it personal to its uploader, who may not be the
+        caller.
       operationId: changeAssetScope
       security:
         - cookieAuth: []
@@ -4739,6 +4873,9 @@ paths:
               schema:
                 type: object
                 properties:
+                  message:
+                    type: string
+                    example: Asset scope updated successfully
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
@@ -4755,6 +4892,16 @@ paths:
       tags:
         - Assets
       summary: Download asset file
+      description: >-
+        Any asset type. Uses the same read rule as the map, token, audio and
+        document routes below (see `GET /api/assets/maps/{id}`), including
+        the grants for an asset used in a campaign the caller shares with its
+        uploader and for a document shared with the caller's campaign, so it
+        can serve a file whose metadata `GET /api/assets/{id}` refuses.
+        Served with `Content-Disposition: attachment` and the asset's
+        original filename. The content type is chosen from the stored file's
+        extension, which the upload forced to match the content. 404 also
+        when the row exists but the file is missing from disk.
       operationId: downloadAsset
       security:
         - cookieAuth: []
@@ -4769,7 +4916,7 @@ paths:
         '200':
           description: File download
           content:
-            application/octet-stream:
+            '*/*':
               schema:
                 type: string
                 format: binary
@@ -4790,7 +4937,10 @@ paths:
         bounded at 900 KB (typed content arrives as JSON; anything larger is a
         file to upload), written to disk exactly as sent, and never interpreted.
         A PDF cannot be typed. Counts against the upload rate limit, since it
-        creates a file on disk exactly as an upload does.
+        creates a file on disk exactly as an upload does. The new asset's
+        `originalName` is `<name>.<format>` and its `mimeType` is
+        `text/plain` or `text/markdown`. A `campaignId` sent with a USER or
+        GLOBAL document is ignored.
       operationId: createDocument
       security:
         - cookieAuth: []
@@ -4807,15 +4957,22 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
                   maxLength: 200
+                  description: Trimmed.
                 description:
                   type: string
                   maxLength: 1000
+                  description: Trimmed.
                 format:
                   type: string
                   enum: [txt, md]
                 content:
                   type: string
+                  description: >-
+                    At most 900 KB once encoded as UTF-8, with no NUL or
+                    control characters besides tab, line feed, form feed and
+                    carriage return.
                 scope:
                   type: string
                   enum: [USER, CAMPAIGN, GLOBAL]
@@ -4835,11 +4992,39 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error` and `message` names the first problem
+            found: a missing or over-long name, a format other than txt or md,
+            content too long or not text, an unknown scope, a `campaignId` that
+            is not a UUID, or a CAMPAIGN document with no `campaignId`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: That is too long to save as typed text. Upload it as a file instead.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            GLOBAL without being an admin or global asset manager; CAMPAIGN
+            without being that campaign's DM (a player or spectator, a
+            non-member, or a campaign that does not exist).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: The JSON body is over 1 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Payload Too Large
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/assets/documents/{id}/content:
     put:
@@ -4850,7 +5035,7 @@ paths:
         The uploader or an admin. A document the caller may not edit answers
         404, so the reply does not confirm a private id exists. A PDF answers
         400: it is a file, and is replaced by uploading a new one. The recorded
-        size is updated.
+        size is updated. Not counted against the upload rate limit.
       operationId: updateDocumentContent
       security:
         - cookieAuth: []
@@ -4872,6 +5057,7 @@ paths:
               properties:
                 content:
                   type: string
+                  description: The same rules as when creating a typed document.
       responses:
         '200':
           description: Saved
@@ -4895,11 +5081,15 @@ paths:
         - Documents
       summary: Serve a document for reading inline
       description: >-
-        A PDF, plain text or Markdown file. A document is private to its
-        uploader unless a DM has shared it with a campaign the caller belongs
-        to; anyone else gets 404, not 403, so the reply never confirms a
-        private id exists. The content type is decided from the file's
-        validated extension, never from what was declared at upload, and
+        A PDF, plain text or Markdown file. Who may read it follows the
+        asset's scope: a GLOBAL document anyone signed in, a CAMPAIGN one
+        that campaign's members, a USER (personal) one its uploader. Beyond
+        that, a document shared with a campaign is readable by that
+        campaign's members, and a platform admin may read any. Anyone else
+        gets 404, not 403, so the reply never confirms a private id exists;
+        404 also when the file is missing from disk. The content type is
+        decided from the file's validated extension, never from what was
+        declared at upload, and
         Markdown is served as text/plain so the browser never renders a
         document as a page. The response carries
         `X-Content-Type-Options: nosniff` and a
@@ -4923,9 +5113,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: The document, inline
-        '304':
-          description: Unchanged since the ETag in `If-None-Match`
+          description: 'The document, inline (`Content-Disposition: inline`)'
           content:
             application/pdf:
               schema:
@@ -4934,6 +5122,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -4944,6 +5134,33 @@ paths:
       tags:
         - Assets
       summary: Serve map image
+      description: |
+        Serves a MAP asset's file. This is the read rule the token, audio,
+        document and download routes share:
+
+        - a platform admin may read any asset;
+        - GLOBAL: anyone signed in;
+        - CAMPAIGN: any member of that campaign, except that a non-DM member
+          is refused a spirit-layer image of one of its maps while the spirit
+          plane is closed to them (unless the same image is a layer of the
+          map the campaign is showing);
+        - USER: its uploader.
+
+        Beyond its scope, an asset is readable by someone who shares a
+        campaign with its uploader in which the asset is in use: as a map's
+        image or base layer, a spirit layer they may see, a token's art,
+        a character's token picture, a creature or token template's
+        picture, or the campaign's atmosphere track. Among maps, a non-DM
+        member counts only the one the campaign is currently showing. A document
+        shared with one of the caller's campaigns is also readable.
+
+        A refused read answers 403 here and on the token route. The file is
+        served with its content type chosen from its stored extension
+        (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
+        `application/pdf`, since a map may be a PDF; anything else as
+        `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
+        It is cached as `private, max-age=31536000, immutable` with the ETag
+        `"<asset id>"`; send that in `If-None-Match` for a 304.
       operationId: serveMap
       security:
         - cookieAuth: []
@@ -4962,14 +5179,29 @@ paths:
               schema:
                 type: string
                 format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No MAP asset with this id, or its file is missing from disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/assets/tokens/{id}:
     get:
       tags:
         - Assets
       summary: Serve token image
+      description: >-
+        Serves a TOKEN asset's file, with the same read rule, 403, content
+        types, caching and 304 as `GET /api/assets/maps/{id}`.
       operationId: serveToken
       security:
         - cookieAuth: []
@@ -4988,24 +5220,43 @@ paths:
               schema:
                 type: string
                 format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No TOKEN asset with this id, or its file is missing from disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/assets/audio/{id}:
     get:
       tags:
         - Assets
       summary: Stream audio file
-      description: >-
-        Stream audio with HTTP range request support. Read access is the shared
-        asset rule: GLOBAL for anyone signed in, CAMPAIGN for that campaign's
-        members, USER for its uploader, and additionally anyone in a campaign
-        whose atmosphere is currently set to this track, since the sound is
-        fetched by each player's browser rather than relayed by the server. That
-        grant covers the one track and lasts only while it is set. Anyone else
-        gets 404, not 403. The Content-Type comes from the file's validated
-        extension, never from the type declared at upload, and the response
-        carries X-Content-Type-Options: nosniff.
+      description: |
+        Stream audio with HTTP range request support. Read access is the
+        shared asset rule described under `GET /api/assets/maps/{id}`: a
+        platform admin any track, GLOBAL anyone signed in, CAMPAIGN that
+        campaign's members, USER its uploader. For audio the usual "in use"
+        grant is a campaign's atmosphere track, since each player's browser
+        fetches the sound itself: while a campaign's atmosphere is set to
+        this track, its members may read it, provided the uploader is a
+        member of that campaign too. Anyone else gets 404, not 403. The
+        Content-Type comes from the file's extension (`audio/mpeg`,
+        `audio/ogg` or `audio/wav`), never from the type declared at upload,
+        and the response carries `X-Content-Type-Options: nosniff`. A track
+        stored under any other extension (`.oga`, `.spx`, `.mp1`, `.mp2`,
+        which the upload accepts) answers 404. No caching headers or ETag
+        are sent.
+
+        A `Range` header is read as `bytes=<start>-<end>`, end optional, and
+        answers 206 with `Content-Range`. A suffix range (`bytes=-500`), or an
+        open range whose start is beyond the end of the file, answers 500;
+        there is no 416. An end beyond the file is not clamped, so the
+        declared `Content-Length` can exceed what is sent.
       operationId: streamAudio
       security:
         - cookieAuth: []
@@ -5026,14 +5277,35 @@ paths:
                 format: binary
         '206':
           description: Partial content (range request)
+          content:
+            audio/*:
+              schema:
+                type: string
+                format: binary
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          description: A suffix range, or an open range starting beyond the end of the file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to stream audio
 
   /api/assets/avatars/{userId}:
     get:
       tags:
         - Assets
       summary: Serve user avatar
+      description: >-
+        Any signed-in user may fetch anyone's avatar. Serves the newest
+        AVATAR asset that user uploaded, with the content type chosen from
+        its stored extension and `X-Content-Type-Options: nosniff`. Because
+        the address names the user, not the asset, it is cached as
+        `private, max-age=300` with the ETag `"<asset id>"`, which changes
+        when a new avatar is uploaded; send it in `If-None-Match` for a 304.
       operationId: serveAvatar
       security:
         - cookieAuth: []
@@ -5052,8 +5324,17 @@ paths:
               schema:
                 type: string
                 format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: The user has no avatar, or its file is missing from disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User avatar not found
 
   # ============================================
   # MAPS & TOKENS
@@ -6448,10 +6729,11 @@ paths:
       tags: [Creatures]
       summary: List creature templates
       description: |
-        Returns SRD (global) + campaign-specific custom creature templates.
-        Supports search, source filter, challenge rating filter, and pagination.
-        Campaign DM only: the library holds stat blocks and the DM's homebrew,
-        and the client shows it to the DM alone.
+        Returns SRD (global) + this campaign's custom creature templates,
+        ordered by name. Supports search, source filter, challenge rating
+        filter, game system filter and pagination; the filters combine.
+        Campaign DM only (403 for any other member): the library holds stat
+        blocks and the DM's homebrew, and the client shows it to the DM alone.
       operationId: listCreatures
       security:
         - cookieAuth: []
@@ -6467,28 +6749,36 @@ paths:
           schema:
             type: string
             enum: [srd, custom]
-          description: Filter by source
+          description: Filter by source. Any other value matches nothing.
         - name: cr
           in: query
           schema:
             type: string
-          description: Filter by challenge rating
+          description: Filter by challenge rating, matched exactly (`1/4`, `5`).
         - name: gameSystem
           in: query
           schema:
             type: string
-          description: Filter by game system
+            enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          description: >-
+            Filter by game system. A creature with no system recorded is
+            system-agnostic and is always included, regardless of this filter.
+            A value outside the enum is not validated and answers 500.
         - name: limit
           in: query
+          description: Clamped into 1-100; 0 or a non-number gives the default.
           schema:
             type: integer
             default: 50
+            minimum: 1
             maximum: 100
         - name: offset
           in: query
+          description: A negative value is treated as 0.
           schema:
             type: integer
             default: 0
+            minimum: 0
       responses:
         '200':
           description: Paginated creature list
@@ -6509,11 +6799,28 @@ paths:
                     type: integer
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          description: An unrecognised `gameSystem` value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       tags: [Creatures]
       summary: Create custom creature
-      description: Create a new campaign-specific custom creature template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
+      description: >-
+        Create a new campaign-specific custom creature template (DM only),
+        with `source: custom`. `imageUrl` is normalised before it is checked
+        and stored: a bare asset id becomes `/api/assets/tokens/<id>`, an
+        address starting `/api/assets/` is kept, and anything else is
+        prefixed with `/api/assets/tokens/`, so an address on another site
+        is refused. The result must be an asset's exact address
+        (`/api/assets/<kind>/<id>`), and one naming an existing asset must
+        name one the caller can read (403 otherwise), unless this campaign
+        already stores that exact address somewhere, as a copy of a token,
+        template or creature does; an address naming an asset that no longer
+        exists is accepted. An empty `imageUrl` means no picture.
       operationId: createCreature
       security:
         - cookieAuth: []
@@ -6531,31 +6838,59 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Trimmed.
                 statBlock:
                   type: object
+                  description: >
+                    Must have `ac` (integer 0-99), `speed` (string, at most 200
+                    characters) and `abilities` with all six scores as
+                    integers. Traits, actions, bonus actions, reactions and
+                    legendary actions hold at most 50 entries each, with names
+                    up to 200 and descriptions up to 5000 characters. Unknown
+                    keys are kept.
                 gameSystem:
                   type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
                 challengeRating:
                   type: string
+                  maxLength: 10
+                  nullable: true
                 creatureType:
                   type: string
+                  maxLength: 200
+                  nullable: true
                 alignment:
                   type: string
+                  maxLength: 100
+                  nullable: true
                 imageUrl:
                   type: string
+                  maxLength: 500
+                  nullable: true
                 size:
                   type: object
+                  required: [width, height]
+                  description: Defaults to 1 by 1.
                   properties:
                     width:
                       type: integer
+                      minimum: 1
+                      maximum: 10
                     height:
                       type: integer
+                      minimum: 1
+                      maximum: 10
                 disposition:
                   type: string
                   enum: [hostile, friendly, neutral]
+                  default: hostile
                 displayMode:
                   type: string
                   enum: [pog, top-down, full-art]
+                  default: pog
       responses:
         '201':
           description: Creature template created
@@ -6564,9 +6899,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Not the campaign's DM, or an image the caller may not reference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to that image
 
   /api/campaigns/{campaignId}/creatures/{creatureId}:
     get:
@@ -6591,13 +6939,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
     put:
       tags: [Creatures]
       summary: Update custom creature
-      description: Update a campaign-specific custom creature template (DM only). Cannot edit SRD creatures (returns 403). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: >-
+        Update a campaign-specific custom creature template (DM only). A
+        field left out keeps its value; `null` clears a nullable one. An SRD
+        creature, or a creature of another campaign, answers 403 (not 404,
+        unlike the read routes); only an unknown id answers 404. The body is
+        validated before the creature is looked up. `imageUrl` is normalised
+        and checked as on create, and `""` or `null` clears it; the address
+        already stored may be sent back unchanged.
       operationId: updateCreature
       security:
         - cookieAuth: []
@@ -6615,25 +6972,60 @@ paths:
           application/json:
             schema:
               type: object
+              description: Every field optional, but at least one is required (400 otherwise).
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Trimmed.
                 statBlock:
                   type: object
+                  description: >
+                    Must have `ac` (integer 0-99), `speed` (string, at most 200
+                    characters) and `abilities` with all six scores as
+                    integers. Traits, actions, bonus actions, reactions and
+                    legendary actions hold at most 50 entries each, with names
+                    up to 200 and descriptions up to 5000 characters. Unknown
+                    keys are kept.
+                gameSystem:
+                  type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
                 challengeRating:
                   type: string
+                  maxLength: 10
+                  nullable: true
                 creatureType:
                   type: string
+                  maxLength: 200
+                  nullable: true
                 alignment:
                   type: string
+                  maxLength: 100
+                  nullable: true
                 imageUrl:
                   type: string
+                  maxLength: 500
+                  nullable: true
                 size:
                   type: object
+                  required: [width, height]
+                  properties:
+                    width:
+                      type: integer
+                      minimum: 1
+                      maximum: 10
+                    height:
+                      type: integer
+                      minimum: 1
+                      maximum: 10
                 disposition:
                   type: string
+                  enum: [hostile, friendly, neutral]
                 displayMode:
                   type: string
+                  enum: [pog, top-down, full-art]
       responses:
         '200':
           description: Creature template updated
@@ -6641,15 +7033,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
+        '400':
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `. An empty body is refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            Not the campaign's DM; an SRD creature ("Cannot edit SRD
+            creatures. Duplicate it first to create a custom version."); a
+            creature of another campaign; or an image the caller may not
+            reference.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
 
     delete:
       tags: [Creatures]
       summary: Delete custom creature
-      description: Delete a campaign-specific custom creature template (DM only). Cannot delete SRD creatures (returns 403).
+      description: >-
+        Delete a campaign-specific custom creature template (DM only). An SRD
+        creature, or a creature of another campaign, answers 403; only an
+        unknown id answers 404. Everyone's favourites of it are removed with
+        it. Tokens already placed from it are not changed.
       operationId: deleteCreature
       security:
         - cookieAuth: []
@@ -6680,7 +7092,13 @@ paths:
     post:
       tags: [Creatures]
       summary: Duplicate creature
-      description: Duplicate a creature of this campaign, or a global SRD creature, as a new custom creature in this campaign (DM only). A creature belonging to another campaign answers 404.
+      description: >-
+        Duplicate a creature of this campaign, or a global SRD creature, as a
+        new custom creature in this campaign (DM only). The copy is named
+        `<name> (Custom)`, with `source: custom`, and copies the stat block
+        and every other field; an older bare-id
+        `imageUrl` is normalised to `/api/assets/tokens/<id>`. A creature
+        belonging to another campaign answers 404.
       operationId: duplicateCreature
       security:
         - cookieAuth: []
@@ -6699,6 +7117,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -6729,12 +7149,14 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CreatureTemplate'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/campaigns/{campaignId}/creatures/{creatureId}/favorite:
     post:
       tags: [Creatures]
       summary: Toggle creature favorite
-      description: Toggle favorite for the current user in this campaign. Campaign DM only. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's answers 404.
+      description: Toggle favorite for the current user in this campaign. Campaign DM only. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's, or an unknown id, answers 404.
       operationId: toggleCreatureFavorite
       security:
         - cookieAuth: []
@@ -6756,12 +7178,20 @@ paths:
                 properties:
                   favorited:
                     type: boolean
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/campaigns/{campaignId}/creatures/seed/status:
     get:
       tags: [Creatures]
       summary: Check SRD seed status
-      description: Returns whether SRD creatures have been seeded. Any campaign member can check.
+      description: >-
+        Returns how many SRD and custom creatures are stored, from which a
+        client tells whether SRD creatures have been seeded, and whether a
+        seed is running on this server. Any campaign member can check (not
+        DM-only, unlike the rest of this library).
       operationId: getSrdSeedStatus
       security:
         - cookieAuth: []
@@ -6775,12 +7205,18 @@ paths:
               schema:
                 type: object
                 properties:
-                  seeded:
-                    type: boolean
-                  count:
+                  srdCount:
                     type: integer
+                    description: Creature templates with source 'srd', across the whole instance.
+                  customCount:
+                    type: integer
+                    description: >-
+                      Creature templates with source 'custom', across the whole
+                      instance rather than this campaign alone.
                   seedInProgress:
                     type: boolean
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/campaigns/{campaignId}/creatures/seed:
     post:
@@ -6788,13 +7224,18 @@ paths:
       summary: Seed SRD creatures
       description: |
         Fetch SRD creatures from Open5e and populate the library (DM only).
-        Safe to call multiple times — existing SRD creatures are not duplicated.
+        Safe to call multiple times — existing SRD creatures, matched by name,
+        are not duplicated. SRD creatures belong to no campaign, so seeding
+        from one campaign fills the library of every campaign on the
+        instance. They are stored with `gameSystem: DND_5E`. The request
+        waits until seeding finishes.
 
         Existing SRD creatures stored before hit points were tracked are updated
         in place with `hpMax` / `hitDice`; only those missing keys are added, and
         custom creatures are never modified.
 
-        Returns 409 if seeding is already in progress.
+        Returns 409 if seeding is already in progress on this server. A
+        creature that fails to insert is logged and left out of every count.
       operationId: seedSrdCreatures
       security:
         - cookieAuth: []
@@ -6824,8 +7265,27 @@ paths:
                     description: Existing SRD creatures left unchanged
                   alreadyExisted:
                     type: integer
+                    description: SRD creatures already stored before this run
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           description: Seeding already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: SRD seeding is already in progress. Please wait.
+        '500':
+          description: The fetch from Open5e failed, or another error stopped the run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to seed SRD creatures. Check that the server can reach api.open5e.com.
 
   # ============================================
   # TOKEN TEMPLATE ENDPOINTS
@@ -6835,7 +7295,10 @@ paths:
     get:
       tags: [Token Templates]
       summary: List token templates
-      description: 'Get all token templates for a campaign. Supports search and type filtering. Campaign DM only: a template carries the notes, stat block and hit points the map keeps from players.'
+      description: >-
+        Get this campaign's token templates, ordered by name, with search,
+        type filtering and pagination. Campaign DM only: a template carries
+        the notes, stat block and hit points the map keeps from players.
       operationId: listTokenTemplates
       security:
         - cookieAuth: []
@@ -6843,13 +7306,30 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: search
           in: query
+          description: Filter by name (case-insensitive partial match)
           schema:
             type: string
         - name: type
           in: query
+          description: Filter by token type. Any other value is ignored, not refused.
           schema:
             type: string
             enum: [npc, player, object]
+        - name: limit
+          in: query
+          description: Clamped into 1-100; 0 or a non-number gives the default.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: A negative value is treated as 0.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
       responses:
         '200':
           description: List of token templates
@@ -6862,14 +7342,26 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/TokenTemplate'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '403':
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
     post:
       tags: [Token Templates]
       summary: Create token template
-      description: Create a new token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
+      description: >-
+        Create a new token template (DM only). An image address on this server
+        must be an asset's exact address (`/api/assets/<kind>/<id>`), and one
+        naming an existing asset must name one the caller can read (403
+        otherwise), unless this campaign already stores that exact address
+        somewhere, as a copy of a token, template or creature does; an address
+        naming an asset that no longer exists is accepted. `imageUrl` is
+        stored exactly as sent, not normalised: a bare asset id is checked as
+        that asset, and an address on another site is accepted unchecked.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -6900,7 +7392,9 @@ paths:
     get:
       tags: [Token Templates]
       summary: Get token template
-      description: Campaign DM only, like the list.
+      description: >-
+        Campaign DM only, like the list. A template of another campaign
+        answers 403 ("Token template belongs to another campaign").
       operationId: getTokenTemplate
       security:
         - cookieAuth: []
@@ -6918,7 +7412,18 @@ paths:
     put:
       tags: [Token Templates]
       summary: Update token template
-      description: Update a token template (DM only). An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted. The address already stored may be sent back unchanged.
+      description: >-
+        Update a token template (DM only). A field left out keeps its value.
+        An unknown id answers 404 and another campaign's template 403, both
+        before the body is validated. An image address on this server must be
+        an asset's exact address (`/api/assets/<kind>/<id>`), and one naming
+        an existing asset must name one the caller can read (403 otherwise),
+        unless this campaign already stores that exact address somewhere, as a
+        copy of a token, template or creature does; an address naming an asset
+        that no longer exists is accepted. The address already stored may be
+        sent back unchanged. `imageUrl` is stored exactly as sent, not
+        normalised: a bare asset id is checked as that asset, and an address
+        on another site is accepted unchecked.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -6926,7 +7431,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TokenTemplateInput'
+              $ref: '#/components/schemas/TokenTemplateUpdate'
       responses:
         '200':
           description: Template updated
@@ -6949,6 +7454,13 @@ paths:
       responses:
         '200':
           description: Template deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -6958,7 +7470,18 @@ paths:
     post:
       tags: [Token Templates]
       summary: Save token as template
-      description: Create a token template from an existing map token's properties. An image address on this server must be an asset's exact address (`/api/assets/<kind>/<id>`), and one naming an existing asset must name one the caller can read (403 otherwise), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does; an address naming an asset that no longer exists is accepted.
+      description: >-
+        Create a token template from a map token's properties, sent in the
+        body: the server does not read the token, and the body has the same
+        fields, rules and defaults as `POST .../token-templates`. An image
+        address on this server must be an asset's exact address
+        (`/api/assets/<kind>/<id>`), and one naming an existing asset must
+        name one the caller can read (403 otherwise), unless this campaign
+        already stores that exact address somewhere, as a copy of a token,
+        template or creature does; an address naming an asset that no longer
+        exists is accepted. `imageUrl` is stored exactly as sent, not
+        normalised: a bare asset id is checked as that asset, and an address
+        on another site is accepted unchecked.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
@@ -6987,11 +7510,17 @@ paths:
       tags: [Token Templates]
       summary: Copy template to another campaign
       description: |
-        Copy a token template to another campaign. The authenticated user must
-        be the DM of **both** the source and target campaigns. The template's
+        Copy a token template to another campaign as an independent copy
+        created by the caller. The authenticated user must be the DM of
+        **both** the source and target campaigns; a target they are not DM
+        of, including one that does not exist, answers 403. The template's
         picture is checked as a new reference in the target campaign: an
         existing asset the caller cannot read, and the target campaign does
         not already use, answers 403 and nothing is copied.
+
+        Checked in this order: the same campaign as source and target (400);
+        DM of the target (403); the template exists (404); it belongs to the
+        source campaign (403); the picture (403).
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []
@@ -7020,7 +7549,14 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: The template does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
 
   # ============================================
   # CAMPAIGN EXPORT/IMPORT ENDPOINTS
@@ -9815,7 +10351,9 @@ components:
           type: string
         gameSystem:
           type: string
+          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
           nullable: true
+          description: "null means system-agnostic: the creature is included regardless of which gameSystem a listing filters by."
         source:
           type: string
           enum: [srd, custom]
