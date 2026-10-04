@@ -9,9 +9,19 @@ export interface PasswordValidationResult {
 }
 
 /**
+ * The characters a password must contain one of. The browser checks the same
+ * pattern as the password is typed (frontend/src/utils/validation.ts), and
+ * keepInStep.test.ts fails if the two differ.
+ */
+export const SPECIAL_CHARACTER = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
+
+/**
  * Validates password strength
  * Requirements:
- * - Minimum 8 characters
+ * - Minimum 12 characters (the number every page that asks for a password
+ *   shows and the API document states; the server took eight, so the API
+ *   and the profile page accepted passwords the wizard and the register
+ *   page refused)
  * - At least one uppercase letter
  * - At least one lowercase letter
  * - At least one number
@@ -20,8 +30,8 @@ export interface PasswordValidationResult {
 export function validatePasswordStrength(password: string): PasswordValidationResult {
   const errors: string[] = [];
 
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
+  if (password.length < 12) {
+    errors.push('Password must be at least 12 characters long');
   }
 
   if (!/[A-Z]/.test(password)) {
@@ -36,7 +46,7 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
     errors.push('Password must contain at least one number');
   }
 
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (!SPECIAL_CHARACTER.test(password)) {
     errors.push('Password must contain at least one special character');
   }
 
@@ -72,8 +82,12 @@ export function sanitizeInput(input: string): string {
  * picture would not appear anyway.
  *
  * A single leading slash and no scheme. `//host/x` is rejected along with the
- * rest: the browser reads it as another origin, not as a path.
+ * rest: the browser reads it as another origin, not as a path. So is any
+ * backslash: browsers read `/\\host/x` the same way. So is any control
+ * character: the URL parser strips tabs and newlines before it looks, so
+ * `/<tab>/host/x` would become `//host/x` on the way in.
  */
 export function isSameOriginPath(value: string): boolean {
-  return value.startsWith('/') && !value.startsWith('//');
+  // eslint-disable-next-line no-control-regex
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !/[\u0000-\u001f\u007f]/.test(value);
 }

@@ -5,10 +5,12 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useUnsavedWorkGuard } from '@/hooks/useUnsavedWorkGuard';
 import { useToast } from '@/contexts/ToastContext';
 import { api } from '@/services/api';
 import type { Character } from '@/types';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 // Import editor components
 import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
@@ -16,6 +18,9 @@ import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfi
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
 import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { isStaleCharacterSave, STALE_CHARACTER_REOPEN } from '@/utils/staleCharacter';
+import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
+import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import type { CharacterData } from '@/types';
 
 interface CharacterSheetEditorModalProps {
@@ -31,7 +36,13 @@ export default function CharacterSheetEditorModal({
 }: CharacterSheetEditorModalProps) {
   const [saving, setSaving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const signedOut = useUnsavedWorkGuard(hasUnsavedChanges);
   const { showToast } = useToast();
+  // The version the editor opened. The character handed in here can be
+  // refreshed while the editor is open, since the sheet behind it follows the
+  // table, but the editor's form is not, so its save is made from this one.
+  const [loadedAt] = useState(character.updatedAt);
 
   // Handle save. The editors pass a freshly-uploaded token image URL as the
   // third argument — forward it so the character's token actually updates.
@@ -42,8 +53,10 @@ export default function CharacterSheetEditorModal({
       setSaving(true);
       await api.updateCharacter(character.id, {
         data,
+        updatedAt: loadedAt,
         ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
       });
+      reportSignedIn();
 
       // Call optional callback
       if (onSaved) {
@@ -55,27 +68,57 @@ export default function CharacterSheetEditorModal({
     } catch (error) {
       console.error('Error saving character:', error);
 
+      // Signed out meanwhile: the editor stays open with the changes, and the
+      // notice says how to save them.
+      if (isSignedOutSave(error)) {
+        reportSignedOut();
+        showToast(SIGNED_OUT_NOT_SAVED, 'error');
+        throw error;
+      }
+
+      // Saving over a newer version would undo it. The sheet behind is loaded
+      // again and the editor, holding the old one, is closed.
+      if (isStaleCharacterSave(error)) {
+        showToast(STALE_CHARACTER_REOPEN, 'error');
+        onSaved?.();
+        onClose();
+        return;
+      }
+
       // Show detailed error message
       const message = apiErrorMessage(error) || 'Failed to save character. Please try again.';
       const validationErrors = apiValidationIssues(error);
 
       if (validationErrors) {
         console.error('Validation errors:', validationErrors);
+        // TODO(ui): the message here is "Character data does not match game
+        // system schema" and the issues go only to the console, so the user is
+        // not told which field to fix. List each issue's path and message, as
+        // CharacterEditorPage does.
         showToast(`Validation Error: ${message}`, 'error');
       } else {
         showToast(message, 'error');
       }
+      // Thrown on so the sheet knows nothing was saved: it keeps its unsaved
+      // changes, and leaving still asks before discarding them.
+      throw error;
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle cancel
+  // Ask before leaving only when something would be lost.
   const handleCancel = () => {
+    if (!hasUnsavedChanges) {
+      onClose();
+      return;
+    }
     setConfirmClose(true);
   };
 
-  const modalRef = useFocusTrap(true, onClose);
+  // Escape does what Cancel does. While the question is up, Escape is its to
+  // answer, so this one stands aside.
+  const modalRef = useFocusTrap(true, confirmClose ? undefined : handleCancel);
 
   // Render appropriate character sheet editor based on game system
   const renderCharacterEditor = () => {
@@ -86,6 +129,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'PATHFINDER_2E':
@@ -94,6 +138,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'CALL_OF_CTHULHU_7E':
@@ -102,6 +147,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
       case 'SHADOWRUN_6E':
@@ -131,6 +177,7 @@ export default function CharacterSheetEditorModal({
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
+            onDirtyChange={setHasUnsavedChanges}
           />
         );
     }
@@ -138,7 +185,7 @@ export default function CharacterSheetEditorModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" aria-hidden="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div
         ref={modalRef}
         role="dialog"
@@ -163,6 +210,12 @@ export default function CharacterSheetEditorModal({
             <X className="w-5 h-5 text-stone-gray" />
           </button>
         </div>
+
+        {signedOut && (
+          <div className="px-4 pt-4 flex-shrink-0">
+            <SignedOutNotice />
+          </div>
+        )}
 
         {/* Visually hidden title for accessibility */}
         <h2 id="character-sheet-editor-title" className="sr-only">

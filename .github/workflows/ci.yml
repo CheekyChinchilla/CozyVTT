@@ -77,3 +77,13 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npx jest
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The route check also loads the OpenAPI file as YAML, which needs PyYAML.
+      - run: pip install pyyaml
+      - run: python3 scripts/spec-coverage.py
+      - run: python3 scripts/websocket-events.py --check

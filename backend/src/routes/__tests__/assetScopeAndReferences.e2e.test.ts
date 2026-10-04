@@ -1,0 +1,383 @@
+/**
+ * What a member may put into a campaign's asset library, and what they may
+ * point at.
+ *
+ * Creating an asset at CAMPAIGN scope is DM-only, with token art the one
+ * exception for players. Moving an asset there through the scope route only
+ * checked membership, so a spectator or player could publish a private
+ * document, map or track into the campaign library. The token exception also
+ * covered spectators. A character's token image was stored unchecked, so any
+ * member could point their character at a fellow member's private asset and
+ * then read it. The asset listing served the file's storage paths, and it
+ * served the spirit-layer image the map itself keeps from players who have
+ * not crossed over.
+ *
+ * Requires PostgreSQL at DATABASE_URL.
+ */
+
+import { randomUUID } from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-asset-scope-'));
+process.env.UPLOAD_DIR = UPLOAD_DIR;
+
+import request from 'supertest';
+
+// file-type is ESM-only and Jest cannot load it; the upload route identifies
+// a real PNG by its signature, as the library would.
+jest.mock('file-type', () => {
+  const realFs = jest.requireActual('fs') as typeof import('fs');
+  const detect = (buffer: Buffer) =>
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      ? { ext: 'png', mime: 'image/png' }
+      : undefined;
+  return {
+    fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => detect(buffer)),
+    fileTypeFromFile: jest.fn(async (filePath: string) => detect(realFs.readFileSync(filePath))),
+  };
+});
+
+import { createTestApp } from '../../__tests__/helpers/test-app';
+import {
+  prisma,
+  createTestUser,
+  createTestCampaign,
+  cleanupUsers,
+  cleanupCampaigns,
+  TEST_PASSWORD,
+} from '../../__tests__/helpers/db';
+import { canPlaceAssetAtScope } from '../../services/permissions';
+
+const app = createTestApp();
+
+/** A tiny valid PNG, written to disk so the serving route has something to send. */
+const PNG = Buffer.from(
+  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154' +
+    '789c6300010000050001' +
+    '0d0a2db40000000049454e44ae426082',
+  'hex'
+);
+
+let dmId: string;
+let playerId: string;
+let spectatorId: string;
+let campaignId: string;
+let dm: ReturnType<typeof request.agent>;
+let player: ReturnType<typeof request.agent>;
+let spectator: ReturnType<typeof request.agent>;
+const assetIds: string[] = [];
+
+async function login(email: string) {
+  const agent = request.agent(app);
+  const res = await agent.post('/api/auth/login').send({ email, password: TEST_PASSWORD });
+  expect(res.status).toBe(200);
+  return agent;
+}
+
+/** An asset row with a real file behind it. */
+async function makeAsset(type: 'MAP' | 'TOKEN' | 'DOCUMENT', scope: 'USER' | 'CAMPAIGN', uploadedById: string, label: string) {
+  const filename = `${label}-${Date.now()}.png`;
+  const filePath = path.join(UPLOAD_DIR, filename);
+  fs.writeFileSync(filePath, PNG);
+  const asset = await prisma.asset.create({
+    data: {
+      type,
+      scope,
+      campaignId: scope === 'CAMPAIGN' ? campaignId : null,
+      uploadedById,
+      filename,
+      originalName: filename,
+      mimeType: 'image/png',
+      fileSize: PNG.length,
+      filePath,
+      name: label,
+    },
+  });
+  assetIds.push(asset.id);
+  return asset.id;
+}
+
+beforeAll(async () => {
+  const stamp = Date.now();
+  const dmUser = await createTestUser({ email: `scope-dm-${stamp}@test.cozyvtt.local`, displayName: 'Scope DM' });
+  const playerUser = await createTestUser({ email: `scope-player-${stamp}@test.cozyvtt.local`, displayName: 'Scope Player' });
+  const spectatorUser = await createTestUser({ email: `scope-spec-${stamp}@test.cozyvtt.local`, displayName: 'Scope Spectator' });
+  dmId = dmUser.id;
+  playerId = playerUser.id;
+  spectatorId = spectatorUser.id;
+  campaignId = (await createTestCampaign(dmId, { name: `Scope ${stamp}` })).id;
+  await prisma.campaignMembership.createMany({
+    data: [
+      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
+    ],
+  });
+  [dm, player, spectator] = await Promise.all([login(dmUser.email), login(playerUser.email), login(spectatorUser.email)]);
+});
+
+afterAll(async () => {
+  await prisma.character.deleteMany({ where: { userId: { in: [dmId, playerId, spectatorId] } } });
+  await prisma.map.deleteMany({ where: { campaignId } });
+  await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
+  await cleanupCampaigns([campaignId]);
+  await cleanupUsers([dmId, playerId, spectatorId]);
+  await prisma.$disconnect();
+  fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
+});
+
+describe('moving an asset into a campaign', () => {
+  const move = (agent: ReturnType<typeof request.agent>, id: string) =>
+    agent.patch(`/api/assets/${id}/scope`).send({ scope: 'CAMPAIGN', campaignId });
+
+  it('is refused to a player and a spectator for anything but token art, as uploading there is', async () => {
+    const playerDoc = await makeAsset('DOCUMENT', 'USER', playerId, 'player-handout');
+    const spectatorMap = await makeAsset('MAP', 'USER', spectatorId, 'spectator-map');
+    expect((await move(player, playerDoc)).status).toBe(403);
+    expect((await move(spectator, spectatorMap)).status).toBe(403);
+    const still = await prisma.asset.findMany({ where: { id: { in: [playerDoc, spectatorMap] } }, select: { scope: true } });
+    expect(still.map((a) => a.scope)).toEqual(['USER', 'USER']);
+  });
+
+  it('lets a player move their own token art in, and a spectator not even that', async () => {
+    const playerToken = await makeAsset('TOKEN', 'USER', playerId, 'player-token');
+    const spectatorToken = await makeAsset('TOKEN', 'USER', spectatorId, 'spectator-token');
+    expect((await move(player, playerToken)).status).toBe(200);
+    expect((await move(spectator, spectatorToken)).status).toBe(403);
+  });
+
+  it('lets the DM move any of their own assets in', async () => {
+    const dmDoc = await makeAsset('DOCUMENT', 'USER', dmId, 'dm-handout');
+    expect((await move(dm, dmDoc)).status).toBe(200);
+  });
+});
+
+describe('placing token art at campaign scope', () => {
+  it('is open to a player and closed to a spectator', async () => {
+    expect((await canPlaceAssetAtScope(playerId, 'TOKEN', 'CAMPAIGN', campaignId)).allowed).toBe(true);
+    expect((await canPlaceAssetAtScope(spectatorId, 'TOKEN', 'CAMPAIGN', campaignId)).allowed).toBe(false);
+    expect((await canPlaceAssetAtScope(dmId, 'MAP', 'CAMPAIGN', campaignId)).allowed).toBe(true);
+    expect((await canPlaceAssetAtScope(playerId, 'MAP', 'CAMPAIGN', campaignId)).allowed).toBe(false);
+  });
+});
+
+describe("a character's token image", () => {
+  it("cannot point at a fellow member's private asset, on creation or on update", async () => {
+    const dmPrivate = await makeAsset('TOKEN', 'USER', dmId, 'dm-private-token');
+    const url = `/api/assets/tokens/${dmPrivate}`;
+    const created = await player.post('/api/characters').send({ name: 'Peeker', tokenImageUrl: url });
+    expect(created.status).toBe(403);
+
+    const own = await player.post('/api/characters').send({ name: 'Honest' });
+    expect(own.status).toBe(201);
+    const updated = await player.put(`/api/characters/${own.body.character.id}`).send({ tokenImageUrl: url });
+    expect(updated.status).toBe(403);
+    // And the private asset stays private.
+    expect((await player.get(url)).status).toBe(403);
+  });
+
+  // The write check reads the asset id out of the address and asks whether
+  // the member may read it. The read side once granted on any stored address
+  // merely containing an asset's id, so an address the write check read as
+  // naming no asset, or a different one, still opened the private one.
+  it.each([
+    ['with a character after the id', (victim: string) => `${victim}#`],
+    ['inside a longer path segment', (victim: string) => `/api/assets/tokens/x${victim}`],
+    ['under a directory that is not an image type', (victim: string) => `/api/assets/documents/${victim}`],
+    ['after a readable asset', (victim: string, mine: string) => `/api/assets/tokens/${mine}/../${victim}`],
+  ])("grants nothing when the private asset's id is written %s", async (_how, address) => {
+    const victim = await makeAsset('TOKEN', 'USER', dmId, 'dm-private-smuggled');
+    const mine = await makeAsset('TOKEN', 'USER', playerId, 'my-cover-token');
+    const created = await player.post('/api/characters').send({ name: 'Smuggler', tokenImageUrl: address(victim, mine) });
+    if (created.status === 201) {
+      // Bring it into the campaign the DM shares with the player.
+      await prisma.character.update({ where: { id: created.body.character.id }, data: { campaignId } });
+    }
+    expect((await player.get(`/api/assets/tokens/${victim}`)).status).toBe(403);
+  });
+
+  // The sheet editors send the stored picture back with every save. Once it
+  // could no longer be read (its campaign left, its asset deleted), every
+  // save of the sheet was refused, although nothing about the picture changed.
+  it('keeps a stored picture the member can no longer read when the save leaves it as it was', async () => {
+    const theirs = await makeAsset('TOKEN', 'USER', dmId, 'dm-picture-kept');
+    const created = await player.post('/api/characters').send({ name: 'Kept' });
+    expect(created.status).toBe(201);
+    await prisma.character.update({ where: { id: created.body.character.id }, data: { tokenImageUrl: `/api/assets/tokens/${theirs}` } });
+    const saved = await player.put(`/api/characters/${created.body.character.id}`).send({ name: 'Kept again', tokenImageUrl: `/api/assets/tokens/${theirs}` });
+    expect(saved.status).toBe(200);
+  });
+
+  it('may point at a picture that no longer exists, which names nothing', async () => {
+    const gone = randomUUID();
+    const created = await player.post('/api/characters').send({ name: 'From an old template', tokenImageUrl: `/api/assets/tokens/${gone}` });
+    expect(created.status).toBe(201);
+  });
+
+  it('may point at an asset the member can read', async () => {
+    const mine = await makeAsset('TOKEN', 'USER', playerId, 'my-token');
+    const created = await player.post('/api/characters').send({ name: 'Pictured', tokenImageUrl: `/api/assets/tokens/${mine}` });
+    expect(created.status).toBe(201);
+    expect(created.body.character.tokenImageUrl).toBe(`/api/assets/tokens/${mine}`);
+  });
+});
+
+describe('what the asset library tells a member', () => {
+  it('never includes where a file is stored on the server', async () => {
+    const id = await makeAsset('MAP', 'CAMPAIGN', dmId, 'listed-map');
+    const list = await player.get(`/api/assets?campaignId=${campaignId}`);
+    expect(list.status).toBe(200);
+    const listed = list.body.assets.find((a: { id: string }) => a.id === id);
+    expect(listed).toBeDefined();
+    expect(listed).not.toHaveProperty('filePath');
+    expect(listed).not.toHaveProperty('thumbnailPath');
+    const one = await player.get(`/api/assets/${id}`);
+    expect(one.status).toBe(200);
+    expect(one.body.asset).toMatchObject({ id, name: 'listed-map' });
+    expect(one.body.asset).not.toHaveProperty('filePath');
+    expect(one.body.asset).not.toHaveProperty('thumbnailPath');
+  });
+
+  it('nor on an upload, a typed document, an edit of it, or a scope change', async () => {
+    const noPaths = (asset: Record<string, unknown>) => {
+      expect(asset).toHaveProperty('id');
+      expect(asset).not.toHaveProperty('filePath');
+      expect(asset).not.toHaveProperty('thumbnailPath');
+    };
+    // A real 1x1 PNG: the upload route decodes what it is given, unlike makeAsset.
+    const realPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const uploaded = await dm
+      .post('/api/assets/upload')
+      .attach('file', realPng, 'tiny.png')
+      .field('type', 'MAP')
+      .field('scope', 'CAMPAIGN')
+      .field('campaignId', campaignId)
+      .field('name', 'uploaded-map');
+    expect(uploaded.status).toBe(201);
+    assetIds.push(uploaded.body.asset.id);
+    noPaths(uploaded.body.asset);
+
+    const doc = await dm.post('/api/assets/documents').send({ name: 'Handout', format: 'md', content: '# Hello', scope: 'CAMPAIGN', campaignId });
+    expect(doc.status).toBe(201);
+    assetIds.push(doc.body.asset.id);
+    noPaths(doc.body.asset);
+
+    const edited = await dm.put(`/api/assets/documents/${doc.body.asset.id}/content`).send({ content: '# Hello again' });
+    expect(edited.status).toBe(200);
+    noPaths(edited.body.asset);
+
+    const moved = await dm.patch(`/api/assets/${doc.body.asset.id}/scope`).send({ scope: 'USER' });
+    expect(moved.status).toBe(200);
+    noPaths(moved.body.asset);
+  });
+
+  it('keeps a spirit layer image hidden when it is also the base layer of a prepared map, not of the current one', async () => {
+    const shared = await makeAsset('MAP', 'CAMPAIGN', dmId, 'shared-plane-image');
+    const url = `/api/assets/maps/${shared}`;
+    const current = await prisma.map.create({
+      data: {
+        campaignId, name: 'Shown', imageUrl: '/api/assets/maps/placeholder', baseLayerUrl: '/api/assets/maps/placeholder',
+        spiritLayerUrl: url, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
+      },
+    });
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId, name: 'Prepared', imageUrl: url, baseLayerUrl: url,
+        width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
+      },
+    });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false, currentMapId: current.id } });
+
+    // The prepared map is not sent to a player, so being its base layer opens nothing.
+    expect((await player.get(url)).status).toBe(403);
+    expect((await player.get(`/api/assets/${shared}`)).status).toBe(403);
+
+    // Once that map is the one the campaign shows, the image is openly on the table.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: prepared.id } });
+    expect((await player.get(url)).status).toBe(200);
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+  });
+
+  it('keeps the spirit layer image from a player who has not crossed over, and shows it once they have', async () => {
+    const spirit = await makeAsset('MAP', 'CAMPAIGN', dmId, 'secret-spirit-realm');
+    await prisma.map.create({
+      data: {
+        campaignId, name: 'Two Planes', imageUrl: '/api/assets/maps/placeholder', baseLayerUrl: '/api/assets/maps/placeholder',
+        spiritLayerUrl: `/api/assets/maps/${spirit}`, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
+      },
+    });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+
+    const hidden = await player.get(`/api/assets?campaignId=${campaignId}&type=MAP`);
+    expect(hidden.body.assets.map((a: { id: string }) => a.id)).not.toContain(spirit);
+    expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(403);
+    expect((await player.get(`/api/assets/${spirit}`)).status).toBe(403);
+    // The DM always has it.
+    expect((await dm.get(`/api/assets?campaignId=${campaignId}&type=MAP`)).body.assets.map((a: { id: string }) => a.id)).toContain(spirit);
+    expect((await dm.get(`/api/assets/maps/${spirit}`)).status).toBe(200);
+
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
+    const shown = await player.get(`/api/assets?campaignId=${campaignId}&type=MAP`);
+    expect(shown.body.assets.map((a: { id: string }) => a.id)).toContain(spirit);
+    expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(200);
+  });
+});
+
+// The pickers that choose a map or token picture list what the caller may
+// use. An admin's listing is every asset on the instance, and the reference
+// check holds an admin to the same rule as anyone, so an admin DM was
+// offered other people's private pictures that saving then refused.
+describe("an admin's picture pickers", () => {
+  it('list only what the admin may use when asked for usable assets', async () => {
+    const stamp = Date.now();
+    const adminUser = await createTestUser({ email: `scope-admin-${stamp}@test.cozyvtt.local`, displayName: 'Scope Admin', role: 'ADMIN' });
+    try {
+      const admin = await login(adminUser.email);
+      const theirs = await makeAsset('MAP', 'USER', playerId, 'players-private-map');
+      const own = await makeAsset('MAP', 'USER', adminUser.id, 'admins-own-map');
+
+      const everything = await admin.get('/api/assets?type=MAP&limit=100');
+      expect(everything.status).toBe(200);
+      expect(everything.body.assets.map((a: { id: string }) => a.id)).toEqual(expect.arrayContaining([theirs, own]));
+
+      const usable = await admin.get('/api/assets?type=MAP&limit=100&usable=true');
+      expect(usable.status).toBe(200);
+      const ids = usable.body.assets.map((a: { id: string }) => a.id);
+      expect(ids).toContain(own);
+      expect(ids).not.toContain(theirs);
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: adminUser.id } });
+      await cleanupUsers([adminUser.id]);
+    }
+  });
+});
+
+// A campaign asset stays with the campaign. Its uploader may delete or move
+// it while they are a member; once they have left, the map art the table
+// uses is the DM's to keep.
+describe("a campaign asset's uploader", () => {
+  it('may delete it while a member of the campaign', async () => {
+    const art = await makeAsset('TOKEN', 'CAMPAIGN', playerId, 'players-campaign-art');
+    expect((await player.delete(`/api/assets/${art}`)).status).toBe(200);
+  });
+
+  it('may neither delete nor move it once they have left', async () => {
+    const stamp = Date.now();
+    const leftUser = await createTestUser({ email: `scope-left-${stamp}@test.cozyvtt.local`, displayName: 'Scope Left' });
+    try {
+      const left = await login(leftUser.email);
+      const art = await makeAsset('MAP', 'CAMPAIGN', leftUser.id, 'departed-campaign-map');
+
+      expect((await left.delete(`/api/assets/${art}`)).status).toBe(403);
+      expect((await left.patch(`/api/assets/${art}/scope`).send({ scope: 'USER' })).status).toBe(403);
+      const kept = await prisma.asset.findUnique({ where: { id: art } });
+      expect(kept?.scope).toBe('CAMPAIGN');
+      expect(fs.existsSync(kept!.filePath)).toBe(true);
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: leftUser.id } });
+      await cleanupUsers([leftUser.id]);
+    }
+  });
+});

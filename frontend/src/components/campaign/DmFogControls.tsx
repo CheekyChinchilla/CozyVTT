@@ -1,8 +1,10 @@
 /**
  * DmFogControls
  * DM-only fog of war controls panel.
- * The DM reveals or hides regions by dragging a box over the map — the
- * selection snaps to whole grid squares — plus bulk reveal/hide actions.
+ * Carries the per-map switch: with fog on, the DM reveals or hides regions
+ * by dragging a box over the map (the selection snaps to whole grid squares)
+ * plus bulk reveal/hide actions; with fog off the panel says so and offers
+ * nothing that would change what players see.
  */
 
 import { useState } from 'react';
@@ -15,6 +17,15 @@ interface DmFogControlsProps {
   onFogModeChange: (mode: FogToolMode) => void;
   onRevealAll: () => void;
   onHideAll: () => void;
+  /** Whether manual fog applies on this map. */
+  fogEnabled: boolean;
+  /** The DM ticked or unticked "Fog of war on this map". */
+  onFogEnabledChange: (enabled: boolean) => void;
+  /**
+   * Forget what every player has seen of this map. Absent when the map has
+   * no explored memory to forget (lighting off, or the setting off).
+   */
+  onResetExploration?: () => void;
   /**
    * Called when the panel is folded away, so the tool it holds can be put
    * down with it. Leaving a fog tool armed behind a closed panel means the
@@ -29,10 +40,20 @@ export default function DmFogControls({
   onFogModeChange,
   onRevealAll,
   onHideAll,
+  fogEnabled,
+  onFogEnabledChange,
+  onResetExploration,
   onCollapse,
 }: DmFogControlsProps) {
   const [confirmRevealAll, setConfirmRevealAll] = useState(false);
   const [confirmHideAll, setConfirmHideAll] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleResetExploration = () => {
+    if (!confirmReset) { setConfirmReset(true); return; }
+    setConfirmReset(false);
+    onResetExploration?.();
+  };
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
@@ -66,6 +87,31 @@ export default function DmFogControls({
     {!collapsed && (
       <div className="flex flex-col gap-2 p-2 pt-1">
 
+      {/* The per-map switch. Off puts an armed tool down first: a reveal box
+          dragged with fog off would change nothing players can see. */}
+      <label className="flex items-center gap-2 px-1 py-0.5 text-xs text-stone-300 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="w-3.5 h-3.5 accent-lime-500"
+          checked={fogEnabled}
+          onChange={(e) => {
+            const next = e.target.checked;
+            if (!next) onFogModeChange(null);
+            onFogEnabledChange(next);
+          }}
+          aria-label="Fog of war on this map"
+        />
+        Fog of war on this map
+      </label>
+
+      {!fogEnabled && (
+        <p className="px-1 text-[11px] leading-snug text-stone-400">
+          Fog is off. Players see the whole map (dynamic lighting still applies).
+          What you had revealed is kept for when you turn it back on.
+        </p>
+      )}
+
+      {fogEnabled && (<>
       {/* Mode toggle */}
       <div className="flex gap-1">
         <button
@@ -134,6 +180,30 @@ export default function DmFogControls({
           {confirmHideAll ? 'Confirm?' : 'Hide all'}
         </button>
       </div>
+      </>)}
+
+      {/* Explored memory is separate from fog: it is what players' own
+          vision has uncovered on a lit map, and only the DM can forget it. */}
+      {onResetExploration && (
+        <div className="pt-1 border-t border-stone-700/50">
+          <button
+            onClick={handleResetExploration}
+            className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+              confirmReset
+                ? 'bg-warning text-white animate-pulse'
+                : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
+            }`}
+            title={confirmReset ? 'Click again to confirm: forget what every player has seen' : 'Reset explored areas: players forget what they have seen of this map'}
+            aria-label="Reset explored areas"
+            onBlur={() => setConfirmReset(false)}
+          >
+            {confirmReset ? 'Confirm?' : 'Reset explored areas'}
+          </button>
+          <p className="px-1 mt-1 text-[10px] leading-snug text-stone-500">
+            Forgets what every player has seen of this map. Their view now is unchanged.
+          </p>
+        </div>
+      )}
     </div>
     )}
     </div>

@@ -133,6 +133,7 @@ model User {
   characterTemplates  CharacterTemplate[]    @relation("CharacterTemplateAuthor")
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
+  mapExplorations     MapExploration[]
   documentLinks       CampaignDocument[]
 
   @@index([email])
@@ -338,7 +339,9 @@ model CampaignDocument {
   assetId String
   asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
-  /// Who shared it, for the audit trail. Cascades with the user like the rest.
+  /// Who shared it, for the audit trail. Before a user is deleted, their
+  /// shares pass to the campaign's DM or owner (services/accountDeletion.ts),
+  /// so the cascade removes none.
   linkedById String
   linkedBy   User   @relation(fields: [linkedById], references: [id], onDelete: Cascade)
 
@@ -475,6 +478,9 @@ model Map {
   wallSegments    Json    @default("[]") // Array of WallSegment objects
   fogData         Json?                  // FogState object (null = not initialized)
   lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting
+  fogEnabled      Boolean @default(true)  // Manual fog of war on this map; off = players see the whole map
+  globalIllumination Boolean @default(true) // Everything in line of sight is lit; off = lights and darkvision decide
+  explorationEnabled Boolean @default(true) // Players' explored areas are remembered (greyed in) on this map
   lights          Json    @default("[]") // Array of LightSource objects
 
   // Metadata
@@ -483,8 +489,27 @@ model Map {
 
   // Relations
   activeCampaigns Campaign[] @relation("CurrentMap")
+  explorations    MapExploration[]
 
   @@index([campaignId])
+}
+
+/// What one player has explored on one map: the cells their vision has
+/// covered, kept in the FogState shape so the fog helpers apply unchanged.
+/// Never read when deciding which tokens to send; it only greys in map
+/// artwork the client already holds.
+model MapExploration {
+  id     String @id @default(uuid())
+  mapId  String
+  map    Map    @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  explored  Json     // FogState: { fogCols, fogRows, cellPx, revealed: boolean[] }
+  updatedAt DateTime @updatedAt
+
+  @@unique([mapId, userId])
+  @@index([mapId])
 }
 
 // ============================================
@@ -499,8 +524,10 @@ model Asset {
   scope AssetScope
 
   // Ownership
-  uploadedById String
-  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+  // Null once the uploader's account is deleted: the file stays, owned by
+  // no one, for the maps and tokens that use it.
+  uploadedById String?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
   campaignId   String? // Null for global assets
   campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
@@ -564,8 +591,10 @@ model DiceRoll {
   campaignId String
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  // Null once the roller's account is deleted: the roll stays in the
+  // campaign's history, as a deleted user's chat messages do.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // Roll Data
   expression String // e.g., "2d6+3"

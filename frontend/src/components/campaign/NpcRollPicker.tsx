@@ -16,6 +16,7 @@ import {
 } from '@/utils/characterRolls';
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
+import { tokenPublicName } from '@/utils/tokenDisplayName';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -161,7 +162,7 @@ export default function NpcRollPicker({
       expr = mode === 'advantage' ? withAdvantage(expr) : withDisadvantage(expr);
       purpose = `${purpose} (${modeLabels[mode]})`;
     }
-    onRoll(expr, purpose, token.name);
+    onRoll(expr, purpose, tokenPublicName(token));
     onClose();
   };
 
@@ -249,7 +250,7 @@ export default function NpcRollPicker({
       </div>
 
       <CustomRollFooter
-        onRoll={(expression, purpose) => { onRoll(expression, purpose, token.name); onClose(); }}
+        onRoll={(expression, purpose) => { onRoll(expression, purpose, tokenPublicName(token)); onClose(); }}
       />
     </div>
   );

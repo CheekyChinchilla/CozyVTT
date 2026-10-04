@@ -1,9 +1,11 @@
 // ============================================
 // MFA Setup Page
 //
-// Two-step flow:
-//   Step 1: Scan QR code → enter 6-digit TOTP to verify
-//   Step 2: Save backup codes (shown once)
+// Three-step flow:
+//   Step 1: Confirm the current password (the server asks for it before it
+//           issues a secret)
+//   Step 2: Scan QR code → enter 6-digit TOTP to verify
+//   Step 3: Save backup codes (shown once)
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -13,7 +15,7 @@ import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 
-type Step = 'loading' | 'scan' | 'backup-codes' | 'error';
+type Step = 'password' | 'scan' | 'backup-codes';
 
 export default function MFASetupPage() {
   const navigate = useNavigate();
@@ -25,14 +27,16 @@ export default function MFASetupPage() {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
   // UI state
-  const [step, setStep] = useState<Step>('loading');
+  const [step, setStep] = useState<Step>('password');
+  const [password, setPassword] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [token, setToken] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [tokenError, setTokenError] = useState('');
   const [secretCopied, setSecretCopied] = useState(false);
   const [codesCopied, setCodesCopied] = useState(false);
   const [codesAcknowledged, setCodesAcknowledged] = useState(false);
-  const [initError, setInitError] = useState('');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -41,28 +45,32 @@ export default function MFASetupPage() {
     }
   }, [authenticated, navigate]);
 
-  // Kick off MFA setup on mount
-  useEffect(() => {
-    if (!authenticated) return;
-
-    const initSetup = async () => {
-      try {
-        const data = await setupMFA();
-        setQrCodeUrl(data.qrCodeUrl);
-        setSecret(data.secret);
-        setStep('scan');
-      } catch (err) {
-        setInitError(apiErrorMessage(err) || 'Failed to initiate MFA setup');
-        setStep('error');
-      }
-    };
-
-    initSetup();
-  }, [authenticated]);  
-
   // ============================================
   // Handlers
   // ============================================
+
+  const handleStart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+
+    if (!password) {
+      setPasswordError('Enter your current password');
+      return;
+    }
+
+    try {
+      setStarting(true);
+      const data = await setupMFA(password);
+      setQrCodeUrl(data.qrCodeUrl);
+      setSecret(data.secret);
+      setPassword('');
+      setStep('scan');
+    } catch (err) {
+      setPasswordError(apiErrorMessage(err) || 'Failed to start MFA setup');
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,27 +133,66 @@ export default function MFASetupPage() {
           </p>
         </div>
 
-        {/* ── Loading ── */}
-        {step === 'loading' && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
-          </div>
-        )}
-
-        {/* ── Error ── */}
-        {step === 'error' && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-danger/10 border border-danger/30 flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-danger-ink">{initError}</p>
+        {/* ── Step 1: Confirm the password ── */}
+        {step === 'password' && (
+          <form onSubmit={handleStart} className="space-y-4">
+            <p className="text-sm text-warm-gray">
+              Enter your current password to begin. This stops anyone else who has your
+              account open from setting up an authenticator of their own.
+            </p>
+            <div>
+              <label htmlFor="mfa-setup-password" className="block text-sm font-medium text-stone-gray mb-1.5">
+                Current password
+              </label>
+              <input
+                id="mfa-setup-password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError('');
+                }}
+                disabled={starting}
+                className={`input-cozy w-full ${passwordError ? 'border-danger/60 focus:ring-danger' : ''}`}
+                autoFocus
+                autoComplete="current-password"
+              />
+              {passwordError && (
+                <p className="mt-1 text-xs text-danger-ink">{passwordError}</p>
+              )}
             </div>
-            <Button onClick={() => navigate('/profile')} variant="secondary" className="w-full">
-              Back to Profile
-            </Button>
-          </div>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                onClick={() => navigate('/profile')}
+                disabled={starting}
+                variant="secondary" className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={starting || !password}
+                className="flex-1 flex items-center justify-center gap-2"
+              >
+                {starting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    Continue
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         )}
 
-        {/* ── Step 1: Scan QR code ── */}
+        {/* ── Step 2: Scan QR code ── */}
         {step === 'scan' && (
           <div className="space-y-6">
             {/* Instructions */}
@@ -240,7 +287,7 @@ export default function MFASetupPage() {
           </div>
         )}
 
-        {/* ── Step 2: Backup codes ── */}
+        {/* ── Step 3: Backup codes ── */}
         {step === 'backup-codes' && (
           <div className="space-y-5">
             {/* Success banner */}
@@ -293,7 +340,7 @@ export default function MFASetupPage() {
                     key={i}
                     className="text-sm font-mono text-brand-ink text-center py-1.5 px-2 rounded bg-paper/60 border border-moss-green/10"
                   >
-                    {code.slice(0, 4)}-{code.slice(4)}
+                    {code}
                   </code>
                 ))}
               </div>

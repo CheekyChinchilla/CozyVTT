@@ -24,4 +24,8 @@ export const UpdateCharacterSchema = z.object({
   data: z.any().optional(),
   tokenImageUrl: z.string().nullish(),
   gameSystem: z.nativeEnum(GameSystem).nullish(),
+  // The character's `updatedAt` as the caller loaded it. When sent, the save
+  // is refused with 409 if the character has changed since; left out, the
+  // save goes ahead whatever happened in between.
+  updatedAt: z.iso.datetime({ message: 'updatedAt must be the ISO timestamp the character was loaded with' }).optional(),
 });

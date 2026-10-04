@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-09-01._
+_Last verified against the code on 2026-09-18._
 
 ## Middleware Cheat Sheet
 
@@ -14,12 +14,12 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 
 #### 1. Authenticated User Only
 ```typescript
-router.get('/api/profile', authenticated, handler);
+router.get('/api/campaigns', authenticated, handler);
 ```
 
 #### 2. Admin Only
 ```typescript
-router.get('/api/admin/users', adminOnly, handler);
+router.get('/api/campaigns/admin/all', adminOnly, handler);
 ```
 
 #### 3. Campaign Member (Any Role)
@@ -30,13 +30,34 @@ router.get('/api/campaigns/:campaignId', campaignMember, handler);
 
 #### 4. Campaign DM Only
 ```typescript
-router.put('/api/campaigns/:campaignId/settings', campaignDM, handler);
+router.put('/api/campaigns/:campaignId', campaignDM, handler);
 ```
 
+#### Characters in a campaign
+Any member may read a character assigned to the campaign, and the DM may edit
+it, only while its owner is still a member (`ownerStillIn` in
+`routes/characters.ts`). Removing a member takes their characters out of the
+campaign in the same transaction; a character left naming a campaign by a
+removal from before that is its owner's alone, and its saves are not sent to
+that campaign.
+
 #### 5. Campaign DM or Player (Excludes Spectators)
-```typescript
-router.post('/api/campaigns/:campaignId/chat', campaignDMOrPlayer, handler);
-```
+`campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
+today. Where spectators are refused, the handler does it: `dice.roll` (socket)
+through `canRollDice`, token control through `canControlToken`, and doors
+through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+may open or close an unlocked door and nothing else, the segment's position
+and size they send being ignored). Chat is a socket event (`chat.message`)
+and spectators may send it. `character.hp.update`, `character.hitdice.spend`
+and `PUT /api/characters/:id` refuse a spectator outright, even for a
+character they own, because a token bound to it follows the sheet on every
+screen; the token-image sync that route runs skips any campaign where the
+editor is a spectator. `controlledBy` may only name a player
+(`canHoldTokens`): a token cannot be created for or handed to a spectator, a
+spectator's character is placed with no controller, and what a spectator is
+sent never treats a token as theirs (`viewerIdFor` in `utils/spirit-layer.ts`),
+nor does crossing into the spirit realm, which `getSpiritVisibility` counts
+for players only.
 
 ---
 
@@ -46,7 +67,7 @@ router.post('/api/campaigns/:campaignId/chat', campaignDMOrPlayer, handler);
 ```typescript
 import {
   canEditCharacter,
-  canMoveToken,
+  canControlToken,
   canManageMaps,
   canToggleSpiritLayer,
   canDeleteCampaign,
@@ -70,30 +91,80 @@ if (!hasPermission) {
 }
 ```
 
-#### Check Token Movement Permission
-```typescript
-const canMove = await canMoveToken(userId, characterId, campaignId);
+#### Who may act on a token
 
-if (!canMove) {
-  return res.status(403).json({ error: 'Cannot move this token' });
+```typescript
+// The DM; a player the token names in controlledBy; never a spectator.
+if (!canControlToken(role, token.controlledBy, userId)) {
+  return res.status(403).json({ error: 'Forbidden' });
 }
 ```
+
+`canControlToken` is synchronous and takes the role you already hold (from
+`req.campaignMembership` or `socket.role`). It is the one rule for
+`PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` and for the three
+`token.move*` socket events, so the two channels cannot disagree. Beside it,
+`canMoveTokensNow(role, campaign.status)` holds a player's move while the
+session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths;
+the DM moves tokens at any time. The spectator
+clause matters: `controlledBy` is set once and is not cleared when someone is
+demoted, so a spectator can still hold a token from their time as a player.
+Such a token is nobody's for what the spectator is sent, too: the
+per-recipient filters ask `viewerIdFor(role, userId)`, which is undefined for
+anyone but a player, so they get no hit points, darkvision or obscured
+identity from it and no sight on a lit map.
+
+`controlledBy` is the whole of what makes a token a player's, on the server
+and in the client alike; a token bound to one of their characters is not theirs
+by that alone. A token created with a `characterId` and no `controlledBy` is
+given the character's owner as controller, provided the character belongs to
+the campaign and its owner is a `PLAYER` member of it (`canHoldTokens`). A
+character owned by the DM or a spectator gives its token no controller.
 
 #### Which token fields a player may change
 
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` is mounted on
 `campaignMember`, so the route guard alone does **not** decide this. A player who
-controls the token may change only where it is and how it looks in play:
+controls the token may change only where it is and what it is doing:
 
 | A player controlling the token may set | Everything else is DM-only |
 |---|---|
-| `position`, `rotation`, `size`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata` |
+| `position`, `rotation`, `conditions` | `hp`, `showHpBar`, `notes`, `initiative`, `type`, `disposition`, `visible`, `name`, `imageUrl`, `layer`, `controlledBy`, `displayMode`, `statBlock`, `creatureTemplateId`, `metadata`, `sightRadius`, `size`, `obscured` |
+
+`size` and `sightRadius` are DM-only because both decide what the server sends
+that player: a token always sees half its own footprint, so a player who could
+enlarge their token would enlarge their sight.
 
 The DM-only list is `restrictedFields` in `routes/maps.ts`. **Adding a token field
 means adding it there too** unless a player is meant to write it — the list is
 deny-based, so a new field is player-writable by default. That is how `metadata`
 came to be writable by any campaign member: it was added to the token shape and
 never added to the list.
+
+#### Which token fields a player is sent
+
+What a player *receives* of a token is decided on the server too, in
+`tokenForRecipient` (`utils/spirit-layer.ts`), which every send to a non-DM
+goes through: the map fetch, the token update's reply, `map.changed`,
+`token:appeared` and the initiative order (`initiative.state`). The client
+has display rules for some of these, but a display rule protects nothing,
+since whatever reaches the browser can be read there.
+
+| Sent to a player | Only when |
+|---|---|
+| `notes`, `statBlock` | never |
+| `hp` | the player controls the token, or its `showHpBar` is on |
+| `sightRadius`, `creatureTemplateId` | the player controls the token |
+| the identity of an `obscured` token: name, picture, conditions, metadata, HP, disposition, character and template links, controller, kind, facing, initiative and display mode (`utils/tokenMask.ts` builds the masked token from a list of what may be known) | the player controls the token |
+| everything else on a token they may see at all | always |
+| a token's move events (`token.move.start`, `token.moved`, `token:appeared`) | the map fetch would send them the token (visible, on a plane they can see), and on a lit map they could see it when the drag began |
+
+`fogData` on a map is DM-only likewise (`filterMapData`); `spiritLayerUrl` goes
+to a player only while they can see the spirit layer (crossed over, or the DM
+has revealed it to everyone), and the campaign overview blanks it on the same
+rule. **A new token field a player must not read goes into
+`tokenForRecipient`**, for the same reason a new field a player must not
+write goes into `restrictedFields`.
 
 #### Check Campaign Deletion Permission
 ```typescript
@@ -132,6 +203,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission |
 | 404 | Not Found | Resource doesn't exist |
 | 400 | Bad Request | Invalid input data |
+| 409 | Conflict | The map's own setting refuses the action, such as a fog operation while fog is off |
 | 500 | Internal Server Error | Unexpected error |
 
 ---
@@ -191,7 +263,58 @@ assume `req.session` knows about them.
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
 
+## Reading a map: the current one
+
+`canReadMap(role, mapId, campaign.currentMapId)` in `services/permissions.ts`:
+the DM may read any map of the campaign; a player or spectator only the one the
+campaign is showing. It gates `GET /api/campaigns/:campaignId/maps` (a player's
+list holds the current map alone), `GET .../maps/:id` and its `walls` and
+`lights` (404 for any other map), the `maps` array of
+`GET /api/campaigns/:campaignId`, and the `walls:request`, `lights:request`,
+`fog:request_state` and `exploration:request` socket events (answered with
+nothing). It gates writes too: a player's `PUT .../maps/:id/tokens/:tokenId`
+(404), `token.move.start`, `token.move` and `token.move.end`, a door
+toggled with `wall:update`, `exploration:reveal` and `initiative.roll`
+(answered with `error`, frames dropped) all refuse
+any map but the current one, even a token the player controls on it. And it
+gates what is broadcast: a map's live wall, light, fog, settings, ping and
+explored-memory-reset events, and the DM's editing notice, go through
+`emitToMapReaders` in `websocket/utils.ts`, which sends them to the whole
+campaign for the current map and to the DM's sockets for any other. A map the
+DM has prepared but not switched to is therefore the DM's alone, tokens left
+visible on it included.
+
 ## Reading an asset: access follows use
+
+Putting an asset *into* a campaign's library, by uploading at CAMPAIGN scope or
+by moving one there (`PATCH /api/assets/:id/scope`), is the DM's
+(`canPlaceAssetAtScope`); a player may add token art, since they upload their
+own character's, and a spectator adds nothing. Every route that stores a
+reference to an asset checks it with `canReferenceAsset` first: map create and
+update (image and spirit layer), token create and update, token and creature
+templates, and a character's `tokenImageUrl`. So pointing at an asset never
+grants the right to read it. An update may send back the address already
+stored even if it can no longer be read, and an address naming an asset that
+does not exist is accepted, since it grants nothing. So is a picture a record
+of the same campaign already stores (a copy: Duplicate, Save as Template,
+placing from a template), since the read grant turns on a reference existing
+in the campaign and another one there grants no one anything; a copy into a
+different campaign is checked in full. The check never counts a
+platform admin's right to read any file: a stored reference shows the asset
+to the whole table, so an admin who is a campaign's DM may reference only what
+they could read as that DM. An address on this server must be exactly an
+asset's own (`/api/assets/<kind>/<id>`): any other same-origin path is
+refused, since every viewer's browser would request it with their own
+session, and because an address the check read as naming nothing was read
+differently by the exports. The campaign export and a map's UVTT export
+include only the asset files their caller may read. A map's use counts
+for a player only while it is the campaign's current map (`canReadMap`): the
+artwork and token art of a prepared map stay the DM's until they switch to it.
+The list and detail
+responses select the public fields only; `filePath` and `thumbnailPath` are the
+server's. A map's spirit-layer image is listed to a member, and served, only
+when that member may see the spirit plane there (`getSpiritVisibility`), which
+is what the map itself does with it.
 
 The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
@@ -295,15 +418,48 @@ session. Sessions roll on every response and the client sends a keepalive, so
 one that stays in use does not expire on its own.
 
 `PUT /api/users/:id` therefore calls `destroyUserLoginSessions(id)` when the role
-actually changes, and `DELETE /api/users/:id` calls it too, because the session
-outlives the row it points at and nothing checks the user still exists. The same
+actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
+it too, because the session outlives the row it points at and nothing checks the
+user still exists. The same
 helper ends a user's other sessions on a self-service password change and on
-disabling MFA, with `exceptSessionId` keeping the device making the request
-signed in.
+turning MFA on or off, with `exceptSessionId` keeping the device making the
+request signed in.
 
 The alternative, re-reading the role from the database on every request the way
 `loadCampaignMembership` does for campaign roles, would also work and is the
 more thorough fix if this ever needs revisiting.
+
+### The instance keeps an admin
+
+`isOnlyAdmin(userId)` (`services/platformAdmins.ts`) counts the admins other
+than that user. `DELETE /api/auth/account` refuses an admin for whom it is true,
+and `PUT /api/users/:id` refuses setting `platformRole` to `USER` on such an
+admin, both with `409` and a message to promote someone first. Nothing else
+grants `ADMIN` once setup has run (the first-user rule needs an empty
+instance), so an instance that lost its last admin could not get one back.
+`DELETE /api/users/:id` needs no such check: it refuses self-deletion, and the
+admin calling it remains.
+
+### What a session alone cannot change
+
+A session cookie can be stolen, so anything that decides who can sign in from
+then on also asks for the current password:
+
+| Change | Route | Password field |
+|---|---|---|
+| Password | `POST /api/auth/change-password` | `currentPassword` |
+| Own email address | `PUT /api/users/:id` with `email`, when `:id` is the caller | `currentPassword` |
+| Start MFA enrolment | `POST /api/auth/mfa/setup` | `password` |
+| Turn MFA off | `POST /api/auth/mfa/disable` | `password` |
+| Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
+| Delete own account | `DELETE /api/auth/account` | `password` |
+
+An admin changing someone else's email gives no password, since they do not
+have it. The email check runs before the new address is looked up, so a
+session without the password cannot use it to learn which addresses have
+accounts. A new address also voids the account's unused reset and invitation
+links (`voidOutstandingResetLinks`), and the old address is sent a notice when
+SMTP is configured.
 
 ---
 
@@ -359,20 +515,43 @@ one atomic path rather than two.
 `socket.role` and `socket.campaignId` are read once, when the socket
 authenticates, and trusted by every gated handler after that. Anything that
 changes a membership therefore has to reach live connections, or the person
-keeps what they had until they reload. Three routes do, and all three are
-best-effort so a socket layer that is down cannot fail a change already written:
+keeps what they had until they reload. The routes below do, and all of them
+are best-effort so a socket layer that is down cannot fail a change already
+written:
 
 | Route | Helper |
 |---|---|
 | `PUT /api/campaigns/:id/dm` | `applyRoleToLiveSockets(userId, campaignId, role)` for both seats |
-| `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)` |
+| `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)`, then `campaign.role.changed` to the campaign so every open page, the member's own included, updates its controls |
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
+| `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
+
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
+
+| Route | Which sockets end |
+|---|---|
+| `POST /api/users/:id/reset-password`, `DELETE /api/users/:id`, `PUT /api/users/:id` (platform role changed) | every socket of that user |
+| `POST /api/auth/reset-password` (emailed link) | every socket of that user; this route now also destroys their login sessions |
+| `POST /api/auth/change-password`, `POST /api/auth/mfa/verify` (MFA turned on), `POST /api/auth/mfa/disable` | every socket but those of the sign-in making the change |
+| `POST /api/auth/logout` | the sockets of that sign-in only |
+| `DELETE /api/auth/account` | every socket of that user; its login sessions on every device end too |
+| `POST /api/admin/backups/restore` | every socket on the instance, and the in-memory combat state is dropped |
+
+Each socket is sent `error` with the reason, then disconnected. A socket records the login session it was opened under (`sessionId`, set at the handshake) so a sign-in can be singled out.
 
 `clearCampaignFromLiveSockets` clears the cached campaign and role and leaves the
 room, so the socket can neither act nor listen. Clearing `campaignId` is what
 stops it acting: every handler refuses a socket that is not authenticated to a
 campaign. A socket belongs to one campaign, so somebody playing elsewhere in
-another tab is untouched.
+another tab is untouched. `authenticate` keeps a socket in one campaign room:
+it handles the events one at a time per socket and leaves every other campaign
+room on each success, and every fan-out that walks a room and reads each
+socket's role goes through `campaignSockets`, which skips a socket whose
+`campaignId` is not that room. A fan-out that awaits anything between that
+fetch and reading the roles filters again with `stillInCampaign` right before
+it sends, and a drag's frames, whose recipients are decided once per drag, go
+only to those still in the room, so a socket that switches campaigns mid-way
+is not sent the old campaign's view under its new role.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
 per request. Platform role is a different matter, see below.

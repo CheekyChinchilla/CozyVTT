@@ -30,6 +30,7 @@ import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 interface CallOfCthulhu7eCharacterViewProps {
   character: Character;
@@ -90,7 +91,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       if (savedColor) {
         setThemeColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         // Custom hex color
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);
@@ -118,12 +119,19 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
+    // TODO(ui): the header text is always parchment, so a pale custom colour
+    // such as white makes the investigator's name unreadable. Choose the text
+    // colour from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
       : `bg-gradient-to-r ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
+        {/* TODO(sheets): the colour picked here only sets this component's
+           state and is never saved, so it is gone the next time the sheet
+           opens. Save it to the sheet's themeColor as the editor does, or
+           leave the choice to the editor and remove the button. */}
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
@@ -608,6 +616,9 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           the official sheet and are among the most consequential things it
           records — the rating caps maximum Sanity. Neither had anywhere to be
           shown or set in the app until now. */}
+      {/* TODO(ui): when Cthulhu Mythos is 0 and the spell list is empty this
+         condition is the number 0, which React renders as a stray "0" on the
+         page. Compare both with > 0 so it is a boolean. */}
       {(data.spellsAndMythos?.cthulhuMythos || data.spellsAndMythos?.spells?.length) && (
         <div className="mt-6 bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
           <h3 className="text-lg font-bold text-purple-900 mb-3">Spells &amp; Mythos</h3>

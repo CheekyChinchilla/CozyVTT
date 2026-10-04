@@ -93,10 +93,14 @@ describe('the token it creates', () => {
     expect(characterTokenRequest(drag, position, TokenLayer.TOKEN).type).toBe(TokenType.PLAYER);
   });
 
-  it('is controlled by the character owner and bound to the character', () => {
+  it('is bound to the character and names no controller, which the server decides', () => {
+    // The server gives a character's token to its owner while they are a
+    // player, and to nobody when the owner is the DM or a spectator. Naming
+    // the owner here made placing a DM's or a spectator's character a 400,
+    // since only a player may be named.
     const request = characterTokenRequest(drag, position, TokenLayer.TOKEN);
-    expect(request.controlledBy).toBe('user-2');
     expect(request.characterId).toBe('char-2');
+    expect(request).not.toHaveProperty('controlledBy');
   });
 
   it('keeps the position and layer it was given', () => {

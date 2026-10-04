@@ -304,11 +304,20 @@ export async function seedSrdCreatures(prisma: PrismaClient): Promise<SeedResult
 
 /**
  * Check current SRD seed status without fetching from Open5e.
+ *
+ * The custom count covers what this campaign's library shows: creatures with
+ * no campaign plus its own. Another campaign's homebrew is not counted, since
+ * any member may ask.
  */
-export async function getSrdSeedStatus(prisma: PrismaClient): Promise<{ srdCount: number; customCount: number }> {
+export async function getSrdSeedStatus(
+  prisma: PrismaClient,
+  campaignId: string,
+): Promise<{ srdCount: number; customCount: number }> {
   const [srdCount, customCount] = await Promise.all([
     prisma.creatureTemplate.count({ where: { source: 'srd' } }),
-    prisma.creatureTemplate.count({ where: { source: 'custom' } }),
+    prisma.creatureTemplate.count({
+      where: { source: 'custom', OR: [{ campaignId: null }, { campaignId }] },
+    }),
   ]);
   return { srdCount, customCount };
 }

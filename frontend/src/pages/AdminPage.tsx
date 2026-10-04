@@ -63,9 +63,10 @@ import type {
   AdminBackup,
   Asset,
   Campaign,
+  DeletionBlocker,
 } from '@/types';
 import { PlatformRole, AssetType, AssetScope } from '@/types';
-import { api } from '@/services/api';
+import { api, type RestoreReply } from '@/services/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   PRESET_THEMES,
@@ -77,8 +78,9 @@ import ThemePicker from '@/components/appearance/ThemePicker';
 import TableSkeleton from '@/components/skeletons/TableSkeleton';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiDeletionBlockers } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import DeletionBlockers from '@/components/admin/DeletionBlockers';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -187,6 +189,8 @@ export default function AdminPage() {
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [deleteEmail, setDeleteEmail] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  // Campaigns the user runs, which the server says must be handed over or deleted first.
+  const [deleteBlockers, setDeleteBlockers] = useState<DeletionBlocker[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Reset password flow
@@ -272,7 +276,7 @@ export default function AdminPage() {
   const [restoring, setRestoring] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [restoreError, setRestoreError] = useState('');
-  const [restoreSuccess, setRestoreSuccess] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<RestoreReply | null>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Activity ----
@@ -362,7 +366,7 @@ export default function AdminPage() {
     try {
       setBackups(await adminService.listBackups());
     } catch (err: unknown) {
-      setBackupsError(err instanceof Error ? err.message : 'Failed to load backups');
+      setBackupsError(apiErrorMessage(err) ?? 'Failed to load backups');
     } finally {
       setBackupsLoading(false);
     }
@@ -567,11 +571,17 @@ export default function AdminPage() {
       setDeleteEmail('');
       showToast(`User "${deletedName}" deleted`, 'success');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setDeleteError(apiErrorMessage(e) ?? 'Failed to delete user');
+      setDeleteError(apiErrorMessage(err) ?? 'Failed to delete user');
+      setDeleteBlockers(apiDeletionBlockers(err) ?? []);
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const clearDeleteBlocker = (campaignId: string) => {
+    const left = deleteBlockers.filter((c) => c.id !== campaignId);
+    setDeleteBlockers(left);
+    if (left.length === 0) setDeleteError('');
   };
 
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
@@ -597,6 +607,7 @@ export default function AdminPage() {
     setDeletingUser(null);
     setDeleteEmail('');
     setDeleteError('');
+    setDeleteBlockers([]);
     setDeletingUserAssetCount(0);
   };
 
@@ -780,6 +791,9 @@ export default function AdminPage() {
     }
   };
 
+  // TODO(ui): the bin button in the Backups list calls this directly, so one
+  // click deletes a backup for good with no confirmation. Ask first, naming
+  // the file, with a ConfirmDialog as the restore below does.
   const handleDeleteBackup = async (filename: string) => {
     setDeletingBackupFile(filename);
     try {
@@ -804,8 +818,7 @@ export default function AdminPage() {
     setRestoring(true);
     setRestoreError('');
     try {
-      await adminService.restoreBackup(restoreFile);
-      setRestoreSuccess(true);
+      setRestoreResult(await adminService.restoreBackup(restoreFile));
       setRestoreFile(null);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -1497,13 +1510,16 @@ export default function AdminPage() {
                                         <div className="flex items-start gap-2 mb-3 p-2.5 bg-warning/10 border border-warning/30 rounded-lg text-xs text-warning-ink">
                                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning-ink" />
                                           <span>
-                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''} that will be deleted with their account.
-                                            To preserve them, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
+                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''}. They stay after the account is deleted, owned by no one, and only admins can see them then.
+                                            To keep them usable by others, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
                                           </span>
                                         </div>
                                       )}
                                       {deleteError && (
                                         <p className="text-xs text-danger-ink mb-2">{deleteError}</p>
+                                      )}
+                                      {deleteBlockers.length > 0 && (
+                                        <DeletionBlockers campaigns={deleteBlockers} onCleared={clearDeleteBlocker} onError={setDeleteError} />
                                       )}
                                       <div className="flex items-center gap-2">
                                         <input
@@ -1649,7 +1665,7 @@ export default function AdminPage() {
 
                         // Thumb URL
                         const thumbUrl = asset.type === AssetType.AVATAR
-                          ? api.getAssetUrl(asset.uploadedById, 'avatars')
+                          ? (asset.uploadedById ? api.getAssetUrl(asset.uploadedById, 'avatars') : '')
                           : asset.type === AssetType.MAP
                             ? api.getAssetUrl(asset.id, 'maps')
                             : asset.type === AssetType.TOKEN
@@ -2059,8 +2075,11 @@ export default function AdminPage() {
                       NGINX_MAX_BODY_SIZE={requiredProxyBodyMB(serverConfig.uploadLimits)}M
                     </code>{' '}
                     in your <code className="font-mono bg-warm-gray/10 px-1 rounded">.env</code> and
-                    restart. Cloudflare-proxied setups (including Tunnels) also cap request bodies at
-                    100 MB on Free/Pro plans.
+                    apply it with{' '}
+                    <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose up -d</code>
+                    ; <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose restart</code>{' '}
+                    keeps the old value. Cloudflare-proxied setups (including Tunnels) also cap request
+                    bodies at 100 MB on Free/Pro plans.
                   </p>
                 </div>
               ) : (
@@ -2304,11 +2323,13 @@ export default function AdminPage() {
                 <h3 className="font-semibold text-danger-ink text-sm">Restore from Backup</h3>
               </div>
               <div className="p-5 space-y-4">
-                {restoreSuccess ? (
+                {restoreResult ? (
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-4 text-center space-y-2">
                     <p className="text-sm font-semibold text-brand-ink">Restore complete!</p>
                     <p className="text-xs text-warm-gray">
-                      The database and files have been restored. Your current session is no longer valid.
+                      The database and files have been restored. The database as it was before is saved as{' '}
+                      <span className="font-mono">{restoreResult.safetyBackup}</span> in the backup list, in case this was
+                      the wrong file. Your current session is no longer valid.
                     </p>
                     <Button
                       onClick={() => window.location.href = '/login'}
@@ -2322,8 +2343,11 @@ export default function AdminPage() {
                     <div className="bg-danger/10 border border-danger/60 rounded-lg p-3 flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-danger-ink">
-                        Restoring will <strong>permanently overwrite</strong> the current database and all uploaded files.
-                        This cannot be undone. Make sure you have a recent backup before proceeding.
+                        Restoring <strong>replaces the current database</strong> with the backup's and copies the backup's
+                        uploaded files over yours. A backup of the database as it is now is saved to the backup list first,
+                        so the database can be put back if this turns out to be the wrong file.{' '}
+                        <strong>Restore only backups made by this dashboard or the backup script, on an instance you trust:</strong>{' '}
+                        the database carries out the file's instructions with full rights.
                       </p>
                     </div>
 
@@ -2756,7 +2780,7 @@ export default function AdminPage() {
       <ConfirmDialog
         isOpen={showRestoreConfirm}
         title="Restore Backup"
-        message="WARNING: This will permanently overwrite the entire database and all uploaded files with the contents of the backup. This cannot be undone. Are you sure you want to continue?"
+        message="This replaces the whole database with the backup's and copies the backup's uploaded files over yours, and it signs everyone out, you included. A backup of the database as it is now is saved to the backup list first, so it can be put back. Continue?"
         confirmLabel="Restore Backup"
         variant="danger"
         isLoading={restoring}

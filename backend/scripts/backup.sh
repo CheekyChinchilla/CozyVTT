@@ -12,9 +12,26 @@
 
 set -euo pipefail
 
+# A dump holds every credential on the instance, so the file and the
+# directory this creates are readable by the user running the script alone.
+umask 077
+
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/cozyvtt_${TIMESTAMP}.sql.gz"
+
+# umask covers only what this creates. A folder that already exists, and the
+# dumps an older version of this script wrote into it, kept whatever mode
+# they had, usually readable by every account, so both are closed up here.
+# A folder or file this user does not own is left as it is, with a warning:
+# refusing the backup would be worse.
+mkdir -p "$BACKUP_DIR"
+if ! chmod 700 "$BACKUP_DIR" 2>/dev/null; then
+  echo "⚠️  Could not make $BACKUP_DIR readable by $(id -un) alone; check who owns it."
+fi
+if ! find "$BACKUP_DIR" -maxdepth 1 -type f -name 'cozyvtt_*.sql.gz' -exec chmod 600 {} + 2>/dev/null; then
+  echo "⚠️  Could not make every backup in $BACKUP_DIR readable by $(id -un) alone; check who owns them."
+fi
 
 # ------------------------------------------------------------------
 # Docker deployments: run pg_dump inside the database container.
@@ -44,10 +61,10 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
     echo "  Output: $BACKUP_FILE"
     echo ""
 
-    mkdir -p "$BACKUP_DIR"
-
     if docker compose exec -T "$DB_SERVICE" \
-        pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "$BACKUP_FILE"; then
+        pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-privileges \
+          --exclude-table-data=public.session \
+        | gzip > "$BACKUP_FILE"; then
       SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
       echo "✅ Backup complete: $BACKUP_FILE ($SIZE)"
     else
@@ -89,10 +106,14 @@ echo "  User:   $DB_USER"
 echo "  Output: $BACKUP_FILE"
 echo ""
 
-mkdir -p "$BACKUP_DIR"
-
 # Run pg_dump
+# --no-owner --no-privileges: the dump then restores under whatever database
+# user the instance it lands on has, instead of insisting on the name used here.
+# --exclude-table-data=public.session: login sessions stay out, so a restore
+# cannot sign back in a device that was signed out since the backup was made.
 if PGPASSWORD="$DB_PASS" pg_dump \
+    --no-owner --no-privileges \
+    --exclude-table-data=public.session \
     -h "$DB_HOST" \
     -p "$DB_PORT" \
     -U "$DB_USER" \

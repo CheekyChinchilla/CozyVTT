@@ -2,6 +2,7 @@ import argon2 from 'argon2';
 import { prisma } from '../config/database';
 import { User, PlatformRole } from '@prisma/client';
 import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
+import { parseDisplayName } from '../validators/users';
 
 /**
  * Authentication Service
@@ -10,6 +11,12 @@ import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils
  */
 
 // Argon2 configuration
+/**
+ * Fixed advisory-lock key for the registration path, so a concurrent signup
+ * cannot race the first-admin decision. Any stable bigint; chosen once.
+ */
+const REGISTRATION_LOCK_KEY = 481507_2026;
+
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
   memoryCost: 65536, // 64 MB
@@ -21,6 +28,13 @@ export interface RegisterInput {
   email: string;
   password: string;
   displayName: string;
+  /**
+   * False when the instance requires an admin to approve new accounts. Set in
+   * the create itself: the column defaults to approved, so a separate write
+   * afterwards would leave the account able to sign in until it landed, and
+   * for good if it failed.
+   */
+  isApproved?: boolean;
 }
 
 export interface LoginInput {
@@ -64,37 +78,41 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     throw new Error(passwordValidation.errors.join(', '));
   }
 
+  const parsedName = parseDisplayName(input.displayName);
+  if (!parsedName.ok) {
+    throw new Error(parsedName.message);
+  }
+  const displayName = parsedName.name;
+
   // Sanitize inputs
   const email = sanitizeInput(input.email.toLowerCase());
-  const displayName = sanitizeInput(input.displayName);
 
-  // Check if email already exists
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (existingUser) {
-    throw new Error('Email already registered');
-  }
-
-  // Check if this is the first user (becomes ADMIN)
-  const userCount = await prisma.user.count();
-  const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
-
-  // Hash password using Argon2
+  // Hash before the transaction: Argon2 is deliberately slow, and holding the
+  // registration lock across it would serialise every signup on the hash.
   const passwordHash = await hashPassword(input.password);
 
-  // Create user
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      displayName,
-      platformRole,
-    },
-  });
+  // The first user on an instance becomes ADMIN, decided by a count that is
+  // then acted on. Two registrations racing on a fresh, internet-facing install
+  // both read zero and both become admin. A transaction-scoped advisory lock
+  // serialises the count-and-create so exactly one wins the first-admin role;
+  // it is one fixed key, so only registration waits on registration, and it is
+  // released when the transaction ends. No schema change, and it covers every
+  // caller of registerUser (setup and public registration alike).
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-  return user;
+    const existingUser = await tx.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new Error('Email already registered');
+    }
+
+    const userCount = await tx.user.count();
+    const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
+
+    return tx.user.create({
+      data: { email, passwordHash, displayName, platformRole, isApproved: input.isApproved ?? true },
+    });
+  });
 }
 
 /**

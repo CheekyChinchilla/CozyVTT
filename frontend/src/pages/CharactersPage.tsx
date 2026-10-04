@@ -22,10 +22,11 @@ import EmptyState from '@/components/common/EmptyState';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { canEditCharacterIn } from '@/services/permissions';
 import type { CharacterData } from '@/types';
 
 export default function CharactersPage() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { mascotUrl } = useTheme();
@@ -296,6 +297,7 @@ export default function CharactersPage() {
                     campaign={getCharacterCampaign(character)}
                     onView={handleView}
                     onEdit={handleEdit}
+                    canEdit={user ? canEditCharacterIn(user, character, getCharacterCampaign(character)) : false}
                     onCopy={handleCopy}
                     onDelete={handleDeleteClick}
                     onAssign={handleAssignClick}
@@ -341,7 +343,11 @@ export default function CharactersPage() {
       {viewingCharacter && (
         <CharacterSheetViewerModal
           character={viewingCharacter}
+          campaign={getCharacterCampaign(viewingCharacter)}
           onClose={() => setViewingCharacter(null)}
+          onCharacterChanged={(stored) =>
+            setCharactersData((prev) => prev.map((c) => (c.id === stored.id ? stored : c)))
+          }
         />
       )}
 

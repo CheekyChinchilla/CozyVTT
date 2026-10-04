@@ -15,7 +15,7 @@
  * One place to ask, so the answer cannot drift apart again.
  */
 
-import type { Campaign, CampaignMembership } from '@/types';
+import type { Campaign, CampaignMembership, CampaignRole } from '@/types';
 
 /** The membership of whoever currently runs the campaign, if it is loaded. */
 export function campaignDmMembership(
@@ -96,3 +96,46 @@ export function isCampaignDm(
   if (campaign.userRole) return campaign.userRole === 'DM';
   return campaign.memberships?.some((m) => m.userId === userId && m.role === 'DM') ?? false;
 }
+
+/**
+ * The campaigns this user may put an asset of a kind into: every campaign
+ * they run, and for token art every campaign they play in, since players
+ * upload their own character's. A spectator puts nothing in. The server
+ * decides the same (canPlaceAssetAtScope); offering more only leads to a
+ * refusal after the file has been sent.
+ */
+export function campaignsToPlaceAssetIn<T extends Pick<Campaign, 'memberships' | 'userRole'>>(
+  campaigns: T[],
+  isTokenArt: boolean,
+  userId: string | null | undefined
+): T[] {
+  return campaigns.filter((c) => {
+    if (isCampaignDm(c, userId)) return true;
+    if (!isTokenArt || !userId) return false;
+    const role = c.userRole ?? c.memberships?.find((m) => m.userId === userId)?.role;
+    return role === 'PLAYER';
+  });
+}
+
+/**
+ * The campaign with one member's role changed, as a role change mid-session
+ * is patched into an open page: the membership list, which every "may I?"
+ * on the page reads, and the page's own `userRole` when `viewerId` is the
+ * member who changed. The same object when nothing changes.
+ */
+export function withMemberRole<T extends Pick<Campaign, 'memberships' | 'userRole'>>(
+  campaign: T,
+  userId: string,
+  role: CampaignRole,
+  viewerId?: string | null
+): T {
+  const member = campaign.memberships?.find((m) => m.userId === userId);
+  const ownRoleChanges = viewerId === userId && campaign.userRole !== undefined && campaign.userRole !== role;
+  if ((!member || member.role === role) && !ownRoleChanges) return campaign;
+  return {
+    ...campaign,
+    memberships: campaign.memberships?.map((m) => (m.userId === userId ? { ...m, role } : m)),
+    ...(ownRoleChanges && { userRole: role }),
+  };
+}
+

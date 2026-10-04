@@ -7,9 +7,9 @@ import { X, Shield, User as UserIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
-import { canEditCharacter, canRollAsCharacter } from '@/services/permissions';
+import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
-import type { Character, GameSystem, CampaignMembership } from '@/types';
+import type { Campaign, Character, GameSystem, CampaignMembership } from '@/types';
 
 // Import view components
 import { DnD5eCharacterView } from '../character-sheets/dnd5e/DnD5eCharacterView';
@@ -25,19 +25,37 @@ interface CharacterSheetViewerModalProps {
   character: Character;
   /**
    * Campaign context, when the sheet was opened from inside a campaign. Absent
-   * when opened from the character gallery, where there is no campaign — and a
-   * character there is always your own, so ownership alone decides editing.
+   * when opened from the character gallery, where a character is always your
+   * own; there `campaign`, the character's campaign as your campaign list
+   * gives it, says whether you are a spectator in it and so may not edit.
    */
   campaignId?: string;
   membership?: CampaignMembership;
+  campaign?: Campaign | null;
+  /**
+   * The name rolls go under in the dice log, when the sheet was opened from a
+   * token that may not be named in front of everyone. The character's name
+   * otherwise.
+   */
+  publicName?: string;
   onClose: () => void;
+  /**
+   * Called with the character as stored, each time the sheet loads it again
+   * after its editor closes: after a save, or after a save refused because the
+   * character had changed. For a page that keeps its own copy and has no live
+   * updates to follow, such as the character gallery.
+   */
+  onCharacterChanged?: (character: Character) => void;
 }
 
 export default function CharacterSheetViewerModal({
   character: initialCharacter,
   campaignId: _campaignId,
   membership,
+  campaign,
+  publicName,
   onClose,
+  onCharacterChanged,
 }: CharacterSheetViewerModalProps) {
   const { user } = useAuth();
   // Optional: this modal opens both from the campaign roster, where there is a
@@ -83,15 +101,31 @@ export default function CharacterSheetViewerModal({
       }
     };
 
+    // Hit points changed at the table (the roster's +/- buttons) arrive as
+    // `character.hp.updated`, carrying only the numbers. The character is
+    // loaded again, so the sheet shows them and an edit opened from here
+    // starts from the current version.
+    const handleHpUpdate = (data: { characterId: string }) => {
+      if (data.characterId !== character.id) return;
+      api
+        .getCharacter(character.id)
+        .then(({ character: fresh }) => setCharacter(fresh))
+        .catch((error: unknown) => console.error('Error refreshing character after an HP change:', error));
+    };
+
     socket.on('character.updated', handleCharacterUpdate);
+    socket.on('character.hp.updated', handleHpUpdate);
 
     return () => {
       socket.off('character.updated', handleCharacterUpdate);
+      socket.off('character.hp.updated', handleHpUpdate);
     };
   }, [socket, character.id]);
 
   // Check if user can edit
-  const canEdit = user ? canEditCharacter(user, character, membership) : false;
+  const canEdit = user
+    ? (membership ? canEditCharacter(user, character, membership) : canEditCharacterIn(user, character, campaign))
+    : false;
   // Reading someone else's sheet is deliberate — the server lets any campaign
   // member do it. Rolling from it is not: those are their modifiers.
   const canRoll = user ? canRollAsCharacter(user, character, membership) : false;
@@ -108,6 +142,7 @@ export default function CharacterSheetViewerModal({
     try {
       const { character: updatedCharacter } = await api.getCharacter(character.id);
       setCharacter(updatedCharacter);
+      onCharacterChanged?.(updatedCharacter);
     } catch (error) {
       console.error('Error refreshing character after save:', error);
     }
@@ -118,7 +153,9 @@ export default function CharacterSheetViewerModal({
     setShowEditor(false);
   };
 
-  const modalRef = useFocusTrap(true, onClose);
+  // Every open dialog hears Escape, so with the editor open over the sheet
+  // the sheet leaves it to the editor.
+  const modalRef = useFocusTrap(true, showEditor ? undefined : onClose);
 
   // Get game system display name
   const getSystemName = (gameSystem: GameSystem | null) => {
@@ -143,12 +180,15 @@ export default function CharacterSheetViewerModal({
     if (socket) {
       // Named so the panel heads the entry with the character whose sheet this
       // is, not with whoever happens to be reading it.
-      socket.emitDiceRoll({ expression, purpose, characterName: character.name });
+      socket.emitDiceRoll({ expression, purpose, characterName: publicName ?? character.name });
     }
   };
 
   // Passed to the sheet views only when this viewer may roll; without it the
   // stats render as plain text rather than clickable rolls.
+  // TODO(ui): on the Characters page there is no socket, yet the owner still
+  // gets this handler, so the stats look clickable and a click rolls nothing.
+  // Pass a handler only when there is a live socket to roll on.
   const rollHandler = canRoll ? handleRoll : undefined;
 
   // Spending follows the same rule as rolling. The server checks it again —
@@ -175,7 +215,7 @@ export default function CharacterSheetViewerModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" aria-hidden="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div
         ref={modalRef}
         role="dialog"

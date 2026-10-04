@@ -14,6 +14,11 @@ When you start CozyVTT with Docker Compose, the backend container will automatic
 
 This ensures that your database schema is always up-to-date.
 
+A restore from the Admin Dashboard also runs `prisma migrate deploy` once the
+backup has loaded, so a backup taken on an older release is brought up to the
+running version without a restart. If that step fails the restore reports it
+and asks for a backend restart, which runs the same command.
+
 ## Manual Migration Commands
 
 If you need to run migrations manually, you can use these commands:
@@ -73,6 +78,24 @@ about; the list is not exhaustive.
   document asset to a campaign, so a DM can share a rulebook with one table
   without making it visible to the whole instance. One `CREATE TABLE`, three
   indexes and three foreign keys. Nothing existing is altered.
+- `20260917003045_add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
+  One `ALTER TABLE ... ADD COLUMN` with a default, so every existing map keeps
+  fog of war exactly as it was; only maps created afterwards start with it off.
+- `20260917005458_add_map_global_illumination` - `Map.globalIllumination`, a boolean defaulting
+  to `true`. Same shape: one `ALTER TABLE ... ADD COLUMN` with a default. Every
+  existing lit map keeps showing players everything in line of sight, as it
+  always did; new maps start with it off so lights and darkvision decide.
+- `20260917013238_add_map_exploration` - `Map.explorationEnabled` (boolean, default `true`)
+  and a new `MapExploration` table holding what each player has explored on a
+  map, one row per map and user, cascading on delete of either. One `ALTER
+  TABLE ... ADD COLUMN` with a default, one `CREATE TABLE`, two indexes and two
+  foreign keys. Nothing existing is altered; the table starts empty.
+- `20260928120000_keep_rolls_and_uploads_of_deleted_accounts` - `Asset.uploadedById`
+  and `DiceRoll.userId` become nullable, and their foreign keys change from
+  refusing a user's deletion to setting the column to null, as
+  `Message.userId` already did. Two `DROP NOT NULL` and the two foreign keys
+  dropped and re-added in one transaction. No row is changed or removed; it
+  only lets an account with rolls or uploads be deleted.
 
 ## Data migrations (one-off scripts)
 
@@ -93,18 +116,30 @@ sheets created from them hold content in fields nothing displays: a D&D 5e
 Fighter's features, its armour and weapon proficiencies, a Pathfinder 2e
 character's strikes and class features.
 
-Reading is already fixed for D&D 5e — those sheets display correctly with no
+Reading is already fixed for D&D 5e: those sheets display correctly with no
 migration at all. **Pathfinder 2e sheets need this script** to show their
 strikes and class features, and running it also tidies the 5e duplicates away
 so the same fact is not stored twice.
 
+The same transforms, in `src/utils/sheetFieldMigrations.ts`, run on every
+character the API creates or saves, before the sheet is validated. Validation
+drops a field the schema does not declare, so without them the first save of
+such a sheet would lose the content this script exists to move. A sheet that
+is saved is therefore moved already, and the script finds nothing to do for
+it.
+
 ```bash
 # Report what would change, without writing anything
-docker compose exec backend npm run migrate:sheet-fields -- --dry-run
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend npm run migrate:sheet-fields
+docker compose exec backend node dist/scripts/migrate-sheet-fields.js
 ```
+
+The production image has no `src/` and no `ts-node`, so `npm run
+migrate:sheet-fields` (which runs the TypeScript source) works only in a
+development checkout. Outside Docker, run the compiled file from `backend/`
+after `npm run build`.
 
 Safe to run more than once — a sheet already converted is skipped. Each
 character is written in its own transaction, so an interruption cannot leave one

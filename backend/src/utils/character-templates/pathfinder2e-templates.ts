@@ -73,6 +73,12 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       other: [],
     },
     strikes: [],
+    // TODO(sheets): the attributes here ("dex", "int"), and the spellcasting
+    // tradition, type and key attribute below ("Arcane", "Prepared", "int"),
+    // are not the values the Pathfinder 2e editor reads, which are "dexterity",
+    // "arcane", "prepared" and "intelligence". The Level 1 Fighter has the same
+    // mismatch. Store the editor's values; sheets already made need the editor
+    // to accept both.
     skills: {
       acrobatics: { attribute: 'dex', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'int', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },

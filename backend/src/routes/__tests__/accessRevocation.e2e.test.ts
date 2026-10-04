@@ -46,6 +46,7 @@ let targetId: string;
 let doomedId: string;
 let keeperId: string;
 let acting: ReturnType<typeof request.agent>;
+const extra: string[] = [];
 
 async function login(email: string) {
   const agent = request.agent(app);
@@ -70,7 +71,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanupUsers([actingAdminId, targetId, doomedId, keeperId]);
+  await cleanupUsers([actingAdminId, targetId, doomedId, keeperId, ...extra]);
   await prisma.$disconnect();
 });
 
@@ -87,6 +88,20 @@ describe('revoking access ends the sessions already issued', () => {
     const res = await acting.delete(`/api/users/${doomedId}`);
     expect(res.status).toBe(200);
     expect(destroyed).toHaveBeenCalledWith(doomedId);
+  });
+
+  it('when a user deletes their own account, on every device', async () => {
+    // An admin, so what the other devices would keep is the admin role.
+    const self = await createTestUser({
+      email: `revoke-self-${Date.now()}${Math.random().toString(36).slice(2, 8)}@test.cozyvtt.local`,
+      role: 'ADMIN',
+    });
+    extra.push(self.id);
+    const agent = await login(self.email);
+
+    const res = await agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
+    expect(res.status).toBe(200);
+    expect(destroyed).toHaveBeenCalledWith(self.id);
   });
 });
 

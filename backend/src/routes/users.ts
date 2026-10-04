@@ -3,13 +3,18 @@ import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
-import { sanitizeUser, hashPassword } from '../services/auth';
+import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
-import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
+import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { isOnlyAdmin } from '../services/platformAdmins';
+import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
+import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
+import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 
 /**
  * User Management Routes
@@ -86,8 +91,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * PUT /api/users/:id
  * Update user profile
  * Requires: Authentication (users can update their own profile, admins can update any)
- * Allowed fields: displayName, email, avatarUrl
+ * Allowed fields: displayName, email, avatarUrl (own avatar address or null), bio
  * Admins can also update: platformRole
+ * Changing your own email needs currentPassword; an admin changing someone
+ * else's does not.
  */
 router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -102,6 +109,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
       bio,
       globalAssetManager,
       templateEditor,
+      currentPassword,
     } = req.body;
 
     // Check authorization: user can only update their own profile unless admin
@@ -128,38 +136,83 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     const updateData: Prisma.UserUpdateInput = {};
 
     if (displayName !== undefined) {
-      updateData.displayName = sanitizeInput(displayName);
+      const parsedName = parseDisplayName(displayName);
+      if (!parsedName.ok) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: parsedName.message,
+        });
+      }
+      updateData.displayName = parsedName.name;
     }
+
+    if (avatarUrl !== undefined) {
+      const parsedAvatar = parseAvatarUrl(avatarUrl, id);
+      if (!parsedAvatar.ok) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: parsedAvatar.message,
+        });
+      }
+      updateData.avatarUrl = parsedAvatar.url;
+    }
+
+    // The previous address, when this request changes it.
+    let emailChangedFrom: string | null = null;
 
     if (email !== undefined) {
       // Validate email format
-      if (!validateEmail(email)) {
+      if (typeof email !== 'string' || !validateEmail(email)) {
         return res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid email format',
         });
       }
 
-      // Check if email is already taken by another user
-      const emailExists = await prisma.user.findFirst({
-        where: {
-          email: email.toLowerCase(),
-          id: { not: id },
-        },
-      });
+      const newEmail = email.toLowerCase();
+      if (newEmail !== existingUser.email.toLowerCase()) {
+        // Reset links go to this address, so moving it is as good as holding
+        // the password. Someone changing their own confirms the password, and
+        // before the address is looked up, so a stolen session cannot use this
+        // to learn which addresses have accounts. An admin changing someone
+        // else's has no password to give.
+        if (id === requestingUserId) {
+          if (typeof currentPassword !== 'string' || currentPassword === '') {
+            return res.status(400).json({
+              error: 'Validation Error',
+              message: 'Enter your current password to change your email address',
+            });
+          }
+          // TODO(accounts): a wrong password here counts only against the
+          // general API limit, so a stolen session can guess the password
+          // through this check. Limit failed checks as credentialLimiter does;
+          // see the matching TODO on POST /change-password in auth.ts.
+          if (!(await verifyPassword(existingUser.passwordHash, currentPassword))) {
+            return res.status(401).json({
+              error: 'Authentication Failed',
+              message: 'Current password is incorrect',
+            });
+          }
+        }
 
-      if (emailExists) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Email already in use',
+        // Check if email is already taken by another user
+        const emailExists = await prisma.user.findFirst({
+          where: {
+            email: newEmail,
+            id: { not: id },
+          },
         });
+
+        if (emailExists) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Email already in use',
+          });
+        }
+
+        updateData.email = newEmail;
+        emailChangedFrom = existingUser.email;
       }
-
-      updateData.email = email.toLowerCase();
-    }
-
-    if (avatarUrl !== undefined) {
-      updateData.avatarUrl = avatarUrl;
     }
 
     if (bio !== undefined) {
@@ -181,6 +234,16 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         return res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid platform role',
+        });
+      }
+
+      // The instance must keep an admin (see services/platformAdmins).
+      if (platformRole === 'USER' && existingUser.platformRole === 'ADMIN' && (await isOnlyAdmin(id))) {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: id === requestingUserId
+            ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
+            : 'This is the only admin on this instance. Promote another user to admin first.',
         });
       }
 
@@ -225,11 +288,26 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
       updateData.templateEditor = templateEditor;
     }
 
-    // Perform update
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
+    // Perform update. A new address also voids every unused reset or
+    // invitation link, in the same transaction, so a link already sent to the
+    // old address cannot set the password afterwards.
+    const updatedUser = emailChangedFrom === null
+      ? await prisma.user.update({ where: { id }, data: updateData })
+      : await prisma.$transaction(async (tx) => {
+        const row = await tx.user.update({ where: { id }, data: updateData });
+        await voidOutstandingResetLinks(id, tx);
+        return row;
+      });
+
+    // Tell the old address, which is the one the owner still reads if the
+    // change was not theirs. Best-effort: the change is made either way.
+    if (emailChangedFrom !== null && isSmtpConfigured()) {
+      try {
+        await sendEmailChangedNotice(emailChangedFrom, updatedUser.email, updatedUser.displayName);
+      } catch (err) {
+        logger.error('Failed to send email-changed notice', { err, userId: id });
+      }
+    }
 
     // The session carries platformRole from the moment it was created and
     // nothing re-reads it, so a demotion would otherwise leave the person
@@ -241,6 +319,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     // already takes effect on the next request and needs no sign-out.
     if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
       await destroyUserLoginSessions(id);
+      await endLiveSockets(id, 'Your platform role changed. Sign in again.');
     }
 
     return res.status(200).json({
@@ -396,19 +475,27 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
 
     // Count USER-scoped assets before deletion so the frontend can warn admins.
-    // Assets with scope USER are owned by this user and will be orphaned on deletion.
+    // They stay, owned by no one, which leaves them readable by admins alone.
     const userAssetCount = await prisma.asset.count({
       where: { uploadedById: id, scope: 'USER' },
     });
 
-    // Delete user (cascades to related data)
-    await prisma.user.delete({
-      where: { id },
-    });
+    // See services/accountDeletion.ts for what stays and what goes.
+    const deletion = await deleteAccount(id);
+    if (!deletion.deleted) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: runsCampaignsMessage(deletion.runs, 'they'),
+        campaigns: deletion.runs,
+      });
+    }
+    const campaignIds = deletion.campaignIds;
 
     // The session outlives the row it refers to, and the guards read the
     // session, so it has to go too.
     await destroyUserLoginSessions(id);
+    await endLiveSockets(id, 'Your account was deleted.');
+    announceRosterChange(id, campaignIds, 'member.left');
 
     return res.status(200).json({
       message: 'User deleted successfully',
@@ -460,10 +547,14 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       },
     });
 
+    // A reset link issued before this would replace the temporary password.
+    await voidOutstandingResetLinks(id);
+
     // End any sessions the user already has open — otherwise they keep full
     // access on the old session and the forced-change gate would only take
     // effect at their next login
     await destroyUserLoginSessions(id);
+    await endLiveSockets(id, 'An administrator reset your password. Sign in again.');
 
     return res.status(200).json({
       message: 'Password reset successfully',
@@ -504,10 +595,7 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     }
 
     // Invalidate any existing unused tokens for this user
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: id, used: false },
-      data: { used: true },
-    });
+    await voidOutstandingResetLinks(id);
 
     const token = crypto.randomUUID();
     await prisma.passwordResetToken.create({

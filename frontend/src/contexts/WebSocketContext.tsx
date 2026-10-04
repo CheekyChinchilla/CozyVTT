@@ -14,9 +14,10 @@ import {
   useMemo,
 } from 'react';
 import { useParams } from 'react-router-dom';
+import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
-import api from '@/services/api';
 import { errorMessage } from '@/utils/errors';
+import { keepSessionAlive, SESSION_KEEPALIVE_MS } from '@/services/sessionKeepAlive';
 
 // ============================================
 // Types
@@ -37,6 +38,17 @@ interface WebSocketContextState {
    * just happened.
    */
   reconnectCount: number;
+
+  /**
+   * 0 until this connection has authenticated into the campaign, then a new
+   * number on each re-authentication.
+   *
+   * Distinct from `reconnectCount`, which ticks when the transport comes back:
+   * that is a moment before the campaign has been rejoined, and the server
+   * drops anything sent by a socket it has not authenticated. Anything that
+   * asks the server for state on joining watches this instead.
+   */
+  joinedEpoch: number;
 
   // Socket Instance (for components that need direct access)
   socket: typeof socketClient;
@@ -69,6 +81,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
+  const [joinedEpoch, setJoinedEpoch] = useState(0);
   const heartbeatCleanupRef = useRef<(() => void) | null>(null);
   const connectedCampaignRef = useRef<string | null>(null);
   const statusRef = useRef<ConnectionStatus>('disconnected');
@@ -98,6 +111,70 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     };
   }, []);
 
+  // Every successful join of the campaign, the first and each one after a
+  // drop. Registered through the client's own listener table, which re-attaches
+  // to the socket it builds on reconnect, so this survives the socket being
+  // thrown away and replaced.
+  useEffect(() => {
+    const onJoined = () => setJoinedEpoch((n) => n + 1);
+    socketClient.on('authenticated', onJoined);
+    return () => { socketClient.off('authenticated', onJoined); };
+  }, []);
+
+  // Wire up the full lifecycle on the raw socket so the status badge stays
+  // in sync across drops and auto-reconnects. Run for every socket the page
+  // uses: the one connect() is handed and each one the client builds itself.
+  const attachLifecycle = useCallback((socket: Socket) => {
+    // Flip to 'disconnected' on every drop, not only the first: a single
+    // `.once('disconnect')` left the badge stuck after the first drop while
+    // socket.io reconnected underneath.
+    socket.on('disconnect', () => {
+      if (!isMountedRef.current) return;
+      setStatus('disconnected');
+    });
+
+    // The reconnect lifecycle belongs to the Manager (`socket.io`), not the
+    // Socket: socket.io-client v4 never emits `reconnect_attempt`,
+    // `reconnect` or `reconnect_failed` on the Socket itself. Listening
+    // there left the badge on "disconnected" after every automatic
+    // reconnect, and everything keyed on `status` returning to
+    // 'connected' waited for an event that never came.
+    const manager = socket.io;
+
+    // Reconnect attempt (socket.io is actively retrying)
+    manager.on('reconnect_attempt', () => {
+      if (!isMountedRef.current) return;
+      setStatus('connecting');
+    });
+
+    // Successful reconnect — flip back to 'connected' and signal consumers
+    manager.on('reconnect', () => {
+      if (!isMountedRef.current) return;
+      setStatus('connected');
+      setReconnectCount((c) => c + 1);
+    });
+
+    // Final reconnect failure (socket.io gave up)
+    manager.on('reconnect_failed', () => {
+      if (!isMountedRef.current) return;
+      setStatus('error');
+      setError('Connection lost. Click Retry to try again.');
+    });
+  }, []);
+
+  // After the server closes a socket the client builds a new one itself. The
+  // listeners above stay on the one it threw away, so the badge said
+  // "Disconnected" over a working connection and nothing keyed on the status
+  // or the reconnect count ran again.
+  useEffect(() => socketClient.onRebuilt(() => {
+    if (!isMountedRef.current) return;
+    setStatus('connected');
+    setError(null);
+    setReconnectCount((c) => c + 1);
+    const socket = socketClient.getSocket();
+    if (socket) attachLifecycle(socket);
+  }), [attachLifecycle]);
+
   // Connect to WebSocket
   const connect = useCallback(async (id: string) => {
     // Use ref to check status without creating a dependency
@@ -125,52 +202,28 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       connectedCampaignRef.current = id;
 
       // Detect reconnect-to-same-campaign on the manual path (Retry button,
-      // navigator.onLine handler). The .on('reconnect') listener below only
-      // fires on socket.io's internal auto-reconnect; manual re-connects go
-      // through here. Either way, reconnectCount must tick so consumers
+      // navigator.onLine handler). The Manager's 'reconnect' listener in
+      // attachLifecycle only fires on socket.io's internal auto-reconnect;
+      // manual re-connects go through here. Either way, reconnectCount must tick so consumers
       // (ChatPanel, CampaignPage) refetch missed state.
       if (previouslyConnectedCampaignRef.current === id) {
         setReconnectCount((c) => c + 1);
       }
       previouslyConnectedCampaignRef.current = id;
 
-      // Wire up the full lifecycle on the raw socket so the status badge stays
-      // in sync across drops and auto-reconnects. Previously a single
-      // `.once('disconnect')` would leave the UI stuck after the first drop —
-      // even though socket.io was happily reconnecting underneath, the badge
-      // never flipped back to green.
       const socket = socketClient.getSocket();
-      if (socket) {
-        // Disconnect — flip to 'disconnected' on every drop, not just the first
-        socket.on('disconnect', () => {
-          if (!isMountedRef.current) return;
-          setStatus('disconnected');
-        });
-
-        // Reconnect attempt (socket.io is actively retrying)
-        socket.on('reconnect_attempt', () => {
-          if (!isMountedRef.current) return;
-          setStatus('connecting');
-        });
-
-        // Successful reconnect — flip back to 'connected' and signal consumers
-        socket.on('reconnect', () => {
-          if (!isMountedRef.current) return;
-          setStatus('connected');
-          setReconnectCount((c) => c + 1);
-        });
-
-        // Final reconnect failure (socket.io gave up)
-        socket.on('reconnect_failed', () => {
-          if (!isMountedRef.current) return;
-          setStatus('error');
-          setError('Connection lost. Click Retry to try again.');
-        });
-      }
+      if (socket) attachLifecycle(socket);
 
       const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
       heartbeatCleanupRef.current = cleanup || null;
     } catch (err) {
+      // TODO(play): suspected, not reproduced. The client does not close its
+      // socket on connect_error, so socket.io keeps retrying underneath, but
+      // attachLifecycle was never run for that socket. When it later joins, the
+      // badge stays on Connection Error and whatever waits for status
+      // 'connected', such as the session listeners in CampaignPage, never
+      // registers until Retry. Attach the lifecycle before the first connect
+      // settles, or close the socket when it fails.
       console.error('[WebSocket] Connection failed:', err);
       if (isMountedRef.current) {
         setStatus('error');
@@ -178,7 +231,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         connectedCampaignRef.current = null;
       }
     }
-  }, []); // No dependencies - stable reference
+  }, [attachLifecycle]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -228,6 +281,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // Reset reconnect-detection so navigating to a new campaign doesn't
       // trigger a false-positive resync when the new campaign first connects.
       previouslyConnectedCampaignRef.current = null;
+      // Likewise the join count: the next campaign's first join is not a rejoin.
+      setJoinedEpoch(0);
     };
   }, [campaignId]); // connect is stable - no need in deps (causes premature cleanup)
 
@@ -260,7 +315,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     const handleOnline = () => {
       const cid = connectedCampaignRef.current ?? previouslyConnectedCampaignRef.current;
       if (!cid) return;
-      if (statusRef.current === 'connected' || statusRef.current === 'connecting') return;
+      if (statusRef.current === 'connected') return;
+      // 'connecting' is either our own connect in flight, which will finish,
+      // or socket.io retrying by itself, whose remaining attempts may already
+      // be spent against a network that has only now come back. Only the
+      // first is left alone.
+      if (statusRef.current === 'connecting' && socketClient.isConnectInProgress()) return;
 
       // Full disconnect + reconnect dance. Goes through our connect() flow
       // which handles the auth/reauth handshake and ticks reconnectCount
@@ -300,16 +360,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   // of no HTTP activity, even while actively playing.
   useEffect(() => {
     if (status !== 'connected') return;
-
-    const KEEPALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes
-    const intervalId = setInterval(async () => {
-      try {
-        await api.pingSession();
-      } catch {
-        // Silently ignore — if the session is truly dead the next page interaction will redirect to login
-      }
-    }, KEEPALIVE_INTERVAL);
-
+    const intervalId = setInterval(() => void keepSessionAlive(), SESSION_KEEPALIVE_MS);
     return () => clearInterval(intervalId);
   }, [status]);
 
@@ -319,11 +370,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     status,
     error,
     reconnectCount,
+    joinedEpoch,
     socket: socketClient,
     connect,
     disconnect,
     reconnect,
-  }), [status, error, reconnectCount, connect, disconnect, reconnect]);
+  }), [status, error, reconnectCount, joinedEpoch, connect, disconnect, reconnect]);
 
   return (
     <WebSocketContext.Provider value={value}>

@@ -295,7 +295,7 @@ function MapCard({
 // ============================================
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
-  const { campaign, currentMap, setCurrentMap } = useCampaign();
+  const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
   const { socket } = useWebSocket();
 
   const [maps, setMaps] = useState<Map[]>([]);
@@ -310,9 +310,10 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [switchingToMap, setSwitchingToMap] = useState<Map | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  // Local active map tracking — updated after each successful switch
-  // (campaign.currentMapId is not updated by setCurrentMap, only by refreshCampaign)
-  const [activeMapId, setActiveMapId] = useState<string | null>(null);
+  // The active map comes straight from the campaign: setCurrentMap keeps
+  // campaign.currentMapId in step with every switch, so there is no separate
+  // copy here to fall out of date.
+  const activeMapId = campaign?.currentMapId ?? null;
 
   // Tokens fetched from the full current map before showing transfer UI
   const [currentMapTokens, setCurrentMapTokens] = useState<Token[]>([]);
@@ -352,20 +353,20 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   useEffect(() => {
     if (isOpen) {
-      // Sync active map from campaign on open
-      setActiveMapId(campaign?.currentMapId ?? null);
       fetchMaps();
     }
-  }, [isOpen, fetchMaps, campaign?.currentMapId]);
+  }, [isOpen, fetchMaps]);
 
   // ---- CRUD handlers ----
 
   const handleCreated = (map: Map) => {
     setMaps((prev) => [map, ...prev]);
+    upsertCampaignMap(map);
   };
 
   const handleUpdated = (updated: Map) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    upsertCampaignMap(updated);
     // If the updated map is the current one, refresh context
     if (currentMap?.id === updated.id) {
       setCurrentMap(updated);
@@ -399,6 +400,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       await mapService.deleteMap(campaign.id, map.id);
       setMaps((prev) => prev.filter((m) => m.id !== map.id));
+      removeCampaignMap(map.id);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to delete map.');
     }
@@ -417,9 +419,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     try {
       const result = await mapService.importUVTT(campaign.id, file, undefined, undefined, opts);
       setMaps((prev) => [result.map, ...prev]);
-      const parts = [`${result.totalSegments} wall segments`];
-      if (result.portalCount > 0) parts.push(`${result.portalCount} doors`);
-      if (result.lightCount > 0) parts.push(`${result.lightCount} lights`);
+      upsertCampaignMap(result.map);
+      const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+      const parts = [count(result.totalSegments, 'wall segment')];
+      if (result.portalCount > 0) parts.push(count(result.portalCount, 'door'));
+      if (result.lightCount > 0) parts.push(count(result.lightCount, 'light'));
       setImportSuccess(`Imported "${result.map.name}" with ${parts.join(', ')}`);
       // Auto-clear success message after 5 seconds
       setTimeout(() => setImportSuccess(null), 5000);
@@ -501,34 +505,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     setError(null);
 
     try {
-      // 1. Transfer selected tokens to the new map
+      // 1. Transfer selected tokens to the new map, all in one request: the
+      // server moves them as they are, under a lock on both maps, so none
+      // is lost or doubled however many go at once.
       if (tokenIdsToTransfer.length > 0 && currentMap) {
-        const tokensToTransfer = currentMapTokens.filter((t) =>
-          tokenIdsToTransfer.includes(t.id)
-        );
-        await Promise.all(
-          tokensToTransfer.map(async (token) => {
-            // Add to new map (clamp position to new map bounds)
-            await api.addToken(campaign.id, targetMap.id, {
-              characterId: token.characterId,
-              name: token.name,
-              imageUrl: extractAssetId(token.imageUrl) || token.imageUrl,
-              position: {
-                x: Math.min(token.position.x, targetMap.width - 1),
-                y: Math.min(token.position.y, targetMap.height - 1),
-              },
-              size: token.size,
-              layer: token.layer,
-              visible: token.visible,
-              controlledBy: token.controlledBy,
-              rotation: token.rotation,
-              conditions: token.conditions,
-              metadata: token.metadata,
-            });
-            // Remove from current map
-            await api.deleteToken(campaign.id, currentMap.id, token.id);
-          })
-        );
+        await api.moveTokens(campaign.id, currentMap.id, tokenIdsToTransfer, targetMap.id);
       }
 
       // 2. Set target map as current
@@ -541,8 +522,6 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       setCurrentMap(fullMap);
       useGameStore.getState().setTokens(fullMap.tokens || []);
 
-      // 5. Update local active map tracking so the badge updates immediately
-      setActiveMapId(targetMap.id);
       setCurrentMapTokens([]);
 
       // 6. Notify other connected clients via WebSocket

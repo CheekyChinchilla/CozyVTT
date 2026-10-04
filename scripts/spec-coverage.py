@@ -88,9 +88,31 @@ def in_guide():
     }
 
 
+def spec_parses():
+    """
+    The OpenAPI document loads as YAML at all. The line-based reads above do
+    not care, but every tool that renders the file does, and three unquoted
+    colons once left it unloadable for months. Needs PyYAML; without it the
+    check says so and is skipped, and CI, which installs it, still runs it.
+    """
+    try:
+        import yaml
+    except ImportError:
+        print('backend/docs/API_DOCUMENTATION.yaml — not parsed: PyYAML is not installed (pip install pyyaml); CI checks it\n')
+        return True
+    try:
+        with io.open(SPEC, encoding='utf-8') as f:
+            yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        print(f'backend/docs/API_DOCUMENTATION.yaml — not valid YAML:\n  {e}\n')
+        return False
+    print('backend/docs/API_DOCUMENTATION.yaml — parses as YAML\n')
+    return True
+
+
 def main():
     code, spec, guide = routed(), in_spec(), in_guide()
-    failed = False
+    failed = not spec_parses()
 
     print(f'{len(code)} routes mounted\n')
 

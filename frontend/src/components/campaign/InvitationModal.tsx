@@ -9,6 +9,7 @@ import Toast, { useToast } from '@/components/Toast';
 import type { CampaignInvitation, Character } from '@/types';
 import { Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface InvitationModalProps {
   invitation: CampaignInvitation;
@@ -36,19 +37,10 @@ export default function InvitationModal({
         setLoading(true);
         const response = await api.listCharacters();
 
-        // Filter for compatible characters
-        const compatible = response.characters.filter((char: Character) => {
-          // Not already assigned
-          const notAssigned = !char.campaignId;
-
-          // Game system compatible
-          const systemMatch =
-            !char.gameSystem ||
-            !invitation.campaign?.gameSystem ||
-            char.gameSystem === invitation.campaign.gameSystem;
-
-          return notAssigned && systemMatch;
-        });
+        // Unassigned characters the server will let join this campaign
+        const compatible = response.characters.filter(
+          (char: Character) => !char.campaignId && systemsCompatible(char.gameSystem, invitation.campaign?.gameSystem)
+        );
 
         setCharacters(compatible);
       } catch (error) {

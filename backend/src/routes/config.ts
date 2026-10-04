@@ -9,7 +9,9 @@ const router = Router();
  *
  * The SPA is built at image-build time, so anything baked into the bundle needs
  * a rebuild to change. Upload limits are served here instead, letting the
- * MAX_<TYPE>_SIZE_MB environment variables take effect with a restart.
+ * MAX_<TYPE>_SIZE_MB environment variables take effect when the backend next
+ * starts with them (under Docker, `docker compose up -d`: a restart keeps the
+ * environment the container was created with).
  */
 
 /**

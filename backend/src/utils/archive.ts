@@ -61,6 +61,11 @@ export async function extractArchiveSafely(
   const resolvedRoot = path.resolve(destRoot);
   let totalBytes = 0;
 
+  // A backup unpacks its whole database here, so a folder this creates is its
+  // user's alone. The files keep the default mode: a restore copies the
+  // uploads among them into the uploads folder, and each copy keeps its mode.
+  await fs.mkdir(resolvedRoot, { recursive: true, mode: 0o700 });
+
   for (const entry of fileEntries) {
     if (!isSafeArchivePath(entry.path)) {
       throw new Error(`Unsafe file path in archive: ${entry.path}`);

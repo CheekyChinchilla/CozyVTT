@@ -28,7 +28,9 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
    * Whoever rolled is still named — the point is to show both, in the order
    * that answers "who is this roll for?" first.
    */
-  const subject = characterName || userName;
+  // A deleted account's rolls stay in the history with no one attached.
+  const roller = userName ?? 'a deleted account';
+  const subject = characterName || userName || 'A deleted account';
   const attribution = characterName
     // Once the heading is a character, "(You)" would read as *being* them, so
     // the tag names the action instead: who pressed the button, not who it is.
@@ -36,7 +38,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       ? '(you rolled)'
       : rollerIsDM
         ? '(DM rolled)'
-        : `(rolled by ${userName})`
+        : `(rolled by ${roller})`
     // A plain dice-panel roll still heads with the person, where "(You)" is
     // about identity and reads correctly.
     : isCurrentUser

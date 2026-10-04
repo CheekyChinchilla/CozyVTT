@@ -3,32 +3,20 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign, canTransferDM, canReadAsset } from '../services/permissions';
-import { captureGameState, restoreGameState, getNextSessionNumber, getLastSession, type GameState } from '../services/sessionState';
-import {
-  sendSystemMessage,
-  broadcastToUser,
-  broadcastToCampaign,
-  applyRoleToLiveSockets,
-  clearCampaignFromLiveSockets,
-} from '../websocket/utils';
+import { canDeleteCampaign, canTransferDM, canReadMap, canReadAsset } from '../services/permissions';
+import { getSpiritVisibility } from '../utils/spirit-layer';
+import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
+import { resendInitiative } from '../websocket/handlers/initiative';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
+import { broadcastMapData } from '../websocket/shared';
+import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
-import { GameSystem } from '../game-systems';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
-import { CreateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
-import {
-  CreatePersonalNoteSchema,
-  UpdatePersonalNoteSchema,
-  MAX_NOTES_PER_CAMPAIGN,
-} from '../validators/personalNotes';
-import {
-  CreateDiceMacroSchema,
-  UpdateDiceMacroSchema,
-  MAX_MACROS_PER_CAMPAIGN,
-} from '../validators/diceMacros';
-import { LinkDocumentSchema } from '../validators/campaignDocuments';
+import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
+import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
@@ -36,7 +24,6 @@ import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
-
 const router = Router();
 
 // ── Import file upload (memory storage — ZIP stays in buffer) ───────────────
@@ -248,6 +235,9 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
             baseLayerUrl: true,
             spiritLayerUrl: true,
             lightingEnabled: true,
+            fogEnabled: true,
+            globalIllumination: true,
+            explorationEnabled: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -283,11 +273,30 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 
     // Flatten sessions array → activeSession (first open session, or null)
     const { sessions: _sessions, ...campaignRest } = campaign;
+
+    // A map's spirit layer is for the DM and for a player who has crossed
+    // over. The map fetch hides its address from everyone else, and so must
+    // this list: any member can fetch the image by the address alone.
+    const role = req.campaignMembership!.role;
+    const spiritVisible = role === 'DM' || (await getSpiritVisibility(campaignId, req.session.userId!));
+    // A player is told about the map the campaign is showing and no other;
+    // the rest are the DM's until they switch to them (canReadMap).
+    const shown = campaignRest.maps.filter((m) => canReadMap(role, m.id, campaignRest.currentMapId));
+    const maps = spiritVisible
+      ? shown
+      : shown.map((m) => ({ ...m, spiritLayerUrl: null }));
+    // A character is the campaign's while its owner is a member. One a
+    // removal left naming the campaign (removals now take it out) is not.
+    const memberIds = new Set(campaignRest.memberships.map((m) => m.userId));
+    const characters = campaignRest.characters.filter((c) => memberIds.has(c.userId));
+
     return res.status(200).json({
       campaign: {
         ...campaignRest,
+        maps,
+        characters,
         activeSession: (_sessions && _sessions.length > 0) ? _sessions[0] : null,
-        userRole: req.campaignMembership!.role,
+        userRole: role,
       },
     });
   } catch (error) {
@@ -379,7 +388,14 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = req.body;
+    const parsed = UpdateCampaignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
+      });
+    }
+    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = parsed.data;
 
     const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
@@ -397,33 +413,11 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (spiritLayerEnabled !== undefined) updateData.spiritLayerEnabled = spiritLayerEnabled;
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
-    if (chatCooldownSeconds !== undefined) {
-      const secs = Number(chatCooldownSeconds);
-      if (!Number.isInteger(secs) || secs < 1 || secs > 300) {
-        return res.status(400).json({ error: 'Validation Error', message: 'chatCooldownSeconds must be an integer between 1 and 300' });
-      }
-      updateData.chatCooldownSeconds = secs;
-    }
+    if (chatCooldownSeconds !== undefined) updateData.chatCooldownSeconds = chatCooldownSeconds;
 
     // Handle gameSystem update
     if (gameSystem !== undefined) {
-      // Validate gameSystem if not null
-      if (gameSystem !== null) {
-        const validSystems: string[] = [
-          GameSystem.DND_5E,
-          GameSystem.PATHFINDER_2E,
-          GameSystem.SHADOWRUN_6E,
-          GameSystem.CALL_OF_CTHULHU_7E,
-        ];
-        if (!validSystems.includes(gameSystem as string)) {
-          return res.status(400).json({
-            error: 'Validation Error',
-            message: `Invalid game system. Must be one of: ${validSystems.join(', ')}`,
-          });
-        }
-      }
-
-      // Check if campaign has characters - log warning if changing gameSystem
+      // Changing the system under existing characters is allowed, but logged.
       const characterCount = await prisma.character.count({
         where: { campaignId },
       });
@@ -432,7 +426,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         logger.warn('campaign game system changed with existing characters', { campaignId, characterCount });
       }
 
-      updateData.gameSystem = gameSystem as GameSystem | null;
+      updateData.gameSystem = gameSystem;
     }
 
     const campaign = await prisma.campaign.update({
@@ -478,6 +472,35 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
         error: 'Validation Error',
         message: validationError,
       });
+    }
+
+    // A period's audio names an asset the whole table fetches while that
+    // period is the vibe, so the save asks the same question the ambient
+    // setter asks: may this DM open this track to the room? Never as an
+    // admin, for the same reason the setter refuses that.
+    const checkedAudio = new Map<string, boolean>();
+    for (const period of (vibeSettings as VibeSettings).periods) {
+      if (period.audio == null) continue;
+      const assetId = vibePeriodAudioAssetId(period.audio);
+      let allowed = false;
+      if (assetId) {
+        if (checkedAudio.has(assetId)) {
+          allowed = checkedAudio.get(assetId) === true;
+        } else {
+          const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+          allowed = !!asset
+            && asset.type === 'AUDIO'
+            && !(asset.scope === 'CAMPAIGN' && asset.campaignId !== campaignId)
+            && (await canReadAsset(asset, req.session.userId!, false));
+          checkedAudio.set(assetId, allowed);
+        }
+      }
+      if (!allowed) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `The "${period.name}" period's audio must be an audio track available to this campaign, or none`,
+        });
+      }
     }
 
     // If campaign has a currentVibe, verify it still exists in the new periods
@@ -545,14 +568,33 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
 
     // Convert CAMPAIGN-scoped assets to USER scope before deleting.
     // Each asset is reassigned to its uploader's personal library.
-    await prisma.asset.updateMany({
-      where: { campaignId, scope: 'CAMPAIGN' },
-      data: { scope: 'USER', campaignId: null },
-    });
+    //
+    // One transaction, so a delete that fails leaves the library as it was.
+    // The campaign's row is locked first: an asset written into the campaign
+    // holds a share lock on that row until it commits, so none can land
+    // between the two writes and be left a campaign asset with no campaign,
+    // which the permission check lets anyone read. The array form has no
+    // time limit, which a large campaign's cascade may need.
+    await prisma.$transaction([
+      prisma.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`,
+      prisma.asset.updateMany({
+        where: { campaignId, scope: 'CAMPAIGN' },
+        data: { scope: 'USER', campaignId: null },
+      }),
+      prisma.campaign.delete({
+        where: { id: campaignId },
+      }),
+    ]);
 
-    await prisma.campaign.delete({
-      where: { id: campaignId },
-    });
+    // The live half of the cascade: sockets still in the room would keep
+    // relaying to each other and fail every write against the missing row.
+    // Best-effort, like the other membership changes: the row is gone.
+    try {
+      await clearDeletedCampaignFromLiveSockets(campaignId);
+    } catch (err) {
+      logger.warn('Campaign deleted but its live sockets could not be cleared', { campaignId, err });
+    }
+    clearCombatState(campaignId);
 
     return res.status(200).json({
       message: 'Campaign deleted successfully',
@@ -627,14 +669,15 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
 router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { userId, expiresInDays, sendEmail } = req.body;
-
-    if (!userId) {
+    const parsed = CampaignInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'User ID is required',
+        message: parsed.error.issues[0]?.message ?? 'Invalid invitation',
       });
     }
+    const { userId, expiresInDays } = parsed.data;
+    const { sendEmail } = req.body;
 
     // Emailing is opt-in per invitation. The invitation itself is created
     // either way — a player sees it on their dashboard — so an instance with no
@@ -857,15 +900,21 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
       });
     }
 
-    // Delete the membership
-    await prisma.campaignMembership.delete({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
+    // Delete the membership, and take their characters out of the campaign
+    // with it: a character that still named the campaign stayed readable by
+    // every member and editable by the DM, and each save the owner made was
+    // still sent to the table they had left.
+    await prisma.$transaction([
+      prisma.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } }),
+      prisma.campaignMembership.delete({
+        where: {
+          userId_campaignId: {
+            userId,
+            campaignId,
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     // A socket caches the campaign from when it authenticated, so without this
     // the person carries on playing until they close the tab. Best-effort: the
@@ -876,6 +925,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     } catch (error) {
       logger.error('Member removed but live sockets were not updated', { err: error, userId, campaignId });
     }
+    announceRosterChange(userId, [campaignId], 'member.left');
 
     return res.status(200).json({
       message: 'Member removed successfully',
@@ -888,6 +938,22 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     });
   }
 });
+
+/**
+ * What the open pages need after members' roles change, the new roles
+ * already applied to their live connections: the roster panel regroups
+ * (it groups by role from its own list), and each copy of the initiative
+ * order and of the map the table is on is sent again as the new roles see
+ * it. A spectator on a lit map is sent no tokens, a player their own and
+ * what they see, a DM every hidden creature and its notes.
+ */
+async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
+  for (const userId of userIds) announceRosterChange(userId, [campaignId], 'member.role');
+  await resendInitiative(campaignId);
+  const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
+  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+}
 
 /**
  * PUT /api/campaigns/:campaignId/members/:userId/role
@@ -978,6 +1044,10 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
     // person keeps what they had until they reload.
     try {
       await applyRoleToLiveSockets(userId, campaignId, role);
+      // And every open page, the member's own included, so the controls
+      // follow the role without a reload (the client patches its list).
+      broadcastToCampaign(campaignId, 'campaign.role.changed', { campaignId, userId, role });
+      await followNewRoles(campaignId, [userId]);
     } catch (error) {
       logger.error('Member role updated but live sockets were not', { err: error, userId, campaignId });
     }
@@ -1117,6 +1187,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
       });
+      await followNewRoles(campaignId, outgoing ? [outgoing.userId, incomingId] : [incomingId]);
     } catch (error) {
       logger.error('DM transfer committed but live sockets were not updated', {
         err: error,
@@ -1638,325 +1709,6 @@ router.delete('/:campaignId/notes/:noteId', campaignMember, async (req: Authenti
  */
 
 /**
- * GET /api/campaigns/:campaignId/macros
- * The caller's own macros for this campaign, oldest first.
- * Requires: Campaign membership (any role)
- *
- * Oldest first so a macro keeps its place in the row of buttons. These are
- * things people build muscle memory for; ordering by `updatedAt` the way notes
- * do would move one to the front every time it was edited.
- */
-router.get('/:campaignId/macros', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const macros = await prisma.diceMacro.findMany({
-      where: { campaignId: req.params.campaignId, userId: req.session.userId! },
-      orderBy: { createdAt: 'asc' },
-    });
-    return res.status(200).json({ macros });
-  } catch (error) {
-    logger.error('Error fetching dice macros', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch macros' });
-  }
-});
-
-/**
- * POST /api/campaigns/:campaignId/macros
- * Save a new macro. Requires: Campaign membership (any role)
- */
-router.post('/:campaignId/macros', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const parsed = CreateDiceMacroSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: parsed.error.issues[0]?.message ?? 'Invalid macro',
-      });
-    }
-
-    const { campaignId } = req.params;
-    const userId = req.session.userId!;
-
-    const existing = await prisma.diceMacro.count({ where: { campaignId, userId } });
-    if (existing >= MAX_MACROS_PER_CAMPAIGN) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `You already have ${MAX_MACROS_PER_CAMPAIGN} macros in this campaign. Delete one to make room.`,
-      });
-    }
-
-    const macro = await prisma.diceMacro.create({
-      data: {
-        campaignId,
-        userId,
-        name: parsed.data.name,
-        expression: parsed.data.expression,
-      },
-    });
-
-    return res.status(201).json({ macro });
-  } catch (error) {
-    logger.error('Error creating dice macro', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create macro' });
-  }
-});
-
-/**
- * GET /api/campaigns/:campaignId/macros/:macroId
- * One of the caller's own macros. Requires: Campaign membership, and authorship.
- */
-router.get('/:campaignId/macros/:macroId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const macro = await prisma.diceMacro.findFirst({
-      where: {
-        id: req.params.macroId,
-        campaignId: req.params.campaignId,
-        userId: req.session.userId!,
-      },
-    });
-
-    if (!macro) {
-      return res.status(404).json({ error: 'Not Found', message: 'Macro not found' });
-    }
-
-    return res.status(200).json({ macro });
-  } catch (error) {
-    logger.error('Error fetching dice macro', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch macro' });
-  }
-});
-
-/**
- * PUT /api/campaigns/:campaignId/macros/:macroId
- * Rename a macro or correct its expression.
- * Requires: Campaign membership, and authorship.
- */
-router.put('/:campaignId/macros/:macroId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const parsed = UpdateDiceMacroSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: parsed.error.issues[0]?.message ?? 'Invalid macro',
-      });
-    }
-
-    // Scoped lookup first: the id used in the update below is one this caller
-    // has already been proven to own, rather than one taken from the request.
-    const owned = await prisma.diceMacro.findFirst({
-      where: {
-        id: req.params.macroId,
-        campaignId: req.params.campaignId,
-        userId: req.session.userId!,
-      },
-      select: { id: true },
-    });
-
-    if (!owned) {
-      return res.status(404).json({ error: 'Not Found', message: 'Macro not found' });
-    }
-
-    const macro = await prisma.diceMacro.update({
-      where: { id: owned.id },
-      data: {
-        ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-        ...(parsed.data.expression !== undefined ? { expression: parsed.data.expression } : {}),
-      },
-    });
-
-    return res.status(200).json({ macro });
-  } catch (error) {
-    logger.error('Error updating dice macro', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update macro' });
-  }
-});
-
-/**
- * DELETE /api/campaigns/:campaignId/macros/:macroId
- * Requires: Campaign membership, and authorship.
- */
-router.delete('/:campaignId/macros/:macroId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    // deleteMany rather than delete: the whole ownership scope goes into the
-    // one statement, so there is no window between checking and deleting.
-    const { count } = await prisma.diceMacro.deleteMany({
-      where: {
-        id: req.params.macroId,
-        campaignId: req.params.campaignId,
-        userId: req.session.userId!,
-      },
-    });
-
-    if (count === 0) {
-      return res.status(404).json({ error: 'Not Found', message: 'Macro not found' });
-    }
-
-    return res.status(200).json({ message: 'Macro deleted' });
-  } catch (error) {
-    logger.error('Error deleting dice macro', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete macro' });
-  }
-});
-
-/**
- * Documents shared with a campaign.
- *
- * A document asset is private to whoever uploaded it. Linking it here is what
- * lets the campaign's members read it, and `canReadAsset` is where that grant
- * is honoured. Only the DM links and unlinks; every member can list.
- */
-
-/**
- * GET /api/campaigns/:campaignId/documents
- * The documents shared with this campaign.
- * Requires: Campaign membership (any role)
- */
-router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { campaignId } = req.params;
-    const assetFields = {
-      id: true,
-      name: true,
-      description: true,
-      originalName: true,
-      mimeType: true,
-      fileSize: true,
-      createdAt: true,
-      uploadedBy: { select: { id: true, displayName: true } },
-    } as const;
-
-    // Two ways a document can belong here, and the list has to show both or
-    // it does not match what canReadAsset lets a member read: a document
-    // shared into the campaign by link, and one created or uploaded at
-    // CAMPAIGN scope for this campaign in the first place.
-    const [links, own] = await Promise.all([
-      prisma.campaignDocument.findMany({
-        where: { campaignId },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          asset: { select: assetFields },
-          linkedBy: { select: { id: true, displayName: true } },
-        },
-      }),
-      prisma.asset.findMany({
-        where: { type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId },
-        orderBy: { createdAt: 'asc' },
-        select: assetFields,
-      }),
-    ]);
-
-    const linkedIds = new Set(links.map((l) => l.assetId));
-    const documents = [
-      ...links.map((link) => ({
-        ...link.asset,
-        linkedAt: link.createdAt,
-        linkedBy: link.linkedBy,
-        // Shared in from elsewhere: the DM can stop sharing it.
-        shared: true,
-      })),
-      ...own
-        .filter((a) => !linkedIds.has(a.id))
-        .map((a) => ({
-          ...a,
-          linkedAt: a.createdAt,
-          linkedBy: a.uploadedBy,
-          // The campaign's own document: there is no link to remove.
-          shared: false,
-        })),
-    ];
-
-    return res.status(200).json({ documents });
-  } catch (error) {
-    logger.error('Error listing campaign documents', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to list documents' });
-  }
-});
-
-/**
- * POST /api/campaigns/:campaignId/documents
- * Share a document with this campaign. Requires: Campaign DM role
- *
- * Two checks. The DM must be able to read the asset, or linking would be a way
- * to grant a whole table access to a stranger's private file from nothing but
- * its id. And reading is not enough: the document must be the DM's own, or
- * global. A document shared into a campaign is readable by its members, and a
- * member who runs another campaign could otherwise pass it on to a table the
- * uploader never chose.
- */
-router.post('/:campaignId/documents', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const parsed = LinkDocumentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: parsed.error.issues[0]?.message ?? 'Invalid request',
-      });
-    }
-
-    const { campaignId } = req.params;
-    const userId = req.session.userId!;
-    const { assetId } = parsed.data;
-
-    const asset = await prisma.asset.findUnique({
-      where: { id: assetId },
-      select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
-    });
-
-    // 404 for both a missing asset and one the caller may not read: the reply
-    // must not confirm that a private id exists.
-    if (!asset || asset.type !== 'DOCUMENT') {
-      return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
-    }
-    const isAdmin = req.session.platformRole === 'ADMIN';
-    if (!(await canReadAsset(asset, userId, isAdmin))) {
-      return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
-    }
-    // 403 here, not 404: the caller can already read this one, so the id is no
-    // secret from them, and the refusal should say what would be allowed.
-    if (asset.scope !== 'GLOBAL' && asset.uploadedById !== userId && !isAdmin) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only the person who uploaded a document, or an admin, can share it with a campaign',
-      });
-    }
-
-    const link = await prisma.campaignDocument.upsert({
-      where: { campaignId_assetId: { campaignId, assetId } },
-      create: { campaignId, assetId, linkedById: userId },
-      // Already shared: nothing to change, and not an error worth surfacing.
-      update: {},
-    });
-
-    return res.status(201).json({ link });
-  } catch (error) {
-    logger.error('Error linking document to campaign', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to share document' });
-  }
-});
-
-/**
- * DELETE /api/campaigns/:campaignId/documents/:assetId
- * Stop sharing a document with this campaign. Requires: Campaign DM role
- *
- * The document itself is untouched; only the link goes.
- */
-router.delete('/:campaignId/documents/:assetId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { count } = await prisma.campaignDocument.deleteMany({
-      where: { campaignId: req.params.campaignId, assetId: req.params.assetId },
-    });
-
-    if (count === 0) {
-      return res.status(404).json({ error: 'Not Found', message: 'That document is not shared with this campaign' });
-    }
-
-    return res.status(200).json({ message: 'Document unshared' });
-  } catch (error) {
-    logger.error('Error unlinking document from campaign', { err: error });
-    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to unshare document' });
-  }
-});
-
-/**
  * GET /api/campaigns/:campaignId/sessions
  * Past sessions and the notes recorded when each one ended.
  * Requires: Campaign membership (any role)
@@ -2293,7 +2045,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
 
 /**
  * PUT /api/campaigns/:campaignId/resume
- * Resume the last session by restoring saved state
+ * Reopen the paused session. The snapshot taken at pause is not applied.
  * Requires: Campaign DM role
  * Resuming a Session
  */
@@ -2311,16 +2063,11 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
       });
     }
 
-    // Check if session has saved state
-    if (!lastSession.savedState) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'No saved state available for the last session',
-      });
-    }
-
-    // Restore game state
-    await restoreGameState(campaignId, lastSession.savedState as unknown as GameState);
+    // The live state is the state: everything is stored as it is played, so
+    // the snapshot pause took is a record of where the break began and is
+    // never written back. Restoring it undid whatever the DM did during the
+    // break, silently: a token hidden then was shown to players again, a
+    // moved one jumped back, an added one vanished, a map switch reverted.
 
     // Clear endedAt to "reopen" the session
     await prisma.session.update({
@@ -2391,7 +2138,11 @@ router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, 
 
     logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
 
-    const result = await exportCampaign(campaignId, { includeAudio, includeTokens });
+    const result = await exportCampaign(
+      campaignId,
+      { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
+      { includeAudio, includeTokens }
+    );
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);

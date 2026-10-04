@@ -48,13 +48,6 @@ export const MAX_MACRO_EXPRESSION_LENGTH = 200;
 export const MAX_MACROS_PER_CAMPAIGN = 50;
 
 /**
- * A dice expression the server would actually roll.
- *
- * Converts a parser failure into a Zod issue, so a bad expression comes back
- * through the same `{ error, message }` shape as every other validation failure
- * rather than as a 500.
- */
-/**
  * Turn a parser complaint into something the person typing can act on.
  *
  * The parser's limit messages are already good — "Too many dice. Maximum 100 per
@@ -83,6 +76,13 @@ function explainRefusal(message: string, expression: string): string {
   return message;
 }
 
+/**
+ * A dice expression the server would actually roll.
+ *
+ * Converts a parser failure into a Zod issue, so a bad expression comes back
+ * through the same `{ error, message }` shape as every other validation failure
+ * rather than as a 500.
+ */
 const rollableExpression = z
   .string()
   .trim()

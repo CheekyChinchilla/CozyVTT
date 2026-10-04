@@ -1,7 +1,7 @@
 // ============================================
-// Dynamic lighting layer — darkness with light/vision coverage
-// subtracted (offscreen compositing, "dim overlap → bright" house
-// rule), warm token/light glows, and the DM's light-source icons.
+// Dynamic lighting layer — opaque darkness with the coverage mask
+// subtracted (offscreen compositing: bright 1.0, dim 0.5, dim + dim =
+// bright), warm token/light glows, and the DM's light-source icons.
 //
 // Pure: no React. The two offscreen canvases persist between frames
 // (allocating ~5MB per frame causes GC jank), so the caller passes
@@ -14,6 +14,7 @@ import { gridYToCentrePx } from '../coords';
 import type { LightToolMode } from '@/components/campaign/DmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
+import { BRIGHT, DIM } from '@/utils/visibilityRule';
 
 /** Mutable holder for a persistent offscreen canvas (a React ref works). */
 export interface CanvasHolder {
@@ -32,10 +33,23 @@ export interface LightingDrawState {
    */
   tokenSight: readonly VisionSource[];
   lightVision: readonly VisionSource[];
+  /** Everything in line of sight counts as lit; the map's setting. */
+  globalIllumination: boolean;
   /** Persistent offscreen canvases (fog composite + light coverage + sight mask). */
   lightingCanvas: CanvasHolder;
   coverageCanvas: CanvasHolder;
   lightCanvas: CanvasHolder;
+  /**
+   * Explored memory: one pixel per grid cell, alpha 1 where the viewer has
+   * been, or null when there is nothing to remember. Remembered ground shows
+   * as a grey, darker copy of the terrain until it is in sight again.
+   */
+  explored: HTMLCanvasElement | null;
+  /** The terrain canvas, the same size as the screen, copied for the memory pass. */
+  terrainCanvas: HTMLCanvasElement | null;
+  /** Two screen-sized scratch canvases for the memory pass, allocated on first use. */
+  memoryMaskCanvas: CanvasHolder;
+  memoryCanvas: CanvasHolder;
 }
 
 function ensureCanvas(holder: CanvasHolder, w: number, h: number): HTMLCanvasElement {
@@ -58,8 +72,9 @@ export function drawDynamicLighting(
 ): void {
   const { w: mapWidthPx, h: mapHeightPx } = mapSizePx(viewport);
 
-  if (state.myTokens.length === 0 && state.enabledLights.length === 0) {
-    // No tokens and no lights → full darkness
+  if (state.myTokens.length === 0) {
+    // Nobody on the map to look through: full darkness, whatever the lights.
+    // A light is not a viewer, and the server sends this player nothing.
     ctx.save();
     ctx.fillStyle = 'rgba(15, 12, 25, 1)';
     ctx.fillRect(0, 0, mapWidthPx, mapHeightPx);
@@ -119,18 +134,25 @@ export function drawDynamicLighting(
     tracePoly(lightCtx, poly);
     lightCtx.clip();
 
-    if (dimRadiusPx > 0) {
-      lightCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    // Each zone adds half, so inside the bright radius the two make a whole.
+    // Its edge fades over a band centred on the radius, so bright blends into
+    // dim and dim into dark, where a hard circle read as a sticker on the map.
+    // Only the picture is feathered: which tokens are seen is decided by the
+    // radii themselves (visibilityRule).
+    const zone = (radiusPx: number) => {
+      const band = Math.min(viewport.gridSize * 0.6, radiusPx * 0.35);
+      const inner = radiusPx - band / 2;
+      const outer = radiusPx + band / 2;
+      const fade = lightCtx.createRadialGradient(light.x, light.y, inner, light.x, light.y, outer);
+      fade.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+      fade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      lightCtx.fillStyle = fade;
       lightCtx.beginPath();
-      lightCtx.arc(light.x, light.y, dimRadiusPx, 0, Math.PI * 2);
+      lightCtx.arc(light.x, light.y, outer, 0, Math.PI * 2);
       lightCtx.fill();
-    }
-    if (brightRadiusPx > 0) {
-      lightCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      lightCtx.beginPath();
-      lightCtx.arc(light.x, light.y, brightRadiusPx, 0, Math.PI * 2);
-      lightCtx.fill();
-    }
+    };
+    if (dimRadiusPx > 0) zone(dimRadiusPx);
+    if (brightRadiusPx > 0) zone(brightRadiusPx);
     lightCtx.restore();
   }
 
@@ -157,11 +179,32 @@ export function drawDynamicLighting(
   covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
   covCtx.globalCompositeOperation = 'lighter';
 
-  // Token vision → bright (alpha 1.0) within the visibility polygon. This is
-  // what a token makes out unaided, so it is not gated on light.
-  for (const { poly } of state.tokenVision) {
-    if (poly.points.length >= 3) {
-      tracePoly(covCtx, poly);
+  if (state.globalIllumination) {
+    // Everything in line of sight is as good as lit.
+    covCtx.fillStyle = `rgba(255, 255, 255, ${BRIGHT})`;
+    for (const { poly } of state.tokenSight) {
+      if (poly.points.length >= 3) {
+        tracePoly(covCtx, poly);
+        covCtx.fill();
+      }
+    }
+  } else {
+    // Darkvision shows the dark as dim, out to its reach...
+    covCtx.fillStyle = `rgba(255, 255, 255, ${DIM})`;
+    for (const { poly } of state.tokenVision) {
+      if (poly.points.length >= 3) {
+        tracePoly(covCtx, poly);
+        covCtx.fill();
+      }
+    }
+    // ...and a token always knows where it stands: its own square is dim
+    // even with no darkvision and no light, so it can see and drag itself.
+    for (const token of state.myTokens) {
+      const cx = (token.position.x + token.size.width / 2) * viewport.gridSize;
+      const cy = gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize);
+      const selfPx = (Math.max(token.size.width, token.size.height) / 2) * viewport.gridSize;
+      covCtx.beginPath();
+      covCtx.arc(cx, cy, selfPx, 0, Math.PI * 2);
       covCtx.fill();
     }
   }
@@ -170,11 +213,73 @@ export function drawDynamicLighting(
   covCtx.drawImage(lightLayer, 0, 0);
   covCtx.globalCompositeOperation = 'source-over';
 
+  // ── Explored memory: remembered ground as a grey, darker copy ───
+  // Canvas blend modes act within one canvas, and this overlay is transparent
+  // where the map is, so the remembered tier is a desaturated, darkened copy
+  // of the terrain canvas, kept only where the viewer has been and cannot
+  // see now. Screen-sized, in screen space; skipped when nothing is
+  // remembered, which is every DM view and every unlit map.
+  if (state.explored && state.terrainCanvas) {
+    const sw = state.terrainCanvas.width;
+    const sh = state.terrainCanvas.height;
+
+    const mask = ensureCanvas(state.memoryMaskCanvas, sw, sh);
+    const maskCtx = mask.getContext('2d')!;
+    maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    maskCtx.clearRect(0, 0, sw, sh);
+    maskCtx.imageSmoothingEnabled = false;
+    maskCtx.translate(viewport.panOffset.x, viewport.panOffset.y);
+    maskCtx.scale(viewport.zoom, viewport.zoom);
+    maskCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+    // What is in sight now is not memory. Dim areas are 0.5 alpha, so three
+    // subtractions leave 12.5%, visually nothing.
+    maskCtx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0);
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const memory = ensureCanvas(state.memoryCanvas, sw, sh);
+    const memCtx = memory.getContext('2d')!;
+    memCtx.setTransform(1, 0, 0, 1, 0, 0);
+    memCtx.clearRect(0, 0, sw, sh);
+    memCtx.drawImage(state.terrainCanvas, 0, 0);
+    memCtx.globalCompositeOperation = 'saturation';
+    memCtx.fillStyle = '#808080';
+    memCtx.fillRect(0, 0, sw, sh);
+    memCtx.globalCompositeOperation = 'source-over';
+    memCtx.fillStyle = 'rgba(15, 12, 25, 0.65)';
+    memCtx.fillRect(0, 0, sw, sh);
+    memCtx.globalCompositeOperation = 'destination-in';
+    memCtx.drawImage(mask, 0, 0);
+    memCtx.globalCompositeOperation = 'source-over';
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(memory, 0, 0);
+    ctx.restore();
+  }
+
   // ── Build fog with coverage subtracted ──────────────────────────
-  offCtx.fillStyle = 'rgba(15, 12, 25, 0.95)';
+  offCtx.fillStyle = 'rgba(15, 12, 25, 1)';
   offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
   offCtx.globalCompositeOperation = 'destination-out';
   offCtx.drawImage(coverage, 0, 0);
+  if (state.explored) {
+    // Remembered ground out of sight is dimmed by the memory pass above, not
+    // blacked out here. Only out of sight: ground in sight is remembered too,
+    // and taking all of it out of the darkness left dim light as clear as
+    // bright. The light layer is spent by now and serves as scratch: the
+    // explored raster, less what is in sight, as the memory mask is built.
+    lightCtx.globalCompositeOperation = 'source-over';
+    lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = false;
+    lightCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = true;
+    lightCtx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0);
+    lightCtx.globalCompositeOperation = 'source-over';
+    offCtx.drawImage(lightLayer, 0, 0);
+  }
   offCtx.globalCompositeOperation = 'source-over';
 
   // Composite onto main canvas with soft blur edge
@@ -268,14 +373,22 @@ export interface LightIconsDrawState {
   lights: readonly LightSource[];
   selectedLightId: string | null;
   lightMode: LightToolMode;
+  /** False in a player preview, which draws nothing here. */
+  isDM: boolean;
 }
 
-/** DM light-source icons (visible to DM always, including player preview). */
+/**
+ * The markers the DM selects and moves lights by. They are a DM tool, so they
+ * are drawn in the DM's own view only. A player preview leaves them out: at a
+ * table watching one projected screen, a marker would show where every light
+ * on the map is, lit or not, which is exactly what the darkness is hiding.
+ */
 export function drawLightIcons(
   ctx: CanvasRenderingContext2D,
   state: LightIconsDrawState,
   viewport: Viewport
 ): void {
+  if (!state.isDM) return;
   ctx.save();
   for (const light of state.lights) {
     const isSelected = state.selectedLightId === light.id;

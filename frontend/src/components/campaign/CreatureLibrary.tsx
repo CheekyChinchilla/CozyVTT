@@ -13,6 +13,7 @@ import {
   Search,
   Loader2,
   BookOpen,
+  Skull,
   Plus,
   Copy,
   ChevronDown,
@@ -26,8 +27,9 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
-import { TokenType, GameSystem, AssetType } from '@/types';
+import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
   StatBlockViewer,
   buildCreatureStatBlock,
@@ -224,7 +226,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         size: creature.size || { width: 1, height: 1 },
         type: TokenType.NPC,
         displayMode: creature.displayMode || 'pog',
-        disposition: creature.disposition || 'hostile',
+        disposition: creature.disposition,
         hp: { current: hpMax, max: hpMax, temp: 0 },
         showHpBar: true,
         visible: true,
@@ -239,12 +241,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       const result = await api.addToken(
         campaign.id,
         currentMap.id,
-        tokenPayload as Parameters<typeof api.addToken>[2]
+        tokenPayload
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
-    } catch {
-      setError('Failed to place creature on map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
@@ -361,7 +363,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           >
             {/* ── Header ── */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <BookOpen className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <Skull className="w-5 h-5 text-brand-ink flex-shrink-0" />
               <h2 className="flex-1 text-base font-bold text-brand-ink">
                 Creature Library
               </h2>
@@ -538,7 +540,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 </div>
               ) : creatures.length === 0 ? (
                 <div className="text-center py-12 px-6">
-                  <BookOpen className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
+                  <Skull className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
                   <p className="text-sm text-stone-gray/70">
                     {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
                   </p>
@@ -906,8 +908,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   const [int, setInt] = useState(sb?.abilities?.int ?? 10);
   const [wis, setWis] = useState(sb?.abilities?.wis ?? 10);
   const [cha, setCha] = useState(sb?.abilities?.cha ?? 10);
-  const [disposition, setDisposition] = useState<'hostile' | 'friendly' | 'neutral'>(
-    (editingCreature?.disposition as 'hostile' | 'friendly' | 'neutral') ?? 'hostile'
+  const [disposition, setDisposition] = useState<TokenDisposition>(
+    editingCreature?.disposition ?? TokenDisposition.HOSTILE
   );
 
   // ── Image field ──
@@ -1210,9 +1212,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         <label className="text-[10px] text-stone-gray block mb-0.5">Disposition</label>
         <div className="flex gap-2">
           {([
-            { d: 'friendly' as const, label: 'Friendly', color: 'teal' },
-            { d: 'neutral' as const, label: 'Neutral', color: 'amber' },
-            { d: 'hostile' as const, label: 'Hostile', color: 'red' },
+            { d: TokenDisposition.FRIENDLY, label: 'Friendly', color: 'teal' },
+            { d: TokenDisposition.NEUTRAL, label: 'Neutral', color: 'amber' },
+            { d: TokenDisposition.HOSTILE, label: 'Hostile', color: 'red' },
           ]).map(({ d, label, color }) => (
             <button
               key={d}

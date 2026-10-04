@@ -1,6 +1,8 @@
 import { prisma } from '../config/database';
-import { computeVisibility, isPointVisible } from './serverRaycasting';
+import { computeVisibility, isPointVisible } from './raycasting';
+import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
 import type { WallSegment, LightSource } from '../types/walls';
+import { tokenSentTo } from './tokenMask';
 import logger from './logger';
 import type { Token } from '../websocket/shared';
 
@@ -17,7 +19,7 @@ import type { Token } from '../websocket/shared';
 // strings). See the note there.
 
 // Map data as returned from Prisma
-interface MapData {
+export interface MapData {
   id: string;
   campaignId: string;
   name: string;
@@ -34,6 +36,12 @@ interface MapData {
   wallSegments: unknown;
   fogData: unknown;
   lightingEnabled: boolean;
+  /** Manual fog of war applies on this map. Off: players see the whole map (lighting still applies). */
+  fogEnabled: boolean;
+  /** Everything in line of sight is lit. Off: lights and darkvision decide what a player sees. */
+  globalIllumination: boolean;
+  /** Players' explored areas are remembered and greyed in on this map. */
+  explorationEnabled: boolean;
   lights: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -47,7 +55,9 @@ interface MapData {
  * - Players see it when the DM has globally enabled it (campaign.spiritLayerEnabled), OR
  *   when the player's own token (identified by controlledBy) is currently on the spirit
  *   layer in the campaign's current map — i.e. they have personally crossed over.
- * - Spectators follow the same rules as players
+ * - Spectators see it when the DM has enabled it for everyone, and never by
+ *   crossing over: a token that still names them from when they were a
+ *   player is nobody's (viewerIdFor), here as everywhere else
  *
  * @param campaignId - The campaign ID
  * @param userId - The user ID to check visibility for
@@ -87,8 +97,10 @@ export async function getSpiritVisibility(
 
   // Individual player check: are they personally in the spirit realm?
   // A player has crossed over if their token (controlledBy === userId) is on
-  // the spirit layer and visible in the campaign's current map.
-  if (campaign.currentMapId) {
+  // the spirit layer and visible in the campaign's current map. Only a
+  // player: a spectator can still be named on a token from before they were
+  // demoted, and that name is nobody's, here as in every other filter.
+  if (membership.role === 'PLAYER' && campaign.currentMapId) {
     const currentMap = await prisma.map.findUnique({
       where: { id: campaign.currentMapId },
       select: { tokens: true },
@@ -152,10 +164,7 @@ export async function getSpiritVisibilityBatch(
     campaign != null &&
     !campaign.spiritLayerEnabled &&
     campaign.currentMapId != null &&
-    uniqueIds.some((id) => {
-      const role = roleByUser.get(id);
-      return role != null && role !== 'DM';
-    });
+    uniqueIds.some((id) => roleByUser.get(id) === 'PLAYER');
 
   if (needsCrossover && campaign?.currentMapId) {
     const currentMap = await prisma.map.findUnique({
@@ -176,7 +185,8 @@ export async function getSpiritVisibilityBatch(
       result.set(userId, true);
       continue;
     }
-    result.set(userId, spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
+    // Crossing over is a player's; see getSpiritVisibility.
+    result.set(userId, role === 'PLAYER' && spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
   }
 
   return result;
@@ -195,10 +205,66 @@ export async function getSpiritVisibilityBatch(
  * @param spiritVisible - Whether the spirit layer is visible to this user
  * @returns Filtered token array
  */
+/**
+ * A token as one non-DM recipient may see it. `filterTokensByRole` decides
+ * which tokens a player is sent; this decides which fields of each one. The
+ * client has a display rule for hit points (`visibleTokenHp`), but a display
+ * rule protects nothing: whatever reaches the browser can be read there, so
+ * what a player is not meant to know is dropped here.
+ *
+ * - `notes` and `statBlock` are the DM's, on every token.
+ * - `hp` goes to the token's controller, and to everyone once the DM turns
+ *   its bar on.
+ * - `sightRadius` goes to the controller, whose client draws what they see
+ *   from it; nobody needs another creature's darkvision.
+ *
+ * - An `obscured` token reaches anyone but its controller as a shape with no
+ *   identity.
+ *
+ * The rule itself lives in `tokenMask.ts` (`tokenSentTo`), byte-identical
+ * with the frontend copy, so the DM's Player Preview applies the same one.
+ * "Own" is `controlledBy === userId`, the same test `filterTokensByLighting`
+ * uses. A caller that passes no `userId` is treated as controlling nothing,
+ * so forgetting it can only hide too much.
+ */
+export function tokenForRecipient(token: Token, userId: string | undefined): Token {
+  return tokenSentTo(token, userId !== undefined && token.controlledBy === userId);
+}
+
+/**
+ * Whose tokens count as their own for what they are sent: a player's. A
+ * spectator controls nothing, whatever `controlledBy` still says from their
+ * time as a player (it is not cleared on demotion, and `canControlToken`
+ * refuses them the move), so for hit points, darkvision, an obscured
+ * identity and sight on a lit map they are nobody. The DM is sent everything
+ * and needs no viewpoint. Every per-recipient filter asks this, so a caller
+ * cannot forget the role half of the rule.
+ */
+export function viewerIdFor(role: string | undefined, userId: string | undefined): string | undefined {
+  return role === 'PLAYER' ? userId : undefined;
+}
+
+/**
+ * Whether a member may act on this token's plane: the DM anywhere, anyone
+ * on the material plane, and a player on the spirit plane only while they
+ * can see it. The socket move handlers and the REST token update ask this
+ * before touching a token, so the two channels cannot disagree.
+ */
+export async function canActOnTokenPlane(
+  role: string | undefined,
+  token: Pick<Token, 'layer'>,
+  campaignId: string,
+  userId: string
+): Promise<boolean> {
+  if (role === 'DM' || token.layer !== 'spirit') return true;
+  return getSpiritVisibility(campaignId, userId);
+}
+
 export function filterTokensByRole(
   tokens: unknown,
   userRole: string,
-  spiritVisible: boolean
+  spiritVisible: boolean,
+  userId?: string
 ): Token[] {
   const tokensArray = (Array.isArray(tokens) ? tokens : []) as Token[];
 
@@ -222,11 +288,10 @@ export function filterTokensByRole(
     return true;
   });
 
-  // Strip DM-only notes field from non-DM clients
-  return visibleTokens.map((token) => {
-    const { notes: _notes, ...rest } = token;
-    return rest as Token;
-  });
+  // Then only the fields this recipient may see of each; a spectator is
+  // nobody's controller, whatever the tokens say.
+  const viewer = viewerIdFor(userRole, userId);
+  return visibleTokens.map((token) => tokenForRecipient(token, viewer));
 }
 
 /**
@@ -236,7 +301,8 @@ export function filterTokensByRole(
  * receive tokens that are within their character's line of sight.
  *
  * @param tokens         Tokens already filtered by role/spirit rules
- * @param playerUserId   The player's user ID
+ * @param playerUserId   The player's user ID, from `viewerIdFor`: undefined for
+ *                       a spectator, who controls no token and so sees nothing
  * @param walls          Map wall segments (for raycasting)
  * @param mapWidth       Map pixel width
  * @param mapHeight      Map pixel height
@@ -246,13 +312,20 @@ export function filterTokensByRole(
  */
 export function filterTokensByLighting(
   tokens: Token[],
-  playerUserId: string,
+  playerUserId: string | undefined,
   walls: unknown,
   mapWidth: number,
   mapHeight: number,
   gridSize: number,
   lightingEnabled: boolean,
-  lights?: unknown
+  lights?: unknown,
+  /**
+   * Everything in line of sight counts as lit. Trailing and defaulted, because
+   * a required parameter cannot follow an optional one; the default errs safe.
+   * A caller that forgets it can only hide too much, never send too much,
+   * the opposite of what a forgotten `userId` once did to `filterMapData`.
+   */
+  globalIllumination = false
 ): Token[] {
   if (!lightingEnabled) return tokens;
 
@@ -260,14 +333,15 @@ export function filterTokensByLighting(
   const lightSources = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
   const enabledLights = lightSources.filter((l) => l.enabled);
 
-  // Find all tokens controlled by this player
-  const myTokens = tokens.filter((t) => t.controlledBy === playerUserId);
+  // Find all tokens controlled by this player. Nobody's viewpoint matches
+  // nothing, not the tokens that carry no controller at all.
+  const myTokens = playerUserId ? tokens.filter((t) => t.controlledBy === playerUserId) : [];
 
-  // Nobody on the map to look through: the only thing to send is what the DM
-  // has left visible. Lights deliberately do not help here — a light is not a
-  // viewer, and treating one as a viewer is exactly the bug fixed below.
+  // Nobody on the map to look through: nothing is seen, so nothing is sent.
+  // Lights deliberately do not help here — a light is not a viewer, and a
+  // token-less player receiving every visible token was a position leak.
   if (myTokens.length === 0) {
-    return tokens.filter((t) => t.visible);
+    return [];
   }
 
   const startMs = Date.now();
@@ -284,58 +358,55 @@ export function filterTokensByLighting(
    * than baked into the polygon, and the polygon answers only "is there a wall
    * in the way".
    */
-  const sights = myTokens.map((t) => {
+  const viewers: Viewer[] = myTokens.map((t) => {
     // Token grid coords use Y=0 at bottom (VTT standard); wall pixel coords use
     // Y=0 at top. Apply the Y-flip so both are in the same pixel space.
-    const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
+    const w = t.size?.width ?? 1;
+    const h = t.size?.height ?? 1;
+    const cx = (t.position.x + w / 2) * gridSize;
+    const cy = (mapHeight - 1 - t.position.y + h / 2) * gridSize;
     return {
-      poly: computeVisibility({ x: cx, y: cy }, wallSegs, mapWidthPx, mapHeightPx, 0),
       cx,
       cy,
-      // 0 means unlimited, which is what a token with no sight radius set has.
-      radiusPx: (t.sightRadius ?? 0) * gridSize,
+      sight: computeVisibility({ x: cx, y: cy }, wallSegs, mapWidthPx, mapHeightPx, 0),
+      // 0 means none: a token with no sight radius makes nothing out in the
+      // dark and relies on light (or global illumination).
+      darkvisionPx: (t.sightRadius ?? 0) * gridSize,
+      selfPx: (Math.max(w, h) / 2) * gridSize,
     };
   });
 
   // What each light reaches, bounded by its own walls. Light positions are
   // already in map-space pixels (Y=0 at top), so no flip is needed.
-  const litAreas = enabledLights.map((light) => {
+  const lits: Lit[] = enabledLights.map((light) => {
     const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
-    return computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx);
+    return {
+      cx: light.x,
+      cy: light.y,
+      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      brightPx: (light.brightRadius ?? 0) * gridSize,
+      dimPx: dimRadiusPx,
+    };
   });
+  const inside: InsideFn = (p, poly) => isPointVisible(p, poly);
 
   const elapsed = Date.now() - startMs;
   if (elapsed > 50) {
     logger.warn(`[lighting] filterTokensByLighting took ${elapsed}ms for userId=${playerUserId} (${myTokens.length} tokens, ${enabledLights.length} lights)`);
   }
 
+  // The rule itself lives in visibilityRule.ts, shared byte for byte with the
+  // client, so what is sent and what is drawn can never disagree. Walls first,
+  // always: a light reveals what you could already have seen; it never sees on
+  // your behalf. Then Global Illumination, darkvision, the token's own square,
+  // and light.
   return tokens.filter((t) => {
     // Always include the player's own tokens
     if (t.controlledBy === playerUserId) return true;
 
     const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
     const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
-    const point = { x: cx, y: cy };
-
-    // Line of sight is required, always.
-    //
-    // Each light's polygon used to be pushed onto this same list and the test
-    // was "inside ANY of them", so a light could stand in for the player's own
-    // eyes: a creature in a lit room was sent to every player on the map,
-    // through walls, at any distance. A light reveals what you could already
-    // have seen; it never sees on your behalf.
-    const withLineOfSight = sights.filter((s) => isPointVisible(point, s.poly));
-    if (withLineOfSight.length === 0) return false;
-
-    // Inside a viewer's own vision radius: made out whether or not it is lit.
-    const seenUnaided = withLineOfSight.some(
-      (s) => s.radiusPx <= 0 || Math.hypot(cx - s.cx, cy - s.cy) <= s.radiusPx
-    );
-    if (seenUnaided) return true;
-
-    // Further off than that, it has to be standing in light.
-    return litAreas.some((poly) => isPointVisible(point, poly));
+    return isSeen({ x: cx, y: cy }, viewers, lits, globalIllumination, inside);
   });
 }
 
@@ -369,19 +440,22 @@ export function filterMapData(
    */
   userId: string | undefined
 ): MapData & { tokens: Token[] } {
-  let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible);
+  let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible, userId);
 
-  // Apply dynamic lighting filter for non-DM players when lighting is enabled
+  // Apply dynamic lighting filter for non-DM members when lighting is enabled.
+  // A spectator has no viewpoint (`viewerIdFor`), so a lit map sends them
+  // nothing, like a player with no token on it.
   if (userRole !== 'DM' && mapData.lightingEnabled && userId) {
     filteredTokens = filterTokensByLighting(
       filteredTokens,
-      userId,
+      viewerIdFor(userRole, userId),
       mapData.wallSegments,
       mapData.width,
       mapData.height,
       mapData.gridSize,
       true,
-      mapData.lights
+      mapData.lights,
+      mapData.globalIllumination
     );
   }
 

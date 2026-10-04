@@ -136,9 +136,34 @@ describe('DocumentReader', () => {
     render(
       <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
     );
-    screen.getByRole('button', { name: /open in a new tab/i }).click();
+    screen.getByRole('button', { name: 'Open in a new tab' }).click();
     expect(open).toHaveBeenCalledWith('/api/assets/documents/doc-1', '_blank', 'noopener,noreferrer');
     open.mockRestore();
+  });
+
+  it('offers a way out above the frame when a browser will not show a PDF inline', () => {
+    // Safari shows a blank frame for an embedded PDF. Whatever the cause, the
+    // reader says so and offers the path that works, which is the one the
+    // player found for themselves.
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+    );
+    const hint = screen.getByRole('button', { name: 'Open this PDF in a new tab' });
+    hint.click();
+    expect(open).toHaveBeenCalledWith('/api/assets/documents/doc-1', '_blank', 'noopener,noreferrer');
+    // Two ways out, each with its own name, so neither is ambiguous.
+    expect(screen.getByRole('button', { name: 'Open in a new tab' })).not.toBe(hint);
+    open.mockRestore();
+  });
+
+  it('does not offer it for a document it renders itself', async () => {
+    mockFetch('plain words');
+    render(
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-2" name="Notes" originalName="notes.txt" />
+    );
+    await waitFor(() => expect(screen.getByText('plain words')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Open this PDF in a new tab' })).toBeNull();
   });
 
   it('asks the server before trusting a cached copy', async () => {

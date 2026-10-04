@@ -5,7 +5,7 @@
 // All methods require ADMIN platform role (enforced server-side).
 // ============================================
 
-import api from './api';
+import api, { type RestoreReply } from './api';
 import type {
   User,
   SystemStats,
@@ -119,7 +119,7 @@ class AdminService {
     await api.deleteAdminBackup(filename);
   }
 
-  async restoreBackup(file: File): Promise<{ message: string }> {
+  async restoreBackup(file: File): Promise<RestoreReply> {
     return api.restoreAdminBackup(file);
   }
 }

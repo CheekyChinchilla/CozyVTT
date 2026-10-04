@@ -86,11 +86,15 @@ export interface DnD5eHitPoints {
 }
 
 /**
- * Hit dice for a specific class
+ * One hit dice pool. `die` ("d10") and `maximum` (how many at full) are the
+ * current fields; `total` is the older packed form ("5d10"), still accepted
+ * so sheets written before them keep loading. The Zod schema is the truth.
  */
 export interface DnD5eHitDice {
   class: string;
-  total: string;
+  total?: string;
+  die?: string;
+  maximum?: number;
   remaining: number;
 }
 

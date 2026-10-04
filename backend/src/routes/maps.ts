@@ -6,12 +6,13 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { filterMapData, getSpiritVisibility } from '../utils/spirit-layer';
-import { broadcastToCampaign } from '../websocket/utils';
+import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
+import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById } from '../services/permissions';
+import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
-import { validateTokenShapes, TokenMetadataSchema } from '../validators/tokens';
+import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
+import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
@@ -27,9 +28,11 @@ import { generateThumbnail } from '../utils/thumbnails';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
-import { toJson } from '../utils/prisma-json';
+import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
+import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
+import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import type { Token } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange } from '../websocket/shared';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -47,12 +50,49 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
+/**
+ * A map's width, height or grid size: a positive whole number that fits the
+ * integer column it is stored in. A fraction used to reach Prisma and fail.
+ */
+const MAX_INT_COLUMN = 2_147_483_647;
+function isMapDimension(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_INT_COLUMN;
+}
+
+/**
+ * Tell those who may read a map of a change to it (emitToMapReaders): the
+ * whole campaign for the map on screen, the DM for a prepared one. The write
+ * has already happened, so a failure to tell anyone is logged and the
+ * request still succeeds.
+ */
+async function tellMapReaders(campaignId: string, mapId: string, event: string, data: unknown): Promise<void> {
+  try {
+    await emitToMapReaders(getSocketInstance(), campaignId, mapId, event, data);
+  } catch (err) {
+    logger.warn('Map change not broadcast', { err, event, mapId });
+  }
+}
+
+/**
+ * Send the map to the table again when it is the one on screen, after a
+ * change to what players are sent. The change is saved by then, so a failure
+ * here is logged, never answered as the change having failed.
+ */
+async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadcastMapData>[2]): Promise<void> {
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    if (campaign?.currentMapId === map.id) await broadcastMapData(getSocketInstance(), campaignId, map);
+  } catch (err) {
+    logger.warn('Map not re-sent to the table; the change stands', { err, mapId: map.id });
+  }
+}
+
 // The token shape lives in websocket/shared.ts — see the note there on why this
 // file no longer keeps its own copy.
 
-const VALID_TOKEN_TYPES = ['player', 'npc', 'object'];
-const VALID_TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
-const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
+const VALID_TOKEN_TYPES: readonly string[] = TOKEN_TYPES;
+const VALID_TOKEN_DISPOSITIONS: readonly string[] = TOKEN_DISPOSITIONS;
+const VALID_DISPLAY_MODES: readonly string[] = TOKEN_DISPLAY_MODES;
 
 /**
  * Map CRUD Routes
@@ -60,6 +100,20 @@ const VALID_DISPLAY_MODES = ['pog', 'top-down', 'full-art'];
  *
  * All routes are prefixed with /api/campaigns/:campaignId/maps
  */
+
+/**
+ * A token in the initiative order was changed or removed: send the order
+ * again, as each member may see it, so the tracker follows the token. A
+ * failure here must not fail the request that changed the token.
+ */
+async function resendInitiativeFor(campaignId: string, tokenId: string): Promise<void> {
+  if (!getCombatState(campaignId).combatants.some((c) => c.tokenId === tokenId)) return;
+  try {
+    await sendInitiativeState(getSocketInstance(), campaignId);
+  } catch (error) {
+    logger.warn('Initiative order not re-sent after a token change', { err: error });
+  }
+}
 
 /**
  * POST /api/campaigns/:campaignId/maps
@@ -86,22 +140,22 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    if (!width || typeof width !== 'number' || width <= 0) {
+    if (!isMapDimension(width)) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Map width must be a positive number',
+        message: 'Map width must be a positive whole number',
       });
     }
 
-    if (!height || typeof height !== 'number' || height <= 0) {
+    if (!isMapDimension(height)) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Map height must be a positive number',
+        message: 'Map height must be a positive whole number',
       });
     }
 
-    // gridSize is optional, defaults to 50 in schema
-    const mapGridSize = gridSize && typeof gridSize === 'number' && gridSize > 0 ? gridSize : 50;
+    // gridSize is optional; anything unusable gets the default of 50
+    const mapGridSize = isMapDimension(gridSize) ? gridSize : 50;
 
     // feetPerSquare: positive integer, defaults to 5
     const mapFeetPerSquare = feetPerSquare && Number.isInteger(feetPerSquare) && feetPerSquare > 0 && feetPerSquare <= 100
@@ -130,14 +184,8 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     // the read rule then saw a legitimate-looking reference and allowed it.
     // Refusing the reference is the half of that fix that stops it being
     // created in the first place.
-    const referenced = [normalizedImageUrl, normalizedSpiritLayerUrl].filter(
-      (url): url is string => typeof url === 'string' && url.length > 0
-    );
-    const isAdmin = req.session.platformRole === 'ADMIN';
-    for (const url of referenced) {
-      const assetId = extractAssetId(url);
-      if (!assetId) continue;
-      if (!(await canReadAssetById(assetId, req.session.userId!, isAdmin))) {
+    for (const url of [normalizedImageUrl, normalizedSpiritLayerUrl]) {
+      if (!(await canReferenceAsset(url, req.session.userId!, undefined, campaignId))) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to that image',
@@ -160,6 +208,12 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         spiritLayerUrl: normalizedSpiritLayerUrl,
         tokens: [], // Initialize empty tokens array
         annotations: [], // Initialize empty annotations array
+        // New maps start with manual fog off and lights that matter; the DM
+        // turns either on when a map needs it. The columns default to on so
+        // maps from before the flags existed keep the behaviour they had.
+        fogEnabled: false,
+        globalIllumination: false,
+        explorationEnabled: false,
       },
     });
 
@@ -182,8 +236,15 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
   try {
     const { campaignId } = req.params;
 
+    // A player is sent the map the campaign is showing and nothing else; the
+    // rest are the DM's until they switch to them (canReadMap).
+    const role = req.campaignMembership!.role;
+    const currentMapId = role === 'DM'
+      ? null
+      : (await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }))?.currentMapId ?? '';
+
     const maps = await prisma.map.findMany({
-      where: { campaignId },
+      where: role === 'DM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
       select: {
         id: true,
         name: true,
@@ -194,6 +255,9 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         feetPerSquare: true,
         diagonalRule: true,
         lightingEnabled: true,
+        fogEnabled: true,
+        globalIllumination: true,
+        explorationEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -235,7 +299,9 @@ router.post(
       }
 
       const mapName = (req.body.name as string)?.trim() || path.basename(req.file.originalname, path.extname(req.file.originalname));
-      const gridSizePx = Number(req.body.gridSize) || 70;
+      // Optional; anything that is not a usable grid size gets the default
+      const requestedGridSize = Number(req.body.gridSize);
+      const gridSizePx = isMapDimension(requestedGridSize) ? requestedGridSize : 70;
 
       // ── Parse the UVTT file ──────────────────────────────────────────────
       const confirmed = req.body.confirm === 'true' || req.body.confirm === true;
@@ -367,6 +433,9 @@ router.post(
           // player until they found the setting: walls block sight, and with
           // nothing lighting the room there is nothing to see.
           lightingEnabled: parsed.lightSources.length > 0,
+          fogEnabled: false,
+          globalIllumination: false,
+          explorationEnabled: false,
         },
       });
 
@@ -422,13 +491,15 @@ router.get(
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
       }
 
-      // Resolve asset file path
-      const assetId = path.basename(map.imageUrl);
-      const asset = await prisma.asset.findUnique({
-        where: { id: assetId },
-        select: { filePath: true },
-      });
-      if (!asset) {
+      // Resolve asset file path. The file goes into the download, so the
+      // caller must be able to read it, and the address is read the way the
+      // reference check reads it: a map could otherwise name another user's
+      // private file and hand it over here.
+      const assetId = extractAssetId(map.imageUrl);
+      const asset = assetId
+        ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
+        : null;
+      if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
       }
 
@@ -524,6 +595,15 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
       });
     }
 
+    // A player may fetch only the map the campaign is showing; a prepared map
+    // is the DM's until they switch to it, and answers as if it were not here.
+    if (membership.role !== 'DM') {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      if (!canReadMap(membership.role, map.id, campaign?.currentMapId)) {
+        return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      }
+    }
+
     // Get spirit layer visibility for this user
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
 
@@ -553,7 +633,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled } = req.body;
+    const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled, globalIllumination, explorationEnabled } = req.body;
 
     // Fetch the map to verify it exists and belongs to campaign
     const existingMap = await prisma.map.findUnique({
@@ -592,30 +672,30 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     }
 
     if (width !== undefined) {
-      if (typeof width !== 'number' || width <= 0) {
+      if (!isMapDimension(width)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Map width must be a positive number',
+          message: 'Map width must be a positive whole number',
         });
       }
       updateData.width = width;
     }
 
     if (height !== undefined) {
-      if (typeof height !== 'number' || height <= 0) {
+      if (!isMapDimension(height)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Map height must be a positive number',
+          message: 'Map height must be a positive whole number',
         });
       }
       updateData.height = height;
     }
 
     if (gridSize !== undefined) {
-      if (typeof gridSize !== 'number' || gridSize <= 0) {
+      if (!isMapDimension(gridSize)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Grid size must be a positive number',
+          message: 'Grid size must be a positive whole number',
         });
       }
       updateData.gridSize = gridSize;
@@ -656,6 +736,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
           message: 'Invalid map imageUrl',
         });
       }
+      // A picture the DM may read, as on create (canReferenceAsset)
+      if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl, campaignId))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
       updateData.imageUrl = normalizedImageUrl;
       updateData.baseLayerUrl = normalizedImageUrl; // Keep both in sync
     }
@@ -669,7 +753,11 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         });
       }
       // Normalize to full path (or null)
-      updateData.spiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
+      const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
+      if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl, campaignId))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
+      updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
     }
 
     if (lightingEnabled !== undefined) {
@@ -679,20 +767,64 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.lightingEnabled = lightingEnabled;
     }
 
+    if (fogEnabled !== undefined) {
+      if (typeof fogEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'fogEnabled must be a boolean' });
+      }
+      updateData.fogEnabled = fogEnabled;
+    }
+
+    if (globalIllumination !== undefined) {
+      if (typeof globalIllumination !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'globalIllumination must be a boolean' });
+      }
+      updateData.globalIllumination = globalIllumination;
+    }
+
+    if (explorationEnabled !== undefined) {
+      if (typeof explorationEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'Validation Error', message: 'explorationEnabled must be a boolean' });
+      }
+      updateData.explorationEnabled = explorationEnabled;
+    }
+
     // Update the map
     const updatedMap = await prisma.map.update({
       where: { id },
       data: updateData,
     });
 
-    // Broadcast lighting change so all connected clients update immediately
-    if (updateData.lightingEnabled !== undefined) {
+    // Any per-map flag change reaches every connected client at once, as one
+    // event carrying all of them, so a client never holds a stale flag.
+    if (updateData.lightingEnabled !== undefined || updateData.fogEnabled !== undefined || updateData.globalIllumination !== undefined || updateData.explorationEnabled !== undefined) {
       try {
-        broadcastToCampaign(campaignId, 'map:lighting:updated', {
+        await tellMapReaders(campaignId, id, 'map:settings:updated', {
           mapId: id,
           lightingEnabled: updatedMap.lightingEnabled,
+          fogEnabled: updatedMap.fogEnabled,
+          globalIllumination: updatedMap.globalIllumination,
+          explorationEnabled: updatedMap.explorationEnabled,
         });
       } catch { /* non-fatal */ }
+    }
+
+    // Fog switched on: push the fog state at once. A client asks for it when
+    // its flag flips, but the flip it sees first is its own optimistic one,
+    // sent before this row was written, and the server had nothing to answer.
+    if (updatedMap.fogEnabled && !existingMap.fogEnabled) {
+      try {
+        await broadcastFogState(getSocketInstance(), campaignId, id, loadFogState(updatedMap, updatedMap.fogData as FogState | null));
+      } catch { /* non-fatal */ }
+    }
+
+    // Lighting and Global Illumination decide which tokens each player is
+    // sent, so when either changes every client gets the map again as they
+    // can now see it. The flags alone would leave a player holding a token the
+    // server would no longer send, or missing one it now would.
+    if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
+      // Only for the map the table is on. A map being edited in the library is
+      // nobody's canvas, and map.changed would put every client onto it.
+      await resendIfCurrent(campaignId, updatedMap);
     }
 
     return res.status(200).json({ map: updatedMap });
@@ -752,6 +884,11 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       where: { id },
     });
 
+    // Combatants that stood on it leave the order with it.
+    if (removeCombatants(campaignId, (c) => c.mapId === id)) {
+      await resendInitiative(campaignId, { evenWhenEmpty: true });
+    }
+
     return res.status(200).json({
       message: 'Map deleted successfully',
     });
@@ -807,6 +944,10 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
       },
     });
 
+    // Which plane each player is on is decided by the current map, and with
+    // it which combatants they are sent.
+    await resendInitiative(campaignId);
+
     return res.status(200).json({
       message: 'Current map updated successfully',
       campaign: updatedCampaign,
@@ -823,6 +964,12 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
 // ============================================
 // TOKEN MANIPULATION ENDPOINTS
 // ============================================
+
+// TODO(tokens): only the move route below tells open pages of its change.
+// Creating, updating or deleting a token here broadcasts nothing but the
+// initiative order; the web app follows each call with a map-change emit of
+// its own, so a change made by any other client stays unseen until the next
+// broadcast or a reload. Broadcast from these routes, as the move route does.
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/tokens
@@ -877,15 +1024,16 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // imageUrl is optional — tokens without an image get colored-letter placeholders
-    if (tokenData.imageUrl && typeof tokenData.imageUrl !== 'string') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Token imageUrl must be a string if provided',
-      });
+    // Every other field is checked against the token schemas, shared with the
+    // update route and the token templates, and stored as parsed, never as it
+    // arrived. imageUrl is optional: a token without one gets a placeholder.
+    const shapes = validateTokenShapes(tokenData);
+    if (!shapes.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    if (!tokenData.position || typeof tokenData.position.x !== 'number' || typeof tokenData.position.y !== 'number') {
+    const position = shapes.value.position;
+    if (!position) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Token position {x, y} is required',
@@ -893,8 +1041,8 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     // Validate position is within map bounds
-    if (tokenData.position.x < 0 || tokenData.position.x >= map.width ||
-        tokenData.position.y < 0 || tokenData.position.y >= map.height) {
+    if (position.x < 0 || position.x >= map.width ||
+        position.y < 0 || position.y >= map.height) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
@@ -926,59 +1074,92 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: 'Invalid display mode' });
     }
 
-    // The JSON fields. Hand-checking stopped short of these, so anything at all
-    // could be written into the column and every reader then had to cope — HP
-    // sent in the character-sheet shape stored happily and rendered as
-    // "8/undefined" everywhere. Same schemas the token-template route uses.
-    const shapes = validateTokenShapes(tokenData);
-    if (!shapes.ok) {
-      return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    // Normalize token imageUrl to full path (optional for placeholder tokens)
+    const normalizedTokenImageUrl = shapes.value.imageUrl
+      ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
+      : null;
+    // Art the DM may read: a token's art counts as the campaign using it.
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, undefined, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
-    // Normalize token imageUrl to full path (optional for placeholder tokens)
-    const normalizedTokenImageUrl = tokenData.imageUrl
-      ? normalizeAssetUrl(tokenData.imageUrl, 'tokens')
-      : null;
+    // Control can only be given to a player of this campaign: the DM needs no
+    // naming, and a spectator controls nothing. A token bound to a character
+    // is controlled by that character's owner, while they are a player,
+    // unless the request names someone else. The controller is who the map is
+    // drawn for and who may move the token, on the server and in the client
+    // alike, so a client that omits it no longer creates a token its own
+    // player cannot use. The character has to be this campaign's: the
+    // initiative roll reads the bound sheet, and character ids are visible to
+    // every member of any shared campaign.
+    const characterId = shapes.value.characterId ?? null;
+    // Absent means "the character's owner, while a player"; an explicit null
+    // means nobody. The two used to read the same, so a character's token the
+    // DM had taken control of came back to its owner whenever it was copied.
+    const controllerGiven = shapes.value.controlledBy !== undefined;
+    let controlledBy: string | null = shapes.value.controlledBy ?? null;
+    if (controlledBy && !(await canHoldTokens(campaignId, controlledBy))) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Token controlledBy must name a player of this campaign',
+      });
+    }
+    if (characterId) {
+      const character = await prisma.character.findUnique({
+        where: { id: characterId },
+        select: { userId: true, campaignId: true },
+      });
+      if (!character || character.campaignId !== campaignId) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Token characterId must name a character of this campaign',
+        });
+      }
+      if (!controllerGiven && (await canHoldTokens(campaignId, character.userId))) {
+        controlledBy = character.userId;
+      }
+    }
 
     // Build the new token with defaults
     const newToken = {
       id: randomUUID(),
-      characterId: tokenData.characterId || null,
+      characterId,
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
-      position: {
-        x: tokenData.position.x,
-        y: tokenData.position.y,
-      },
+      position,
       size: shapes.value.size ?? { width: 1, height: 1 },
       layer,
-      visible: tokenData.visible !== undefined ? tokenData.visible : true,
-      controlledBy: tokenData.controlledBy || null,
-      rotation: tokenData.rotation || 0,
+      visible: shapes.value.visible ?? true,
+      controlledBy,
+      rotation: shapes.value.rotation ?? 0,
       conditions: shapes.value.conditions ?? [],
       metadata: shapes.value.metadata ?? {},
       type: tokenType,
       disposition: disposition,
       hp: shapes.value.hp ?? null,
-      showHpBar: tokenData.showHpBar !== undefined ? tokenData.showHpBar : false,
-      notes: typeof tokenData.notes === 'string' ? tokenData.notes : '',
-      initiative: tokenData.initiative !== undefined ? tokenData.initiative : null,
+      showHpBar: shapes.value.showHpBar ?? false,
+      notes: shapes.value.notes ?? '',
+      initiative: shapes.value.initiative ?? null,
+      // Darkvision in squares; 0 = none. Decides what the server sends this
+      // token's owner, so it is set here and by the DM, never by a player.
+      sightRadius: shapes.value.sightRadius ?? 0,
       displayMode: displayMode,
       statBlock: shapes.value.statBlock ?? null,
-      creatureTemplateId: tokenData.creatureTemplateId || null,
+      creatureTemplateId: shapes.value.creatureTemplateId ?? null,
+      obscured: shapes.value.obscured ?? false,
     };
 
-    // Get existing tokens array
-    const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
-
-    // Add new token to array
-    const updatedTokens = [...tokensArray, newToken];
-
-    // Update the map with new tokens array
-    const updatedMap = await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Appended under the map's lock, to the list as it is then: another
+    // write landing between this route's read and its write used to be lost.
+    const updatedMap = await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
     });
+
+    // A player's spirit-layer token placed on the map the table is on moves
+    // them to the spirit plane, which changes what they are sent of the
+    // order. Skipped while nothing is in it.
+    await resendInitiative(campaignId);
 
     return res.status(201).json({
       message: 'Token added successfully',
@@ -1008,9 +1189,11 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const userId = req.session.userId!;
     const updates = req.body;
 
-    // Fetch the map
+    // Fetch the map, with the campaign's status for the pause rule below
+    // and its current map for the read rule
     const map = await prisma.map.findUnique({
       where: { id: mapId },
+      include: { campaign: { select: { status: true, currentMapId: true } } },
     });
 
     if (!map) {
@@ -1044,6 +1227,13 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
 
+    // A player may change tokens only on the map the campaign is showing, as
+    // they may only fetch that one: a prepared map answers as if it were not
+    // here, even where it holds a token they control.
+    if (!canReadMap(membership.role, mapId, map.campaign.currentMapId)) {
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+    }
+
     // Get existing tokens array
     const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
 
@@ -1059,33 +1249,28 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 
     const existingToken = tokensArray[tokenIndex];
 
-    // Permission check: DM can update any token, players can only update their own tokens
+    // The same rule the socket move handlers apply: the DM, or a player (never
+    // a spectator) whom the token names as its controller.
     const isDM = membership.role === 'DM';
-    const controlsToken = existingToken.controlledBy === userId;
-
-    if (!isDM && !controlsToken) {
+    if (!canControlToken(membership.role, existingToken.controlledBy, userId)) {
       return res.status(403).json({
         error: 'Forbidden',
         message: 'You can only update tokens you control',
       });
     }
-
-    // Validate position if being updated
-    if (updates.position) {
-      if (typeof updates.position.x !== 'number' || typeof updates.position.y !== 'number') {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Position must have numeric x and y values',
-        });
-      }
-
-      if (updates.position.x < 0 || updates.position.x >= map.width ||
-          updates.position.y < 0 || updates.position.y >= map.height) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-        });
-      }
+    // And the same plane rule: a player touches a spirit-plane token only
+    // while they can see that plane, as over the socket.
+    if (!(await canActOnTokenPlane(membership.role, existingToken, campaignId, userId))) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You cannot interact with spirit layer tokens',
+      });
+    }
+    // And the same session rule the socket move events apply: a player's
+    // move waits while the session is paused or ended. The DM sets the scene
+    // whenever they like.
+    if (updates.position !== undefined && !canMoveTokensNow(membership.role, map.campaign.status)) {
+      return res.status(403).json({ error: 'Forbidden', message: PAUSED_MOVE_REFUSAL });
     }
 
     // Validate layer if being updated (DM only)
@@ -1124,7 +1309,10 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       // write-only channel into the map's JSON that served no purpose. The
       // create route, which is the only place the app sends metadata at all, is
       // DM-only already.
-      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata'];
+      // `size` and `sightRadius` are here because both decide what the server
+      // sends this player: a token always sees half its own footprint, so a
+      // player who could enlarge their token would enlarge their sight.
+      const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius', 'size', 'obscured'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
           return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });
@@ -1132,12 +1320,29 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       }
     }
 
-    // The JSON-valued fields, checked against the same schemas the create route
-    // and the token templates use. Only what the request actually carries is
-    // checked, so a position-only move is unaffected.
+    // Every field the request carries, checked against the same schemas the
+    // create route and the token templates use, and stored as parsed: a
+    // position keeps only its square, a rotation is a number of degrees.
     const shapes = validateTokenShapes(updates);
     if (!shapes.ok) {
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
+    }
+
+    const position = shapes.value.position;
+    if (position && (position.x < 0 || position.x >= map.width || position.y < 0 || position.y >= map.height)) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
+      });
+    }
+
+    // Control can only be handed to a player of this campaign: the DM needs
+    // no naming, and a spectator controls nothing.
+    if (shapes.value.controlledBy && !(await canHoldTokens(campaignId, shapes.value.controlledBy))) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Token controlledBy must name a player of this campaign',
+      });
     }
 
     // Metadata is merged into what the token already holds, so the size limit
@@ -1157,48 +1362,82 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       }
     }
 
+    // New art the DM may read; the art already on the token may stay.
+    const nextImageUrl = updates.imageUrl === undefined
+      ? undefined
+      : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     // Build updated token (merge updates with existing)
-    const updatedToken: Token = {
-      ...existingToken,
-      ...(updates.name && { name: updates.name }),
-      ...(updates.imageUrl !== undefined && { imageUrl: updates.imageUrl ? (normalizeAssetUrl(updates.imageUrl, 'tokens') || existingToken.imageUrl) : '' }),
-      ...(updates.position && { position: updates.position }),
+    const changes: Partial<Token> = {
+      ...(shapes.value.name && { name: shapes.value.name }),
+      ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
+      ...(position && { position }),
       ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
-      ...(updates.visible !== undefined && { visible: updates.visible }),
-      ...(updates.controlledBy !== undefined && { controlledBy: updates.controlledBy }),
-      ...(updates.rotation !== undefined && { rotation: updates.rotation }),
+      ...(shapes.value.visible !== undefined && { visible: shapes.value.visible }),
+      ...(updates.controlledBy !== undefined && { controlledBy: shapes.value.controlledBy ?? null }),
+      ...(shapes.value.rotation !== undefined && { rotation: shapes.value.rotation }),
       ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
       ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
       ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
-      ...(updates.showHpBar !== undefined && { showHpBar: updates.showHpBar }),
-      ...(updates.notes !== undefined && { notes: updates.notes }),
-      ...(updates.initiative !== undefined && { initiative: updates.initiative }),
+      ...(shapes.value.showHpBar !== undefined && { showHpBar: shapes.value.showHpBar }),
+      ...(updates.notes !== undefined && { notes: shapes.value.notes ?? '' }),
+      ...(updates.initiative !== undefined && { initiative: shapes.value.initiative ?? null }),
+      ...(updates.sightRadius !== undefined && { sightRadius: shapes.value.sightRadius ?? 0 }),
       ...(updates.displayMode !== undefined && { displayMode: updates.displayMode }),
       // The parsed value, not the raw one: Zod drops keys the schema does not
       // declare, and storing what arrived instead of what was checked is how
       // undeclared fields survived into sheets and then drifted. The create
       // route above has always stored the parsed value.
       ...(updates.statBlock !== undefined && { statBlock: shapes.value.statBlock ?? null }),
-      ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: updates.creatureTemplateId }),
+      ...(updates.creatureTemplateId !== undefined && { creatureTemplateId: shapes.value.creatureTemplateId ?? null }),
+      ...(shapes.value.obscured !== undefined && { obscured: shapes.value.obscured }),
     };
 
-    // Update the tokens array
-    const updatedTokens = [...tokensArray];
-    updatedTokens[tokenIndex] = updatedToken;
-
-    // Update the map
-    const updatedMap = await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Merged into the token as it is under the map's lock, so a move that
+    // landed since this route read it is kept, and written back to the list
+    // as it is then.
+    const written = await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      const tokens = readTokens(fresh.tokens);
+      const index = tokens.findIndex((t) => t.id === tokenId);
+      if (index === -1) return null;
+      const token: Token = { ...tokens[index], ...changes };
+      tokens[index] = token;
+      const map = await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+      return { token, map };
     });
+    if (!written) {
+      return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
+    }
+    const { token: updatedToken, map: updatedMap } = written;
 
+    // A combatant's own change follows the token. A layer, visibility or
+    // controller change on any token may move a player between planes,
+    // which changes what they are sent of the whole order.
+    if (updates.layer !== undefined || shapes.value.visible !== undefined || updates.controlledBy !== undefined) {
+      await resendInitiative(campaignId);
+    } else {
+      await resendInitiativeFor(campaignId, tokenId);
+    }
+
+    // Answered as the map fetch answers, never with the stored row: that row
+    // carries every token, hidden ones included, with notes, stat blocks and
+    // hit points, plus the fog grid and the spirit layer, and a player moving
+    // their own token could read all of it here.
+    // The token too: a player is sent it only if the map would send it to
+    // them (visible, on their plane), with the fields they may see, and
+    // otherwise null, so the reply never holds what the map beside it leaves out.
+    const spiritVisible = await getSpiritVisibility(campaignId, userId);
     return res.status(200).json({
       message: 'Token updated successfully',
-      token: updatedToken,
-      map: updatedMap,
+      token: isDM ? updatedToken : (filterTokensByRole([updatedToken], membership.role, spiritVisible, userId)[0] ?? null),
+      map: filterMapData(updatedMap, membership.role, spiritVisible, userId),
     });
   } catch (error) {
     logger.error('Error updating token', { err: error });
@@ -1206,6 +1445,95 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       error: 'Internal Server Error',
       message: 'Failed to update token',
     });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/maps/:id/tokens/move
+ * Move tokens to another map of the campaign, in one step
+ * Requires: DM role
+ *
+ * Each token travels as it is stored, under its own id, clamped onto the
+ * target map. A copy and a delete per token used to race (tokens lost or
+ * doubled), gave the token a new id (a combatant dropped out of the order)
+ * and rebuilt it through the create route's defaults.
+ */
+router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id: sourceId } = req.params;
+    const parsed = MoveTokensSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    }
+    const { tokenIds, targetMapId } = parsed.data;
+    if (targetMapId === sourceId) {
+      return res.status(400).json({ error: 'Validation Error', message: 'The target must be another map' });
+    }
+    const wanted = new Set(tokenIds);
+
+    const outcome = await withMapsLocked([sourceId, targetMapId], async (tx) => {
+      const source = await tx.map.findUnique({ where: { id: sourceId } });
+      if (!source || source.campaignId !== campaignId) {
+        return { refused: 'Map not found in this campaign' };
+      }
+      const target = await tx.map.findUnique({ where: { id: targetMapId } });
+      if (!target || target.campaignId !== campaignId) {
+        return { refused: 'Target map not found in this campaign' };
+      }
+      const sourceTokens = readTokens(source.tokens);
+      const missing = tokenIds.filter((id) => !sourceTokens.some((t) => t.id === id));
+      if (missing.length > 0) {
+        return { refused: `Token not found on this map: ${missing.join(', ')}` };
+      }
+      const moved = sourceTokens
+        .filter((t) => wanted.has(t.id))
+        .map((t) => ({ ...t, position: clampTokenPosition(t.position, t.size, target) }));
+      const updatedSource = await tx.map.update({
+        where: { id: sourceId },
+        data: { tokens: toJson(sourceTokens.filter((t) => !wanted.has(t.id))) },
+      });
+      const updatedTarget = await tx.map.update({
+        where: { id: targetMapId },
+        data: { tokens: toJson([...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved]) },
+      });
+      return { moved, updatedSource, updatedTarget };
+    });
+    if ('refused' in outcome) {
+      return res.status(404).json({ error: 'Not Found', message: outcome.refused });
+    }
+    const { moved, updatedSource, updatedTarget } = outcome;
+
+    // A combatant follows its token: the order names the map each entry's
+    // token is on, and the tracker looks for it there.
+    const state = getCombatState(campaignId);
+    const inOrder = state.combatants.some((c) => wanted.has(c.tokenId));
+    if (inOrder) {
+      setCombatState(campaignId, {
+        ...state,
+        combatants: state.combatants.map((c) => (wanted.has(c.tokenId) ? { ...c, mapId: targetMapId } : c)),
+      });
+    }
+
+    // Whichever of the two maps the table is on is sent again, as each
+    // member may see it; the other is the DM's alone until they switch.
+    try {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+      const io = getSocketInstance();
+      for (const map of [updatedSource, updatedTarget]) {
+        if (campaign?.currentMapId === map.id) await broadcastMapData(io, campaignId, map);
+      }
+      // Any token, not only a combatant's: moving a player's spirit-layer
+      // token onto or off the map the table is on moves them between
+      // planes, which changes what they are sent of the whole order.
+      if (getCombatState(campaignId).combatants.length > 0) await sendInitiativeState(io, campaignId);
+    } catch (error) {
+      logger.warn('Table not told of a token move', { err: error });
+    }
+
+    return res.status(200).json({ message: `${moved.length} token(s) moved`, moved });
+  } catch (error) {
+    logger.error('Error moving tokens', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to move tokens' });
   }
 });
 
@@ -1250,14 +1578,21 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
       });
     }
 
-    // Remove the token
-    const updatedTokens = tokensArray.filter((t) => t.id !== tokenId);
-
-    // Update the map
-    await prisma.map.update({
-      where: { id: mapId },
-      data: { tokens: toJson(updatedTokens) },
+    // Removed from the list as it is under the map's lock; several deletes
+    // at once used to leave only whichever wrote last.
+    await withMapsLocked([mapId], async (tx) => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
     });
+
+    // The entry goes with the token, and the order is sent again without it.
+    // Any other token's deletion can move its controller between planes (a
+    // player's spirit-layer token), so the order is sent again then too.
+    if (removeCombatants(campaignId, (c) => c.tokenId === tokenId)) {
+      await resendInitiative(campaignId, { evenWhenEmpty: true });
+    } else {
+      await resendInitiative(campaignId);
+    }
 
     return res.status(200).json({
       message: 'Token removed successfully',
@@ -1282,7 +1617,8 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 async function findMapInCampaign(
   campaignId: string,
   mapId: string,
-  res: Response
+  res: Response,
+  role: string
 ) {
   const map = await prisma.map.findUnique({ where: { id: mapId } });
   if (!map) {
@@ -1293,60 +1629,15 @@ async function findMapInCampaign(
     res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
     return null;
   }
+  // A prepared map is the DM's alone; to anyone else it is not here.
+  if (role !== 'DM') {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    if (!canReadMap(role, map.id, campaign?.currentMapId)) {
+      res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      return null;
+    }
+  }
   return map;
-}
-
-/**
- * Helper: build a default all-hidden FogState from map dimensions.
- * One cell per grid square so fog aligns with the visible grid.
- */
-function buildDefaultFogState(map: { width: number; height: number; gridSize: number }): FogState {
-  const cellPx = map.gridSize; // one fog cell = one grid square
-  const fogCols = map.width;   // grid columns
-  const fogRows = map.height;  // grid rows
-  return {
-    fogCols,
-    fogRows,
-    cellPx,
-    revealed: new Array(fogCols * fogRows).fill(false),
-  };
-}
-
-/**
- * Load fog from DB, rebuilding if the stored cell size doesn't match the current grid.
- */
-function loadFogState(map: { width: number; height: number; gridSize: number }, stored: FogState | null): FogState {
-  const expected = buildDefaultFogState(map);
-  if (!stored || stored.cellPx !== expected.cellPx || stored.fogCols !== expected.fogCols || stored.fogRows !== expected.fogRows) {
-    return expected;
-  }
-  return stored;
-}
-
-/**
- * Helper: apply a FogOperation to an existing FogState, mutating revealed in-place.
- * Out-of-bounds indices are silently ignored.
- */
-function applyFogOperation(fog: FogState, operation: { op: string; cells?: number[] }): void {
-  const total = fog.fogCols * fog.fogRows;
-  switch (operation.op) {
-    case 'reveal_all':
-      fog.revealed.fill(true);
-      break;
-    case 'hide_all':
-      fog.revealed.fill(false);
-      break;
-    case 'reveal':
-      for (const idx of (operation.cells ?? [])) {
-        if (idx >= 0 && idx < total) fog.revealed[idx] = true;
-      }
-      break;
-    case 'hide':
-      for (const idx of (operation.cells ?? [])) {
-        if (idx >= 0 && idx < total) fog.revealed[idx] = false;
-      }
-      break;
-  }
 }
 
 /**
@@ -1356,7 +1647,7 @@ function applyFogOperation(fog: FogState, operation: { op: string; cells?: numbe
 router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
     const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
     return res.status(200).json({ segments });
@@ -1374,7 +1665,7 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
 router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = WallSegmentsArraySchema.safeParse(req.body.segments);
@@ -1387,6 +1678,9 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
       data: { wallSegments: toJson(parsed.data) },
     });
 
+    // The same events the socket wall edits send, to those who may read the map.
+    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: updated.wallSegments });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segments: updated.wallSegments });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
@@ -1402,7 +1696,7 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const segmentData = { ...req.body, id: req.body.id || randomUUID() };
@@ -1421,6 +1715,8 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
       data: { wallSegments: toJson([...existing, parsed.data]) },
     });
 
+    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment: parsed.data });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
   } catch (error) {
     logger.error('Error adding wall segment', { err: error });
@@ -1435,7 +1731,7 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
@@ -1446,6 +1742,8 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
     }
 
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
+    await tellMapReaders(campaignId, id, 'wall:removed', { mapId: id, segmentId: sid });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Wall segment deleted' });
   } catch (error) {
     logger.error('Error deleting wall segment', { err: error });
@@ -1461,7 +1759,7 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
 router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const validTypes = ['wall', 'door-closed', 'door-open', 'window'];
@@ -1479,6 +1777,8 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     existing[segIndex] = { ...existing[segIndex], type: req.body.type };
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
+    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segment: existing[segIndex] });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
@@ -1497,7 +1797,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
 router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
     const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
     return res.status(200).json({ lights });
@@ -1515,7 +1815,7 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
 router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = LightSourcesArraySchema.safeParse(req.body.lights);
@@ -1528,7 +1828,8 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
       data: { lights: toJson(parsed.data) },
     });
 
-    broadcastToCampaign(campaignId, 'lights:replaced', { mapId: id, lights: updated.lights });
+    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: updated.lights });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ lights: updated.lights });
   } catch (error) {
     logger.error('Error replacing light sources:', error);
@@ -1544,7 +1845,7 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
 router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const lightData = { ...req.body, id: req.body.id || randomUUID() };
@@ -1563,7 +1864,8 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
       data: { lights: toJson([...existing, parsed.data]) },
     });
 
-    broadcastToCampaign(campaignId, 'light:added', { mapId: id, light: parsed.data });
+    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: parsed.data });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: parsed.data, total: (updated.lights as unknown as LightSource[]).length });
   } catch (error) {
     logger.error('Error adding light source:', error);
@@ -1579,7 +1881,7 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
 router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const parsed = LightSourceUpdateSchema.safeParse(req.body);
@@ -1596,7 +1898,8 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     existing[idx] = { ...existing[idx], ...parsed.data };
     await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
-    broadcastToCampaign(campaignId, 'light:updated', { mapId: id, light: existing[idx] });
+    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ light: existing[idx] });
   } catch (error) {
     logger.error('Error updating light source:', error);
@@ -1611,7 +1914,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
 router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
@@ -1623,7 +1926,8 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 
     await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
 
-    broadcastToCampaign(campaignId, 'light:removed', { mapId: id, lightId });
+    await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
+    resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
     logger.error('Error deleting light source:', error);
@@ -1641,7 +1945,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     const fog = loadFogState(map, map.fogData as FogState | null);
@@ -1661,8 +1965,13 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
 router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
+
+    // The map's flag is the single source of truth, here as on the socket.
+    if (!map.fogEnabled) {
+      return res.status(409).json({ error: 'Conflict', message: 'Fog of war is off for this map' });
+    }
 
     const parsed = FogOperationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1670,13 +1979,18 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
     }
 
     const fog: FogState = loadFogState(map, map.fogData as FogState | null);
-
-    applyFogOperation(fog, parsed.data);
+    applyWsFogOperation(fog, parsed.data);
 
     const updated = await prisma.map.update({
       where: { id },
       data: { fogData: toJson(fog) },
     });
+
+    // Same broadcast as the socket path, so a reveal made here reaches the
+    // table at once. No socket server (some tests) means nobody to tell.
+    try {
+      await broadcastFogState(getSocketInstance(), campaignId, id, fog);
+    } catch { /* non-fatal */ }
 
     return res.status(200).json({ fogState: updated.fogData });
   } catch (error) {
@@ -1693,7 +2007,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
-    const map = await findMapInCampaign(campaignId, id, res);
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
     if (typeof req.body.enabled !== 'boolean') {
@@ -1707,12 +2021,21 @@ router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: R
 
     // Broadcast to all clients in this campaign so they don't need to reload
     try {
-      broadcastToCampaign(campaignId, 'map:lighting:updated', {
+      await tellMapReaders(campaignId, id, 'map:settings:updated', {
         mapId: id,
         lightingEnabled: updated.lightingEnabled,
+        fogEnabled: updated.fogEnabled,
+        globalIllumination: updated.globalIllumination,
+        explorationEnabled: updated.explorationEnabled,
       });
     } catch {
       // Socket may not be initialized in tests — log and continue
+    }
+
+    // See PUT /:id: a lighting change alters which tokens players are sent,
+    // and only the map the table is on is anyone's canvas.
+    if (updated.lightingEnabled !== map.lightingEnabled) {
+      await resendIfCurrent(campaignId, updated);
     }
 
     return res.status(200).json({ lightingEnabled: updated.lightingEnabled });

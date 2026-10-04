@@ -1,11 +1,12 @@
 // ============================================
-// Initiative tracker handlers (DM-only controls; state broadcasts to all).
+// Initiative tracker handlers (DM-only controls; the order is sent to every
+// member as they may see it, see sendInitiativeState).
 // initiative.add / remove / set / roll / reorder / start / next / end /
 // request_state
 // ============================================
 
 import { Server } from 'socket.io';
-import { AuthenticatedSocket } from '../auth';
+import { AuthenticatedSocket, type AuthenticatedFields } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import {
@@ -15,22 +16,172 @@ import {
 } from '../../utils/rules/initiative';
 import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
+import { withMapsLocked } from '../../utils/mapTokens';
+import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
+import { canControlToken, canReadMap, canRollDice } from '../../services/permissions';
 import {
   getState as getCombatState,
   setState as setCombatState,
   clearState as clearCombatState,
   sortCombatants,
+  withoutCombatants,
+  projectCombatState,
+  getVersion,
+  startSend,
+  latestSend,
   type CombatantEntry,
+  type CombatantSource,
+  type CombatState,
 } from '../initiativeState';
+import { bestEffort, campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
+import { diceRollLimiter, stateRequestAllowed } from '../shared';
+
+/** What a send needs of a socket; a connected one and a fetched one both have it. */
+type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
+  emit(event: 'initiative.state', state: CombatState): unknown;
+  emit(event: 'dice.rolled', roll: Record<string, unknown>): unknown;
+};
+
+/**
+ * The sockets in the campaign that are sent `token` at all: every DM's, and
+ * a player's when the token stands on the map the campaign is showing and the
+ * role filter keeps it for them (visible, on their plane). The dice log entry for a token's roll goes to these and no one
+ * else, so a hidden or off-plane combatant the tracker keeps from a player is
+ * not announced to them by its roll.
+ */
+async function recipientsSentToken(
+  io: Server,
+  campaignId: string,
+  token: ReturnType<typeof readTokens>[number],
+  mapId: string
+): Promise<Recipient[]> {
+  const recipients = (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  // A token on a map the table is not showing is sent to no player at all.
+  if (campaign?.currentMapId !== mapId) return stillInCampaign(recipients, campaignId).filter((r) => r.role === 'DM');
+  const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
+  const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+  return stillInCampaign(recipients, campaignId).filter((r) => {
+    if (r.role === 'DM') return true;
+    if (!r.userId) return false;
+    return filterTokensByRole([token], r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId).length > 0;
+  });
+}
+
+/**
+ * Send the order to the given sockets, or to every socket in the campaign,
+ * each as they may see it. The combatants' tokens are read as they are now,
+ * so a name, picture or hit points the DM changes follow the token, and a
+ * player's copy goes through the same role filter as the map itself: a hidden
+ * token's entry, one on a map the campaign is not showing, and hit points
+ * behind a bar the DM keeps off, never reach them. The stored state is the DM's view and is not changed.
+ */
+export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
+  const state = getCombatState(campaignId);
+  const version = getVersion(campaignId);
+  // A send to everyone is numbered; a reply to one socket takes the number
+  // of the last send to everyone.
+  const sendNumber = only ? latestSend(campaignId) : startSend(campaignId);
+  // A change that lands while this send is still reading starts its own
+  // send with the newer state or tokens; this one would arrive after it and
+  // show the older, so it is dropped instead. Checked before every emit.
+  const overtaken = () => getVersion(campaignId) !== version || latestSend(campaignId) !== sendNumber;
+  const recipients: Recipient[] = only ?? (await campaignSockets(io, campaignId)).map((s) => s as unknown as Recipient);
+  if (recipients.length === 0 || overtaken()) return;
+
+  // Nothing in the order means nothing to look up: every client asks for
+  // the state when it opens a campaign, and a reply that costs several
+  // queries for an empty list was the most expensive request a member could
+  // repeat.
+  if (state.combatants.length === 0) {
+    const nothing = new Map<string, CombatantSource>();
+    for (const r of stillInCampaign(recipients, campaignId)) {
+      r.emit('initiative.state', projectCombatState(state, nothing, r.role === 'DM'));
+    }
+    return;
+  }
+
+  const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];
+  const [maps, campaign] = await Promise.all([
+    prisma.map.findMany({ where: { id: { in: mapIds }, campaignId }, select: { id: true, tokens: true } }),
+    prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+  ]);
+  const tokens = maps.flatMap((m) => readTokens(m.tokens));
+  // A player is sent the map the campaign is showing and no other, so the
+  // order names for them only what stands on it. A combatant on a prepared
+  // map, added there or moved there mid-fight, stays the DM's.
+  const shown = maps.filter((m) => m.id === campaign?.currentMapId).flatMap((m) => readTokens(m.tokens));
+  const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
+  const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
+  if (overtaken()) return;
+  const byId = (list: CombatantSource[]) => new Map(list.map((t) => [t.id, t]));
+
+  const forDM = byId(tokens);
+  for (const r of stillInCampaign(recipients, campaignId)) {
+    if (r.role === 'DM') {
+      r.emit('initiative.state', projectCombatState(state, forDM, true));
+      continue;
+    }
+    if (!r.userId) continue;
+    const forRole = filterTokensByRole(shown, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
+    r.emit('initiative.state', projectCombatState(state, byId(forRole), false));
+  }
+}
+
+/**
+ * Send the order again after something changed, and never let that fail the
+ * change: the state or the token is already saved by the time this runs, so
+ * a database blip here used to tell the DM "Failed to add to initiative"
+ * for an addition that had been made, and a retry was refused as a
+ * duplicate. The next change, or a client's request on reconnect, catches
+ * everyone up.
+ */
+export async function resendInitiativeState(io: Server, campaignId: string): Promise<void> {
+  try {
+    await sendInitiativeState(io, campaignId);
+  } catch (error) {
+    logger.warn('initiative.state fan-out failed; the change stands', { err: error, campaignId });
+  }
+}
+
+/**
+ * The same from a REST route, which has no socket server in hand. A member's
+ * copy of the order depends on their plane, their role and each token, so
+ * the routes that change any of those call this. Skipped while nothing is in
+ * the order, unless told otherwise (a deletion that emptied it still has to
+ * be sent).
+ */
+export async function resendInitiative(campaignId: string, options: { evenWhenEmpty?: boolean } = {}): Promise<void> {
+  if (!options.evenWhenEmpty && getCombatState(campaignId).combatants.length === 0) return;
+  let io: Server;
+  try {
+    io = getSocketInstance();
+  } catch {
+    return;
+  }
+  await resendInitiativeState(io, campaignId);
+}
+
+/**
+ * Store a token's initiative on its map, in the list as it is under the map's
+ * lock like every other write to a map's tokens. A token no longer on the
+ * map is left alone.
+ */
+async function setTokenInitiative(mapId: string, tokenId: string, value: number | null): Promise<void> {
+  await withMapsLocked([mapId], async (tx) => {
+    const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const tokens = readTokens(fresh.tokens);
+    const index = tokens.findIndex((t) => t.id === tokenId);
+    if (index === -1) return;
+    tokens[index] = { ...tokens[index], initiative: value };
+    await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+  });
+}
 
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {
-  /**
-   * Broadcast full initiative state to all campaign members. Called after
-   * every mutation.
-   */
+  /** Send the order to every member, each as they may see it, after a change. */
   async function broadcastInitiativeState(campaignId: string) {
-    const state = getCombatState(campaignId);
-    io.to(campaignId).emit('initiative.state', state);
+    await resendInitiativeState(io, campaignId);
   }
 
   /**
@@ -61,6 +212,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
 
       const entry: CombatantEntry = {
         tokenId,
+        mapId,
         name: token.name,
         imageUrl: token.imageUrl || '',
         // Always null, never `token.initiative`.
@@ -100,15 +252,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const { tokenId } = data;
       if (!tokenId) { socket.emit('error', { message: 'tokenId required' }); return; }
 
-      const state = getCombatState(socket.campaignId);
-      state.combatants = state.combatants.filter((c) => c.tokenId !== tokenId);
-
-      // If we just removed the current combatant, advance to the next one
-      if (state.currentTokenId === tokenId) {
-        state.currentTokenId = state.combatants[0]?.tokenId ?? null;
-      }
-
-      setCombatState(socket.campaignId, state);
+      // The turn passes on, and an emptied order ends the fight, as when a
+      // combatant's token is deleted (withoutCombatants).
+      const next = withoutCombatants(getCombatState(socket.campaignId), (c) => c.tokenId === tokenId);
+      if (next) setCombatState(socket.campaignId, next);
       await broadcastInitiativeState(socket.campaignId);
     } catch (error) {
       logger.error('initiative.remove failed', { err: error });
@@ -132,12 +279,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       const map = await prisma.map.findUnique({ where: { id: mapId } });
       if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
 
-      const tokens = readTokens(map.tokens);
-      const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
-      if (tokenIndex !== -1) {
-        tokens[tokenIndex] = { ...tokens[tokenIndex], initiative: value };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-      }
+      await setTokenInitiative(mapId, tokenId, value);
 
       // Update in-memory combat state
       const state = getCombatState(socket.campaignId);
@@ -169,11 +311,29 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
    * whether to *offer* the control, and neither is trustworthy on its own.
    */
   socket.on('initiative.roll', async (data: { tokenId: string; mapId: string; expression?: string; characterName?: string }) => {
+    // `characterName` is what older clients sent along; the server names the token itself now.
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
 
-      const { tokenId, mapId, expression, characterName } = data;
+      // A spectator may not roll, as with dice.roll, and is told so before
+      // anything is read. The token check below refuses one too, for a role
+      // that changes while this handler waits on the database.
+      if (!canRollDice(socket.role)) {
+        socket.emit('error', { message: 'Spectators cannot roll initiative' });
+        return;
+      }
+
+      const { tokenId, mapId, expression } = data;
       if (!tokenId || !mapId) { socket.emit('error', { message: 'tokenId and mapId required' }); return; }
+
+      // An initiative roll is a dice roll: it writes the map, tells the table
+      // and re-sends the order, and it used to bypass the ceiling dice.roll
+      // applies. Every roll but the DM's is counted; the DM rolls for a whole
+      // encounter at once.
+      if (socket.role !== 'DM' && !diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
+        socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
+        return;
+      }
 
       // `expression` is now only a fallback for combatants the server cannot
       // work initiative out for itself — see the resolution below. Validate it
@@ -185,9 +345,13 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         }
       }
 
-      // Fetch token name from DB for logging
-      const map = await prisma.map.findUnique({ where: { id: mapId } });
-      if (!map || map.campaignId !== socket.campaignId) { socket.emit('error', { message: 'Map not found' }); return; }
+      // Fetch token name from DB for logging, with the campaign's current map:
+      // a prepared map is the DM's until they switch to it (canReadMap).
+      const map = await prisma.map.findUnique({ where: { id: mapId }, include: { campaign: { select: { currentMapId: true } } } });
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
+        socket.emit('error', { message: 'Map not found' });
+        return;
+      }
 
       const tokens = readTokens(map.tokens);
       const tokenIndex = tokens.findIndex((t) => t.id === tokenId);
@@ -201,17 +365,14 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // may move a token (see handlers/tokens.ts), so a player can roll for
       // exactly the tokens they can already move.
       if (socket.role !== 'DM') {
-        // Spectators are watching, not playing. `controlledBy` survives a
-        // demotion from PLAYER, so without this an ex-player would keep the
-        // ability to roll — and reorder a fight — after losing the ability to
-        // move the very same token. handlers/tokens.ts makes the same pair of
-        // checks for movement.
-        if (socket.role === 'SPECTATOR') {
-          socket.emit('error', { message: 'Spectators cannot roll initiative' });
-          return;
-        }
-        if (token.controlledBy !== socket.userId) {
-          socket.emit('error', { message: 'You can only roll initiative for your own token' });
+        // The same predicate that decides who may move the token: a spectator
+        // never, even one `controlledBy` still names from before a demotion.
+        if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
+          socket.emit('error', {
+            message: socket.role === 'SPECTATOR'
+              ? 'Spectators cannot roll initiative'
+              : 'You can only roll initiative for your own token',
+          });
           return;
         }
         if (existingIndex === -1) {
@@ -240,8 +401,12 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // than by both remembering to compute it the same way.
       let resolution = null as ReturnType<typeof resolveCharacterInitiative>;
       if (token.characterId) {
-        const character = await prisma.character.findUnique({
-          where: { id: token.characterId },
+        // Only a character of this campaign. Character ids are visible to
+        // every member of any shared campaign, and anyone can be the DM of a
+        // campaign they create, so a token bound to someone else's character
+        // must not read that sheet.
+        const character = await prisma.character.findFirst({
+          where: { id: token.characterId, campaignId: socket.campaignId },
           select: { gameSystem: true, data: true },
         });
         if (character) {
@@ -289,33 +454,32 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         rolledValue = rollResult.total;
       }
 
-      // Persist to token.
-      //
-      // Re-read rather than writing back the copy fetched before the character
-      // lookups above: those are awaits, and the whole token array is rewritten
-      // in one field, so a token someone moved in the meantime would be silently
-      // put back where it was.
-      const freshMap = await prisma.map.findUnique({ where: { id: mapId }, select: { tokens: true } });
-      const freshTokens = freshMap && Array.isArray(freshMap.tokens) ? readTokens(freshMap.tokens) : tokens;
-      const freshIndex = freshTokens.findIndex((t) => t.id === tokenId);
-      if (freshIndex !== -1) {
-        freshTokens[freshIndex] = { ...freshTokens[freshIndex], initiative: rolledValue };
-        await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(freshTokens) } });
-      }
+      // Persist to token, in the list as it is under the map's lock: the
+      // copy fetched before the character lookups above is stale by now.
+      await setTokenInitiative(mapId, tokenId, rolledValue);
 
       // Update in-memory state — add to combatants if not already present.
-      // Only reachable for a DM: a player's roll is rejected above unless the
-      // token is already a combatant.
+      // Only for a DM, and only a token that was not in the order when the
+      // roll began: a player's roll is rejected above unless the token is
+      // already a combatant, and a combatant that has left the order since
+      // stays out.
       //
-      // Re-found rather than reusing the index taken before the awaits above:
-      // a concurrent roll re-sorts this array and a concurrent remove shortens
-      // it, so a stale index would write the value onto the wrong combatant.
-      const combatantIndex = state.combatants.findIndex((c) => c.tokenId === tokenId);
+      // The order as it is now, not the copy read before the awaits above:
+      // a concurrent roll re-sorts it, a remove shortens it, and the DM may
+      // have ended the fight, which writing the old copy back would undo.
+      const current = getCombatState(socket.campaignId);
+      const combatantIndex = current.combatants.findIndex((c) => c.tokenId === tokenId);
       if (combatantIndex !== -1) {
-        state.combatants[combatantIndex].initiative = rolledValue;
-      } else {
-        state.combatants.push({
+        current.combatants[combatantIndex].initiative = rolledValue;
+        current.combatants = sortCombatants(current.combatants);
+        setCombatState(socket.campaignId, current);
+      } else if (socket.role === 'DM' && existingIndex === -1) {
+        // The DM's roll adds a token that was not in the order when the roll
+        // began. One that was, and is gone now, was removed meanwhile (or
+        // the fight ended), and stays out.
+        current.combatants.push({
           tokenId,
+          mapId,
           name: token.name,
           imageUrl: token.imageUrl || '',
           initiative: rolledValue,
@@ -323,31 +487,48 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           type: token.type ?? 'npc',
           disposition: token.disposition ?? null,
         });
+        current.combatants = sortCombatants(current.combatants);
+        setCombatState(socket.campaignId, current);
       }
-      state.combatants = sortCombatants(state.combatants);
-      setCombatState(socket.campaignId, state);
 
       // Announce the roll in the dice log — but only when dice were actually
       // thrown. A Call of Cthulhu investigator's initiative is simply their
       // Dexterity, and a dice-log entry claiming otherwise would be a lie. The
       // value still reaches everyone through the initiative broadcast below.
-      if (rollResult) {
+      const campaignId = socket.campaignId;
+      const roll = rollResult;
+      // The roll is stored and ordered by now: a failure to write its dice
+      // log entry is logged, and the new order below still goes out.
+      // TODO(play): this entry is only broadcast. Unlike a roll made in dice.ts
+      // it is never written to the diceRoll table, so it is gone from the dice
+      // log on reload. Store it as other rolls are stored.
+      if (roll) await bestEffort('initiative.roll dice log', async () => {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
+        // The server names the token; a name the client sends is not used.
+        // An obscured token is not named in the dice log even to the DM, since
+        // one entry reaches everyone who is sent the token.
+        // TODO(play): who rolled is not considered, so a player rolling for
+        // their own obscured token sees it logged as "Unknown creature", while
+        // a roll from their sheet names the character. Send the roller the
+        // token's name and everyone else the placeholder.
+        const publicName = token.obscured === true ? 'Unknown creature' : token.name;
         const rollData = {
           userId: socket.userId,
           userName: user?.displayName ?? 'DM',
-          characterName: characterName || token.name,
+          characterName: publicName,
           expression: usedExpression,
           result: rolledValue,
-          breakdown: rollResult,
-          purpose: `${token.name} Initiative`,
+          breakdown: roll,
+          purpose: `${publicName} Initiative`,
           timestamp: new Date().toISOString(),
           secret: false,
         };
-        io.to(socket.campaignId).emit('dice.rolled', rollData);
-      }
+        for (const r of await recipientsSentToken(io, campaignId, token, mapId)) {
+          r.emit('dice.rolled', rollData);
+        }
+      });
 
-      await broadcastInitiativeState(socket.campaignId);
+      await broadcastInitiativeState(campaignId);
       logger.debug('initiative.roll', {
         rolled: !!rollResult, result: rolledValue, name: token.name, campaignId: socket.campaignId,
       });
@@ -451,12 +632,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can end combat' }); return; }
 
       clearCombatState(socket.campaignId);
-      io.to(socket.campaignId).emit('initiative.state', {
-        active: false,
-        round: 0,
-        currentTokenId: null,
-        combatants: [],
-      });
+      await broadcastInitiativeState(socket.campaignId);
       logger.info('initiative.end', { campaignId: socket.campaignId });
     } catch (error) {
       logger.error('initiative.end failed', { err: error });
@@ -467,9 +643,13 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   /**
    * INITIATIVE.REQUEST_STATE — Client requests current state on (re)connect.
    */
-  socket.on('initiative.request_state', () => {
-    if (!socket.campaignId) return;
-    const state = getCombatState(socket.campaignId);
-    socket.emit('initiative.state', state);
+  socket.on('initiative.request_state', async () => {
+    try {
+      if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'initiative.request_state')) return;
+      await sendInitiativeState(io, socket.campaignId, [socket as unknown as Recipient]);
+    } catch (error) {
+      logger.error('initiative.request_state failed', { err: error });
+    }
   });
 }

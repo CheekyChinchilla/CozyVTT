@@ -11,23 +11,25 @@
 import { describe, it, expect } from 'vitest';
 import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
-import { drawTokens, type TokenDrawState } from '../layers/drawTokens';
+import { drawTokens, placeholderColor, type TokenDrawState } from '../layers/drawTokens';
 import { drawWalls } from '../layers/drawWalls';
 import { drawFogSelection, type FogSelectionState } from '../layers/drawOverlays';
 import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from '../layers/drawPings';
 import { drawSpiritLayer } from '../layers/drawBackground';
-import { drawDynamicLighting } from '../layers/drawLights';
+import { drawDynamicLighting, drawLightIcons } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
-import { TokenLayer, TokenType } from '@/types';
-import type { FogState, WallSegment } from '@/types/walls';
+import { TokenDisposition, TokenLayer, TokenType } from '@/types';
+import type { FogState, LightSource, WallSegment } from '@/types/walls';
 
 // ── Recording mock 2D context ────────────────────────────────────────────────
 
 interface RecordedCall {
   method: string;
   args: unknown[];
+  /** The fillStyle in force when a fillRect was recorded. */
+  fillStyle?: string;
 }
 
 type MockCtx = CanvasRenderingContext2D & { calls: RecordedCall[] };
@@ -63,7 +65,7 @@ function makeMockCtx(): MockCtx {
     stroke: record('stroke'),
     fill: record('fill'),
     clip: record('clip'),
-    fillRect: record('fillRect'),
+    fillRect(this: { fillStyle: unknown }, ...args: unknown[]) { calls.push({ method: 'fillRect', args, fillStyle: String(this.fillStyle) }); },
     strokeRect: record('strokeRect'),
     clearRect: record('clearRect'),
     drawImage: record('drawImage'),
@@ -100,7 +102,9 @@ function makeToken(id: string, overrides: Partial<Token> = {}): Token {
     id,
     characterId: null,
     name: `Token ${id}`,
-    imageUrl: '',
+    // A cached image always has an address in real use; the address decides
+    // whether cached art is drawn (an obscured token arrives without one).
+    imageUrl: `/api/assets/tokens/${id}`,
     position: { x: 0, y: 0 },
     size: { width: 1, height: 1 },
     layer: TokenLayer.TOKEN,
@@ -122,6 +126,7 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     tokens: [],
     tokenImages: new Map(),
     animatingTokens: new Map(),
+    heldAt: {},
     now: Date.now(),
     draggedToken: null,
     dragOffset: null,
@@ -174,6 +179,48 @@ describe('drawFog', () => {
     expect(ctx.calls).toHaveLength(0);
   });
 
+  it('paints a player\'s unrevealed cells fully opaque, so nothing under them shows through', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
+    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
+    expect(fills).toHaveLength(8);
+    for (const f of fills) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
+  });
+
+  it('keeps the DM\'s fog translucent, so the DM can still work under it', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: true,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 0.55)');
+  });
+
+  it('leaves the cells a player\'s own tokens stand on clear, even when unrevealed', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: false,
+      fogState: null,
+      revealedCells: new Set([0]),
+      exemptCells: new Set([4, 8]),
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    expect(count(ctx, 'fillRect')).toBe(6);
+  });
+
+  it('player fog never reads the full fog grid, only the revealed set', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: false,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    expect(ctx.calls).toHaveLength(0);
+  });
+
   it('DM fog uses the full fog grid, not revealedCells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
@@ -203,6 +250,18 @@ describe('drawTokens', () => {
     expect(drawIdx).toBeGreaterThan(clipIdx);
   });
 
+  // Someone else is carrying it: drawn where the frames put it, while the
+  // position that sight and explored memory read stays where it was.
+  it('draws a token someone is carrying where it is held', () => {
+    const firstArcX = (heldAt: Record<string, { x: number; y: number }>) => {
+      const ctx = makeMockCtx();
+      drawTokens(ctx, baseTokenState({ tokens: [makeToken('a')], tokenImages: new Map([['a', fakeImage]]), heldAt }), viewport3x3);
+      return ctx.calls.find((c) => c.method === 'arc')?.args[0];
+    };
+    expect(firstArcX({})).toBe(25);
+    expect(firstArcX({ a: { x: 2, y: 0 } })).toBe(125);
+  });
+
   it('full-art tokens clip to a rounded rect, not a circle', () => {
     const ctx = makeMockCtx();
     drawTokens(ctx, baseTokenState({
@@ -214,6 +273,51 @@ describe('drawTokens', () => {
     expect(seq.indexOf('roundRect')).toBeGreaterThanOrEqual(0);
     expect(seq.indexOf('clip')).toBeGreaterThan(seq.indexOf('roundRect'));
     expect(count(ctx, 'drawImage')).toBe(1);
+  });
+
+  it('an obscured token is a plain shape with a question mark, even when its art is cached', () => {
+    // A player receives it with no image address, as a plain creature with no
+    // disposition. The DM's preview holds the real art under the same id, so
+    // the address decides, not the cache.
+    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '', type: TokenType.NPC, disposition: null });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
+    expect(placeholderColor(veiled)).toBe('#78716c');
+  });
+
+  it('keeps an obscured token\'s own colour for the DM, who sees it as it is', () => {
+    // The grey the table sees comes from the mask (no kind, no disposition),
+    // not from the flag, so the DM's lettered circle stays blue for a
+    // character and red for a hostile.
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.PLAYER }))).toBe('#3b82f6');
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.NPC, disposition: TokenDisposition.HOSTILE }))).toBe('#ef4444');
+  });
+
+  it('draws the drag ghost from cached art only when the token has an address', () => {
+    // In Player Preview the dragged token is the masked one, whose id the
+    // DM's image cache still holds under the real art.
+    const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '' });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({
+      tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false,
+      draggedToken: veiled, dragOffset: { x: 0, y: 0 }, hoverCoords: { x: 1, y: 1 },
+    }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('marks an obscured token for the DM, who still sees its art', () => {
+    const veiled = makeToken('v', { obscured: true, imageUrl: '/api/assets/tokens/v' });
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: true }), viewport3x3);
+    expect(count(ctx, 'drawImage')).toBe(1);
+    expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
+
+    const plain = makeMockCtx();
+    drawTokens(plain, baseTokenState({ tokens: [makeToken('p', { imageUrl: '/api/assets/tokens/p' })], tokenImages: new Map([['p', fakeImage]]), isDM: true }), viewport3x3);
+    expect(plain.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(0);
   });
 
   it('players never see hidden tokens; the DM sees them', () => {
@@ -456,7 +560,7 @@ describe('drawWalls', () => {
       dragEndpoint: null,
       selectedEndpoint: null,
       lightingEnabled: false,
-      visPolygons: [],
+      canSee: () => true,
       ...overrides,
     };
   }
@@ -469,14 +573,17 @@ describe('drawWalls', () => {
     expect(count(ctx, 'arc')).toBe(1); // closed-door center dot
   });
 
-  it('players with lighting ON and no vision see no doors (LOS filtered)', () => {
+  it('players with lighting ON see no doors they cannot see (the rule says so)', () => {
     const ctx = makeMockCtx();
-    drawWalls(ctx, wallsState({
-      lightingEnabled: true,
-      visPolygons: [{ poly: { points: [] }, cx: 0, cy: 0 }],
-    }), viewport3x3);
-    // Door filtered by empty polygon; walls not drawn under lighting
+    drawWalls(ctx, wallsState({ lightingEnabled: true, canSee: () => false }), viewport3x3);
+    // Door filtered by the rule; walls not drawn under lighting
     expect(count(ctx, 'moveTo')).toBe(0);
+  });
+
+  it('players with lighting ON see a door the rule says they can see', () => {
+    const ctx = makeMockCtx();
+    drawWalls(ctx, wallsState({ lightingEnabled: true, canSee: () => true }), viewport3x3);
+    expect(count(ctx, 'arc')).toBe(1); // the closed-door dot
   });
 
   it('DM sees all segments and endpoint nodes while a wall tool is active', () => {
@@ -528,13 +635,18 @@ describe('computeVisionState', () => {
     expect(vision.tokenVision[0].poly.points.length).toBeGreaterThan(2);
   });
 
-  it('orders sources tokens-first (the door LOS filter relies on it)', () => {
-    const token = makeToken('a', { sightRadius: 2 } as Partial<Token>);
-    const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
-    const vision = computeVisionState([token], [light], [], viewport3x3);
-    expect(vision.all).toHaveLength(2);
-    expect(vision.all[0]).toBe(vision.tokenVision[0]);
-    expect(vision.all[1]).toBe(vision.lightVision[0]);
+  it('keeps every per-token list index-aligned with the tokens it was given', () => {
+    // The canvas pairs tokens with their sight and vision entries by index to
+    // build the viewers the visibility rule reads.
+    const a = makeToken('a', { position: { x: 0, y: 0 }, sightRadius: 2 } as Partial<Token>);
+    const b = makeToken('b', { position: { x: 2, y: 2 }, sightRadius: 0 } as Partial<Token>);
+    const vision = computeVisionState([a, b], [], [], viewport3x3);
+    expect(vision.tokenSight).toHaveLength(2);
+    expect(vision.tokenVision).toHaveLength(2);
+    expect(vision.tokenSight[0].cx).toBe(vision.tokenVision[0].cx);
+    expect(vision.tokenSight[1].cx).toBe(vision.tokenVision[1].cx);
+    expect(vision.tokenVision[0].poly.points.length).toBeGreaterThan(2); // has darkvision
+    expect(vision.tokenVision[1].poly.points).toHaveLength(0);           // has none
   });
 });
 
@@ -552,23 +664,27 @@ describe('computeVisionState', () => {
  * which a refactor could otherwise drop in silence.
  */
 describe('drawDynamicLighting', () => {
-  interface OpCall { method: string; op: string }
+  interface OpCall { method: string; op: string; fillStyle: string; src?: unknown }
 
-  /** A context that records the composite operation in force at each call. */
-  function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[] } {
+  /**
+   * A context that records the composite operation and fill style in force at
+   * each call, what each drawImage draws from, and every radial gradient made.
+   */
+  function makeOpRecorder(): { ctx: CanvasRenderingContext2D; ops: OpCall[]; gradients: number[][] } {
     const ops: OpCall[] = [];
+    const gradients: number[][] = [];
     const gradient = { addColorStop: () => {} };
     const ctx = {
       globalCompositeOperation: 'source-over',
-      fillStyle: '', filter: 'none', globalAlpha: 1,
-      createRadialGradient: () => gradient,
-    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string };
+      fillStyle: '', filter: 'none', globalAlpha: 1, imageSmoothingEnabled: true,
+      createRadialGradient: (...args: number[]) => { gradients.push(args); return gradient; },
+    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
-      'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage']) {
-      (ctx as unknown as Record<string, unknown>)[m] = () =>
-        ops.push({ method: m, op: ctx.globalCompositeOperation });
+      'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
+      (ctx as unknown as Record<string, unknown>)[m] = (...args: unknown[]) =>
+        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), src: args[0] });
     }
-    return { ctx, ops };
+    return { ctx, ops, gradients };
   }
 
   /** A holder whose canvas is already the right size, so ensureCanvas reuses it. */
@@ -580,28 +696,126 @@ describe('drawDynamicLighting', () => {
   const W = 150, H = 150;
   const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
 
-  function run(opts: { withLight: boolean }) {
+  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean }) {
     const main = makeOpRecorder();
     const lighting = makeOpRecorder();
     const coverage = makeOpRecorder();
     const lightOnly = makeOpRecorder();
+    const memoryMask = makeOpRecorder();
+    const memory = makeOpRecorder();
+    const explored = opts.withMemory ? ({ width: 3, height: 3 } as unknown as HTMLCanvasElement) : null;
+    const terrainCanvas = { width: W, height: H } as unknown as HTMLCanvasElement;
 
-    const token = makeToken('a', { sightRadius: 0 } as Partial<Token>);
-    const vision = computeVisionState([token], opts.withLight ? [light] : [], [], viewport);
+    const token = makeToken('a', { sightRadius: opts.sightRadius ?? 0 } as Partial<Token>);
+    const myTokens = opts.noTokens ? [] : [token];
+    const gi = opts.globalIllumination ?? false;
+    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], viewport, { globalIllumination: gi });
 
+    const lightHolder = holderFor(lightOnly.ctx, W, H);
+    const coverageHolder = holderFor(coverage.ctx, W, H);
     drawDynamicLighting(main.ctx, {
-      myTokens: [token],
+      myTokens,
       enabledLights: opts.withLight ? [light] : [],
       tokenVision: vision.tokenVision,
       tokenSight: vision.tokenSight,
       lightVision: vision.lightVision,
+      globalIllumination: gi,
       lightingCanvas: holderFor(lighting.ctx, W, H),
-      coverageCanvas: holderFor(coverage.ctx, W, H),
-      lightCanvas: holderFor(lightOnly.ctx, W, H),
+      coverageCanvas: coverageHolder,
+      lightCanvas: lightHolder,
+      explored,
+      terrainCanvas,
+      memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
+      memoryCanvas: holderFor(memory.ctx, W, H),
     }, viewport);
 
-    return { lightOnly, coverage };
+    return { main, lighting, lightOnly, coverage, memoryMask, memory, explored, lightCanvas: lightHolder.current, coverageCanvas: coverageHolder.current };
   }
+
+  // Remembered ground out of sight is dimmed by the memory pass, so it comes
+  // out of the darkness. Ground in sight is remembered too, though, and taking
+  // all of it out left dim light as clear as bright on any map that remembers:
+  // the darkness is cut by the explored raster less what is in sight now.
+  it('takes only remembered ground out of sight out of the darkness, so dim light in sight stays dim', () => {
+    const { lighting, lightOnly, explored, lightCanvas, coverageCanvas } = run({ withLight: false, withMemory: true });
+    const cuts = lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out');
+    expect(cuts.map((c) => c.src)).toEqual([coverageCanvas, lightCanvas]);
+    expect(lighting.ops.some((c) => c.method === 'drawImage' && c.src === explored)).toBe(false);
+    // The spent light canvas holds the explored raster, less what is in sight.
+    const scratch = lightOnly.ops.filter((c) => c.method === 'drawImage');
+    expect(scratch.filter((c) => c.src === explored && c.op === 'source-over')).toHaveLength(1);
+    expect(scratch.filter((c) => c.src === coverageCanvas && c.op === 'destination-out')).toHaveLength(3);
+  });
+
+  // Hard circles read as stickers on the map; each zone's edge now fades over
+  // a band centred on its radius, so bright blends into dim and dim into dark.
+  it('feathers each light zone into the next with a radial gradient across its edge', () => {
+    const { lightOnly } = run({ withLight: true });
+    // light: bright 1 square (50 px), dim 2 squares (100 px), at (75, 75)
+    const bands = lightOnly.gradients.map(([, , r0, , , r1]) => [r0, r1]);
+    expect(bands).toHaveLength(2);
+    for (const [[r0, r1], radius] of [[bands[0], 100], [bands[1], 50]] as const) {
+      expect(r0).toBeLessThan(radius);
+      expect(r1).toBeGreaterThan(radius);
+      expect((r0 + r1) / 2).toBeCloseTo(radius);
+    }
+  });
+
+  it('draws remembered ground as a grey, darker copy of the terrain, masked to what is out of sight', () => {
+    const { memoryMask, memory, main } = run({ withLight: false, withMemory: true });
+    // explored raster in, current coverage subtracted three times
+    expect(memoryMask.ops.filter((c) => c.method === 'drawImage' && c.op === 'source-over')).toHaveLength(1);
+    expect(memoryMask.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(3);
+    // terrain copy, desaturated, darkened, then kept only where the mask is
+    expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'source-over')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'saturation')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'source-over' && c.fillStyle === 'rgba(15, 12, 25, 0.65)')).toBe(true);
+    expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
+    expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(2); // memory, then the darkness
+  });
+
+  it('runs no memory pass when nothing is remembered', () => {
+    const { memoryMask, memory, lighting } = run({ withLight: false });
+    expect(memoryMask.ops).toHaveLength(0);
+    expect(memory.ops).toHaveLength(0);
+    expect(lighting.ops.filter((c) => c.method === 'drawImage' && c.op === 'destination-out')).toHaveLength(1);
+  });
+
+  const fillsAt = (r: { ops: OpCall[] }, alpha: string) =>
+    r.ops.filter((c) => c.method === 'fill' && c.op === 'lighter' && c.fillStyle === `rgba(255, 255, 255, ${alpha})`);
+
+  it('under global illumination, fills the whole line of sight as bright', () => {
+    const { coverage } = run({ withLight: false, globalIllumination: true });
+    expect(fillsAt(coverage, '1').length).toBeGreaterThan(0);
+    expect(fillsAt(coverage, '0.5')).toHaveLength(0);
+  });
+
+  it('with no darkvision, fills only the viewer\'s own square, and as dim', () => {
+    const { coverage } = run({ withLight: false });
+    expect(fillsAt(coverage, '1')).toHaveLength(0);
+    const dim = fillsAt(coverage, '0.5');
+    expect(dim).toHaveLength(1); // the own-square disc
+    expect(coverage.ops.some((c) => c.method === 'arc' && c.op === 'lighter')).toBe(true);
+  });
+
+  it('darkvision fills its reach as dim', () => {
+    const { coverage } = run({ withLight: false, sightRadius: 2 });
+    expect(fillsAt(coverage, '0.5').length).toBeGreaterThanOrEqual(2); // reach polygon + own square
+    expect(fillsAt(coverage, '1')).toHaveLength(0);
+  });
+
+  it('paints the darkness fully opaque', () => {
+    const { lighting } = run({ withLight: true });
+    expect(lighting.ops.some((c) => c.method === 'fillRect' && c.fillStyle === 'rgba(15, 12, 25, 1)')).toBe(true);
+    expect(lighting.ops.some((c) => c.fillStyle === 'rgba(15, 12, 25, 0.95)')).toBe(false);
+  });
+
+  it('with no viewer token, paints everything dark even when lights are on', () => {
+    const { main, coverage } = run({ withLight: true, noTokens: true });
+    expect(main.ops.filter((c) => c.method === 'fillRect' && c.fillStyle === 'rgba(15, 12, 25, 1)')).toHaveLength(1);
+    expect(main.ops.some((c) => c.method === 'drawImage')).toBe(false);
+    expect(coverage.ops).toHaveLength(0);
+  });
 
   it('intersects the light layer with the viewer line of sight', () => {
     const { lightOnly } = run({ withLight: true });
@@ -816,5 +1030,23 @@ describe('drawFogSelection', () => {
     }), viewport3x3);
     expect(count(ctx, 'fillRect')).toBe(0);
     expect(count(ctx, 'strokeRect')).toBe(0);
+  });
+});
+
+describe('drawLightIcons', () => {
+  const torch: LightSource = { id: 'l1', x: 100, y: 100, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+  const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 10, mapHeight: 10 };
+
+  it('draws a marker for each light in the DM view', () => {
+    const ctx = makeMockCtx();
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: null, lightMode: null, isDM: true }, viewport);
+    expect(ctx.calls.filter((c) => c.method === 'arc')).toHaveLength(1);
+  });
+
+  it('draws nothing in a player view, where a marker would give away every light on the map', () => {
+    // A DM previewing as a token at a projected table is showing the room a player's view.
+    const ctx = makeMockCtx();
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: 'l1', lightMode: 'light-select', isDM: false }, viewport);
+    expect(ctx.calls.filter((c) => ['arc', 'fill', 'stroke'].includes(c.method))).toHaveLength(0);
   });
 });

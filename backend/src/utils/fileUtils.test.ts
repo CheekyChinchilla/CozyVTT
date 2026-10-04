@@ -131,6 +131,13 @@ describe('getProxyLimitWarnings', () => {
     expect(warnings.some((w) => w.includes('NGINX_MAX_BODY_SIZE=255M'))).toBe(true);
   });
 
+  it('names the command that applies a changed .env, which a restart does not', () => {
+    const [warning] = loadWith({ MAX_AUDIO_SIZE_MB: '90', NGINX_MAX_BODY_SIZE: '55M' });
+
+    expect(warning).toContain('docker compose up -d');
+    expect(warning).not.toMatch(/\band restart\b/);
+  });
+
   it('warns about the Cloudflare 100 MB body cap for large limits', () => {
     const warnings = loadWith({ MAX_AUDIO_SIZE_MB: '250', NGINX_MAX_BODY_SIZE: '300M' });
 

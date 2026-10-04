@@ -23,22 +23,28 @@
 import express from 'express';
 import session from 'express-session';
 import { bodyParsers } from '../../middleware/bodyParsers';
+import { originCheck } from '../../middleware/originCheck';
 import { errorHandler } from '../../middleware/errorHandler';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
+import campaignMacroRoutes from '../../routes/campaignMacros';
+import campaignDocumentRoutes from '../../routes/campaignDocuments';
 import characterRoutes from '../../routes/characters';
 import characterTemplateRoutes from '../../routes/characterTemplates';
 import assetRoutes from '../../routes/assets';
 import creatureRoutes from '../../routes/creatures';
+import tokenTemplateRoutes from '../../routes/tokenTemplates';
 import userRoutes from '../../routes/users';
 import mapRoutes from '../../routes/maps';
 import configRoutes from '../../routes/config';
 import adminRoutes from '../../routes/admin';
+import invitationRoutes from '../../routes/invitations';
 
 export function createTestApp(): express.Express {
   const app = express();
 
   app.use(bodyParsers());
+  app.use(originCheck);
 
   // Memory store — no PostgreSQL needed for tests
   app.use(
@@ -60,14 +66,18 @@ export function createTestApp(): express.Express {
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/campaigns', campaignRoutes);
+  app.use('/api/campaigns', campaignMacroRoutes);
+  app.use('/api/campaigns', campaignDocumentRoutes);
   // Mounted separately in server.ts too — the creature routes hang off a
   // campaign path rather than the campaigns router, so they need their own line.
   app.use('/api/campaigns/:campaignId/creatures', creatureRoutes);
+  app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
   app.use('/api/campaigns/:campaignId/maps', mapRoutes);
   app.use('/api/characters', characterRoutes);
   app.use('/api/character-templates', characterTemplateRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/assets', assetRoutes);
+  app.use('/api/invitations', invitationRoutes);
 
   // Catch-all 404
   app.use('*', (_req, res) => {

@@ -52,7 +52,7 @@ describe('AssetGrid', () => {
 
     expect(await screen.findByAltText('Goblin')).toBeInTheDocument();
     expect(screen.getByAltText('Ogre')).toBeInTheDocument();
-    expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ type: AssetType.TOKEN }));
+    expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ type: AssetType.TOKEN, usable: true }));
   });
 
   it('builds thumbnail URLs from the type-specific serving route', async () => {

@@ -11,7 +11,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { canRollAsCharacter } from '@/services/permissions';
+import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -319,7 +319,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.DM.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -333,7 +333,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.PLAYER.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -347,7 +347,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.SPECTATOR.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -386,7 +386,7 @@ export default function CampaignRoster() {
                 handleCloseContextMenu();
               },
               // Rolling uses the sheet's modifiers, so it follows character
-              // ownership the same way Edit below does — not `true`, which let
+              // ownership, like Edit and Remove below — not `true`, which let
               // any member roll anyone's character.
               visible: canRollAsCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
             },
@@ -394,7 +394,7 @@ export default function CampaignRoster() {
               icon: Edit,
               label: 'Edit Character Sheet',
               onClick: handleEditCharacterSheet,
-              visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
+              visible: canEditCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
             },
             {
               icon: MapPin,
@@ -411,7 +411,7 @@ export default function CampaignRoster() {
               icon: X,
               label: 'Remove from Campaign',
               onClick: handleRemoveFromCampaign,
-              visible: user.id === contextMenu.characterUserId || userMembership.role === 'DM',
+              visible: canRemoveCharacterFromCampaign(user, { userId: contextMenu.characterUserId }, userMembership),
               className: 'text-danger-ink hover:bg-danger/10',
             },
           ]}
@@ -468,13 +468,15 @@ interface MemberCardProps {
   onCharacterRightClick: (e: React.MouseEvent, characterId: string, characterUserId: string) => void;
   isDM: boolean;
   currentUserId: string;
+  /** The viewer is a player, so may adjust their own characters' hit points; a spectator may not. */
+  canAdjustOwn: boolean;
   characterHpCache: Record<string, CharacterHpInfo>;
   onHpDelta: (characterId: string, delta: number) => void;
   /** Has at least one live connection to this campaign right now. */
   isOnline: boolean;
 }
 
-function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortName, onCharacterClick, onCharacterRightClick, isDM, currentUserId, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
+function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortName, onCharacterClick, onCharacterRightClick, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
   const RoleIcon = getRoleIcon(member.role);
 
   return (
@@ -589,7 +591,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             {/* HP bar + controls — shown when character has HP data and user can edit */}
             {(() => {
               const hp = characterHpCache[character.id] ?? character.hp;
-              const canAdjust = isDM || character.userId === currentUserId;
+              const canAdjust = isDM || (canAdjustOwn && character.userId === currentUserId);
               if (!hp || hp.max === 0) return null;
               const pct = Math.max(0, Math.min(1, hp.current / hp.max));
               const barColor = pct >= 0.75 ? 'bg-success'

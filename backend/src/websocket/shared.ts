@@ -7,6 +7,13 @@
 // ============================================
 
 import type { FogState, FogOperation } from '../types/walls';
+import type { Server } from 'socket.io';
+import type { AuthenticatedSocket } from './auth';
+import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
+import { campaignSockets, stillInCampaign } from './utils';
+import { prisma } from '../config/database';
+import { canReadMap } from '../services/permissions';
+import logger from '../utils/logger';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -43,6 +50,8 @@ export interface Token {
   displayMode?: 'pog' | 'top-down' | 'full-art';
   statBlock?: Record<string, unknown> | null;
   creatureTemplateId?: string | null;
+  /** Identity hidden from players who do not control it; see utils/tokenMask.ts. DM-only on write. */
+  obscured?: boolean;
 }
 
 /**
@@ -98,19 +107,45 @@ export class RateLimiter {
 // Rate limiter instances (shared across handler modules)
 export const diceRollLimiter = new RateLimiter();
 export const chatMessageLimiter = new RateLimiter();
-export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second per socket
+export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second per user
 
 // flood ceilings for the high-frequency map surfaces. Generous
 // enough that no legitimate interaction is ever throttled (a drag emits ~60
 // token.move/s; human wall/light edits are a few per second) — these exist to
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
-export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events/second per socket
-export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per socket
+export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events (start, frames, end)/second per user
+export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per user
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.
-export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per socket
+export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per user
+// Explored-memory reveals arrive as a player's vision moves; a client sends
+// at most a few a second. Over-limit reveals are dropped silently.
+export const explorationRevealLimiter = new RateLimiter(); // Max 10 reveals/second per user
+
+/**
+ * The key a per-socket flood ceiling is counted under: the user, so that
+ * opening more sockets does not multiply the budget. Thirty sockets of one
+ * player each at their own limit stalled the server; one player is one
+ * budget. Before authentication the socket id stands in.
+ */
+export function limiterKey(socket: { userId?: string; id: string }): string {
+  return socket.userId ?? socket.id;
+}
+
+// The requests a client makes when it opens a map or reconnects: walls,
+// lights, fog, explored memory, presence, the initiative order. A client
+// sends each once per load; a flood of any of them is database work for
+// nothing (the initiative reply alone runs several queries), so each is
+// answered at most a few times a second per user and the rest are dropped
+// silently, like the other ceilings.
+export const stateRequestLimiter = new RateLimiter();
+const STATE_REQUESTS_PER_SECOND = 5;
+
+export function stateRequestAllowed(socket: { userId?: string; id: string }, event: string): boolean {
+  return stateRequestLimiter.check(`${limiterKey(socket)}:${event}`, STATE_REQUESTS_PER_SECOND, 1000);
+}
 
 // Cleanup old events every 5 minutes. unref() so this housekeeping timer
 // never holds the process open on its own (matters for test runners and
@@ -122,6 +157,7 @@ setInterval(() => {
   tokenMoveLimiter.cleanup(1000); // Token moves: 1 second window
   mapEditLimiter.cleanup(1000); // Map edits: 1 second window
   pingLimiter.cleanup(10 * 1000); // Map pings: 10 second window
+  explorationRevealLimiter.cleanup(5 * 1000); // Explored-memory reveals: 5 second window
 }, 5 * 60 * 1000).unref();
 
 // ── Fog/Wall Helpers ─────────────────────────────────────────────────────────
@@ -173,6 +209,57 @@ export function applyWsFogOperation(fog: FogState, operation: FogOperation): voi
   }
 }
 
+/**
+ * Send a map's fog to every socket in the campaign, by role: the DM gets the
+ * full grid, everyone else their revealed cells. The socket handler and the
+ * REST route both go through this, so a reveal reaches the table the same
+ * way whichever path made it.
+ */
+export async function broadcastFogState(io: Server, campaignId: string, mapId: string, fog: FogState): Promise<void> {
+  // A prepared map's fog is the DM's until they switch to it (canReadMap).
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const sockets = await campaignSockets(io, campaignId);
+  for (const s of sockets) {
+    const role = (s as unknown as AuthenticatedSocket).role;
+    if (!canReadMap(role, mapId, campaign?.currentMapId)) continue;
+    if (role === 'DM') {
+      s.emit('fog:updated', { mapId, fogState: fog });
+    } else {
+      s.emit('fog:cells', {
+        mapId,
+        revealedCells: revealedCellIndices(fog),
+        fogCols: fog.fogCols,
+        fogRows: fog.fogRows,
+        cellPx: fog.cellPx,
+      });
+    }
+  }
+}
+
+/**
+ * Send a user's explored memory to those who show it: that user's own
+ * sockets in the campaign, so a second tab stays in step, and the DM sockets
+ * whose Player Preview is on that user (previewingMemoryOf), so the preview
+ * follows the memory as it grows. Each send is the whole memory, a few times
+ * a second while a player moves, so a DM socket not previewing them is not
+ * sent it. Nobody else: one player's memory is never another's to see.
+ */
+export async function broadcastExplorationState(
+  io: Server,
+  campaignId: string,
+  mapId: string,
+  userId: string,
+  cells: number[]
+): Promise<void> {
+  const sockets = await campaignSockets(io, campaignId);
+  for (const s of sockets) {
+    const member = s as unknown as AuthenticatedSocket;
+    if (member.userId === userId || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
+      s.emit('exploration:state', { mapId, userId, cells });
+    }
+  }
+}
+
 /** Derive the list of revealed cell indices from a FogState for player broadcasts. */
 export function revealedCellIndices(fog: FogState): number[] {
   return fog.revealed.reduce<number[]>((acc, v, i) => {
@@ -185,4 +272,71 @@ export function revealedCellIndices(fog: FogState): number[] {
 export interface HandlerContext {
   io: import('socket.io').Server;
   socket: import('./auth').AuthenticatedSocket;
+}
+
+/**
+ * Send every connected member the map as they are allowed to see it: the DM
+ * everything, each player only what their role, plane and sight permit. One
+ * resync path for a map switch, a spirit-realm crossing, a lighting or
+ * Global Illumination change, and a light, wall or door change on a lit map,
+ * so a player is never left holding a token the server would no longer send
+ * them, or missing one it now would. `players` leaves out the DM, who is
+ * sent everything whatever the light.
+ */
+export async function broadcastMapData(
+  io: Server,
+  campaignId: string,
+  map: MapData,
+  audience: 'everyone' | 'players' = 'everyone'
+): Promise<void> {
+  const members = await campaignSockets(io, campaignId);
+  const visibility = await getSpiritVisibilityBatch(
+    campaignId,
+    members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
+  );
+  for (const s of stillInCampaign(members, campaignId)) {
+    const member = s as unknown as AuthenticatedSocket;
+    if (audience === 'players' && member.role === 'DM') continue;
+    const spiritVisible = member.role === 'DM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
+    const mapData = filterMapData(map, member.role || 'PLAYER', spiritVisible, member.userId);
+    s.emit('map.changed', { mapId: map.id, mapData, spiritVisible });
+  }
+}
+
+/**
+ * On a lit map, which tokens a player is sent depends on the lights, walls
+ * and doors. After any of them changes, players are sent the map again as
+ * they can now see it: a creature a new light shows, or a door opens onto,
+ * appears at once, and one whose light goes out leaves their browser. Only
+ * for the map the table is on, since players are sent no other.
+ *
+ * Changes come in bursts (a wall drawn as two segments, a replace after a
+ * drag), so one re-send per map follows the last change of a burst by
+ * SIGHT_RESEND_MS. Best-effort: the change is saved by then, so a failure is
+ * logged and nothing else.
+ */
+const SIGHT_RESEND_MS = 150;
+const pendingSightResends = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function resendSightAfterChange(io: Server, campaignId: string, mapId: string): void {
+  const key = `${campaignId}:${mapId}`;
+  const pending = pendingSightResends.get(key);
+  if (pending) clearTimeout(pending);
+  const timer = setTimeout(() => {
+    pendingSightResends.delete(key);
+    void (async () => {
+      try {
+        const [map, campaign] = await Promise.all([
+          prisma.map.findUnique({ where: { id: mapId } }),
+          prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+        ]);
+        if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
+        await broadcastMapData(io, campaignId, map, 'players');
+      } catch (err) {
+        logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
+      }
+    })();
+  }, SIGHT_RESEND_MS);
+  timer.unref?.();
+  pendingSightResends.set(key, timer);
 }

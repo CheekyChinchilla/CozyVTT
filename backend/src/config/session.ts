@@ -6,6 +6,11 @@ import logger from '../utils/logger';
 const PgSession = connectPgSimple(session);
 
 // PostgreSQL connection pool for session storage
+// TODO(deploy): this pool has no 'error' listener. node-postgres emits an error
+// on the pool when an idle client's connection drops, as it does when Postgres
+// stops or restarts, and with no listener that error crashes the backend. Log
+// it with pgPool.on('error', ...); the pool opens a new client for the next
+// query.
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });

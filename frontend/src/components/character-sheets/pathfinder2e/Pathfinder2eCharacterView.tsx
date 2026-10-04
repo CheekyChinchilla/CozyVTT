@@ -38,6 +38,7 @@ import type {
   PF2eSpellSlots,
   SheetChrome,
 } from '../../../types/game-systems';
+import { isHexColor } from '@/utils/styleAllowlists';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
@@ -132,7 +133,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
+      } else if (isHexColor(data.themeColor)) {
         setCustomColorHex(data.themeColor);
         setIsCustomColor(true);
       }

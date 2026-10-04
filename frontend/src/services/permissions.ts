@@ -2,7 +2,7 @@
  * Permission Utilities
  */
 
-import type { User, Character, CampaignMembership } from '../types';
+import type { User, Character, CampaignMembership, Campaign } from '../types';
 
 /**
  * Check if a user can edit a character
@@ -13,9 +13,16 @@ import type { User, Character, CampaignMembership } from '../types';
  */
 export function canEditCharacter(
   user: User,
-  character: Character,
-  membership?: CampaignMembership
+  character: Pick<Character, 'userId'>,
+  membership?: Pick<CampaignMembership, 'role'>
 ): boolean {
+  // A spectator may read the characters they own but not edit them while
+  // they are a spectator in the character's campaign: a bound token follows
+  // the sheet on every screen, and the server refuses the save.
+  if (membership?.role === 'SPECTATOR') {
+    return false;
+  }
+
   // User owns the character
   if (character.userId === user.id) {
     return true;
@@ -27,6 +34,33 @@ export function canEditCharacter(
   }
 
   return false;
+}
+
+/**
+ * canEditCharacter for a page outside the campaign, which holds the
+ * character's campaign as the user's campaign list gives it (with their role
+ * in it) and no membership: the Characters page and the full editor. An
+ * owner who is a spectator in that campaign may not edit, as the server
+ * refuses the save.
+ */
+export function canEditCharacterIn(
+  user: User,
+  character: Pick<Character, 'userId'>,
+  campaign: Pick<Campaign, 'userRole' | 'memberships'> | null | undefined
+): boolean {
+  const role = campaign ? (campaign.userRole ?? campaign.memberships?.find((m) => m.userId === user.id)?.role) : undefined;
+  return canEditCharacter(user, character, role ? { role } : undefined);
+}
+
+/**
+ * Why `user` may not edit `character`, once canEditCharacterIn has said no.
+ * An owner is refused only for being a spectator in its campaign, so they are
+ * told that, not that only the owner may edit it.
+ */
+export function characterEditRefusal(user: Pick<User, 'id'>, character: Pick<Character, 'userId'>): string {
+  return character.userId === user.id
+    ? "You watch this character's campaign as a spectator, so you cannot edit the character there. Ask its DM to make you a player."
+    : 'You do not have permission to edit this character. Only its owner or the DM of its campaign can edit it.';
 }
 
 /**
@@ -82,6 +116,12 @@ export function canRollAsCharacter(
   character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
+  // A spectator is watching, not playing, even with a character of their own
+  // in the roster; the server refuses the roll.
+  if (membership?.role === 'SPECTATOR') {
+    return false;
+  }
+
   // User owns the character
   if (character.userId === user.id) {
     return true;
@@ -115,7 +155,7 @@ export function canReassignCharacter(membership?: CampaignMembership): boolean {
  */
 export function canRemoveCharacterFromCampaign(
   user: User,
-  character: Character,
+  character: Pick<Character, 'userId'>,
   membership?: CampaignMembership
 ): boolean {
   // User owns the character

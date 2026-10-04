@@ -14,15 +14,18 @@ import {
 
 describe('validatePasswordStrength', () => {
   it('accepts a strong password', () => {
-    const result = validatePasswordStrength('Str0ng!Pass');
+    const result = validatePasswordStrength('Str0ng!Passw0rd');
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it('rejects a password shorter than 8 characters', () => {
-    const result = validatePasswordStrength('Ab1!');
+  // Twelve, the same number every page that asks for a password shows. The
+  // server accepted eight, so the API and the profile page took passwords
+  // the setup wizard and the register page refused.
+  it('rejects a password shorter than 12 characters', () => {
+    const result = validatePasswordStrength('Str0ng!Pass');
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('Password must be at least 8 characters long');
+    expect(result.errors).toContain('Password must be at least 12 characters long');
   });
 
   it('rejects a password with no uppercase letter', () => {
@@ -55,8 +58,8 @@ describe('validatePasswordStrength', () => {
     expect(result.errors.length).toBeGreaterThan(1);
   });
 
-  it('accepts a password with exactly 8 characters that meets all requirements', () => {
-    const result = validatePasswordStrength('Abc1!xyz');
+  it('accepts a password with exactly 12 characters that meets all requirements', () => {
+    const result = validatePasswordStrength('Abc1!xyzxyz!');
     expect(result.valid).toBe(true);
   });
 

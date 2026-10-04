@@ -20,17 +20,13 @@ import type {
  * What a skill row can render.
  *
  * `CoC7eSkill` plus `language`, because the same row renders the entries of
- * `languageOther`, which carry one. A science specialisation fits too — its
- * `specialization` is required there and optional here.
+ * `languageOther`, which carry one, and `name`, which a custom skill carries. A
+ * science specialisation fits too: its `specialization` is required there and
+ * optional here.
  */
 interface Skill extends CoC7eSkill {
   language?: string;
-  /**
-   * Custom skills carry their own label. Neither `CoC7eSkill` nor the backend's
-   * `skillSchema` declares it, but it survives a save the same way the other
-   * undeclared keys do: Zod strips it on parse, and the route stores the body
-   * as sent rather than the parsed output.
-   */
+  /** A custom skill's own label; see `CoC7eCustomSkill`. */
   name?: string;
 }
 
@@ -190,6 +186,10 @@ const SkillRow: React.FC<{
       <div className="flex-1 min-w-0 flex items-center gap-1">
         <span className="text-sm text-sepia-900 truncate">{displayName}</span>
         {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0" />}
+        {/* TODO(ui): the Other Language and Science rows already carry the
+           language or specialization in displayName, so these print it a
+           second time, as in "Science (Physics) (Physics)". Show it here
+           only when displayName does not. */}
         {skill.specialization && (
           <span className="text-xs text-sepia-600 ml-1">({skill.specialization})</span>
         )}
@@ -280,6 +280,10 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                 );
               }
 
+              // TODO(sheets): the Firearms, Other Language and Science rows
+              // below get no onRoll, so they do not roll from the sheet as
+              // every other skill does. Pass onRoll to them as the Brawl row
+              // above does.
               if (skillName === 'firearms' && skill) {
                 // Firearms specializations
                 return (

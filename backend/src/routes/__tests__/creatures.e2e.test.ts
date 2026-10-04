@@ -380,4 +380,31 @@ describe('Creature template routes', () => {
       expect(res.status).toBe(403);
     });
   });
+
+  // The library is the DM's: a template holds a stat block and the DM's
+  // homebrew, and the client shows the library to the DM alone. Reading it was
+  // open to every member, which handed a player what the map keeps from them.
+  describe('reading the library as a player', () => {
+    it('cannot list creatures', async () => {
+      const res = await playerAgent.get(`/api/campaigns/${campaignId}/creatures`);
+      expect(res.status).toBe(403);
+    });
+
+    it('cannot read one creature', async () => {
+      const list = await dmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
+      expect(list.status).toBe(200);
+      const id = list.body.creatures[0]?.id;
+      expect(id).toBeDefined();
+      const res = await playerAgent.get(`/api/campaigns/${campaignId}/creatures/${id}`);
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.body)).not.toContain('statBlock');
+    });
+
+    it('cannot list or set favourites', async () => {
+      const list = await dmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
+      const id = list.body.creatures[0]?.id;
+      expect((await playerAgent.get(`/api/campaigns/${campaignId}/creatures/favorites/list`)).status).toBe(403);
+      expect((await playerAgent.post(`/api/campaigns/${campaignId}/creatures/${id}/favorite`)).status).toBe(403);
+    });
+  });
 });

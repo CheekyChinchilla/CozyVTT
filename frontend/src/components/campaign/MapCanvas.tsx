@@ -52,20 +52,44 @@ import {
   type AoEAnchor,
   type Viewport,
 } from './map/layers';
-import { createVisionCache, type VisionSource } from './map/vision';
+import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
-import { placeholderColor } from './map/layers/drawTokens';
-import { fogRectFromDrag, fogCellsInRect } from './map/fogSelection';
-import { rectFromDrag, segmentsInRect, type SelectionRect } from './map/mapSelection';
-import { translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
+import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
+import { exploredCellsFromCoverage, diffNew } from './map/exploration';
+import { rectFromDrag, segmentsInRect } from './map/mapSelection';
+import { useWallSelection } from './map/useWallSelection';
+import {
+  previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
+  encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
+  previewTokens,
+} from './map/previewSelection';
+import { useExploredMemory } from './map/useExploredMemory';
+import { useFogStateRequest } from './map/useFogStateRequest';
+import { releaseHeldToken } from './map/tokenHold';
+import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
+import mapService from '@/services/map.service';
+import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
+import { isSeen, type Viewer, type Lit, type InsideFn } from '@/utils/visibilityRule';
+import { isPointVisible } from '@/utils/raycasting';
+
+/** A player's revealed set before the server has answered: nothing revealed. */
+const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
+import { controlsToken } from '@/utils/tokenControl';
+import { dmTokenControls } from '@/utils/tokenControls';
+import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
+import { apiErrorMessage } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
+import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
+import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
@@ -75,18 +99,15 @@ import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
+import { mapImageState } from './map/mapImageState';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
-  if (!style) return '#9370DB';
-  if (style.startsWith('custom:')) {
-    const rest = style.slice(7);
-    const lastColon = rest.lastIndexOf(':');
-    return lastColon !== -1 ? rest.slice(0, lastColon) : rest;
-  }
-  if (style === 'ethereal') return '#c8deff';
-  if (style === 'shadow') return '#9b6dcc';
-  if (style === 'dream') return '#d4a0f0';
+  const { effect, customColor } = parseSpiritStyle(style);
+  if (customColor) return customColor;
+  if (effect === 'ethereal') return '#c8deff';
+  if (effect === 'shadow') return '#9b6dcc';
+  if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
 }
 
@@ -108,6 +129,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // socket handlers write there directly (outside React), and this
   // subscription is what re-renders the canvas per token change.
   const tokens = useTokenList();
+  const heldAt = useGameStore((s) => s.heldAt);
   // Whose turn it is, for the active-combatant ring. Narrow selector: this
   // changes on turn advance only, not when a combatant's HP ticks.
   const currentTurnTokenId = useCurrentTurnTokenId();
@@ -115,7 +137,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // the one pointing — the blue hover outline already marks that case.
   const peekTokenId = useMapPeekTokenId();
   const prefersReducedMotion = useReducedMotion();
-  const { socket } = useWebSocket();
+  // joinedEpoch is 0 until this connection has authenticated into the campaign,
+  // and a new number after each rejoin. Anything that asks the server for map
+  // state watches it, because a request sent before the campaign is joined is
+  // dropped unanswered.
+  const { socket, joinedEpoch } = useWebSocket();
   const { user } = useAuth();
   const isDM = userRole === 'DM';
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -140,6 +166,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const imageState = mapImageState(currentMap, imageLoaded, imageError);
 
   // Spirit layer image
   const [spiritLayerImage, setSpiritLayerImage] = useState<HTMLImageElement | null>(null);
@@ -174,7 +201,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [isMoveToMapLoading, setIsMoveToMapLoading] = useState(false);
 
   // Character sheet viewer state
-  const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null);
+  // The sheet opened from a token's menu, with the token it was opened from.
+  const [viewingSheet, setViewingSheet] = useState<{ character: Character; tokenId: string } | null>(null);
 
   // Roll picker (right-click token → Roll...). Carries the token as well as the
   // character because initiative belongs to the token on the map, not to the
@@ -222,7 +250,23 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  const revealOpacityRef = useFogRevealAnimation(() => markDirty('terrain'), fogState, revealedCells);
+  const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
+
+  // Tokens this viewer controls, by the server's definition (utils/tokenControl.ts).
+  const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id, userRole), [user?.id, userRole]);
+
+  // Whether manual fog applies on this map. Absent on an older payload means
+  // on, matching the column default. When fog is on and the player's revealed
+  // set has not arrived yet, everything is fogged: over-fogging for a moment
+  // beats flashing the whole map before the server answers. When fog is off,
+  // every consumer sees `null`, which has always meant "no fog".
+  const fogEnabled = currentMap?.fogEnabled ?? true;
+  const effectiveRevealedCells = useMemo<Set<number> | null>(
+    () => (fogEnabled ? revealedCells ?? EMPTY_REVEALED : null),
+    [fogEnabled, revealedCells]
+  );
+  const effectiveFogState = fogEnabled ? fogState : null;
+
   // Cache invalidation flag for the wall layer.
   const wallCacheValidRef = useRef(false);
 
@@ -237,23 +281,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null); // for pointer cursor in pan mode
   const [wallColor, setWallColor] = useState('#f97316'); // default orange
-  /**
-   * Which walls are selected. A set because the DM can gather several: click,
-   * Shift+click, a dragged box, or Ctrl+A. Most of what follows works on the
-   * whole set; the properties panel is the exception, since a type belongs to
-   * one wall at a time.
-   */
-  const [selectedWallIds, setSelectedWallIds] = useState<ReadonlySet<string>>(() => new Set());
-  /** The box being dragged out over empty space, in map pixels. */
-  const [wallMarquee, setWallMarquee] = useState<SelectionRect | null>(null);
-  const wallMarqueeRef = useRef<{ startX: number; startY: number; additive: boolean } | null>(null);
-  /** A drag that moves the selection, holding where it began so it can be undone. */
-  const wallMoveRef = useRef<{
-    startX: number;
-    startY: number;
-    preDragState: WallSegment[];
-    hasDragged: boolean;
-  } | null>(null);
   const [splitHoverPoint, setSplitHoverPoint] = useState<{ x: number; y: number; wallId: string } | null>(null);
   const wallEraseBrushActiveRef = useRef(false);
   const wallErasedIdsRef = useRef<Set<string>>(new Set());
@@ -268,17 +295,59 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [brushSize, setBrushSize] = useState(20);
   const wallBrushActiveRef = useRef(false);
   const wallBrushPointsRef = useRef<Array<{ x: number; y: number }>>([]);
-  const wallDragEndpointRef = useRef<{
-    targets: Array<{ segId: string; end: 'start' | 'end' }>;
-    point: { x: number; y: number };
-    preDragState: WallSegment[] | null;
-    hasDragged: boolean;
-  } | null>(null);
   const [nearEndpoint, setNearEndpoint] = useState(false);
-  const [selectedEndpoint, setSelectedEndpoint] = useState<{ x: number; y: number } | null>(null);
   const { toast, showToast, hideToast } = useToast();
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
+  const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
+
+  // Player Preview: the DM's canvas drawn through chosen eyes, a player's, one
+  // token's, or the whole party's. Those tokens supply the vision, the fog
+  // comes from the grid the DM already holds, and the same visibility rule
+  // decides what is drawn.
+  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
+  // The plane the previewed viewer is on, by the server's rule: a player whose
+  // token has crossed to the spirit layer is sent that plane and sees through
+  // that token, so the preview draws the spirit realm as their screen does.
+  const previewedPlane = useMemo(
+    () => previewPlane(previewSelection, tokens, campaign?.spiritLayerEnabled ?? false),
+    [previewSelection, tokens, campaign?.spiritLayerEnabled]
+  );
+  const previewOwn = useMemo(() => previewOwnFor(previewSelection, previewedPlane), [previewSelection, previewedPlane]);
+  // Whose tokens the preview shows whole; differs from sight only for the party.
+  const previewControls = useMemo(() => previewControlsFor(previewSelection), [previewSelection]);
+  const viewerOwn = previewing ? previewOwn : isOwnToken;
+  const previewChoices = useMemo(
+    () => previewOptions(campaign?.memberships ?? [], tokens),
+    [campaign?.memberships, tokens]
+  );
+  // A token preview whose token left the map (a switch, a deletion) falls
+  // back to the default choice, so the preview never runs with no viewer.
+  useEffect(() => {
+    if (!previewSelection) return;
+    const kept = reconcilePreviewSelection(previewSelection, campaign?.memberships ?? [], tokens);
+    if (kept !== previewSelection) setPreviewSelection(kept);
+  }, [previewSelection, campaign?.memberships, tokens]);
+  const previewRevealed = useMemo<Set<number> | null>(
+    () => (previewing && fogEnabled ? revealedSetFromFogState(fogState) : null),
+    [previewing, fogEnabled, fogState]
+  );
+  const viewerRevealed = previewing ? previewRevealed : effectiveRevealedCells;
+
+  // The cells the viewer's own tokens stand on, by the same rule the token
+  // layer and hit testing use to decide which cell a token is in. Player fog
+  // on the overlay leaves these clear, so you can always see where you stand.
+  const ownTokenCells = useMemo<Set<number>>(() => {
+    const cells = new Set<number>();
+    if (!currentMap || !viewerRevealed) return cells;
+    for (const t of tokens) {
+      if (!viewerOwn(t)) continue;
+      const fogRow = gridYToFogRow(t.position.y, t.size.height, currentMap.height);
+      const fogCol = gridXToFogCol(t.position.x, t.size.width);
+      cells.add(fogCellIndex(fogCol, fogRow, { fogCols: currentMap.width }));
+    }
+    return cells;
+  }, [currentMap, viewerRevealed, tokens, viewerOwn]);
 
   // Light source state
   const [lightSources, setLightSources] = useState<LightSource[]>([]);
@@ -300,9 +369,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
   const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
 
-  // Token socket handlers read/write live token state synchronously via
-  // useGameStore.getState() — no stale-closure ref bookkeeping needed.
-
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
   const wallSegmentsRef = useRef<WallSegment[]>([]);
@@ -315,6 +381,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Light coverage is built here first so it can be intersected with the
   // viewer's line of sight before joining the coverage mask.
   const lightOnlyOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // Explored memory pass: two screen-sized scratch canvases, allocated on first use.
+  const memoryMaskOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const memoryOffscreenRef = useRef<HTMLCanvasElement | null>(null);
 
   // Raw map-pixel position from last mousemove — ghost line uses this when snap is off.
   // screenToGrid() quantises to integer grid coords, so hoverCoords can't be used for free-draw.
@@ -373,9 +442,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return socket !== null && socket !== undefined && socket.getSocket() !== null;
   };
 
-  /**
-   * Point-to-line-segment distance (for door/wall hover hit testing).
-   */
+  // Put a held token back where it was picked up. The per-frame moves told
+  // every other client where the cursor went; without this release they keep
+  // showing the last cursor position until the token next moves.
+  const cancelHold = () => {
+    if (draggedToken && currentMap && canEmit()) {
+      socket!.emitTokenMove(releaseHeldToken(draggedToken, currentMap.id));
+    }
+    setDraggedToken(null);
+    setDragOffset(null);
+  };
+
   /**
    * Send the whole wall list to everyone and add it to the undo stack.
    *
@@ -391,41 +468,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
   }, [pushWallHistory, socket, currentMap]);
 
-  /** Move everything selected by an offset in map pixels. */
-  const moveSelectedWalls = useCallback((dxPx: number, dyPx: number) => {
-    if (selectedWallIds.size === 0) return;
-    const moved = wallSegments.map((seg) =>
-      selectedWallIds.has(seg.id) ? translateWallSegments([seg], dxPx, dyPx)[0] : seg
-    );
-    commitWalls(moved);
-  }, [selectedWallIds, wallSegments, commitWalls]);
-
-  const deleteSelectedWalls = useCallback(() => {
-    if (selectedWallIds.size === 0 || !currentMap) return;
-    commitWalls(wallSegments.filter((seg) => !selectedWallIds.has(seg.id)));
-    setSelectedWallIds(new Set());
-  }, [selectedWallIds, wallSegments, commitWalls, currentMap]);
-
-  /**
-   * The type shown in the wall panel: only when everything selected agrees,
-   * since one dropdown cannot show two answers.
-   */
-  const selectedSegmentType = (() => {
-    if (selectedWallIds.size === 0) return null;
-    const types = new Set(
-      wallSegments.filter((seg) => selectedWallIds.has(seg.id)).map((seg) => seg.type)
-    );
-    return types.size === 1 ? [...types][0] : null;
-  })();
-
-  const distToSegment = (px: number, py: number, seg: WallSegment): number => {
-    const dx = seg.x2 - seg.x1;
-    const dy = seg.y2 - seg.y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return Math.hypot(px - seg.x1, py - seg.y1);
-    const t = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
-    return Math.hypot(px - (seg.x1 + t * dx), py - (seg.y1 + t * dy));
-  };
+  const {
+    selectedWallIds, setSelectedWallIds,
+    wallMarquee, setWallMarquee, wallMarqueeRef,
+    wallMoveRef,
+    wallDragEndpointRef,
+    selectedEndpoint, setSelectedEndpoint,
+    moveSelectedWalls, deleteSelectedWalls, selectedSegmentType,
+  } = useWallSelection({ wallSegments, commitWalls });
+  // TODO(maintainability): the wall pointer and keyboard handlers further down
+  // belong in useWallSelection too. They still read a dozen MapCanvas closures
+  // (viewport, tool mode, the socket), so they stay here until those are lifted.
 
   /**
    * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
@@ -593,8 +646,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Player's own token on the current map — used as ruler origin for non-DM users
   const myToken = useMemo(() => {
     if (isDM || !tokens || !user) return null;
-    return tokens.find((t) => t.controlledBy === user.id) ?? null;
-  }, [tokens, user, isDM]);
+    return tokens.find((t) => controlsToken(t, user.id, userRole)) ?? null;
+  }, [tokens, user, isDM, userRole]);
 
   // Effective ruler origin: players use their token position, DM uses clicked point
   const effectiveRulerOrigin = isDM ? rulerOrigin : (myToken ? myToken.position : null);
@@ -913,13 +966,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const store = useGameStore.getState();
       const token = store.tokens[event.tokenId];
       if (!token) return;
+      // Glide from where it is drawn, which is where it is held while someone
+      // carries it.
+      const from = store.heldAt[event.tokenId] ?? token.position;
 
       // Start animation from current position to new position
       setAnimatingTokens((prev) => {
         const newMap = new Map(prev);
         newMap.set(event.tokenId, {
-          fromX: token.position.x,
-          fromY: token.position.y,
+          fromX: from.x,
+          fromY: from.y,
           toX: event.x,
           toY: event.y,
           startTime: Date.now(),
@@ -929,8 +985,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       });
 
       // Store writes are synchronous — subsequent handlers in the same
-      // macro-task (e.g. token:appeared for NPCs) see the correct state.
-      store.applyTokenMove(event.tokenId, { x: event.x, y: event.y });
+      // macro-task (e.g. token:appeared for NPCs) see the correct state. A
+      // drag frame only moves where the token is drawn; sight, lighting and
+      // explored memory follow it when it is put down.
+      store.receiveTokenMove(event.tokenId, { x: event.x, y: event.y }, event.dragging === true);
     };
 
     // Listen for token moved events.
@@ -965,12 +1023,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => clearTimeout(t);
   }, [currentMap?.id]);  
 
-  // Listen for map.changed events broadcast by the DM
+  // Listen for map.changed events broadcast by the DM.
+  //
+  // Through the client, never the raw socket: the client rebuilds its socket
+  // on a manual reconnect and re-attaches only what was registered with it.
+  // Bound to `getSocket()` this listener died with the first socket, so after
+  // the browser came back online a player never received another map change,
+  // and with it the DM's Hide or Obscure.
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
+    // TODO(play): suspected, not reproduced. This handler is registered once,
+    // so it reads userRole and campaign from the render that registered it,
+    // while the role can change without a reload, as in a DM handover. A former
+    // DM's handler then still skips the spirit-realm update below, which may
+    // leave a stale "Spirit Realm" badge, and a new DM's may play the crossing
+    // sound. Read both through refs, or list them as dependencies.
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
       setCurrentMap(mapData);
       useGameStore.getState().setTokens(mapData.tokens || []);
@@ -991,9 +1059,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     };
 
-    socketInstance.on('map.changed', handleMapChanged);
+    socket.onMapChanged(handleMapChanged);
     return () => {
-      socketInstance.off('map.changed', handleMapChanged);
+      socket.off('map.changed', handleMapChanged);
     };
   }, [socket, setCurrentMap]);
 
@@ -1003,8 +1071,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
     const handleSpiritLayerToggled = (data: SpiritLayerToggledBroadcast) => {
       // Play ethereal audio cue — ascending when entering, descending when leaving
@@ -1027,14 +1093,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       updateCampaignSpiritLayer(campaign?.spiritLayerEnabled ?? false, data.style);
     };
 
-    socketInstance.on('spirit_layer.toggled', handleSpiritLayerToggled);
-    socketInstance.on('spirit_layer.token.toggled', handleSpiritTokenToggled);
-    socketInstance.on('spirit_layer.style_changed', handleSpiritStyleChanged);
+    // Through the client's own table, so these survive a rebuilt socket.
+    socket.onSpiritLayerToggled(handleSpiritLayerToggled);
+    socket.onSpiritLayerTokenToggled(handleSpiritTokenToggled);
+    socket.onSpiritLayerStyleChanged(handleSpiritStyleChanged);
 
     return () => {
-      socketInstance.off('spirit_layer.toggled', handleSpiritLayerToggled);
-      socketInstance.off('spirit_layer.token.toggled', handleSpiritTokenToggled);
-      socketInstance.off('spirit_layer.style_changed', handleSpiritStyleChanged);
+      socket.off('spirit_layer.toggled', handleSpiritLayerToggled);
+      socket.off('spirit_layer.token.toggled', handleSpiritTokenToggled);
+      socket.off('spirit_layer.style_changed', handleSpiritStyleChanged);
     };
   }, [socket, updateCampaignSpiritLayer, campaign?.spiritLayerEnabled, playEtherealTransition]);
 
@@ -1044,16 +1111,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   useEffect(() => {
     if (!socket) return;
-    const socketInstance = socket.getSocket();
-    if (!socketInstance) return;
 
     const handleVibeUpdated = (data: VibeUpdatedBroadcast) => {
       updateVibe(data.period, data.hue, data.filter);
     };
 
-    socketInstance.on('vibe.updated', handleVibeUpdated);
+    // Through the client's own table, so this survives a rebuilt socket.
+    socket.onVibeUpdated(handleVibeUpdated);
     return () => {
-      socketInstance.off('vibe.updated', handleVibeUpdated);
+      socket.off('vibe.updated', handleVibeUpdated);
     };
   }, [socket, updateVibe]);
 
@@ -1072,10 +1138,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     replaceWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
-    // DMs: request full fog state; players: request revealed cells
     const socketInstance = socket?.getSocket();
     if (socketInstance) {
-      socketInstance.emit('fog:request_state', { mapId: currentMap.id });
       socketInstance.emit('walls:request', { mapId: currentMap.id });
       socketInstance.emit('lights:request', { mapId: currentMap.id });
     }
@@ -1087,6 +1151,43 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightOnlyOffscreenRef.current = null;
   }, [currentMap?.id]);  
 
+  // Fog state is requested whenever the map changes or fog is switched on for
+  // it (DMs get the full grid, players their revealed cells), once the socket
+  // can be answered and again after a reconnect. Off: nothing to ask for.
+  useFogStateRequest(socket, currentMap?.id, fogEnabled, joinedEpoch);
+
+  // Explored memory: the cells this viewer's vision has covered on this map,
+  // as the server remembers them. Whose memory depends on whose eyes: a
+  // player's own, or the player the DM is previewing as; the DM's own view
+  // explores as nobody.
+  const explorationEnabled = currentMap?.explorationEnabled ?? true;
+  const exploringAs = previewing ? previewMemoryUser(previewSelection, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
+  const { exploredCells, addExplored } = useExploredMemory(
+    socket,
+    currentMap?.id,
+    explorationEnabled && (currentMap?.lightingEnabled ?? false),
+    exploringAs,
+    joinedEpoch
+  );
+  const exploredScratchRef = useRef<HTMLCanvasElement | null>(null);
+  const lastExploredReportRef = useRef(0);
+  // The remembered cells as a raster, one pixel per grid square, rebuilt only
+  // when the set changes; the lighting layer scales it to the map.
+  const exploredRaster = useMemo<HTMLCanvasElement | null>(() => {
+    if (!currentMap || !exploredCells || exploredCells.size === 0) return null;
+    const raster = document.createElement('canvas');
+    raster.width = currentMap.width;
+    raster.height = currentMap.height;
+    const rctx = raster.getContext('2d');
+    if (!rctx) return null;
+    const img = rctx.createImageData(raster.width, raster.height);
+    for (const idx of exploredCells) {
+      if (idx >= 0 && idx < raster.width * raster.height) img.data[idx * 4 + 3] = 255;
+    }
+    rctx.putImageData(img, 0, 0);
+    return raster;
+  }, [exploredCells, currentMap?.width, currentMap?.height]);
+
   // ============================================
   // Wall & Fog WebSocket Listeners
   // ============================================
@@ -1095,6 +1196,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const socketInstance = socket.getSocket();
     if (!socketInstance) return;
 
+    // TODO(maps): the DM's page skips every wall event below, taking each for
+    // the echo of its own edit. A player's door toggle, or a wall change made
+    // through the REST API, then never reaches the DM's canvas or preview until
+    // reload, and the DM's next walls:replace sends the stale list and undoes
+    // that change for everyone. Skip only the echo of this page's own emit and
+    // apply the rest.
     const handleWallAdded = (data: { mapId: string; segment: WallSegment }) => {
       // DM already applied the change optimistically before emitting; skip the echo to
       // avoid reverting local state with stale data from the closed-over wallSegments.
@@ -1175,16 +1282,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     // Dynamic lighting toggle broadcast from DM
-    const handleLightingUpdated = (data: { mapId: string; lightingEnabled: boolean }) => {
+    // Every per-map flag arrives on one event, so a DM changing any of them
+    // in Edit Map or a control panel reaches every client at once.
+    const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean; explorationEnabled: boolean }) => {
       if (!currentMap || data.mapId !== currentMap.id) return;
-      setCurrentMap({ ...currentMap, lightingEnabled: data.lightingEnabled });
+      setCurrentMap({
+        ...currentMap,
+        lightingEnabled: data.lightingEnabled,
+        fogEnabled: data.fogEnabled,
+        globalIllumination: data.globalIllumination,
+        explorationEnabled: data.explorationEnabled,
+      });
     };
 
     socketInstance.on('token:appeared', handleTokenAppeared);
     socketInstance.on('token:disappeared', handleTokenDisappeared);
-    socketInstance.on('map:lighting:updated', handleLightingUpdated);
+    socketInstance.on('map:settings:updated', handleSettingsUpdated);
 
     // Light source events
+    // Same TODO(maps) as the wall handlers above: these skip every light event
+    // on the DM's page, so a light changed through the REST API does not reach
+    // the DM's canvas until reload.
     const handleLightAdded = (data: { mapId: string; light: LightSource }) => {
       if (isDM) return; // DM applied optimistically
       if (!currentMap || data.mapId !== currentMap.id) return;
@@ -1221,7 +1339,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socketInstance.off('token:appeared', handleTokenAppeared);
       socketInstance.off('token:disappeared', handleTokenDisappeared);
-      socketInstance.off('map:lighting:updated', handleLightingUpdated);
+      socketInstance.off('map:settings:updated', handleSettingsUpdated);
       socketInstance.off('wall:added', handleWallAdded);
       socketInstance.off('wall:removed', handleWallRemoved);
       socketInstance.off('wall:updated', handleWallUpdated);
@@ -1234,7 +1352,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id]);  
+  }, [socket, currentMap?.id, joinedEpoch]);
 
   // ============================================
   // Map pings — receive, name, and expire
@@ -1252,8 +1370,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [user?.id, user?.displayName, campaign?.memberships]);
 
   useEffect(() => {
-    const socketInstance = socket?.getSocket();
-    if (!socketInstance) return;
+    if (!socket) return;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -1278,9 +1395,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }, PING_DURATION_MS));
     };
 
-    socketInstance.on('map.pinged', handlePinged);
+    // Through the client's table, not the socket.io instance: a rebuilt
+    // socket after a reconnect gets the listener back only this way.
+    socket.onMapPinged(handlePinged);
     return () => {
-      socketInstance.off('map.pinged', handlePinged);
+      socket.off('map.pinged', handlePinged);
       timers.forEach(clearTimeout);
     };
   }, [socket, currentMap?.id, resolvePingerName]);
@@ -1475,6 +1594,41 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
 
   /**
+   * The visibility rule's inputs for a set of viewer tokens on this map, from
+   * the memoized raycasts. The token layer (what to draw in preview), the
+   * lighting layer and the door filter all ask this, so they cannot disagree.
+   */
+  const ruleFor = useCallback((myTokens: readonly Token[], viewport: Viewport) => {
+    const enabledLights = lightSources.filter((l) => l.enabled);
+    const globalIllumination = currentMap?.globalIllumination ?? true;
+    const vision = visionCacheRef.current.compute(myTokens, enabledLights, wallSegments, viewport, { globalIllumination });
+    const viewers: Viewer[] = myTokens.map((t, i) => ({
+      cx: vision.tokenSight[i].cx,
+      cy: vision.tokenSight[i].cy,
+      sight: vision.tokenSight[i].poly,
+      darkvisionPx: (t.sightRadius ?? 0) * viewport.gridSize,
+      selfPx: (Math.max(t.size.width, t.size.height) / 2) * viewport.gridSize,
+    }));
+    const lits: Lit[] = enabledLights.map((l, i) => ({
+      cx: l.x,
+      cy: l.y,
+      reach: vision.lightVision[i].poly,
+      brightPx: l.brightRadius * viewport.gridSize,
+      dimPx: l.dimRadius * viewport.gridSize,
+    }));
+    const inside: InsideFn = (p, poly) => poly.points.length >= 3 && isPointVisible(p, poly);
+    // Closed doors lie exactly on a sight polygon's boundary, so each viewer
+    // tests the point nudged 2px toward itself, as the door filter always has.
+    const canSee = (x: number, y: number) => viewers.some((v) => {
+      const dx = v.cx - x;
+      const dy = v.cy - y;
+      const d = Math.hypot(dx, dy) || 1;
+      return isSeen({ x: x + (dx / d) * 2, y: y + (dy / d) * 2 }, [v], lits, globalIllumination, inside);
+    });
+    return { vision, enabledLights, globalIllumination, canSee };
+  }, [lightSources, wallSegments, currentMap?.globalIllumination]);
+
+  /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
    * spirit imagery. Static during a token drag. The three layers stack
    * terrain → tokens → overlay, which reproduces the old single-canvas draw
@@ -1510,11 +1664,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = userRole === 'DM';
+    const renderIsDM = isDM && !previewing;
     // isInSpiritRealm is true if the campaign-wide toggle is on OR this
-    // specific non-DM player has personally crossed into the spirit realm.
+    // specific non-DM player has personally crossed into the spirit realm. A
+    // preview is in it when the previewed viewer is.
     const spiritActive = campaign?.spiritLayerEnabled ?? false;
-    const isInSpiritRealm = spiritActive || (userRole !== 'DM' && playerSpiritVisible);
+    const isInSpiritRealm = previewing
+      ? previewedPlane === 'spirit'
+      : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
 
     // 1. Map image (Material Plane)
     drawMapImage(ctx, {
@@ -1529,14 +1686,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       drawGrid(ctx, { gridColor }, viewport);
     }
 
-    // 3. Manual fog of war (rendered before spirit layer and tokens so they
-    //    appear above fog)
-    drawFog(ctx, {
-      isDM: renderIsDM,
-      fogState,
-      revealedCells,
-      revealOpacity: revealOpacityRef.current,
-    }, viewport);
+    // 3. The DM's translucent fog, under the spirit layer and tokens so they
+    //    stay visible through it. A player's fog is opaque and has to cover
+    //    walls, doors and light glows too, so it is drawn on the overlay.
+    if (renderIsDM) {
+      drawFog(ctx, {
+        isDM: true,
+        fogState: effectiveFogState,
+        revealedCells: null,
+        revealOpacity: revealOpacityRef.current,
+      }, viewport);
+    }
 
     // 4. Spirit layer image (the Ethereal Plane)
     if (spiritLayerImage) {
@@ -1551,7 +1711,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1577,25 +1737,37 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = userRole === 'DM';
+    const renderIsDM = isDM && !previewing;
+
+    // In Player Preview only the tokens that player would have are drawn:
+    // their own, and what the visibility rule says they see. Hidden and
+    // off-plane tokens, which the server never sends a player, are dropped.
+    let drawn = tokens;
+    if (previewing) {
+      const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+    }
 
     // 5. Tokens (+ drag ghost)
     drawTokens(ctx, {
-      tokens,
+      tokens: drawn,
       tokenImages,
       animatingTokens,
+      heldAt,
       now: Date.now(),
-      draggedToken,
+      // In a preview the ghost is the token as the viewer is sent it, or
+      // nothing when the viewer would not have it at all.
+      draggedToken: previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken,
       dragOffset,
       hoverCoords,
       hoverTokenId: hoverToken?.id ?? null,
-      revealedCells,
+      revealedCells: viewerRevealed,
       isDM: renderIsDM,
       dmShowSpiritTokens,
       dmViewBothPlanes,
       spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
       characterHpCache,
-      isOwnToken,
+      isOwnToken: viewerOwn,
       currentTurnTokenId,
       // Held at mid-breath under reduced motion, where no pulse loop runs.
       pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
@@ -1603,7 +1775,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, draggedToken, dragOffset, hoverCoords, hoverToken, revealedCells, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1630,45 +1802,62 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = userRole === 'DM';
+    const renderIsDM = isDM && !previewing;
 
     // 6. Dynamic lighting — raycast visibility darkness over tokens.
     //    DM always sees all; "Preview player view" simulates player vision.
     //    The vision polygons also feed the walls layer's door LOS filter.
     const lightingEnabled = currentMap.lightingEnabled ?? false;
-    let visPolygons: VisionSource[] = [];
-    if (lightingEnabled) {
-      const renderAsPlayer = !renderIsDM || dmPreviewPlayerView;
-      if (renderAsPlayer) {
-        const myTokens = tokens.filter((t) => {
-          if (renderIsDM && dmPreviewPlayerView) return true; // DM preview: use all tokens
-          return isOwnToken(t);
-        });
-        const enabledLights = lightSources.filter((l) => l.enabled);
-        // Memoized: only sources whose position/radius changed —
-        // or all sources when a wall was edited — actually recompute.
-        const vision = visionCacheRef.current.compute(myTokens, enabledLights, wallSegments, viewport);
-        visPolygons = vision.all;
-        drawDynamicLighting(ctx, {
-          myTokens,
-          enabledLights,
-          tokenVision: vision.tokenVision,
-          tokenSight: vision.tokenSight,
-          lightVision: vision.lightVision,
-          lightingCanvas: lightingOffscreenRef,
-          coverageCanvas: lightCoverageOffscreenRef,
-          lightCanvas: lightOnlyOffscreenRef,
-        }, viewport);
+    // Whether this viewer can make out a point, by the shared visibility rule.
+    // Everything is seen until lighting says otherwise.
+    let canSee: (x: number, y: number) => boolean = () => true;
+    if (lightingEnabled && !renderIsDM) {
+      const myTokens = tokens.filter(viewerOwn);
+      const rule = ruleFor(myTokens, viewport);
+      canSee = rule.canSee;
+      drawDynamicLighting(ctx, {
+        myTokens,
+        enabledLights: rule.enabledLights,
+        tokenVision: rule.vision.tokenVision,
+        tokenSight: rule.vision.tokenSight,
+        lightVision: rule.vision.lightVision,
+        globalIllumination: rule.globalIllumination,
+        lightingCanvas: lightingOffscreenRef,
+        coverageCanvas: lightCoverageOffscreenRef,
+        lightCanvas: lightOnlyOffscreenRef,
+        explored: explorationEnabled ? exploredRaster : null,
+        terrainCanvas: terrainCanvasRef.current,
+        memoryMaskCanvas: memoryMaskOffscreenRef,
+        memoryCanvas: memoryOffscreenRef,
+      }, viewport);
+
+      // Report what this viewer has just seen, at most every 300 ms, from the
+      // coverage mask just built, to whoever's memory this is: the player's
+      // own, or the player the DM is previewing. A preview writes too, so a
+      // token the DM moves for an absent player still remembers its ground.
+      // The party and an uncontrolled token explore as nobody, and write
+      // nothing.
+      const now = Date.now();
+      if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
+        && now - lastExploredReportRef.current >= 300) {
+        lastExploredReportRef.current = now;
+        const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
+        const fresh = seen ? diffNew(exploredCells, seen) : [];
+        if (fresh.length > 0) {
+          addExplored(fresh);
+          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
+        }
       }
-      // DM (not in preview) sees everything — skip fog entirely
     }
 
-    // 7. DM light source icons (visible in player preview too, so DM can edit)
-    if (renderIsDM) {
+    // 7. DM light source markers, in the DM's own view only: a preview is a
+    //    player's view, and a marker would give away every light on the map
+    if (isDM) {
       drawLightIcons(ctx, {
         lights: lightSources,
         selectedLightId,
         lightMode,
+        isDM: renderIsDM,
       }, viewport);
     }
 
@@ -1685,11 +1874,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       dragEndpoint: wallDragEndpointRef.current?.point ?? null,
       selectedEndpoint,
       lightingEnabled,
-      visPolygons,
+      canSee,
     }, viewport);
 
     // 9. DM wall-tool overlays
-    if (renderIsDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
+    if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
       drawWallDrawOverlay(ctx, {
         wallInProgress,
         hoverMapPx: hoverMapPxRef.current,
@@ -1699,10 +1888,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         findWallAtPoint,
       }, viewport);
     }
-    if (renderIsDM && wallMode === 'wall-split' && splitHoverPoint) {
+    if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
       drawSplitPreview(ctx, splitHoverPoint, viewport);
     }
-    if (renderIsDM && wallMode === 'wall-erase') {
+    if (isDM && wallMode === 'wall-erase') {
       drawEraseOverlay(ctx, {
         hoverMapPx: hoverMapPxRef.current,
         eraseRadius: WALL_ERASE_RADIUS,
@@ -1710,14 +1899,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         wallSegments,
       }, viewport);
     }
-    if (renderIsDM && wallMode === 'wall-brush') {
+    if (isDM && wallMode === 'wall-brush') {
       drawBrushOverlay(ctx, {
         points: wallBrushPointsRef.current,
         brushSize,
         hoverMapPx: hoverMapPxRef.current,
       }, viewport);
     }
-    if (renderIsDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
+    if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
       drawPolygonOverlay(ctx, {
         points: polygonPoints,
         hoverMapPx: hoverMapPxRef.current,
@@ -1778,13 +1967,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     //     so a ping into an unlit corner is still visible. (The turn ring
     //     makes the opposite trade on purpose: it lives on the token layer
     //     so a hidden token's ring stays hidden.)
+    // Manual fog for a player covers everything drawn so far on this layer
+    // and the layers beneath: artwork, tokens, walls, doors and light glows.
+    // Nothing under an unrevealed cell shows, except the cells the player's
+    // own tokens stand on. Pings stay above it: a ping is a deliberate
+    // signal from someone at the table, not a discovery.
+    if (!renderIsDM) {
+      drawFog(ctx, {
+        isDM: false,
+        fogState: null,
+        revealedCells: viewerRevealed,
+        exemptCells: ownTokenCells,
+        revealOpacity: revealOpacityRef.current,
+      }, viewport);
+    }
+
     if (pings.length > 0) {
       drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
     }
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1806,7 +2010,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, fogState, revealedCells, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -1819,7 +2023,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, previewing, previewSelection]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -1838,7 +2042,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
 
   // ============================================
   // Token Hit Testing
@@ -1851,13 +2055,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * vision source, and by the visibility context below. It was written out
    * twice, identically, in two draw callbacks; one definition now.
    */
-  const isOwnToken = useCallback(
-    (t: Token): boolean =>
-      t.controlledBy === user?.id ||
-      !!(t.characterId && campaign?.characters?.find((c) => c.id === t.characterId && c.userId === user?.id)),
-    [user?.id, campaign?.characters]
-  );
-
   /**
    * What this viewer can see — the same rule the token layer draws by.
    *
@@ -1867,18 +2064,49 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const tokenView = useMemo(
     () => ({
       isDM: userRole === 'DM',
-      revealedCells,
+      revealedCells: effectiveRevealedCells,
       isOwnToken,
       dmShowSpiritTokens,
       mapWidth: currentMap?.width ?? 0,
       mapHeight: currentMap?.height ?? 0,
     }),
-    [userRole, revealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
+    [userRole, effectiveRevealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
   );
 
   /**
    * Check if a grid coordinate is within a token's bounds
    */
+  /**
+   * The token the hover panel may name. In a preview that is only what the
+   * preview draws, by the same shown-token rule and the previewed fog: the
+   * DM's own lookup would name a hidden, unlit or fogged creature to a table
+   * watching the projector.
+   */
+  const getHoverTokenAt = useCallback(
+    (gridX: number, gridY: number): Token | null => {
+      if (!currentMap) return null;
+      if (!previewing) return pickTokenAt(tokens, gridX, gridY, tokenView);
+      const viewport: Viewport = {
+        zoom: mapControls.zoom,
+        panOffset: mapControls.panOffset,
+        gridSize: currentMap.gridSize,
+        mapWidth: currentMap.width,
+        mapHeight: currentMap.height,
+      };
+      const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+      const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+      return pickTokenAt(shown, gridX, gridY, {
+        isDM: false,
+        revealedCells: viewerRevealed,
+        isOwnToken: viewerOwn,
+        dmShowSpiritTokens,
+        mapWidth: currentMap.width,
+        mapHeight: currentMap.height,
+      });
+    },
+    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
+  );
+
   const getTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
@@ -1902,22 +2130,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         return false;
       }
 
-      // Player can move tokens they are assigned as controller (NPC tokens with controlledBy)
-      if (token.controlledBy && token.controlledBy === user?.id) {
-        return true;
-      }
-
-      // Player can only move their own character's token
-      if (token.characterId) {
-        // Find the character associated with this token
-        const character = campaign.characters?.find((c) => c.id === token.characterId);
-        if (character) {
-          // Check if current user owns this character
-          return character.userId === user?.id;
-        }
-      }
-
-      return false;
+      // A player moves the tokens they control, the same rule the server
+      // applies to the move; a character binding alone is not control, and a
+      // spectator controls nothing.
+      return controlsToken(token, user?.id, userRole);
     },
     [campaign, userRole, user?.id]
   );
@@ -2207,6 +2423,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
+    // TODO(maps): this checks isDM and not previewing, so during a player-view
+    // preview, where no light markers are drawn, a click still places, selects
+    // or drags a light with nothing on screen to show it. Ignore the light
+    // tool while previewing.
     // Light tool: place or select/drag
     if (lightMode && isDM) {
       const mapPx = screenToMapPx(screenX, screenY);
@@ -2249,6 +2469,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
+    // TODO(maps): a door is found by distance alone. A player can open one none
+    // of their tokens can see, a click in darkness answers "This door is
+    // locked." for a door they had no way to know of, and a spectator gets the
+    // toggle, applied here before the server refuses it, which leaves their
+    // page out of step. Offer the toggle only to players and the DM, and only
+    // for doors the viewer can see; the server's wall:update needs the same
+    // sight check.
     // Door interaction: click near a door segment to toggle open/closed (all roles)
     if (!wallMode && !fogMode && !lightMode) {
       const mapPx = screenToMapPx(screenX, screenY);
@@ -2324,9 +2551,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           characterHpCache
         );
         if (blockedBy.length > 0) {
-          showToast(`${blockedBy[0].name} is already standing there.`, 'info');
-          setDraggedToken(null);
-          setDragOffset(null);
+          showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
+          cancelHold();
           markDirty('tokens');
           return;
         }
@@ -2631,7 +2857,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
       // the cursor was over something else entirely. Reading the square under
       // the cursor also shows what you are about to land on.
-      setHoverToken(getTokenAtPosition(gridCoords.x, gridCoords.y));
+      setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
 
       // Ghost follows the cursor — tokens layer only.
       markDirty('tokens');
@@ -2640,7 +2866,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapControls.handleDrag(e);
 
       // Update hover token
-      const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
+      const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
       setHoverToken(token);
 
       // Pan moves the whole scene → repaint every layer.
@@ -2785,10 +3011,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const handleMouseLeave = () => {
     // Cancel token drag if in progress
-    if (draggedToken) {
-      setDraggedToken(null);
-      setDragOffset(null);
-    }
+    if (draggedToken) cancelHold();
 
     // Stop map panning
     mapControls.stopDrag();
@@ -2884,11 +3107,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const combat = useGameStore.getState().combat;
     if (!combat.combatants.some((c) => c.tokenId === token.id)) return false;
     if (isDM) return true;
-    // Spectators are watching, not playing; and once combat is under way a
-    // re-roll re-sorts the order and can skip a turn, so that is the DM's call.
-    // The server enforces both.
-    if (userRole === 'SPECTATOR' || combat.active) return false;
-    return !!user && token.controlledBy === user.id;
+    // Once combat is under way a re-roll re-sorts the order and can skip a
+    // turn, so that is the DM's call; and a spectator controls no token. The
+    // server enforces both.
+    if (combat.active) return false;
+    return controlsToken(token, user?.id, userRole);
   };
 
   /**
@@ -2906,7 +3129,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socket.emitInitiativeRoll({
       tokenId,
       mapId: currentMap.id,
-      characterName: token?.name,
+      characterName: token ? tokenPublicName(token) : undefined,
     });
   };
 
@@ -2920,10 +3143,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setDoorContextMenu(null);
 
     // Cancel any picked-up token (right-click cancels movement)
-    if (draggedToken) {
-      setDraggedToken(null);
-      setDragOffset(null);
-    }
+    if (draggedToken) cancelHold();
 
     // Get grid + screen coordinates of click
     const rect = canvasRef.current.getBoundingClientRect();
@@ -3036,7 +3256,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         ref={layersRef}
         className="absolute inset-0"
         style={{
-          filter: activeVibeEffect?.filter ?? undefined,
+          // Re-checked here as well as on the server: a filter is CSS.
+          filter: activeVibeEffect && isSafeVibeFilter(activeVibeEffect.filter) ? activeVibeEffect.filter : undefined,
           transition: 'filter 3s ease',
         }}
       >
@@ -3082,7 +3303,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundColor: activeVibeEffect.hue,
+            backgroundColor: isHexColor(activeVibeEffect.hue) ? activeVibeEffect.hue : undefined,
             opacity: 0.12,
             mixBlendMode: 'multiply',
             transition: 'background-color 3s ease, opacity 3s ease',
@@ -3096,41 +3317,30 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {/* Spirit Layer CSS overlay — atmospheric effect of the Ethereal Plane */}
       {currentMap?.spiritLayerUrl && spiritLayerImage && (
         (() => {
-          const isDM = userRole === 'DM';
+          // A preview shows the overlay as the previewed viewer sees it.
+          const isDM = userRole === 'DM' && !previewing;
           const spiritActive = campaign?.spiritLayerEnabled ?? false;
           // Non-DM players are in spirit realm if globally enabled OR their personal token is there
-          const playerEffectivelyInSpirit = spiritActive || playerSpiritVisible;
+          const playerSpiritPersonal = previewing ? previewedPlane === 'spirit' : playerSpiritVisible;
+          const playerEffectivelyInSpirit = spiritActive || playerSpiritPersonal;
           // Show overlay only when spirit realm is actually visible to this viewer
           if (!isDM && !playerEffectivelyInSpirit) return null;
           // DM in single-plane material view: no overlay (they're not perceiving the spirit realm)
           if (isDM && !dmViewBothPlanes && !spiritActive) return null;
 
-          const rawStyle = campaign?.spiritLayerStyle ?? 'wispy';
-          let overlayClass = 'spirit-overlay-wispy';
-          let inlineStyle: React.CSSProperties = {};
-
-          if (rawStyle === 'ethereal') overlayClass = 'spirit-overlay-ethereal';
-          else if (rawStyle === 'shadow') overlayClass = 'spirit-overlay-shadow';
-          else if (rawStyle === 'dream') overlayClass = 'spirit-overlay-dream';
-          else if (rawStyle.startsWith('custom:')) {
-            // Format: "custom:#hexcolor:effectId" (effectId optional, legacy = wispy)
-            const rest = rawStyle.slice(7);
-            const lastColon = rest.lastIndexOf(':');
-            const customColor  = lastColon !== -1 ? rest.slice(0, lastColon) : rest;
-            const customEffect = lastColon !== -1 ? rest.slice(lastColon + 1) : 'wispy';
-            const validEffects = ['wispy', 'ethereal', 'shadow', 'dream'];
-            const effectClass  = validEffects.includes(customEffect) ? customEffect : 'wispy';
-            // Apply the chosen effect class for its animations + ::before/::after particles/shimmer.
-            // The inline background overrides the named class's base colour with the custom hue.
-            overlayClass = `spirit-overlay-${effectClass}`;
-            inlineStyle = {
-              background: `${customColor}44`, // custom hue at ~27% alpha as base tint
-            };
-          }
+          // The style is validated on both write paths and re-checked here:
+          // anything outside the allowlist reads as plain wispy.
+          const { effect, customColor } = parseSpiritStyle(campaign?.spiritLayerStyle);
+          // The named class carries the animations and ::before/::after particles;
+          // a custom colour only overrides its base tint.
+          const overlayClass = `spirit-overlay-${effect}`;
+          const inlineStyle: React.CSSProperties = customColor
+            ? { background: `${customColor}44` } // custom hue at ~27% alpha as base tint
+            : {};
 
           // When DM views spirit realm that's hidden from most players, reduce overlay intensity
           // Full opacity when fully active (global toggle or personal crossover)
-          const overlayOpacity = (!isDM && !spiritActive && playerSpiritVisible)
+          const overlayOpacity = (!isDM && !spiritActive && playerSpiritPersonal)
             ? 1.0   // player's own token is in spirit realm — full immersion
             : (!spiritActive ? 0.4 : 1.0); // DM hint view vs full view
 
@@ -3155,7 +3365,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-      {userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible) && (
+      {(previewing
+        ? previewedPlane === 'spirit'
+        : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
         <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-sm animate-pulse-soft">
           <Ghost className="w-3.5 h-3.5 text-spirit-purple" />
           <span className="text-xs font-semibold text-spirit-purple">Spirit Realm</span>
@@ -3257,6 +3469,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         {userRole === 'DM' && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
+            {/* TODO(ui): while dmShowSpiritTokens is true the tokens are
+               shown, yet the title says "Hiding spirit tokens (click to
+               show)"; both branches say click to show. It should read
+               "Spirit tokens shown, click to hide" in that case. */}
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
@@ -3273,6 +3489,23 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         <DmToolPanelContainer containerRef={containerRef}>
           <DmFogControls
             fogMode={fogMode}
+            fogEnabled={fogEnabled}
+            onResetExploration={(currentMap.lightingEnabled ?? false) && explorationEnabled
+              ? () => { socket?.getSocket()?.emit('exploration:reset', { mapId: currentMap.id }); }
+              : undefined}
+            onFogEnabledChange={async (enabled) => {
+              if (!campaign || !currentMap) return;
+              // Shown at once; the settings broadcast confirms it for every
+              // client, this one included. Put back if the save fails.
+              const before = currentMap;
+              setCurrentMap({ ...currentMap, fogEnabled: enabled });
+              if (!enabled) { setFogMode(null); cancelFogDrag(); }
+              try {
+                await mapService.updateMap(campaign.id, currentMap.id, { fogEnabled: enabled });
+              } catch {
+                setCurrentMap(before);
+              }
+            }}
             onCollapse={() => {
               setFogMode(null);
               cancelFogDrag();
@@ -3469,17 +3702,56 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setSelectedLightId(null);
             }}
             lightingEnabled={currentMap.lightingEnabled ?? false}
+            globalIllumination={currentMap.globalIllumination ?? true}
+            onGlobalIlluminationChange={async (on) => {
+              if (!campaign) return;
+              const before = currentMap;
+              setCurrentMap({ ...currentMap, globalIllumination: on });
+              try {
+                await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
+              } catch {
+                setCurrentMap(before);
+              }
+            }}
             placementDefaults={lightPlacementDefaults}
             onDefaultsChange={setLightPlacementDefaults}
           />
         </DmToolPanelContainer>
       )}
 
+      {/* TODO(maps): the button that ends a preview renders only while
+         lighting or fog is on, and nothing else resets dmPreviewPlayerView,
+         so turning both off during a preview leaves the DM in the player's
+         view until one is turned back on or the page reloads. End the
+         preview when both go off, or keep the button while previewing. */}
       {/* DM Preview Player View — shown when dynamic lighting is enabled */}
-      {userRole === 'DM' && currentMap?.lightingEnabled && (
-        <div className="absolute bottom-20 right-2 z-30">
+      {userRole === 'DM' && ((currentMap?.lightingEnabled ?? false) || fogEnabled) && (
+        <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
+          {dmPreviewPlayerView && (
+            <select
+              value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
+              onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
+              aria-label="Player or token to preview as"
+              className="px-2 py-1.5 rounded text-xs bg-ink/85 text-paper border border-ink/40"
+            >
+              {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
+              {(['players', 'tokens'] as const).map((group) => {
+                const entries = previewChoices.filter((o) => o.group === group);
+                if (entries.length === 0) return null;
+                return (
+                  <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
+                    {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                );
+              })}
+            </select>
+          )}
           <button
-            onClick={() => setDmPreviewPlayerView((prev) => !prev)}
+            onClick={() => {
+              const next = !dmPreviewPlayerView;
+              if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
+              setDmPreviewPlayerView(next);
+            }}
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
               dmPreviewPlayerView
                 ? 'bg-info/30 text-info-ink border-info/50'
@@ -3487,7 +3759,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 // chip over the map on both light and dark themes
                 : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
             }`}
-            title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview how players see this map with dynamic lighting'}
+            title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
             aria-label="Toggle DM player view preview"
           >
             {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
@@ -3619,8 +3891,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         // sheet, which every campaign member can already read; an NPC's own hit
         // points are the DM's to reveal, so they appear only once the HP bar is
         // turned on. Same rule the bar on the token itself draws by.
-        const hp = visibleTokenHp(hoverToken, characterHpCache, userRole === 'DM');
-        const image = tokenImages.get(hoverToken.id);
+        const hp = visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing);
+        const image = cachedTokenImage(hoverToken, tokenImages);
         const conditions = hoverToken.conditions ?? [];
         // `undefined` means "not in the turn order" — the row is left out
         // rather than shown blank. `null` means it is, but nothing has rolled.
@@ -3661,7 +3933,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2 mb-1.5">
                   <span className="text-sm font-semibold text-brand-ink truncate">
-                    {hoverToken.name}
+                    {tokenDisplayName(hoverToken)}
                   </span>
                   <span className="text-xs text-stone-gray font-mono shrink-0">
                     ({hoverCoords.x}, {hoverCoords.y})
@@ -3714,7 +3986,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       })()}
 
       {/* Image Loading State */}
-      {currentMap && !imageLoaded && !imageError && (
+      {imageState === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-moss-green/30 border-t-moss-green rounded-full animate-spin mx-auto mb-2" />
@@ -3723,8 +3995,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </div>
       )}
 
+      {/* No Picture State: an imported map whose picture the export left out */}
+      {imageState === 'missing' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
+          <div className="glass-panel p-4 text-center max-w-sm">
+            <p className="text-sm text-brand-ink mb-1">This map has no picture.</p>
+            <p className="text-xs text-stone-gray">
+              {isDM
+                ? 'Choose one in Edit Map; its walls, tokens and fog are kept.'
+                : 'The DM has to choose one before the map can be shown.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Image Error State */}
-      {imageError && (
+      {imageState === 'error' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="glass-panel p-4 text-center">
             <p className="text-sm text-danger-ink mb-2">{imageError}</p>
@@ -3734,7 +4020,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* No Map State */}
-      {!currentMap && (
+      {imageState === 'none' && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <Grid3x3 className="w-12 h-12 text-brand-ink/30 mx-auto mb-3" />
@@ -3777,10 +4063,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   const characterId = contextMenu.token.characterId!;
+                  const tokenId = contextMenu.token.id;
                   setContextMenu(null);
                   try {
                     const { character } = await api.getCharacter(characterId);
-                    setViewingCharacter(character);
+                    setViewingSheet({ character, tokenId });
                   } catch (err) {
                     console.error('Failed to load character sheet:', err);
                   }
@@ -3813,8 +4100,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           {userRole === 'DM' && (() => {
             const cmToken = contextMenu.token;
             const cmType = cmToken.type ?? (cmToken.characterId ? TokenType.PLAYER : TokenType.NPC);
-            const isObject = cmType === TokenType.OBJECT;
-            const isNpcOrObject = cmType === TokenType.NPC || cmType === TokenType.OBJECT;
+            const controls = dmTokenControls(cmType);
             return (
             <>
               {/* Roll... — NPC tokens only. The `characterId` check is what
@@ -3837,8 +4123,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Edit Token — NPC and Object tokens */}
-              {isNpcOrObject && (
+              {/* Edit Token — every token type. The editor shows a player token
+                  its name, image, darkvision and controller; the NPC-only
+                  sections stay hidden. */}
+              {(
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
@@ -3872,31 +4160,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   const token = contextMenu.token;
                   setContextMenu(null);
                   try {
-                    // Place copy 1 cell offset, clamped to map bounds
-                    const newX = Math.min(token.position.x + 1, currentMap.width - token.size.width);
-                    const newY = Math.min(token.position.y + 1, currentMap.height - token.size.height);
-                    // Reset HP to full for the copy
-                    const freshHp = token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null;
+                    // Place the copy one cell along, clamped to the map
+                    const position = clampTokenPosition(
+                      { x: token.position.x + 1, y: token.position.y + 1 },
+                      token.size,
+                      currentMap
+                    );
                     const result = await api.addToken(campaign.id, currentMap.id, {
-                      name: token.name,
-                      imageUrl: token.imageUrl,
-                      position: { x: newX, y: newY },
-                      size: token.size,
-                      layer: token.layer,
-                      visible: token.visible,
-                      controlledBy: token.controlledBy,
-                      type: token.type,
-                      disposition: token.disposition,
-                      hp: freshHp,
-                      showHpBar: token.showHpBar,
-                      notes: token.notes,
-                      initiative: token.initiative,
+                      ...tokenCopyRequest(token, position),
+                      // A copy starts fresh and belongs to nobody's character:
+                      // two tokens on one sheet would follow the same hit
+                      // points and both count as that player's own.
+                      characterId: null,
+                      controlledBy: copyController(token.controlledBy, campaign?.memberships),
+                      hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
                       conditions: [],
                     });
                     useGameStore.getState().addToken(result.token);
                     socket?.emitMapChange(currentMap.id);
                   } catch (err) {
-                    console.error('Failed to duplicate token:', err);
+                    // A copy is a new token, so an older one whose fields predate
+                    // validation is refused: say which, so the DM can fix it in Edit Token.
+                    showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
                   }
                 }}
               >
@@ -3924,16 +4209,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       statBlock: token.statBlock || null,
                       sightRadius: token.sightRadius ?? null,
                     });
+                    showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
                   } catch (err) {
-                    console.error('Failed to save token as template:', err);
+                    showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
                   }
                 }}
               >
                 Save as Template
               </button>
 
-              {/* Visibility toggle — Object tokens: Reveal/Hide */}
-              {isObject && (
+              {/* Hide from / Reveal to players — every token; see utils/tokenControls.ts */}
+              {controls.hide && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
@@ -3941,11 +4227,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-                      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-                      socket?.emitMapChange(currentMap.id);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
                     } catch (err) {
-                      console.error('Failed to toggle object visibility:', err);
+                      // TODO(ui): this failure, and those of Obscure, Send to
+                      // Spirit Realm and Return to Material Plane below, go only
+                      // to the console, so the DM sees the menu close and nothing
+                      // change. Show them in a toast with apiErrorMessage(err),
+                      // as Save as Template above does.
+                      console.error('Failed to toggle token visibility:', err);
                     }
                   }}
                 >
@@ -3953,8 +4242,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Spirit Realm toggle — Player and NPC tokens only (not Objects) */}
-              {!isObject && (
+              {/* Obscure / Reveal identity — every token; see utils/tokenControls.ts */}
+              {controls.obscure && (
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  onClick={async () => {
+                    if (!campaign?.id || !currentMap?.id) return;
+                    const token = contextMenu.token;
+                    setContextMenu(null);
+                    try {
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+                    } catch (err) {
+                      console.error('Failed to toggle token identity:', err);
+                    }
+                  }}
+                >
+                  {cmToken.obscured ? 'Reveal Identity' : 'Obscure Identity'}
+                </button>
+              )}
+
+              {/* Spirit Realm toggle — creatures cross planes, scenery does not */}
+              {controls.crossPlanes && (
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}
@@ -4035,25 +4343,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                                 setContextMenuMoveToMapOpen(false);
                                 setIsMoveToMapLoading(true);
                                 try {
-                                  const position = {
-                                    x: Math.min(token.position.x, targetMap.width - token.size.width),
-                                    y: Math.min(token.position.y, targetMap.height - token.size.height),
-                                  };
-                                  await api.addToken(campaign.id, targetMap.id, {
-                                    name: token.name,
-                                    imageUrl: token.imageUrl,
-                                    position,
-                                    size: token.size,
-                                    layer: token.layer,
-                                    visible: token.visible,
-                                    controlledBy: token.controlledBy,
-                                  });
-                                  await api.deleteToken(campaign.id, currentMap.id, token.id);
+                                  // One request: the server moves the token as it is and
+                                  // tells everyone on this map itself.
+                                  await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
                                   useGameStore.getState().removeToken(token.id);
-                                  socket?.emitMapChange(currentMap.id);
-                                  socket?.emitMapChange(targetMap.id);
                                 } catch (err) {
-                                  console.error('Failed to move token to map:', err);
+                                  showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
                                 } finally {
                                   setIsMoveToMapLoading(false);
                                 }
@@ -4094,15 +4389,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* Character Sheet Viewer (opened from token context menu) */}
-      {viewingCharacter && campaign && (() => {
+      {viewingSheet && campaign && (() => {
         const membership = campaign.memberships?.find((m) => m.userId === user?.id);
         if (!membership) return null;
         return (
           <CharacterSheetViewerModal
-            character={viewingCharacter}
+            character={viewingSheet.character}
             campaignId={campaign.id}
             membership={membership}
-            onClose={() => setViewingCharacter(null)}
+            // Rolls from it reach the whole table, as from Roll... below.
+            publicName={characterRollPublicName(tokens.find((t) => t.id === viewingSheet.tokenId), user?.id)}
+            onClose={() => setViewingSheet(null)}
           />
         );
       })()}
@@ -4116,6 +4413,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
+          // The dice log goes to the whole table, so an obscured token's
+          // rolls are filed under the name everyone may see.
+          publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
           onRoll={(expression, purpose, characterName) =>
             socket?.emitDiceRoll({ expression, purpose, characterName })
           }
