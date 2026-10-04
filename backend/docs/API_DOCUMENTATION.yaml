@@ -7211,8 +7211,9 @@ paths:
                   customCount:
                     type: integer
                     description: >-
-                      Creature templates with source 'custom', across the whole
-                      instance rather than this campaign alone.
+                      Creature templates with source 'custom' that this
+                      campaign's library shows: those with no campaign plus
+                      this campaign's own.
                   seedInProgress:
                     type: boolean
         '403':

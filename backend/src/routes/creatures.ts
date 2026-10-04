@@ -28,9 +28,9 @@ let seedInProgress = false;
 // Any campaign member can check.
 // ============================================
 
-router.get('/seed/status', campaignMember, async (_req: AuthenticatedRequest, res: Response) => {
+router.get('/seed/status', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const status = await getSrdSeedStatus(prisma);
+    const status = await getSrdSeedStatus(prisma, req.params.campaignId);
     return res.json({
       ...status,
       seedInProgress,
