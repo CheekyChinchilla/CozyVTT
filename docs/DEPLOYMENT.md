@@ -1279,55 +1279,31 @@ Alternatives in the same family: **Tailscale Funnel** (P2P, no third-party termi
 
 ---
 
-## Hosting the API Documentation
+## The API Documentation
 
-CozyVTT ships an OpenAPI 3.0 spec at [`backend/docs/API_DOCUMENTATION.yaml`](../backend/docs/API_DOCUMENTATION.yaml). It documents every endpoint with examples, error responses, and schemas. You have three reasonable options for what to do with it:
+CozyVTT keeps a description of its HTTP routes in [`backend/docs/API_DOCUMENTATION.yaml`](../backend/docs/API_DOCUMENTATION.yaml) (an OpenAPI 3.0 file), and of its live-connection events in [`backend/docs/WEBSOCKET_DOCUMENTATION.md`](../backend/docs/WEBSOCKET_DOCUMENTATION.md). They are for developers. Running an instance needs neither, and there is nothing to set up or host.
 
-### Option A — Publish publicly (recommended for community instances)
+They describe what the web client calls. That is **not a public API**: it is not versioned, carries no compatibility promise, and can change in any release. A program can still use it by signing in as a user, and it then acts with that user's permissions. The [Community Projects](../README.md#community-projects) section of the README says more.
 
-Host the rendered Swagger UI / Redoc at a public URL like `/docs`. This is what every major API provider does (Stripe, GitHub, etc.) and is **not a security risk** — every endpoint requires authentication or proper RBAC, and obscuring routes is not a meaningful defense against automated scanners.
+### Reading it
 
-To render the docs to a static HTML page:
+The YAML file is plain text and reads fine in any editor. For a formatted view, either:
 
-```bash
-cd backend
-npx @redocly/cli build-docs docs/API_DOCUMENTATION.yaml --output public/docs.html
-```
+- open [editor.swagger.io](https://editor.swagger.io) and paste the file in, or
+- with Node.js installed, build a single page from the CozyVTT folder and open it in your browser:
 
-Then serve `public/docs.html` from your Nginx config:
+  ```bash
+  npx @redocly/cli build-docs backend/docs/API_DOCUMENTATION.yaml --output api-docs.html
+  ```
 
-```nginx
-location = /docs {
-    alias /path/to/backend/public/docs.html;
-    default_type text/html;
-}
-```
+There is no need to serve it from your instance. The bundled nginx only sees its own configuration and certificates, so a page on the host is not reachable through it anyway.
 
-### Option B — Behind authentication
+### Hiding it is not a protection
 
-If you'd rather not advertise your instance's endpoints, serve the docs only to logged-in admins:
+The routes are the same whether the file is published or not, since the web client's own code shows them to anyone who loads the page. What protects an instance is:
 
-```nginx
-location = /docs {
-    auth_request /api/auth/me;
-    alias /path/to/backend/public/docs.html;
-}
-```
-
-This calls `/api/auth/me` on every docs request; non-authenticated users get a 401 redirect to login.
-
-### Option C — Don't host them on the instance at all
-
-Keep the spec in the repo and reference it from a separate docs site (e.g. `cozyvtt.com/docs`). Self-hosters who never need API access get a slightly smaller attack surface and a cleaner Nginx config.
-
-### A note on enumeration
-
-Whichever option you pick, do **not** rely on hiding the spec as a security measure. Real protection comes from:
-
-- Per-endpoint authentication and RBAC checks (built in — see `backend/src/middleware/`)
-- Rate limiting (sign-in 5 failures/15min, new accounts 10/hour, uploads 30/min, general API 300/min)
-- Magic-byte file validation (not MIME header)
-- Strong session secrets and Argon2id password hashing
-- Helmet.js CSP headers in production
-
-If those are in place, documenting the API is a feature, not a risk.
+- every request is checked on the server: that the caller is signed in, their role in the campaign, and that they may touch what they ask for (`backend/src/middleware/` and `backend/src/services/permissions.ts`)
+- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, and 30 uploads a minute per user
+- uploads checked by what the file contains, not by its name or the type it claims
+- Argon2id password hashing and a strong `SESSION_SECRET`
+- security headers on every response: from helmet on the API, and from the bundled nginx on the app page
