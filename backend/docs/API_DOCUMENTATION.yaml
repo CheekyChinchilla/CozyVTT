@@ -2158,7 +2158,10 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
       responses:
         '200':
-          description: Shared documents, in the order they were shared
+          description: >-
+            Documents shared in by link come first, oldest share first,
+            followed by the campaign's own documents not also shared by link,
+            oldest upload first.
           content:
             application/json:
               schema:
@@ -2182,8 +2185,9 @@ paths:
         sharing cannot be used to grant a table access to a stranger's private
         file from nothing but its id. A document the caller can read but did
         not upload answers 403: being shared into one campaign does not let a
-        member who runs another pass it on. Admins may share anything. Sharing
-        a document twice is not an error.
+        member who runs another pass it on. Admins may share anything. An
+        asset that is not a document answers 404. Sharing a document that is
+        already shared answers 201 with the existing link, unchanged.
       operationId: linkCampaignDocument
       security:
         - cookieAuth: []
@@ -2241,7 +2245,10 @@ paths:
       tags:
         - Documents
       summary: Stop sharing a document with a campaign
-      description: DM only. The document itself is untouched; only the share is removed.
+      description: >-
+        DM only. The document itself is untouched; only the share is removed.
+        A campaign's own document (`shared: false` in the list) has no share
+        to remove and answers 404, as does an id that is not shared here.
       operationId: unlinkCampaignDocument
       security:
         - cookieAuth: []
@@ -2308,8 +2315,10 @@ paths:
       description: >
         The expression is rolled once and the result discarded, to prove it can be
         rolled at all. An expression that only looks like dice — `2d6+`, `dddd` —
-        is refused here rather than becoming a button that fails every time it is
-        pressed. Limited to 50 per campaign per player.
+        is refused here, with 400, and does not become a button that fails every
+        time it is pressed. Both fields are trimmed and must not be empty. Any
+        member, spectators included, may save macros. A player may keep 50 per
+        campaign; saving another answers 400.
       operationId: createDiceMacro
       security:
         - cookieAuth: []
@@ -2327,9 +2336,11 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
                   maxLength: 60
                 expression:
                   type: string
+                  minLength: 1
                   maxLength: 200
       responses:
         '201':
@@ -2379,6 +2390,8 @@ paths:
                     $ref: '#/components/schemas/DiceMacro'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     put:
@@ -2386,9 +2399,10 @@ paths:
         - Dice Macros
       summary: Rename a macro or correct its expression
       description: >
-        Either field alone is a valid edit; a body with neither is refused so a
-        mistake is visible rather than silent. A new expression is checked the
-        same way it was on creation, so an edit cannot make a macro unrollable.
+        Either field alone is a valid edit; a body with neither answers 400. A
+        new expression is checked the same way it was on creation, so an edit
+        cannot make a macro unrollable. A macro belonging to someone else
+        answers 404.
       operationId: updateDiceMacro
       security:
         - cookieAuth: []
@@ -2409,9 +2423,11 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
                   maxLength: 60
                 expression:
                   type: string
+                  minLength: 1
                   maxLength: 200
       responses:
         '200':
@@ -2427,12 +2443,15 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
       tags:
         - Dice Macros
       summary: Delete a macro
+      description: Only the caller's own macro; anyone else's answers 404.
       operationId: deleteDiceMacro
       security:
         - cookieAuth: []
@@ -2456,6 +2475,8 @@ paths:
                     type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -2933,7 +2954,10 @@ paths:
       tags:
         - Characters
       summary: List user characters
-      description: Get all characters owned by authenticated user
+      description: >-
+        Every character the caller owns, newest first, each with its
+        `campaign` as `{ id, name }` (null when unassigned). Characters owned
+        by other members of the caller's campaigns are not included.
       operationId: listCharacters
       security:
         - cookieAuth: []
@@ -2956,22 +2980,42 @@ paths:
       summary: Create character
       description: |
         Create a new character.
-        - If `campaignId` is provided and `gameSystem` is not specified, the
-          character auto-inherits the campaign's `gameSystem`.
-        - If `gameSystem` is provided, character data is validated against that
-          system's Zod schema.
-        - If `gameSystem` is null, no validation occurs (flexible character).
-        - If `campaignId` is provided, the caller must already be a member of
-          that campaign; a non-member gets 403 and nothing is created. The
-          character is added to the caller's membership as well as carrying the
-          `campaignId` column, in one transaction — both are needed, because the
-          campaign roster and the token permission checks read the membership,
-          not the column.
-        - A `tokenImageUrl` on this server must be an asset's exact address
-          (`/api/assets/<kind>/<id>`), and one naming an existing asset must
-          name one the caller can read; otherwise the answer is 403 and nothing
-          is created. An address naming an asset that no longer exists is
-          accepted.
+        - `name` is trimmed and must be 1 to 200 characters.
+        - If `campaignId` is provided and `gameSystem` is omitted or null, the
+          character inherits the campaign's `gameSystem`. A `gameSystem`
+          sent together with `campaignId` is not checked against the
+          campaign's own system, so a character can be created straight into a
+          campaign it does not match; `POST /api/characters/{id}/assign`
+          refuses that combination, but this endpoint does not.
+        - For a typed game system, `name` is written into the sheet's own name
+          field (`characterName`, or `investigatorName` for
+          `CALL_OF_CTHULHU_7E`) and the caller's display name into
+          `playerName`, overwriting whatever `data` held there, before the
+          sheet is validated. A flexible sheet is stored as sent.
+        - With a game system (sent or inherited), `data` is validated against
+          that system's sheet schema and stored as the schema's parsed output,
+          so a key the schema does not declare is dropped. Sheet fields from
+          before version 1.3.0 are moved to their current names first. The
+          top-level fields each system requires are: `DND_5E` `class`,
+          `level`, `race`, `proficiencyBonus`, `stats`; `PATHFINDER_2E`
+          `class`, `level`, `ancestry`, `heritage`, `attributes`;
+          `SHADOWRUN_6E` `metatype`, `archetype`, `attributes`;
+          `CALL_OF_CTHULHU_7E` `occupation`, `era`, `characteristics` (the
+          name field is filled in from `name`). `GET
+          /api/characters/templates/{gameSystem}/blank` returns a sheet that
+          passes.
+        - With no game system, `data` is not validated (flexible character).
+        - If `campaignId` is provided, the campaign must exist (404) and the
+          caller must already be a member of it (403); otherwise nothing is
+          created. The character is added to the caller's membership as well
+          as carrying the `campaignId` column, in one transaction, because the
+          campaign roster and the token permission checks read the membership.
+        - `tokenImageUrl` is optional and nullable; an empty string is stored
+          as null. A bare asset id is stored as `/api/assets/tokens/<id>`; any
+          other value must be an asset's exact address,
+          `/api/assets/<maps|tokens|avatars|audio|documents>/<id>` with nothing
+          after the id. The asset must be one the caller can read, or one that
+          does not exist; otherwise the answer is 403 and nothing is created.
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -2986,6 +3030,8 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -2999,12 +3045,14 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` (a preset name or `#RRGGBB`) is accepted on every system.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces.
                 tokenImageUrl:
                   type: string
+                  nullable: true
+                  description: A bare asset id, or an asset's exact `/api/assets/<kind>/<id>` address.
       responses:
         '201':
-          description: Character created
+          description: Character created. The `character` carries no `campaign` object.
           content:
             application/json:
               schema:
@@ -3015,7 +3063,12 @@ paths:
                   character:
                     $ref: '#/components/schemas/Character'
         '400':
-          description: Validation error (invalid gameSystem or character data doesn't match schema)
+          description: >-
+            The body fails its shape check (`name` missing, empty or over 200
+            characters, an unknown `gameSystem`, a non-string `campaignId` or
+            `tokenImageUrl`), answered with `message` alone; or `data` does not
+            match the game system's sheet schema, answered with
+            `validationErrors` listing each problem.
           content:
             application/json:
               schema:
@@ -3050,7 +3103,12 @@ paths:
       tags:
         - Characters
       summary: Get character
-      description: Get character details (owner or campaign DM)
+      description: >-
+        The owner can always read it. If it is in a campaign, any member of
+        that campaign (DM, player or spectator) can read it too, as long as
+        the owner is still a member there; otherwise anyone else gets 403.
+        The response includes `campaign` (`id`, `name`) and the owner as
+        `user` (`id`, `displayName`, `avatarUrl`).
       operationId: getCharacterById
       security:
         - cookieAuth: []
@@ -3081,18 +3139,47 @@ paths:
         - Characters
       summary: Update character
       description: |
-        Update character (owner or campaign DM).
-        - `gameSystem` cannot be changed after character creation (returns 400 error).
-        - If the character has a `gameSystem`, data updates are validated against
-          that system's Zod schema.
-        - If the character has no `gameSystem`, no validation occurs.
+        The owner may edit it. The DM of the character's campaign may edit it
+        too, but only while the character's owner is still a member of that
+        campaign. A spectator in the character's campaign may not edit it,
+        even when it is their own.
+        - `gameSystem` in the body is only compared with the character's
+          current value: the same value is accepted and ignored, a different
+          one (or null on a typed character) answers 400. A character's game
+          system cannot change. This comparison happens before the permission
+          check.
+        - If the character has a `gameSystem`, `data` is validated against
+          that system's sheet schema (after moving sheet fields from before
+          version 1.3.0 to their current names) and stored as the schema's
+          parsed output. `data` replaces the whole sheet; it is not merged.
+        - If the character has no `gameSystem`, `data` is stored unvalidated.
+        - If `name` is omitted, `data` is sent, the character has a game
+          system, and the sheet's own name field (`characterName`, or
+          `investigatorName` for `CALL_OF_CTHULHU_7E`) holds a non-blank value
+          different from the stored `name`, the `name` column is set to that
+          value, trimmed. An explicit `name` in the body always wins.
         - A new `tokenImageUrl` follows the rule on create (403 otherwise); the
           address already stored may be sent back unchanged.
-        - Send `updatedAt` as the character was loaded to have the save refused
-          with 409 if the character has changed since, by another save or by a
-          hit point or hit dice change made over the socket. Without it the
-          save is made whatever changed in between. A 200 response carries the
-          new `updatedAt` for the next save.
+        - Send `updatedAt` exactly as the character was loaded with, as a UTC
+          ISO timestamp ending in `Z`, to have the save refused with 409 if the
+          character has changed since, by another save or by a hit point or
+          hit dice change made over the socket. Without it the save is made
+          whatever changed in between. A 200 response carries the new
+          `updatedAt` for the next save.
+        - When the saved `tokenImageUrl` actually changes, every map token
+          bound to this character (found by its `characterId`, in any
+          campaign, not only this character's own) has its picture set to the
+          new address, or to an empty string when it was cleared, except in a
+          campaign where the caller is a spectator. The token's name is not
+          touched. Each campaign whose tokens changed has its initiative
+          state resent. A failure here is logged and does not fail the save.
+        - If the character is in a campaign and its owner is still a member,
+          the update broadcasts `character.updated` to that campaign with
+          `characterId`, `character`, `userId` and `tokensChanged`, and also
+          `character.hp.updated` with `characterId` and `hp` when the sheet's
+          hit points changed. Any other campaign whose tokens were repainted
+          gets `character.updated` with only `characterId` and
+          `tokensChanged: true`, without the sheet.
       operationId: updateCharacter
       security:
         - cookieAuth: []
@@ -3112,21 +3199,27 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` (a preset name or `#RRGGBB`) is accepted on every system.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces.
                 tokenImageUrl:
                   type: string
+                  nullable: true
+                  description: A bare asset id, or a full `/api/assets/<kind>/<id>` address; the address already stored may be sent back unchanged.
                 gameSystem:
                   type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
                   deprecated: true
-                  description: DEPRECATED - Cannot change gameSystem after creation. Will return 400 error.
+                  description: Optional. If sent it must equal the character's current gameSystem (null for a flexible character), or the request answers 400. It is never written.
                 updatedAt:
                   type: string
                   format: date-time
                   description: |
-                    The character's `updatedAt` as the caller loaded it. Optional. When sent and the character has changed since, the save is refused with 409 and nothing is written.
+                    The character's `updatedAt` as the caller loaded it, as a UTC ISO timestamp ending in `Z`. Optional. When sent and the character has changed since, the save is refused with 409 and nothing is written.
       responses:
         '200':
           description: Character updated
@@ -3140,7 +3233,13 @@ paths:
                   character:
                     $ref: '#/components/schemas/Character'
         '400':
-          description: Validation error (trying to change gameSystem or data doesn't match schema)
+          description: >-
+            The body fails its shape check (`name` empty or over 200
+            characters, an unknown `gameSystem`, an `updatedAt` that is not a
+            UTC ISO timestamp ending in `Z`), answered with `message` alone;
+            `gameSystem` differs from the character's, answered with `error:
+            Bad Request`; or `data` does not match the game system's sheet
+            schema, answered with `validationErrors`.
           content:
             application/json:
               schema:
@@ -3163,7 +3262,11 @@ paths:
                         code:
                           type: string
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller is neither the owner nor the DM of the character's
+            campaign (or is that DM but the owner has left the campaign), or is
+            a spectator in the character's campaign, or `tokenImageUrl` names a
+            picture the caller may not use.
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -3186,7 +3289,9 @@ paths:
       tags:
         - Characters
       summary: Delete character
-      description: Delete character (owner only)
+      description: >-
+        Owner only. Deletes the character row. No event is broadcast, and map
+        tokens placed from the character stay on their maps.
       operationId: deleteCharacter
       security:
         - cookieAuth: []
@@ -3216,11 +3321,26 @@ paths:
     post:
       tags:
         - Characters
-      summary: Assign character to campaign
+      summary: Assign character to campaign, or unassign it
       description: |
-        Assign character to a campaign (owner only, must be a campaign member).
-        If `character.gameSystem !== campaign.gameSystem`, a warning is logged
-        and returned in the response, but assignment is still allowed (DM decision).
+        Owner only. The body is not schema-checked: `campaignId` is read from
+        it as sent, and a value that is not a string answers 500.
+        - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
+          character: its `campaignId` column is cleared and it is removed from
+          the caller's membership `characterIds` in its previous campaign, if
+          it had one. No campaign membership is needed for this.
+        - Sending a `campaignId` assigns the character to that campaign. The
+          campaign must exist (404 otherwise) and the caller must already be a
+          member of it (403 otherwise). The character's `gameSystem` must
+          match the campaign's (both flexible, or the same typed system), or
+          the request answers 400 and nothing changes. If the character was
+          assigned to another campaign, it is removed from the caller's
+          membership there first.
+        - Assigning broadcasts `roster.updated` to the new campaign, with
+          `action` set to `character.assigned` and `characterId`, `userId`
+          and `campaignId`. Unassigning a character that had a campaign
+          broadcasts `roster.updated` to that campaign, with `action` set to
+          `character.unassigned` and `characterId` and `userId`.
       operationId: assignCharacterToCampaign
       security:
         - cookieAuth: []
@@ -3232,20 +3352,22 @@ paths:
             type: string
             format: uuid
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - campaignId
               properties:
                 campaignId:
                   type: string
                   format: uuid
+                  nullable: true
+                  description: Omit, or send null/"", to unassign instead of assign.
       responses:
         '200':
-          description: Character assigned (may include warning if game system mismatch)
+          description: >-
+            Character assigned or unassigned. Its `campaign` is `{ id, name,
+            gameSystem }`, or null after unassigning.
           content:
             application/json:
               schema:
@@ -3255,14 +3377,29 @@ paths:
                     type: string
                   character:
                     $ref: '#/components/schemas/Character'
-                  warning:
+        '400':
+          description: >-
+            `campaignId` names a campaign whose game system does not match the
+            character's. Nothing is changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
                     type: string
-                    nullable: true
-                    description: Warning message if character and campaign have different game systems
+                    example: Game System Mismatch
+                  message:
+                    type: string
+                    example: Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller does not own the character, or (when assigning) is not
+            a member of the target campaign.
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            The character does not exist, or (when assigning) no campaign
+            exists with the given `campaignId`.
 
   /api/characters/{id}/validate:
     get:
@@ -3295,7 +3432,7 @@ paths:
                     type: boolean
                   errors:
                     type: array
-                    nullable: true
+                    description: Present only when `isValid` is false. A problem at the top level of the sheet has `path` set to `root`.
                     items:
                       type: object
                       properties:
@@ -3344,9 +3481,11 @@ paths:
         - Characters
       summary: Duplicate a character
       description: |
-        Creates a copy of the character owned by the same user. The copy is
-        unassigned (`campaignId: null`) and its name is suffixed with `(Copy)`.
-        Only the character owner may copy it.
+        Creates a copy of the character for the same owner, with the same
+        `gameSystem`, sheet and `tokenImageUrl`. The copy is unassigned
+        (`campaignId: null`), its name is the original's followed by a space
+        and `(Copy)`, and the response carries no `campaign` object. Only the
+        character's owner may copy it.
       operationId: copyCharacter
       security:
         - cookieAuth: []
@@ -6602,34 +6741,168 @@ paths:
     get:
       tags: [Character Templates]
       summary: List shared character sheets
+      description: >-
+        Every template is visible to every signed-in user. Sorted by name,
+        A to Z, and paged with `limit` and `offset`; `total` counts every
+        match. A `gameSystem` value that is neither `flexible` nor a known
+        game system answers 500.
       operationId: listCharacterTemplates
       security:
         - cookieAuth: []
+      parameters:
+        - name: search
+          in: query
+          description: Case-insensitive substring match on the template's name.
+          schema:
+            type: string
+        - name: gameSystem
+          in: query
+          description: '`flexible` selects the system-agnostic templates (stored with a null gameSystem); otherwise a GameSystem value.'
+          schema:
+            type: string
+            enum: [flexible, DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+        - name: mine
+          in: query
+          description: '`true` limits the list to templates the caller authored.'
+          schema:
+            type: string
+            enum: ['true']
+        - name: limit
+          in: query
+          description: Values above 100 are treated as 100 and negative values as 1; `0` or a non-number gives the default.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: A negative value or a non-number is treated as 0.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
       responses:
         '200':
-          description: Templates visible to the caller
+          description: Matching templates, with the `limit` and `offset` actually applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        description: { type: string, nullable: true }
+                        gameSystem:
+                          type: string
+                          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                          nullable: true
+                        tokenImageUrl: { type: string, nullable: true }
+                        data:
+                          type: object
+                          description: The sheet.
+                        createdById: { type: string, format: uuid, nullable: true }
+                        createdBy:
+                          type: object
+                          nullable: true
+                          properties:
+                            id: { type: string, format: uuid }
+                            displayName: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Character Templates]
       summary: Publish a shared character sheet
       description: >-
-        Any signed-in user may publish a template. A `tokenImageUrl`, when
-        given, must name a global asset by its own address
-        (`/api/assets/tokens/<id>`, with nothing after the id) or by its bare
-        id; anything else is refused with 400.
+        Any signed-in user may publish a template, and becomes its author.
+        `name` is trimmed, 1 to 200 characters. `description` is trimmed, up
+        to 2000 characters. When `gameSystem` is given, `data` must pass that
+        system's sheet schema (an omitted `data` is checked as `{}` and so
+        fails), but `data` is stored exactly as sent, so fields the schema
+        does not declare are kept; the template is not stored as the schema's
+        parsed output. Without a `gameSystem`, `data` is free-form and an
+        omitted one is stored as `{}`. A `tokenImageUrl`, when given, must be
+        an existing GLOBAL-scoped asset, named by its bare id (stored as
+        `/api/assets/tokens/<id>`) or by its exact address
+        (`/api/assets/<kind>/<id>`, with nothing after the id); anything else
+        answers 400. An empty string or null leaves the template without an
+        image.
       operationId: createCharacterTemplate
       security:
         - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                description:
+                  type: string
+                  nullable: true
+                  maxLength: 2000
+                gameSystem:
+                  type: string
+                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  nullable: true
+                data:
+                  type: object
+                  description: The sheet. Free-form when gameSystem is null.
+                tokenImageUrl:
+                  type: string
+                  nullable: true
+                  maxLength: 500
       responses:
         '201':
           description: Template created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  description: { type: string, nullable: true }
+                  gameSystem:
+                    type: string
+                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    nullable: true
+                  tokenImageUrl: { type: string, nullable: true }
+                  data:
+                    type: object
+                    description: The sheet, stored exactly as sent.
+                  createdById: { type: string, format: uuid, nullable: true }
+                  createdBy:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: string, format: uuid }
+                      displayName: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  updatedAt: { type: string, format: date-time }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
 
   /api/character-templates/{id}:
     get:
@@ -6648,6 +6921,31 @@ paths:
       responses:
         '200':
           description: The template
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  description: { type: string, nullable: true }
+                  gameSystem:
+                    type: string
+                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    nullable: true
+                  tokenImageUrl: { type: string, nullable: true }
+                  data:
+                    type: object
+                    description: The sheet, stored exactly as sent.
+                  createdById: { type: string, format: uuid, nullable: true }
+                  createdBy:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: string, format: uuid }
+                      displayName: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  updatedAt: { type: string, format: date-time }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -6657,7 +6955,13 @@ paths:
       summary: Update a shared character sheet
       description: >-
         The template's author, a user with the `templateEditor` flag, or a
-        platform ADMIN. `tokenImageUrl` follows the rule on create.
+        platform ADMIN; anyone else gets 403. At least one of `name`,
+        `description`, `data` and `tokenImageUrl` must be sent, or the answer
+        is 400; other keys, `gameSystem` included, are ignored, since a
+        template's game system is fixed at creation. `data` replaces the
+        whole sheet; it is checked against the template's game system (free
+        form if it has none) and stored as sent. `tokenImageUrl` follows the
+        rule on create, and null or an empty string removes the image.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -6668,9 +6972,57 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                description:
+                  type: string
+                  nullable: true
+                  maxLength: 2000
+                data:
+                  type: object
+                tokenImageUrl:
+                  type: string
+                  nullable: true
+                  maxLength: 500
       responses:
         '200':
           description: Template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  description: { type: string, nullable: true }
+                  gameSystem:
+                    type: string
+                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    nullable: true
+                  tokenImageUrl: { type: string, nullable: true }
+                  data:
+                    type: object
+                    description: The sheet, stored exactly as sent.
+                  createdById: { type: string, format: uuid, nullable: true }
+                  createdBy:
+                    type: object
+                    nullable: true
+                    properties:
+                      id: { type: string, format: uuid }
+                      displayName: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  updatedAt: { type: string, format: date-time }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6680,7 +7032,7 @@ paths:
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
-      description: The template's author, a user with the `templateEditor` flag, or a platform ADMIN.
+      description: The template's author, a user with the `templateEditor` flag, or a platform ADMIN; anyone else gets 403.
       operationId: deleteCharacterTemplate
       security:
         - cookieAuth: []
@@ -6694,6 +7046,14 @@ paths:
       responses:
         '200':
           description: Template deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Character template deleted
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6704,10 +7064,20 @@ paths:
   /api/characters/templates/{gameSystem}/{templateName}:
     get:
       tags: [Characters]
-      summary: Get a blank starter sheet for a game system
+      summary: Get a factory starter sheet for a game system
       description: >
         The factory templates built into the server, as distinct from the
         user-published sheets under /api/character-templates.
+
+        `gameSystem` is the literal text `null` or `undefined` for a flexible
+        character's templates, or one of `DND_5E`, `PATHFINDER_2E`,
+        `SHADOWRUN_6E`, `CALL_OF_CTHULHU_7E`; anything else answers 400.
+        Template names are matched exactly. The flexible templates are
+        `blank` and `basic`, and any other name answers 404. Every typed
+        system has `blank`, plus `fighter` for `DND_5E` and `PATHFINDER_2E`,
+        `streetsamurai` for `SHADOWRUN_6E`, and `privateinvestigator` (or
+        `pi`) for `CALL_OF_CTHULHU_7E`; any other name returns that system's
+        `blank` template with 200.
       operationId: getBuiltInCharacterTemplate
       security:
         - cookieAuth: []
@@ -6717,6 +7087,7 @@ paths:
           required: true
           schema:
             type: string
+          description: '`null`, `undefined`, or a GameSystem value.'
         - name: templateName
           in: path
           required: true
@@ -6724,11 +7095,31 @@ paths:
             type: string
       responses:
         '200':
-          description: The blank sheet
+          description: The starter sheet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  name:
+                    type: string
+                  description:
+                    type: string
+                  gameSystem:
+                    type: string
+                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    nullable: true
+                  data:
+                    type: object
+                    description: The sheet, in the shape that game system's data takes (null gameSystem is free-form JSON).
+        '400':
+          description: '`gameSystem` is neither `null`/`undefined` nor a recognised game system.'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: 'Flexible (`null`/`undefined`) `gameSystem` only: `templateName` is not `blank` or `basic`. The body''s `error` is `Template Not Found`.'
 
   /api/campaigns/{campaignId}/dice-rolls:
     get:
@@ -7512,6 +7903,39 @@ components:
         updatedAt:
           type: string
           format: date-time
+        campaign:
+          type: object
+          nullable: true
+          description: >-
+            The character's campaign, null when it has none. Included by
+            GET /api/characters, GET and PUT /api/characters/{id}, and
+            POST /api/characters/{id}/assign; absent from the create and copy
+            responses. Only the assign response includes `gameSystem`;
+            the others carry `id` and `name`.
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            gameSystem:
+              type: string
+              enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+              nullable: true
+        user:
+          type: object
+          description: >-
+            The character's owner. Included only by GET /api/characters/{id}.
+            It carries no email address.
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            avatarUrl:
+              type: string
+              nullable: true
 
     Asset:
       type: object
