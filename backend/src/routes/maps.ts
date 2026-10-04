@@ -51,6 +51,15 @@ const uvttUpload = multer({
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
 /**
+ * A map's width, height or grid size: a positive whole number that fits the
+ * integer column it is stored in. A fraction used to reach Prisma and fail.
+ */
+const MAX_INT_COLUMN = 2_147_483_647;
+function isMapDimension(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_INT_COLUMN;
+}
+
+/**
  * Tell those who may read a map of a change to it (emitToMapReaders): the
  * whole campaign for the map on screen, the DM for a prepared one. The write
  * has already happened, so a failure to tell anyone is logged and the
@@ -131,22 +140,22 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    if (!width || typeof width !== 'number' || width <= 0) {
+    if (!isMapDimension(width)) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Map width must be a positive number',
+        message: 'Map width must be a positive whole number',
       });
     }
 
-    if (!height || typeof height !== 'number' || height <= 0) {
+    if (!isMapDimension(height)) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Map height must be a positive number',
+        message: 'Map height must be a positive whole number',
       });
     }
 
-    // gridSize is optional, defaults to 50 in schema
-    const mapGridSize = gridSize && typeof gridSize === 'number' && gridSize > 0 ? gridSize : 50;
+    // gridSize is optional; anything unusable gets the default of 50
+    const mapGridSize = isMapDimension(gridSize) ? gridSize : 50;
 
     // feetPerSquare: positive integer, defaults to 5
     const mapFeetPerSquare = feetPerSquare && Number.isInteger(feetPerSquare) && feetPerSquare > 0 && feetPerSquare <= 100
@@ -290,7 +299,9 @@ router.post(
       }
 
       const mapName = (req.body.name as string)?.trim() || path.basename(req.file.originalname, path.extname(req.file.originalname));
-      const gridSizePx = Number(req.body.gridSize) || 70;
+      // Optional; anything that is not a usable grid size gets the default
+      const requestedGridSize = Number(req.body.gridSize);
+      const gridSizePx = isMapDimension(requestedGridSize) ? requestedGridSize : 70;
 
       // ── Parse the UVTT file ──────────────────────────────────────────────
       const confirmed = req.body.confirm === 'true' || req.body.confirm === true;
@@ -661,30 +672,30 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     }
 
     if (width !== undefined) {
-      if (typeof width !== 'number' || width <= 0) {
+      if (!isMapDimension(width)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Map width must be a positive number',
+          message: 'Map width must be a positive whole number',
         });
       }
       updateData.width = width;
     }
 
     if (height !== undefined) {
-      if (typeof height !== 'number' || height <= 0) {
+      if (!isMapDimension(height)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Map height must be a positive number',
+          message: 'Map height must be a positive whole number',
         });
       }
       updateData.height = height;
     }
 
     if (gridSize !== undefined) {
-      if (typeof gridSize !== 'number' || gridSize <= 0) {
+      if (!isMapDimension(gridSize)) {
         return res.status(400).json({
           error: 'Validation Error',
-          message: 'Grid size must be a positive number',
+          message: 'Grid size must be a positive whole number',
         });
       }
       updateData.gridSize = gridSize;

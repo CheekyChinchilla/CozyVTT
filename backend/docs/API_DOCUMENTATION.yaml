@@ -5423,10 +5423,10 @@ paths:
 
         `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
         missing or out-of-range value is replaced with its default (50, 5,
-        `flat`). Only `name`, `imageUrl`, `width` and `height` can make this
-        route answer 400. A `width`, `height` or `gridSize` that is a positive
-        number but not a whole one passes these checks and answers 500
-        (`Failed to create map`), since the columns hold integers.
+        `flat`); a `gridSize` that is not a positive whole number counts as
+        out of range. Only `name`, `imageUrl`, `width` and `height` can make
+        this route answer 400; `width` and `height` must be positive whole
+        numbers.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -5461,7 +5461,7 @@ paths:
                 gridSize:
                   type: integer
                   default: 50
-                  description: Pixels per grid square. Falls back to 50 when omitted or not a positive number.
+                  description: Pixels per grid square. Falls back to 50 when omitted or not a positive whole number.
                 feetPerSquare:
                   type: integer
                   default: 5
@@ -5552,9 +5552,8 @@ paths:
         Update map settings (DM only). Send only the fields to change. Each
         field sent is checked and a bad one answers 400; unlike on create,
         nothing is replaced with a default. `feetPerSquare` must be an
-        integer from 1 to 100 and `diagonalRule` `flat` or `alternating`. A
-        `width`, `height` or `gridSize` that is a positive number but not a
-        whole one passes the check and answers 500 (`Failed to update map`).
+        integer from 1 to 100, `diagonalRule` `flat` or `alternating`, and
+        `width`, `height` and `gridSize` positive whole numbers.
 
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
@@ -9101,10 +9100,9 @@ paths:
         Some bad requests answer 500 with the generic `An unexpected error
         occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
         `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        or a file sent under a field other than `file`. A `gridSize` with a
-        fraction, or a `map_size` without a numeric `y`, answers 500 (`Failed
-        to import UVTT file`) after the picture has already been saved as an
-        asset. A negative `gridSize` is not refused.
+        or a file sent under a field other than `file`. A `map_size` without
+        a numeric `y` answers 500 (`Failed to import UVTT file`) after the
+        picture has already been saved as an asset.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9129,8 +9127,8 @@ paths:
                   default: 70
                   description: >-
                     Pixels per grid square on the new map, used to place the
-                    file's walls and lights. Missing, zero or not a number
-                    means 70. Other values are not range-checked.
+                    file's walls and lights. Anything other than a positive
+                    whole number, including a missing value, means 70.
                 confirm:
                   type: string
                   enum: ['true']
