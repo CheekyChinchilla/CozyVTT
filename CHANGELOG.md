@@ -276,6 +276,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Sign-in and accounts
 
+- **A profile picture can only point at that user's own uploaded avatar.** The address was stored exactly as sent, and every member's browser loads it, so a script could set it to anything. The app was not affected, since it only ever sets the user's own avatar.
+
 - **A page on another address can no longer act as you.** Your browser sends CozyVTT's sign-in with requests from any page on the same site, including another port or subdomain of the same server. Such a page could make changes as whoever was signed in (an administrator restoring a backup or inviting a new admin, for example) or open a live game connection as the DM. A browser request that changes something, and a live game connection, are now refused unless they come from the address in `CORS_ORIGIN`. Nothing changes for the app itself or for scripts.
 
 - **MFA backup codes are harder to guess and stored like passwords.** They were generated from too small a range and stored with a fast, unsalted hash. Existing codes stop working; regenerate them as described in the upgrade note.

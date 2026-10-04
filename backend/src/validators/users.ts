@@ -40,3 +40,20 @@ export function parseDisplayName(value: unknown): { ok: true; name: string } | {
   if (parsed.success) return { ok: true, name: parsed.data };
   return { ok: false, message: parsed.error.issues[0]?.message ?? 'Invalid display name' };
 }
+
+/**
+ * A user's avatar address: the avatar route for that same user, or null to
+ * clear it.
+ *
+ * Every member's browser loads it, so it is not stored as sent. The app sets it
+ * to exactly this address after uploading the picture, and the route serves
+ * that user's newest avatar.
+ */
+export function parseAvatarUrl(
+  value: unknown,
+  userId: string,
+): { ok: true; url: string | null } | { ok: false; message: string } {
+  const own = `/api/assets/avatars/${userId}`;
+  if (value === null || value === own) return { ok: true, url: value };
+  return { ok: false, message: `avatarUrl must be ${own} or null` };
+}

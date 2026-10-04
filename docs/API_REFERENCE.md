@@ -1211,6 +1211,10 @@ refused with `409`. There is no approval field to set here.
 `displayName` is trimmed and must then be 1 to 50 characters of text; anything
 else is refused with `400`. Registration applies the same rule.
 
+`avatarUrl` must be `/api/assets/avatars/<id>` for the user being updated,
+which is what the web client sets after uploading the picture, or `null` to
+clear it. Anything else is refused with `400`.
+
 Changing **your own** `email` needs `currentPassword` in the same request (`400`
 without it, `401` when it is wrong); an admin changing someone else's does not.
 When the address changes, any unused password-reset or invitation link for the

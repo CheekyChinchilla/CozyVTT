@@ -11,7 +11,7 @@ import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
-import { parseDisplayName } from '../validators/users';
+import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
@@ -91,7 +91,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * PUT /api/users/:id
  * Update user profile
  * Requires: Authentication (users can update their own profile, admins can update any)
- * Allowed fields: displayName, email, avatarUrl
+ * Allowed fields: displayName, email, avatarUrl (own avatar address or null), bio
  * Admins can also update: platformRole
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
@@ -144,6 +144,17 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         });
       }
       updateData.displayName = parsedName.name;
+    }
+
+    if (avatarUrl !== undefined) {
+      const parsedAvatar = parseAvatarUrl(avatarUrl, id);
+      if (!parsedAvatar.ok) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: parsedAvatar.message,
+        });
+      }
+      updateData.avatarUrl = parsedAvatar.url;
     }
 
     // The previous address, when this request changes it.
@@ -202,10 +213,6 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         updateData.email = newEmail;
         emailChangedFrom = existingUser.email;
       }
-    }
-
-    if (avatarUrl !== undefined) {
-      updateData.avatarUrl = avatarUrl;
     }
 
     if (bio !== undefined) {

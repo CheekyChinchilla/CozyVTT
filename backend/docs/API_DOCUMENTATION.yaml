@@ -1497,10 +1497,9 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    Stored as sent, with no check of its form; `null` clears it.
-                    The web client sets `/api/assets/avatars/{userId}` after an
-                    avatar upload. A value that is neither a string nor `null`
-                    answers 500.
+                    Either `/api/assets/avatars/{id}` for the user being
+                    updated (the address the web client sets after an avatar
+                    upload) or `null` to clear it. Anything else answers 400.
                 bio:
                   type: string
                   nullable: true
@@ -1536,7 +1535,8 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           description: >-
-            Invalid display name, invalid email, email already in use,
+            Invalid display name, an avatarUrl other than this user's
+            avatar address or null, invalid email, email already in use,
             missing current password for an email change, invalid
             platformRole, or `globalAssetManager`/`templateEditor` sent as
             something other than a boolean.
@@ -1575,8 +1575,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
-          description: >-
-            Also given for an `avatarUrl` that is neither a string nor `null`.
+          description: Unexpected server error.
           content:
             application/json:
               schema:
