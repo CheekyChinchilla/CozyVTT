@@ -7846,7 +7846,7 @@ paths:
                         nullable: true
                       campaignExportSizeLimit:
                         type: integer
-                        description: Byte ceiling for a campaign export; not changeable through this route.
+                        description: Largest campaign archive accepted on import, in bytes. Exports are not limited by it. Not changeable through this route.
                       createdAt:
                         type: string
                         format: date-time
@@ -10911,7 +10911,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: Unprocessable Entity
-            message: Map has no image
+            message: Map image asset not found
 
     RateLimited:
       description: |
