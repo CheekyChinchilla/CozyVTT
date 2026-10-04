@@ -1352,7 +1352,7 @@ paths:
       tags:
         - Campaigns
       summary: List user campaigns
-      description: Get all campaigns the user is a member of
+      description: Get all campaigns the user is a member of, each carrying its owner, full membership list, the caller's own role, and the character ids they have assigned in it.
       operationId: listCampaigns
       security:
         - cookieAuth: []
@@ -1367,15 +1367,36 @@ paths:
                   campaigns:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Campaign'
+                      allOf:
+                        - $ref: '#/components/schemas/Campaign'
+                        - type: object
+                          properties:
+                            owner:
+                              type: object
+                              properties:
+                                id: { type: string, format: uuid }
+                                displayName: { type: string }
+                                avatarUrl: { type: string, nullable: true }
+                            memberships:
+                              type: array
+                              items:
+                                $ref: '#/components/schemas/CampaignMembership'
+                            userRole:
+                              type: string
+                              enum: [DM, PLAYER, SPECTATOR]
+                            characterIds:
+                              type: array
+                              items: { type: string, format: uuid }
 
     post:
       tags:
         - Campaigns
       summary: Create campaign
       description: |
-        Create a new campaign (creator automatically becomes DM). The optional
-        `gameSystem` field is preferred but not required; it can be set later.
+        Create a new campaign. The caller becomes its owner and its DM, and it
+        starts with the default atmosphere periods (dawn, day, dusk, night).
+        The optional `gameSystem` field can also be set later. A validation
+        failure is a 400 whose `message` names the first problem found.
       operationId: createCampaign
       security:
         - cookieAuth: []
@@ -1390,8 +1411,13 @@ paths:
               properties:
                 name:
                   type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Trimmed before the length is checked and before it is stored.
                 description:
                   type: string
+                  maxLength: 5000
+                  description: Optional, stored as an empty string when omitted. Null is refused here, although the update route accepts it.
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -1408,14 +1434,38 @@ paths:
                   message:
                     type: string
                   campaign:
-                    $ref: '#/components/schemas/Campaign'
+                    allOf:
+                      - $ref: '#/components/schemas/Campaign'
+                      - type: object
+                        properties:
+                          memberships:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /api/campaigns/{campaignId}:
     get:
       tags:
         - Campaigns
       summary: Get campaign details
-      description: Get campaign with members, maps, and characters (requires campaign membership). `maps` lists every map to the DM and only the current map to other members.
+      description: |
+        Get campaign with owner, members, map and character metadata, the
+        active session, and the caller's own role (requires campaign
+        membership). An unknown campaign id answers the membership 403.
+
+        `maps` lists every map to the DM and only the campaign's current map
+        to other members (none when no map is current). It carries metadata
+        only, not the token, wall, fog or light data a map fetch
+        (`GET /api/maps/{id}`) returns. `spiritLayerUrl` is filled in for the
+        DM, for every member while the campaign's spirit layer is switched on,
+        and for a player who has a visible token of their own on the spirit
+        layer of the current map. Everyone else gets `null`, so a map's spirit
+        image is never addressable by someone who should not see it.
+
+        `characters` lists the metadata of every character whose `campaignId`
+        is this campaign and whose owner is still a member.
       operationId: getCampaignById
       security:
         - cookieAuth: []
@@ -1430,11 +1480,69 @@ paths:
                 type: object
                 properties:
                   campaign:
-                    $ref: '#/components/schemas/Campaign'
+                    allOf:
+                      - $ref: '#/components/schemas/Campaign'
+                      - type: object
+                        properties:
+                          owner:
+                            type: object
+                            properties:
+                              id: { type: string, format: uuid }
+                              displayName: { type: string }
+                              avatarUrl: { type: string, nullable: true }
+                          memberships:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/CampaignMembership'
+                          maps:
+                            type: array
+                            description: Metadata only. See the description above for which maps are included and when `spiritLayerUrl` is null.
+                            items:
+                              type: object
+                              properties:
+                                id: { type: string, format: uuid }
+                                campaignId: { type: string, format: uuid }
+                                name: { type: string }
+                                imageUrl: { type: string, nullable: true }
+                                width: { type: number }
+                                height: { type: number }
+                                gridSize: { type: number }
+                                feetPerSquare: { type: number }
+                                diagonalRule: { type: string }
+                                baseLayerUrl: { type: string, nullable: true }
+                                spiritLayerUrl: { type: string, nullable: true }
+                                lightingEnabled: { type: boolean }
+                                fogEnabled: { type: boolean }
+                                globalIllumination: { type: number }
+                                explorationEnabled: { type: boolean }
+                                createdAt: { type: string, format: date-time }
+                                updatedAt: { type: string, format: date-time }
+                          characters:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id: { type: string, format: uuid }
+                                userId: { type: string, format: uuid }
+                                campaignId: { type: string, format: uuid, nullable: true }
+                                gameSystem: { type: string, nullable: true }
+                                name: { type: string }
+                                tokenImageUrl: { type: string, nullable: true }
+                                createdAt: { type: string, format: date-time }
+                                updatedAt: { type: string, format: date-time }
+                          activeSession:
+                            type: object
+                            nullable: true
+                            description: The campaign's most recently started session that has not ended, or null.
+                            properties:
+                              id: { type: string, format: uuid }
+                              sessionNumber: { type: integer }
+                              startedAt: { type: string, format: date-time }
+                          userRole:
+                            type: string
+                            enum: [DM, PLAYER, SPECTATOR]
         '403':
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
 
     put:
       tags:
@@ -1443,8 +1551,9 @@ paths:
       description: |
         Update campaign settings (DM only). Every field is optional and is
         validated when present; a bad value is a 400 with a message naming it.
-        Note: Changing `gameSystem` after characters have been created logs a
-        warning, but the change is still allowed.
+        Unknown fields are ignored. Changing `gameSystem` after characters
+        have been created logs a warning, but the change is still allowed.
+        Nothing is broadcast; open pages see the change on their next fetch.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -1475,7 +1584,42 @@ paths:
                   description: Game system for the campaign (warning logged if characters exist)
                 vibeSettings:
                   type: object
-                  description: Custom vibe periods with hues, filters, and audio
+                  description: >-
+                    Replaces the campaign's atmosphere settings. Validated more
+                    loosely than `PUT /api/campaigns/{campaignId}/vibe`: only
+                    `periods` is required (0 to 20 entries), `enabled` and any
+                    other top-level field are stored as sent without a check,
+                    a period needs no `audio` field, names need not be unique,
+                    and a period `audio` is not checked against the asset
+                    library (switching to a period whose track the DM may not
+                    open plays nothing). Unknown fields inside a period are
+                    dropped. `atmosphereAudio` is ignored and the stored value
+                    kept. The current period is not cleared when it disappears
+                    from the list, unlike on the dedicated vibe route.
+                  required: [periods]
+                  properties:
+                    periods:
+                      type: array
+                      maxItems: 20
+                      items:
+                        type: object
+                        required: [name, hue, filter]
+                        properties:
+                          name:
+                            type: string
+                            maxLength: 100
+                            description: May be empty here; the dedicated vibe route requires 1 to 50 characters.
+                          hue:
+                            type: string
+                            pattern: '^#[0-9A-Fa-f]{6}$'
+                          filter:
+                            type: string
+                            maxLength: 200
+                            description: Allowlisted CSS filter, as on the dedicated vibe route.
+                          audio:
+                            type: string
+                            maxLength: 500
+                            nullable: true
                 spiritLayerEnabled:
                   type: boolean
                 spiritLayerStyle:
@@ -1509,7 +1653,19 @@ paths:
       tags:
         - Campaigns
       summary: Delete campaign
-      description: Delete campaign (owner or admin only). The campaign's library assets become their uploaders' personal (`USER`) assets in the same transaction as the delete, so a failed delete changes neither, and an asset written into the campaign while it is being deleted goes the same way.
+      description: >-
+        Delete campaign (owner or admin only; anyone else, including for an
+        unknown campaign, gets 403). The campaign's library assets become
+        their uploaders' personal (`USER`) assets in the same transaction as
+        the delete, so a failed delete changes neither, and an asset written
+        into the campaign while it is being deleted goes the same way.
+        Characters are kept, with their `campaignId` set to null; the rest of
+        what the campaign holds (maps, memberships, invitations, sessions,
+        chat, dice rolls, personal notes, macros, creatures, token templates
+        and document links) is deleted with it. Afterwards
+        every open connection in the campaign leaves it and receives an
+        `error` event saying the campaign was deleted, and its combat state is
+        discarded. An admin naming a campaign that does not exist gets a 500.
       operationId: deleteCampaign
       security:
         - cookieAuth: []
@@ -1535,8 +1691,9 @@ paths:
       summary: List campaign roster
       description: |
         Returns all memberships for the campaign with each member's assigned
-        characters. The response includes summarized character info — name,
-        token image, game system, and extracted HP — but never raw character
+        characters (the characters named in that membership's
+        `characterIds`). Each character carries summarized info (name, token
+        image, game system and extracted HP) but never the raw character
         `data`. Requires campaign membership.
       operationId: listCampaignRoster
       security:
@@ -1576,13 +1733,19 @@ paths:
                               hp:
                                 type: object
                                 nullable: true
+                                description: >-
+                                  Null unless the sheet records a positive maximum,
+                                  and always null for a character with no game
+                                  system or one other than D&D 5e, Pathfinder 2e
+                                  and Call of Cthulhu 7e. `current` falls back to
+                                  the maximum when unset; `temp` is 0 when unset
+                                  and always 0 for Call of Cthulhu.
                                 properties:
-                                  current: { type: integer }
-                                  max: { type: integer }
+                                  current: { type: number }
+                                  max: { type: number }
+                                  temp: { type: number }
         '403':
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1611,7 +1774,12 @@ paths:
                   users:
                     type: array
                     items:
-                      $ref: '#/components/schemas/User'
+                      type: object
+                      description: Never includes `email`, so a DM cannot collect addresses through the invite picker. Ordered by display name.
+                      properties:
+                        id: { type: string, format: uuid }
+                        displayName: { type: string }
+                        avatarUrl: { type: string, nullable: true }
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -1622,7 +1790,16 @@ paths:
       tags:
         - Campaigns
       summary: Invite user to campaign
-      description: Add a user to the campaign as PLAYER (DM only)
+      description: >-
+        Create a PENDING invitation for a user (DM only). This route does not
+        create a membership; the user joins as PLAYER once they accept it with
+        `POST /api/invitations/{id}/accept`. 400 when `userId` is missing, the
+        user is already a member, or they already have a pending invitation.
+        A user whose earlier invitation was accepted or declined (and who is
+        no longer a member) gets that same invitation back as PENDING, with a
+        new `createdAt` and expiry. The invited user's open connections
+        receive `invitation.received` (`{ invitationId, campaignId,
+        campaignName, invitedBy, timestamp }`).
       operationId: inviteUserToCampaign
       security:
         - cookieAuth: []
@@ -1640,9 +1817,23 @@ paths:
                 userId:
                   type: string
                   format: uuid
+                  description: Not checked for format. An id that names no user is a 404; a value that is not a string is a 500.
+                expiresInDays:
+                  type: integer
+                  description: >-
+                    When a positive number, the invitation expires this many
+                    days from now; when omitted, zero or negative it never
+                    expires. Send a JSON number: a numeric string passes the
+                    check but produces a wrong expiry date.
+                sendEmail:
+                  type: boolean
+                  default: false
+                  description: Email the invitation if the instance has SMTP configured. Anything other than exactly `true` is treated as no email.
       responses:
         '201':
-          description: User invited
+          description: >-
+            Invitation created. `message` is "Invitation sent successfully",
+            or says it was also emailed when `emailSent` is true.
           content:
             application/json:
               schema:
@@ -1650,19 +1841,51 @@ paths:
                 properties:
                   message:
                     type: string
-                  membership:
-                    $ref: '#/components/schemas/CampaignMembership'
+                  invitation:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      campaignId: { type: string, format: uuid }
+                      userId: { type: string, format: uuid }
+                      status:
+                        type: string
+                        enum: [PENDING]
+                      createdAt: { type: string, format: date-time }
+                      expiresAt: { type: string, format: date-time, nullable: true }
+                      campaign:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          name: { type: string }
+                  emailSent:
+                    type: boolean
+                    description: True only when `sendEmail` was `true`, SMTP is configured, and the send succeeded within a 10 second timeout. A failed or slow send still leaves the invitation created.
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The invited user does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/members/{userId}:
     delete:
       tags:
         - Campaigns
       summary: Remove member
-      description: Remove a member from campaign (DM only). The sitting DM and the campaign owner cannot be removed; both return 400. The member's characters are taken out of the campaign in the same step (their `campaignId` becomes null), and a character still naming a campaign its owner has left is readable and editable by its owner alone.
+      description: >-
+        Remove a member from campaign (DM only). The sitting DM and the
+        campaign owner cannot be removed; both return 400. The member's
+        characters are taken out of the campaign in the same step (their
+        `campaignId` becomes null), and a character still naming a campaign
+        its owner has left is readable and editable by its owner alone. The
+        removed member's open connections leave the campaign and receive an
+        `error` event saying they are no longer a member, and the campaign
+        receives `roster.updated` (`{ action: 'member.left', userId,
+        campaignId }`).
       operationId: removeMember
       security:
         - cookieAuth: []
@@ -1688,13 +1911,28 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The user is not a member of this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/members/{userId}/role:
     put:
       tags:
         - Campaigns
       summary: Change member role
-      description: Change a member's role (DM only, one DM per campaign enforced). The member's open connections take the new role at once, and `campaign.role.changed` (`{ campaignId, userId, role }`) goes to everyone in the campaign so open pages follow it, with a `roster.updated`; the initiative order and the map on screen are sent again as the new role sees it.
+      description: >-
+        Switch a member between PLAYER and SPECTATOR (DM only). The DM seat
+        cannot be moved here: naming the DM as the member, or asking for
+        `DM`, is always a 400 because the campaign already has its DM; use
+        `PUT /api/campaigns/{campaignId}/dm`. The member keeps their assigned
+        characters. Their open connections take the new role at once, and
+        `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
+        everyone in the campaign so open pages follow it, with a
+        `roster.updated`; the initiative order and the map on screen are sent
+        again as the new role sees it.
       operationId: changeMemberRole
       security:
         - cookieAuth: []
@@ -1734,6 +1972,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The user is not a member of this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/dm:
     put:
@@ -1751,6 +1995,9 @@ paths:
         open connections take their new roles at once; `campaign.dm.transferred`
         and a `roster.updated` for each go to the campaign, and the initiative
         order and the map on screen are sent again as each new role sees it.
+        The caller need not be a member, so an unknown campaign is a 404 here,
+        as is a `userId` that is not a member; naming the sitting DM is a 400.
+        The response lists every membership with its `user`.
       operationId: transferDM
       security:
         - cookieAuth: []
@@ -1801,11 +2048,16 @@ paths:
         Each period's `hue` must be a `#RRGGBB` colour and its `filter` may use
         only `brightness()`, `saturate()`, `contrast()` and `hue-rotate()`,
         the functions the atmosphere editor produces; anything else is a 400.
-        A period's `audio`, when set, must be the id of an audio asset the DM
-        may open to the table: their own, this campaign's, or a global track.
-        Anything else is a 400 naming the period. Switching to a period plays
-        its track for everyone; a period without one silences the table.
-        If the current period no longer exists in the new list it is cleared.
+        A period's `audio` must be present: null for no track, or the id of
+        an audio asset the DM can read (their admin rights are not counted)
+        that does not belong to another campaign. Anything else is a 400
+        naming the period. Switching to a period plays its track for
+        everyone; a period without one silences the table. Period names must
+        be unique ignoring case. If the current period no longer exists in
+        the new list it is cleared (matched ignoring case). Other fields, at
+        the top level or in a period, are stored as sent, except
+        `atmosphereAudio`, which is ignored in favour of the stored value.
+        Nothing is broadcast.
       operationId: updateVibe
       security:
         - cookieAuth: []
@@ -1830,14 +2082,16 @@ paths:
                       type: array
                       minItems: 1
                       maxItems: 20
-                      description: At least one period; names must be unique.
+                      description: At least one period; names must be unique ignoring case.
                       items:
                         type: object
-                        required: [name, hue, filter]
+                        required: [name, hue, filter, audio]
                         properties:
                           name:
                             type: string
+                            minLength: 1
                             maxLength: 50
+                            description: Must contain something other than whitespace.
                           hue:
                             type: string
                             pattern: '^#[0-9A-Fa-f]{6}$'
@@ -1879,7 +2133,10 @@ paths:
       tags:
         - Campaigns
       summary: List all campaigns (Admin)
-      description: Get all campaigns in the system (Admin only)
+      description: >-
+        Get every campaign on the instance, unpaged and in no particular order
+        (platform admin only). Each carries its owner, email included, and
+        counts of its members, maps and characters.
       operationId: listAllCampaigns
       security:
         - cookieAuth: []
@@ -1894,7 +2151,24 @@ paths:
                   campaigns:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Campaign'
+                      allOf:
+                        - $ref: '#/components/schemas/Campaign'
+                        - type: object
+                          properties:
+                            owner:
+                              type: object
+                              properties:
+                                id: { type: string, format: uuid }
+                                displayName: { type: string }
+                                email: { type: string, format: email }
+                            _count:
+                              type: object
+                              properties:
+                                memberships: { type: integer }
+                                maps: { type: integer }
+                                characters:
+                                  type: integer
+                                  description: Characters whose `campaignId` is this campaign.
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2081,8 +2355,9 @@ paths:
         Messages arriving while someone pages back cannot shift the window,
         which is what an offset would allow.
 
-        Do not construct a cursor. It is opaque and its shape is not part of
-        this contract.
+        Do not construct a cursor. It is opaque and its shape may change; one
+        this server did not issue is a 400 ("Invalid cursor"), as is a `limit`
+        outside 1 to 100.
 
         Dice rolls are not chat messages and are never returned here — they are
         served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
@@ -2534,7 +2809,9 @@ paths:
               properties:
                 title:
                   type: string
+                  minLength: 1
                   maxLength: 120
+                  description: Trimmed before it is checked and stored.
                 content:
                   type: string
                   maxLength: 100000
@@ -2625,7 +2902,9 @@ paths:
               properties:
                 title:
                   type: string
+                  minLength: 1
                   maxLength: 120
+                  description: Trimmed before it is checked and stored.
                 content:
                   type: string
                   maxLength: 100000
@@ -2751,7 +3030,15 @@ paths:
       tags:
         - Sessions
       summary: Start new session
-      description: Start a new game session for the campaign (DM only). Auto-increments session number.
+      description: >-
+        Start a new game session for the campaign (DM only), numbered one
+        past the highest session number so far. Sets the campaign ACTIVE and
+        its `lastPlayedAt` to now, posts a "Session N has started!" system
+        message to chat, and broadcasts `session.started` (`{ sessionId,
+        sessionNumber, startedAt }`) to the campaign. Refused only while the
+        campaign's status is ACTIVE. A PAUSED campaign is not refused: the
+        paused session is left without an end time and the new one becomes
+        the campaign's `activeSession`.
       operationId: startSession
       security:
         - cookieAuth: []
@@ -2768,9 +3055,13 @@ paths:
                   message:
                     type: string
                   session:
-                    $ref: '#/components/schemas/Session'
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      sessionNumber: { type: integer }
+                      startedAt: { type: string, format: date-time }
         '400':
-          description: Active session already exists
+          description: The campaign's status is already ACTIVE
           content:
             application/json:
               schema:
@@ -2783,7 +3074,15 @@ paths:
       tags:
         - Sessions
       summary: Pause session
-      description: Pause an active game session (DM only)
+      description: >-
+        Pause a session that has not ended (DM only). Captures the current
+        map's tokens and annotations, the current map id, vibe and spirit
+        layer setting into the session's saved state (replacing any earlier
+        snapshot), sets the campaign PAUSED, posts a "Session N has been
+        paused" system message, and broadcasts `session.paused`
+        (`{ sessionId, sessionNumber }`). The campaign's status is not
+        checked. The session keeps no end time, so `PUT .../resume` reopens
+        it. 400 when the session has already ended.
       operationId: pauseSession
       security:
         - cookieAuth: []
@@ -2807,18 +3106,37 @@ paths:
                     type: string
                   stateSaved:
                     type: boolean
-                    description: Whether the map's current state was written to the session record.
+                    description: Always true.
+        '400':
+          description: The session has already ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No session with this id in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/sessions/{sessionId}/end:
     put:
       tags:
         - Sessions
       summary: End session
-      description: End a game session and save the current game state (token positions, map, vibe, spirit layer). DM only.
+      description: >-
+        End a session that has not ended (DM only). Sets its end time, sets
+        the campaign INACTIVE, posts a "Session N has ended." system message
+        (adding "Game state saved!" when it was), and broadcasts
+        `session.ended` (`{ sessionId, sessionNumber }`). With `saveState`
+        the current game state (the current map's tokens and annotations,
+        map id, vibe and spirit layer setting) is captured into the session;
+        without it the session's saved state is set to null, discarding any
+        snapshot taken at pause. The body is not schema-validated. 400 when
+        the session has already ended.
       operationId: endSession
       security:
         - cookieAuth: []
@@ -2830,9 +3148,29 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saveState:
+                  type: boolean
+                  default: true
+                  description: Any truthy value saves the state, and so does omitting the field.
+                notes:
+                  type: string
+                  description: >-
+                    The session recap. Any truthy value is converted to a
+                    string and cut to its first 2000 characters, without
+                    trimming; an empty or missing value leaves the existing
+                    notes alone. Editing them afterwards uses
+                    `PUT .../sessions/{sessionId}/notes`, which refuses an
+                    over-long recap instead of cutting it.
       responses:
         '200':
-          description: Session ended with state saved
+          description: Session ended
           content:
             application/json:
               schema:
@@ -2842,11 +3180,21 @@ paths:
                     type: string
                   stateSaved:
                     type: boolean
-                    description: Whether the map's current state was written to the session record.
+                    description: The `saveState` value as sent (true when omitted).
+        '400':
+          description: The session has already ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No session with this id in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/sessions/{sessionId}/notes:
     put:
@@ -2855,9 +3203,11 @@ paths:
       summary: Edit or clear a past session's notes
       description: >-
         Rewrite the recap recorded for a session, or clear it by sending an
-        empty string. DM only. The session must belong to the campaign in the
-        path; one that does not answers 404 rather than 403, so the response
-        cannot be used to discover which session ids exist.
+        empty string. DM only. The session need not have ended. It must
+        belong to the campaign in the path; one that does not answers 404,
+        not 403, so the response cannot be used to discover which session ids
+        exist. The recap is trimmed before it is stored. Nothing is
+        broadcast.
       operationId: updateSessionNotes
       security:
         - cookieAuth: []
@@ -2893,13 +3243,23 @@ paths:
                 type: object
                 properties:
                   session:
-                    $ref: '#/components/schemas/Session'
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      sessionNumber: { type: integer }
+                      startedAt: { type: string, format: date-time }
+                      endedAt: { type: string, format: date-time, nullable: true }
+                      notes: { type: string, nullable: true }
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No session with this id in this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/{campaignId}/resume:
     put:
@@ -2909,7 +3269,9 @@ paths:
       description: >
         Reopen the campaign's most recently started session (DM only), whether
         it was paused or ended: its end time is cleared, the campaign is set
-        ACTIVE, and `session.resumed` is broadcast. The campaign's current
+        ACTIVE with `lastPlayedAt` now, a "Session N has been resumed!"
+        system message is posted, and `session.resumed` (`{ sessionId,
+        sessionNumber, startedAt }`) is broadcast. The campaign's current
         status is not checked, so a call while a session is running succeeds
         too and posts another "resumed" message. The table is left exactly
         as it is: everything is stored as it is played, and the snapshot taken
@@ -2934,6 +3296,7 @@ paths:
                     properties:
                       id:
                         type: string
+                        format: uuid
                       sessionNumber:
                         type: integer
         '403':
@@ -6083,11 +6446,12 @@ paths:
       tags: [Campaign Export/Import]
       summary: Export campaign
       description: |
-        Export a campaign as a .cozyvtt ZIP archive (DM only).
-        Rate limited to 1 per 5 minutes per user. The archive holds only the
-        asset files the caller may read; a picture the campaign names that the
-        caller cannot read, or that no longer exists, is left out, and the map,
-        token, creature or template that used it is imported without a picture.
+        Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
+        built in memory and sent whole, with no size limit of its own. It
+        holds only the asset files the caller may read; a picture the campaign
+        names that the caller cannot read, or that no longer exists, is left
+        out, and the map, token, creature or template that used it is imported
+        without a picture. Only the API-wide rate limit applies.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -6095,30 +6459,53 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: includeAudio
           in: query
+          description: Audio files are included only for exactly `true`.
           schema:
             type: boolean
             default: false
         - name: includeTokens
           in: query
+          description: Map tokens are left out only for exactly `false`.
           schema:
             type: boolean
             default: true
       responses:
         '200':
-          description: ZIP archive
+          description: >-
+            ZIP archive, sent with `Content-Disposition: attachment` and a file
+            name of the campaign's name (characters other than letters, digits,
+            `_` and `-` replaced by `_`, cut to 50) followed by
+            `-export.cozyvtt`.
           content:
             application/zip:
               schema:
                 type: string
                 format: binary
-        '429':
-          description: Rate limited
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The export failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Export Failed
+                message: Failed to export campaign. Please try again.
 
   /api/campaigns/import/preview:
     post:
       tags: [Campaign Export/Import]
       summary: Preview import archive
-      description: Upload a .cozyvtt archive and return its manifest without creating anything.
+      description: >-
+        Upload a .cozyvtt archive and return its manifest without creating
+        anything. Only `manifest.json` is read and validated. Any signed-in
+        user may call it. The upload is one file in the `file` field, at most
+        500 MB, accepted when its MIME type is `application/zip`,
+        `application/x-zip-compressed` or `application/octet-stream`, or its
+        name ends in `.cozyvtt`. The archive must also be no larger than the
+        instance's `campaignExportSizeLimit` setting (500 MB unless an admin
+        has changed it).
       operationId: previewCampaignImport
       security:
         - cookieAuth: []
@@ -6128,6 +6515,7 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              required: [file]
               properties:
                 file:
                   type: string
@@ -6143,15 +6531,37 @@ paths:
                   preview:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
-          description: Invalid archive
+          description: >-
+            No file (`Validation Error`), a file over 500 MB (`File Too
+            Large`), another upload problem such as a refused file type
+            (`Upload Error`), or an archive that cannot be read, is over the
+            size setting, or has a missing or invalid manifest (`Invalid
+            Archive`, with the reason in `message`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/campaigns/import:
     post:
       tags: [Campaign Export/Import]
       summary: Import campaign
       description: |
-        Upload a .cozyvtt archive and create a new campaign.
-        Rate limited to 1 per 5 minutes per user.
+        Upload a .cozyvtt archive and create a new campaign from it. Any
+        signed-in user may call it; they become the new campaign's owner and
+        DM. The upload rules are those of the preview route, and the
+        `campaignExportSizeLimit` setting bounds both the archive and the
+        total size of the files read out of it. Only the API-wide rate limit
+        applies.
+
+        The campaign starts in PREPARATION with the first imported map as its
+        current map. Assets whose content does not match their declared type,
+        and maps, creatures or templates that fail validation, are skipped.
+        Imported tokens are linked to no character and controlled by no one.
+
+        The import is not one transaction. A failure after the campaign has
+        been created answers 400 and leaves the partly imported campaign in
+        place.
       operationId: importCampaign
       security:
         - cookieAuth: []
@@ -6161,16 +6571,21 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              required: [file]
               properties:
                 file:
                   type: string
                   format: binary
                 campaignName:
                   type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Replaces the archive's campaign name. Trimmed, then 1 to 200 characters.
                 importTokens:
                   type: string
                   enum: ['true', 'false']
                   default: 'true'
+                  description: Map tokens are left out only for exactly `false`.
       responses:
         '201':
           description: Campaign imported
@@ -6183,10 +6598,12 @@ paths:
                     type: string
                   campaignId:
                     type: string
+                    format: uuid
                   campaignName:
                     type: string
                   mapCount:
                     type: integer
+                    description: The count the archive's manifest declares, including any map that was skipped.
                   tokenCount:
                     type: integer
                   creatureCount:
@@ -6194,9 +6611,15 @@ paths:
                   tokenTemplateCount:
                     type: integer
         '400':
-          description: Import failed
-        '429':
-          description: Rate limited
+          description: >-
+            The upload errors of the preview route, a `campaignName` out of
+            range (`Validation Error`), or any failure while importing
+            (`Import Failed`, with the reason in `message`). Every import
+            failure, including a database error, answers 400.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ============================================
   # ADMIN ENDPOINTS
@@ -7394,6 +7817,40 @@ paths:
       responses:
         '200':
           description: The rolls this caller is entitled to see
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rolls:
+                    type: array
+                    description: Shaped like the `dice.rolled` socket payload.
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        userId: { type: string, format: uuid, nullable: true }
+                        userName:
+                          type: string
+                          nullable: true
+                          description: Null once the roller's account is deleted.
+                        characterName: { type: string, nullable: true }
+                        expression: { type: string, example: 2d6+3 }
+                        result: { type: integer }
+                        breakdown:
+                          description: The roll's stored breakdown, as written when it was rolled.
+                        purpose: { type: string, nullable: true }
+                        secret: { type: boolean }
+                        timestamp: { type: string, format: date-time }
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: How many rolls this caller may see in all.
+                      limit: { type: integer }
+                      offset: { type: integer }
+                      hasMore: { type: boolean }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7407,7 +7864,9 @@ paths:
       summary: Clear the old join and leave chat messages
       description: >
         DM only. Those notices are no longer written, and nothing is removed on
-        upgrade, so this is how a campaign clears the ones it already has.
+        upgrade, so this is how a campaign clears the ones it already has. It
+        deletes the campaign's SYSTEM messages whose `metadata.action` is
+        `user.joined` or `user.left`. Nothing is broadcast.
       operationId: clearJoinLeaveMessages
       security:
         - cookieAuth: []
@@ -7416,6 +7875,17 @@ paths:
       responses:
         '200':
           description: Messages removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Cleared 3 join and leave messages
+                  deleted:
+                    type: integer
+                    description: How many messages were removed; 0 when there were none.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
