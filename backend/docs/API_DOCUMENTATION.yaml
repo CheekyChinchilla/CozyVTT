@@ -4482,8 +4482,9 @@ paths:
         in a campaign where the caller is not the DM, and whose spirit plane
         is still closed to them, is left out.
 
-        `type` and `scope` are not validated: a value outside their enums
-        answers 500, as does a negative `page`.
+        A `type` or `scope` outside its enum, or either sent more than once,
+        answers 400. A `page` below 1 is treated as 1, and `limit` is clamped
+        into 1-100.
       operationId: listAssets
       security:
         - cookieAuth: []
@@ -4492,7 +4493,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [MAP, TOKEN, AUDIO, AVATAR, DOCUMENT]
+            enum: [MAP, TOKEN, AUDIO, AVATAR, DOCUMENT, OTHER]
         - name: scope
           in: query
           schema:
@@ -4558,6 +4559,15 @@ paths:
                         type: integer
                       totalPages:
                         type: integer
+        '400':
+          description: A `type` or `scope` outside its enum, or sent more than once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: 'type must be one of: MAP, TOKEN, AUDIO, AVATAR, DOCUMENT, OTHER'
         '403':
           description: '`campaignId` names a campaign the caller is not a member of, including one that does not exist.'
           content:
@@ -6761,7 +6771,7 @@ paths:
           description: >-
             Filter by game system. A creature with no system recorded is
             system-agnostic and is always included, regardless of this filter.
-            A value outside the enum is not validated and answers 500.
+            A value outside the enum answers 400.
         - name: limit
           in: query
           description: Clamped into 1-100; 0 or a non-number gives the default.
@@ -6795,14 +6805,17 @@ paths:
                     type: integer
                   offset:
                     type: integer
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          description: An unrecognised `gameSystem` value.
+        '400':
+          description: A `gameSystem` outside the enum.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: 'gameSystem must be one of: DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
     post:
       tags: [Creatures]
@@ -8531,7 +8544,7 @@ paths:
         Every template is visible to every signed-in user. Sorted by name,
         A to Z, and paged with `limit` and `offset`; `total` counts every
         match. A `gameSystem` value that is neither `flexible` nor a known
-        game system answers 500.
+        game system answers 400.
       operationId: listCharacterTemplates
       security:
         - cookieAuth: []
@@ -8607,6 +8620,15 @@ paths:
                     type: integer
                   offset:
                     type: integer
+        '400':
+          description: A `gameSystem` that is neither `flexible` nor a known game system.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: 'gameSystem must be one of: DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E, flexible'
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:

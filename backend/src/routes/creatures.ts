@@ -15,6 +15,8 @@ import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
 import { toJson } from '../utils/prisma-json';
+import { readEnumQuery } from '../utils/queryEnum';
+import { GameSystem } from '../game-systems';
 import logger from '../utils/logger';
 
 const router = Router({ mergeParams: true });
@@ -82,7 +84,12 @@ router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Respons
 router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { search, source, cr, gameSystem, limit = '50', offset = '0' } = req.query;
+    const { search, source, cr, limit = '50', offset = '0' } = req.query;
+    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', Object.values(GameSystem));
+    if (!system.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: system.message });
+    }
+    const gameSystem = system.value;
 
     const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
     const skip = Math.max(0, parseInt(offset as string, 10) || 0);
@@ -98,7 +105,7 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
       // Creatures with no system recorded are usable anywhere, so they are
       // never filtered out — only creatures belonging to a *different* system
       // are excluded.
-      scopes.push({ OR: [{ gameSystem: gameSystem as string }, { gameSystem: null }] });
+      scopes.push({ OR: [{ gameSystem }, { gameSystem: null }] });
     }
 
     const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };

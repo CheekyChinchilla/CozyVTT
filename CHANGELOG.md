@@ -252,7 +252,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Setup, imports and documentation
 
-- **Malformed requests from scripts get a 400 that says what is wrong, not an internal error.** The app never sends these, but a program driving the API could, and got "An unexpected error occurred". This covers a password reset request whose email, link or new password is not text.
+- **Malformed requests from scripts get a 400 that says what is wrong, not an internal error.** The app never sends these, but a program driving the API could, and got "An unexpected error occurred". This covers a password reset request whose email, link or new password is not text, and an unknown type, scope or game system in the asset, creature and character template lists. A negative asset page is read as the first.
 
 - **A map whose picture was deleted before the campaign was exported now imports without a picture**, keeping its walls, tokens and fog. Such maps used to be left out of the import, including from archives made on 1.4.0.
 

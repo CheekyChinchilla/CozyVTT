@@ -26,6 +26,8 @@ import path from 'path';
 import fs from 'fs';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
+import { readEnumQuery } from '../utils/queryEnum';
+import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 
 const router = Router();
 
@@ -146,19 +148,30 @@ function handleAssetCaching(
  * List assets with optional filtering
  * Requires: Authentication
  * Query params:
- *   - type: Filter by AssetType (MAP, TOKEN, AUDIO, AVATAR)
- *   - scope: Filter by AssetScope (GLOBAL, CAMPAIGN)
+ *   - type: Filter by AssetType; an unknown value answers 400
+ *   - scope: Filter by AssetScope (GLOBAL, USER, CAMPAIGN); an unknown value answers 400
  *   - campaignId: Filter by campaign (requires CAMPAIGN scope or returns campaign-specific assets)
  *   - usable: 'true' applies the member scope rules to an admin too (the pickers)
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { type, scope, campaignId, page, limit, search, uploadedBy, usable } = req.query;
+    const { campaignId, page, limit, search, uploadedBy, usable } = req.query;
 
-    // Pagination parameters
-    const pageNum = parseInt(page as string) || 1;
-    const limitNum = Math.min(parseInt(limit as string) || 50, 100); // Max 100 per page
+    const typeFilter = readEnumQuery(req.query.type, 'type', Object.values(AssetTypes));
+    if (!typeFilter.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: typeFilter.message });
+    }
+    const scopeFilter = readEnumQuery(req.query.scope, 'scope', Object.values(AssetScopes));
+    if (!scopeFilter.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: scopeFilter.message });
+    }
+    const type = typeFilter.value;
+    const scope = scopeFilter.value;
+
+    // Pagination parameters, clamped to page 1 or later and 1 to 100 per page
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 50));
     const skip = (pageNum - 1) * limitNum;
 
     // Build filter conditions
@@ -166,7 +179,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     // Type filter
     if (type) {
-      where.type = type as AssetType;
+      where.type = type;
     } else {
       // Documents have their own section. A rulebook among the map thumbnails
       // is what that separation exists to avoid, so a list with no type leaves
@@ -176,7 +189,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     // Scope filter
     if (scope) {
-      where.scope = scope as AssetScope;
+      where.scope = scope;
     }
 
     // Name search

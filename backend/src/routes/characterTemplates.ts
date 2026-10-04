@@ -16,6 +16,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
+import { readEnumQuery } from '../utils/queryEnum';
 import { validateCharacterData } from '../validators/game-systems';
 import {
   CreateCharacterTemplateSchema,
@@ -136,7 +137,13 @@ function validateSheet(
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { search, gameSystem, mine, limit = '50', offset = '0' } = req.query;
+    const { search, mine, limit = '50', offset = '0' } = req.query;
+    // 'flexible' selects the system-agnostic templates, which store null.
+    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', [...Object.values(GameSystem), 'flexible']);
+    if (!system.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: system.message });
+    }
+    const gameSystem = system.value;
 
     const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
     const skip = Math.max(0, parseInt(offset as string, 10) || 0);
@@ -146,8 +153,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     if (search && typeof search === 'string') {
       where.name = { contains: search, mode: 'insensitive' };
     }
-    if (gameSystem && typeof gameSystem === 'string') {
-      // 'flexible' selects the system-agnostic templates, which store null.
+    if (gameSystem !== undefined) {
       where.gameSystem = gameSystem === 'flexible' ? null : gameSystem;
     }
     if (mine === 'true') {
