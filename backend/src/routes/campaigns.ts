@@ -15,7 +15,7 @@ import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAt
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { exportCampaign } from '../services/campaignExporter';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
-import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema } from '../validators/campaigns';
+import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
 import type { Prisma } from '@prisma/client';
@@ -669,14 +669,15 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
 router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { userId, expiresInDays, sendEmail } = req.body;
-
-    if (!userId) {
+    const parsed = CampaignInviteSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'User ID is required',
+        message: parsed.error.issues[0]?.message ?? 'Invalid invitation',
       });
     }
+    const { userId, expiresInDays } = parsed.data;
+    const { sendEmail } = req.body;
 
     // Emailing is opt-in per invitation. The invitation itself is created
     // either way — a player sees it on their dashboard — so an instance with no

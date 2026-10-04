@@ -26,6 +26,25 @@ export const TransferDMSchema = z.object({
 
 export type TransferDMInput = z.infer<typeof TransferDMSchema>;
 
+/** The longest a campaign invitation can be set to last. */
+export const MAX_INVITE_EXPIRY_DAYS = 365;
+
+/**
+ * POST /api/campaigns/:campaignId/invite. `expiresInDays` omitted, null, zero
+ * or negative means the invitation never expires; otherwise it is a whole
+ * number of days, up to a year. `sendEmail` is read by the route itself, since
+ * anything but `true` simply means no email.
+ */
+export const CampaignInviteSchema = z.object({
+  userId: z.string({ error: 'User ID is required' }).min(1, { error: 'User ID is required' }),
+  expiresInDays: z
+    .number({ error: 'expiresInDays must be a number of days' })
+    .int({ error: 'expiresInDays must be a whole number of days' })
+    .max(MAX_INVITE_EXPIRY_DAYS, { error: `expiresInDays must be at most ${MAX_INVITE_EXPIRY_DAYS}` })
+    .nullable()
+    .optional(),
+});
+
 /** One atmosphere period: a named hue and filter, with optional audio. */
 export const VibePeriodSchema = z.object({
   name: z.string().max(100),

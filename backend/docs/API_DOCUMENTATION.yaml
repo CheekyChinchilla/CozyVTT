@@ -2308,8 +2308,9 @@ paths:
       description: >-
         Create a PENDING invitation for a user (DM only). This route does not
         create a membership; the user joins as PLAYER once they accept it with
-        `POST /api/invitations/{id}/accept`. 400 when `userId` is missing, the
-        user is already a member, or they already have a pending invitation.
+        `POST /api/invitations/{id}/accept`. 400 when `userId` is missing or
+        not text, `expiresInDays` is not a whole number up to 365, the user is
+        already a member, or they already have a pending invitation.
         A user whose earlier invitation was accepted or declined (and who is
         no longer a member) gets that same invitation back as PENDING, with a
         new `createdAt` and expiry. The invited user's open connections
@@ -2332,14 +2333,16 @@ paths:
                 userId:
                   type: string
                   format: uuid
-                  description: Not checked for format. An id that names no user is a 404; a value that is not a string is a 500.
+                  description: Not checked for format. An id that names no user is a 404; a missing, empty or non-string value is a 400.
                 expiresInDays:
                   type: integer
+                  nullable: true
+                  maximum: 365
                   description: >-
-                    When a positive number, the invitation expires this many
-                    days from now; when omitted, zero or negative it never
-                    expires. Send a JSON number: a numeric string passes the
-                    check but produces a wrong expiry date.
+                    A whole number of days, at most 365: the invitation expires
+                    that many days from now. Omitted, null, zero or negative, it
+                    never expires. A string, a fraction or more than 365 answers
+                    400.
                 sendEmail:
                   type: boolean
                   default: false
@@ -4269,8 +4272,8 @@ paths:
         - Characters
       summary: Assign character to campaign, or unassign it
       description: |
-        Owner only. The body is not schema-checked: `campaignId` is read from
-        it as sent, and a value that is not a string answers 500.
+        Owner only. A `campaignId` that is not a string or null answers 400
+        (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
           character: its `campaignId` column is cleared and it is removed from
           the caller's membership `characterIds` in its previous campaign, if
@@ -4326,7 +4329,8 @@ paths:
         '400':
           description: >-
             `campaignId` names a campaign whose game system does not match the
-            character's. Nothing is changed.
+            character's (`Game System Mismatch`), or is not a string or null
+            (`Validation Error`). Nothing is changed.
           content:
             application/json:
               schema:

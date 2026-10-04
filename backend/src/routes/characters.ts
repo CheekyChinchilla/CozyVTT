@@ -832,6 +832,14 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     const { id } = req.params;
     const { campaignId } = req.body;
 
+    // A campaign id, or null, "" or nothing to unassign.
+    if (campaignId !== undefined && campaignId !== null && typeof campaignId !== 'string') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'campaignId must be a campaign id, or null to unassign',
+      });
+    }
+
     const character = await prisma.character.findUnique({
       where: { id },
     });
