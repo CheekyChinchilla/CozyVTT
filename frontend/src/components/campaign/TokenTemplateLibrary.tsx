@@ -10,7 +10,7 @@ import {
   X,
   Search,
   Loader2,
-  Package,
+  Stamp,
   Plus,
   Pencil,
   Trash2,
@@ -24,6 +24,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
 import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
@@ -149,18 +150,18 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         notes: template.notes || '',
         initiative: null,
         statBlock: template.statBlock || null,
-        sightRadius: template.sightRadius || undefined,
+        sightRadius: template.sightRadius ?? 0,
       };
 
       const result = await api.addToken(
         campaign.id,
         currentMap.id,
-        tokenPayload as Parameters<typeof api.addToken>[2]
+        tokenPayload
       );
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
-    } catch {
-      setError('Failed to place token on map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }
@@ -190,6 +191,10 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   const handleCopyToCampaign = useCallback(async (templateId: string, targetCampaignId: string) => {
     if (!campaign) return;
     try {
+      // TODO(ui): a copy that works only closes the menu, with nothing to say
+      // it happened, and a refusal shows the fixed sentence below without the
+      // server's reason. Confirm the copy with a toast naming the campaign, and
+      // show apiErrorMessage(err) on failure.
       await api.copyTokenTemplateToCampaign(campaign.id, templateId, targetCampaignId);
       setCopyMenuId(null);
     } catch {
@@ -222,7 +227,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
           >
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <Package className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <Stamp className="w-5 h-5 text-brand-ink flex-shrink-0" />
               <h2 className="flex-1 text-base font-bold text-brand-ink">Token Templates</h2>
               <span className="text-xs text-stone-gray/60">
                 {total} template{total !== 1 ? 's' : ''}
@@ -281,7 +286,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                 </div>
               ) : templates.length === 0 ? (
                 <div className="text-center py-12 px-6">
-                  <Package className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
+                  <Stamp className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
                   <p className="text-sm text-stone-gray/70">
                     {searchQuery ? 'No templates match your search.' : 'No saved token templates yet.'}
                   </p>

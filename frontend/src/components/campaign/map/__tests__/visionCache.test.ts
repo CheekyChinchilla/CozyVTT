@@ -46,7 +46,8 @@ describe('createVisionCache', () => {
     const b = cache.compute([token('a', 1, 1)], [light], walls, viewport);
     expect(b.tokenVision[0].poly.points).toEqual(a.tokenVision[0].poly.points);
     expect(b.lightVision[0].poly.points).toEqual(a.lightVision[0].poly.points);
-    expect(b.all).toHaveLength(2);
+    expect(b.tokenSight).toHaveLength(1);
+    expect(b.lightVision).toHaveLength(1);
   });
 
   it('reuses a source polygon when nothing changed (cache hit)', () => {
@@ -89,5 +90,29 @@ describe('createVisionCache', () => {
     const readd = cache.compute([token('a', 1, 1), token('b', 5, 5)], [], walls, viewport);
     expect(readd.tokenVision[1]).toBe(only_b.tokenVision[0]); // 'b' stayed cached
     expect(readd.tokenVision).toHaveLength(2);
+  });
+
+  it('a token with no darkvision has an empty vision polygon but a full line of sight', () => {
+    const cache = createVisionCache();
+    const dark = { ...token('a', 1, 1), sightRadius: 0 } as Token;
+    const out = cache.compute([dark], [], [wall], viewport);
+    expect(out.tokenVision[0].poly.points).toHaveLength(0);
+    expect(out.tokenSight[0].poly.points.length).toBeGreaterThan(2);
+  });
+
+  it('changing a token\'s darkvision recomputes its vision only; its line of sight stays cached', () => {
+    const cache = createVisionCache();
+    const walls = [wall];
+    const first = cache.compute([token('a', 1, 1)], [], walls, viewport);
+    const second = cache.compute([{ ...token('a', 1, 1), sightRadius: 8 } as Token], [], walls, viewport);
+    expect(second.tokenVision[0]).not.toBe(first.tokenVision[0]);
+    expect(second.tokenSight[0]).toBe(first.tokenSight[0]);
+  });
+
+  it('under global illumination skips the darkvision raycast', () => {
+    const cache = createVisionCache();
+    const out = cache.compute([token('a', 1, 1)], [], [wall], viewport, { globalIllumination: true });
+    expect(out.tokenVision[0].poly.points).toHaveLength(0);
+    expect(out.tokenSight[0].poly.points.length).toBeGreaterThan(2);
   });
 });

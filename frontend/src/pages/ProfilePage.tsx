@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { isStrongPassword } from '@/utils/validation';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -461,7 +462,7 @@ export default function ProfilePage() {
     setPwSuccess('');
 
     if (!pwCurrent) { setPwError('Current password is required'); return; }
-    if (pwNew.length < 8) { setPwError('New password must be at least 8 characters'); return; }
+    if (!isStrongPassword(pwNew)) { setPwError('New password must be at least 12 characters with uppercase, lowercase, number, and special character'); return; }
     if (pwNew !== pwConfirm) { setPwError('Passwords do not match'); return; }
     if (pwNew === pwCurrent) { setPwError('New password must differ from current password'); return; }
 
@@ -782,7 +783,7 @@ export default function ProfilePage() {
                     value={pwNew}
                     onChange={(e) => setPwNew(e.target.value)}
                     className="input-cozy w-full pr-10"
-                    placeholder="Min 8 characters"
+                    placeholder="At least 12 characters"
                     autoComplete="new-password"
                   />
                   <button
@@ -896,7 +897,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-danger-ink">Delete Account</h3>
                 <p className="text-xs text-warm-gray">
-                  Permanently delete your account and all data. This cannot be undone.
+                  Permanently delete your account, characters and personal notes. This cannot be undone.
                 </p>
               </div>
               {!deleteConfirmOpen && (
@@ -917,9 +918,13 @@ export default function ProfilePage() {
                     <p className="font-semibold">This will permanently delete:</p>
                     <ul className="list-disc list-inside text-xs space-y-0.5">
                       <li>Your account and profile</li>
-                      <li>All campaigns you own</li>
-                      <li>All characters and messages</li>
+                      <li>Your characters, personal notes and saved rolls</li>
                     </ul>
+                    <p className="text-xs">
+                      Your chat messages, dice rolls and uploaded files stay where they are, no longer linked to you.
+                      A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
+                      to another DM, or deleted, first.
+                    </p>
                   </div>
                 </div>
 

@@ -51,31 +51,31 @@ Either way you end up with a password only you know. Pick something you'll actua
 
 ## Accepting a Campaign Invitation
 
-Your DM will invite you to a campaign using your email address. Here's what happens next:
+Your DM invites you by picking your account from a list of the people on your instance. Here's what happens next:
 
 1. **Log in** to CozyVTT
-2. On your **Dashboard**, you'll see a **Pending Invitations** banner at the top
-3. The banner shows the campaign name and your DM's name
-4. Click **Accept** — you'll be asked which of your characters to bring (if you have any created already)
+2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards
+3. Each invitation shows the campaign name and, after **DM:**, the campaign's owner (usually the DM)
+4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
 5. Or click **Decline** if it's not for you
 
-*Screenshot pending — Pending invitation banner.*
+*Screenshot pending — Pending invitations section.*
 
 If you haven't created a character yet, you can accept the invitation without one and assign a character later. Jump to [Creating Your Character](#creating-your-character) and come back.
 
-Once you've accepted, the campaign appears in your **Campaign Grid** on the dashboard. Click it anytime to enter the campaign.
+Once you've accepted, the campaign appears under **Your Campaigns** on the dashboard. Click it anytime to enter the campaign.
 
 ---
 
 ## Creating Your Character
 
-Before you can fully participate in a campaign, you'll want a character. Click **Characters** in the top navigation (or the Characters card on the dashboard) to get to your character library.
+Before you can fully participate in a campaign, you'll want a character. On your dashboard, click **Manage** beside **Your Characters** to get to your character library.
 
 *Screenshot pending — Characters page (empty state).*
 
 ### Step 1: Start a New Character
 
-Click **+ New Character**. A dialog pops up asking you to choose a **Game System** — this determines which character sheet you'll fill out.
+Click **Create Character**. A dialog pops up asking you to choose a **Game System** — this determines which character sheet you'll fill out.
 
 Ask your DM which system you're playing:
 
@@ -90,7 +90,7 @@ Ask your DM which system you're playing:
 
 ### Step 2: Fill Out Your Sheet
 
-After selecting a system, you're taken to the **Character Editor**. This is your character sheet — fill it out just like you would on paper.
+Give your character a name and click **Create Character**. The dialog closes, **Character created successfully!** appears, and the new character is on your Characters page. Choose **Edit Character** from its card's menu (**⋮**) to open the **Character Editor**. This is your character sheet — fill it out just like you would on paper.
 
 *Screenshot pending — Character editor (D&D 5e example).*
 
@@ -99,11 +99,11 @@ The sheet is split into sections depending on the system. Take your time — you
 **A few things to know:**
 - Click **Save** regularly. There's no auto-save and no keyboard shortcut — the header shows the time of your last save
 - Leaving with unsaved changes asks you to confirm first, whether you use the back arrow or close the tab. Confirm and those changes are gone
-- You can **Export to JSON** from the header to save a local backup of your character
+- **Export** in the editor's header saves a local JSON backup of your character
 
 ### Step 3: Add a Profile Image (Optional)
 
-Want your token on the map to look like your character? You can set a token image when saving. Ask your DM for details on how they handle token images in your campaign.
+Want your token on the map to look like your character? The sheet editor has a token image: pick a picture, and it is uploaded when you save and becomes your token's art when your DM places you on the map.
 
 ### Step 4: Assign to Your Campaign
 
@@ -111,7 +111,7 @@ Once your character is created, you'll need to assign them to your campaign so t
 
 From the **Characters** page:
 1. Find your character card
-2. Click the **Assign** button (or the menu on the card)
+2. Open the card's menu (**⋮**) and choose **Assign to Campaign**
 3. Select the campaign you want to assign them to
 
 *GIF pending — Assigning a character to a campaign.*
@@ -130,7 +130,7 @@ The page has three main areas:
 
 ### Left Sidebar — Campaign Info
 - Campaign name and description at the top
-- The **Party Roster** showing all players and their characters
+- The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
 - If you're curious about your fellow adventurers, it's all here
 
@@ -142,13 +142,14 @@ A tabbed panel — click a tab to switch between:
 - **Chat** — Talk to everyone (an unread badge shows on the tab when messages arrive while you're on another tab)
 - **Dice** — Roll your dice
 - **Initiative** — See the turn order during combat
-- **Session** — The vibe/scene tone and session status
+- **Notes** — Your own private notes (see [Your Own Notes](#your-own-notes))
+- **Session** — The vibe and past sessions (the Live / Paused badge is in the header)
 
 You can also drag the divider to resize the sidebar, or collapse it to give the map more room.
 
 ### The Header Bar
 The top bar shows:
-- Campaign name and session status (Live / Paused / Inactive)
+- Campaign name, a **Live** or **Paused** badge while a session is running or paused, and the current vibe
 - Connection indicator — a dot that goes green when you're connected
 - A **book icon** — the rulebooks and handouts your DM has shared with this campaign
 - Navigation controls
@@ -167,7 +168,7 @@ You can keep documents of your own too, from **Documents** on your dashboard: up
 
 When you first load the campaign page, CozyVTT connects to the live session. Look for the **connection indicator** in the header — it turns green when you're successfully connected. If you see a loading spinner, just wait a moment.
 
-If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, a message appears and you can refresh the page to reconnect manually.
+If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, the indicator turns red and shows a **Retry** button; click it to reconnect.
 
 ### If your DM hands you the game
 
@@ -202,7 +203,7 @@ Type your message in the input box at the bottom and press **Enter** to send. Yo
 Chat is for everything: in-character dialogue, out-of-character coordination, questions for the DM, celebrations when you roll a nat 20.
 
 **Chat tips:**
-- **System messages** (gray, slightly different style) announce session events like "Session started" or "Initiative started"
+- **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
 
@@ -244,7 +245,7 @@ and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVT
 says so when you save it rather than letting you find out later with a button
 that never works.
 
-**Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly you get a "DM rolled secretly" message rather than the result.
+**Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly, nothing reaches you at all, not even a notice that they rolled.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
@@ -258,16 +259,17 @@ One thing to know: if the DM has **paused** the session, your rolls are worked o
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map and the session is **Live**, you can move it by clicking and dragging.
+When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. You can't move it while the session is paused or has ended.
 
-*GIF pending — Clicking and dragging a player token across the map.*
+*GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
 **When you can't move your token:**
-- If the session is **Paused**, token movement is disabled until the DM resumes
+- If the session is **Paused**, token movement is disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
 - If your token hasn't been placed by the DM yet, it won't appear on the map
-- If the session hasn't started (status shows "Inactive"), movement is disabled
+- If the DM has handed control of your character's token to someone else, or to nobody, it is not yours to move until they set you as its controller in **Edit Token**
+- If the DM has ended the session (status shows "Inactive"), movement is disabled until the next one starts
 
 *Screenshot pending — Paused session banner blocking movement.*
 
@@ -277,7 +279,7 @@ If your token is missing or in the wrong place, just let your DM know in chat �
 
 Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
 
-A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight.
+A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight. That only works when you can see its hit points: another player's character, or a creature whose HP bar the DM has turned on. A creature whose hit points the DM keeps hidden looks standing to you until the DM removes it.
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
@@ -303,22 +305,22 @@ If a session shows no notes, your DM simply didn't write any that night.
 
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
 
-You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
 
 ### Why parts of the map are dark
 
-Most of the map usually starts hidden. That's **fog of war**, and it's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
+If your DM uses **fog of war**, most of the map starts hidden. It's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
 
-Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing and which walls are in the way, so the view shifts as you move. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
+Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing, which walls are in the way, and what is lit, so the view shifts as you move. Anything in bright light shows clearly. Dim light, and the dark within your character's darkvision, show half-dark. Beyond that is black, but the square you stand on is always visible, so you always know where you are. If your DM keeps **Remember Explored Areas** on for the map, places your character has already seen stay on your map, greyed and darkened, until you can see them again, so a corridor you have walked is not pitch black behind you. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
 
 Two things worth knowing:
 
-- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there.
+- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
 
 ### Sound and weather on the map
 
-Your DM can start an ambient track and lay weather over the map: rain, mist, drifting leaves, sparkles, snow or wind. Both arrive on their own when your DM sets them, and stop when your DM stops them; there is nothing for you to turn on.
+Your DM can start an ambient track and lay weather over the map: rain, mist, drifting leaves, sparkles, snow or wind. Both arrive on their own when your DM sets them, and stop when your DM stops them; there is nothing for you to turn on. The time of day can carry its own music too, which changes when the DM changes the vibe.
 
 If you hear nothing, check your browser has not blocked sound for the tab. Most browsers refuse to play audio until you have clicked something on the page, so clicking anywhere in the campaign usually starts it.
 
@@ -344,14 +346,14 @@ Shapes cover whole squares wherever the grid allows it. A cone's spreading edges
 
 ## The Initiative Tracker
 
-When combat begins, the DM will start initiative tracking. The **Initiative Tracker** appears in the right sidebar and shows the turn order.
+The **Initiative** tab in the right sidebar shows the turn order. As the DM adds combatants they appear there, and when the DM clicks **Start Combat** the first one's turn begins.
 
 *Screenshot pending — Initiative tracker during combat.*
 
 You'll see:
-- **All combatants** in order, highest initiative first
+- **The combatants in the fight**, in order, highest initiative first. A creature isn't listed while the DM has it hidden, while it stands on a map the DM hasn't switched to, or while it is on the other plane when your DM uses the spirit realm; one that is merely out of your sight, in the dark or under fog, is listed
 - **Current turn** highlighted
-- **HP** for each combatant (updating in real time)
+- **HP** for a creature once the DM has turned its HP bar on, and for any creature token you control; it follows the token as the DM changes it. Your own character's hit points are on your sheet and roster card, not in the tracker
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
@@ -363,6 +365,8 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 - **On the map** — right-click your token, choose **Roll...**, and pick **Roll Initiative** at the top of the menu
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
+
+Roll before the DM clicks **Start Combat**. Once combat has started, the dice icon and **Roll Initiative** are no longer offered to you, and the server refuses a roll; if your initiative needs changing, ask your DM.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -421,7 +425,7 @@ Your DM can still roll for you (and re-roll, or type a value in by hand) — han
 
 **Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
 
-If a creature is hidden or somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery.
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
@@ -440,7 +444,7 @@ A few things worth knowing:
 
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
 
-The DM controls when initiative advances — after your turn, they'll click "Next" and the focus moves to the next combatant.
+The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
 
 *Screenshot pending — Your name highlighted in the initiative order.*
 
@@ -453,16 +457,9 @@ The DM controls when initiative advances — after your turn, they'll click "Nex
 
 ## The Vibe Tracker
 
-The **Vibe Tracker** is a small mood indicator set by your DM. Keep an eye on it — it's a subtle signal about the current scene's tone.
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one.
 
-*Screenshot pending — Vibe tracker showing different moods.*
-
-You might see vibes like:
-- **Cozy** — The party is safe, probably at the tavern
-- **Tense** — Something's wrong; pay attention
-- **Mysterious** — Things are not as they appear
-- **Triumphant** — You've done something great!
-- **Ominous** — Danger is near (or already here)
+*Screenshot pending — Vibe tracker showing the current period.*
 
 You don't control this — only the DM does. Just let it color your roleplaying.
 
@@ -479,28 +476,34 @@ The **Characters** page shows all your characters across every campaign and syst
 **Things you can do from the Characters page:**
 
 - **Click a character** — Open its sheet to read. **Edit** is on the sheet itself when you want to change something
-- **Edit** — Skip straight to the character editor
-- **Copy** — Duplicate a character (handy for making variants or backups)
-- **Export** — Download your character as a JSON file (great for backups or sharing builds)
-- **Import** — Load a previously exported character JSON
-- **Assign / Unassign** — Add or remove a character from a campaign
-- **Delete** — Remove a character permanently (you'll be asked to confirm)
+
+The card's menu (**⋮**) holds the rest:
+
+- **Edit Character** — Skip straight to the character editor
+- **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
+- **Assign to Campaign** — Add a character to a campaign, move it to another, or unassign it
+- **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
+- **Delete Character** — Remove a character permanently (you'll be asked to confirm)
+
+**Import**, at the top of the page, loads a previously exported character JSON.
 
 ### Editing Your Character
 
-Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. The **Edit** action on the card itself skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
+Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
 
 If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. Simply opening a sheet and reading it never counts as a change.
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the new version is loaded; make your changes again on it. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
+
 > **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Exporting and Importing
 
-**Export:** From the Characters page or from within the Character Editor, use the Export button to download a `.json` file. This is a complete backup of your character data.
+**Export:** Choose **Export as JSON** in a character card's menu, or **Export** in the Character Editor's header, to download a `.json` file. This is a complete backup of your character data.
 
-**Import:** Click **Import Character** on the Characters page and upload a previously exported JSON file. The character appears in your library.
+**Import:** Click **Import** on the Characters page and upload a previously exported JSON file. The character appears in your library.
 
 > **Tip:** Export your character after every few sessions as a backup. It takes five seconds and could save you hours of re-entry if something goes wrong.
 
@@ -508,7 +511,7 @@ Renaming a character on its sheet renames it everywhere: the card in your librar
 
 ## Your Profile
 
-Click your name or avatar in the top navigation to reach your **Profile** page.
+Click your name or avatar at the top of the dashboard to reach your **Profile & Settings** page.
 
 *Screenshot pending — Profile page.*
 
@@ -529,13 +532,13 @@ Click your name or avatar in the top navigation to reach your **Profile** page.
 
 **Change Password:** In the Security section, enter your current password and your new password (twice), then save.
 
-**Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe.
+**Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Enter your current password to begin, scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe. Turning MFA on signs out your other devices.
 
 *Screenshot pending — MFA setup with QR code.*
 
 ### Themes & Fonts
 
-The **Themes** section of your profile lets you pick the color theme and font *you* see across the app. 16 built-in themes (light, warm, cool, dark, neutral, vibrant) plus 8 open-source font families. There's also a **Custom** option for picking your own primary/accent/background/text colors. Your choice saves to your account and persists across logout/login — when you sign back in, your theme is restored.
+The **Appearance** section of your profile lets you pick the color theme and font *you* see across the app. 16 built-in themes (light, warm, cool, dark, neutral, vibrant) plus 8 open-source font families. There's also a **Custom** option for picking your own primary/accent/background/text colors. Your choice saves to your account and persists across logout/login — when you sign back in, your theme is restored.
 
 ---
 
@@ -557,15 +560,17 @@ The **Themes** section of your profile lets you pick the color theme and font *y
 
 | Status | What it means |
 |--------|--------------|
-| 🟢 Live | Session is active — you can move tokens |
-| 🟡 Paused | DM paused — token movement disabled |
-| ⚫ Inactive | No active session |
+| Preparation | No session has been run yet — you can move your token |
+| 🟢 Live | Session is active — you can move your token |
+| 🟡 Paused | DM paused — token movement disabled, and your rolls stay in your own browser: the DM and other players don't see them |
+| ⚫ Inactive | The last session has ended — token movement disabled |
+
+The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
 | Action | Shortcut |
 |--------|---------|
-| Save character | Ctrl/Cmd + S (in Character Editor) |
 | Send chat message | Enter |
 | New line in chat without sending | Shift + Enter |
 | Ping the map | Tab (cursor over the map) |
@@ -574,17 +579,17 @@ The **Themes** section of your profile lets you pick the color theme and font *y
 
 ### Common Questions
 
-**My token isn't on the map.** Ask your DM to place it. They do this from the Token Manager.
+**My token isn't on the map.** Ask your DM to place it. They drag your character onto the map from the Campaign Roster.
 
-**I can't move my token.** Check that the session is Live (not Paused or Inactive).
+**I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
 
-**I lost connection.** Refresh the page — your session state is saved on the server.
+**I lost connection.** Click **Retry** beside the connection indicator in the header. Your session state is saved on the server.
 
 **Someone edited my character.** Only you and your campaign's DM can edit your characters. If you have concerns, speak with your platform administrator.
 
 **I need to switch characters.** From the Characters page, unassign your current character from the campaign and assign the new one. Let your DM know so they can update the token.
 
-**I forgot my password.** Contact your platform administrator — they can reset it and give you a temporary login.
+**I forgot my password.** Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator — they can reset it and give you a temporary login.
 
 ---
 

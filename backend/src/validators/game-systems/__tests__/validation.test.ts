@@ -15,14 +15,34 @@ import {
   shadowrun6eCharacterDataSchema,
   callOfCthulhu7eCharacterDataSchema,
 } from '../index';
+import type {
+  DnD5eCharacterData,
+  PF2eCharacterData,
+  SR6CharacterData,
+  CoC7eCharacterData,
+} from '../index';
+
+// The sheet type each example file is expected to hold. The files are read
+// without validation, so this is an expectation: whether each one really has
+// that shape is what the tests below check.
+interface ExampleSheets {
+  'DnD_5e_character.json': DnD5eCharacterData;
+  'DnD_5e_character_minimal.json': DnD5eCharacterData;
+  'Pathfinder_2e_character.json': PF2eCharacterData;
+  'Pathfinder_2e_character_minimal.json': PF2eCharacterData;
+  'Shadowrun_character.json': SR6CharacterData;
+  'Shadowrun_character_minimal.json': SR6CharacterData;
+  'Call_of_Cthulhu_7th_Edition_character.json': CoC7eCharacterData;
+  'Call_of_Cthulhu_7th_Edition_character_minimal.json': CoC7eCharacterData;
+}
 
 // Helper to load example JSON files. The Examples/ files use the campaign
 // export envelope: { cozyVttVersion, exportedAt, character: { name, gameSystem, data } }
 // — the character sheet payload the schemas validate lives at character.data.
-function loadExampleJSON(filename: string): any {
+function loadExampleJSON<F extends keyof ExampleSheets>(filename: F): { data: ExampleSheets[F] } {
   const examplesPath = path.join(__dirname, '../../../../..', 'Examples', filename);
   const content = fs.readFileSync(examplesPath, 'utf-8');
-  const parsed = JSON.parse(content);
+  const parsed = JSON.parse(content) as { character: { data: ExampleSheets[F] } };
   return { data: parsed.character.data };
 }
 
@@ -34,7 +54,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as DnD5eCharacterData;
         expect(data.characterName).toBe('Elara Voss');
         expect(data.class).toBe('Wizard');
         expect(data.level).toBe(5);
@@ -210,9 +230,8 @@ describe('Game Systems Validation', () => {
     });
 
     describe('the four proficiency boxes', () => {
-      // Declared rather than left to survive by accident: the route stores the
-      // body as sent, so an undeclared field persisted silently — which is how
-      // the built-in templates came to seed fields nothing read.
+      // Declared because the editor writes them: the routes store the parsed
+      // sheet, so an undeclared field would be dropped on save.
       const sheetWith = (proficiencies: unknown) => {
         const example = loadExampleJSON('DnD_5e_character.json');
         return { ...example.data, proficiencies };
@@ -340,7 +359,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as DnD5eCharacterData;
         expect(data.characterName).toBe('Grunk the Fighter');
         expect(data.class).toBe('Fighter');
         expect(data.level).toBe(1);
@@ -375,7 +394,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as PF2eCharacterData;
         expect(data.characterName).toBe('Seraphina Ashveil');
         expect(data.class).toBe('Wizard');
         expect(data.level).toBe(5);
@@ -410,7 +429,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as PF2eCharacterData;
         expect(data.characterName).toBe('Aria the Ranger');
         expect(data.class).toBe('Ranger');
         expect(data.level).toBe(1);
@@ -468,7 +487,7 @@ describe('Game Systems Validation', () => {
         savingThrows: {
           ...example.data.savingThrows,
           fortitude: {
-            ...example.data.savingThrows.fortitude,
+            ...example.data.savingThrows!.fortitude,
             proficiencyRank: 'invalid_rank', // Invalid proficiency rank
           },
         },
@@ -490,7 +509,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as SR6CharacterData;
         expect(data.characterName).toBe('Ghost');
         expect(data.metatype).toBe('Human');
         expect(data.archetype).toBe('Street Samurai');
@@ -524,7 +543,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as SR6CharacterData;
         expect(data.characterName).toBe('Razor');
         expect(data.metatype).toBe('Human');
         expect(data.archetype).toBe('Street Samurai');
@@ -560,7 +579,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as CoC7eCharacterData;
         expect(data.investigatorName).toBe('Dr. Eleanor Voss');
         expect(data.occupation).toBe('Professor');
         expect(data.era).toBe('1920s');
@@ -594,7 +613,7 @@ describe('Game Systems Validation', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        const data = result.data as any;
+        const data = result.data as CoC7eCharacterData;
         expect(data.investigatorName).toBe('Dr. Sarah Chen');
         expect(data.occupation).toBe('Professor of Archaeology');
         expect(data.era).toBe('1920s');
@@ -626,7 +645,7 @@ describe('Game Systems Validation', () => {
         derivedStats: {
           ...example.data.derivedStats,
           sanity: {
-            ...example.data.derivedStats.sanity,
+            ...example.data.derivedStats!.sanity,
             current: 120, // Invalid: sanity > 99
           },
         },

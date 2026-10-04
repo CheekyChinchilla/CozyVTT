@@ -113,6 +113,8 @@ beforeAll(async () => {
     },
   });
   mapId = map.id;
+  // Players are told of moves on the map the campaign is showing.
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
   server = await createWsTestServer();
   [dmCookie, ownerCookie, otherCookie, spectatorCookie] = await Promise.all([
@@ -125,6 +127,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server?.close();
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
   await prisma.user.deleteMany({ where: { id: { in: [dmId, ownerId, otherId, spectatorId] } } });

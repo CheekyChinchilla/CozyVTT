@@ -2,12 +2,13 @@
  * The built-in templates must write the fields the schema declares.
  *
  * They did not. Each was written against an older shape and never caught up, so
- * it seeded fields nothing reads while leaving the declared ones empty. Because
- * `PUT /characters/:id` stores the body as sent rather than Zod's parsed
- * output, the undeclared fields were saved happily and then ignored by every
- * reader. What a player saw was a Fighter with a blank Features tab while
- * "Second Wind" sat in the database, and a Pathfinder sheet reading "No
- * strikes/attacks recorded" with a warhammer and a crossbow stored on it.
+ * it seeded fields nothing reads while leaving the declared ones empty. The
+ * routes stored the body as it was sent at the time, so the undeclared fields
+ * were saved and then ignored by every reader. What a player saw was a Fighter
+ * with a blank Features tab while "Second Wind" sat in the database, and a
+ * Pathfinder sheet reading "No strikes/attacks recorded" with a warhammer and a
+ * crossbow stored on it. The routes now store Zod's parsed sheet, so such a
+ * field would instead be dropped on the first save.
  *
  * Validating a template proves it is *acceptable*. It cannot prove the template
  * is not also carrying a field the schema quietly ignores — Zod strips unknown

@@ -1,0 +1,303 @@
+/**
+ * A socket that authenticates into a second campaign must leave the first.
+ *
+ * `authenticate` is meant to hold one campaign per socket: leave the old room,
+ * tell it the user left, recompute its presence, then join the new one. That
+ * block compared `socket.campaignId` with the new id after the membership
+ * check had already overwritten it, so it never ran. The socket stayed in the
+ * old room, kept every broadcast the old table sent, and carried the new
+ * campaign's role while doing so, which the role-filtered fan-outs read.
+ *
+ * These drive the real socket server and re-authenticate one connection. The
+ * shipped browser never does that (it opens a fresh socket per campaign); a
+ * scripted client can.
+ *
+ * Requires PostgreSQL at DATABASE_URL.
+ */
+
+import { randomUUID } from 'crypto';
+import type { Socket as ClientSocket } from 'socket.io-client';
+import { prisma } from '../../config/database';
+import { toJson } from '../../utils/prisma-json';
+import { setState, clearState } from '../initiativeState';
+import {
+  createWsTestServer,
+  waitForEvent,
+  expectNoEvent,
+  WsTestServer,
+} from '../../__tests__/helpers/websocket-test-server';
+
+jest.setTimeout(20000);
+
+const runId = randomUUID().slice(0, 8);
+const email = (name: string) => `switch-${name}-${runId}@test.cozyvtt.local`;
+
+const SEEN_TOKEN = 'aaaaaaaa-0000-4000-8000-00000000c0de';
+const HIDDEN_TOKEN = 'aaaaaaaa-0000-4000-8000-00000000d00d';
+
+let server: WsTestServer;
+let hostId: string;
+let switcherId: string;
+let campaignA: string;
+let campaignB: string;
+let mapA: string;
+let hostCookie: string;
+let switcherCookie: string;
+
+type Presence = { campaignId: string; onlineUserIds: string[] };
+type MapChanged = { mapId: string; mapData: { tokens: Array<{ id: string }> } };
+
+/** Authenticate an already-connected socket into another campaign. */
+async function reauth(client: ClientSocket, campaignId: string): Promise<void> {
+  const done = waitForEvent<{ campaignId: string }>(client, 'authenticated');
+  client.emit('authenticate', { campaignId });
+  expect((await done).campaignId).toBe(campaignId);
+}
+
+beforeAll(async () => {
+  const [host, switcher] = await Promise.all(
+    ['host', 'switcher'].map((name) =>
+      prisma.user.create({
+        data: {
+          email: email(name),
+          passwordHash: 'not-used-by-socket-auth',
+          displayName: `Switch ${name}`,
+        },
+      })
+    )
+  );
+  hostId = host.id;
+  switcherId = switcher.id;
+
+  const [a, b] = await Promise.all([
+    prisma.campaign.create({ data: { name: `Campaign A ${runId}`, ownerId: hostId, vibeSettings: {} } }),
+    prisma.campaign.create({ data: { name: `Campaign B ${runId}`, ownerId: switcherId, vibeSettings: {} } }),
+  ]);
+  campaignA = a.id;
+  campaignB = b.id;
+
+  // The switcher is a player at A's table and the DM of B.
+  await prisma.campaignMembership.createMany({
+    data: [
+      { userId: hostId, campaignId: campaignA, role: 'DM', characterIds: [] },
+      { userId: switcherId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
+      { userId: switcherId, campaignId: campaignB, role: 'DM', characterIds: [] },
+    ],
+  });
+
+  // A map in A with one token players may see and one only the DM may.
+  const base = { imageUrl: '', size: { width: 1, height: 1 }, rotation: 0, conditions: [] as string[], metadata: {} as Record<string, unknown>, layer: 'token', controlledBy: null };
+  const map = await prisma.map.create({
+    data: {
+      campaignId: campaignA,
+      name: 'Switch Map',
+      imageUrl: '/api/assets/maps/placeholder',
+      baseLayerUrl: '/api/assets/maps/placeholder',
+      width: 20,
+      height: 20,
+      gridSize: 50,
+      lightingEnabled: false,
+      tokens: toJson([
+        { ...base, id: SEEN_TOKEN, name: 'Guard', visible: true, position: { x: 2, y: 2 } },
+        { ...base, id: HIDDEN_TOKEN, name: 'Assassin', visible: false, position: { x: 5, y: 5 }, notes: 'waiting in the rafters' },
+      ]),
+      annotations: toJson([]),
+      wallSegments: toJson([]),
+    },
+  });
+  mapA = map.id;
+  // map.change sends only the map the campaign is showing.
+  await prisma.campaign.update({ where: { id: campaignA }, data: { currentMapId: mapA } });
+
+  server = await createWsTestServer();
+  [hostCookie, switcherCookie] = await Promise.all([server.loginAs(hostId), server.loginAs(switcherId)]);
+});
+
+afterAll(async () => {
+  await prisma.campaign.updateMany({ where: { id: { in: [campaignA, campaignB] } }, data: { currentMapId: null } });
+  await server?.close();
+  await prisma.map.deleteMany({ where: { id: mapA } });
+  await prisma.campaign.deleteMany({ where: { id: { in: [campaignA, campaignB] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [hostId, switcherId] } } });
+  await prisma.$disconnect();
+});
+
+describe('authenticating into another campaign on the same socket', () => {
+  it('stops hearing the campaign it left, and hears the one it joined', async () => {
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+
+    const heard = waitForEvent(switcher, 'chat.message');
+    host.emit('chat.message', { content: 'before the switch', type: 'DM' });
+    await expect(heard).resolves.toBeDefined();
+
+    await reauth(switcher, campaignB);
+
+    const silence = expectNoEvent(switcher, 'chat.message', 500);
+    host.emit('chat.message', { content: 'after the switch', type: 'DM' });
+    await expect(silence).resolves.toBeUndefined();
+
+    const echoed = waitForEvent<{ content: string }>(switcher, 'chat.message');
+    switcher.emit('chat.message', { content: 'at my own table', type: 'DM' });
+    expect((await echoed).content).toBe('at my own table');
+
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  it('tells the campaign it left, and drops it from that presence roster', async () => {
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    // Consume the presence update the switcher's arrival will send, so the
+    // one asserted on below is the one the switch sends.
+    const arrival = waitForEvent<Presence>(host, 'presence.state');
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+    expect((await arrival).onlineUserIds).toContain(switcherId);
+
+    const left = waitForEvent<{ userId: string }>(host, 'user.left');
+    const presence = waitForEvent<Presence>(host, 'presence.state');
+    await reauth(switcher, campaignB);
+
+    expect((await left).userId).toBe(switcherId);
+    const roster = await presence;
+    expect(roster.campaignId).toBe(campaignA);
+    expect(roster.onlineUserIds).toContain(hostId);
+    expect(roster.onlineUserIds).not.toContain(switcherId);
+
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  it('holds only the last campaign when two authenticate events arrive back to back', async () => {
+    // Emitted in one tick, without waiting: the second must not read the
+    // room to leave before the first has joined it.
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectClient(switcherCookie);
+    const authed: string[] = [];
+    const both = new Promise<void>((resolve) => {
+      switcher.on('authenticated', (d: { campaignId: string }) => {
+        authed.push(d.campaignId);
+        if (authed.length === 2) resolve();
+      });
+    });
+    switcher.emit('authenticate', { campaignId: campaignA });
+    switcher.emit('authenticate', { campaignId: campaignB });
+    await both;
+    expect(authed).toEqual([campaignA, campaignB]);
+
+    // Nothing from A: not chat, not the map, and the DM's copy least of all.
+    const noChat = expectNoEvent(switcher, 'chat.message', 500);
+    const noMap = expectNoEvent(switcher, 'map.changed', 500);
+    host.emit('chat.message', { content: 'A after the race', type: 'DM' });
+    host.emit('map.change', { mapId: mapA });
+    await expect(noChat).resolves.toBeUndefined();
+    await expect(noMap).resolves.toBeUndefined();
+
+    // And A's roster no longer lists the switcher.
+    const presence = waitForEvent<Presence>(host, 'presence.state');
+    host.emit('presence.request');
+    expect((await presence).onlineUserIds).not.toContain(switcherId);
+
+    // B is where it lives now.
+    const echoed = waitForEvent<{ content: string }>(switcher, 'chat.message');
+    switcher.emit('chat.message', { content: 'settled at B', type: 'DM' });
+    expect((await echoed).content).toBe('settled at B');
+
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  it('never applies the new role to the room it left', async () => {
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+
+    // As a player at A's table, the hidden token is withheld.
+    const asPlayer = waitForEvent<MapChanged>(switcher, 'map.changed');
+    host.emit('map.change', { mapId: mapA });
+    const seen = (await asPlayer).mapData.tokens.map((t) => t.id);
+    expect(seen).toContain(SEEN_TOKEN);
+    expect(seen).not.toContain(HIDDEN_TOKEN);
+
+    // Now a DM elsewhere. A's fan-out must not reach this socket at all,
+    // let alone with the DM's copy of A's map.
+    await reauth(switcher, campaignB);
+    const nothing = expectNoEvent(switcher, 'map.changed', 500);
+    host.emit('map.change', { mapId: mapA });
+    await expect(nothing).resolves.toBeUndefined();
+
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  // A fan-out picks its sockets, reads the database, then reads each
+  // socket's role. A switch that lands in between must not get the old
+  // campaign's data worked out for the new campaign's role.
+  it('never answers a request from the room it left with the new role', async () => {
+    const entry = (tokenId: string, name: string) => ({
+      tokenId, mapId: mapA, name, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null,
+    });
+    setState(campaignA, { active: true, round: 1, currentTokenId: null, combatants: [entry(SEEN_TOKEN, 'Guard'), entry(HIDDEN_TOKEN, 'Assassin')] });
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+
+    // Hold the request's first database read until the switch has finished.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let reading!: () => void;
+    const reached = new Promise<void>((resolve) => { reading = resolve; });
+    const findMany = prisma.map.findMany.bind(prisma.map);
+    const held = jest.spyOn(prisma.map, 'findMany').mockImplementationOnce(((args: never) => {
+      reading();
+      return gate.then(() => findMany(args));
+    }) as never);
+
+    const sent: string[] = [];
+    switcher.on('initiative.state', (state: { combatants: Array<{ tokenId: string }> }) => {
+      sent.push(...state.combatants.map((c) => c.tokenId));
+    });
+    switcher.emit('initiative.request_state');
+    await reached;
+    await reauth(switcher, campaignB);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(sent).not.toContain(HIDDEN_TOKEN);
+    held.mockRestore();
+    clearState(campaignA);
+    switcher.disconnect();
+  });
+
+  // Who a drag's frames go to is decided once, when it starts. A socket
+  // decided then and switched since must not keep receiving the old table's
+  // token positions for the rest of the drag.
+  it('stops sending a drag in the room it left to a socket that switched mid-drag', async () => {
+    const host = await server.connectAndAuth(hostCookie, campaignA);
+    const switcher = await server.connectAndAuth(switcherCookie, campaignA);
+    const started = waitForEvent(switcher, 'token.move.start');
+    host.emit('token.move.start', { tokenId: SEEN_TOKEN, mapId: mapA });
+    await started;
+
+    await reauth(switcher, campaignB);
+    const quiet = expectNoEvent(switcher, 'token.moved', 800);
+    host.emit('token.move', { tokenId: SEEN_TOKEN, mapId: mapA, x: 3, y: 2 });
+    await expect(quiet).resolves.toBeUndefined();
+
+    host.emit('token.move.end', { tokenId: SEEN_TOKEN, mapId: mapA, x: 2, y: 2 });
+    host.disconnect();
+    switcher.disconnect();
+  });
+
+  // The handshake checks the sign-in; nothing checked it again after that,
+  // so a connection whose sign-in had ended (signed out, expired, or ended by
+  // a password change) could still join any other campaign of the user's.
+  it('refuses to move a socket whose sign-in has ended into another campaign', async () => {
+    const cookie = await server.loginAs(switcherId);
+    const switcher = await server.connectAndAuth(cookie, campaignA);
+    await server.logout(cookie);
+
+    const joined = expectNoEvent(switcher, 'authenticated', 800);
+    const refused = waitForEvent<{ message: string }>(switcher, 'error');
+    switcher.emit('authenticate', { campaignId: campaignB });
+    expect((await refused).message).toBe('Unauthorized');
+    await expect(joined).resolves.toBeUndefined();
+    switcher.disconnect();
+  });
+});

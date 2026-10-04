@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { themeColorSchema } from './sheetChrome';
 import { featureEntrySchema } from './featureEntry.schema';
 
 /**
@@ -124,6 +125,11 @@ const loreSkillSchema = z.object({
  * Armor class
  */
 const armorClassSchema = z.object({
+  // TODO(rules): this minimum of 10, and the ones on the class DC total and the
+  // spell DC below, refuse a sheet whose derived value is under 10, which a
+  // negative modifier with an untrained rank produces (Dexterity -1 gives AC
+  // 9). The editor derives these, so such a sheet cannot be saved at all. Drop
+  // the minimums, or floor them at a value the formulas cannot go below.
   total: z.number().int().min(10),
   proficiencyRank: proficiencyRankSchema,
   capDex: z.number().int().nullable(),
@@ -264,12 +270,14 @@ const bulkSchema = z.object({
 
 /**
  * Feat
- * Notes optional for quick feat addition
+ * Notes optional for quick feat addition. `description` is what the editor's
+ * text box under each feat writes; the built-in templates write `notes`.
  */
 const featSchema = z.object({
   level: z.number().int().min(1).max(20).optional(),
   name: z.string().min(1),
   notes: z.string().optional(),
+  description: z.string().optional(),
 });
 
 /**
@@ -364,7 +372,8 @@ const innateSpellSchema = z.object({
   rank: z.number().int().min(1).max(10).optional(),
   name: z.string().min(1),
   tradition: z.string().min(1).optional(),
-  frequency: z.string().min(1).optional(),
+  // A text box on the sheet; empty when cleared.
+  frequency: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -430,6 +439,7 @@ const alliesAndOrganizationsSchema = z.object({
  * - All other fields can be omitted and added progressively
  */
 export const pathfinder2eCharacterDataSchema = z.object({
+  themeColor: themeColorSchema,
   // Required: Core identity
   characterName: z.string().min(1),
   class: z.string().min(1),
@@ -440,9 +450,11 @@ export const pathfinder2eCharacterDataSchema = z.object({
 
   // Optional: Additional details
   playerName: z.string().min(1).optional(),
-  background: z.string().min(1).optional(),
-  alignment: z.string().min(1).optional(),
-  deity: z.string().min(1).optional(),
+  // Empty is allowed: these are text boxes on the sheet, and clearing one
+  // writes an empty string, which `min(1)` refused along with the whole save.
+  background: z.string().optional(),
+  alignment: z.string().optional(),
+  deity: z.string().optional(),
   experiencePoints: z.number().int().min(0).optional(),
   heroPoints: z.number().int().min(0).max(3).optional(),
   savingThrows: savingThrowsSchema.optional(),

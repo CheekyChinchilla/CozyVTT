@@ -35,15 +35,17 @@ import { apiErrorMessage } from '@/utils/errors';
 
 /**
  * The sheet as this editor holds it: `CoC7eCharacterData` plus `themeColor`,
- * the header colour chosen in the editor. It is not part of the game system but
- * it is saved with the sheet, because `PUT /characters/:id` validates the body
- * and stores it as sent rather than storing Zod's parsed output.
+ * the header colour chosen in the editor. It is not part of the game system,
+ * but every system's schema declares it, so it is saved with the sheet. The
+ * server stores the schema's parsed sheet, so anything this editor writes has
+ * to be declared there too.
  */
 interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
   /**
-   * Not declared by `CoC7eCharacterData`, which keeps the investigator's name
-   * at the top level as `investigatorName`. Only the token-upload filename
-   * reads this, so a sheet without it simply falls back to "Investigator".
+   * Not declared by `CoC7eCharacterData` or the schema, which keep the
+   * investigator's name at the top level as `investigatorName`, so the server
+   * drops it on save. Only the token-upload filename reads it, and falls back
+   * to "Investigator" without it.
    */
   personalDetails?: { name?: string };
 }
@@ -55,6 +57,8 @@ import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
+import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { setCoC7eSkillField } from './skillEdits';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -215,24 +219,6 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const dirtyRef = useRef(false);
   const hasInteractedRef = useRef(false);
   const cleanSnapshotRef = useRef<string | null>(null);
-  if (cleanSnapshotRef.current === null) {
-    cleanSnapshotRef.current = JSON.stringify(formData);
-  }
-  // Always the current form state, for reading inside async callbacks.
-  const latestFormDataRef = useRef(formData);
-  latestFormDataRef.current = formData;
-
-  useEffect(() => {
-    if (!hasInteractedRef.current) {
-      cleanSnapshotRef.current = JSON.stringify(formData);
-      return;
-    }
-    const dirty = JSON.stringify(formData) !== cleanSnapshotRef.current;
-    if (dirty !== dirtyRef.current) {
-      dirtyRef.current = dirty;
-      onDirtyChange?.(dirty);
-    }
-  }, [formData, onDirtyChange]);
 
   // Capture-phase, so it runs before the field's own handler updates state.
   // Pointer events are included because plenty of edits here are button
@@ -244,6 +230,34 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [tokenImagePreview, setTokenImagePreview] = useState<string | null>(
     character.tokenImageUrl
   );
+
+  // The header colour and a newly chosen token picture are kept outside the
+  // form, and are unsaved changes too.
+  const sheetSnapshot = JSON.stringify({
+    formData,
+    themeColor: isCustomColor ? customColorHex : themeColor.name,
+    tokenImage: tokenImageFile
+      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
+      : null,
+  });
+  if (cleanSnapshotRef.current === null) {
+    cleanSnapshotRef.current = sheetSnapshot;
+  }
+  // Always the current state, for reading inside async callbacks.
+  const latestSnapshotRef = useRef(sheetSnapshot);
+  latestSnapshotRef.current = sheetSnapshot;
+
+  useEffect(() => {
+    if (!hasInteractedRef.current) {
+      cleanSnapshotRef.current = sheetSnapshot;
+      return;
+    }
+    const dirty = sheetSnapshot !== cleanSnapshotRef.current;
+    if (dirty !== dirtyRef.current) {
+      dirtyRef.current = dirty;
+      onDirtyChange?.(dirty);
+    }
+  }, [sheetSnapshot, onDirtyChange]);
 
   // Auto-calculate half and fifth values for characteristics
   useEffect(() => {
@@ -335,6 +349,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
           },
           sanity: {
+            // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
+            // an investigator with POW 100 and no Sanity yet gets 100 for both
+            // of these and the sheet cannot be saved. Cap the starting value at
+            // 99 and the current value at maxSanity.
             starting: prev.derivedStats?.sanity?.starting ?? pow,
             maximum: maxSanity,
             current: prev.derivedStats?.sanity?.current ?? pow,
@@ -387,19 +405,25 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     // A completed save means nothing is pending any more.
     // Unless the sheet was edited again while the save was in flight, which the
     // recheck preserves.
-    const savedSnapshot = JSON.stringify(formData);
+    const savedSnapshot = sheetSnapshot;
     const markClean = () => {
       cleanSnapshotRef.current = savedSnapshot;
-      const stillDirty = JSON.stringify(latestFormDataRef.current) !== savedSnapshot;
+      const stillDirty = latestSnapshotRef.current !== savedSnapshot;
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
     };
+    // The server refuses a colour it cannot read, and the whole save with it.
+    if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
+      setErrors((prev) => ({ ...prev, themeColor: HEX_COLOUR_HINT }));
+      setShowColorPicker(true);
+      return;
+    }
     setIsSaving(true);
     try {
       // Include color customization in saved data
       const updatedData = {
         ...formData,
-        themeColor: isCustomColor ? customColorHex : themeColor.name,
+        themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : themeColor.name,
       };
 
       // Upload token image if a new one was selected
@@ -435,6 +459,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       markClean();
     } catch (error) {
       console.error('Failed to save character:', error);
+      setErrors((prev) => ({ ...prev, submit: 'Failed to save character. Please try again.' }));
     } finally {
       setIsSaving(false);
     }
@@ -447,10 +472,14 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       if (savedColor) {
         setThemeColor(savedColor);
         setIsCustomColor(false);
-      } else if (formData.themeColor.startsWith('#')) {
-        // Custom hex color
-        setCustomColorHex(formData.themeColor);
-        setIsCustomColor(true);
+      } else {
+        // Custom hex colour, a three-digit one expanded, so it opens as itself
+        // rather than as the default preset.
+        const hex = toStoredHexColor(formData.themeColor);
+        if (hex) {
+          setCustomColorHex(hex);
+          setIsCustomColor(true);
+        }
       }
     }
   }, [formData.themeColor]);
@@ -459,6 +488,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
     setIsCustomColor(true);
+    setErrors((prev) => ({ ...prev, themeColor: '' }));
   };
 
   // Handle preset color selection
@@ -540,9 +570,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                       }
                     }}
                     placeholder="#14532d"
+                    aria-label="Custom colour hex code"
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #14532d)</div>
+                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
 
@@ -925,13 +957,9 @@ value={formData.derivedStats?.luck?.score}
         onChange={(skillName, field, value) => {
           setFormData({
             ...formData,
-            skills: {
-              ...formData.skills,
-              [skillName]: {
-                ...formData.skills![skillName as keyof CoC7eSkills],
-                [field]: value,
-              },
-            } as CoC7eSkills,
+            // `skillName` may name a skill inside a group, such as
+            // `fighting.brawl`; this writes it there.
+            skills: setCoC7eSkillField(formData.skills ?? {}, skillName, field, value) as CoC7eSkills,
           });
         }}
       />
@@ -1017,10 +1045,18 @@ value={formData.wealth?.cash}
               : ''
           }
           onChange={(e) => {
+            // TODO(sheets): this parses and re-renders on every keystroke, so a
+            // new line typed at the end is dropped as an empty line, and a " -
+            // " typed before any notes is dropped because an item with no notes
+            // renders without it. Pasting works. Keep the raw text while the
+            // box has focus and parse it on blur.
             const lines = e.target.value.split('\n').filter(line => line.trim());
+            // Split at the first " - " only: the notes may hold one too.
             const possessions = lines.map(line => {
-              const parts = line.split(' - ');
-              return { name: parts[0], notes: parts[1] || '' };
+              const at = line.indexOf(' - ');
+              return at > 0
+                ? { name: line.slice(0, at), notes: line.slice(at + 3) }
+                : { name: line, notes: '' };
             });
             setFormData({ ...formData, possessions });
           }}
@@ -1104,6 +1140,10 @@ value={formData.wealth?.cash}
                   ...formData,
                   spellsAndMythos: {
                     cthulhuMythos: formData.spellsAndMythos?.cthulhuMythos ?? 0,
+                    // TODO(sheets): trimming and dropping empty lines on every
+                    // keystroke eats a new line or a space typed at the end, so
+                    // a two-word spell cannot be typed in order. Keep the raw
+                    // text while the box has focus and split it on blur.
                     spells: e.target.value.split('\n').map((line) => line.trim()).filter(Boolean),
                   },
                 });
@@ -1147,6 +1187,9 @@ value={formData.wealth?.cash}
         {activeTab === 'possessions' && renderPossessionsTab()}
         {activeTab === 'backstory' && renderBackstoryTab()}
       </div>
+      {errors.submit && (
+        <div className="px-6 py-3 text-sm text-red-700 bg-parchment">{errors.submit}</div>
+      )}
     </div>
   );
 };

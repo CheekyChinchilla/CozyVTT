@@ -16,14 +16,16 @@
  */
 
 import express from 'express';
+import type { Request, Response } from 'express';
 import session from 'express-session';
-import { createServer, Server as HTTPServer } from 'http';
+import { createServer, Server as HTTPServer, IncomingMessage, ServerResponse } from 'http';
 import { Server as IOServer } from 'socket.io';
 import { AddressInfo } from 'net';
 import request from 'supertest';
 import { io as ioc, Socket as ClientSocket } from 'socket.io-client';
 import { registerEventHandlers } from '../../websocket/events';
 import { setSocketInstance } from '../../websocket/utils';
+import { socketAllowRequest } from '../../middleware/originCheck';
 
 export interface WsTestServer {
   httpServer: HTTPServer;
@@ -33,6 +35,8 @@ export interface WsTestServer {
   loginAs(userId: string): Promise<string>;
   /** Connect a socket.io client carrying the given session cookie. Resolves on the server's 'connected' ack. */
   connectClient(cookie: string): Promise<ClientSocket>;
+  /** End the sign-in the given cookie belongs to, in the server's session store. */
+  logout(cookie: string): Promise<void>;
   /** Connect + emit 'authenticate' for a campaign. Resolves with the client on 'authenticated'. */
   connectAndAuth(cookie: string, campaignId: string): Promise<ClientSocket>;
   close(): Promise<void>;
@@ -52,18 +56,24 @@ export async function createWsTestServer(): Promise<WsTestServer> {
 
   // Test-only session bootstrap — see file header.
   app.post('/test/login-as', (req, res) => {
-    (req.session as any).userId = req.body.userId;
+    req.session.userId = req.body.userId;
     res.json({ ok: true });
+  });
+  // Ends the sign-in the cookie names, as signing out or expiring does.
+  app.post('/test/logout', (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
   });
 
   const httpServer = createServer(app);
   const io = new IOServer(httpServer, {
     transports: ['websocket', 'polling'],
+    allowRequest: socketAllowRequest,
   });
 
-  // Same session-sharing wiring as production (websocket/index.ts)
-  io.engine.use((req: any, res: any, next: any) => {
-    sessionMiddleware(req, res, next);
+  // Same session-sharing wiring as production (websocket/index.ts), casts
+  // included: engine.io passes the raw Node request and response.
+  io.engine.use((req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
+    sessionMiddleware(req as Request, res as Response, next);
   });
 
   setSocketInstance(io);
@@ -106,6 +116,10 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     });
   }
 
+  async function logout(cookie: string): Promise<void> {
+    await request(app).post('/test/logout').set('Cookie', cookie);
+  }
+
   async function connectAndAuth(cookie: string, campaignId: string): Promise<ClientSocket> {
     const client = await connectClient(cookie);
     await new Promise<void>((resolve, reject) => {
@@ -131,11 +145,11 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   }
 
-  return { httpServer, io, url, loginAs, connectClient, connectAndAuth, close };
+  return { httpServer, io, url, loginAs, logout, connectClient, connectAndAuth, close };
 }
 
 /** Wait for a single occurrence of an event, with timeout. */
-export function waitForEvent<T = any>(client: ClientSocket, event: string, timeoutMs = 3000): Promise<T> {
+export function waitForEvent<T = unknown>(client: ClientSocket, event: string, timeoutMs = 3000): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`waitForEvent: "${event}" not received within ${timeoutMs}ms`)),
@@ -155,7 +169,7 @@ export function waitForEvent<T = any>(client: ClientSocket, event: string, timeo
  */
 export function expectNoEvent(client: ClientSocket, event: string, windowMs = 300): Promise<void> {
   return new Promise((resolve, reject) => {
-    const handler = (data: any) => {
+    const handler = (data: unknown) => {
       clearTimeout(timer);
       reject(new Error(`expectNoEvent: unexpectedly received "${event}": ${JSON.stringify(data)}`));
     };

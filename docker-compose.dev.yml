@@ -56,12 +56,20 @@ services:
       # No bundled Nginx in dev — Vite proxies directly to the backend, so this
       # only affects the startup warning about proxy body caps.
       NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
+      ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      SESSION_MAX_AGE: ${SESSION_MAX_AGE:-3600000}
+      REMEMBER_ME_MAX_AGE: ${REMEMBER_ME_MAX_AGE:-2592000000}
+      LOG_LEVEL: ${LOG_LEVEL:-}
     ports:
       - "4000:4000"
     volumes:
       - ./backend:/app
       - /app/node_modules
       - ./backend/uploads:/app/uploads
+      # Instance backups (full database dumps) live beside uploads, never inside it.
+      - ./backend/backups:/app/backups
     command: npm run dev
 
   frontend:

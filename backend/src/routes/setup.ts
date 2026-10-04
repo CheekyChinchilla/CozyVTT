@@ -7,6 +7,7 @@ import {
   updateSystemSettings,
 } from '../services/systemSettings';
 import { registerUser, sanitizeUser } from '../services/auth';
+import { regenerateSession } from '../utils/session';
 import { validateEmail, validatePasswordStrength } from '../utils/validation';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import logger from '../utils/logger';
@@ -105,6 +106,11 @@ router.post('/init', async (req: Request, res: Response) => {
       displayName,
     });
 
+    // TODO(accounts): two requests racing through the checks above both get
+    // here. registerUser makes only the first an admin, but the second still
+    // applies its own settings (registration open, instance name), completes
+    // setup and is signed in. Only the request that created the admin should
+    // apply settings; refuse the other with the "Setup Already Completed" 400.
     // Apply the wizard's system configuration step. See utils/setupConfig for
     // why these were being dropped and how each field is treated.
     const settings = systemConfigFromSetupBody(req.body);
@@ -115,7 +121,8 @@ router.post('/init', async (req: Request, res: Response) => {
     // Mark setup as completed
     await markSetupCompleted();
 
-    // Create session for the new admin user
+    // Create the admin session on a fresh id (session fixation).
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     req.session.displayName = user.displayName;

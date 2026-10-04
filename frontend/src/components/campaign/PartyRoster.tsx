@@ -1,6 +1,9 @@
 // ============================================
 // Party Roster Component
 // Displays campaign members and their characters
+//
+// TODO(cleanup): nothing imports this component; the roster the sidebar
+// shows is CampaignRoster. Delete it, or wire it in if it is wanted.
 // ============================================
 
 import { useCampaign } from '@/contexts/CampaignContext';

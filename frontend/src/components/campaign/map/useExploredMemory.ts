@@ -1,0 +1,98 @@
+// ============================================
+// Explored memory on the client — which cells the viewer has seen before,
+// asked for and kept per "whose eyes": a player's own, or the player the DM
+// is previewing as.
+//
+// The reply carries the user it belongs to, and only that user's memory is
+// kept. Both effects are keyed on `exploringAs`, so the DM switching the
+// preview from one player to another asks again and compares the reply with
+// the new choice, never with the one the listener was first registered under.
+// ============================================
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+export interface ExplorationState {
+  mapId: string;
+  /** Whose memory this is; null for a reset, which empties everyone's. */
+  userId: string | null;
+  cells: number[];
+}
+
+/** The slice of a socket the memory needs; the real one is socket.io's. */
+export interface ExplorationSocket {
+  on(event: 'exploration:state', handler: (data: ExplorationState) => void): unknown;
+  off(event: 'exploration:state', handler: (data: ExplorationState) => void): unknown;
+  emit(event: 'exploration:request', data: { mapId: string; userId?: string }): unknown;
+}
+
+export interface ExplorationSocketSource {
+  getSocket(): ExplorationSocket | null | undefined;
+}
+
+export function useExploredMemory(
+  socket: ExplorationSocketSource | null | undefined,
+  mapId: string | undefined,
+  /** Lighting and explored memory are both on for this map. */
+  active: boolean,
+  /** Whose memory to hold; null when this canvas explores as nobody (the DM's own view). */
+  exploringAs: string | null,
+  /**
+   * 0 until the connection has authenticated into the campaign, and a new
+   * number after each re-authentication, so a rejoin asks again. A request
+   * sent before the campaign is joined is dropped by the server unanswered.
+   */
+  joinedEpoch: number
+) {
+  const [exploredCells, setExploredCells] = useState<Set<number> | null>(null);
+
+  // What is held belongs to one map and one person. When either changes, it is
+  // no longer about anything, so it goes. A rejoin is deliberately not in here:
+  // clearing on every reconnect blanked a map that was perfectly good, and the
+  // reply to the fresh request puts the same cells back anyway.
+  useEffect(() => {
+    setExploredCells(null);
+  }, [mapId, active, exploringAs]);
+
+  // Ask when the map, the setting or whose memory it is changes, and again on
+  // each rejoin. Off, or nobody to ask for: nothing to hold.
+  useEffect(() => {
+    if (!mapId || !active || !exploringAs || !joinedEpoch) return;
+    socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
+  }, [socket, mapId, active, exploringAs, joinedEpoch]);
+
+  // The server sends a player's memory to the DM sockets following them, and
+  // a socket follows whoever its last request named. When a preview ends,
+  // ask as nobody, which stops the following: otherwise the DM went on being
+  // sent that player's whole memory on every reveal.
+  const followed = useRef<string | null>(null);
+  useEffect(() => {
+    const was = followed.current;
+    followed.current = exploringAs;
+    if (was === null || exploringAs !== null || !joinedEpoch) return;
+    socket?.getSocket()?.emit('exploration:request', { mapId: mapId ?? '' });
+  }, [socket, mapId, exploringAs, joinedEpoch]);
+
+  // Keyed on the rejoin as well: a reconnect throws the socket away and
+  // builds a new one, and the request above already follows the rejoin. The
+  // listener did not, so the reply arrived with nobody listening and the
+  // DM's reset or another tab's reveals never reached this canvas again.
+  useEffect(() => {
+    const live = socket?.getSocket();
+    if (!live || !mapId) return;
+    const onState = (data: ExplorationState) => {
+      if (data.mapId !== mapId) return;
+      if (data.userId !== null && data.userId !== exploringAs) return;
+      setExploredCells(new Set<number>(data.cells));
+    };
+    live.on('exploration:state', onState);
+    return () => { live.off('exploration:state', onState); };
+  }, [socket, mapId, exploringAs, joinedEpoch]);
+
+  /** Cells this canvas has just seen for itself, added before the server echoes them. */
+  const addExplored = useCallback((fresh: readonly number[]) => {
+    if (fresh.length === 0) return;
+    setExploredCells((prev) => new Set<number>([...(prev ?? []), ...fresh]));
+  }, []);
+
+  return { exploredCells, addExplored };
+}

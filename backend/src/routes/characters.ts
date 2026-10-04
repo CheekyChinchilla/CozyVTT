@@ -4,37 +4,34 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
+import { canReferenceAsset } from '../services/permissions';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../validators/game-systems';
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
+import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
-import { errorMessage } from '../utils/errors';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
-
-/**
- * The `issues` array off a thrown Zod-shaped error.
- *
- * Duck-typed rather than `instanceof z.ZodError` because that is what the code
- * this replaces checked, and the two differ for an error that merely looks
- * like one.
- */
-interface ZodLikeIssue {
-  path: Array<string | number>;
-  message: string;
-  code?: string;
-}
-function zodLikeIssues(error: unknown): ZodLikeIssue[] | undefined {
-  if (error && typeof error === 'object' && 'errors' in error) {
-    const { errors } = error as { errors: unknown };
-    if (Array.isArray(errors)) return errors as ZodLikeIssue[];
-  }
-  return undefined;
-}
-
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
+import { withMapsLocked } from '../utils/mapTokens';
+import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
 const router = Router();
+
+/**
+ * Whether a character's owner is still a member of the campaign it names. A
+ * member removed before removals took their characters out of the campaign
+ * left characters naming it; those are the owner's alone.
+ */
+async function ownerStillIn(ownerId: string, campaignId: string): Promise<boolean> {
+  const owner = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId: ownerId, campaignId } },
+    select: { userId: true },
+  });
+  return owner !== null;
+}
+
 
 /**
  * Character Management Routes
@@ -97,6 +94,12 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
+      // TODO(rules): a gameSystem sent with the campaignId is not checked
+      // against the campaign's, so the API creates a Pathfinder 2e character
+      // straight into a D&D 5e campaign, or a typed one into a Flexible
+      // campaign, which assigning and accepting an invitation both refuse.
+      // It should answer 400 unless systemsCompatible(gameSystem, the
+      // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
         // Prisma's GameSystem is a string-literal union; cast to the local enum
         // type finalGameSystem was inferred from (identical string values).
@@ -114,12 +117,17 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       where: { id: userId },
       select: { displayName: true },
     });
+    // A sheet in the shape of a version before 1.3.0 has its older fields
+    // moved where the sheet reads them first, since validation drops them.
     const dataWithIdentity = applyIdentityToSheet(
       finalGameSystem as GameSystem | null,
-      data as Record<string, unknown> | undefined,
+      migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
     );
+    // What gets stored: the schema's parsed output once validated, so a key
+    // the sheet does not declare never reaches the database.
+    let sheetData: unknown = dataWithIdentity;
 
     // Validate gameSystem if provided
     if (finalGameSystem !== undefined && finalGameSystem !== null) {
@@ -149,11 +157,18 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
           })),
         });
       }
+      sheetData = validationResult.data;
     }
 
-    // Create character with flexible JSON data field
     // Normalize tokenImageUrl to full path if provided
     const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+
+    // The image has to be one the caller may read. Storing an unchecked
+    // reference is what let a member read a fellow member's private asset:
+    // a character pointing at it counted as the campaign using it.
+    if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
 
     // Both halves in one transaction. Written separately, a failure between
     // them would produce exactly the state this fixes: a character carrying a
@@ -163,7 +178,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         data: {
           userId,
           name,
-          data: dataWithIdentity as Prisma.InputJsonValue,
+          data: toJson(sheetData),
           tokenImageUrl: normalizedTokenImageUrl,
           campaignId: campaignId || null,
           gameSystem: finalGameSystem || null,
@@ -344,8 +359,9 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         },
       });
 
-      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in the campaign
-      if (membership) {
+      // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in
+      // the campaign, while the owner is still a member of it.
+      if (membership && (await ownerStillIn(character.userId, character.campaignId))) {
         return res.status(200).json({ character });
       }
     }
@@ -412,44 +428,20 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       });
     }
 
-    // Validate character data
-    try {
-      validateCharacterData(character.gameSystem as GameSystem, character.data);
-
-      return res.status(200).json({
-        isValid: true,
-      });
-    } catch (error: unknown) {
-      // TODO(typing): this catch cannot fire on a validation failure.
-      // `validateCharacterData` *returns* `{ success: false, errors }` rather
-      // than throwing, and the call above discards its return value — so this
-      // endpoint answers `isValid: true` for every character, valid or not.
-      // Left exactly as it was: a typing pass must not change what an endpoint
-      // returns. Logged separately to be fixed with a test that fails first.
-      const issues = zodLikeIssues(error);
-      if (issues) {
-        const formattedErrors = issues.map((err) => ({
-          path: err.path.join('.') || 'root',
-          message: err.message,
-          code: err.code,
-        }));
-
-        return res.status(200).json({
-          isValid: false,
-          errors: formattedErrors,
-        });
-      }
-
-      // Unknown validation error
-      return res.status(200).json({
-        isValid: false,
-        errors: [{
-          path: 'unknown',
-          message: errorMessage(error) || 'Unknown validation error',
-          code: 'unknown',
-        }],
-      });
+    // The validator reports rather than throws; a bad sheet is a 200 with
+    // the reasons, as documented, since asking is not an error.
+    const result = validateCharacterData(character.gameSystem as GameSystem, character.data);
+    if (result.success) {
+      return res.status(200).json({ isValid: true });
     }
+    return res.status(200).json({
+      isValid: false,
+      errors: result.errors.issues.map((issue) => ({
+        path: issue.path.join('.') || 'root',
+        message: issue.message,
+        code: issue.code,
+      })),
+    });
   } catch (error) {
     logger.error('Error validating character', { err: error });
     return res.status(500).json({
@@ -477,7 +469,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         message: parsed.error.issues[0]?.message ?? 'Invalid character data',
       });
     }
-    const { name, data, tokenImageUrl, gameSystem } = parsed.data;
+    const { name, data, tokenImageUrl, gameSystem, updatedAt: loadedAt } = parsed.data;
 
     // Find character first to check authorization
     const character = await prisma.character.findUnique({
@@ -491,37 +483,24 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Prevent changing gameSystem after creation
-    if (gameSystem !== undefined && gameSystem !== character.gameSystem) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot change game system after character creation. Create a new character instead.',
+    // Check authorization: the owner, or the DM of the character's campaign.
+    // A spectator in that campaign may not edit even their own character: a
+    // token bound to it follows the sheet on every screen (its bar, its
+    // downed fade, its picture), and spectators change nothing at the table.
+    const membership = character.campaignId
+      ? await prisma.campaignMembership.findUnique({
+          where: { userId_campaignId: { userId, campaignId: character.campaignId } },
+        })
+      : null;
+    if (membership?.role === 'SPECTATOR') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Spectators cannot edit a character in this campaign',
       });
     }
-
-    // Check authorization
-    let isAuthorized = false;
-
-    // Owner can always edit
-    if (character.userId === userId) {
-      isAuthorized = true;
-    }
-
-    // If character is in a campaign, check if requester is the DM
-    if (!isAuthorized && character.campaignId) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId: character.campaignId,
-          },
-        },
-      });
-
-      if (membership && membership.role === 'DM') {
-        isAuthorized = true;
-      }
-    }
+    const isAuthorized =
+      character.userId === userId ||
+      (membership?.role === 'DM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -530,9 +509,26 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Validate data update if character has gameSystem
+    // Prevent changing gameSystem after creation. Checked after the permission
+    // check, so the answer tells a stranger nothing about the character.
+    if (gameSystem !== undefined && gameSystem !== character.gameSystem) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Cannot change game system after character creation. Create a new character instead.',
+      });
+    }
+
+    // Validate data update if character has gameSystem. What gets stored is
+    // the schema's parsed output, so a key the sheet does not declare never
+    // reaches the database. A sheet still carrying fields from before 1.3.0
+    // has them moved where the sheet reads them first, or that would drop
+    // their content before `migrate:sheet-fields` could move it.
+    let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
-      const validationResult = validateCharacterData(character.gameSystem as GameSystem, data);
+      const validationResult = validateCharacterData(
+        character.gameSystem as GameSystem,
+        migrateLegacySheetFields(character.gameSystem, data)
+      );
       if (!validationResult.success) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -544,6 +540,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           })),
         });
       }
+      sheetData = validationResult.data;
     }
 
     // Build update data
@@ -553,7 +550,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       tokenImageUrl?: string | null;
     } = {};
     if (name !== undefined) updateData.name = name;
-    if (data !== undefined) updateData.data = toJson(data);
+    if (data !== undefined) updateData.data = toJson(sheetData);
 
     // Keep the `name` column in step with the name typed on the sheet.
     //
@@ -564,28 +561,47 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // the character was created with. The sheet is the thing the user typed
     // into, so it wins; an explicit `name` in the request still takes priority.
     if (name === undefined && data !== undefined && character.gameSystem) {
-      const sheetName = sheetNameFor(character.gameSystem as GameSystem, data as Record<string, unknown>);
+      const sheetName = sheetNameFor(character.gameSystem as GameSystem, sheetData as Record<string, unknown>);
       if (sheetName && sheetName !== character.name) {
         updateData.name = sheetName;
       }
     }
     if (tokenImageUrl !== undefined) {
-      // Normalize tokenImageUrl to full path (or null)
-      updateData.tokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+      // Normalize tokenImageUrl to full path (or null), and check what is stored
+      const normalizedTokenImageUrl = tokenImageUrl ? normalizeAssetUrl(tokenImageUrl, 'tokens') : null;
+      // The picture already on the sheet may be sent back as it is.
+      if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, character.tokenImageUrl))) {
+        return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
+      updateData.tokenImageUrl = normalizedTokenImageUrl;
     }
 
-    const updatedCharacter = await prisma.character.update({
-      where: { id },
-      data: updateData,
-      include: {
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const withCampaign = { campaign: { select: { id: true, name: true } } } as const;
+    let updatedCharacter;
+    if (loadedAt !== undefined) {
+      // Saved only if the character is still the version the caller loaded.
+      // Checked in the write itself, so a change landing after the read above
+      // is caught too. Without it, a sheet open while the DM took hit points
+      // put the old number back on its next save.
+      const { count } = await prisma.character.updateMany({
+        where: { id, updatedAt: new Date(loadedAt) },
+        data: updateData,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'CHARACTER_CHANGED',
+          message: 'This character was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id }, include: withCampaign });
+    } else {
+      updatedCharacter = await prisma.character.update({
+        where: { id },
+        data: updateData,
+        include: withCampaign,
+      });
+    }
 
     // A map token stores its own COPY of the character's image, taken when it
     // was placed — there is no Token table, tokens live as JSON on the map. So
@@ -628,18 +644,34 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           WHERE tokens @> ${JSON.stringify([{ characterId: updatedCharacter.id }])}::jsonb
         `;
 
-        for (const map of boundMaps) {
-          const tokens = readTokens(map.tokens);
-          let mapChanged = false;
+        // A campaign where the editor is only a spectator keeps its tokens as
+        // they are: spectators change nothing at the table, and this is the
+        // one write of theirs that would otherwise reach it.
+        const spectatorIn = new Set(
+          (await prisma.campaignMembership.findMany({
+            where: { userId, role: 'SPECTATOR', campaignId: { in: boundMaps.map((m) => m.campaignId) } },
+            select: { campaignId: true },
+          })).map((m) => m.campaignId)
+        );
 
-          const nextTokens = tokens.map((token) => {
-            if (token?.characterId !== updatedCharacter.id) return token;
-            mapChanged = true;
-            return { ...token, imageUrl: updateData.tokenImageUrl ?? '' };
+        for (const map of boundMaps) {
+          if (spectatorIn.has(map.campaignId)) continue;
+          // Rewritten from the list as it is under the map's lock, like every
+          // other write to a map's tokens; the list the query above returned
+          // only says which maps to visit.
+          const mapChanged = await withMapsLocked([map.id], async (tx) => {
+            const fresh = await tx.map.findUniqueOrThrow({ where: { id: map.id }, select: { tokens: true } });
+            let changed = false;
+            const nextTokens = readTokens(fresh.tokens).map((token) => {
+              if (token?.characterId !== updatedCharacter.id) return token;
+              changed = true;
+              return { ...token, imageUrl: updateData.tokenImageUrl ?? '' };
+            });
+            if (changed) await tx.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
+            return changed;
           });
 
           if (mapChanged) {
-            await prisma.map.update({ where: { id: map.id }, data: { tokens: toJson(nextTokens) } });
             tokensChanged = true;
             campaignsWithChangedTokens.add(map.campaignId);
           }
@@ -651,10 +683,22 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       }
     }
 
-    // Broadcast character update to campaign if character is in a campaign
-    if (updatedCharacter.campaignId) {
+    // A combatant bound to this character shows the token's picture, which
+    // the sync above may just have changed.
+    for (const affectedCampaignId of campaignsWithChangedTokens) {
+      await resendInitiative(affectedCampaignId);
+    }
+
+    // Broadcast character update to campaign if character is in a campaign,
+    // and its owner is still a member there: a character a removal left
+    // naming the campaign is not that table's to read.
+    const sheetCampaignId =
+      updatedCharacter.campaignId && (await ownerStillIn(updatedCharacter.userId, updatedCharacter.campaignId))
+        ? updatedCharacter.campaignId
+        : null;
+    if (sheetCampaignId) {
       try {
-        broadcastToCampaign(updatedCharacter.campaignId, 'character.updated', {
+        broadcastToCampaign(sheetCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           character: updatedCharacter,
           userId,
@@ -684,7 +728,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           readJsonObject(updatedCharacter.data)
         );
         if (currentHp && !sameCharacterHp(previousHp, currentHp)) {
-          broadcastToCampaign(updatedCharacter.campaignId, 'character.hp.updated', {
+          broadcastToCampaign(sheetCampaignId, 'character.hp.updated', {
             characterId: updatedCharacter.id,
             hp: currentHp,
           });
@@ -706,7 +750,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // that a token moved on, which is all a repaint needs.
     try {
       for (const affectedCampaignId of campaignsWithChangedTokens) {
-        if (affectedCampaignId === updatedCharacter.campaignId) continue;
+        if (affectedCampaignId === sheetCampaignId) continue;
         broadcastToCampaign(affectedCampaignId, 'character.updated', {
           characterId: updatedCharacter.id,
           tokensChanged: true,
@@ -787,6 +831,14 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     const userId = req.session.userId!;
     const { id } = req.params;
     const { campaignId } = req.body;
+
+    // A campaign id, or null, "" or nothing to unassign.
+    if (campaignId !== undefined && campaignId !== null && typeof campaignId !== 'string') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'campaignId must be a campaign id, or null to unassign',
+      });
+    }
 
     const character = await prisma.character.findUnique({
       where: { id },
@@ -908,11 +960,8 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     // typed characters must match the campaign's game system exactly.
     const charSystem = character.gameSystem;
     const campSystem = campaign.gameSystem;
-    const systemsCompatible =
-      (!charSystem && !campSystem) ||
-      (charSystem && campSystem && charSystem === campSystem);
 
-    if (!systemsCompatible) {
+    if (!systemsCompatible(charSystem, campSystem)) {
       const charLabel = charSystem ?? 'flexible';
       const campLabel = campSystem ?? 'flexible';
       return res.status(400).json({

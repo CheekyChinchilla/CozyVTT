@@ -6,17 +6,20 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { findVibePeriod, normalizeVibeSettings } from '../../utils/vibe-presets';
+import { vibePeriodAudioAssetId } from '../../utils/vibeAudio';
+import { lastAmbientVolume, setCampaignAmbientAudio } from '../../services/atmosphereAudio';
 import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
 
 export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * VIBE.UPDATE - DM changes the current vibe period.
-   * Updates campaign.currentVibe and broadcasts period data to all members.
+   * VIBE.UPDATE - DM changes the current vibe period and its audio follows.
+   * Updates campaign.currentVibe, broadcasts period data to all members, and
+   * sets the period's track as the table's ambient audio (none means silence).
    */
   socket.on('vibe.update', async (data: { period: string }) => {
     try {
-      if (!socket.campaignId) {
+      if (!socket.campaignId || !socket.userId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
@@ -80,6 +83,20 @@ export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): v
         updatedBy: socket.userId,
         timestamp: new Date().toISOString(),
       });
+
+      // The vibe owns the soundtrack: a period with a track starts it for
+      // the table, one without silences it. Older settings carried free-text
+      // notes in this field; those count as no track. A dead or forbidden id
+      // silences the table and tells the DM, but never blocks the switch.
+      const requestedAudio = vibePeriodAudioAssetId(vibePeriod.audio);
+      const volume = await lastAmbientVolume(socket.campaignId);
+      const audioResult = await setCampaignAmbientAudio(io, socket.campaignId, socket.userId, requestedAudio, { volume });
+      if (!audioResult.ok) {
+        await setCampaignAmbientAudio(io, socket.campaignId, socket.userId, null, { volume });
+        socket.emit('error', {
+          message: `The "${vibePeriod.name}" period's audio track is unavailable, so the vibe changed without audio`,
+        });
+      }
 
       // Send system message
       const periodDisplayName = vibePeriod.name.charAt(0).toUpperCase() + vibePeriod.name.slice(1);

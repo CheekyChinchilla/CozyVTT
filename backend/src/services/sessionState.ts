@@ -13,7 +13,7 @@
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import type { Token } from '../websocket/shared';
-import { readJsonArray, readTokens, toJson } from '../utils/prisma-json';
+import { readJsonArray, readTokens } from '../utils/prisma-json';
 
 /**
  * Game State Interface
@@ -75,69 +75,6 @@ export async function captureGameState(
     return state;
   } catch (error) {
     logger.error('❌ Error capturing game state', { err: error });
-    throw error;
-  }
-}
-
-/**
- * Restore saved game state to a campaign
- * Resuming a Session
- *
- * @param campaignId - Campaign ID
- * @param state - GameState object to restore
- */
-export async function restoreGameState(
-  campaignId: string,
-  state: GameState
-): Promise<void> {
-  try {
-    // Validate campaign exists
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-    });
-
-    if (!campaign) {
-      throw new Error('Campaign not found');
-    }
-
-    // Update campaign settings
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        currentMapId: state.mapId,
-        spiritLayerEnabled: state.spiritLayerVisible,
-        currentVibe: state.currentVibe,
-      },
-    });
-
-    // If there's a current map, restore tokens and annotations
-    if (state.mapId) {
-      // Verify map exists and belongs to campaign
-      const map = await prisma.map.findFirst({
-        where: {
-          id: state.mapId,
-          campaignId,
-        },
-      });
-
-      if (map) {
-        await prisma.map.update({
-          where: { id: state.mapId },
-          data: {
-            tokens: toJson(state.tokens),
-            annotations: toJson(state.annotations),
-          },
-        });
-
-        logger.info(`✅ Restored game state for campaign ${campaignId} (map: ${state.mapId})`);
-      } else {
-        logger.warn(`⚠️ Map ${state.mapId} not found or doesn't belong to campaign ${campaignId}`);
-      }
-    }
-
-    logger.info(`✅ Restored game state for campaign ${campaignId}`);
-  } catch (error) {
-    logger.error('❌ Error restoring game state', { err: error });
     throw error;
   }
 }

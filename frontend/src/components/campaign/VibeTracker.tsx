@@ -38,6 +38,9 @@ export default function VibeTracker() {
 
   const periods = campaign?.vibeSettings?.periods ?? [];
   const activePeriod = periods.find((p) => p.name === currentVibe);
+  // The server refuses a period change while the tracker is off, and treats a
+  // missing flag as on; offering the buttons anyway only produced that refusal.
+  const vibeEnabled = campaign?.vibeSettings?.enabled !== false;
 
   // ============================================
   // Period Change (DM only)
@@ -102,8 +105,16 @@ export default function VibeTracker() {
           )}
         </div>
 
-        {/* Period Selection Grid — DM only */}
-        {userRole === 'DM' && periods.length > 0 && (
+        {/* With the tracker off, saving the period editor turns it on. */}
+        {userRole === 'DM' && !vibeEnabled && (
+          <p className="text-xs text-warm-gray">
+            The vibe tracker is off for this campaign. Open the period editor
+            with the gear above and save its periods to turn it on.
+          </p>
+        )}
+
+        {/* Period Selection Grid — DM only, while the tracker is on */}
+        {userRole === 'DM' && vibeEnabled && periods.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {periods.map((period) => {
               const isActive = currentVibe === period.name;

@@ -105,7 +105,7 @@ export default function AssetGrid({
     let cancelled = false;
     setLoading(true);
     api
-      .listAssets({ type, limit })
+      .listAssets({ type, limit, usable: true })
       .then((res) => {
         if (cancelled) return;
         setFetched(res.assets);

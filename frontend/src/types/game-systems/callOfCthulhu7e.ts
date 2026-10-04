@@ -98,6 +98,13 @@ export interface CoC7eSkill {
 }
 
 /**
+ * A skill the player adds, which carries its own name.
+ */
+export interface CoC7eCustomSkill extends CoC7eSkill {
+  name?: string;
+}
+
+/**
  * Fighting skill entry
  */
 export interface CoC7eFightingSkill {
@@ -202,7 +209,7 @@ export interface CoC7eSkills {
   swim: CoC7eSkill;
   throw: CoC7eSkill;
   track: CoC7eSkill;
-  customSkills: CoC7eSkill[];
+  customSkills: CoC7eCustomSkill[];
 }
 
 /**

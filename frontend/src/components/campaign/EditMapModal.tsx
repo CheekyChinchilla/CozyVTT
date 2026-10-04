@@ -192,6 +192,9 @@ export default function EditMapModal({
   const [feetCustom, setFeetCustom] = useState(5);
   const [diagonalRule, setDiagonalRule] = useState<'flat' | 'alternating'>('flat');
   const [lightingEnabled, setLightingEnabled] = useState(false);
+  const [fogEnabled, setFogEnabled] = useState(true);
+  const [globalIllumination, setGlobalIllumination] = useState(true);
+  const [explorationEnabled, setExplorationEnabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -219,6 +222,9 @@ export default function EditMapModal({
       else { setFeetPreset('custom'); setFeetCustom(fps); }
       setDiagonalRule((map.diagonalRule as 'flat' | 'alternating') ?? 'flat');
       setLightingEnabled(map.lightingEnabled ?? false);
+      setFogEnabled(map.fogEnabled ?? true);
+      setGlobalIllumination(map.globalIllumination ?? true);
+      setExplorationEnabled(map.explorationEnabled ?? true);
       setPreviewZoom(1);
       setDetectedGrid(null);
       setIsDetecting(false);
@@ -286,6 +292,9 @@ export default function EditMapModal({
         diagonalRule,
         spiritLayerUrl: spiritAssetId ?? null,
         lightingEnabled,
+        fogEnabled,
+        globalIllumination,
+        explorationEnabled,
       };
       const updatedMap = await mapService.updateMap(campaignId, map.id, data);
       onUpdated(updatedMap);
@@ -494,6 +503,65 @@ export default function EditMapModal({
                         Enable Dynamic Lighting
                       </span>
                       <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Fog of War */}
+                <div className="mt-3 pt-3 border-t border-stone-gray/20">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={fogEnabled}
+                      onChange={(e) => setFogEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-moss-green"
+                      aria-label="Fog of war on this map"
+                    />
+                    <div>
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                        Fog of War
+                      </span>
+                      <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Global Illumination */}
+                <div className="mt-3 pt-3 border-t border-stone-gray/20">
+                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={globalIllumination}
+                      disabled={!lightingEnabled}
+                      onChange={(e) => setGlobalIllumination(e.target.checked)}
+                      className="w-4 h-4 accent-moss-green"
+                      aria-label="Global illumination"
+                    />
+                    <div>
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                        Global Illumination
+                      </span>
+                      <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Explored memory */}
+                <div className="mt-3 pt-3 border-t border-stone-gray/20">
+                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={explorationEnabled}
+                      disabled={!lightingEnabled}
+                      onChange={(e) => setExplorationEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-moss-green"
+                      aria-label="Remember explored areas"
+                    />
+                    <div>
+                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                        Remember Explored Areas
+                      </span>
+                      <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
                     </div>
                   </label>
                 </div>

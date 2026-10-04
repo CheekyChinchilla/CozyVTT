@@ -35,8 +35,9 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
-import { AssetScope } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { settableAudioAssets } from '@/utils/audioAssets';
+import { currentVibeTrack, stopTarget } from '@/utils/ambientFallback';
 import type { Asset } from '@/types';
 
 // ============================================
@@ -73,7 +74,7 @@ interface AtmospherePanelProps {
 // ============================================
 
 export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProps) {
-  const { campaign, activeAtmosphereEffect, activeAtmosphereAudio } = useCampaign();
+  const { campaign, currentVibe, activeAtmosphereEffect, activeAtmosphereAudio } = useCampaign();
   const { user } = useAuth();
   const { socket } = useWebSocket();
 
@@ -102,21 +103,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
     setLoadingAssets(true);
     setAssetError(null);
     api.listAssets({ type: 'AUDIO' })
-      // The list is wider than what can be played here: it also carries audio
-      // belonging to other campaigns this DM is in, which the server refuses
-      // because a campaign's audio belongs to that table, and other people's
-      // personal tracks are not the DM's to open to the room. Offering one
-      // gave a button that did nothing.
-      .then((r) =>
-        setAudioAssets(
-          (r.assets || []).filter(
-            (a) =>
-              a.scope === AssetScope.GLOBAL ||
-              (a.scope === AssetScope.USER && a.uploadedById === user?.id) ||
-              (a.scope === AssetScope.CAMPAIGN && a.campaignId === campaign.id)
-          )
-        )
-      )
+      .then((r) => setAudioAssets(settableAudioAssets(r.assets || [], user?.id, campaign.id)))
       .catch(() => setAssetError('Failed to load audio assets'))
       .finally(() => setLoadingAssets(false));
   }, [isOpen, campaign, user?.id]);
@@ -413,10 +400,15 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                       </p>
                       {audioAssets.map((asset) => {
                         const isPlaying = activeAtmosphereAudio?.assetId === asset.id;
+                        // Stopping an override brings the vibe's own track
+                        // back; stopping the vibe's track means silence.
+                        const vibeTrackId = currentVibeTrack(campaign?.vibeSettings, currentVibe);
+                        const onStop = stopTarget(vibeTrackId, asset.id);
                         return (
                           <button
                             key={asset.id}
-                            onClick={() => handleAudioSelect(isPlaying ? null : asset.id)}
+                            title={isPlaying && onStop ? 'Stop this track and return to the vibe audio' : undefined}
+                            onClick={() => handleAudioSelect(isPlaying ? onStop : asset.id)}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${
                               isPlaying
                                 ? 'border-moss-green bg-moss-green/10'

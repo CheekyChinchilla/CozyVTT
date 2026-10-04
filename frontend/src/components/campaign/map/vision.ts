@@ -26,7 +26,12 @@ export interface VisionSource {
 }
 
 export interface VisionState {
-  /** One entry per viewer-controlled token (sight radius applied). */
+  /**
+   * One entry per viewer-controlled token: what it makes out unaided, bounded
+   * by its darkvision radius. Empty (no points) for a token with none, and for
+   * every token when Global Illumination is on, since then the sight polygon
+   * alone decides.
+   */
   tokenVision: VisionSource[];
   /**
    * One entry per viewer-controlled token with **no** radius limit — pure line
@@ -40,9 +45,14 @@ export interface VisionState {
   tokenSight: VisionSource[];
   /** One entry per enabled light source (dim radius applied). */
   lightVision: VisionSource[];
-  /** Concatenated in draw order — used by the walls layer door filter. */
-  all: VisionSource[];
 }
+
+export interface VisionOptions {
+  /** Everything in line of sight counts as lit, so no darkvision raycast is needed. */
+  globalIllumination?: boolean;
+}
+
+const NO_REACH: VisibilityPolygon = { points: [] };
 
 /** Token center (canvas px) + sight radius (px) for a viewer token. */
 function tokenSource(token: Token, viewport: Viewport): { cx: number; cy: number; r: number } {
@@ -63,22 +73,25 @@ export function computeVisionState(
   myTokens: readonly Token[],
   enabledLights: readonly LightSource[],
   wallSegments: readonly WallSegment[],
-  viewport: Viewport
+  viewport: Viewport,
+  options: VisionOptions = {}
 ): VisionState {
   const { w: mapWidthPx, h: mapHeightPx } = mapSizePx(viewport);
+  const globalIllumination = options.globalIllumination ?? false;
 
-  const tokenVision: VisionSource[] = myTokens.map((token) => {
-    const { cx, cy, r } = tokenSource(token, viewport);
-    const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, r);
+  // Line of sight is always computed; it is what every other test is clipped to.
+  const tokenSight: VisionSource[] = myTokens.map((token) => {
+    const { cx, cy } = tokenSource(token, viewport);
+    const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, 0);
     return { poly, cx, cy };
   });
 
-  // A radius of 0 already means unbounded, so that polygon *is* the line of
-  // sight — only a token with a real radius needs the second raycast.
-  const tokenSight: VisionSource[] = myTokens.map((token, i) => {
+  // Darkvision reach: a second, bounded raycast, only for a token that has any
+  // and only when it matters.
+  const tokenVision: VisionSource[] = myTokens.map((token) => {
     const { cx, cy, r } = tokenSource(token, viewport);
-    if (r <= 0) return tokenVision[i];
-    const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, 0);
+    if (globalIllumination || r <= 0) return { poly: NO_REACH, cx, cy };
+    const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, r);
     return { poly, cx, cy };
   });
 
@@ -88,7 +101,7 @@ export function computeVisionState(
     return { poly, cx: light.x, cy: light.y };
   });
 
-  return { tokenVision, tokenSight, lightVision, all: [...tokenVision, ...lightVision] };
+  return { tokenVision, tokenSight, lightVision };
 }
 
 /**
@@ -110,7 +123,8 @@ export interface VisionCache {
     myTokens: readonly Token[],
     enabledLights: readonly LightSource[],
     wallSegments: readonly WallSegment[],
-    viewport: Viewport
+    viewport: Viewport,
+    options?: VisionOptions
   ): VisionState;
 }
 
@@ -128,8 +142,9 @@ export function createVisionCache(): VisionCache {
   const lightCache = new Map<string, CachedSource>();
 
   return {
-    compute(myTokens, enabledLights, wallSegments, viewport) {
+    compute(myTokens, enabledLights, wallSegments, viewport, options = {}) {
       const { w: mapWidthPx, h: mapHeightPx } = mapSizePx(viewport);
+      const globalIllumination = options.globalIllumination ?? false;
 
       // Any wall mutation (or a map switch) replaces the array reference.
       if (wallSegments !== lastWalls) {
@@ -140,24 +155,11 @@ export function createVisionCache(): VisionCache {
       }
 
       const seenTokens = new Set<string>();
-      const tokenVision: VisionSource[] = myTokens.map((token) => {
-        const { cx, cy, r } = tokenSource(token, viewport);
-        seenTokens.add(token.id);
-        const hit = tokenCache.get(token.id);
-        if (hit && hit.x === cx && hit.y === cy && hit.r === r) return hit.src;
-        const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, r);
-        const src: VisionSource = { poly, cx, cy };
-        tokenCache.set(token.id, { x: cx, y: cy, r, src });
-        return src;
-      });
-      for (const id of tokenCache.keys()) if (!seenTokens.has(id)) tokenCache.delete(id);
 
-      // Unbounded line of sight, cached separately — see VisionState.tokenSight.
-      // A token with no radius is already unbounded, so it costs nothing extra;
-      // only a token with a real sight radius adds a second raycast.
-      const tokenSight: VisionSource[] = myTokens.map((token, i) => {
-        const { cx, cy, r } = tokenSource(token, viewport);
-        if (r <= 0) return tokenVision[i];
+      // Line of sight, keyed by position only — see VisionState.tokenSight.
+      const tokenSight: VisionSource[] = myTokens.map((token) => {
+        const { cx, cy } = tokenSource(token, viewport);
+        seenTokens.add(token.id);
         const hit = sightCache.get(token.id);
         if (hit && hit.x === cx && hit.y === cy) return hit.src;
         const poly = computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, 0);
@@ -166,6 +168,23 @@ export function createVisionCache(): VisionCache {
         return src;
       });
       for (const id of sightCache.keys()) if (!seenTokens.has(id)) sightCache.delete(id);
+
+      // Darkvision reach, keyed by position and radius. A change of radius
+      // misses this entry only; Global Illumination folds every radius to 0,
+      // so toggling it recomputes each darkvision entry once and nothing else.
+      const tokenVision: VisionSource[] = myTokens.map((token) => {
+        const { cx, cy, r: real } = tokenSource(token, viewport);
+        const r = globalIllumination ? 0 : real;
+        const hit = tokenCache.get(token.id);
+        if (hit && hit.x === cx && hit.y === cy && hit.r === r) return hit.src;
+        const poly = r <= 0
+          ? NO_REACH
+          : computeVisibility({ x: cx, y: cy }, wallSegments as WallSegment[], mapWidthPx, mapHeightPx, r);
+        const src: VisionSource = { poly, cx, cy };
+        tokenCache.set(token.id, { x: cx, y: cy, r, src });
+        return src;
+      });
+      for (const id of tokenCache.keys()) if (!seenTokens.has(id)) tokenCache.delete(id);
 
       const seenLights = new Set<string>();
       const lightVision: VisionSource[] = enabledLights.map((light) => {
@@ -180,7 +199,7 @@ export function createVisionCache(): VisionCache {
       });
       for (const id of lightCache.keys()) if (!seenLights.has(id)) lightCache.delete(id);
 
-      return { tokenVision, tokenSight, lightVision, all: [...tokenVision, ...lightVision] };
+      return { tokenVision, tokenSight, lightVision };
     },
   };
 }

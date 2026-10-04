@@ -60,7 +60,7 @@ src/
 ├── server.ts          Entry point — creates Express app, attaches Socket.io
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
-│   ├── auth.ts        Passport.js session middleware, requireAuth guards
+│   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
 │   └── upload.ts      Multer configuration, magic byte validation
@@ -68,12 +68,13 @@ src/
 │   ├── auth.ts        Login, logout, register, password reset
 │   ├── users.ts       User CRUD (admin only)
 │   ├── campaigns.ts   Campaign CRUD + membership
+│   ├── campaignMacros.ts Saved dice macros per campaign
+│   ├── campaignDocuments.ts Documents shared with a campaign
 │   ├── characters.ts  Character CRUD + assignment
 │   ├── maps.ts        Map and token management
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites
 │   ├── assets.ts      File upload and retrieval
 │   ├── invitations.ts Campaign invitation lifecycle
-│   ├── mfa.ts         TOTP setup, verify, disable, backup codes
 │   ├── setup.ts       First-run setup wizard
 │   ├── config.ts      Public client config (upload limits)
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
@@ -87,11 +88,14 @@ src/
 │   ├── utils.ts       System-message / broadcast helpers
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
 │                      vibe, maps, atmosphere, characters, initiative,
-│                      walls, fog, lights
+│                      walls, fog, lights, exploration, pings
 ├── utils/
 │   ├── dice-parser.ts    mathjs-based dice expression evaluator
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
-│   ├── serverRaycasting.ts  Server-side vision raycasting for lighting
+│   ├── visibilityRule.ts What a viewer makes out of a point (shared, see Vision model)
+│   ├── raycasting.ts     Line-of-sight polygons (shared, byte-identical with the client)
+│   ├── spatialIndex.ts   Wall grid for large maps (shared)
+│   ├── styleAllowlists.ts CSS-bound values the server accepts and the client re-checks (shared)
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
@@ -145,13 +149,15 @@ src/
 ├── components/
 │   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
-│   │   └── map/       MapCanvas render layers, coordinate conversions, fog selection, vision cache, and animation/render-loop hooks
+│   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Admin panel tabs
 ├── services/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
+│   ├── unsavedWork.ts What a lost session does while an editor has unsaved changes
+│   ├── sessionKeepAlive.ts  Pings the session from the game table and from editors with unsaved changes
 │   └── auth.service.ts  Auth-specific API calls
 ├── hooks/
 │   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
@@ -421,15 +427,17 @@ sequenceDiagram
     S->>DB: Verify argon2id hash
     DB-->>S: User record
     S->>DB: Create session record
-    S-->>C: Set-Cookie: session_id (httpOnly, secure, sameSite=lax)
+    S-->>C: Set-Cookie: cozyvtt.sid (httpOnly, sameSite=lax, Secure over HTTPS)
 
     Note over C,S: Subsequent requests
-    C->>S: GET /api/campaigns (Cookie: session_id)
+    C->>S: GET /api/campaigns (Cookie: cozyvtt.sid)
     S->>DB: Look up session
     DB-->>S: Session + user id
     S->>S: req.user = user
     S-->>C: 200 response
 ```
+
+A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
 
 ### Role-Based Authorization
 
@@ -474,7 +482,7 @@ equivalent: `loadCampaignMembership` reads the membership per request.
 
 ### MFA (TOTP)
 
-MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Backup codes are SHA-256 hashed before storage and shown to the user only once.
+MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
 
 ---
 
@@ -518,9 +526,22 @@ Sockets join two rooms, keyed by raw id (no prefix):
 Token data is filtered **per-client** before being broadcast. The server maintains two views of the token list:
 
 - **DM view** — all tokens, both layers, all metadata including DM notes
-- **Player view** — material-layer tokens only, plus tokens that belong to the player's own character if they have spirit crossover (and, when dynamic lighting is on, only tokens within line of sight)
+- **Player view** — the tokens on the plane the player is on (the spirit layer once they have crossed over or the DM has revealed it to everyone, otherwise the material plane), never a hidden token, and, when dynamic lighting is on, only tokens the visibility rule says the player sees. Each token is then trimmed for that recipient by `tokenForRecipient`: no `notes` or `statBlock`, `hp` only for their own token or one whose HP bar is on, `sightRadius` and `creatureTemplateId` only for their own, and an obscured token they do not control masked by `tokenMask.ts`
 
-This filtering lives in `src/utils/spirit-layer.ts` and is applied in the token, spirit, and `map.change` handlers before each client receives its payload. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
+This filtering lives in `src/utils/spirit-layer.ts` and is applied before each client receives its payload: by the map fetch and the token update's reply over REST, and by the token, spirit, `map.change` and initiative handlers over the socket. The initiative order is projected per recipient through the same role filter, so a hidden or off-plane combatant, or one on a map the campaign is not showing, is absent and a combatant's name, picture and hit points are what the map would send that player; the lighting rule is not applied to the order, so a combatant out of a player's sight is still listed. For fan-out to many players, visibility is resolved for all viewers in a fixed number of queries per event rather than one lookup per socket.
+
+### Vision model
+
+Dynamic lighting asks one question of every point on the map: how well does this viewer make it out? The answer is decided once, in `visibilityRule.ts`, and used on both sides:
+
+- the **server** (`filterTokensByLighting`) sends a player a token only if the rule says its centre is seen;
+- the **client** (`drawLights.ts`, `drawWalls.ts`) draws the coverage mask in the rule's tiers and shows a door only where the rule says the player can see it.
+
+The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
+
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
+
+A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 
 ### WebSocket Event Reference
 
@@ -542,8 +563,11 @@ uploads/
   avatars/       {userId}_avatar.{ext}
   documents/    global/{id}.{ext}             Global and personal documents
                 campaigns/{campaignId}/{id}.{ext}
-  backups/      cozyvtt_{timestamp}.sql.gz
 ```
+
+Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
+`backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
+directory (`backend/src/utils/backupDir.ts`).
 
 ### Upload Pipeline
 
@@ -651,9 +675,12 @@ Character data round-trips as JSON:
 
 ```
 User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
-→ CharacterEditorPage sends PUT /api/characters/:id { data }
+→ CharacterEditorPage sends PUT /api/characters/:id { data, updatedAt }
+→ Backend moves any pre-1.3.0 fields into the ones the sheet reads (utils/sheetFieldMigrations)
 → Backend validates data against the game-system Zod schema (mostly optional fields)
-→ Stored as character.data in PostgreSQL
+→ The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
+  does not declare is dropped; a stale updatedAt (the character changed since the
+  sheet was loaded) is refused with 409 and nothing is written
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```

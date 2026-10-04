@@ -211,7 +211,7 @@ export interface CreatureTemplate {
   imageUrl: string | null;
   statBlock: NpcStatBlock;
   size: { width: number; height: number };
-  disposition: string;
+  disposition: TokenDisposition;
   displayMode: TokenDisplayMode;
   createdById: string | null;
   campaignId: string | null;
@@ -498,6 +498,8 @@ export interface Campaign {
 }
 
 export interface VibeSettings {
+  /** The server treats a missing flag as on, for settings saved before it existed. */
+  enabled?: boolean;
   periods: VibePeriod[];
   [key: string]: unknown;
 }
@@ -582,9 +584,14 @@ export interface CampaignDocument {
   mimeType: string;
   fileSize: number;
   createdAt: string;
-  uploadedBy: { id: string; displayName: string };
+  /** Null once the uploader's account is deleted. */
+  uploadedBy: { id: string; displayName: string } | null;
   linkedAt: string;
-  linkedBy: { id: string; displayName: string };
+  /**
+   * Who shared it. For the campaign's own document this is its uploader, so it
+   * is null once that account is deleted, as uploadedBy is.
+   */
+  linkedBy: { id: string; displayName: string } | null;
   /**
    * True when shared into the campaign by link, which the DM can undo. False
    * when it is the campaign's own document, created or uploaded at CAMPAIGN
@@ -691,6 +698,12 @@ export interface Map {
   wallSegments?: import('./walls').WallSegment[];
   fogData?: import('./walls').FogState | null;
   lightingEnabled?: boolean;
+  /** Manual fog of war on this map. Absent on older payloads means on. */
+  fogEnabled?: boolean;
+  /** Everything in line of sight is lit. Absent on older payloads means on. */
+  globalIllumination?: boolean;
+  /** Explored areas are remembered per player. Absent on older payloads means on. */
+  explorationEnabled?: boolean;
   lights?: import('./walls').LightSource[];
   createdAt: string;
   updatedAt: string;
@@ -716,7 +729,11 @@ export interface Token {
   showHpBar:   boolean;
   notes:       string;
   initiative:  number | null;
-  /** Sight radius in grid squares (0 = unlimited). Used by dynamic lighting. */
+  /**
+   * Darkvision, in grid squares: how far the token makes things out with no
+   * light (0 = none; 12 = 60 ft at 5 ft a square). It never limits how far a lit thing can be
+   * noticed. Decides what the server sends, so only the DM may change it.
+   */
   sightRadius?: number;
   /** Display mode: pog (circular + border), top-down (circular, no border), full-art (rectangular, alpha). Default: pog */
   displayMode?: TokenDisplayMode;
@@ -724,6 +741,11 @@ export interface Token {
   statBlock?: NpcStatBlock | null;
   /** ID of the creature template this token was created from (if any). */
   creatureTemplateId?: string | null;
+  /**
+   * The DM has hidden what this token is. Players who do not control it are
+   * sent it with its identity masked (utils/tokenMask.ts); only the DM may set it.
+   */
+  obscured?: boolean;
 }
 
 export interface Position {
@@ -771,24 +793,33 @@ export interface RosterMember {
 // Asset
 // ============================================
 
+/**
+ * A campaign that stops an account being deleted: its owner is its DM. An
+ * admin clears it by handing the DM seat to one of `members`, or deleting it.
+ */
+export interface DeletionBlocker {
+  id: string;
+  name: string;
+  members: { userId: string; displayName: string; role: string }[];
+}
+
 export interface Asset {
   id: string;
   type: AssetType;
   scope: AssetScope;
-  uploadedById: string;
+  /** Null once the uploader's account is deleted: the file stays, owned by no one. */
+  uploadedById: string | null;
   campaignId: string | null;
   filename: string;
   originalName: string;
   mimeType: string;
   fileSize: number;
-  filePath: string;
-  thumbnailPath: string | null;
   name: string;
   description: string | null;
   tags: string[];
   createdAt: string;
   /** Populated by backend include — available in list responses */
-  uploadedBy?: { id: string; displayName: string };
+  uploadedBy?: { id: string; displayName: string } | null;
   campaign?: { id: string; name: string } | null;
 }
 
@@ -836,7 +867,8 @@ export interface MessageMetadata {
 export interface DiceRoll {
   id: string;
   campaignId: string;
-  userId: string;
+  /** Null once the roller's account is deleted. */
+  userId: string | null;
   expression: string;
   result: number;
   breakdown: DiceRollBreakdown;
@@ -977,6 +1009,11 @@ export interface UpdateCharacterRequest {
   name?: string;
   data?: CharacterData;
   tokenImageUrl?: string;
+  /**
+   * The character's `updatedAt` as the sheet was loaded. The server refuses the
+   * save with 409 if the character has changed since.
+   */
+  updatedAt?: string;
 }
 
 // Map
@@ -1001,6 +1038,9 @@ export interface UpdateMapRequest {
   imageUrl?: string;
   spiritLayerUrl?: string | null;
   lightingEnabled?: boolean;
+  fogEnabled?: boolean;
+  globalIllumination?: boolean;
+  explorationEnabled?: boolean;
 }
 
 // Token
@@ -1023,6 +1063,16 @@ export interface CreateTokenRequest {
   showHpBar?: boolean;
   notes?: string;
   initiative?: number | null;
+  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  sightRadius?: number | null;
+  /** Display mode: pog, top-down or full-art. Default: pog */
+  displayMode?: TokenDisplayMode;
+  /** NPC stat block, when placing from the creature library or moving a token that has one. */
+  statBlock?: NpcStatBlock | null;
+  /** The creature template this token came from, if any. */
+  creatureTemplateId?: string | null;
+  /** DM only: hide what the token is from players who do not control it. */
+  obscured?: boolean;
 }
 
 export interface UpdateTokenRequest {
@@ -1043,6 +1093,13 @@ export interface UpdateTokenRequest {
   showHpBar?: boolean;
   notes?: string;
   initiative?: number | null;
+  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  sightRadius?: number | null;
+  displayMode?: TokenDisplayMode;
+  statBlock?: NpcStatBlock | null;
+  creatureTemplateId?: string | null;
+  /** DM only: hide what the token is from players who do not control it. */
+  obscured?: boolean;
 }
 
 // ============================================
@@ -1079,7 +1136,13 @@ export interface TokenMovedEvent {
   tokenId: string;
   x: number;
   y: number;
-  movedBy: string;
+  /** Null for anyone but the DM and the mover while the token is obscured. */
+  movedBy: string | null;
+  /**
+   * Set on a frame of a drag still in progress; absent on the drop. A frame is
+   * where the token is being carried, not where it stands.
+   */
+  dragging?: true;
 }
 
 // Dice Roll Events
@@ -1098,8 +1161,9 @@ export interface DiceRolledEvent {
    * or replayed from history, carries one and dedupes on it.
    */
   id?: string;
-  userId: string;
-  userName: string;
+  /** Null for a roll whose roller has since deleted their account. */
+  userId: string | null;
+  userName: string | null;
   characterName: string | null;
   expression: string;
   result: number;
@@ -1263,6 +1327,13 @@ export interface CharacterHpUpdatedBroadcast {
  * The DM seat moved to another member. Campaign ownership is a separate thing
  * and does not move with it.
  */
+/** A member's role in a campaign changed (`campaign.role.changed`). */
+export interface MemberRoleChangedBroadcast {
+  campaignId: string;
+  userId: string;
+  role: CampaignRole;
+}
+
 export interface DmTransferredBroadcast {
   campaignId: string;
   /** Null only if the campaign somehow had no DM to demote. */
@@ -1276,6 +1347,8 @@ export interface DmTransferredBroadcast {
 
 export interface CombatantEntry {
   tokenId: string;
+  /** The map the token is on; the server always sends it. */
+  mapId: string;
   name: string;
   imageUrl: string;
   initiative: number | null;

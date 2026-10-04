@@ -136,10 +136,14 @@ const SPECIAL_ROLLS = [
  * Dice roller component with carousel navigation and secret rolls
  */
 export default function DiceRoller() {
-  const { socket, reconnectCount, status } = useWebSocket();
+  const { socket, joinedEpoch, status } = useWebSocket();
+  // Joins after the first; see the history load below.
+  const rejoins = Math.max(0, joinedEpoch - 1);
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
   const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'DM';
+  // A spectator watches the dice; the server refuses their rolls, and so does this.
+  const isSpectator = userRole === 'SPECTATOR';
 
   /**
    * Which campaign members are DMs, so a roll made on someone else's behalf can
@@ -234,7 +238,10 @@ export default function DiceRoller() {
   // ============================================
 
   /**
-   * Load roll history from the server on mount, and again after a reconnect.
+   * Load roll history from the server on mount, and again after the page
+   * rejoins the campaign: not on the transport's reconnect, which comes
+   * before the socket is back in the room, so a roll sent in that gap would
+   * be missed by a read made then.
    *
    * Rolls have always been stored server-side; nothing read them back, so this
    * panel started empty after every refresh even though the rolls still
@@ -257,6 +264,11 @@ export default function DiceRoller() {
         if (cancelled) return;
         const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
 
+        // TODO(play): suspected, not reproduced. This merge only adds, and
+        // the DM's clear reaches only members online at the time, so a member
+        // who was offline then keeps the cleared rolls after rejoining, until
+        // they reload. On a rejoin, take the server's list as the history,
+        // keeping only rolls that arrived live since it was fetched.
         setRolls((prev) => {
           // Merge rather than replace: a roll can land live between mount and
           // this response, and it must not be lost or duplicated.
@@ -275,7 +287,7 @@ export default function DiceRoller() {
 
     loadHistory();
     return () => { cancelled = true; };
-  }, [campaign?.id, userRole, reconnectCount]);
+  }, [campaign?.id, userRole, rejoins]);
 
   // Saved rolls for this campaign. Failure is quiet on purpose: macros are a
   // convenience on top of a dice panel that works without them, and an error
@@ -481,6 +493,10 @@ export default function DiceRoller() {
   // ============================================
 
   const rollDice = (expr: string) => {
+    if (isSpectator) {
+      setError('Spectators watch the dice; they cannot roll.');
+      return;
+    }
     // When session is paused, roll entirely client-side — no server, no DB, no DM visibility
     if (isPaused) {
       if (!user) return;
@@ -699,7 +715,7 @@ export default function DiceRoller() {
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
-                rollerIsDM={dmUserIds.has(roll.userId)}
+                rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
               />
             ))}
             {shownRolls.length === 0 && (
@@ -714,10 +730,15 @@ export default function DiceRoller() {
 
       {/* Input Area */}
       <div className="flex-shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-sm">
-        {/* Paused notice for players — rolls still work but are forced secret */}
+        {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
-            Session paused — rolls are automatically secret.
+            Session paused: your rolls stay on your own screen.
+          </p>
+        )}
+        {isSpectator && (
+          <p className="text-xs text-stone-gray text-center mb-2 italic">
+            You are watching this campaign: the dice are the players' to roll.
           </p>
         )}
         {/* Error Message */}

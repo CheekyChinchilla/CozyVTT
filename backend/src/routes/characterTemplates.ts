@@ -16,12 +16,13 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
+import { readEnumQuery } from '../utils/queryEnum';
 import { validateCharacterData } from '../validators/game-systems';
 import {
   CreateCharacterTemplateSchema,
   UpdateCharacterTemplateSchema,
 } from '../validators/characterTemplates';
-import { extractAssetId, normalizeAssetUrl } from '../utils/asset-urls';
+import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils/asset-urls';
 import { toJson } from '../utils/prisma-json';
 import logger from '../utils/logger';
 
@@ -72,9 +73,12 @@ async function resolveTemplateImage(
 ): Promise<{ url: string | null } | { error: string }> {
   if (!tokenImageUrl) return { url: null };
 
+  // Every viewer's browser requests the stored address with their own
+  // session, so it is an asset's own address and nothing more, or the bare id
+  // it is built from: dot segments or a query could send it to another page.
   const assetId = extractAssetId(tokenImageUrl);
-  if (!assetId) {
-    return { error: 'Token image must reference an uploaded asset' };
+  if (!assetId || (assetId !== tokenImageUrl && !isExactAssetAddress(tokenImageUrl))) {
+    return { error: "Token image must be an uploaded asset's own address, such as /api/assets/tokens/<id>" };
   }
 
   const asset = await prisma.asset.findUnique({
@@ -107,6 +111,10 @@ function validateSheet(
 ): { ok: true } | { ok: false; message: string; issues?: unknown[] } {
   if (gameSystem === null || gameSystem === undefined) return { ok: true };
 
+  // TODO(sheets): the parsed sheet is thrown away, so the create and update
+  // routes store the template exactly as sent, fields the schema would strip
+  // included, while a character is stored as the schema's output. Return
+  // result.data and store that, as the character routes do.
   const result = validateCharacterData(gameSystem, (data as object) || {});
   if (result.success) return { ok: true };
 
@@ -129,7 +137,13 @@ function validateSheet(
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    const { search, gameSystem, mine, limit = '50', offset = '0' } = req.query;
+    const { search, mine, limit = '50', offset = '0' } = req.query;
+    // 'flexible' selects the system-agnostic templates, which store null.
+    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', [...Object.values(GameSystem), 'flexible']);
+    if (!system.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: system.message });
+    }
+    const gameSystem = system.value;
 
     const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
     const skip = Math.max(0, parseInt(offset as string, 10) || 0);
@@ -139,8 +153,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     if (search && typeof search === 'string') {
       where.name = { contains: search, mode: 'insensitive' };
     }
-    if (gameSystem && typeof gameSystem === 'string') {
-      // 'flexible' selects the system-agnostic templates, which store null.
+    if (gameSystem !== undefined) {
       where.gameSystem = gameSystem === 'flexible' ? null : gameSystem;
     }
     if (mine === 'true') {

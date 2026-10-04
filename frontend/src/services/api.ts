@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { isPublicPath } from '@/utils/publicRoutes';
+import { handleUnauthorized } from '@/services/unsavedWork';
 import type {
   User,
   AuthResponse,
@@ -53,6 +53,7 @@ import type {
   RosterMember,
   CampaignMembership,
 } from '@/types';
+import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
 
 // ============================================
 // API Client Configuration
@@ -63,6 +64,12 @@ import type {
 // Empty string = relative URLs (Nginx proxies /api/* to backend in production,
 // Vite dev server proxies in development)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+/** What a finished restore answers: the safety copy is the backup of the database as it was, in the backup list. */
+export interface RestoreReply {
+  message: string;
+  safetyBackup: string;
+}
 
 class ApiClient {
   private client: AxiosInstance;
@@ -100,13 +107,16 @@ class ApiClient {
         if (error.response) {
           const { status, data } = error.response;
 
-          // Unauthorized - redirect to login, but only from protected pages.
+          // Unauthorized - redirect to login, but only from protected pages,
+          // and not while an editor holds unsaved changes (see unsavedWork).
           // On a public page a 401 is expected, because nobody has signed in
           // yet. The route list lives in utils/publicRoutes so it can be tested
           // against App.tsx — see the note there on why a missing entry breaks
           // tokenised links rather than merely redirecting them.
-          if (status === 401 && !isPublicPath(window.location.pathname)) {
-            window.location.href = '/auth/login';
+          if (status === 401) {
+            handleUnauthorized(window.location.pathname, () => {
+              window.location.href = '/auth/login';
+            });
           }
 
           // Forbidden
@@ -229,8 +239,8 @@ class ApiClient {
   // MFA
   // ============================================
 
-  async mfaSetup(): Promise<MFASetupResponse> {
-    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup');
+  async mfaSetup(password: string): Promise<MFASetupResponse> {
+    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password });
     return response.data;
   }
 
@@ -388,7 +398,9 @@ class ApiClient {
   }
 
   async createAdminBackup(): Promise<AdminBackup> {
-    const response = await this.client.post<AdminBackup>('/api/admin/backups');
+    // Dumping and zipping the whole database takes minutes on a large
+    // instance; the bundled nginx allows this route ten minutes.
+    const response = await this.client.post<AdminBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
     return response.data;
   }
 
@@ -406,11 +418,20 @@ class ApiClient {
     return response.data;
   }
 
-  async restoreAdminBackup(file: File): Promise<{ message: string }> {
+  async restoreAdminBackup(file: File): Promise<RestoreReply> {
     const formData = new FormData();
     formData.append('backup', file);
-    const response = await this.client.post<{ message: string }>('/api/admin/backups/restore', formData, {
+    // A restore writes a safety copy of the current database, then loads the
+    // backup and migrates it: minutes on a large instance, and the bundled
+    // nginx allows this route ten minutes. Giving up sooner reported a
+    // restore as failed while the server went on to replace the database.
+    const response = await this.client.post<RestoreReply>('/api/admin/backups/restore', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // No limit of the page's own: it would count the upload, which nginx's
+      // ten minutes do not, and a slow upload then ran the page out of time
+      // while the server went on restoring. nginx still ends a restore that
+      // goes silent for ten minutes.
+      timeout: 0,
     });
     return response.data;
   }
@@ -765,6 +786,8 @@ class ApiClient {
     limit?: number;
     search?: string;
     uploadedBy?: string;
+    /** Only what the caller may put on a map or token; see GET /api/assets. */
+    usable?: boolean;
   }): Promise<AssetListResponse> {
     const response = await this.client.get<AssetListResponse>('/api/assets', { params });
     return response.data;
@@ -874,13 +897,24 @@ class ApiClient {
     return response.data;
   }
 
-  async updateToken(campaignId: string, mapId: string, tokenId: string, data: UpdateTokenRequest): Promise<{ message: string; token: Token }> {
+  /** `token` is null when the caller is not sent the token, e.g. a player's own token the DM has hidden. */
+  async updateToken(campaignId: string, mapId: string, tokenId: string, data: UpdateTokenRequest): Promise<{ message: string; token: Token | null }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`, data);
     return response.data;
   }
 
   async deleteToken(campaignId: string, mapId: string, tokenId: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`);
+    return response.data;
+  }
+
+  /**
+   * Move tokens from one map to another in one step. The server keeps each
+   * token as it is, under its own id, and tells the table itself; a move
+   * used to be a copy and a delete per token, which raced and rebuilt them.
+   */
+  async moveTokens(campaignId: string, mapId: string, tokenIds: string[], targetMapId: string): Promise<{ message: string; moved: Token[] }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/move`, { tokenIds, targetMapId });
     return response.data;
   }
 
@@ -965,22 +999,22 @@ class ApiClient {
     params?: { search?: string; source?: string; cr?: string; gameSystem?: string; limit?: number; offset?: number }
   ): Promise<{ creatures: CreatureTemplate[]; total: number; limit: number; offset: number }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures`, { params });
-    return response.data;
+    return { ...response.data, creatures: response.data.creatures.map(withKnownCreatureChoices) };
   }
 
   async getCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/${creatureId}`);
-    return response.data;
+    return withKnownCreatureChoices(response.data);
   }
 
   async createCreature(campaignId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures`, data);
-    return response.data;
+    return withKnownCreatureChoices(response.data);
   }
 
   async updateCreature(campaignId: string, creatureId: string, data: Partial<CreatureTemplate>): Promise<CreatureTemplate> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/creatures/${creatureId}`, data);
-    return response.data;
+    return withKnownCreatureChoices(response.data);
   }
 
   async deleteCreature(campaignId: string, creatureId: string): Promise<{ message: string }> {
@@ -1000,12 +1034,12 @@ class ApiClient {
 
   async duplicateCreature(campaignId: string, creatureId: string): Promise<CreatureTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/${creatureId}/duplicate`);
-    return response.data;
+    return withKnownCreatureChoices(response.data);
   }
 
   async listCreatureFavorites(campaignId: string): Promise<{ favoriteIds: string[]; creatures: CreatureTemplate[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/favorites/list`);
-    return response.data;
+    return { ...response.data, creatures: response.data.creatures.map(withKnownCreatureChoices) };
   }
 
   async toggleCreatureFavorite(campaignId: string, creatureId: string): Promise<{ favorited: boolean }> {
@@ -1022,12 +1056,12 @@ class ApiClient {
     params?: { search?: string; type?: string; limit?: number; offset?: number }
   ): Promise<{ templates: TokenTemplate[]; total: number; limit: number; offset: number }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/token-templates`, { params });
-    return response.data;
+    return { ...response.data, templates: response.data.templates.map(withKnownTemplateChoices) };
   }
 
   async getTokenTemplate(campaignId: string, id: string): Promise<TokenTemplate> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/token-templates/${id}`);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   async createTokenTemplate(campaignId: string, data: Partial<TokenTemplate>): Promise<TokenTemplate> {
@@ -1037,7 +1071,7 @@ class ApiClient {
 
   async updateTokenTemplate(campaignId: string, id: string, data: Partial<TokenTemplate>): Promise<TokenTemplate> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/token-templates/${id}`, data);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   async deleteTokenTemplate(campaignId: string, id: string): Promise<{ message: string }> {
@@ -1052,7 +1086,7 @@ class ApiClient {
 
   async copyTokenTemplateToCampaign(campaignId: string, templateId: string, targetCampaignId: string): Promise<TokenTemplate> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/token-templates/${templateId}/copy-to/${targetCampaignId}`);
-    return response.data;
+    return withKnownTemplateChoices(response.data);
   }
 
   // ============================================
@@ -1125,5 +1159,8 @@ class ApiClient {
 }
 
 // Export singleton instance
+/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/nginx.conf). */
+const LONG_ADMIN_REQUEST_MS = 600_000;
+
 export const api = new ApiClient();
 export default api;

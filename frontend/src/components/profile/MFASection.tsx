@@ -186,7 +186,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-2 gap-1.5 p-3 rounded-lg bg-parchment/60 border border-moss-green/15">
             {newCodes.map((code, i) => (
               <code key={i} className="text-xs font-mono text-brand-ink text-center py-1 px-1.5 rounded bg-paper/60 border border-moss-green/10">
-                {code.slice(0, 4)}-{code.slice(4)}
+                {code}
               </code>
             ))}
           </div>

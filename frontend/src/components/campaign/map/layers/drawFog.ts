@@ -1,7 +1,8 @@
 // ============================================
 // Manual fog-of-war layer (the non-dynamic-lighting fog).
-// DM sees semi-transparent fog from the full fogState; players see
-// near-opaque fog everywhere outside their revealed cell set.
+// DM sees semi-transparent fog from the full fogState; players see opaque
+// fog everywhere outside their revealed cell set: nothing under an
+// unrevealed cell shows through, not the artwork and not what stands on it.
 // Pure: no React, no component closures.
 // ============================================
 
@@ -12,8 +13,14 @@ export interface FogDrawState {
   isDM: boolean;
   /** Full fog grid — DM only. */
   fogState: FogState | null;
-  /** Revealed cell indices — players only; null = fog data not received yet. */
+  /** Revealed cell indices — players only; null = no fog to draw. */
   revealedCells: Set<number> | null;
+  /**
+   * Cells left clear whatever the revealed set says — the ones a player's own
+   * tokens stand on. Players always see their own tokens; the fog that covers
+   * the overlay must not paint over them.
+   */
+  exemptCells?: ReadonlySet<number>;
   /** Per-cell reveal-fade opacity (1 = just revealed → 0 = faded in). */
   revealOpacity: ReadonlyMap<number, number>;
 }
@@ -46,7 +53,7 @@ export function drawFog(
     ctx.restore();
   }
 
-  // Player fog (near-opaque, from revealedCells; cells are one per grid square)
+  // Player fog (opaque, from revealedCells; cells are one per grid square)
   if (!state.isDM && state.revealedCells) {
     const cellPx = viewport.gridSize;
     const fogCols = viewport.mapWidth;
@@ -55,11 +62,11 @@ export function drawFog(
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
-        if (!state.revealedCells.has(idx)) {
+        if (!state.revealedCells.has(idx) && !state.exemptCells?.has(idx)) {
           const fadeOpacity = state.revealOpacity.get(idx);
           ctx.fillStyle = fadeOpacity !== undefined
-            ? `rgba(15, 12, 25, ${0.95 * fadeOpacity})`
-            : 'rgba(15, 12, 25, 0.95)';
+            ? `rgba(15, 12, 25, ${fadeOpacity})`
+            : 'rgba(15, 12, 25, 1)';
           ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
         }
       }

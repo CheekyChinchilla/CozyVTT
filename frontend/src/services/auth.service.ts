@@ -89,11 +89,11 @@ class AuthService {
   }
 
   /**
-   * Setup MFA for current user
+   * Setup MFA for current user. The server asks for the current password.
    * Returns QR code and secret for authenticator app
    */
-  async setupMFA(): Promise<MFASetupResponse> {
-    return await api.mfaSetup();
+  async setupMFA(password: string): Promise<MFASetupResponse> {
+    return await api.mfaSetup(password);
   }
 
   /**

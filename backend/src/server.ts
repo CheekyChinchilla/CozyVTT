@@ -9,13 +9,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { sessionConfig } from './config/session';
+import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
 import { bodyParsers } from './middleware/bodyParsers';
+import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
+import campaignMacroRoutes from './routes/campaignMacros';
+import campaignDocumentRoutes from './routes/campaignDocuments';
 import userRoutes from './routes/users';
 import characterRoutes from './routes/characters';
 import characterTemplateRoutes from './routes/characterTemplates';
@@ -31,6 +35,9 @@ import logger from './utils/logger';
 import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
+
+// A production instance on the placeholder database password stops here.
+enforceDatabaseCredential();
 
 const app = express();
 const httpServer = createServer(app);
@@ -81,6 +88,10 @@ app.use(
     credentials: true,
   })
 );
+
+// A browser request from another site, a same-site page on another port
+// included, changes nothing. See middleware/originCheck.ts.
+app.use(originCheck);
 
 // General API rate limiter — applied to all /api/* routes
 // Stricter per-endpoint limiters (auth, file uploads) are applied inside each router
@@ -162,6 +173,8 @@ app.use('/api/admin', adminRoutes);
 
 // Campaigns
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/campaigns', campaignMacroRoutes);
+app.use('/api/campaigns', campaignDocumentRoutes);
 
 // Characters
 app.use('/api/characters', characterRoutes);

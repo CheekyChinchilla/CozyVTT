@@ -2,13 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Upload, FileImage, FileAudio, User, MapPin, Loader, Tag as TagIcon, Globe, Users } from 'lucide-react';
 import { api } from '../../services/api';
-import { Asset, AssetType, AssetScope, PlatformRole, Campaign, CampaignRole } from '../../types';
+import { Asset, AssetType, AssetScope, PlatformRole, Campaign } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import campaignService from '../../services/campaign.service';
 import { Button, Modal } from '@/components/ui';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
+import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
   const [tagInput, setTagInput] = useState('');
 
   // Campaign selection state
-  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[] | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(defaultCampaignId ?? '');
 
   // When type is AVATAR, always force USER scope
@@ -84,18 +85,30 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     }
   }, [isOpen, defaultCampaignId]);
 
-  // Campaigns shown in dropdown:
-  // TOKEN uploads: any campaign membership (players can upload tokens)
-  // All other types: DM-only campaigns
-  const dropdownCampaigns = assetType === AssetType.TOKEN
-    ? allCampaigns
-    : allCampaigns.filter((c) =>
-        c.ownerId === user?.id ||
-        c.memberships?.some((m) => m.userId === user?.id && m.role === CampaignRole.DM)
-      );
+  // Campaigns shown in dropdown: those the server lets this user put this
+  // kind of asset into (the DM's for anything, a player's for token art).
+  const dropdownCampaigns = campaignsToPlaceAssetIn(allCampaigns ?? [], assetType === AssetType.TOKEN, user?.id);
 
   // Whether the Campaign scope option should be available
-  const hasCampaignAccess = allCampaigns.length > 0;
+  const hasCampaignAccess = dropdownCampaigns.length > 0;
+
+  // Switching to a kind of asset the chosen campaign does not take (a
+  // player's map, say) takes the choice back, once the list has arrived, so
+  // an upload the server would refuse is never sent. Nothing is picked in
+  // its place: the one campaign left may be one the user never meant to
+  // share the file with. A campaign the dialog was opened for is left as it is.
+  const offeredIds = dropdownCampaigns.map((c) => c.id).join(',');
+  useEffect(() => {
+    if (defaultCampaignId || allCampaigns === null || assetScope !== AssetScope.CAMPAIGN) return;
+    const offered = offeredIds === '' ? [] : offeredIds.split(',');
+    if (offered.includes(selectedCampaignId)) return;
+    if (offered.length === 0) {
+      setAssetScope(AssetScope.USER);
+      setSelectedCampaignId('');
+    } else {
+      setSelectedCampaignId('');
+    }
+  }, [defaultCampaignId, allCampaigns, assetScope, offeredIds, selectedCampaignId]);
 
   // Reset form — returns to default values (honouring any locked defaults)
   const resetForm = () => {
@@ -279,11 +292,18 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     [AssetScope.GLOBAL]: 'Available to all users across all campaigns on this platform.',
   };
 
+  // The scope in words, for the locked context banner
+  const scopeWords: Record<AssetScope, string> = {
+    [AssetScope.USER]: 'personal',
+    [AssetScope.CAMPAIGN]: 'campaign',
+    [AssetScope.GLOBAL]: 'global',
+  };
+
   // Locked context banner label
   const lockedLabel = defaultType && defaultScope
-    ? `Uploading as a ${defaultScope} ${defaultType.toLowerCase()} asset`
+    ? `Uploading as a ${scopeWords[defaultScope]} ${defaultType.toLowerCase()} asset`
     : defaultScope
-    ? `Scope locked to ${defaultScope}`
+    ? `Scope locked to ${scopeWords[defaultScope]}`
     : defaultCampaignId
     ? 'Campaign locked for this upload'
     : null;
@@ -423,7 +443,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                 {dropdownCampaigns.length === 0 && (
                   <p className="mt-2 text-sm text-stone-gray/70">
                     {assetType === AssetType.TOKEN
-                      ? 'You need to be a member of a campaign to upload tokens.'
+                      ? 'You need to play in or run a campaign to upload tokens to it.'
                       : 'You need to be a DM of a campaign to upload campaign assets.'}
                   </p>
                 )}

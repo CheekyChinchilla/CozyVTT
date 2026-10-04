@@ -1,5 +1,4 @@
-import multer, { FileFilterCallback } from 'multer';
-import path from 'path';
+import multer from 'multer';
 import { errorMessage } from '../utils/errors';
 import { Request, Response, NextFunction } from 'express';
 import {
@@ -10,10 +9,8 @@ import {
   generateUniqueFilename,
   getFilePath,
   getFileSizeLimit,
-  isAllowedExtension,
   ensureDirectory,
   getTempDirectory,
-  ALLOWED_EXTENSIONS,
 } from '../utils/fileUtils';
 
 /**
@@ -67,79 +64,6 @@ const storage = multer.diskStorage({
 });
 
 /**
- * File filter to validate file types
- * Checks extension against allowed types for the asset
- */
-const fileFilter = (req: UploadRequest, file: Express.Multer.File, cb: FileFilterCallback) => {
-  const assetType = req.assetType || 'MAP';
-  const ext = path.extname(file.originalname);
-
-  // Check if extension is allowed for this asset type
-  if (isAllowedExtension(assetType, ext)) {
-    cb(null, true); // Accept file
-  } else {
-    cb(
-      new Error(
-        `Invalid file type. ${assetType} files must be one of: ${getAllowedExtensionsString(assetType)}`
-      )
-    );
-  }
-};
-
-/**
- * The allowed extensions for an error message, read from the one table that
- * decides them. This used to be a hand-written copy that had already drifted
- * from the real list.
- */
-function getAllowedExtensionsString(assetType: AssetType): string {
-  return ALLOWED_EXTENSIONS[assetType].join(', ');
-}
-
-/**
- * Create multer upload middleware for a specific asset type
- * @param assetType Type of asset being uploaded
- * @returns Configured multer middleware
- */
-export function createUploadMiddleware(assetType: AssetType) {
-  const sizeLimit = getFileSizeLimit(assetType);
-
-  return multer({
-    storage,
-    fileFilter,
-    limits: {
-      fileSize: sizeLimit,
-      files: 1, // Only allow one file per request
-    },
-  });
-}
-
-/**
- * Middleware to set asset metadata on request before upload
- * @param assetType Type of asset
- * @param scope Scope of asset (optional, defaults to GLOBAL)
- */
-export function setAssetMetadata(assetType: AssetType, scope: AssetScope = 'GLOBAL') {
-  return (req: UploadRequest, res: Response, next: NextFunction): Response | void => {
-    req.assetType = assetType;
-    req.assetScope = scope;
-
-    // If scope is CAMPAIGN, extract campaignId from route params
-    if (scope === 'CAMPAIGN') {
-      req.campaignId = req.params.campaignId || req.body.campaignId;
-
-      if (!req.campaignId) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Campaign ID is required for campaign-scoped assets',
-        });
-      }
-    }
-
-    next();
-  };
-}
-
-/**
  * Generic upload middleware that accepts all file types
  * Used when asset type is determined from request body
  * File type validation happens in subsequent middleware
@@ -156,14 +80,6 @@ export const uploadGeneric = multer({
   },
   // No fileFilter - accept all files, validate in middleware
 });
-
-/**
- * Pre-configured upload middleware for each asset type
- */
-export const uploadMap = createUploadMiddleware('MAP');
-export const uploadToken = createUploadMiddleware('TOKEN');
-export const uploadAudio = createUploadMiddleware('AUDIO');
-export const uploadAvatar = createUploadMiddleware('AVATAR');
 
 /**
  * Error handler middleware for multer errors

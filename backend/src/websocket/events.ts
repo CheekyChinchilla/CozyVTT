@@ -1,7 +1,8 @@
 import { Server } from 'socket.io';
-import { AuthenticatedSocket, authenticateSocket, authenticateCampaign } from './auth';
+import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { broadcastPresence, getOnlineUserIds } from './utils';
 import logger from '../utils/logger';
+import { stateRequestAllowed } from './shared';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -13,6 +14,7 @@ import { registerCharacterHandlers } from './handlers/characters';
 import { registerInitiativeHandlers } from './handlers/initiative';
 import { registerWallHandlers } from './handlers/walls';
 import { registerFogHandlers } from './handlers/fog';
+import { registerExplorationHandlers } from './handlers/exploration';
 import { registerLightHandlers } from './handlers/lights';
 import { registerPingHandlers } from './handlers/pings';
 
@@ -60,7 +62,16 @@ export function registerEventHandlers(io: Server): void {
     // AUTHENTICATE EVENT
     // User requests to join a campaign room
     // ============================================
-    socket.on('authenticate', async (data: { campaignId: string }) => {
+    // One at a time per socket. Two of these overlapping both read the room
+    // to leave before either has joined its own, and the socket ends up in
+    // two campaign rooms carrying one role. The chain never rejects (the
+    // handler catches everything), so a refused attempt does not block the
+    // next.
+    socket.on('authenticate', (data: { campaignId: string }) => {
+      socket.authenticating = (socket.authenticating ?? Promise.resolve()).then(() => authenticateInto(data));
+    });
+
+    async function authenticateInto(data: { campaignId: string }): Promise<void> {
       try {
         logger.debug('authenticate', { campaignId: data.campaignId, userId: socket.userId });
 
@@ -69,7 +80,15 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // Authenticate campaign membership
+        // The sign-in has to be live now, not only at the handshake. The
+        // same answer a refused handshake gets, then the connection ends; the
+        // client then asks the server whether it is still signed in.
+        if (!(await socketSessionIsLive(socket))) {
+          socket.emit('error', { message: 'Unauthorized' });
+          socket.disconnect(true);
+          return;
+        }
+
         const result = await authenticateCampaign(socket, data.campaignId);
 
         if (!result.success) {
@@ -77,14 +96,17 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
-        // SECURITY: Enforce single campaign context per socket
-        // Leave previous campaign room if exists
-        if (socket.campaignId && socket.campaignId !== data.campaignId) {
-          const previousCampaignId = socket.campaignId;
-          await socket.leave(previousCampaignId);
+        // SECURITY: one campaign per socket. Leave every other campaign room
+        // before taking the new campaign's role, or a role-filtered fan-out in
+        // an old room would find this socket still there and answer it with
+        // the new role's view of that campaign. A socket's rooms are its own
+        // id, its user room and campaign rooms, nothing else.
+        for (const room of [...socket.rooms]) {
+          if (room === socket.id || room === socket.userId || room === data.campaignId) continue;
+          await socket.leave(room);
 
           // Notify old campaign that user left
-          socket.to(previousCampaignId).emit('user.left', {
+          socket.to(room).emit('user.left', {
             userId: socket.userId,
             timestamp: new Date().toISOString(),
           });
@@ -93,12 +115,14 @@ export function registerEventHandlers(io: Server): void {
           // by the full `presence.state` snapshot, so telling only the new
           // campaign would leave the old one showing this user online forever.
           // Recomputed after the leave above, so a second tab still counts.
-          await broadcastPresence(previousCampaignId);
+          await broadcastPresence(room);
         }
 
-        // Join the campaign room
+        // Join the campaign room. Role is refreshed even when the campaign is
+        // the same, since a client re-authenticates after a reconnect.
         socket.join(data.campaignId);
-        socket.campaignId = data.campaignId; // Update stored campaign ID
+        socket.campaignId = data.campaignId;
+        socket.role = result.role;
 
         // Notify the user they've been authenticated
         socket.emit('authenticated', {
@@ -126,7 +150,7 @@ export function registerEventHandlers(io: Server): void {
         logger.error('authenticate failed', { err: error });
         socket.emit('error', { message: 'Authentication failed' });
       }
-    });
+    }
 
     // ============================================
     // PRESENCE REQUEST
@@ -138,6 +162,7 @@ export function registerEventHandlers(io: Server): void {
     // ask. Replies to the caller alone — nobody else's view has changed.
     socket.on('presence.request', async () => {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'presence.request')) return;
       try {
         const onlineUserIds = await getOnlineUserIds(socket.campaignId);
         socket.emit('presence.state', { campaignId: socket.campaignId, onlineUserIds });
@@ -160,6 +185,7 @@ export function registerEventHandlers(io: Server): void {
     registerInitiativeHandlers(io, socket);
     registerWallHandlers(io, socket);
     registerFogHandlers(io, socket);
+    registerExplorationHandlers(io, socket);
     registerLightHandlers(io, socket);
     registerPingHandlers(io, socket);
 

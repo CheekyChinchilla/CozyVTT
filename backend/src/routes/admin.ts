@@ -8,13 +8,13 @@ import crypto from 'crypto';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { createWriteStream } from 'fs';
 import fs from 'fs/promises';
+import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
@@ -26,15 +26,20 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { buildRestoreArgs } from '../utils/pgRestore';
+import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
+import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
+import { getSocketInstance } from '../websocket/utils';
+import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
 const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
-const BACKUP_DIR = path.join(UPLOADS_DIR, 'backups');
-const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.zip$/;
+// Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
+const BACKUP_DIR = resolveBackupDir();
+const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
 
 // Guards for restoring an uploaded backup archive (see utils/archive.ts).
 // A full-instance backup legitimately bundles every uploaded file, but the
@@ -47,7 +52,7 @@ const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    fs.mkdir(BACKUP_DIR, { recursive: true })
+    ensureBackupDir(BACKUP_DIR)
       .then(() => cb(null, BACKUP_DIR))
       .catch((err) => cb(err, BACKUP_DIR));
   },
@@ -273,6 +278,10 @@ router.post('/users', async (req, res) => {
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
+    // TODO(accounts): this name skips parseDisplayName, the check sign-up and
+    // profile edits use, and is stored sanitised and cut to 50 characters, so a
+    // name typed as "<>" is saved empty. Validate it with parseDisplayName and
+    // answer 400 when it fails, here and in the invite route below.
     const rawName = typeof displayName === 'string' && displayName.trim()
       ? displayName
       : email.split('@')[0];
@@ -449,10 +458,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     }
 
     // Invalidate outstanding links so only the newest one works
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: id, used: false },
-      data: { used: true },
-    });
+    await voidOutstandingResetLinks(id);
 
     const token = crypto.randomUUID();
     await prisma.passwordResetToken.create({
@@ -703,70 +709,234 @@ router.post('/smtp/test', async (req, res) => {
   }
 });
 
+/**
+ * pg_dump did not produce a dump. Carries only what is safe to log: the exec
+ * error's own message repeats the command line, database URL and password
+ * included.
+ */
+class DumpFailed extends Error {
+  constructor(
+    readonly code: string | undefined,
+    readonly stderr: string | undefined
+  ) {
+    super('pg_dump failed');
+  }
+}
+
+/** pg_dump could not be started at all: it is not installed where the backend runs. */
+class ToolMissing extends Error {
+  constructor(readonly tool: string) {
+    super(`${tool} is not installed`);
+  }
+}
+
+/**
+ * The private temporary folder the dump is written into could not be made.
+ * Its error can carry ENOENT too, which is why a missing tool is its own
+ * error: the two need different fixes.
+ */
+class TempFolderUnusable extends Error {
+  constructor(readonly code: string | undefined) {
+    super('temporary folder unusable');
+  }
+}
+
+const TOOL_MISSING_REPLY = {
+  error: 'Tool Not Available',
+  message: 'pg_dump is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
+};
+
+/** The backups folder refused a new backup (its owner or mode, a full disk). */
+class BackupFolderUnusable extends Error {
+  constructor(readonly code: string | undefined) {
+    super('backups folder unusable');
+  }
+}
+
+/** Errors that come from the filesystem refusing a folder or running out of room. */
+const FOLDER_ERRORS = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EDQUOT', 'ENOENT', 'ENOTDIR']);
+
+/** A backups-folder failure as BackupFolderUnusable, anything else as it came. */
+function inBackupsFolder(error: unknown): unknown {
+  const code = errorCode(error);
+  return code !== undefined && FOLDER_ERRORS.has(code) ? new BackupFolderUnusable(code) : error;
+}
+
+function backupFolderReply(what: string) {
+  return {
+    error: 'Backup Failed',
+    message: `${what} in the backups folder (${BACKUP_DIR}). Check that it exists, that the backend's user owns it and can write to it, and that its disk has room.`,
+  };
+}
+
+/**
+ * What to do about a temporary folder a backup or restore could not use.
+ * Under Docker it is inside the backend container, on the disk Docker keeps
+ * its containers on, and TMPDIR in .env does not reach the container.
+ */
+const TEMP_FOLDER_ADVICE =
+  'Check that it exists and that the backend can write to it. If it is full, free some space on the disk it is on (under Docker, the disk Docker keeps its containers on); on an install without Docker you can also set TMPDIR to a folder with more room.';
+
+function tempFolderReply() {
+  return {
+    error: 'Backup Failed',
+    message: `The backup could not use the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE}`,
+  };
+}
+
+/**
+ * Write a backup ZIP into BACKUP_DIR: a pg_dump of the database (flags
+ * explained in utils/pgRestore.ts), plus the uploaded files when asked. Create
+ * Backup takes both; a restore takes the database alone as the copy that lets
+ * it be undone. The ZIP is named by the second it was made, like every backup
+ * the dashboard lists.
+ */
+/**
+ * A backup name of its own, and the partial file to write it into. The name
+ * is the second the backup was asked for; two asked for in the same second,
+ * or a restore's safety copy taken in the second a backup was made, used to
+ * be given the same name, and the later one silently replaced the earlier.
+ * While the name is taken, `-2`, `-3` and so on follow it. A name is ours
+ * once we hold its partial file, opened exclusively, and no finished backup
+ * has it: a finished one is only ever renamed from a partial its writer held.
+ */
+async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }> {
+  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+  for (let n = 1; ; n++) {
+    const filename = n === 1 ? `backup-${timestamp}.zip` : `backup-${timestamp}-${n}.zip`;
+    const partialPath = path.join(BACKUP_DIR, filename + PARTIAL);
+    let handle: FileHandle;
+    try {
+      // 'wx' refuses an existing file instead of truncating it. Readable by the
+      // backend's own user alone: the archive holds every password hash, MFA
+      // secret and backup code on the instance.
+      handle = await fs.open(partialPath, 'wx', 0o600);
+    } catch (error) {
+      const code = errorCode(error);
+      if (code === 'EEXIST') continue;
+      throw inBackupsFolder(error);
+    }
+    if (await exists(path.join(BACKUP_DIR, filename))) {
+      await handle.close();
+      await fs.unlink(partialPath).catch(() => {});
+      continue;
+    }
+    return { filename, handle };
+  }
+}
+
+/**
+ * Backups being written now, by name. Each is written to its name plus
+ * PARTIAL, which the list never shows, and renamed once it is complete, so a
+ * backup the backend is stopped partway through never appears as a backup.
+ */
+const backupsInProgress = new Set<string>();
+const PARTIAL = '.partial';
+
+const exists = (file: string) => fs.access(file).then(() => true, () => false);
+
+async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
+  await ensureBackupDir(BACKUP_DIR).catch((error: unknown) => { throw inBackupsFolder(error); });
+  const { filename, handle } = await openNewBackup();
+  backupsInProgress.add(filename);
+  const zipPath = path.join(BACKUP_DIR, filename);
+  const partialPath = zipPath + PARTIAL;
+  // The stream takes the handle over once it exists; until then a failure
+  // has to close it here.
+  let streamed = false;
+  let dumpDir: string | null = null;
+
+  try {
+    // pg_dump creates its file with the default mode, which on a host without
+    // Docker leaves the whole database readable by every local account for as
+    // long as the backup runs. mkdtemp makes a folder only this user can open.
+    try {
+      dumpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-db-'));
+    } catch (mkdtempError: unknown) {
+      throw new TempFolderUnusable(errorCode(mkdtempError));
+    }
+    const sqlPath = path.join(dumpDir, 'database.sql');
+    try {
+      await execFileAsync('pg_dump', buildDumpArgs(dbUrl, sqlPath), { env: pgConnection(dbUrl).env });
+    } catch (execError: unknown) {
+      if (errorCode(execError) === 'ENOENT') throw new ToolMissing('pg_dump');
+      throw new DumpFailed(errorCode(execError), errorStderr(execError));
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      streamed = true;
+      const output = handle.createWriteStream();
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      // Both ends can fail: the archive while reading, the file while
+      // writing (a full disk). A stream error with nobody listening is an
+      // uncaught exception, which exits the process mid-backup. Creating the
+      // file on a full disk succeeds; running out of room shows up here.
+      output.on('error', (error) => reject(inBackupsFolder(error)));
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.file(sqlPath, { name: 'database.sql' });
+      if (withUploads) {
+        // Under an "uploads/" prefix, skipping the backups subdir older installs had there
+        archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
+          return entry.name.startsWith('backups/') ? false : entry;
+        });
+      }
+      archive.finalize();
+    });
+
+    // Complete: only now does it take a backup's name.
+    await fs.rename(partialPath, zipPath).catch((error: unknown) => { throw inBackupsFolder(error); });
+    const stat = await fs.stat(zipPath);
+    return { filename, sizeBytes: stat.size };
+  } catch (error) {
+    if (!streamed) await handle.close().catch(() => {});
+    await fs.unlink(partialPath).catch(() => {});
+    throw error;
+  } finally {
+    backupsInProgress.delete(filename);
+    if (dumpDir !== null) await fs.rm(dumpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+
 // ============================================
 // POST /api/admin/backups
 // Creates a full instance backup: pg_dump of the database + all uploaded
 // files bundled into a single downloadable ZIP archive.
-// Requires pg_dump (postgresql-client) to be installed in the container.
+// Requires pg_dump, which the backend Dockerfiles install.
 // ============================================
 router.post('/backups', async (req, res) => {
-  await fs.mkdir(BACKUP_DIR, { recursive: true });
-
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
     return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
   }
 
-  const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-  const zipFilename = `backup-${timestamp}.zip`;
-  const zipPath = path.join(BACKUP_DIR, zipFilename);
-  const sqlPath = path.join(os.tmpdir(), `cozyvtt-db-${Date.now()}.sql`);
-
   try {
-    // 1. Dump database to a temp SQL file
-    // --clean --if-exists adds DROP statements so the restore works on an existing DB
-    try {
-      await execFileAsync('pg_dump', ['--dbname', dbUrl, '--file', sqlPath, '--clean', '--if-exists']);
-    } catch (execError: unknown) {
-      if (errorCode(execError) === 'ENOENT') {
-        return res.status(500).json({
-          error: 'Tool Not Available',
-          message: 'pg_dump is not installed. Rebuild the backend Docker image to include postgresql-client.',
-        });
-      }
-      logger.error('pg_dump error:', errorStderr(execError) || errorMessage(execError));
+    const { filename, sizeBytes } = await writeBackupZip(dbUrl, true);
+
+    await writeAdminLog(req.session.userId!, `Created instance backup: ${filename}`, 'INFO', {
+      filename,
+      sizeBytes,
+    });
+
+    return res.status(201).json({ filename, sizeBytes, createdAt: new Date().toISOString() });
+  } catch (error) {
+    if (error instanceof ToolMissing) {
+      return res.status(500).json(TOOL_MISSING_REPLY);
+    }
+    if (error instanceof TempFolderUnusable) {
+      logger.error('Backup could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
+      return res.status(500).json(tempFolderReply());
+    }
+    if (error instanceof BackupFolderUnusable) {
+      logger.error('Backup could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+      return res.status(500).json(backupFolderReply('The backup could not be written'));
+    }
+    if (error instanceof DumpFailed) {
+      logger.error('pg_dump error', { stderr: error.stderr, code: error.code });
       return res.status(500).json({ error: 'Backup Failed', message: 'Database dump failed. Check server logs for details.' });
     }
-
-    // 2. Bundle database.sql + uploads/ (excluding previous backups) into a ZIP
-    await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(zipPath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      output.on('close', resolve);
-      archive.on('error', reject);
-      archive.pipe(output);
-      // Include the SQL dump
-      archive.file(sqlPath, { name: 'database.sql' });
-      // Include uploaded files under an "uploads/" prefix, skipping the backups subdir
-      archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
-        return entry.name.startsWith('backups/') ? false : entry;
-      });
-      archive.finalize();
-    });
-
-    await fs.unlink(sqlPath).catch(() => {});
-
-    const stat = await fs.stat(zipPath);
-    await writeAdminLog(req.session.userId!, `Created instance backup: ${zipFilename}`, 'INFO', {
-      filename: zipFilename,
-      sizeBytes: stat.size,
-    });
-
-    return res.status(201).json({ filename: zipFilename, sizeBytes: stat.size, createdAt: new Date().toISOString() });
-  } catch (error) {
-    // Clean up partial output on failure
-    await fs.unlink(zipPath).catch(() => {});
-    await fs.unlink(sqlPath).catch(() => {});
     logger.error('Backup error', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create backup' });
   }
@@ -778,8 +948,21 @@ router.post('/backups', async (req, res) => {
 // ============================================
 router.get('/backups', async (_req, res) => {
   try {
-    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
+    // TODO(restore): a restore's upload is saved here as restore-temp-<ms>.zip
+    // and removed only when the request ends, so a backend stopped mid-restore
+    // leaves it behind for good. Clear stale restore-temp files here too.
+    // A partial file no backup here is writing was left by a backend stopped
+    // partway through one; it can never be finished, and it is the size of a
+    // backup.
+    for (const f of files) {
+      const name = f.endsWith(PARTIAL) ? f.slice(0, -PARTIAL.length) : null;
+      if (name === null || !BACKUP_FILENAME_RE.test(name) || backupsInProgress.has(name)) continue;
+      await fs.unlink(path.join(BACKUP_DIR, f))
+        .then(() => logger.warn('Removed an unfinished backup left by a stopped backend', { file: f }))
+        .catch(() => {});
+    }
     const backups = await Promise.all(
       files
         .filter(f => BACKUP_FILENAME_RE.test(f))
@@ -790,8 +973,10 @@ router.get('/backups', async (_req, res) => {
     );
     backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return res.json({ backups });
-  } catch {
-    return res.json({ backups: [] });
+  } catch (error) {
+    // Not an empty list: that reads as every backup being gone.
+    logger.error('Backups folder could not be read', { code: errorCode(error), dir: BACKUP_DIR });
+    return res.status(500).json(backupFolderReply('The list of backups could not be read'));
   }
 });
 
@@ -843,25 +1028,78 @@ router.delete('/backups/:filename', async (req, res) => {
 // Restores the entire instance from an uploaded backup ZIP.
 // The ZIP must contain database.sql (created by pg_dump --clean --if-exists)
 // and optionally an uploads/ directory.
-// WARNING: This overwrites the current database and all uploaded files.
+// WARNING: This overwrites the current database and copies the archive's
+// uploaded files over the existing ones. A backup of the database as it was
+// is written first, so the database half can be undone.
 // ============================================
-router.post('/backups/restore', restoreUpload.single('backup'), async (req, res) => {
+/**
+ * The uploaded backup is saved into the backups folder before the route
+ * runs, so a folder the backend cannot write to, or whose disk is full,
+ * refuses it here. Say which folder, and that nothing changed.
+ */
+const takeRestoreUpload: RequestHandler = (req, res, next) => {
+  restoreUpload.single('backup')(req, res, (error?: unknown) => {
+    if (!error) return next();
+    const folderError = inBackupsFolder(error);
+    // TODO(restore): the file filter's refusal of a name not ending in .zip
+    // takes this path to the generic error handler, which answers 500 "An
+    // unexpected error occurred" in production. Answer 400 with the filter's
+    // own message.
+    if (!(folderError instanceof BackupFolderUnusable)) return next(error);
+    logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
+    const reply = backupFolderReply('The uploaded backup could not be saved');
+    return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was changed.` });
+  });
+};
+
+router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Bad Request', message: 'No backup file provided' });
   }
 
   const uploadedZip = req.file.path;
-  const tempDir = path.join(os.tmpdir(), `cozyvtt-restore-${Date.now()}`);
+  let tempDir: string | null = null;
 
   try {
+    // The upload is a backup too, written by multer with the default mode;
+    // close it to everyone but the backend's user before anything else.
+    await fs.chmod(uploadedZip, 0o600);
+
+    // The backup is unpacked, and the copy psql loads written, in a folder
+    // only the backend's user can open: both are the whole database.
+    // Nothing has changed until the safety copy: a temporary folder that
+    // cannot be made, or fills while the backup is unpacked, says so.
+    const tempFolderRefused = (error: unknown) => {
+      logger.error('Restore could not use its temporary folder', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not unpack the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
+      });
+    };
+    try {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cozyvtt-restore-'));
+    } catch (error) {
+      return tempFolderRefused(error);
+    }
+
     // 1. Extract ZIP to temp directory.
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
     // the entry count and total decompressed size (zip-bomb protection).
+    // TODO(restore): a file named .zip that is not a ZIP throws here and
+    // reaches the catch at the end, which answers "An unexpected error occurred
+    // during restore". Answer 400 saying the file is not a ZIP archive, as the
+    // database.sql check below does for a ZIP that is not a backup.
     const directory = await unzipper.Open.file(uploadedZip);
-    await extractArchiveSafely(directory, tempDir, {
-      maxFiles: RESTORE_MAX_FILES,
-      maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
-    });
+    try {
+      await extractArchiveSafely(directory, tempDir, {
+        maxFiles: RESTORE_MAX_FILES,
+        maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      if (code !== undefined && FOLDER_ERRORS.has(code)) return tempFolderRefused(error);
+      throw error;
+    }
 
     // 2. Validate the backup contains database.sql
     const sqlPath = path.join(tempDir, 'database.sql');
@@ -879,34 +1117,150 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
       return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
     }
 
-    // 3. Restore the database
+    // 3. Check the dump is a complete CozyVTT backup that runs nothing but
+    // SQL, and write the copy psql loads: the schema is replaced first, and a
+    // setting this server would reject (a dump written by a newer pg_dump) is
+    // dropped from the header. See utils/pgRestore.ts for why each matters.
+    // A refused file has changed nothing, and no tool has run yet.
+    const restorePath = path.join(tempDir, 'restore.sql');
+    let prepared: PreparedDump;
     try {
-      await execFileAsync('psql', buildRestoreArgs(dbUrl, sqlPath));
+      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+    } catch (error) {
+      logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `The restore could not write its working copy of the backup in the temporary folder (${os.tmpdir()}). ${TEMP_FOLDER_ADVICE} Nothing was changed.`,
+      });
+    }
+    const { skipped, refused } = prepared;
+    if (refused !== null) {
+      return res.status(400).json({
+        error: 'Invalid Backup',
+        message: `This file cannot be restored because ${refused}. Nothing was changed.`,
+      });
+    }
+    if (skipped.settings.length > 0 || skipped.ownership > 0 || skipped.privileges > 0) {
+      logger.info('Restore: skipped statements this server would reject', skipped);
+    }
+
+    // 4. Keep the database as it is now, so the restore can be undone. A
+    // backup that loads cleanly can still be the wrong one, or an empty one.
+    let safetyBackup: string;
+    try {
+      safetyBackup = (await writeBackupZip(dbUrl, false)).filename;
+    } catch (error) {
+      if (error instanceof ToolMissing) {
+        return res.status(500).json(TOOL_MISSING_REPLY);
+      }
+      if (error instanceof TempFolderUnusable) {
+        logger.error('Backup before restore could not make its temporary folder', { code: error.code, tmpdir: os.tmpdir() });
+        return res.status(500).json({ ...tempFolderReply(), message: `${tempFolderReply().message} Nothing was restored.` });
+      }
+      if (error instanceof BackupFolderUnusable) {
+        logger.error('Backup before restore could not be written to the backups folder', { code: error.code, dir: BACKUP_DIR });
+        const reply = backupFolderReply('A backup of the current database could not be written');
+        return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was restored.` });
+      }
+      if (error instanceof DumpFailed) {
+        logger.error('pg_dump error before restore', { stderr: error.stderr, code: error.code });
+      } else {
+        logger.error('Backup before restore failed', { err: error });
+      }
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: 'A backup of the current database could not be written, so nothing was restored. The reason is in the server log. If the database cannot be backed up as it is, the deployment guide shows how to restore this backup from the command line.',
+      });
+    }
+    const undo = `The database as it was before is saved as ${safetyBackup} in the backup list.`;
+
+    // 5. Load the prepared dump. One transaction, stopped at the first
+    // failure, so a load that fails leaves the existing database as it was.
+    try {
+      await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
       if (errorCode(execError) === 'ENOENT') {
         return res.status(500).json({
           error: 'Tool Not Available',
-          message: 'psql is not installed. Rebuild the backend Docker image to include postgresql-client.',
+          message: 'psql is not installed. Rebuild the backend Docker image from the current source; its Dockerfile installs the PostgreSQL client tools.',
         });
       }
-      logger.error('psql restore error:', errorStderr(execError) || errorMessage(execError));
-      return res.status(500).json({ error: 'Restore Failed', message: 'Database restore failed. Check server logs for details.' });
+      // stderr only: the error's message repeats the command line, database URL and password included.
+      logger.error('psql restore error', { stderr: errorStderr(execError), code: errorCode(execError) });
+      return res.status(500).json({
+        error: 'Restore Failed',
+        message: `Database restore failed and the existing database is unchanged. Check server logs for details. ${undo}`,
+      });
     }
 
-    // 4. Restore uploaded files (if present in backup)
-    const extractedUploads = path.join(tempDir, 'uploads');
+    // 6. Everyone is signed out, as soon as the load has committed: the
+    // database is the backup's from here on, whatever the steps below do. The
+    // restored database holds no login sessions, and a socket that stayed open
+    // would keep the identity and campaign role it cached before the restore.
+    // Best-effort: the load itself is done. The in-memory combat state
+    // belonged to the old data.
     try {
-      await fs.access(extractedUploads);
-      await fs.cp(extractedUploads, UPLOADS_DIR, { recursive: true });
-    } catch {
-      // No uploads dir in backup — skip (DB-only backup is still valid)
+      const io = getSocketInstance();
+      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
+      io.disconnectSockets(true);
+    } catch (error) {
+      logger.warn('Restore: live sockets could not be ended', { err: error });
+    }
+    clearAllCombatState();
+
+    // 7. Copy the archive's uploaded files over the existing ones. A backup
+    // without any is fine; a copy that fails is not, and is reported after the
+    // database side has been finished, so what was restored is usable.
+    const extractedUploads = path.join(tempDir, 'uploads');
+    const hasUploads = await fs.access(extractedUploads).then(() => true, () => false);
+    let filesError: string | null = null;
+    if (hasUploads) {
+      try {
+        await fs.cp(extractedUploads, UPLOADS_DIR, { recursive: true });
+      } catch (error) {
+        logger.error('Restore: copying uploaded files failed', { code: errorCode(error), err: error });
+        filesError = errorCode(error) ?? 'unknown error';
+      }
     }
 
-    // 5. Log the restore (best-effort — DB just changed so this may use restored data)
-    await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {}).catch(() => {});
+    // 8. Bring a backup from an older release up to this version's schema.
+    // start.sh runs the same command on every boot, so a failure here is
+    // recovered by a restart, and the response says so.
+    try {
+      await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
+    } catch (execError: unknown) {
+      logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
+      // TODO(restore): this return skips step 9, so a restore whose migrations
+      // failed leaves no entry in the admin log although the database was
+      // replaced. It should write the same best-effort entry before answering.
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          'The backup was restored, but bringing its database up to this version failed. ' +
+          'Restart the backend (docker compose restart backend), which runs migrations on start, then check the server logs. ' +
+          (filesError
+            ? `Copying the uploaded files failed too (${filesError}); once the backend is up, restore again or copy the archive's uploads folder in by hand. `
+            : '') +
+          undo,
+      });
+    }
+
+    // 9. Log the restore (best-effort — DB just changed so this may use restored data)
+    await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup }).catch(() => {});
+
+    if (filesError !== null) {
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          `The database was restored and is up to date, but copying the uploaded files from the backup failed (${filesError}). ` +
+          'Check that the uploads directory is writable and has room, then restore again, ' +
+          `or copy the archive's uploads folder into it by hand. ${undo}`,
+      });
+    }
 
     return res.json({
-      message: 'Restore complete. Your session is no longer valid — please refresh and log in again.',
+      message: `Restore complete. ${undo} Your session is no longer valid — please refresh and log in again.`,
+      safetyBackup,
     });
   } catch (error) {
     logger.error('Restore error', { err: error });
@@ -914,7 +1268,7 @@ router.post('/backups/restore', restoreUpload.single('backup'), async (req, res)
   } finally {
     // Always clean up temp files
     await fs.unlink(uploadedZip).catch(() => {});
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    if (tempDir !== null) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 });
 

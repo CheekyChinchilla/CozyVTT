@@ -55,7 +55,6 @@ function track(id: string, name: string, scope: AssetScope, extra: Partial<Asset
     originalName: `${name}.mp3`,
     mimeType: 'audio/mpeg',
     fileSize: 1024,
-    filePath: '',
     filename: '',
     description: null,
     tags: [],

@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { socketTarget } from '@/utils/socketTarget';
+import { api } from '@/services/api';
+import { apiErrorStatus } from '@/utils/errors';
 import type {
   Map as CampaignMap,
   TokenMoveStartEvent,
@@ -27,6 +29,7 @@ import type {
   CharacterHpUpdateEvent,
   CharacterHpUpdatedBroadcast,
   DmTransferredBroadcast,
+  MemberRoleChangedBroadcast,
   HitDiceSpendEvent,
   CombatState,
   InitiativeAddEvent,
@@ -76,9 +79,18 @@ type StoredCallback = (data: never) => void;
  */
 type SocketIoListener = (...args: unknown[]) => void;
 
+/** The server's answer to a socket whose sign-in it does not accept. */
+function isSignInRefusal(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { message?: unknown }).message === 'Unauthorized';
+}
+
 class SocketClient {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
+  /** Sign-in checks that failed for a reason other than the sign-in; see checkSignIn. */
+  private signInChecks = 0;
+  /** The server refused this socket's sign-in; the disconnect that follows must not reconnect. */
+  private signInRefused = false;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
   private isConnecting = false;
@@ -100,6 +112,13 @@ class SocketClient {
    * means a component added later cannot reintroduce the bug.
    */
   private listeners = new Map<string, Set<StoredCallback>>();
+
+  /**
+   * Told each time a socket this client built on its own, after the server
+   * closed the last one, has joined the campaign. Whoever connected listens
+   * on the socket it was handed; this is how it learns there is a new one.
+   */
+  private rebuiltCallbacks = new Set<() => void>();
 
   constructor() {
     // Socket will be initialized when connect() is called
@@ -144,6 +163,7 @@ class SocketClient {
 
       this.isConnecting = true;
       this.campaignId = campaignId;
+      this.signInRefused = false;
 
       // Disconnect and clean up any existing socket first
       if (this.socket) {
@@ -187,12 +207,12 @@ class SocketClient {
       this.socket.on('authenticated', () => {
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
-        resolve();
-      });
-
-      // Low-level socket.io connection established
-      this.socket.on('connect', () => {
+        // Only a socket that has joined counts as working. Resetting on the
+        // transport's own connect let a server that closes every socket
+        // before it joins be retried for ever.
         this.reconnectAttempts = 0;
+        this.signInChecks = 0;
+        resolve();
       });
 
       // Backend ready — emit authenticate once we know the server is listening
@@ -218,10 +238,16 @@ class SocketClient {
 
       // Disconnected
       this.socket.on('disconnect', (reason) => {
-        if (reason === 'io server disconnect') {
-          // Server disconnected us, need to manually reconnect
-          this.reconnect();
+        if (reason !== 'io server disconnect') return;
+        // Server disconnected us. If it no longer accepts the sign-in,
+        // another socket would only be refused again: ask the REST API,
+        // whose answer to an ended sign-in sends the user to sign in.
+        if (this.signInRefused) {
+          this.signInRefused = false;
+          void this.checkSignIn();
+          return;
         }
+        this.reconnect();
       });
 
       // Reconnection attempt
@@ -242,14 +268,58 @@ class SocketClient {
         reject(new Error('Failed to reconnect after maximum attempts'));
       });
 
+      // TODO(play): when the server ends a table's sign-in (a password
+      // changed elsewhere, a platform role changed, the account deleted) it
+      // sends the reason here before closing the socket, and it is only
+      // written to the console; the Dice tab shows it only if it is open at
+      // the time. Show the reason to the user, in a toast or on the
+      // connection badge.
+      //
       // Error events from server
       this.socket.on('error', (error) => {
         console.error('[Socket] Server error event:', error);
+        if (isSignInRefusal(error)) this.signInRefused = true;
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
         reject(error);
       });
     });
+  }
+
+  /**
+   * The server refused the sign-in on a socket. The REST client redirects on
+   * a 401 (to sign in) or a required password change, so any authenticated
+   * request settles it; if the request succeeds, the sign-in is still good
+   * and the refusal was momentary, so reconnect as usual.
+   */
+  private async checkSignIn(): Promise<void> {
+    try {
+      await api.listCampaigns();
+    } catch (error) {
+      // Signed out or held for a password change: the API client sends the
+      // page to sign in, and there is nothing to reconnect to. Anything else
+      // (the network, a server that could not read its sessions) says nothing
+      // about the sign-in, so ask again after a while, within the attempts.
+      const status = apiErrorStatus(error);
+      if (status === 401 || status === 403) return;
+      if (this.signInChecks >= this.maxReconnectAttempts) return;
+      const delay = Math.min(this.reconnectDelay * Math.pow(2, this.signInChecks), 30000);
+      this.signInChecks++;
+      setTimeout(() => { void this.checkSignIn(); }, delay);
+      return;
+    }
+    // The checks have attempts of their own, so a run the network cut short
+    // still leaves the reconnect its own. Each reconnect spends one of those,
+    // so a socket refused every time while the REST API takes the same
+    // sign-in (a proxy dropping the cookie on /socket.io) still stops.
+    this.signInChecks = 0;
+    this.reconnect();
+  }
+
+  /** Call `callback` whenever this client has replaced its socket on its own; returns the unsubscribe. */
+  onRebuilt(callback: () => void): () => void {
+    this.rebuiltCallbacks.add(callback);
+    return () => { this.rebuiltCallbacks.delete(callback); };
   }
 
   private reconnect() {
@@ -264,9 +334,11 @@ class SocketClient {
     setTimeout(() => {
       this.reconnectAttempts++;
       if (this.campaignId) {
-        this.connect(this.campaignId).catch((error) => {
-          console.error('[Socket] Reconnection error:', error);
-        });
+        this.connect(this.campaignId)
+          .then(() => { for (const callback of this.rebuiltCallbacks) callback(); })
+          .catch((error) => {
+            console.error('[Socket] Reconnection error:', error);
+          });
       }
     }, delay);
   }
@@ -281,6 +353,11 @@ class SocketClient {
 
     // Reset connection state to allow reconnection
     this.isConnecting = false;
+  }
+
+  /** Whether a connect() is under way and has not yet joined or failed. */
+  isConnectInProgress(): boolean {
+    return this.isConnecting;
   }
 
   isConnected(): boolean {
@@ -512,6 +589,14 @@ class SocketClient {
    */
   onDmTransferred(callback: EventCallback<DmTransferredBroadcast>) {
     this.addListener('campaign.dm.transferred', callback);
+  }
+
+  /**
+   * A member's role changed. Everyone in the campaign hears it: the member's
+   * own page has to change its controls, and everyone else's roster its list.
+   */
+  onMemberRoleChanged(callback: EventCallback<MemberRoleChangedBroadcast>) {
+    this.addListener('campaign.role.changed', callback);
   }
 
   /**

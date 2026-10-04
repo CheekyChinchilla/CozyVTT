@@ -14,14 +14,19 @@ import {
   Edit2,
   Eye,
   EyeOff,
+  HelpCircle,
   Loader2,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
+import { setTokenFlag } from '@/utils/tokenFlags';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
+import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
+import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
 // Props
@@ -59,13 +64,12 @@ interface TokenRowProps {
 }
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
-  const { currentMap } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
   const { socket } = useWebSocket();
+  const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
 
-  const tokenType = getEffectiveType(token);
-  const canEdit = tokenType === TokenType.NPC || tokenType === TokenType.OBJECT;
 
   const handleDuplicate = useCallback(async () => {
     if (!currentMap) return;
@@ -74,41 +78,43 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       // The roster subscribes ignoring movement, so this row's `token` prop
       // can hold a stale position — read the live one at action time.
       const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
-      const newX = Math.min(livePosition.x + 1, currentMap.width - token.size.width);
-      const newY = Math.min(livePosition.y + 1, currentMap.height - token.size.height);
-      const freshHp = token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null;
+      const position = clampTokenPosition(
+        { x: livePosition.x + 1, y: livePosition.y + 1 },
+        token.size,
+        currentMap
+      );
       const result = await api.addToken(campaignId, mapId, {
-        name: token.name,
-        imageUrl: token.imageUrl,
-        position: { x: newX, y: newY },
-        size: token.size,
-        layer: token.layer,
-        visible: token.visible,
-        controlledBy: token.controlledBy,
-        type: token.type,
-        disposition: token.disposition,
-        hp: freshHp,
-        showHpBar: token.showHpBar,
-        notes: token.notes,
-        initiative: token.initiative,
+        ...tokenCopyRequest(token, position),
+        // A copy starts fresh and belongs to nobody's character; see MapCanvas.
+        characterId: null,
+        controlledBy: copyController(token.controlledBy, campaign?.memberships),
+        hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
-      console.error('TokenRoster: failed to duplicate token', err);
+      // A copy is a new token, so an older one whose fields predate validation
+      // is refused: say which, so the DM can fix it in Edit Token.
+      showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, socket]);
+  }, [token, campaignId, mapId, currentMap, socket, showToast]);
 
   const handleToggleVisible = useCallback(async () => {
     try {
-      await api.updateToken(campaignId, mapId, token.id, { visible: !token.visible });
-      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-      socket?.emitMapChange(mapId);
+      await setTokenFlag(campaignId, mapId, token, 'visible', !token.visible, socket);
     } catch (err) {
       console.error('TokenRoster: failed to toggle visibility', err);
+    }
+  }, [token, campaignId, mapId, socket]);
+
+  const handleToggleObscured = useCallback(async () => {
+    try {
+      await setTokenFlag(campaignId, mapId, token, 'obscured', !token.obscured, socket);
+    } catch (err) {
+      console.error('TokenRoster: failed to toggle identity', err);
     }
   }, [token, campaignId, mapId, socket]);
 
@@ -147,6 +153,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         <p className={`text-xs font-medium truncate ${!token.visible ? 'text-stone-gray/50' : 'text-charcoal'}`}>
           {token.name}
           {!token.visible && <span className="ml-1 text-[10px] text-stone-gray/40">(hidden)</span>}
+          {token.obscured && <span className="ml-1 text-[10px] text-stone-gray/40">(obscured)</span>}
         </p>
         {hp && (
           <p className="text-[10px] text-stone-gray/60">{hp}</p>
@@ -155,8 +162,8 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
       {/* Actions — shown on hover */}
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        {/* Edit (NPC/Object only) */}
-        {canEdit && onEditToken && (
+        {/* Edit — every token type */}
+        {onEditToken && (
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"
@@ -173,6 +180,15 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           className="p-1 rounded hover:bg-moss-green/10 text-stone-gray transition-colors"
         >
           {token.visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+        </button>
+
+        {/* Obscure / reveal identity */}
+        <button
+          onClick={handleToggleObscured}
+          title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+          className={`p-1 rounded hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
+        >
+          <HelpCircle className="w-3 h-3" />
         </button>
 
         {/* Duplicate */}

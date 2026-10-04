@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isCampaignDm } from '@/utils/campaignRoles';
+import { isCampaignDm, campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
@@ -79,6 +79,9 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const canUploadGlobal = isAdmin || !!user?.globalAssetManager;
 
   // Check permissions
+  // TODO(assets): the server also lets the DM of a campaign asset's campaign
+  // delete and move it, but this and canMove below offer Delete and Move only
+  // to the uploader or an admin. Offer both to that DM too.
   const canDelete = isOwner || isAdmin;
 
   // Scope is fixed for avatars
@@ -121,7 +124,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const getAssetUrl = (): string => {
     if (currentAsset.type === AssetType.MAP) return api.getAssetUrl(currentAsset.id, 'maps');
     if (currentAsset.type === AssetType.TOKEN) return api.getAssetUrl(currentAsset.id, 'tokens');
-    if (currentAsset.type === AssetType.AVATAR) return api.getAssetUrl(currentAsset.uploadedById, 'avatars');
+    if (currentAsset.type === AssetType.AVATAR) return currentAsset.uploadedById ? api.getAssetUrl(currentAsset.uploadedById, 'avatars') : '';
     if (currentAsset.type === AssetType.AUDIO) return api.getAssetUrl(currentAsset.id, 'audio');
     return '';
   };
@@ -184,16 +187,21 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
       setMoveCampaignId('');
       onUpdate?.(updated);
     } catch (err) {
+      // TODO(ui): apiErrorText reads the reply's error field, the short status
+      // label, so a refused move shows only "Forbidden". Read
+      // apiErrorMessage(err) first, which carries the reason.
       setMoveError(apiErrorText(err) ?? 'Failed to move asset. Please try again.');
     } finally {
       setMoving(false);
     }
   };
 
-  // Campaigns available in the picker depend on target scope:
-  // Moving TO campaign — user must be a member (any role)
+  // Campaigns available in the picker depend on target scope. Moving into a
+  // campaign is the DM's, with token art the one thing a player may bring in;
+  // the server refuses the rest, so the picker offers only what it accepts.
+  const playerOrDmCampaigns = campaignsToPlaceAssetIn(userCampaigns, true, user?.id);
   const campaignsForPicker =
-    moveScope === AssetScope.CAMPAIGN ? userCampaigns : dmCampaigns;
+    moveScope === AssetScope.CAMPAIGN && currentAsset.type === AssetType.TOKEN ? playerOrDmCampaigns : dmCampaigns;
 
   return (
     <>
