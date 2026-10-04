@@ -66,6 +66,9 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
 - **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
 - **Suspected: the map-change listener keeps the role from MapCanvas's first render,** so after a role change without a reload a former DM may see a stale "Spirit Realm" badge and a new DM may hear the crossing sound (`MapCanvas.tsx`).
+- **A campaign import that fails part-way leaves a partial campaign behind.** `services/campaignImporter.ts` creates the campaign before its maps, tokens and pictures and does not undo them when a later step fails, so a refused archive still leaves an incomplete campaign and its files.
+- **An audio request for the last bytes of a file, or starting past its end, answers 500.** `routes/assets.ts` passes a `Range` of `bytes=-N` or a start beyond the file straight to the file stream, which throws; it should answer 416, and an end past the file should be cut to the file's length. Browsers do not send these during normal playback.
+- **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 
 ### Play and connection
 
@@ -74,6 +77,8 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
 - **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
 - **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
+- **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
+- **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
 
 ### Maps
 
@@ -81,6 +86,10 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
 - **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
+- **A Universal VTT upload the server refuses answers 500.** A file with the wrong extension, over 100 MB, or sent under the wrong form field gets "An unexpected error occurred", and a file whose `map_size` has no numeric `y` fails after its picture has been saved (`routes/maps.ts`, `services/uvttParser.ts`). The asset upload route answers the same mistakes with 400.
+- **Editing a single light can store a dim radius smaller than its bright one.** `LightSourceUpdateSchema` in `validators/walls.ts` lacks the check that creating a light and saving the whole list make, so a later save of the full list is refused.
+- **Editing a single wall refuses the locked-door type,** which creating walls, saving the whole list and the DM's live wall edit all accept (`routes/maps.ts`).
+- **Suspected: two edits to a map's walls or lights at the same moment can lose one.** The wall and light routes read, change and write the stored list without the map lock the token routes take (`routes/maps.ts`).
 
 ### Accounts
 
@@ -99,7 +108,7 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
 - **Stopping Postgres can crash the backend.** The session store's pool in `config/session.ts` has no `'error'` listener, so an idle client's dropped connection becomes an unhandled error.
 - **The Backups list's bin icon deletes a backup without asking** (`AdminPage.tsx`).
 - **The bundled nginx keeps the backend's address from its own start,** so recreating only the backend container can leave `/api` answering 502 until nginx is restarted. A `resolver` with a variable upstream in `nginx/nginx.conf` would fix it; the file carries no TODO because any change to it needs a new `NGINX_CONF_STAMP` in `docker-compose.yml`.
-- **Restoring a file that is not a ZIP, or whose name does not end in .zip, shows only "An unexpected error occurred"** (`routes/admin.ts`).
+- **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
 - **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
 
 ---
