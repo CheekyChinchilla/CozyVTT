@@ -221,9 +221,10 @@ paths:
       summary: Get public client configuration
       description: |
         Public endpoint — returns the upload size limits the server enforces,
-        derived from the `MAX_<TYPE>_SIZE_MB` environment variables. The SPA is
-        built ahead of time, so it reads the limits from here at runtime rather
-        than baking them into the bundle. No authentication required.
+        derived from the `MAX_<TYPE>_SIZE_MB` environment variables, and whether
+        this instance can send email. The SPA is built ahead of time, so it
+        reads the limits from here at runtime rather than baking them into the
+        bundle. No authentication required.
       operationId: getClientConfig
       security: []
       responses:
@@ -251,6 +252,19 @@ paths:
                   maxUploadBytes:
                     type: integer
                     description: Largest configured limit — the cap enforced before the asset type is known
+                  smtp:
+                    type: object
+                    description: >-
+                      Whether this instance can send email. Host, port and
+                      credentials stay on the admin-only `GET /api/admin/config`;
+                      this bare boolean lets a non-admin DM tell whether an
+                      invitation's "also email them" option will do anything.
+                    properties:
+                      configured:
+                        type: boolean
+                        description: >-
+                          True when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are
+                          all set. The mail server is not contacted to check.
               example:
                 uploadLimits:
                   MAP: 52428800
@@ -259,6 +273,8 @@ paths:
                   AVATAR: 2097152
                   DOCUMENT: 52428800
                 maxUploadBytes: 52428800
+                smtp:
+                  configured: true
 
   # ============================================
   # SETUP
@@ -292,7 +308,14 @@ paths:
       tags:
         - Setup
       summary: Initialize system
-      description: Create first admin account and complete setup wizard. Only works if setup is not yet complete.
+      description: >-
+        Create the first admin account, apply the wizard's instance settings,
+        mark setup complete, and sign the new admin in (the response sets a
+        fresh session cookie). Only works while setup is not yet complete and
+        no account exists; both are checked before the body is read. The
+        password must be at least 12 characters with an uppercase letter, a
+        lowercase letter, a number and a special character, the same rule
+        enforced on register, reset-password and change-password.
       operationId: initializeSystem
       security: []
       requestBody:
@@ -314,25 +337,35 @@ paths:
                   minLength: 12
                 displayName:
                   type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: >-
+                    Trimmed, and angle brackets removed, before the length is
+                    checked. Anything else, including a value that is not a
+                    string, is refused with 400 `Setup Failed`.
                 instanceName:
                   type: string
-                  maxLength: 100
                   default: CozyVTT
                   description: >-
-                    Shown in browser tabs and page titles. Blank, missing or
-                    non-string values leave the default in place rather than
-                    failing setup, which can only be run once.
+                    Shown in browser tabs and page titles. Angle brackets are
+                    removed, the value is trimmed, and anything past 100
+                    characters is cut off. Blank, missing or non-string values
+                    leave the default in place rather than failing setup, which
+                    can only be run once.
                 timezone:
                   type: string
-                  maxLength: 50
                   default: UTC
-                  description: IANA timezone name, used for timestamps.
+                  description: >-
+                    IANA timezone name, used for timestamps. Not checked against
+                    the timezone list. Treated like `instanceName`, cut off at
+                    50 characters.
                 allowRegistration:
                   type: boolean
                   default: false
                   description: >-
-                    Whether people may create their own accounts. Changeable
-                    afterwards from Admin → Settings.
+                    Whether people may create their own accounts. A value that
+                    is not a boolean is ignored. Changeable afterwards from
+                    Admin → Settings.
       responses:
         '201':
           description: Setup completed successfully
@@ -346,7 +379,22 @@ paths:
                   user:
                     $ref: '#/components/schemas/User'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `Setup Already Completed`; `Users Exist` when any account exists;
+            `Validation Error` for a missing field, an invalid email, or a
+            password that does not meet the strength rule (that case alone
+            carries an `errors` array listing each rule not met); or
+            `Setup Failed` with the reason, for a display name that is refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Password does not meet requirements
+                errors:
+                  - Password must contain at least one uppercase letter
+                  - Password must contain at least one special character
 
   # ============================================
   # AUTHENTICATION
@@ -357,7 +405,17 @@ paths:
       tags:
         - Authentication
       summary: Register new user
-      description: Create a new user account. First user automatically becomes ADMIN. Rate limited (5/15min).
+      description: >-
+        Create a new user account. Refused with 403 if the instance has
+        registration disabled. If the instance requires admin approval (the
+        default), the account is created unapproved and no session is started
+        (201 with `pendingApproval: true` and no `user`); otherwise the account
+        is approved and signed in on a fresh session. The email is lowercased
+        and has angle brackets removed before it is stored. Should no account
+        exist at all (setup normally creates the first), the account becomes
+        ADMIN, approved and signed in, and the registration and approval
+        settings are not consulted. Rate limited to 10 requests per hour per
+        address, counted whether or not they succeed.
       operationId: registerUser
       security: []
       requestBody:
@@ -384,18 +442,49 @@ paths:
                   description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
       responses:
         '201':
-          description: User registered successfully
+          description: Registered, or submitted pending admin approval.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  user:
-                    $ref: '#/components/schemas/User'
+                oneOf:
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                      user:
+                        $ref: '#/components/schemas/User'
+                  - type: object
+                    description: When the instance requires admin approval. No session is created.
+                    properties:
+                      message:
+                        type: string
+                      pendingApproval:
+                        type: boolean
+                        example: true
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `Validation Error` when a field is missing. Otherwise
+            `Registration Failed`, with the reason as `message`: an invalid
+            email, a password that does not meet the strength rule (the unmet
+            rules joined with ", ", with no `errors` array), a refused display
+            name, or `Email already registered`. The missing-field check runs
+            before the 403; the others after it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Registration Failed
+                message: Email already registered
+        '403':
+          description: Registration is disabled on this instance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Registration Disabled
+                message: Registration is currently disabled. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -405,8 +494,8 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create session. Rate limited (5/15min).
-        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`.
+        Authenticate user and create a session on a fresh session id. Rate limited (5 failed requests per 15 minutes, shared with the other credential endpoints; a 403 counts as failed).
+        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
       security: []
@@ -429,7 +518,10 @@ paths:
                 rememberMe:
                   type: boolean
                   default: false
-                  description: Extends session to 30 days
+                  description: >-
+                    Keeps the session for `REMEMBER_ME_MAX_AGE` of inactivity
+                    (30 days by default) instead of `SESSION_MAX_AGE`. With MFA,
+                    it takes effect when `/api/auth/mfa/verify-login` succeeds.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -456,8 +548,40 @@ paths:
                         example: true
                       message:
                         type: string
+        '400':
+          description: >-
+            `Validation Error` when the email or password is missing. An email
+            that is not a string answers `Login Failed`, with the internal
+            error text as `message`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Email and password are required
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            No account has that email, or the password is wrong. The answer is
+            the same for both.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Authentication Failed
+                message: Invalid email or password
+        '403':
+          description: >-
+            The account is pending admin approval. Given only once the password
+            has been checked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Account Pending Approval
+                message: Your account is pending admin approval. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -466,8 +590,13 @@ paths:
       tags:
         - Authentication
       summary: Logout
-      description: Destroy session and clear cookie
+      description: >-
+        Destroy session and clear cookie. Needs no session: a client that is
+        already signed out, or partway through an MFA sign-in, gets the same
+        200. Ends only this sign-in's live WebSocket connections; the same
+        account signed in elsewhere is unaffected.
       operationId: logoutUser
+      security: []
       responses:
         '200':
           description: Logout successful
@@ -478,13 +607,24 @@ paths:
                 properties:
                   message:
                     type: string
+        '500':
+          description: The session could not be destroyed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Logout Failed
+                message: Failed to destroy session
 
   /api/auth/me:
     get:
       tags:
         - Authentication
       summary: Get current user
-      description: Get currently authenticated user from session
+      description: >-
+        Get the signed-in user, read fresh from the database rather than from
+        the session.
       operationId: getCurrentUser
       security:
         - cookieAuth: []
@@ -499,7 +639,17 @@ paths:
                   user:
                     $ref: '#/components/schemas/User'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            No signed-in session (`Not authenticated`), or the session's
+            account no longer exists (`User not found`), in which case the
+            session is also destroyed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Unauthorized
+                message: Not authenticated
 
   /api/auth/forgot-password:
     post:
@@ -507,10 +657,11 @@ paths:
         - Authentication
       summary: Request password reset
       description: |
-        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration).
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged.
+        The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
-        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does.
-        Rate limited (5/15min).
+        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does. This happens even when SMTP is not configured and no email is sent.
+        Rate limited to 5 requests per 15 minutes; every request counts, successful or not.
       operationId: forgotPassword
       security: []
       requestBody:
@@ -535,15 +686,50 @@ paths:
                 properties:
                   message:
                     type: string
+              examples:
+                smtpConfigured:
+                  value:
+                    message: If an account with that email exists, a password reset link has been sent.
+                smtpNotConfigured:
+                  value:
+                    message: Password reset is not available. Contact your administrator.
+        '400':
+          description: The email is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Email is required
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: >-
+            Also given when `email` is present but is not a string, for
+            example a number or a list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/reset-password:
     post:
       tags:
         - Authentication
       summary: Reset password with token
-      description: Reset password using a valid token from a password reset email or invitation. Token must not be expired or used. A token sets the password once, even when two requests carry it at the same moment, and using it voids the account's other unused tokens. Rate limited (5/15min).
+      description: >-
+        Reset password using a valid token from a password reset email or
+        invitation. Token must not be expired or used. A token sets the
+        password once, even when two requests carry it at the same moment,
+        and using it voids the account's other unused tokens. Clears
+        `mustChangePassword`, and ends every login session and live WebSocket
+        connection of the account; the request itself does not sign anyone
+        in. Rate limited (5 failed requests per 15 minutes, shared with the
+        other credential endpoints).
       operationId: resetPassword
       security: []
       requestBody:
@@ -573,16 +759,37 @@ paths:
                   message:
                     type: string
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `Validation Error` when the token or new password is missing, or
+            the password does not meet the strength rule (the unmet rules
+            joined with ", " as `message`); `Invalid Token` when the token is
+            unknown, used or expired, including when another request used it
+            first. The token is checked before the password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Token
+                message: This password reset link is invalid or has expired
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: Also given when `token` is present but is not a string.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/change-password:
     post:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false. Ends the user's other login sessions; the session making the request stays signed in. Voids the user's unused password-reset and invitation links.
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links. Wrong current passwords count only towards the general API rate limit.
       operationId: changePassword
       security:
         - cookieAuth: []
@@ -612,9 +819,35 @@ paths:
                   message:
                     type: string
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            A field is missing, or the new password does not meet the strength
+            rule (the unmet rules joined with ", " as `message`). The current
+            password is checked before the strength rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Password must contain at least one number
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Not authenticated, or the current password is incorrect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Authentication Failed
+                message: Current password is incorrect
+        '404':
+          description: The session's account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
 
   # ============================================
   # MFA
@@ -625,7 +858,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. Rate limited (5 failures/15min).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 failures/15min, shared with the other credential endpoints).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -658,13 +891,34 @@ paths:
                     type: string
                     description: TOTP secret for manual entry
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The password is missing or not a string, or MFA is already enabled
+            (checked before the password).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: MFA is already enabled. Disable it first to set it up again.
         '401':
           description: Not authenticated, or the password is incorrect
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: Authentication Failed
+                message: Incorrect password
+        '404':
+          description: The session's account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -673,7 +927,7 @@ paths:
       tags:
         - MFA
       summary: Complete MFA setup
-      description: Verify TOTP code to complete MFA setup. Generates 10 backup codes (shown only once). Ends the user's other login sessions; the session making the request stays signed in. The code counts as used, so it cannot then sign in. Rate limited (5/15min).
+      description: Verify TOTP code to complete MFA setup, which needs a pending secret from `/api/auth/mfa/setup`. Generates 10 backup codes (shown only once). Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. The code counts as used, so it cannot then sign in. Rate limited (5 failures/15min, on its own allowance).
       operationId: mfaVerifySetup
       security:
         - cookieAuth: []
@@ -705,7 +959,34 @@ paths:
                       type: string
                     description: 10 backup codes in XXXX-XXXX format (shown only once)
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The code is missing, no setup is in progress (call
+            `/api/auth/mfa/setup` first), or MFA is already enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: No MFA setup in progress. Call /mfa/setup first.
+        '401':
+          description: Not authenticated, or the verification code is invalid or already used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Code
+                message: Invalid verification code. Please try again.
+        '404':
+          description: The session's account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -716,8 +997,9 @@ paths:
       summary: Verify MFA during login
       description: |
         Complete MFA verification during login flow. Requires a pending MFA session from `/api/auth/login`.
-        Accepts either a TOTP token or a backup code (not both). Backup codes are consumed on use, exactly once even when two requests carry the same code; the second is answered 401.
+        At least one of `token` and `backupCode` is required; sending both is not refused: a non-empty `token` is checked and the backup code is ignored. Backup codes are compared ignoring hyphens, spaces and letter case. They are consumed on use, exactly once even when two requests carry the same code; the second is answered 401.
         A TOTP code is accepted once: one from the same 30-second step as a code already accepted for the account, or an earlier step, is refused.
+        On success the session is signed in on a fresh session id, with the `rememberMe` choice made at `/api/auth/login`.
         Rate limited (5 failures/15min per address, separate from setup verification, and 5 failures/15min per account from any address).
       operationId: mfaVerifyLogin
       security: []
@@ -750,13 +1032,37 @@ paths:
                     type: boolean
                   backupCodeUsed:
                     type: boolean
+                    description: Present, as true, only when a backup code was used.
                   remainingBackupCodes:
                     type: integer
+                    description: Present only when a backup code was used.
                   warning:
                     type: string
-                    description: Warning when backup codes are running low (<=3)
+                    description: Present when a backup code was used and 3 or fewer remain.
+        '400':
+          description: >-
+            Neither a token nor a backup code was sent, or one that was sent is
+            not a string. Checked only once a sign-in is pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Either a TOTP token or backup code is required
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            No MFA sign-in is pending in this session (`Unauthorized`), the
+            account no longer has MFA on (`Unauthorized`, `Invalid MFA state`),
+            or the token or backup code is invalid or already used
+            (`Invalid Code`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Code
+                message: Invalid authentication code. Please try again.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -765,7 +1071,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used. Admin accounts cannot disable MFA. Ends the user's other login sessions; the session making the request stays signed in.
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 failures/15min, shared with the other credential endpoints).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -794,21 +1100,54 @@ paths:
                 properties:
                   message:
                     type: string
+        '400':
+          description: Password or token missing, or MFA is not enabled on the account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: MFA is not enabled
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            Not authenticated, the password is incorrect (`Authentication
+            Failed`), or the TOTP code is invalid or already used
+            (`Invalid Code`). The password is checked first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Code
+                message: Invalid authentication code
         '403':
           description: Admin accounts cannot disable MFA
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Admin accounts must keep MFA enabled.
+        '404':
+          description: The session's account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/auth/mfa/backup-codes:
     post:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes.
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 failures/15min, shared with the other credential endpoints).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
@@ -837,8 +1176,38 @@ paths:
                     type: array
                     items:
                       type: string
+                    description: 10 backup codes in XXXX-XXXX format (shown only once)
+        '400':
+          description: >-
+            Password missing, or MFA is not enabled on the account (checked
+            before the password).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: MFA is not enabled
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: Not authenticated, or the password is incorrect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Authentication Failed
+                message: Incorrect password
+        '404':
+          description: The session's account no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/auth/account:
     delete:
@@ -847,13 +1216,20 @@ paths:
       summary: Delete own account
       description: |
         Self-service permanent account deletion. Requires the current
-        password as confirmation. Deletes the user's memberships, characters,
-        personal notes and dice macros. Their chat messages, dice rolls and
-        uploaded assets stay, with the user field set to null, and documents
-        they shared into a campaign stay shared (the share passes to the
-        campaign's DM, or its owner). A campaign the
-        user owns passes to its sitting DM; while the user is that DM the
-        deletion is refused with 409 and nothing changes.
+        password as confirmation. Deletes the user's memberships, pending
+        invitations, characters, personal notes and dice macros. Their chat
+        messages, dice rolls and uploaded assets stay, with the user field
+        set to null, and documents they shared into a campaign stay shared
+        (the share passes to the campaign's DM, or its owner).
+
+        Only campaigns the user owns are checked. One whose DM seat another
+        member holds passes to that DM. One where the user holds the DM seat,
+        or where nobody does, refuses the deletion with 409 and nothing
+        changes. A campaign the user is DM of but does not own (after a DM
+        handover) is not checked: the deletion goes ahead and leaves that
+        campaign with no DM.
+
+        Wrong passwords count only towards the general API rate limit.
       operationId: deleteOwnAccount
       security:
         - cookieAuth: []
@@ -873,7 +1249,11 @@ paths:
               password: hunter2-correct-horse-battery
       responses:
         '200':
-          description: Account deleted; every login session of the account ended, on every device.
+          description: >-
+            Account deleted; every login session and live WebSocket
+            connection of the account ended, on every device. Each campaign
+            the account was a member of gets a `roster.updated` broadcast
+            (`member.left`).
           content:
             application/json:
               schema:
@@ -881,26 +1261,46 @@ paths:
                 properties:
                   message: { type: string, example: Account deleted successfully }
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: The password is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Password is required to delete your account
         '401':
           description: |
-            Either not authenticated, or password did not match. The error message
-            distinguishes the two cases.
+            Either not authenticated, or password did not match
+            (`Authentication Failed`, `Incorrect password`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: >-
-            The caller is the instance's only admin (another user has to be promoted
-            to admin first), or runs a campaign they own (the message names it).
-            Nothing was changed.
+          description: The session's account no longer exists.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: User not found
+        '409':
+          description: >-
+            The caller is the instance's only admin (another user has to be
+            promoted to admin first), or owns a campaign whose DM seat is
+            theirs or empty (the message names each one). Checked after the
+            password. Nothing was changed. The body is `{ error, message }`
+            only; unlike `DELETE /api/users/{id}` it carries no `campaigns`
+            list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: You run "Curse of the Lantern". Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -912,7 +1312,9 @@ paths:
       description: |
         Public endpoint — returns whether public self-registration is currently
         enabled on this instance. Used by the frontend to show/hide the register
-        link on the login page. No authentication required.
+        link on the login page. No authentication required. Answers `true`
+        when no account exists yet, and `false` (still 200) when the settings
+        cannot be read.
       operationId: getRegistrationStatus
       security: []
       responses:
@@ -939,9 +1341,11 @@ paths:
       summary: Get instance appearance settings
       description: |
         Public endpoint — returns the instance's theme, font, and branding
-        URLs. The frontend calls this on every page load so the login and
-        setup pages can paint with the correct theme before authentication.
-        No authentication required.
+        URLs. The frontend calls this on every page load so the login page
+        can paint with the correct theme before authentication. No
+        authentication required, and reachable during a forced password
+        change. Until setup has run it is refused with the setup 403 like
+        other routes, so the setup wizard shows the built-in defaults.
       operationId: getAppearanceSettings
       security: []
       responses:
@@ -992,7 +1396,7 @@ paths:
       tags:
         - Users
       summary: List all users
-      description: Get list of all users (Admin only)
+      description: Get list of all users, newest account first, including unapproved ones (Admin only)
       operationId: listUsers
       security:
         - cookieAuth: []
@@ -1040,7 +1444,16 @@ paths:
                   user:
                     $ref: '#/components/schemas/User'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            A non-admin asked for an id other than their own, whether or not
+            that user exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have permission to view this user
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -1049,7 +1462,7 @@ paths:
         - Users
       summary: Update user
       description: |
-        Update user profile (own profile or admin). Admin can change platformRole, which ends every login session the target has, because the role is carried in the session. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
 
         Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
@@ -1077,12 +1490,35 @@ paths:
                 email:
                   type: string
                   format: email
+                  description: >-
+                    Stored lowercased. An address that differs from the
+                    current one only in letter case changes nothing.
                 avatarUrl:
                   type: string
+                  nullable: true
+                  description: >-
+                    Stored as sent, with no check of its form; `null` clears it.
+                    The web client sets `/api/assets/avatars/{userId}` after an
+                    avatar upload. A value that is neither a string nor `null`
+                    answers 500.
+                bio:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Any value other than `null` is converted to text, has angle
+                    brackets removed, is trimmed and is cut off at 500
+                    characters; a longer bio is not refused. Sending `null`
+                    clears it.
                 platformRole:
                   type: string
                   enum: [ADMIN, USER]
                   description: Admin only
+                globalAssetManager:
+                  type: boolean
+                  description: Admin only. 403 for a non-admin caller, 400 if sent and not a boolean.
+                templateEditor:
+                  type: boolean
+                  description: Admin only. 403 for a non-admin caller, 400 if sent and not a boolean.
                 currentPassword:
                   type: string
                   description: Required when changing your own email
@@ -1099,7 +1535,18 @@ paths:
                   user:
                     $ref: '#/components/schemas/User'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            Invalid display name, invalid email, email already in use,
+            missing current password for an email change, invalid
+            platformRole, or `globalAssetManager`/`templateEditor` sent as
+            something other than a boolean.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: Email already in use
         '401':
           description: Not authenticated, or the current password given for an email change is incorrect
           content:
@@ -1107,7 +1554,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            A non-admin tried to update another user (checked first, so also
+            for an id that does not exist), or sent `platformRole`,
+            `globalAssetManager` or `templateEditor`, even for their own
+            account and even unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only admins can update platform roles
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1116,12 +1574,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            Also given for an `avatarUrl` that is neither a string nor `null`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to update user
 
     delete:
       tags:
         - Users
       summary: Delete user
-      description: Delete user account (Admin only, cannot delete self). Ends every login session the deleted user had. What stays and what goes, and the 409 for a user who runs a campaign they own, are as for `DELETE /api/auth/account`.
+      description: >-
+        Delete user account (Admin only; an admin naming their own id is
+        refused with 400, and uses `DELETE /api/auth/account` instead). Ends
+        every login session and live WebSocket connection the deleted user
+        had, and broadcasts `roster.updated` (`member.left`) to each campaign
+        they were a member of. What stays and what goes, which campaigns are
+        checked, and the 409 for a user who owns a campaign whose DM seat is
+        theirs or empty, are as for `DELETE /api/auth/account`. No
+        password is asked for.
       operationId: deleteUser
       security:
         - cookieAuth: []
@@ -1142,16 +1618,32 @@ paths:
                 properties:
                   message:
                     type: string
+                  deletedUserAssetCount:
+                    type: integer
+                    description: >-
+                      Count of the user's personal-scope assets, taken before
+                      deletion. The assets themselves are not deleted; they
+                      stay, owned by no one, readable by admins only. Assets
+                      of other scopes also stay but are not counted.
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The calling admin named their own id. Checked after the admin
+            check, so a non-admin gets 403 instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: You cannot delete your own account
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           description: >-
-            The user runs a campaign they own. `campaigns` lists each such
-            campaign with its other members,
+            The user owns a campaign whose DM seat is theirs or empty.
+            `campaigns` lists each such campaign with its other members,
             so the admin can hand the DM seat over (`PUT
             /api/campaigns/{campaignId}/dm`) or delete the campaign and try
             again. Nothing was changed.
@@ -1183,7 +1675,7 @@ paths:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, and ends every login session and live connection the user already has open. There is no self check, so an admin naming their own id signs themselves out everywhere. MFA on the account is left as it is.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []
@@ -1206,6 +1698,8 @@ paths:
                     type: string
                   temporaryPassword:
                     type: string
+                    description: 16 random letters and digits in four groups of four, shown only in this response.
+                    example: aB3d-Ef9h-Jk2m-Np4q
                   mustChangePassword:
                     type: boolean
                     example: true
@@ -1222,7 +1716,7 @@ paths:
         - Users
       summary: Get user preferences
       description: |
-        Returns the user's per-user preferences blob (theme, font, dice color, sound effects, notifications).
+        Returns the user's per-user appearance preferences: theme id, custom theme colors, and font id.
         Returns an empty object if the user has not customized any preferences yet — the frontend layers
         these on top of the system defaults from `GET /api/auth/appearance`.
         Users can fetch their own preferences; admins can fetch any user's.
@@ -1256,10 +1750,11 @@ paths:
         - Users
       summary: Update user preferences (partial merge)
       description: |
-        Partial-merge update of the user's preferences. Send any subset of fields and the server
-        merges them into the stored JSON blob.
+        Partial-merge update of the user's appearance preferences (theme id, custom theme colors,
+        font id). Send any subset of fields and the server merges them into the stored JSON blob.
         Users can update their own preferences; admins can update any user's.
-        Unknown fields are stripped silently. Empty payloads are rejected with 400.
+        Unknown fields are stripped silently. Empty payloads, including one with only unknown fields, are rejected with 400.
+        The body is validated before the user is looked up, so an invalid body for an unknown id answers 400.
       operationId: updateUserPreferences
       security:
         - cookieAuth: []
@@ -1289,7 +1784,20 @@ paths:
                   preferences:
                     $ref: '#/components/schemas/UserPreferences'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The body is empty or a field is invalid. `details` is the
+            validator's flattened error, with `formErrors` and `fieldErrors`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: Invalid preferences payload
+                details:
+                  formErrors:
+                    - At least one preference field must be provided
+                  fieldErrors: {}
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -1302,8 +1810,9 @@ paths:
       summary: Admin send password reset link
       description: |
         Send a password reset email to the user (Admin only).
-        Invalidates any existing unused reset tokens and creates a new one (expires in 1 hour).
-        Requires SMTP to be configured — returns 503 if SMTP is not set up.
+        Invalidates any existing unused reset or invitation links and creates a new one (expires in 1 hour).
+        The email is sent before the response. If sending fails, the answer is 500, and the earlier links have already been voided.
+        Requires SMTP to be configured — returns 503 if SMTP is not set up, checked before the user is looked up.
       operationId: adminSendUserResetLink
       security:
         - cookieAuth: []
@@ -1324,11 +1833,20 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: Password reset email sent successfully
+                    example: Password reset link sent to player@example.com.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          description: The reset email could not be sent. The new link exists but was not delivered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to send password reset link
         '503':
           description: SMTP not configured
           content:
@@ -1341,7 +1859,7 @@ paths:
                     example: Service Unavailable
                   message:
                     type: string
-                    example: SMTP is not configured on this instance.
+                    example: SMTP is not configured on this instance. Configure SMTP in your .env to use this feature.
 
   # ============================================
   # CAMPAIGNS
@@ -2185,7 +2703,14 @@ paths:
         Returns the authenticated user's pending campaign invitations (status
         `PENDING`), ordered newest first, with the inviting campaign's summary
         info included so the UI can render an invitation card without
-        additional fetches.
+        additional fetches. An invitation whose `expiresAt` has passed is
+        still listed; accepting it answers 400.
+
+        The errors this route and `/accept` and `/decline` below send
+        themselves (400, 403, 404 and 500) carry only `message`, without the
+        `error` field most other routes send. The exceptions are `/accept`'s
+        400 for a malformed `characterIds`, and the 401 from the shared
+        sign-in check, which carry both.
       operationId: listMyInvitations
       security:
         - cookieAuth: []
@@ -2204,7 +2729,12 @@ paths:
                     userId: { type: string, format: uuid }
                     status:
                       type: string
-                      enum: [PENDING, ACCEPTED, DECLINED, EXPIRED]
+                      enum: [PENDING, ACCEPTED, DECLINED]
+                      description: >-
+                        Only `PENDING` invitations are returned here. There is
+                        no `EXPIRED` status: a past `expiresAt` is checked and
+                        refused at accept time, not transitioned in the
+                        database.
                     createdAt: { type: string, format: date-time }
                     expiresAt: { type: string, format: date-time, nullable: true }
                     campaign:
@@ -2219,12 +2749,21 @@ paths:
                           enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
                         owner:
                           type: object
+                          description: >-
+                            The campaign's owner. After a DM handover this need
+                            not be the member who holds the DM seat.
                           properties:
                             displayName: { type: string }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
-          $ref: '#/components/responses/ServerError'
+          description: The invitations could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Failed to fetch invitations
 
   /api/invitations/{id}/accept:
     post:
@@ -2236,22 +2775,25 @@ paths:
         assigns one or more of the accepting user's characters to the campaign
         in the same transaction.
 
-        Validation:
+        Validation, in this order:
         - `characterIds`, when sent, must be a list of at most 50 non-empty ids.
+          This is checked before the invitation is looked up.
         - The invitation must belong to the authenticated user and be `PENDING`.
           It is accepted once: a second accept, even one sent at the same moment,
           answers 400 `Invitation already processed`.
         - Expired invitations are rejected.
         - All `characterIds` must belong to the user and not already be assigned
-          to a campaign. One assigned elsewhere while the accept runs makes it
-          answer 400 and change nothing.
+          to a campaign; a list naming the same id twice is refused too. One
+          assigned elsewhere while the accept runs makes it answer 400 and
+          change nothing.
         - Each character's `gameSystem` must be the campaign's: a character with
           a system joins only a campaign with the same one, and a character with
           none (Flexible) only a campaign with none. The same rule as
           `POST /api/characters/{id}/assign`.
 
-        On success, also broadcasts a `roster.updated` event over the WebSocket
-        to all current campaign members.
+        On success, also broadcasts a `roster.updated` event
+        (`{ action: 'member.joined', userId, campaignId, characterIds }`) over
+        the WebSocket to all current campaign members.
       operationId: acceptInvitation
       security:
         - cookieAuth: []
@@ -2289,17 +2831,38 @@ paths:
           description: |
             Invitation already processed, expired, `characterIds` malformed, or
             character validation failed (not owned by user, already assigned, or
-            game-system mismatch).
+            game-system mismatch). Only the `characterIds` case carries an
+            `error` field (`Validation Error`); the rest are `{ message }` only.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                message: Invitation expired
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The invitation does not belong to the authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Not authorized
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No invitation with that id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Invitation not found
         '500':
-          $ref: '#/components/responses/ServerError'
+          description: Unexpected error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Failed to accept invitation
 
   /api/invitations/{id}/decline:
     post:
@@ -2308,8 +2871,10 @@ paths:
       summary: Decline a campaign invitation
       description: |
         Marks the invitation as `DECLINED`. The invitation must belong to
-        the authenticated user and currently be `PENDING`. Does not create
-        any campaign membership.
+        the authenticated user and currently be `PENDING`; an expired one can
+        still be declined. Does not create any campaign membership, and sends
+        no WebSocket event. A DM can invite the same user again afterwards,
+        which sets the same invitation back to `PENDING`.
       operationId: declineInvitation
       security:
         - cookieAuth: []
@@ -2330,12 +2895,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                message: Invitation already processed
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The invitation does not belong to the authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Not authorized
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No invitation with that id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Invitation not found
         '500':
-          $ref: '#/components/responses/ServerError'
+          description: Unexpected error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: Failed to decline invitation
 
   # ============================================
   # MESSAGES
