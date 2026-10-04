@@ -821,6 +821,16 @@ class ApiClient {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
   }
 
+  /**
+   * The address to load a stored picture reference from. Token templates keep
+   * the reference as sent, which from their editor's upload is the asset's bare
+   * id, so a bare id is given its serving address and an address is used as it
+   * is.
+   */
+  storedAssetSrc(stored: string, type: import('@/utils/assetUrl').AssetDirectory): string {
+    return stored.startsWith('/') || stored.startsWith('http') ? stored : this.getAssetUrl(stored, type);
+  }
+
   // ============================================
   // Maps & Tokens
   // ============================================

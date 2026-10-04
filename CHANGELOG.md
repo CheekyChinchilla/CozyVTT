@@ -172,6 +172,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Tokens
 
+- **The Token Templates list shows each template's picture.** A picture uploaded in the template editor showed only the template's name in the list, though the token placed from it had the picture. Templates saved before this update show their pictures too, with nothing to re-save.
+
 - **Any token can be hidden from the right-click menu.** **Hide from Players** was offered only for objects. It is now offered for every token, and the Token Manager can now place a creature already hidden, as it already could an object.
 
 - **A token moved to another map keeps all its details.** Moving a token (when switching maps, or from the Token Manager or the right-click menu) rebuilt it from a partial copy: a player character came back as an NPC, and darkvision, hit points, disposition, stat block, art mode, rotation and notes were lost. The whole token now moves, keeping its id. A token that would hang off the edge of the new map is moved onto it. Duplicate also copies everything, except that the copy starts with fresh hit points and no conditions, is not linked to a character, and keeps its controller only if that person is still a player.

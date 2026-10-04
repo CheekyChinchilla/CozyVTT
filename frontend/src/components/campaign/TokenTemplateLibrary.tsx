@@ -393,7 +393,7 @@ function TemplateRow({
         {/* Avatar */}
         {template.imageUrl ? (
           <img
-            src={template.imageUrl}
+            src={api.storedAssetSrc(template.imageUrl, 'tokens')}
             alt={template.name}
             className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-moss-green/20"
           />
@@ -624,12 +624,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
         <div className="flex items-center gap-2">
           {imageUrl ? (
             <img
-              // imageUrl may be a bare asset id or an /api/assets path — both
-              // resolve through the tokens serving route. (There is no
-              // /api/assets/:id/file endpoint; this used to point at one.)
-              src={imageUrl.startsWith('http') || imageUrl.startsWith('/')
-                ? imageUrl
-                : api.getAssetUrl(imageUrl, 'tokens')}
+              src={api.storedAssetSrc(imageUrl, 'tokens')}
               alt="Token" className="w-10 h-10 rounded-full object-cover border border-moss-green/20"
             />
           ) : (
