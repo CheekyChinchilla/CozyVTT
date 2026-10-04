@@ -4117,9 +4117,10 @@ paths:
         - Maps
       summary: List campaign maps
       description: |
-        List the campaign's maps. The DM gets every map; a player or spectator
-        is sent only the map the campaign is showing (`currentMapId`). A map the
-        DM has prepared but not switched to is the DM's alone.
+        List the campaign's maps, newest first. The DM gets every map; a
+        player or spectator is sent only the map the campaign is showing
+        (`currentMapId`), or an empty list while it shows none. A map the DM
+        has prepared but not switched to is the DM's alone.
       operationId: listMaps
       security:
         - cookieAuth: []
@@ -4127,7 +4128,10 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
       responses:
         '200':
-          description: List of maps
+          description: >-
+            List of maps. Each item is a summary of 14 fields, not the full
+            Map object: no tokens, annotations, walls, lights, fog, spirit
+            layer or `campaignId`.
           content:
             application/json:
               schema:
@@ -4136,7 +4140,22 @@ paths:
                   maps:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Map'
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        imageUrl: { type: string }
+                        width: { type: integer }
+                        height: { type: integer }
+                        gridSize: { type: integer }
+                        feetPerSquare: { type: integer }
+                        diagonalRule: { type: string, enum: [flat, alternating] }
+                        lightingEnabled: { type: boolean }
+                        fogEnabled: { type: boolean }
+                        globalIllumination: { type: boolean }
+                        explorationEnabled: { type: boolean }
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -4145,11 +4164,28 @@ paths:
         - Maps
       summary: Create map
       description: >-
-        Create a new map for the campaign (DM only). An image address on this
-        server must be an asset's exact address (`/api/assets/<kind>/<id>`),
-        and one naming an existing asset must name one the caller can read, or
-        the request answers 403, unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that
-        no longer exists is accepted.
+        Create a new map for the campaign (DM only). The new map starts with
+        lighting, fog of war, Global Illumination and exploration memory all
+        off, and no tokens, walls or lights.
+
+
+        `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
+        address (`/api/assets/<kind>/<id>`). A bare id is stored as
+        `/api/assets/maps/<id>`. Anything else, an outside URL included, is
+        given the same prefix and so answers 403. An address naming an
+        existing asset must name one the caller can read, or the request
+        answers 403 (`You do not have access to that image`), unless this
+        campaign already stores that exact address somewhere, as a copy of a
+        token, template or creature does. An address naming an asset that no
+        longer exists is accepted.
+
+
+        `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
+        missing or out-of-range value is replaced with its default (50, 5,
+        `flat`). Only `name`, `imageUrl`, `width` and `height` can make this
+        route answer 400. A `width`, `height` or `gridSize` that is a positive
+        number but not a whole one passes these checks and answers 500
+        (`Failed to create map`), since the columns hold integers.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -4169,20 +4205,34 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Trimmed; must not be blank.
                 imageUrl:
                   type: string
+                  description: Asset id or exact asset address.
                 width:
                   type: integer
                   minimum: 1
+                  description: In grid squares.
                 height:
                   type: integer
                   minimum: 1
+                  description: In grid squares.
                 gridSize:
                   type: integer
-                  minimum: 1
                   default: 50
+                  description: Pixels per grid square. Falls back to 50 when omitted or not a positive number.
+                feetPerSquare:
+                  type: integer
+                  default: 5
+                  description: Falls back to 5 when omitted or not an integer from 1 to 100.
+                diagonalRule:
+                  type: string
+                  enum: [flat, alternating]
+                  default: flat
+                  description: Falls back to flat when omitted or not one of these two values.
                 spiritLayerUrl:
                   type: string
+                  description: Asset id or exact asset address. Omitted or empty means none.
       responses:
         '201':
           description: Map created
@@ -4204,10 +4254,19 @@ paths:
         - Maps
       summary: Get map
       description: |
-        Get map with tokens. Spirit layer data filtered by role (DM sees all,
-        players see filtered). A player or spectator may fetch only the
-        campaign's current map; any other map of the campaign answers 404 for
-        them, as does everything under it (walls, lights).
+        Get a map with its tokens, annotations, walls and lights. The DM gets
+        the stored map whole. Anyone else gets it filtered as the Map schema
+        describes: only the tokens on their plane that are not hidden (and on
+        a lit map only those in their sight plus their own), each cut down to
+        the fields they may see; `spiritLayerUrl` null unless the spirit layer
+        is visible to them; `fogData` always null. Walls, lights and
+        annotations are sent to everyone.
+
+
+        A player or spectator may fetch only the campaign's current map; any
+        other map of the campaign answers 404 for them, as does everything
+        under it (walls, lights). A map of another campaign answers 404
+        (`Map not found in this campaign`) for everyone.
       operationId: getMapById
       security:
         - cookieAuth: []
@@ -4229,6 +4288,16 @@ paths:
                 properties:
                   map:
                     $ref: '#/components/schemas/Map'
+                  spiritVisible:
+                    type: boolean
+                    description: >-
+                      Whether the caller can currently see the spirit layer,
+                      which decides `map.spiritLayerUrl` and which plane's
+                      tokens they get. Always true for the DM. For anyone else
+                      it is true while the DM has revealed the spirit layer to
+                      the campaign, and for a player also while a visible
+                      spirit-layer token they control stands on the current
+                      map.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -4239,20 +4308,41 @@ paths:
         - Maps
       summary: Update map
       description: |
-        Update map settings (DM only). A change to any per-map flag is
-        broadcast as `map:settings:updated`, to every member for the map the
-        campaign is showing and to the DM's connections for any other; a change to `lightingEnabled` or
-        `globalIllumination` also re-sends every member the map as they can
-        now see it (`map.changed`), since those two decide which tokens a
-        player is sent.
+        Update map settings (DM only). Send only the fields to change. Each
+        field sent is checked and a bad one answers 400; unlike on create,
+        nothing is replaced with a default. `feetPerSquare` must be an
+        integer from 1 to 100 and `diagonalRule` `flat` or `alternating`. A
+        `width`, `height` or `gridSize` that is a positive number but not a
+        whole one passes the check and answers 500 (`Failed to update map`).
 
-        An image address on this server must be an asset's exact address
-        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
-        one the caller can read, or the request answers 403 (the right to read
-        an asset follows its use, so storing a reference is checked like
-        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
-        accepted. The address already stored may be
-        sent back unchanged.
+        A request carrying any of the four per-map flags broadcasts
+        `map:settings:updated` with all four, to every member for the map the
+        campaign is showing and to the DM's connections for any other. When
+        `lightingEnabled` or `globalIllumination` actually changes, and the map
+        is the one the campaign is showing, every member is also sent the map
+        as they can now see it (`map.changed`), since those two decide which
+        tokens a player is sent; editing another map in the library sends no
+        `map.changed`.
+
+        Turning `fogEnabled` on from off also pushes the map's fog at once,
+        as a fog operation does: `fog:updated` with the whole grid to the DM,
+        `fog:cells` with the revealed cells to everyone else who may read the
+        map. Changing `gridSize`, `width` or `height` pushes nothing, but the
+        stored fog no longer matches the map's grid, so from then on it is
+        read as a fresh, fully hidden grid, and the next fog operation
+        overwrites it.
+
+        `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
+        address (`/api/assets/<kind>/<id>`); a bare id is stored as
+        `/api/assets/maps/<id>`, and anything else, an outside URL included,
+        answers 403. One naming an existing asset must name one the caller
+        can read, or the request answers 403 (the right to read an asset
+        follows its use, so storing a reference is checked like reading it),
+        unless this campaign already stores that exact address somewhere, as
+        a copy of a token, template or creature does. An address naming an
+        asset that no longer exists is accepted, and so is the address
+        already stored, sent back unchanged. `spiritLayerUrl` null or empty
+        removes the spirit layer.
       operationId: updateMap
       security:
         - cookieAuth: []
@@ -4275,10 +4365,20 @@ paths:
                   type: string
                 width:
                   type: integer
+                  minimum: 1
                 height:
                   type: integer
+                  minimum: 1
                 gridSize:
                   type: integer
+                  minimum: 1
+                feetPerSquare:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                diagonalRule:
+                  type: string
+                  enum: [flat, alternating]
                 imageUrl:
                   type: string
                 spiritLayerUrl:
@@ -4317,7 +4417,14 @@ paths:
       tags:
         - Maps
       summary: Delete map
-      description: Delete map (DM only, cannot delete current map)
+      description: >-
+        Delete a map (DM only). The campaign's current map cannot be deleted:
+        that answers 400 (`Cannot delete the current map. Set a different map
+        as current first.`). The map's tokens, walls, lights and fog go with
+        it, as does every player's explored-area memory of it; its image
+        asset is kept. If any combatant stood on it, those combatants leave
+        the initiative order and the order is sent again to every connected
+        member (`initiative.state`).
       operationId: deleteMap
       security:
         - cookieAuth: []
@@ -4351,7 +4458,13 @@ paths:
       tags:
         - Maps
       summary: Set current map
-      description: Set a map as the current map for the campaign (DM only)
+      description: >-
+        Set a map as the current map for the campaign (DM only). Which plane
+        each player is on, and which combatants they are sent, follows the
+        current map, so while anything is in the initiative order it is sent
+        again to every connected member (`initiative.state`). The route sends
+        no map event of its own, so open pages are not moved to the new map
+        by it.
       operationId: setCurrentMap
       security:
         - cookieAuth: []
@@ -4373,6 +4486,10 @@ paths:
                 properties:
                   message:
                     type: string
+                  campaign:
+                    allOf:
+                      - $ref: '#/components/schemas/Campaign'
+                    description: The updated campaign, with `currentMap` added, holding `{ id, name, imageUrl }` of the map just set.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -4392,13 +4509,26 @@ paths:
         controlled by that character's owner, while the owner is a player of
         this campaign, unless `controlledBy` says otherwise. A character
         owned by the DM or a spectator gives its token no controller.
+        `name` and `position` are required, and the position must be on the
+        map (`x` at least 0 and less than the map's width, `y` likewise with
+        its height; 400 otherwise). The server assigns the token's `id`.
 
-        An image address on this server must be an asset's exact address
-        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
-        one the caller can read, or the request answers 403 (the right to read
-        an asset follows its use, so storing a reference is checked like
-        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
-        accepted.
+        `imageUrl` takes an asset id or an asset's exact address
+        (`/api/assets/<kind>/<id>`); a bare id is stored as
+        `/api/assets/tokens/<id>`, and anything else, an outside URL included,
+        answers 403. Omitted or empty, the token has no picture and is drawn
+        as a placeholder. One naming an existing asset must name one the
+        caller can read, or the request answers 403 (the right to read an
+        asset follows its use, so storing a reference is checked like reading
+        it), unless this campaign already stores that exact address
+        somewhere, as a copy of a token, template or creature does. An
+        address naming an asset that no longer exists is accepted.
+
+        While anything is in the initiative order it is sent again to every
+        connected member (`initiative.state`), since a player's spirit-layer
+        token placed on the current map moves them to the spirit plane. No
+        map event is sent: other open pages see the new token only on their
+        next map update or reload.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -4452,15 +4582,25 @@ paths:
         `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
         DM may move tokens at any time. On a map the campaign is not showing, a
         player's update answers 404, as fetching that map does, even for a
-        token they control; the DM may update tokens on any map.
+        token they control; the DM may update tokens on any map. A token on
+        the spirit plane answers 403 (`You cannot interact with spirit layer
+        tokens`) for a player who cannot currently see that plane, even one
+        that names them in `controlledBy`.
 
-        An image address on this server must be an asset's exact address
-        (`/api/assets/<kind>/<id>`), and one naming an existing asset must name
-        one the caller can read, or the request answers 403 (the right to read
-        an asset follows its use, so storing a reference is checked like
-        reading it), unless this campaign already stores that exact address somewhere, as a copy of a token, template or creature does. An address naming an asset that no longer exists is
-        accepted. The address already stored may be
-        sent back unchanged.
+        `imageUrl` takes an asset id or an asset's exact address
+        (`/api/assets/<kind>/<id>`); a bare id is stored as
+        `/api/assets/tokens/<id>`, and anything else, an outside URL included,
+        answers 403. Null or empty removes the picture. One naming an
+        existing asset must name one the caller can read, or the request
+        answers 403 (the right to read an asset follows its use, so storing a
+        reference is checked like reading it), unless this campaign already
+        stores that exact address somewhere, as a copy of a token, template
+        or creature does. An address naming an asset that no longer exists is
+        accepted, and so is the address already stored, sent back unchanged.
+
+        `metadata` is merged into what the token already holds, and the
+        merged object must stay within 8 KB. `characterId` cannot be changed
+        here.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,
@@ -4469,9 +4609,13 @@ paths:
         `spiritLayerUrl` too unless they can see the spirit layer (crossed over, or
         revealed campaign-wide).
 
-        If the token is in the initiative order, the order is sent again to
-        every connected member (`initiative.state`), each as they may see it,
-        so the tracker follows the token.
+        A request carrying `layer`, `visible` or `controlledBy` can move a
+        token's controller between planes, so it sends the initiative order
+        again to every connected member (`initiative.state`), each as they
+        may see it, whenever anything is in the order, whether or not this
+        token is a combatant. Any other update sends the order again only if
+        this token is in it. No map event is sent: other open pages see the
+        change only on their next map update or reload.
       operationId: updateToken
       security:
         - cookieAuth: []
@@ -4486,9 +4630,12 @@ paths:
         - name: tokenId
           in: path
           required: true
+          description: >-
+            Not necessarily a UUID. A token's id is whatever is stored for
+            it, and an older map can hold ids from before tokens were given
+            UUIDs.
           schema:
             type: string
-            format: uuid
       requestBody:
         required: true
         content:
@@ -4498,11 +4645,17 @@ paths:
               properties:
                 name:
                   type: string
+                  maxLength: 200
+                  description: DM only. An empty name is ignored.
                 imageUrl:
                   type: string
+                  maxLength: 500
+                  nullable: true
+                  description: DM only.
                 position:
                   type: object
-                  description: Grid square, within the map. Only x and y are stored.
+                  required: [x, y]
+                  description: Grid square, within the map (400 otherwise). Only x and y are stored.
                   properties:
                     x:
                       type: number
@@ -4510,16 +4663,24 @@ paths:
                       type: number
                 size:
                   type: object
+                  required: [width, height]
+                  description: Grid squares. DM only.
                   properties:
                     width:
-                      type: number
+                      type: integer
+                      minimum: 1
+                      maximum: 10
                     height:
-                      type: number
+                      type: integer
+                      minimum: 1
+                      maximum: 10
                 layer:
                   type: string
                   enum: [token, spirit]
+                  description: DM only.
                 visible:
                   type: boolean
+                  description: DM only.
                 controlledBy:
                   type: string
                   format: uuid
@@ -4536,10 +4697,15 @@ paths:
                   description: Degrees
                 conditions:
                   type: array
+                  maxItems: 50
                   items:
                     type: string
+                    minLength: 1
+                    maxLength: 60
+                  description: Each entry is trimmed and must not be blank.
                 metadata:
                   type: object
+                  description: DM only. Merged into the stored metadata; the result must stay within 8 KB.
                 sightRadius:
                   type: number
                   minimum: 0
@@ -4567,9 +4733,11 @@ paths:
                   description: DM only.
                 notes:
                   type: string
-                  description: DM only; never sent to a player.
+                  maxLength: 5000
+                  nullable: true
+                  description: DM only; never sent to a player. Null stores an empty string.
                 initiative:
-                  type: integer
+                  type: number
                   nullable: true
                   description: DM only.
                 displayMode:
@@ -4613,7 +4781,14 @@ paths:
       tags:
         - Maps
       summary: Delete token
-      description: Remove token from map (DM only)
+      description: >-
+        Remove a token from the map (DM only). If it is a combatant, it
+        leaves the initiative order and the order is sent again to every
+        connected member (`initiative.state`), even when that empties it.
+        Otherwise the order is sent again only while anything is in it, since
+        removing a player's spirit-layer token can move them between planes.
+        No map event is sent: other open pages see the token go only on their
+        next map update or reload.
       operationId: deleteToken
       security:
         - cookieAuth: []
@@ -4630,7 +4805,10 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
+          description: >-
+            Not necessarily a UUID. A token's id is whatever is stored for
+            it, and an older map can hold ids from before tokens were given
+            UUIDs.
       responses:
         '200':
           description: Token removed
@@ -4661,9 +4839,15 @@ paths:
         (DM only). Each token travels as it is stored, under its own id, with
         its position clamped onto the target map, and a combatant keeps its
         place in the initiative order. All named tokens move or none does: an
-        id that is not on this map answers 404 and nothing changes. Whichever
-        of the two maps the campaign is showing is then sent again to every
-        member as `map.changed`; the other stays the DM's until they switch.
+        id that is not on this map answers 404 (`Token not found on this map:
+        <ids>`) and nothing changes, as does a `targetMapId` that is not a map
+        of this campaign (`Target map not found in this campaign`).
+        `targetMapId` naming the source map itself answers 400. Whichever of
+        the two maps the campaign is showing is then sent again to every
+        member as `map.changed`, as each may see it; the other stays the DM's
+        until they switch. While anything is in the initiative order it is
+        sent again too (`initiative.state`), since a spirit-layer token moving
+        onto or off the current map can move its controller between planes.
       operationId: moveTokens
       security:
         - cookieAuth: []
@@ -4692,6 +4876,9 @@ paths:
                   maxItems: 500
                   items:
                     type: string
+                    minLength: 1
+                    maxLength: 100
+                    description: Not necessarily a UUID; an older map can hold ids from before tokens were given one.
                 targetMapId:
                   type: string
                   format: uuid
@@ -4752,7 +4939,10 @@ paths:
         - Walls & Lighting
       summary: Replace all wall segments
       description: |
-        Replaces the map's entire wall list atomically. DM only.
+        Replaces the map's entire wall list atomically. DM only. Every
+        segment needs a UUID `id`, and a map holds at most 5000; a
+        list over that, or any invalid segment, answers 400 and changes
+        nothing.
 
         Each wall route tells connected clients of the change with the event
         the matching socket edit sends (`walls:replaced`, `wall:added`,
@@ -4773,6 +4963,7 @@ paths:
               properties:
                 segments:
                   type: array
+                  maxItems: 5000
                   items:
                     $ref: '#/components/schemas/Wall'
               required: [segments]
@@ -4802,8 +4993,10 @@ paths:
       summary: Add a wall segment
       description: |
         Append a single wall segment. The server assigns an `id` if the body
-        omits one. Maps are capped at 5000 wall segments. DM only. Connected
-        clients are sent `wall:added` (see `replaceWalls`).
+        omits one, and keeps one it sent, which must be a UUID. A map holds
+        at most 5000 segments; adding to a full map answers 400 with
+        `error: Limit Exceeded`. DM only. Connected clients are sent
+        `wall:added` (see `replaceWalls`).
       operationId: addWall
       security:
         - cookieAuth: []
@@ -4834,11 +5027,16 @@ paths:
                     description: Total wall count after this addition
                     example: 47
         '400':
-          description: Validation failure or 5000-segment limit reached.
+          description: >-
+            Validation failure (`error: Validation Error`), or the map
+            already holds 5000 segments (`error: Limit Exceeded`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: Limit Exceeded
+                message: Maximum 5000 wall segments per map
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -4879,10 +5077,12 @@ paths:
         - Walls & Lighting
       summary: Update a wall segment's type
       description: |
-        Change the `type` of a single wall segment — most commonly used to
-        toggle a door open/closed. Geometry (`x1/y1/x2/y2`) is immutable;
-        to move a wall, delete and re-add. DM only. Connected clients are sent
-        `wall:updated` (see `replaceWalls`).
+        Change the `type` of a single wall segment, most commonly to open or
+        close a door. Only `type` is read; any other field in the body is
+        ignored, so the segment keeps its position. `door-locked` is refused
+        with 400 here, although `PUT` and `POST` on the wall list and the
+        DM's socket `wall:update` event accept it. DM only. Connected clients are
+        sent `wall:updated` (see `replaceWalls`).
       operationId: updateWallType
       security:
         - cookieAuth: []
@@ -4955,11 +5155,17 @@ paths:
       description: |
         Replaces the map's entire light list atomically. Used when committing
         a large batch of changes or restoring saved lighting state. DM only.
+        Every light needs a UUID `id` and a `dimRadius` at least its
+        `brightRadius`, and a map holds at most 200; a list over that, or any
+        invalid light, answers 400 and changes nothing.
 
         Each light route tells connected clients of the change with the event
-        the matching socket edit sends. On a lit map that the campaign is
-        showing, each player is then sent `map.changed` with the map as they
-        can now see it, since lights decide which tokens a player is sent.
+        the matching socket edit sends (`lights:replaced`, `light:added`,
+        `light:updated`, `light:removed`): to every member for the map the
+        campaign is showing, and to the DM's connections for any other. On a
+        lit map that the campaign is showing, each player is then sent
+        `map.changed` with the map as they can now see it, since lights decide
+        which tokens a player is sent.
       operationId: replaceLights
       security:
         - cookieAuth: []
@@ -4972,6 +5178,7 @@ paths:
               properties:
                 lights:
                   type: array
+                  maxItems: 200
                   items:
                     $ref: '#/components/schemas/LightSource'
               required: [lights]
@@ -4999,7 +5206,12 @@ paths:
       tags:
         - Walls & Lighting
       summary: Add a light source
-      description: Add a single light. Server assigns the `id`. DM only.
+      description: >-
+        Add a single light. The server assigns an `id` if the body omits
+        one, and keeps one it sent, which must be a UUID. `dimRadius` must be
+        at least `brightRadius`. A map holds at most 200 lights; adding to a
+        full map answers 400 with `error: Limit Exceeded`. DM only. Connected
+        clients are sent `light:added` (see `replaceLights`).
       operationId: addLight
       security:
         - cookieAuth: []
@@ -5026,8 +5238,21 @@ paths:
                 properties:
                   light:
                     $ref: '#/components/schemas/LightSource'
+                  total:
+                    type: integer
+                    description: Total light count after this addition
+                    example: 5
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            Validation failure (`error: Validation Error`), or the map
+            already holds 200 lights (`error: Limit Exceeded`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Limit Exceeded
+                message: Maximum 200 light sources per map
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -5046,7 +5271,14 @@ paths:
       summary: Update a light source
       description: |
         Partially update a light's position, radii, color, or enabled state.
-        Send only the fields you want to change. DM only.
+        Send only the fields you want to change. Other fields, `id` included,
+        are ignored, and a body with none of these six answers 400 (`At least
+        one field must be provided`). `brightRadius` and `dimRadius` are each
+        checked against their own limits but not against each other, so a
+        patch can leave the light stored with a dim radius smaller than its
+        bright radius, which `PUT` and `POST` on the light list refuse. DM
+        only. Connected clients are sent `light:updated` (see
+        `replaceLights`).
       operationId: updateLight
       security:
         - cookieAuth: []
@@ -5059,8 +5291,8 @@ paths:
               properties:
                 x: { type: number }
                 y: { type: number }
-                brightRadius: { type: number, minimum: 0 }
-                dimRadius: { type: number, minimum: 0 }
+                brightRadius: { type: number, minimum: 0, maximum: 100 }
+                dimRadius: { type: number, minimum: 0.5, maximum: 100 }
                 color:
                   type: string
                   pattern: '^#[0-9a-fA-F]{6}$'
@@ -5089,7 +5321,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a light source
-      description: Remove a light. DM only.
+      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`).
       operationId: deleteLight
       security:
         - cookieAuth: []
@@ -5101,7 +5333,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  message: { type: string, example: Light deleted }
+                  message: { type: string, example: Light source deleted }
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -5118,9 +5350,12 @@ paths:
         - Walls & Lighting
       summary: Get fog state (DM only)
       description: |
-        Returns the full `FogState` for the map. Players do not see the raw
-        fog state — they receive computed visibility via WebSocket events
-        as the DM reveals areas. DM only.
+        Returns the full `FogState` for the map, one cell per grid square,
+        whether or not fog of war is on for it. A map with no stored fog, or
+        whose stored fog no longer matches its `width`, `height` and
+        `gridSize`, answers a fresh, fully hidden grid. Players do not see the
+        raw fog state; they receive the revealed cells over WebSocket
+        (`fog:cells`) as the DM reveals areas. DM only.
       operationId: getFogState
       security:
         - cookieAuth: []
@@ -5152,11 +5387,16 @@ paths:
       description: |
         Mutate the fog state by either revealing/hiding a list of cell indices
         (`reveal` / `hide` with `cells: number[]`) or by revealing/hiding the
-        entire map (`reveal_all` / `hide_all`). Returns the updated fog state
-        and broadcasts it exactly as the socket `fog:operation` event does:
-        to every connected member for the map the campaign is showing, to the
-        DM's connections for any other. Refused with 409 while fog of war is off
-        for the map. DM only.
+        entire map (`reveal_all` / `hide_all`). A cell index past the end of
+        the grid is ignored. Stored fog that no longer matches the map's grid
+        is started again from fully hidden before the operation applies.
+        Returns the updated fog state and broadcasts it exactly as the socket
+        `fog:operation` event does: `fog:updated` with the whole grid to the
+        DM, and `fog:cells` with the revealed cells to every other member,
+        for the map the campaign is showing; for any other map, only the DM's
+        connections are told. Refused with 409 (`Fog of war is off for this
+        map`) while `fogEnabled` is off for the map, before the body is
+        checked. DM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -5190,10 +5430,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5206,16 +5446,19 @@ paths:
         - Walls & Lighting
       summary: Toggle dynamic lighting
       description: |
-        Enable or disable dynamic lighting for the map. When enabled,
-        players see only what their tokens can — fog uses the wall and
-        light data to compute visibility. When disabled, fog is the
-        manual brush-controlled layer. DM only.
+        Enable or disable dynamic lighting for the map, the same flag as
+        `lightingEnabled` on `PUT /api/campaigns/{campaignId}/maps/{id}`. While
+        it is on, a player is sent only their own tokens and those their
+        tokens can see, judged from the map's walls and lights, and a
+        spectator none. Manual fog of war is a separate setting
+        (`fogEnabled`). DM only.
 
-        Also broadcasts `map:settings:updated`, carrying every per-map flag,
-        to every connected member for the map the campaign is showing and to
-        the DM's connections for any other. Because this flag decides which tokens
-        players are sent, a change also re-sends each member the map as they
-        can now see it (`map.changed`), so nothing needs a reload.
+        Every request broadcasts `map:settings:updated`, carrying all four
+        per-map flags, to every connected member for the map the campaign is
+        showing and to the DM's connections for any other. When the flag
+        actually changes on the map the campaign is showing, each member is
+        also sent the map as they can now see it (`map.changed`), so nothing
+        needs a reload; a map that is not being shown gets no `map.changed`.
       operationId: setLightingEnabled
       security:
         - cookieAuth: []
@@ -7212,16 +7455,40 @@ paths:
         are, so a wall on the map's edge does not trigger it.
 
 
-        A file with more wall segments or lights than a map can hold is refused
-        with **400**, because import used to write past the limits every later
-        edit enforces, leaving a map that could not be saved.
+        A file with more wall segments or lights than a map can hold (5000
+        segments, 200 lights), or with a light the map editor could not save,
+        is refused with **400**, because import used to write past the limits
+        every later edit enforces, leaving a map that could not be saved. A
+        light's `range` becomes its dim radius and half of it its bright
+        radius, so a range over 100 squares, or under 0.5, answers 400. A
+        file that is not JSON or lacks `resolution.map_size`, `image` or
+        `line_of_sight` answers 400 with `error: Parse Error`.
 
 
         The embedded picture is checked by its bytes, not by what the file
-        claims: anything that is not a map image is refused, as is one over the
-        `MAX_MAP_SIZE_MB` limit. A thumbnail is generated, and the route counts
-        against the upload rate limit, since it writes a file to disk exactly
-        as an upload does.
+        claims: anything that is not one of the types a map upload accepts
+        (PNG, JPEG, WebP, PDF) is refused with 400, as is one over the
+        `MAX_MAP_SIZE_MB` limit. It is saved as a new campaign map asset
+        tagged `uvtt-import`, with a thumbnail. The route counts against the
+        upload rate limit (429), since it writes a file to disk exactly as an
+        upload does.
+
+
+        The map is named after `name`, or the file's name without its
+        extension when `name` is missing or blank. Its size in squares is the
+        file's `map_size`, rounded. Lighting is turned on only when the file
+        brings lights of its own; fog of war, Global Illumination and
+        exploration memory start off. Doors become `door-closed` or
+        `door-open` segments, as the file says.
+
+
+        Some bad requests answer 500 with the generic `An unexpected error
+        occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
+        `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
+        or a file sent under a field other than `file`. A `gridSize` with a
+        fraction, or a `map_size` without a numeric `y`, answers 500 (`Failed
+        to import UVTT file`) after the picture has already been saved as an
+        asset. A negative `gridSize` is not refused.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -7240,8 +7507,14 @@ paths:
                   format: binary
                 name:
                   type: string
+                  description: The map's name. Defaults to the file's name without its extension.
                 gridSize:
                   type: integer
+                  default: 70
+                  description: >-
+                    Pixels per grid square on the new map, used to place the
+                    file's walls and lights. Missing, zero or not a number
+                    means 70. Other values are not range-checked.
                 confirm:
                   type: string
                   enum: ['true']
@@ -7257,6 +7530,25 @@ paths:
       responses:
         '201':
           description: Map created, with counts of what was imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  map:
+                    $ref: '#/components/schemas/Map'
+                  wallCount:
+                    type: integer
+                    description: Wall segments imported, object walls included when they were asked for.
+                  portalCount:
+                    type: integer
+                    description: Doors imported.
+                  lightCount:
+                    type: integer
+                    description: Lights imported.
+                  totalSegments:
+                    type: integer
+                    description: Wall and door segments now on the map (`wallCount` plus `portalCount`).
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7300,12 +7592,27 @@ paths:
                 message: This file needs a decision before it can be imported.
                 outOfBounds: { walls: 79, doors: 20, lights: 0 }
                 objectWalls: 0
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/campaigns/{campaignId}/maps/{id}/export-uvtt:
     get:
       tags: [Maps]
       summary: Export a map as a Universal VTT file
-      description: DM only. Answers 422 when the map's picture is missing or is not one the caller may read.
+      description: >-
+        DM only. Downloads the map as a Universal VTT file (format 0.3): a
+        JSON attachment named after the map (`<name>.uvtt`, with characters
+        other than letters, digits, spaces, `_` and `-` removed) holding the
+        map's picture as base64, its size in squares, its walls and windows as
+        `line_of_sight`, its doors as `portals` (a locked door is written as
+        closed), and its enabled lights, each with its dim radius as `range`.
+        Tokens, fog and the spirit layer are not included.
+
+
+        Answers 422 when the picture cannot be put in the file: the map's
+        image address names no asset, an asset that no longer exists, or one
+        the caller may not read (`Map image asset not found`), or the file is
+        missing from disk (`Map image file not found on disk`).
       operationId: exportUvttMap
       security:
         - cookieAuth: []
@@ -7319,13 +7626,51 @@ paths:
             format: uuid
       responses:
         '200':
-          description: The .uvtt payload
+          description: 'The .uvtt file, sent with `Content-Disposition: attachment`.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  format: { type: number, example: 0.3 }
+                  resolution:
+                    type: object
+                    properties:
+                      map_origin:
+                        type: object
+                        description: 'Always `{ x: 0, y: 0 }`.'
+                      map_size:
+                        type: object
+                        description: The map's width and height in squares.
+                      pixels_per_grid:
+                        type: integer
+                        description: The picture's width in pixels divided by the map's width in squares, rounded; the map's `gridSize` when the width cannot be read.
+                  line_of_sight:
+                    type: array
+                    description: Walls and windows in grid units, joined into polylines where their ends meet.
+                    items:
+                      type: array
+                      items:
+                        type: object
+                  portals:
+                    type: array
+                    items:
+                      type: object
+                  lights:
+                    type: array
+                    items:
+                      type: object
+                  image:
+                    type: string
+                    description: The picture's file, base64-encoded.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /api/admin/backups/restore:
     post:
