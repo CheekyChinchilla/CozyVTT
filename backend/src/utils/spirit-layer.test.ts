@@ -6,7 +6,7 @@
  * raycasting visibility polygon (or tokens controlled by the player themselves).
  */
 
-import { filterTokensByLighting, filterMapData } from './spirit-layer';
+import { filterTokensByLighting, filterMapData, filterTokensByRole } from './spirit-layer';
 import type { WallSegment } from '../types/walls';
 
 // Minimal token factory
@@ -50,14 +50,13 @@ describe('filterTokensByLighting', () => {
     expect(result).toHaveLength(2);
   });
 
-  it('returns only visible tokens when player has no controlled tokens', () => {
-    const tokens = [
-      makeToken('a', 2, 2),
-      { ...makeToken('b', 5, 5), visible: false },
-    ];
-    const result = filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('a');
+  it('sends nothing when the player has no controlled token on the map, whatever the lights', () => {
+    // Nobody on the map to look through, so nothing is seen: a light is not a
+    // viewer, and a token-less player learning positions was a leak.
+    const tokens = [makeToken('a', 2, 2), { ...makeToken('b', 5, 5), visible: false }];
+    const lights = [{ id: 'l', x: 250, y: 750, brightRadius: 3, dimRadius: 6, enabled: true }];
+    expect(filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, lights)).toEqual([]);
+    expect(filterTokensByLighting(tokens, 'user-nobody', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, undefined, true)).toEqual([]);
   });
 
   it('always includes the player\'s own token regardless of sight', () => {
@@ -72,15 +71,22 @@ describe('filterTokensByLighting', () => {
     expect(result.some((t) => t.id === 'mine')).toBe(true);
   });
 
-  it('includes nearby token visible through open space', () => {
-    // Player at center (5,5 grid = 550,550 px center), sight covers whole map (0 = full)
+  it('includes nearby token visible through open space under global illumination', () => {
     const playerToken = makeToken('player', 4, 4, 'user1', 0);
     // Another token one square away — should be in polygon
     const nearbyToken = makeToken('nearby', 5, 4);
     const tokens = [playerToken, nearbyToken];
 
-    const result = filterTokensByLighting(tokens, 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+    const result = filterTokensByLighting(tokens, 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true, undefined, true);
     expect(result.some((t) => t.id === 'nearby')).toBe(true);
+  });
+
+  it('with global illumination off, the same nearby token in the dark is not sent', () => {
+    const playerToken = makeToken('player', 4, 4, 'user1', 0);
+    const nearbyToken = makeToken('nearby', 5, 4);
+
+    const result = filterTokensByLighting([playerToken, nearbyToken], 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+    expect(result.some((t) => t.id === 'nearby')).toBe(false);
   });
 
   it('excludes token blocked behind a solid wall', () => {
@@ -99,7 +105,9 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
-      true
+      true,
+      undefined,
+      true // global illumination: the wall alone must do the hiding
     );
 
     expect(result.some((t) => t.id === 'blocked')).toBe(false);
@@ -121,6 +129,8 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
+      true,
+      undefined,
       true
     );
 
@@ -217,6 +227,9 @@ describe('filterTokensByLighting', () => {
       tokens,
       annotations: [],
       lightingEnabled: true,
+      fogEnabled: true,
+      globalIllumination: false,
+      explorationEnabled: true,
       wallSegments: [makeWall('w', 500, 0, 500, 1000)],
       lights: [{ id: 'l1', x: 750, y: 550, brightRadius: 3, dimRadius: 6, enabled: true }],
       width: MAP_WIDTH,
@@ -243,6 +256,74 @@ describe('filterTokensByLighting', () => {
 
       expect(out.tokens.some((t: { id: string }) => t.id === 'behind')).toBe(true);
     });
+
+    it('sends a spectator nothing on a lit map, even one a token still names', () => {
+      const held = makeToken('held', 2, 5, 'user1', 12);
+      const near = makeToken('near', 3, 5);
+
+      const out = filterMapData(litMap([held, near]) as never, 'SPECTATOR', false, 'user1');
+
+      expect(out.tokens).toEqual([]);
+    });
+
+    it('passes the fog flag through to every role, so a client knows whether to draw fog', () => {
+      const map = { ...litMap([]), fogEnabled: false };
+      expect(filterMapData(map as never, 'PLAYER', false, 'user1').fogEnabled).toBe(false);
+      expect(filterMapData(map as never, 'DM', true, 'dm-user').fogEnabled).toBe(false);
+    });
+  });
+
+  /**
+   * What a viewer makes out in the dark. The rule the DM guide has always
+   * stated: the sight radius governs how far you make things out unlit; it
+   * does not limit how far you notice something that is lit.
+   */
+  describe('sight radius, light and global illumination', () => {
+    // A 20×20 map, so a token can stand further than 12 squares away.
+    const W = 20;
+    const H = 20;
+
+    it('sees within its sight radius and not beyond it', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 12);
+      const near = makeToken('near', 10, 5); // 10 squares off
+      const far = makeToken('far', 14, 5);   // 14 squares off
+      const out = filterTokensByLighting([viewer, near, far], 'user1', NO_WALLS, W, H, GRID_SIZE, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'near']);
+    });
+
+    it('a radius of 0 means none: nothing unlit is sent', () => {
+      const viewer = makeToken('viewer', 2, 2, 'user1', 0);
+      const next = makeToken('next', 3, 2);
+      const out = filterTokensByLighting([viewer, next], 'user1', NO_WALLS, MAP_WIDTH, MAP_HEIGHT, GRID_SIZE, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer']);
+    });
+
+    it('a lit token is seen beyond the sight radius', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 2);
+      const lit = makeToken('lit', 8, 5); // centre px (850, 1450) on a 20-high map
+      const light = [{ id: 'l', x: 850, y: 1450, brightRadius: 2, dimRadius: 3, enabled: true }];
+      const out = filterTokensByLighting([viewer, lit], 'user1', NO_WALLS, W, H, GRID_SIZE, true, light);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'lit']);
+    });
+
+    it('a token straight out from a light, inside its dim reach, is lit', () => {
+      // A light's reach polygon used to be a fan through wall endpoints and map
+      // corners only, so in the open it was a quadrilateral inscribed in the
+      // dim circle: a token 7.5 squares straight east of a dim-8 light fell
+      // outside it on the server while the client drew it lit.
+      const viewer = makeToken('viewer', 2, 14, 'user1', 0);
+      const lit = makeToken('lit', 12, 14);
+      const light = [{ id: 'l', x: 500, y: 500, brightRadius: 4, dimRadius: 8, enabled: true }];
+      const out = filterTokensByLighting([viewer, lit], 'user1', NO_WALLS, W, H, GRID_SIZE, true, light);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'lit']);
+    });
+
+    it('with global illumination on, everything in line of sight is sent', () => {
+      const viewer = makeToken('viewer', 0, 5, 'user1', 0);
+      const far = makeToken('far', 19, 5);
+      const out = filterTokensByLighting([viewer, far], 'user1', NO_WALLS, W, H, GRID_SIZE, true, undefined, true);
+      expect(out.map((t) => t.id)).toEqual(['viewer', 'far']);
+    });
   });
 
   it('multiple controlled tokens combine sight areas', () => {
@@ -263,11 +344,142 @@ describe('filterTokensByLighting', () => {
       MAP_WIDTH,
       MAP_HEIGHT,
       GRID_SIZE,
+      true,
+      undefined,
       true
     );
 
     // Both NPCs visible because combined sight covers the whole map
     expect(result.some((t) => t.id === 'leftNPC')).toBe(true);
     expect(result.some((t) => t.id === 'rightNPC')).toBe(true);
+  });
+});
+
+describe('filterTokensByRole', () => {
+  // What the server sends a player of each token, field by field. The role
+  // filter decides which tokens they get; these decide what of each one.
+  const hp = { current: 7, max: 7, temp: 0 };
+  const npc = { ...makeToken('npc', 3, 3, null, 12), hp, showHpBar: false, notes: 'secret ambusher', statBlock: { ac: 13 } };
+  const shown = { ...makeToken('shown', 4, 4, null, 6), hp, showHpBar: true };
+  const mine = { ...makeToken('mine', 5, 5, 'user1', 6), hp, showHpBar: false, notes: 'the DM wrote this' };
+  const tokens = [npc, shown, mine];
+  const byId = (list: { id: string }[], id: string) => list.find((t) => t.id === id) as Record<string, unknown> | undefined;
+
+  it('sends a player neither notes nor a stat block, on any token', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')).not.toHaveProperty('notes');
+    expect(byId(sent, 'npc')).not.toHaveProperty('statBlock');
+    expect(byId(sent, 'mine')).not.toHaveProperty('notes');
+  });
+
+  it('sends a player hit points only when the bar is shown or the token is theirs', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')?.hp).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+    expect(byId(sent, 'mine')?.hp).toEqual(hp);
+  });
+
+  it('sends a player darkvision only for the tokens they control', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false, 'user1');
+    expect(byId(sent, 'npc')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBe(6);
+  });
+
+  it('treats a recipient it was not told about as controlling nothing', () => {
+    const sent = filterTokensByRole(tokens, 'PLAYER', false);
+    expect(byId(sent, 'mine')?.hp).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+  });
+
+  // A spectator still named on a token from their time as a player is sent
+  // it as any other player would be: `controlledBy` grants a spectator
+  // nothing, on the server as in the move handlers.
+  it('treats a spectator as controlling nothing, whatever controlledBy says', () => {
+    const veiled = { ...makeToken('veiled', 6, 6, 'user1', 12), hp, showHpBar: false, obscured: true, conditions: ['invisible'] };
+    const sent = filterTokensByRole([...tokens, veiled], 'SPECTATOR', false, 'user1');
+    expect(byId(sent, 'mine')?.hp).toBeUndefined();
+    expect(byId(sent, 'mine')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'shown')?.hp).toEqual(hp);
+    expect(byId(sent, 'veiled')?.name).toBe('');
+    expect(byId(sent, 'veiled')?.conditions).toEqual([]);
+  });
+
+  // "Own" is the recipient's controller id and nobody else's: another
+  // player's token is sent without its hit points or darkvision, and masked
+  // when obscured, exactly like the DM's.
+  it("sends another player's token as any other token: no hit points, no darkvision, masked when obscured", () => {
+    const theirs = { ...makeToken('theirs', 6, 6, 'user2', 9), hp, showHpBar: false };
+    const theirsVeiled = { ...makeToken('theirs-veiled', 7, 7, 'user2', 9), hp, showHpBar: false, obscured: true, conditions: ['prone'] };
+    const sent = filterTokensByRole([theirs, theirsVeiled], 'PLAYER', false, 'user1');
+    expect(byId(sent, 'theirs')?.hp).toBeUndefined();
+    expect(byId(sent, 'theirs')?.sightRadius).toBeUndefined();
+    expect(byId(sent, 'theirs')?.name).toBe('Token theirs');
+    expect(byId(sent, 'theirs-veiled')?.name).toBe('');
+    expect(byId(sent, 'theirs-veiled')?.conditions).toEqual([]);
+    expect(byId(sent, 'theirs-veiled')?.hp).toBeNull();
+  });
+
+  // Tokens placed by older versions carry no showHpBar at all; a missing flag
+  // is off, or an imported or legacy token with hit points would leak them.
+  it('withholds the hit points of a token that has no showHpBar flag', () => {
+    const legacy = { ...makeToken('legacy', 8, 8, null, 0), hp };
+    expect(byId(filterTokensByRole([legacy], 'PLAYER', false, 'user1'), 'legacy')?.hp).toBeUndefined();
+  });
+
+  it('keeps what a player is sent on the token: position, size, the bar flag', () => {
+    const sent = byId(filterTokensByRole(tokens, 'PLAYER', false, 'user1'), 'npc');
+    expect(sent?.position).toEqual({ x: 3, y: 3 });
+    expect(sent?.size).toEqual({ width: 1, height: 1 });
+    expect(sent?.showHpBar).toBe(false);
+  });
+
+  it('gives the DM the tokens exactly as stored', () => {
+    expect(filterTokensByRole(tokens, 'DM', false, 'dm')).toBe(tokens);
+  });
+
+  describe('an obscured token', () => {
+    const veiled = { ...makeToken('veiled', 6, 6, null, 0), obscured: true, hp, showHpBar: true, conditions: ['prone'], disposition: 'hostile' as const, characterId: 'c1' };
+    const ownVeiled = { ...makeToken('own-veiled', 7, 7, 'user1', 0), obscured: true, hp, showHpBar: false, conditions: ['prone'] };
+
+    it('reaches a player who does not control it as a shape with no identity', () => {
+      const sent = byId(filterTokensByRole([veiled], 'PLAYER', false, 'user1'), 'veiled');
+      expect(sent?.name).toBe('');
+      expect(sent?.imageUrl).toBe('');
+      expect(sent?.conditions).toEqual([]);
+      expect(sent?.hp).toBeNull();
+      expect(sent?.disposition).toBeNull();
+      expect(sent?.characterId).toBeNull();
+      expect(sent?.position).toEqual({ x: 6, y: 6 });
+      expect(sent?.obscured).toBe(true);
+    });
+
+    it('never names the creature template a placed token came from to a player who does not control it', () => {
+      const fromLibrary = { ...makeToken('placed', 9, 9, null, 0), creatureTemplateId: 'tmpl-1' };
+      const sent = byId(filterTokensByRole([fromLibrary], 'PLAYER', false, 'user1'), 'placed');
+      expect(sent).not.toHaveProperty('creatureTemplateId');
+    });
+
+    it('tells another player neither who controls it nor what kind of token it is', () => {
+      const disguised = { ...makeToken('disguised', 8, 8, 'user2', 0), obscured: true, type: 'player' as const, rotation: 90, initiative: 17, displayMode: 'full-art' as const };
+      const sent = byId(filterTokensByRole([disguised], 'PLAYER', false, 'user1'), 'disguised');
+      expect(sent?.controlledBy).toBeNull();
+      expect(sent?.type).toBe('npc');
+      expect(sent?.rotation).toBe(0);
+      expect(sent?.initiative).toBeNull();
+      expect(sent?.displayMode).toBe('pog');
+    });
+
+    it('reaches its controller whole', () => {
+      const sent = byId(filterTokensByRole([ownVeiled], 'PLAYER', false, 'user1'), 'own-veiled');
+      expect(sent?.name).toBe('Token own-veiled');
+      expect(sent?.hp).toEqual(hp);
+      expect(sent?.conditions).toEqual(['prone']);
+    });
+
+    it('reaches the DM as stored', () => {
+      expect(filterTokensByRole([veiled], 'DM', false, 'dm')[0]).toBe(veiled);
+    });
   });
 });

@@ -15,6 +15,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { currentVibeTrack, trackEndTarget } from '@/utils/ambientFallback';
 import type { AtmosphereAudioUpdatedBroadcast, AtmosphereEffectUpdatedBroadcast } from '@/types';
 
 const FADE_DURATION_MS = 1500; // 1.5-second crossfade
@@ -59,11 +60,25 @@ function fadeTo(
 }
 
 export default function AtmospherePlayer() {
-  const { activeAtmosphereAudio, updateAtmosphereAudio, updateAtmosphereEffect } = useCampaign();
+  const { campaign, userRole, currentVibe, activeAtmosphereAudio, updateAtmosphereAudio, updateAtmosphereEffect } = useCampaign();
   const { socket } = useWebSocket();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Used to cancel any in-progress fade when a new command arrives
   const fadeSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+
+  // What the 'ended' listener needs, read at the moment the track finishes.
+  const endStateRef = useRef<{ isDM: boolean; vibeTrackId: string | null; volume: number }>({
+    isDM: false,
+    vibeTrackId: null,
+    volume: 0.5,
+  });
+  useEffect(() => {
+    endStateRef.current = {
+      isDM: userRole === 'DM',
+      vibeTrackId: currentVibeTrack(campaign?.vibeSettings, currentVibe),
+      volume: activeAtmosphereAudio?.volume ?? 0.5,
+    };
+  }, [userRole, campaign?.vibeSettings, currentVibe, activeAtmosphereAudio?.volume]);
 
   // ============================================
   // Initialize audio element once
@@ -80,6 +95,30 @@ export default function AtmospherePlayer() {
       audio.src = '';
     };
   }, []);
+
+  // ============================================
+  // A finished one-shot falls back to the vibe's track
+  // ============================================
+  //
+  // Only a non-looping track can end. The DM's client answers for the table:
+  // it re-asserts the current vibe's track, or clears the finished one from
+  // the stored state so a late joiner does not start it from the top. If the
+  // DM's browser is closed when the track ends, the table stays quiet until
+  // they are back, which is the price of the server not hearing audio.
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !socket) return;
+    const onEnded = () => {
+      const { isDM, vibeTrackId, volume } = endStateRef.current;
+      const target = trackEndTarget(isDM, vibeTrackId);
+      if (target) {
+        socket.emitAtmosphereAudioSet({ assetId: target.assetId, volume, loop: true });
+      }
+    };
+    audio.addEventListener('ended', onEnded);
+    return () => audio.removeEventListener('ended', onEnded);
+  }, [socket]);
 
   // ============================================
   // Autoplay unlock helper

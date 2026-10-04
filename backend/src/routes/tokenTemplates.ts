@@ -8,14 +8,16 @@ import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/rbac';
-import { campaignMember, campaignDM } from '../middleware/compose';
+import { campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
   CreateTokenTemplateSchema,
   UpdateTokenTemplateSchema,
   SaveTokenAsTemplateSchema,
 } from '../validators/tokenTemplates';
+import { TOKEN_TYPES } from '../validators/tokens';
 import { jsonOrNull } from '../utils/prisma-json';
+import { canReferenceAsset } from '../services/permissions';
 import logger from '../utils/logger';
 
 const router = Router({ mergeParams: true });
@@ -23,10 +25,11 @@ const router = Router({ mergeParams: true });
 // ============================================
 // LIST — GET /
 // Returns token templates for this campaign with search/pagination.
-// Any campaign member can list.
+// DM only, like every other route here: a template carries the notes, stat
+// block and hit points the map keeps from players.
 // ============================================
 
-router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const { search, type, limit = '50', offset = '0' } = req.query;
@@ -39,7 +42,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
     if (search && typeof search === 'string') {
       where.name = { contains: search, mode: 'insensitive' };
     }
-    if (type && typeof type === 'string' && ['player', 'npc', 'object'].includes(type)) {
+    if (type && typeof type === 'string' && (TOKEN_TYPES as readonly string[]).includes(type)) {
       where.type = type;
     }
 
@@ -64,7 +67,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
 // GET ONE — GET /:id
 // ============================================
 
-router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -103,6 +106,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     }
 
     const data = parsed.data;
+    // A picture the DM may read: a template's picture counts as the campaign using it.
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
     const template = await prisma.tokenTemplate.create({
       data: {
         id: randomUUID(),
@@ -155,6 +162,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     }
 
     const data = parsed.data;
+    // A new picture the DM may read; the one already stored may stay.
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
     const updated = await prisma.tokenTemplate.update({
       where: { id },
       data: {
@@ -223,6 +234,10 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     const data = parsed.data;
+    // A picture the DM may read: a template's picture counts as the campaign using it.
+    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
     const template = await prisma.tokenTemplate.create({
       data: {
         id: randomUUID(),
@@ -292,6 +307,12 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
     }
     if (source.campaignId !== campaignId) {
       return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
+    }
+
+    // The copy stores the picture in the target campaign, which may not use
+    // it yet: checked there, as any other new reference is.
+    if (!(await canReferenceAsset(source.imageUrl, userId, undefined, targetCampaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
     // Create the copy in the target campaign

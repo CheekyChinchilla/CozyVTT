@@ -27,9 +27,9 @@ module.exports = {
     // Strict typing is a project requirement. This rule sat at 'off' behind a
     // deferred TODO while 326 explicit `any` accumulated across both projects —
     // the tsconfig's `noImplicitAny` never caught them, because an explicit
-    // annotation is exactly how you opt out of inference. It is an error now;
-    // the `overrides` block at the bottom is the shrinking list of files that
-    // still hold the legacy usages.
+    // annotation is exactly how you opt out of inference. It is an error now,
+    // everywhere: the allowlist of legacy files is empty and gone, so a new
+    // `any`, in a test or not, fails lint.
     '@typescript-eslint/no-explicit-any': 'error',
 
     // Unused vars are caught by tsc (noUnusedLocals); allow _-prefixed
@@ -39,15 +39,4 @@ module.exports = {
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
   },
-  overrides: [
-    {
-      // Legacy `any`, being burned down cluster by cluster. Entries come off as
-      // each file is converted; when this list is empty the block goes with it.
-      // Do not add to it — a new file with `any` should fail lint.
-      files: [
-      'src/hooks/__tests__/useInitiativeSync.test.tsx',
-      ],
-      rules: { '@typescript-eslint/no-explicit-any': 'off' },
-    },
-  ],
 };

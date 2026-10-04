@@ -7,6 +7,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import type { SessionData } from 'express-session';
 import { requirePasswordChanged, PASSWORD_CHANGE_REQUIRED } from './passwordChange';
 
 // The middleware falls back to a database read when the session predates the
@@ -20,20 +21,22 @@ jest.mock('../config/database', () => ({
   },
 }));
 
-function mockReq(path: string, sessionOverrides: Record<string, any> = {}): Request {
+// Partial on purpose: the middleware reads `path` and session fields, so the
+// cookie is empty and the session methods are bare mocks.
+function mockReq(path: string, sessionOverrides: Partial<SessionData> = {}): Request {
   return {
     path,
     session: {
       ...sessionOverrides,
       id: 'test-session-id',
-      cookie: {} as any,
+      cookie: {},
       regenerate: jest.fn(),
       destroy: jest.fn(),
       reload: jest.fn(),
       resetMaxAge: jest.fn(),
       save: jest.fn(),
       touch: jest.fn(),
-    } as any,
+    },
   } as unknown as Request;
 }
 

@@ -6,11 +6,15 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibilityBatch, filterMapData } from '../../utils/spirit-layer';
 import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
-import { Token } from '../shared';
-import { toJson } from '../../utils/prisma-json';
+import { isValidSpiritStyle } from '../../utils/styleAllowlists';
+import { Token, broadcastMapData } from '../shared';
+import { readTokens, toJson } from '../../utils/prisma-json';
+import { withMapsLocked } from '../../utils/mapTokens';
+import { getState as getCombatState } from '../initiativeState';
+import { resendInitiativeState } from './initiative';
+import { bestEffort, campaignSockets } from '../utils';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -49,46 +53,23 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         timestamp: new Date().toISOString(),
       });
 
-      // Also broadcast updated filtered map data so clients update their spirit layer rendering
-      // Fetch the campaign's current map to send role-filtered updates
-      const campaignForMap = await prisma.campaign.findUnique({
-        where: { id: socket.campaignId },
-        select: { currentMapId: true },
-      });
-
-      if (campaignForMap?.currentMapId) {
-        const currentMap = await prisma.map.findUnique({
-          where: { id: campaignForMap.currentMapId },
+      // Also broadcast updated filtered map data so clients update their spirit layer rendering.
+      // The change is saved by now: a failure to tell the table is logged,
+      // and the chat notice below still goes out.
+      const campaignId = socket.campaignId;
+      await bestEffort('spirit_layer.toggle re-send', async () => {
+        const campaignForMap = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { currentMapId: true },
         });
-
-        if (currentMap) {
-          const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-          const visibility = await getSpiritVisibilityBatch(
-            socket.campaignId,
-            campaignSockets.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-          );
-          for (const s of campaignSockets) {
-            const authedSocket = s as unknown as AuthenticatedSocket;
-            const spiritVisible =
-              authedSocket.role === 'DM'
-                ? true
-                : authedSocket.userId
-                  ? (visibility.get(authedSocket.userId) ?? false)
-                  : false;
-            const filteredMap = filterMapData(
-              {
-                ...currentMap,
-                tokens: currentMap.tokens,
-                annotations: currentMap.annotations,
-              },
-              authedSocket.role || 'PLAYER',
-              spiritVisible,
-              authedSocket.userId
-            );
-            s.emit('map.changed', { mapId: currentMap.id, mapData: filteredMap, spiritVisible });
-          }
+        if (!campaignForMap?.currentMapId) return;
+        const currentMap = await prisma.map.findUnique({ where: { id: campaignForMap.currentMapId } });
+        if (currentMap) await broadcastMapData(io, campaignId, currentMap);
+        // Which plane a player sees decides which combatants they are sent
+        if (getCombatState(campaignId).combatants.length > 0) {
+          await resendInitiativeState(io, campaignId);
         }
-      }
+      });
 
       // Send system message
       await sendSystemMessage(
@@ -114,6 +95,12 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
     if (!socket.campaignId) return;
     if (socket.role !== 'DM') {
       socket.emit('error', { message: 'Only DMs can change spirit layer style' });
+      return;
+    }
+    // Same allowlist as the REST write path: a named look or custom:#RRGGBB.
+    // Every client renders the value as CSS.
+    if (typeof data?.style !== 'string' || !isValidSpiritStyle(data.style)) {
+      socket.emit('error', { message: 'Invalid spirit layer style' });
       return;
     }
     io.to(socket.campaignId).emit('spirit_layer.style_changed', { style: data.style });
@@ -153,83 +140,51 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         return;
       }
 
-      // Find and update the token
-      const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
-      const tokenIndex = tokensArray.findIndex((t) => t.id === tokenId);
+      // Find and update the token, in the list as it is under the map's
+      // lock, like every other write to a map's tokens: a move or an add
+      // landing meanwhile used to be written away.
+      const updatedTokens = await withMapsLocked([mapId], async (tx) => {
+        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+        const tokens = readTokens(fresh.tokens);
+        const index = tokens.findIndex((t) => t.id === tokenId);
+        if (index === -1) return null;
+        tokens[index] = { ...tokens[index], visible };
+        await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+        return tokens;
+      });
+      const token: Token | undefined = updatedTokens?.find((t) => t.id === tokenId);
 
-      if (tokenIndex === -1) {
+      if (!updatedTokens || !token) {
         socket.emit('error', { message: 'Token not found' });
         return;
       }
 
-      const token = tokensArray[tokenIndex];
-      token.visible = visible;
-
-      // Save updated tokens to database
-      const updatedTokens = [...tokensArray];
-      updatedTokens[tokenIndex] = token;
-
-      await prisma.map.update({
-        where: { id: mapId },
-        data: { tokens: toJson(updatedTokens) },
+      // The DM's own clients get the toggle with the token. Then everyone,
+      // the DM included, gets the map again as they may see it: a player is
+      // sent the token only if the map fetch would send it (visible, on
+      // their plane, in their sight on a lit map), and never with the DM's
+      // notes. This used to hand every player the whole token.
+      const toggled = { mapId, tokenId, visible, token, toggledBy: socket.userId, timestamp: new Date().toISOString() };
+      const campaignId = socket.campaignId;
+      // The token is saved by now: a failure to tell the table is logged,
+      // not reported to the DM as a failed toggle.
+      await bestEffort('spirit_layer.token.toggle re-send', async () => {
+        for (const s of await campaignSockets(io, campaignId)) {
+          if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
+        }
+        // Only when this is the map the table is on: map.changed puts every
+        // client onto the map it carries.
+        const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+        if (campaign?.currentMapId === mapId) {
+          await broadcastMapData(io, campaignId, { ...map, tokens: toJson(updatedTokens) });
+        }
+        // Any token: revealing or hiding a player's own spirit-plane token
+        // moves them between planes, which changes what they are sent of the
+        // whole order, not only an entry of that token.
+        if (getCombatState(campaignId).combatants.length > 0) {
+          await resendInitiativeState(io, campaignId);
+        }
       });
-
-      // Role-filtered broadcast: use per-socket filtering
-      const sockets = await io.in(socket.campaignId).fetchSockets();
-      const visibility = await getSpiritVisibilityBatch(
-        socket.campaignId,
-        sockets.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-      );
-
-      for (const s of sockets) {
-        const authedSocket = s as unknown as AuthenticatedSocket;
-        const isSocketDM = authedSocket.role === 'DM';
-
-        // DM always gets the event
-        if (isSocketDM) {
-          s.emit('spirit_layer.token.toggled', {
-            mapId,
-            tokenId,
-            visible,
-            token,
-            toggledBy: socket.userId,
-            timestamp: new Date().toISOString(),
-          });
-          continue;
-        }
-
-        // Non-DMs: only notify if they can see the token after the change
-        // Check spirit visibility for THIS receiver, not the sender
-        const receiverSpiritVisible = authedSocket.userId ? (visibility.get(authedSocket.userId) ?? false) : false;
-
-        // They must be able to see spirit layer (if spirit token) AND token must be visible
-        if (token.layer === 'spirit' && !receiverSpiritVisible) {
-          // Player can't see spirit tokens - skip
-          continue;
-        }
-
-        if (visible) {
-          // Token is now visible - notify player so it appears
-          s.emit('spirit_layer.token.toggled', {
-            mapId,
-            tokenId,
-            visible,
-            token,
-            toggledBy: socket.userId,
-            timestamp: new Date().toISOString(),
-          });
-        } else {
-          // Token is now hidden - notify player so it disappears
-          // Send minimal data (no full token details for hidden tokens)
-          s.emit('spirit_layer.token.toggled', {
-            mapId,
-            tokenId,
-            visible: false,
-            toggledBy: socket.userId,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
 
       logger.debug('spirit_layer.token.toggle', { tokenId, visible, userId: socket.userId, mapId });
     } catch (error) {

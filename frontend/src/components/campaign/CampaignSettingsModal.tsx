@@ -94,7 +94,10 @@ export default function CampaignSettingsModal({
   const [deletingCampaign, setDeletingCampaign] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Sync form values when modal opens or campaign changes
+  // Seed the form when the dialog opens, or for another campaign. Not on
+  // every campaign object: the page fetches the same campaign again when
+  // someone joins or leaves and after a reconnect, and re-seeding then threw
+  // away what the DM was typing and jumped back to the first tab.
   useEffect(() => {
     if (isOpen && campaign) {
       setName(campaign.name);
@@ -104,7 +107,7 @@ export default function CampaignSettingsModal({
       setDeleteConfirmName('');
       setActiveTab(isDmViewer ? 'general' : 'members');
     }
-  }, [isOpen, campaign]);
+  }, [isOpen, campaign?.id]);
 
   if (!campaign) return null;
 
@@ -122,6 +125,10 @@ export default function CampaignSettingsModal({
     try {
       await campaignService.updateCampaign(campaign.id, {
         name: trimmedName,
+        // TODO(ui): an emptied box sends undefined, which leaves the field out
+        // of the request, so the server keeps the old description while this
+        // panel says the settings were saved. Send null for an empty box; the
+        // server accepts it and clears the description.
         description: description.trim() || undefined,
       });
       await refreshCampaign();
@@ -273,6 +280,10 @@ export default function CampaignSettingsModal({
                 {/* ── Tabs ── */}
                 <div className="flex gap-1 mt-4">
                   {(
+                    /* TODO(ui): a DM who is neither the owner nor an admin,
+                       such as one the game was handed to, still gets the
+                       Danger Zone tab, and the server refuses its Delete
+                       Campaign. Offer the tab only to the owner or an admin. */
                     (isDmViewer
                       ? [
                           { id: 'general', label: 'General' },
@@ -315,6 +326,10 @@ export default function CampaignSettingsModal({
                       >
                         Campaign Name <span className="text-danger-ink">*</span>
                       </label>
+                      {/* TODO(ui): these boxes stop at 100 and 1000 characters,
+                         while the server accepts a name of 200 and a
+                         description of 5000. Use the server's limits,
+                         declared in one place. */}
                       <input
                         id="cs-name"
                         type="text"
@@ -640,7 +655,8 @@ export default function CampaignSettingsModal({
                           <p className="text-sm text-danger-ink">
                             Permanently deletes this campaign and all associated maps, tokens, chat
                             history, and session records. Characters and uploaded assets are{' '}
-                            <strong>not</strong> deleted — they remain in your library.
+                            <strong>not</strong> deleted: characters stay with their owners, and each
+                            uploaded file moves to the personal library of whoever uploaded it.
                           </p>
                           <p className="text-sm text-danger-ink mt-2">
                             This action <strong>cannot be undone</strong>.

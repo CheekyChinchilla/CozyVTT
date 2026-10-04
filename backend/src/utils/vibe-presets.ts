@@ -1,3 +1,5 @@
+import { isSafeVibeFilter } from './styleAllowlists';
+
 /**
  * Vibe Tracker Presets & Validation
  * Vibe Tracker Details
@@ -27,7 +29,7 @@ export const DEFAULT_VIBE_PERIODS: VibePeriod[] = [
     name: 'dawn',
     hue: '#FFB88C',
     filter: 'brightness(0.9) saturate(1.1)',
-    audio: 'birds_chirping.mp3',
+    audio: null,
   },
   {
     name: 'day',
@@ -39,13 +41,13 @@ export const DEFAULT_VIBE_PERIODS: VibePeriod[] = [
     name: 'dusk',
     hue: '#FF9966',
     filter: 'brightness(0.85) saturate(1.3) hue-rotate(10deg)',
-    audio: 'evening_breeze.mp3',
+    audio: null,
   },
   {
     name: 'night',
     hue: '#1A1A2E',
     filter: 'brightness(0.6) saturate(0.7) contrast(1.1)',
-    audio: 'night_crickets.mp3',
+    audio: null,
   },
 ];
 
@@ -86,6 +88,11 @@ export function preserveAtmosphereAudio(incoming: unknown, stored?: unknown): un
   return next;
 }
 
+// TODO(cleanup): PUT /campaigns/:id/vibe validates with this function and PUT
+// /campaigns/:id with VibeSettingsSchema in validators/campaigns.ts, and the
+// two disagree: a period name may be 50 characters here and 100 there, and only
+// this one requires enabled, at least one period and unique names. Validate
+// both routes with one schema.
 /**
  * Validate a vibe settings object structure.
  * Returns null if valid, or an error message string if invalid.
@@ -138,6 +145,12 @@ export function validateVibeSettings(settings: unknown): string | null {
 
     if (period.filter.length > 200) {
       return `vibeSettings.periods[${i}].filter cannot exceed 200 characters`;
+    }
+
+    // Only the functions the atmosphere editor produces. A filter is CSS, and
+    // url() in it would have every visitor fetch whatever the DM named.
+    if (!isSafeVibeFilter(period.filter)) {
+      return `vibeSettings.periods[${i}].filter may only use brightness(), saturate(), contrast() and hue-rotate()`;
     }
 
     if (period.audio !== null && typeof period.audio !== 'string') {

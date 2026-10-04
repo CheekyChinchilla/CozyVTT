@@ -5,8 +5,10 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { getSpiritVisibilityBatch, filterMapData } from '../../utils/spirit-layer';
+import { broadcastMapData } from '../shared';
 import logger from '../../utils/logger';
+import { getState as getCombatState } from '../initiativeState';
+import { resendInitiativeState } from './initiative';
 
 export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -36,33 +38,22 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
-      // Broadcast role-filtered map data to each connected campaign member.
-      // spiritVisible is included in the payload so the client knows whether
-      // to show the spirit overlay for this specific viewer.
-      const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-      const visibility = await getSpiritVisibilityBatch(
-        socket.campaignId,
-        campaignSockets.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
-      );
-      for (const s of campaignSockets) {
-        const authedSocket = s as unknown as AuthenticatedSocket;
-        const spiritVisible =
-          authedSocket.role === 'DM'
-            ? true
-            : authedSocket.userId
-              ? (visibility.get(authedSocket.userId) ?? false)
-              : false;
-        const filteredMap = filterMapData(
-          {
-            ...map,
-            tokens: map.tokens,
-            annotations: map.annotations,
-          },
-          authedSocket.role || 'PLAYER',
-          spiritVisible,
-          authedSocket.userId
-        );
-        s.emit('map.changed', { mapId, mapData: filteredMap, spiritVisible });
+      // map.changed puts every client onto the map it carries, so only the
+      // map the campaign is showing may be sent: a token moved to another
+      // map used to switch the whole table onto that map.
+      const campaign = await prisma.campaign.findUnique({ where: { id: socket.campaignId }, select: { currentMapId: true } });
+      if (campaign?.currentMapId !== mapId) {
+        socket.emit('error', { message: 'Only the current map can be sent to the table; set it current first' });
+        return;
+      }
+
+      // Each member gets the map as they may see it; the payload says whether
+      // the spirit overlay applies to that viewer.
+      await broadcastMapData(io, socket.campaignId, map);
+      // The plane each player is on follows the current map, and with it
+      // which combatants they are sent.
+      if (getCombatState(socket.campaignId).combatants.length > 0) {
+        await resendInitiativeState(io, socket.campaignId);
       }
 
       logger.info('map.change', { mapId, userId: socket.userId, campaignId: socket.campaignId });

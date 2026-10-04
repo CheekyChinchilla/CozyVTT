@@ -90,6 +90,10 @@ export default function LoginPage() {
       // If MFA is required, mfaPending will be true and user will be redirected to MFA page
     } catch (err) {
       // Handle specific error messages
+      // TODO(accounts): apiErrorText returns the reply's short label, such as
+      // "Authentication Failed", so the sentence in its message is never shown
+      // and the branches below never run when the server sends one. Show
+      // apiErrorMessage(err) first.
       const serverError = apiErrorText(err);
       if (serverError) {
         setError(serverError);

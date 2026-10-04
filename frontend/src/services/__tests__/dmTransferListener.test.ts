@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { DmTransferredBroadcast } from '@/types';
+import type { DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
+import { CampaignRole } from '@/types';
 
 /** Minimal stand-in for a socket.io Socket, recording what is attached to it. */
 class FakeSocket {
@@ -131,3 +132,29 @@ describe('campaign.dm.transferred', () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+// The same contract for any other role change: the route broadcasts
+// `campaign.role.changed`, and the campaign page patches the member's role.
+describe('campaign.role.changed', () => {
+  let client: typeof import('../socket').default;
+  const change: MemberRoleChangedBroadcast = { campaignId: 'campaign-1', userId: 'user-p', role: CampaignRole.SPECTATOR };
+
+  beforeEach(async () => {
+    sockets.length = 0;
+    vi.resetModules();
+    client = (await import('../socket')).default;
+  });
+
+  it('subscribes under the exact event name the server broadcasts, and survives a reconnect', async () => {
+    await connect(client);
+    const seen: MemberRoleChangedBroadcast[] = [];
+    client.onMemberRoleChanged((data) => seen.push(data));
+
+    current().fire('campaign.role.changed', change);
+    await connect(client);
+    current().fire('campaign.role.changed', change);
+
+    expect(seen).toEqual([change, change]);
+  });
+});
+

@@ -37,6 +37,8 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Check if current user can delete this asset
+  // TODO(assets): the server also lets the DM of a campaign asset's campaign
+  // delete it; offer Delete to that DM, as AssetDetailPanel should.
   const canDelete =
     user?.id === asset.uploadedById || user?.platformRole === 'ADMIN';
 
@@ -64,8 +66,9 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
     if (asset.type === AssetType.TOKEN) {
       return api.getAssetUrl(asset.id, 'tokens');
     }
+    // An avatar is served by its owner's id; a deleted account's has none.
     if (asset.type === AssetType.AVATAR) {
-      return api.getAssetUrl(asset.uploadedById, 'avatars');
+      return asset.uploadedById ? api.getAssetUrl(asset.uploadedById, 'avatars') : '';
     }
     // For audio, return a default icon
     return '';

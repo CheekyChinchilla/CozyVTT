@@ -84,9 +84,18 @@ services:
       NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
+      ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      # Session timeouts (milliseconds) and logging. Every setting .env.example
+      # offers is named here, or it never reaches the container: a test keeps
+      # the two files in step.
+      SESSION_MAX_AGE: ${SESSION_MAX_AGE:-3600000}
+      REMEMBER_ME_MAX_AGE: ${REMEMBER_ME_MAX_AGE:-2592000000}
+      LOG_LEVEL: ${LOG_LEVEL:-}
     volumes:
       # Uploads persist on the host — back this directory up regularly
       - ./backend/uploads:/app/uploads
+      # Instance backups (full database dumps) live beside uploads, never inside it.
+      - ./backend/backups:/app/backups
       # Logs persist on the host
       - ./backend/logs:/app/logs
     # Backend is only accessible internally — Nginx terminates public traffic
@@ -145,8 +154,15 @@ services:
       # MB of multipart overhead, or large uploads fail with HTTP 413.
       NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
       # Only substitute this one variable — without the filter, envsubst would
-      # also blank Nginx's own $host / $scheme / $proxy_add_x_forwarded_for.
+      # also blank Nginx's own $host / $scheme / $remote_addr.
       NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE"
+      # The hash of nginx/nginx.conf: when that file changes, set this to the
+      # value backend/src/__tests__/keepInStep.test.ts prints, which fails until
+      # it matches. The template is rendered when the container starts, and
+      # `docker compose up -d --build` leaves a running container alone unless
+      # its definition changed, so without a change here an upgrade keeps
+      # serving the previous config.
+      NGINX_CONF_STAMP: "507e7aa210aa"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080

@@ -7,6 +7,7 @@ import { useState, useEffect, useLayoutEffect, useRef, FormEvent, KeyboardEvent 
 import { MessageCircle, Send, Loader, AlertCircle, Eraser } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useOnRejoin } from '@/hooks/useOnRejoin';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getMessages } from '@/services/message.service';
@@ -26,7 +27,7 @@ const PAGE_SIZE = 50;
 
 export default function ChatPanel() {
   const { id: campaignId } = useParams<{ id: string }>();
-  const { socket, reconnectCount } = useWebSocket();
+  const { socket, joinedEpoch } = useWebSocket();
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
 
@@ -181,11 +182,13 @@ export default function ChatPanel() {
    * have, deduping by id. Any messages the user missed during the drop
    * appear inline at the bottom.
    *
-   * Driven by `reconnectCount` from WebSocketContext, which increments only
-   * on actual reconnects (never on initial connect). Skips when count is 0.
+   * Driven by `joinedEpoch`, which counts joins of the campaign: every join
+   * after the first is a rejoin. The transport's own reconnect comes before
+   * the socket is back in the campaign's room, and a message sent in that
+   * gap would be missed by a read made then.
    */
-  useEffect(() => {
-    if (!campaignId || reconnectCount === 0) return;
+  useOnRejoin(joinedEpoch, () => {
+    if (!campaignId) return;
 
     const resync = async () => {
       try {
@@ -202,7 +205,7 @@ export default function ChatPanel() {
     };
 
     resync();
-  }, [campaignId, reconnectCount]);
+  });
 
   /**
    * Load more messages (pagination)
@@ -404,6 +407,14 @@ export default function ChatPanel() {
     try {
       console.log('[ChatPanel] Sending message:', content);
 
+      // TODO(play): this is sent with no acknowledgement. Sent while the
+      // connection is dropping, the message is lost: the client drops it once
+      // its socket is gone, or socket.io delivers it on reconnect before the
+      // socket has rejoined the campaign, which the server refuses. Either
+      // way the optimistic copy below stays "sending…" for good. Emit with an
+      // ack and offer a resend when it fails, or hold it until the socket has
+      // rejoined.
+      //
       // Emit to WebSocket (campaignId comes from server-side socket.campaignId)
       socket.emitChatMessage({
         content,

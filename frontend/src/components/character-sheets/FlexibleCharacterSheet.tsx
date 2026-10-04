@@ -9,7 +9,7 @@ import { FlexibleCharacterSheetView } from './flexible/FlexibleCharacterSheetVie
 import { FlexibleCharacterSheetEdit } from './flexible/FlexibleCharacterSheetEdit';
 
 export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave } = props;
+  const { mode, character, onSave, onDirtyChange } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   const handleCancel = () => {
@@ -29,6 +29,7 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
         character={character}
         onSave={handleSave}
         onCancel={handleCancel}
+        onDirtyChange={onDirtyChange}
       />
     );
   }

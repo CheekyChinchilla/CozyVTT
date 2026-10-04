@@ -149,6 +149,9 @@ describe('assets used in a campaign', () => {
       },
     });
     mapId = map.id;
+    // The campaign is showing this map; a player's access to its layers
+    // follows from that, not from the map merely existing.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
     await prisma.character.create({
       data: {
@@ -278,6 +281,57 @@ describe('assets used in a campaign', () => {
 
     it('reads their own unused asset as before', async () => {
       expect((await dm.get(`/api/assets/maps/${unusedAssetId}`)).status).toBe(200);
+    });
+  });
+
+  // A map the DM has prepared but not shown is the DM's alone, artwork and
+  // token art included, until the campaign switches to it.
+  describe('a map the DM has prepared but not shown', () => {
+    let preparedMapAssetId: string;
+    let preparedTokenAssetId: string;
+    let preparedMapId: string;
+
+    beforeAll(async () => {
+      preparedMapAssetId = await makeAsset('MAP', 'next-scene');
+      preparedTokenAssetId = await makeAsset('TOKEN', 'lurker');
+      preparedMapId = (await prisma.map.create({
+        data: {
+          campaignId,
+          name: 'The Crypt',
+          imageUrl: `/api/assets/maps/${preparedMapAssetId}`,
+          baseLayerUrl: `/api/assets/maps/${preparedMapAssetId}`,
+          width: 20,
+          height: 16,
+          gridSize: 50,
+          annotations: [],
+          tokens: [{
+            id: 'tok-lurker', characterId: null, name: 'Lurker', imageUrl: `/api/assets/tokens/${preparedTokenAssetId}`,
+            position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, controlledBy: null,
+            rotation: 0, conditions: [], metadata: {},
+          }],
+        },
+      })).id;
+    });
+
+    afterAll(async () => {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
+      await prisma.map.deleteMany({ where: { id: preparedMapId } });
+      await prisma.asset.deleteMany({ where: { id: { in: [preparedMapAssetId, preparedTokenAssetId] } } });
+    });
+
+    it('is readable by the DM', async () => {
+      expect((await dm.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(200);
+    });
+
+    it('keeps its artwork and its token art from a player until the campaign shows it', async () => {
+      expect((await player.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(403);
+      expect((await player.get(`/api/assets/tokens/${preparedTokenAssetId}`)).status).toBe(403);
+
+      await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: preparedMapId } });
+      expect((await player.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(200);
+      expect((await player.get(`/api/assets/tokens/${preparedTokenAssetId}`)).status).toBe(200);
+      // And the map it replaced is the DM's again.
+      expect((await player.get(`/api/assets/maps/${mapAssetId}`)).status).toBe(403);
     });
   });
 

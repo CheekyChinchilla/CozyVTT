@@ -3,6 +3,8 @@ import { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
+import { canReadMap } from '../services/permissions';
+import type { AuthenticatedFields } from './auth';
 
 /**
  * WebSocket Utility Functions
@@ -40,6 +42,22 @@ export function broadcastToCampaign(campaignId: string, event: string, data: unk
 }
 
 /**
+ * Tell each campaign's open pages that its roster changed for `userId`: they
+ * left it (removed, or their account deleted) or their role changed. Every
+ * page keeps the member list and the roster panel it loaded, and refreshes
+ * both on this. Never throws: the change is already saved.
+ */
+export function announceRosterChange(userId: string, campaignIds: string[], action: 'member.left' | 'member.role'): void {
+  for (const campaignId of campaignIds) {
+    try {
+      broadcastToCampaign(campaignId, 'roster.updated', { action, userId, campaignId });
+    } catch (error) {
+      logger.warn('roster.updated not broadcast; the change stands', { err: error, campaignId, userId });
+    }
+  }
+}
+
+/**
  * Broadcast an event to a specific user (all their connected sockets)
  * @param userId - User ID
  * @param event - Event name
@@ -50,6 +68,87 @@ export function broadcastToUser(userId: string, event: string, data: unknown): v
   io.to(userId).emit(event, data);
 }
 
+/** A socket as a room fan-out sees it, with the fields authentication set. */
+export type CampaignSocket = Awaited<ReturnType<Server['fetchSockets']>>[number];
+
+/**
+ * The sockets in a campaign's room that belong to it.
+ *
+ * A socket's own `campaignId` is what every gated handler trusts; the room is
+ * only how a broadcast finds it, and `authenticate` keeps the two in step.
+ * Every fan-out that walks a room and reads each socket's role goes through
+ * here, so a socket that is in a room it no longer belongs to is skipped
+ * instead of being answered with another campaign's view. The default
+ * in-memory adapter hands back the real sockets, so the fields are readable.
+ */
+export async function campaignSockets(io: Server, campaignId: string): Promise<CampaignSocket[]> {
+  const sockets = await io.in(campaignId).fetchSockets();
+  return sockets.filter((s) => (s as unknown as AuthenticatedFields).campaignId === campaignId);
+}
+
+/**
+ * Run the part of a handler that tells the table about a change it has
+ * already saved. A failure there is logged and goes no further: the change
+ * stands, so answering the sender that it failed would be wrong, and what the
+ * handler does next (a chat notice, the order re-sent) still happens.
+ */
+export async function bestEffort(what: string, tell: () => Promise<void>): Promise<void> {
+  try {
+    await tell();
+  } catch (error) {
+    logger.warn(`${what} failed; the change stands`, { err: error });
+  }
+}
+
+/**
+ * Those of `sockets` that still belong to the campaign. campaignSockets
+ * checks when it fetches; a fan-out that awaits anything after that, a
+ * database read say, calls this again right before it reads each socket's
+ * role, with no await between the check and the emits. A socket that
+ * authenticated into another campaign in the meantime carries that
+ * campaign's role, and is skipped instead of being sent this campaign's
+ * data worked out for it.
+ */
+export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T[] {
+  return sockets.filter((s) => (s as unknown as AuthenticatedFields).campaignId === campaignId);
+}
+
+/**
+ * Send one of a map's live edits (its walls, lights, fog, settings, pings,
+ * the explored-memory reset, the DM's editing notice) to everyone who may
+ * read that map (canReadMap): the whole campaign while it is the map on
+ * screen, the DM's sockets for any other. A prepared map's layout is the
+ * DM's until they switch to it, on the live connection as on its fetch.
+ * `exceptSocketId` leaves out the sender where the event is not echoed.
+ * Best-effort: a failure is logged and goes no further.
+ */
+export async function emitToMapReaders(
+  io: Server,
+  campaignId: string,
+  mapId: string,
+  event: string,
+  data: unknown,
+  exceptSocketId?: string
+): Promise<void> {
+  // Every caller has saved its change by now: failing to tell the table is
+  // logged, never turned into a reply that the change failed.
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    const currentMapId = campaign?.currentMapId ?? null;
+    if (currentMapId === mapId) {
+      const room = io.to(campaignId);
+      (exceptSocketId ? room.except(exceptSocketId) : room).emit(event, data);
+      return;
+    }
+    for (const s of await campaignSockets(io, campaignId)) {
+      if (s.id === exceptSocketId) continue;
+      if (canReadMap((s as unknown as AuthenticatedFields).role, mapId, currentMapId)) s.emit(event, data);
+    }
+  } catch (error) {
+    logger.warn(`${event} not broadcast; the change stands`, { err: error, mapId });
+  }
+}
+
 /**
  * Get all sockets in a campaign room
  * @param campaignId - Campaign ID
@@ -57,7 +156,7 @@ export function broadcastToUser(userId: string, event: string, data: unknown): v
  */
 export async function getSocketsInCampaign(campaignId: string): Promise<string[]> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   return sockets.map((socket) => socket.id);
 }
 
@@ -68,7 +167,7 @@ export async function getSocketsInCampaign(campaignId: string): Promise<string[]
  */
 export async function getCampaignMemberCount(campaignId: string): Promise<number> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   return sockets.length;
 }
 
@@ -85,13 +184,13 @@ export async function getCampaignMemberCount(campaignId: string): Promise<number
  */
 export async function getOnlineUserIds(campaignId: string): Promise<string[]> {
   const io = getSocketInstance();
-  const sockets = await io.in(campaignId).fetchSockets();
+  const sockets = await campaignSockets(io, campaignId);
   const ids = new Set<string>();
   for (const socket of sockets) {
     // The default in-memory adapter hands back the real sockets, so the fields
     // set during authentication are readable — the same approach the secret
     // dice-roll fan-out uses.
-    const userId = (socket as unknown as { userId?: string }).userId;
+    const userId = (socket as unknown as AuthenticatedFields).userId;
     if (userId) ids.add(userId);
   }
   return [...ids];
@@ -118,20 +217,37 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
 }
 
 /**
- * Disconnect a user's sockets (for forced logout, bans, etc.)
- * @param userId - User ID
- * @param reason - Reason for disconnection
+ * End a user's live sockets, each told why, when their sign-in ends.
+ *
+ * A socket takes its user at the handshake and re-reads nothing after that,
+ * so a sign-in the database no longer holds would otherwise keep acting
+ * through it, with the campaign role it cached. `exceptSessionId` keeps the
+ * sockets of the sign-in making the change (a password change keeps the
+ * device it is made on); `onlySessionId` ends one sign-in's sockets alone
+ * (signing out). Best-effort, like the other live-socket helpers: the change
+ * this follows is already written.
  */
-export async function disconnectUser(userId: string, reason: string): Promise<void> {
-  const io = getSocketInstance();
-  const sockets = await io.in(userId).fetchSockets();
-
-  sockets.forEach((socket) => {
-    socket.emit('error', { message: reason });
-    socket.disconnect(true);
-  });
-
-  logger.info(`❌ Disconnected user ${userId}: ${reason}`);
+export async function endLiveSockets(
+  userId: string,
+  reason: string,
+  which: { exceptSessionId?: string; onlySessionId?: string } = {}
+): Promise<number> {
+  try {
+    const io = getSocketInstance();
+    let ended = 0;
+    for (const socket of await io.in(userId).fetchSockets()) {
+      const sid = (socket as unknown as AuthenticatedFields).sessionId;
+      if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
+      if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
+      socket.emit('error', { message: reason });
+      socket.disconnect(true);
+      ended += 1;
+    }
+    return ended;
+  } catch (error) {
+    logger.error('Failed to end live sockets', { err: error, userId });
+    return 0;
+  }
 }
 
 /**
@@ -218,8 +334,8 @@ export async function applyRoleToLiveSockets(
     // The default in-memory adapter hands back the real sockets, so the fields
     // set during authentication are both readable and writable — the same
     // approach getOnlineUserIds and the secret dice-roll fan-out rely on.
-    const authed = socket as unknown as { campaignId?: string; role?: string };
-    if (authed.campaignId === campaignId) {
+    const authed = socket as unknown as AuthenticatedFields;
+    if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       authed.role = role;
       updated += 1;
     }
@@ -252,15 +368,39 @@ export async function clearCampaignFromLiveSockets(
 
   let cleared = 0;
   for (const socket of sockets) {
-    const authed = socket as unknown as { campaignId?: string; role?: string };
-    if (authed.campaignId === campaignId) {
+    const authed = socket as unknown as AuthenticatedFields;
+    if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       socket.leave(campaignId);
-      authed.campaignId = undefined;
-      authed.role = undefined;
+      if (authed.campaignId === campaignId) {
+        authed.campaignId = undefined;
+        authed.role = undefined;
+      }
       socket.emit('error', { message: 'You are no longer a member of this campaign' });
       cleared += 1;
     }
   }
 
+  return cleared;
+}
+
+/**
+ * Empty a campaign's room when the campaign itself is gone: every socket in
+ * it leaves, forgets the campaign and its role, and is told why. Deleting a
+ * campaign cascades its memberships in the database; this is the live half
+ * of that, the same as removing one member is for one person.
+ */
+export async function clearDeletedCampaignFromLiveSockets(campaignId: string): Promise<number> {
+  const io = getSocketInstance();
+  let cleared = 0;
+  for (const socket of await io.in(campaignId).fetchSockets()) {
+    const authed = socket as unknown as AuthenticatedFields;
+    socket.leave(campaignId);
+    if (authed.campaignId === campaignId) {
+      authed.campaignId = undefined;
+      authed.role = undefined;
+    }
+    socket.emit('error', { message: 'This campaign was deleted' });
+    cleared += 1;
+  }
   return cleared;
 }

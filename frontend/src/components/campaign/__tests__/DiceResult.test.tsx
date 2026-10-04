@@ -58,6 +58,17 @@ const without = (roll: DiceRolledEvent, key: string): DiceRolledEvent => {
 };
 
 describe('DiceResult', () => {
+  // A deleted account's rolls stay in the history with no one attached.
+  it('names a roll whose roller has deleted their account', () => {
+    const orphan = { ...wellFormed(), userId: null, userName: null };
+    render(<DiceResult roll={orphan} isCurrentUser={false} />);
+    expect(screen.getByText(/rolled by a deleted account/)).toBeInTheDocument();
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+
+    render(<DiceResult roll={{ ...orphan, characterName: null }} isCurrentUser={false} />);
+    expect(screen.getByText('A deleted account')).toBeInTheDocument();
+  });
+
   it('shows a well-formed roll', () => {
     render(<DiceResult roll={wellFormed()} isCurrentUser={false} />);
     expect(screen.getByText('1d20+6')).toBeInTheDocument();

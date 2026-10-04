@@ -29,7 +29,6 @@ import type {
   PF2eInventoryItem,
   PF2eSkills,
   PF2eSpellcasting,
-  PF2eCantrip,
   PF2eAttributes,
   PF2eSavingThrows,
   PF2ePerception,
@@ -38,7 +37,6 @@ import type {
   PF2eClassDC,
   PF2eHitPoints,
   PF2eFeats,
-  PF2eFeat,
   PF2eSpellSlots,
   PF2eAppearance,
   PF2ePersonality,
@@ -51,29 +49,34 @@ import NumberField from '../../ui/NumberField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
+import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import {
+  readPf2eSpellSlots,
+  readPf2eCantrips,
+  newPf2eCantrip,
+  newPf2eSpell,
+  newPf2eFocusSpell,
+  newPf2eSpellcasting,
+} from './spellcastingEntries';
 
 /**
  * The sheet as this editor holds it.
  *
  * `PF2eCharacterData` plus `themeColor`, the header colour chosen in the
- * editor. It is not part of the game system, but it is saved with the sheet:
- * `PUT /characters/:id` validates the body and stores it as sent, rather than
- * storing Zod's parsed output, so a key the schema does not declare survives.
+ * editor. It is not part of the game system, but every system's schema
+ * declares it, so it is saved with the sheet. The server stores the schema's
+ * parsed sheet, so anything this editor writes has to be declared there too.
  */
-interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting' | 'feats'>, SheetChrome {
-  spellcasting?: PF2eEditorSpellcasting | null;
-  feats?: Record<keyof PF2eFeats, PF2eEditorFeat[]>;
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
+  /** Absent, not null, for a sheet with none: the schema refuses null. */
+  spellcasting?: PF2eEditorSpellcasting;
 }
 
 /**
- * Spellcasting as this editor manipulates it, which is not what the shared type
- * or the backend schema declare.
- *
- * `cantrips` is widened because the rendering reads `cantrip.name || cantrip`,
- * tolerating a bare string. The schema wants objects, so that defence only ever
- * mattered for sheets written before the shape settled.
+ * Spellcasting as this editor manipulates it: the shared type, with rituals
+ * narrowed to one shape.
  */
-interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'cantrips' | 'slots'> {
+interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals'> {
   /**
    * Objects only. A stored ritual may be a bare name — that is all the schema
    * allowed until recently — so the initializer below normalises one into
@@ -81,28 +84,6 @@ interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals' | 'can
    * The name survives, so the upgrade costs nothing.
    */
   rituals?: { name: string; rank: number }[];
-  cantrips?: (PF2eCantrip | string)[];
-  /**
-   * TODO(typing) — `used` vs `expended`. The slot boxes read and write `used`,
-   * but both the shared type and the schema call the field `expended`. On a
-   * character made from the blank template the save still succeeds, because
-   * the template seeds all ten ranks with `{ total, expended }` and `used`
-   * rides along as an extra key — but nothing else ever reads it, and
-   * `expended` stays at whatever it was. Verified against the validator.
-   */
-  slots?: Partial<Record<keyof PF2eSpellSlots, { total: number; expended?: number; used?: number }>>;
-}
-
-/**
- * A feat as the editor edits it.
- *
- * `description` is not declared by the shared type or by the backend schema.
- * It survives a save regardless: an undeclared key is stripped by Zod's parse,
- * but the route stores the body as sent rather than the parsed output. Verified
- * against the validator — a feat carrying one is accepted.
- */
-interface PF2eEditorFeat extends PF2eFeat {
-  description?: string;
 }
 
 interface Pathfinder2eCharacterEditorProps {
@@ -154,6 +135,9 @@ const shouldUseWhiteText = (hexColor: string): boolean => {
   return luminance < 0.5;
 };
 
+// TODO(sheets): the inventory's Bulk box stores what is typed as a string, so
+// an item typed as "2" counts as 0 here and in bulkToNumber in BulkTracker, and
+// only light items add to the total. Read a numeric string as its number.
 const calculateTotalBulk = (inventory: PF2eInventoryItem[]): number => {
   return inventory.reduce((total, item) => {
     let itemBulk = 0;
@@ -239,14 +223,14 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
       ...data.spellcasting,
-      cantrips: data.spellcasting.cantrips || [],
-      slots: data.spellcasting.slots || {},
+      cantrips: readPf2eCantrips(data.spellcasting.cantrips),
+      slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
       focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
       innateSpells: data.spellcasting.innateSpells || [],
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
-    } : null,
+    } : undefined,
     // TODO(typing): `{}` has none of the keys these types require, and the
     // inputs below read straight off them. Pre-existing; cast so the
     // behaviour for a sheet stored without one is exactly what it was.
@@ -294,24 +278,6 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const dirtyRef = useRef(false);
   const hasInteractedRef = useRef(false);
   const cleanSnapshotRef = useRef<string | null>(null);
-  if (cleanSnapshotRef.current === null) {
-    cleanSnapshotRef.current = JSON.stringify(formData);
-  }
-  // Always the current form state, for reading inside async callbacks.
-  const latestFormDataRef = useRef(formData);
-  latestFormDataRef.current = formData;
-
-  useEffect(() => {
-    if (!hasInteractedRef.current) {
-      cleanSnapshotRef.current = JSON.stringify(formData);
-      return;
-    }
-    const dirty = JSON.stringify(formData) !== cleanSnapshotRef.current;
-    if (dirty !== dirtyRef.current) {
-      dirtyRef.current = dirty;
-      onDirtyChange?.(dirty);
-    }
-  }, [formData, onDirtyChange]);
 
   // Capture-phase, so it runs before the field's own handler updates state.
   // Pointer events are included because plenty of edits here are button
@@ -324,15 +290,48 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const [customColorHex, setCustomColorHex] = useState('');
   const [isCustomColor, setIsCustomColor] = useState(false);
 
+  // The header colour and a newly chosen token picture are kept outside the
+  // form, and are unsaved changes too.
+  const sheetSnapshot = JSON.stringify({
+    formData,
+    themeColor: isCustomColor ? customColorHex : selectedColor.name,
+    tokenImage: tokenImageFile
+      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
+      : null,
+  });
+  if (cleanSnapshotRef.current === null) {
+    cleanSnapshotRef.current = sheetSnapshot;
+  }
+  // Always the current state, for reading inside async callbacks.
+  const latestSnapshotRef = useRef(sheetSnapshot);
+  latestSnapshotRef.current = sheetSnapshot;
+
+  useEffect(() => {
+    if (!hasInteractedRef.current) {
+      cleanSnapshotRef.current = sheetSnapshot;
+      return;
+    }
+    const dirty = sheetSnapshot !== cleanSnapshotRef.current;
+    if (dirty !== dirtyRef.current) {
+      dirtyRef.current = dirty;
+      onDirtyChange?.(dirty);
+    }
+  }, [sheetSnapshot, onDirtyChange]);
+
   useEffect(() => {
     if (data.themeColor) {
       const savedColor = COLOR_PRESETS.find(c => c.name === data.themeColor);
       if (savedColor) {
         setSelectedColor(savedColor);
         setIsCustomColor(false);
-      } else if (data.themeColor.startsWith('#')) {
-        setCustomColorHex(data.themeColor);
-        setIsCustomColor(true);
+      } else {
+        // A three-digit colour is expanded, so it opens as itself rather than
+        // as the default preset.
+        const hex = toStoredHexColor(data.themeColor);
+        if (hex) {
+          setCustomColorHex(hex);
+          setIsCustomColor(true);
+        }
       }
     }
   }, [data.themeColor]);
@@ -340,6 +339,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
     setIsCustomColor(true);
+    setErrors((prev) => ({ ...prev, themeColor: '' }));
   };
 
   const handlePresetColorSelect = (color: typeof COLOR_PRESETS[0]) => {
@@ -409,6 +409,15 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
+      // TODO(sheets): the built-in templates store skill and lore attributes
+      // abbreviated ("str", "int") and spellcasting as "Arcane", "Prepared" and
+      // "int", but this effect, the lore and spellcasting effects below and the
+      // spell list compare them with full lowercase names. A template-made
+      // sheet opened here has every skill and lore total recomputed without
+      // its attribute modifier, which the next save stores (the Level 1
+      // Fighter's Athletics +6 becomes +3); spell totals ignore the key
+      // attribute, and spells added start unprepared. Resolve an abbreviated
+      // or capitalised value the way pf2eClassDC does.
       const attribute = updatedSkills[skill].attribute;
       const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
@@ -676,6 +685,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.level || formData.level < 1 || formData.level > 20) {
       newErrors.level = 'Level must be between 1 and 20';
     }
+    // The server refuses a colour it cannot read, and the whole save with it.
+    if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
+      newErrors.themeColor = HEX_COLOUR_HINT;
+      setShowColorPicker(true);
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -684,10 +698,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     // A completed save means nothing is pending any more.
     // Unless the sheet was edited again while the save was in flight, which the
     // recheck preserves.
-    const savedSnapshot = JSON.stringify(formData);
+    const savedSnapshot = sheetSnapshot;
     const markClean = () => {
       cleanSnapshotRef.current = savedSnapshot;
-      const stillDirty = JSON.stringify(latestFormDataRef.current) !== savedSnapshot;
+      const stillDirty = latestSnapshotRef.current !== savedSnapshot;
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
     };
@@ -702,7 +716,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         // Drop class-feature rows left blank. The editor keeps them while you
         // type; storage should not.
         classFeatures: readFeatureEntries(formData.classFeatures),
-        themeColor: isCustomColor ? customColorHex : selectedColor.name,
+        themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : selectedColor.name,
       } as CharacterData;
 
       // Upload token image if a new one was selected
@@ -805,8 +819,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               <div className="flex items-center space-x-2">
                 <input type="color" value={customColorHex || '#1d4ed8'} onChange={(e) => handleCustomColorChange(e.target.value)} className="w-12 h-12 rounded cursor-pointer border-2 border-stone-300" title="Pick a custom color" />
                 <div className="flex-1">
-                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" aria-label="Custom colour hex code" className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code</div>
+                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
             </div>
@@ -960,6 +975,12 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
+          {/* TODO(sheets): this box, and the speeds, resistances,
+             immunities, weaknesses, conditions, strike traits and languages
+             boxes, splits, trims and re-joins the text on every keystroke,
+             so a comma or a trailing space typed at the end vanishes before
+             the next word; pasting a whole list works. Keep the raw text
+             while the box has focus and split it on blur. */}
           <input type="text" value={(formData.perception?.senses || []).join(', ')} onChange={(e) => updateField('perception.senses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
@@ -1247,7 +1268,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
       return (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6 text-center">
           <p className="text-amber-800 mb-4">No spellcasting configured</p>
-          <button onClick={() => updateField('spellcasting', { tradition: 'arcane', type: 'prepared', keyAttribute: 'intelligence', spellAttackBonus: { proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }, spellDC: { proficiencyRank: 'trained', itemBonus: 0, dc: 10 }, cantrips: [], slots: {}, spells: [], focusSpells: { focusPoints: { total: 0, current: 0 }, spells: [] }, innateSpells: [], rituals: [] })} className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800">
+          <button onClick={() => updateField('spellcasting', newPf2eSpellcasting())} className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800">
             Enable Spellcasting
           </button>
         </div>
@@ -1325,7 +1346,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Cantrips</h3>
-            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), { name: 'New Cantrip', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Cantrip</span>
             </button>
@@ -1333,7 +1354,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={typeof cantrip === 'string' ? cantrip : cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                <input type="text" value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1350,7 +1371,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
           <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Slots (Rank 1-10)</h3>
           <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] || { total: 0, used: 0 };
+              const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] ?? { total: 0, expended: 0 };
               return (
                 <div key={rank} className="bg-white border border-stone-200 rounded-lg p-2">
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
@@ -1358,7 +1379,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
                     <NumberField
 min={0} max={20} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                     <NumberField
-min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.used`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded text-xs text-center text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
+min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded text-xs text-center text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                   </div>
                 </div>
               );
@@ -1370,7 +1391,7 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
-            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), { name: 'New Spell', rank: 1, tradition: formData.spellcasting!.tradition, prepared: formData.spellcasting!.type === 'prepared' }]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Spell</span>
             </button>
@@ -1416,7 +1437,7 @@ min={0} max={slots.total || 0} value={slots.used} onChange={(v: number) => updat
 min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" fallback={0} />
                 <span className="text-sm text-stone-600">/ 3</span>
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), { name: 'New Focus Spell', tradition: formData.spellcasting!.tradition }]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>
@@ -1645,6 +1666,11 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+                  {/* TODO(sheets): a feat from the built-in templates holds
+                     its text in notes, which the view shows and this box
+                     does not, so the editor opens it empty and the notes can
+                     be neither changed nor removed. Show notes here when
+                     there is no description, and keep one field. */}
                   <textarea value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               ))}

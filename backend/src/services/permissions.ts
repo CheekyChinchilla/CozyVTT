@@ -1,6 +1,9 @@
 import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
+import { getSpiritVisibility } from '../utils/spirit-layer';
+import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
 
 /**
  * Permission Verification Helpers
@@ -27,13 +30,6 @@ export function isDM(campaignRole: CampaignRole): boolean {
  */
 export function isPlayer(campaignRole: CampaignRole): boolean {
   return campaignRole === 'PLAYER';
-}
-
-/**
- * Check if user is Spectator in a campaign
- */
-export function isSpectator(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'SPECTATOR';
 }
 
 /**
@@ -94,41 +90,73 @@ export async function canEditCharacter(
 }
 
 /**
- * Check if user can move a token
- * 
- * - Players can move their assigned character tokens
- * - DM can move any token
+ * May this member act on this token: move it, and change the fields a player
+ * is allowed to change.
+ *
+ * The DM always; a player only when the token names them in `controlledBy`;
+ * a spectator never. That last clause is why `controlledBy` alone is not the
+ * test: it is set once and not cleared when someone is demoted, so a spectator
+ * can still hold a token from before. One predicate for the REST update route
+ * and the three socket move handlers, so the channels cannot drift apart.
  */
-export async function canMoveToken(
-  userId: string,
-  characterId: string,
-  campaignId: string
-): Promise<boolean> {
+export function canControlToken(
+  role: string | undefined,
+  controlledBy: string | null | undefined,
+  userId: string | undefined
+): boolean {
+  if (role === 'DM') return true;
+  return role === 'PLAYER' && !!userId && controlledBy === userId;
+}
+
+/**
+ * May this member be given tokens to control: a player of the campaign, and
+ * nobody else. The DM controls every token without being named on one, and
+ * a spectator controls nothing, so `controlledBy` may only ever name a
+ * player. Asked before a token is created or handed over, and before a
+ * character's owner is made the default controller of a token bound to it,
+ * so a spectator is never named on a token from now on; one still named from
+ * their time as a player is treated as nobody's by `canControlToken` above
+ * and by `viewerIdFor` in `utils/spirit-layer.ts`.
+ */
+export async function canHoldTokens(campaignId: string, userId: string): Promise<boolean> {
   const membership = await prisma.campaignMembership.findUnique({
-    where: {
-      userId_campaignId: {
-        userId,
-        campaignId,
-      },
-    },
+    where: { userId_campaignId: { userId, campaignId } },
+    select: { role: true },
   });
+  return membership?.role === 'PLAYER';
+}
 
-  if (!membership) {
-    return false;
-  }
+/**
+ * May this member move tokens right now. The DM always: setting the scene
+ * between sessions is theirs. A player not while the session is paused or
+ * has ended, which is what the client greys the drag out for and the guides
+ * promise; until the server asked too, a scripted client moved its token
+ * straight through a pause. The same statuses the client checks, so the two
+ * cannot disagree. Asked by the three move events and the REST token update.
+ */
+export function canMoveTokensNow(role: string | undefined, campaignStatus: string): boolean {
+  if (role === 'DM') return true;
+  return campaignStatus !== 'PAUSED' && campaignStatus !== 'INACTIVE';
+}
 
-  // DM can move any token
-  if (isDM(membership.role)) {
-    return true;
-  }
+/** What both channels answer a player who moves during a pause. */
+export const PAUSED_MOVE_REFUSAL = 'Players cannot move tokens while the session is paused or ended';
 
-  // Player can move their assigned character tokens
-  if (isPlayer(membership.role)) {
-    return membership.characterIds.includes(characterId);
-  }
-
-  // Spectators cannot move tokens
-  return false;
+/**
+ * May this member read this map: the DM any map of the campaign; anyone else
+ * only the map the campaign is showing. A prepared map is the DM's until they
+ * switch to it, with its artwork, walls, lights and whatever tokens were left
+ * visible on it. One rule for the map routes, the walls, lights, fog and
+ * exploration requests, the campaign fetch's map list, and the asset reads a
+ * map's use grants.
+ */
+export function canReadMap(
+  role: string | undefined,
+  mapId: string,
+  currentMapId: string | null | undefined
+): boolean {
+  if (role === 'DM') return true;
+  return !!currentMapId && mapId === currentMapId;
 }
 
 /**
@@ -264,19 +292,23 @@ export async function canTransferDM(
 }
 
 /**
- * Check if user can send chat messages
- * DM and Players can chat, Spectators cannot
+ * Who may roll dice: the DM and players. A spectator watches, and may talk in
+ * chat, but a roll of theirs would land in the table's log and history. Takes
+ * the socket's role as stored, a plain string, like canControlToken.
  */
-export function canSendChatMessages(campaignRole: CampaignRole): boolean {
-  return isDM(campaignRole) || isPlayer(campaignRole);
+export function canRollDice(campaignRole: string | undefined): boolean {
+  return campaignRole === 'DM' || campaignRole === 'PLAYER';
 }
 
 /**
- * Check if user can roll dice
- * DM and Players can roll, Spectators cannot
+ * Who may open or close a door: the DM and players. A spectator watches the
+ * map and does not touch it. The DM may also move, redraw or lock a door, and
+ * change any other wall; a player may change nothing about a door but whether
+ * it is open, which the wall handler enforces on top of this. Takes the
+ * socket's role as stored, a plain string, like canRollDice.
  */
-export function canRollDice(campaignRole: CampaignRole): boolean {
-  return isDM(campaignRole) || isPlayer(campaignRole);
+export function canToggleDoor(campaignRole: string | undefined): boolean {
+  return campaignRole === 'DM' || campaignRole === 'PLAYER';
 }
 
 /**
@@ -314,6 +346,15 @@ export async function canExportCampaign(
 }
 
 /**
+ * The answer also carries the campaign the asset may be filed under, because
+ * `campaignId` is what decides which campaign lists an asset and a caller's own
+ * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
+ */
+export type ScopeDecision =
+  | { allowed: true; campaignId: string | null }
+  | { allowed: false; status: 400 | 403; message: string };
+
+/**
  * Whether a user may place a new asset at a scope.
  *
  * The single rule for anything that creates an asset row, whether by uploading
@@ -328,15 +369,6 @@ export async function canExportCampaign(
  * Returns the refusal's status and message so a caller can answer exactly as
  * the upload route always has.
  */
-/**
- * The answer also carries the campaign the asset may be filed under, because
- * `campaignId` is what decides which campaign lists an asset and a caller's own
- * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
- */
-export type ScopeDecision =
-  | { allowed: true; campaignId: string | null }
-  | { allowed: false; status: 400 | 403; message: string };
-
 export async function canPlaceAssetAtScope(
   userId: string,
   type: AssetType,
@@ -372,7 +404,9 @@ export async function canPlaceAssetAtScope(
   if (!membership) {
     return { allowed: false, status: 403, message: 'You do not have access to this campaign' };
   }
-  if (membership.role !== 'DM' && type !== 'TOKEN') {
+  // A player may add token art, since they upload their own character's; a
+  // spectator adds nothing to a campaign's library.
+  if (membership.role !== 'DM' && !(type === 'TOKEN' && membership.role === 'PLAYER')) {
     return {
       allowed: false,
       status: 403,
@@ -380,6 +414,59 @@ export async function canPlaceAssetAtScope(
     };
   }
   return { allowed: true, campaignId };
+}
+
+/**
+ * The spirit-layer images a user may not see in the given campaigns: the
+ * spirit plane of a map is shown to a player only once they have crossed
+ * over (or the DM has opened it to everyone), and the asset library must not
+ * hand them the picture the map itself withholds. The DM's campaigns hide
+ * nothing. Returns asset ids, for a listing to leave out.
+ */
+export async function spiritLayerAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
+  if (campaignIds.length === 0) return [];
+  const memberships = await prisma.campaignMembership.findMany({
+    where: { userId, campaignId: { in: campaignIds } },
+    select: { campaignId: true, role: true },
+  });
+  const hidden: string[] = [];
+  for (const m of memberships) {
+    if (m.role === 'DM') continue;
+    if (await getSpiritVisibility(m.campaignId, userId)) continue;
+    const maps = await prisma.map.findMany({
+      where: { campaignId: m.campaignId, spiritLayerUrl: { not: null } },
+      select: { spiritLayerUrl: true },
+    });
+    for (const map of maps) {
+      const id = extractAssetId(map.spiritLayerUrl);
+      if (id) hidden.push(id);
+    }
+  }
+  return hidden;
+}
+
+/** Whether `assetId` is a spirit-layer image of a map in `campaignId` that `userId` may not see there. */
+async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId: string): Promise<boolean> {
+  const asSpiritLayer = await prisma.map.findFirst({
+    where: { campaignId, spiritLayerUrl: { contains: assetId } },
+    select: { id: true },
+  });
+  if (!asSpiritLayer) return false;
+  // Shown openly on the map the campaign is showing: nothing to keep. A
+  // prepared map does not count, since a player is not sent it at all.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  const asBaseLayer = campaign?.currentMapId
+    ? await prisma.map.findFirst({
+        where: {
+          id: campaign.currentMapId,
+          campaignId,
+          OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }],
+        },
+        select: { id: true },
+      })
+    : null;
+  if (asBaseLayer) return false;
+  return !(await getSpiritVisibility(campaignId, userId));
 }
 
 /**
@@ -402,9 +489,10 @@ export async function canPlaceAssetAtScope(
  * and is unchanged — being able to see the battlemap must not mean being able
  * to delete it.
  *
- * The asset id is matched as a substring of the stored URL, which is the shape
- * everything writes (`/api/assets/maps/<id>`). Ids are UUIDs, so a partial
- * collision is not a practical concern.
+ * A stored address counts only when it names this asset: it is read with
+ * extractAssetId, the reader the write routes check an address with before
+ * storing it, and the id it gives must equal `assetId`. Where a query below
+ * matches the id as a substring, that only narrows the rows it reads.
  */
 export async function assetUsedInUserCampaign(
   assetId: string,
@@ -426,47 +514,77 @@ export async function assetUsedInUserCampaign(
   if (!uploaderId) return false;
 
   const [viewerIn, uploaderIn] = await Promise.all([
-    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }),
+    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } }),
     prisma.campaignMembership.findMany({ where: { userId: uploaderId }, select: { campaignId: true } }),
   ]);
 
   const uploaderCampaigns = new Set(uploaderIn.map((m) => m.campaignId));
-  const campaignIds = viewerIn
-    .map((m) => m.campaignId)
-    .filter((id) => uploaderCampaigns.has(id));
+  const shared = viewerIn.filter((m) => uploaderCampaigns.has(m.campaignId));
+  const campaignIds = shared.map((m) => m.campaignId);
 
   if (campaignIds.length === 0) return false;
 
-  // A map's own layers first: that is the common case, and it answers without
-  // reading any JSON.
-  const mapLayer = await prisma.map.findFirst({
-    where: {
-      campaignId: { in: campaignIds },
-      OR: [
-        { imageUrl: { contains: assetId } },
-        { baseLayerUrl: { contains: assetId } },
-        { spiritLayerUrl: { contains: assetId } },
-      ],
-    },
-    select: { id: true },
-  });
-  if (mapLayer) return true;
+  // A map's use counts for a player only while the campaign is showing that
+  // map (canReadMap): a prepared map is the DM's until they switch to it,
+  // artwork and token art included. The DM's campaigns count every map.
+  const dmCampaignIds = shared.filter((m) => m.role === 'DM').map((m) => m.campaignId);
+  const memberCampaignIds = shared.filter((m) => m.role !== 'DM').map((m) => m.campaignId);
+  const currentMapIds = memberCampaignIds.length === 0
+    ? []
+    : (await prisma.campaign.findMany({ where: { id: { in: memberCampaignIds } }, select: { currentMapId: true } }))
+        .map((c) => c.currentMapId)
+        .filter((id): id is string => id !== null);
+  const readableMaps: Prisma.MapWhereInput = {
+    OR: [{ campaignId: { in: dmCampaignIds } }, { id: { in: currentMapIds } }],
+  };
 
-  const [character, creature, tokenTemplate] = await Promise.all([
-    prisma.character.findFirst({
+  // A map's own layers first: that is the common case, and it answers without
+  // reading any JSON. The spirit layer counts only where the viewer may see
+  // that plane; the map keeps it from everyone else, and so does this.
+  // Every address below is matched on the asset it names, read by the same
+  // extractAssetId the write routes check before storing one. The database
+  // search only narrows the rows: an address that merely contains the id
+  // (the id with a character after it, inside a longer segment, under
+  // another directory, after a different asset) names no asset, or another,
+  // to the write check, so it must grant nothing here either.
+  const names = (address: string | null | undefined): boolean => extractAssetId(address) === assetId;
+
+  const mapLayers = await prisma.map.findMany({
+    where: {
+      AND: [readableMaps, { OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }] }],
+    },
+    select: { imageUrl: true, baseLayerUrl: true },
+  });
+  if (mapLayers.some((m) => names(m.imageUrl) || names(m.baseLayerUrl))) return true;
+  const spiritLayers = await prisma.map.findMany({
+    where: { AND: [readableMaps, { spiritLayerUrl: { contains: assetId } }] },
+    select: { campaignId: true, spiritLayerUrl: true },
+  });
+  for (const map of new Set(spiritLayers.filter((m) => names(m.spiritLayerUrl)).map((m) => m.campaignId))) {
+    if (await getSpiritVisibility(map, userId)) return true;
+  }
+
+  const [characters, creatures, tokenTemplates] = await Promise.all([
+    prisma.character.findMany({
       where: { campaignId: { in: campaignIds }, tokenImageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { tokenImageUrl: true },
     }),
-    prisma.creatureTemplate.findFirst({
+    prisma.creatureTemplate.findMany({
       where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { imageUrl: true },
     }),
-    prisma.tokenTemplate.findFirst({
+    prisma.tokenTemplate.findMany({
       where: { campaignId: { in: campaignIds }, imageUrl: { contains: assetId } },
-      select: { id: true },
+      select: { imageUrl: true },
     }),
   ]);
-  if (character || creature || tokenTemplate) return true;
+  if (
+    characters.some((c) => names(c.tokenImageUrl)) ||
+    creatures.some((c) => names(c.imageUrl)) ||
+    tokenTemplates.some((t) => names(t.imageUrl))
+  ) {
+    return true;
+  }
 
   // The track a campaign is playing. The DM sets it and every player's browser
   // fetches it, so it is used by the whole table for as long as it is set.
@@ -483,18 +601,18 @@ export async function assetUsedInUserCampaign(
   // Tokens live as JSON on the map, so they cannot be matched by column. Only
   // the art URL is read, and only once everything cheaper has missed.
   const maps = await prisma.map.findMany({
-    where: { campaignId: { in: campaignIds } },
+    where: readableMaps,
     select: { tokens: true },
   });
   return maps.some((map) =>
-    readTokens(map.tokens).some((token) => token?.imageUrl?.includes(assetId))
+    readTokens(map.tokens).some((token) => names(token?.imageUrl))
   );
 }
 
 /** The asset fields the read decision depends on. */
 export interface AssetAccessFacts {
   id: string;
-  scope: string;
+  scope: AssetScope;
   uploadedById: string | null;
   campaignId: string | null;
 }
@@ -525,7 +643,8 @@ export async function canReadAsset(
     const membership = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
     });
-    if (membership) return true;
+    if (membership?.role === 'DM') return true;
+    if (membership) return !(await spiritLayerHidesAsset(asset.id, asset.campaignId, userId));
     // Scoped to one campaign, but a map in another may point at it.
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
@@ -572,4 +691,69 @@ export async function canReadAssetById(
   });
   if (!asset) return false;
   return canReadAsset(asset, userId, isAdmin);
+}
+
+/**
+ * May this user store this address as a reference to an asset: a map's
+ * image or spirit layer, a token's art, a template's or a character's
+ * picture. The read rule counts any stored reference as the campaign using
+ * the asset, so storing one without this check is what let a member read an
+ * asset of someone else's by naming it.
+ *
+ * Pass the address exactly as it will be stored, since normalising can turn
+ * an address that names no asset into one that does. An address that names
+ * no asset, or none, is fine, and so is one naming an asset that does not
+ * exist: it grants nothing, and a picture deleted since a template or a token
+ * was made would otherwise refuse every copy of it. So is the address already
+ * stored on the record being updated (`stored`): refusing it would refuse
+ * every unrelated edit of a record whose picture has since become unreadable,
+ * and keeping it grants nothing it did not already.
+ */
+export async function canReferenceAsset(
+  address: string | null | undefined,
+  userId: string,
+  stored?: string | null,
+  campaignId?: string
+): Promise<boolean> {
+  if (!address) return true;
+  if (stored !== undefined && address === stored) return true;
+  // One reading of an address for every reader: an address on this server
+  // that is not an asset's exact address was accepted here as naming no
+  // asset, and the exports, reading it their own way, found one in it.
+  if (isSameOriginPath(address) && !isExactAssetAddress(address)) return false;
+  const assetId = extractAssetId(address);
+  if (!assetId) return true;
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+  });
+  if (!asset) return true;
+  // Never as an administrator: an admin may read any file, but a stored
+  // reference opens the asset to everyone at the table, as setting a scene's
+  // music does (handlers/atmosphere.ts).
+  if (await canReadAsset(asset, userId, false)) return true;
+  // A copy of something already in this campaign (Duplicate, Save as
+  // Template, placing from a template) names a picture stored here already.
+  // The read grant turns on a reference existing in the campaign, so another
+  // one here grants no one anything, even when the picture can no longer be
+  // read (its uploader has left).
+  return campaignId !== undefined && (await addressUsedInCampaign(address, campaignId));
+}
+
+/** Whether a record of the campaign already stores exactly this picture address. */
+async function addressUsedInCampaign(address: string, campaignId: string): Promise<boolean> {
+  const [templates, creatures, characters] = await Promise.all([
+    prisma.tokenTemplate.count({ where: { campaignId, imageUrl: address } }),
+    prisma.creatureTemplate.count({ where: { campaignId, imageUrl: address } }),
+    prisma.character.count({ where: { campaignId, tokenImageUrl: address } }),
+  ]);
+  if (templates + creatures + characters > 0) return true;
+  const maps = await prisma.map.findMany({
+    where: { campaignId },
+    select: { imageUrl: true, baseLayerUrl: true, spiritLayerUrl: true, tokens: true },
+  });
+  return maps.some((m) =>
+    m.imageUrl === address || m.baseLayerUrl === address || m.spiritLayerUrl === address
+    || readTokens(m.tokens).some((t) => t.imageUrl === address)
+  );
 }

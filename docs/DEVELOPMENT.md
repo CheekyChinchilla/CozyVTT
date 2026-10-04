@@ -190,6 +190,11 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up
 ```
 
+> The dev stack runs the backend as an unprivileged user from the start, with no
+> root step to fix ownership, so create the two bind-mounted folders yourself before
+> the first `up`: `mkdir -p backend/uploads backend/backups`. Docker would otherwise
+> create a missing one as root and the backend could not write to it.
+
 Services (all exposed on localhost for easy debugging):
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:4000`
@@ -364,16 +369,76 @@ Two of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
+- **The backend run manages its own database connections.** Every test file
+  builds its own Prisma clients and jest reuses workers across files, so a
+  full run once crept up to PostgreSQL's default ceiling of a hundred
+  connections and unrelated suites failed with "too many clients already".
+  Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
+  `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
+  it ends; if you see that error again, look there first, not at the code.
+  That disconnect runs before a file's own top-level `afterAll`, so a file
+  that cleans up the database there ends it with `prisma.$disconnect()`.
+- **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
+  fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
+  `docker-compose.yml` being set to the value it prints (the file's hash, which
+  is what makes an upgrade recreate the web server), and when the PostgreSQL
+  client the backend image installs is older than the server image the compose
+  files and CI pin, when any line in either Dockerfile that installs it names the
+  unpinned `postgresql-client`, or when the stage that runs (the last one) does
+  not install it. It also fails when `backend/scripts/restore.sh`
+  stops ending its load with the statements the dashboard restore ends it with,
+  when the combat state's fields differ between the two packages, and when the
+  special characters a password needs differ between the browser and the
+  server.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
-  mounts and fails when they disagree in either direction;
-  `websocket-events.py --check` does the same for the WebSocket event table.
-  Regenerate that table with `python scripts/websocket-events.py --write`.
+  mounts and fails when they disagree in either direction, and loads the file
+  as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
+  the route check does not care whether the file loads and three unquoted
+  colons once made it unloadable;
+  `websocket-events.py --check` regenerates the WebSocket event table from
+  the handlers and fails on any difference from the one in the doc, a
+  changed permission column included. Regenerate that table with
+  `python scripts/websocket-events.py --write`.
 
 `.github/workflows/ci.yml` runs the same commands on every push and pull
 request. Note that it **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
+
+### Before a release: rehearse the upgrade
+
+The suites run against an empty test database. None of them upgrades an
+instance that already holds data, and none loads a backup into a real
+PostgreSQL with `psql`: they check the file `psql` is handed and the
+arguments it runs with, because the suites run where the client tools need
+not be installed. Self-hosters upgrade with `git pull` and
+`docker compose up -d --build` and nothing else, so before a release is
+tagged, rehearse exactly that:
+
+1. In a second checkout (`git worktree add ../cozy-rehearsal <previous-tag>`),
+   copy `.env.example` to `.env`, give it ports of its own (`HTTP_PORT`,
+   `HTTPS_PORT`) and its own secrets, and start the production stack with
+   `docker compose up -d --build`. Its containers are named `cozyvtt-*`, like
+   a real instance's, so do this on a machine that is not running one.
+2. Seed it through the app: an admin, a player with two-factor sign-in on,
+   a campaign with a lit map (walls, a light, a hidden token with notes, some
+   revealed fog) and a character; then make a backup from the Admin Dashboard
+   and one with `./backend/scripts/backup.sh`.
+3. Record a fingerprint of the data with `psql` in the database container:
+   an `md5` of each map's tokens, walls, lights and fog, of each character's
+   data, and each user's two-factor state, with the row counts.
+4. Check out the release commit in the same folder and run
+   `docker compose up -d --build`, as a self-hoster would.
+5. Check that the migrations applied (`docker compose logs backend`), the
+   fingerprints are unchanged, `/health` answers through the bundled nginx,
+   the old passwords still sign in, the player is sent nothing the DM hid,
+   the previous release's dashboard backup restores on the new code, a new
+   backup downloads and restores, and `backup.sh` then `restore.sh` work.
+6. Open the campaign in a browser as the DM and as the player.
+
+Take the rehearsal down afterwards with `docker compose down -v` in that
+checkout, which deletes its database, and `git worktree remove`.
 
 ---
 
@@ -390,10 +455,12 @@ turning on one day, but it is its own burn-down and mixing it into other work
 would make it impossible to say what caused a regression.
 
 **No `any`.** `@typescript-eslint/no-explicit-any` is an **error** in both
-packages, not a warning. There is a small `overrides` allowlist covering some
-test files; it is meant to shrink and never to grow. When a type resists, reach
-for `unknown` plus a narrowing helper — `frontend/src/utils/errors.ts` and
-`backend/src/utils/prisma-json.ts` exist for the two common cases.
+packages, not a warning, and it applies to every file, tests included. There is
+no allowlist; do not add one. When a type resists, reach for `unknown` plus a
+narrowing helper — `frontend/src/utils/errors.ts` and
+`backend/src/utils/prisma-json.ts` exist for the two common cases. A test double
+that is partial on purpose, such as a mock Express request, is built as a plain
+object and cast once through `unknown` to the type it stands in for.
 
 ### Linting
 

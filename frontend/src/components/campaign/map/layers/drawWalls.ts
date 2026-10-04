@@ -5,9 +5,7 @@
 // ============================================
 
 import type { WallSegment } from '@/types/walls';
-import { isPointVisible } from '@/utils/raycasting';
 import type { Viewport } from './types';
-import type { VisionSource } from '../vision';
 
 export interface WallsDrawState {
   wallSegments: readonly WallSegment[];
@@ -24,8 +22,11 @@ export interface WallsDrawState {
   selectedEndpoint: { x: number; y: number } | null;
   /** Dynamic lighting on → player doors filtered by line of sight. */
   lightingEnabled: boolean;
-  /** Viewer vision polygons (empty when not applicable). */
-  visPolygons: readonly VisionSource[];
+  /**
+   * Whether the viewer can make out a point on the map, by the shared
+   * visibility rule. Decides which doors a player is shown under lighting.
+   */
+  canSee: (x: number, y: number) => boolean;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -155,23 +156,8 @@ export function drawWalls(
     // When dynamic lighting is off, all doors are always visible.
     for (const seg of state.wallSegments) {
       if (seg.type === 'door-closed' || seg.type === 'door-open' || seg.type === 'door-locked') {
-        if (state.lightingEnabled && state.visPolygons.length > 0) {
-          const midX = (seg.x1 + seg.x2) / 2;
-          const midY = (seg.y1 + seg.y2) / 2;
-          // Closed doors lie exactly ON the visibility polygon boundary — a raw
-          // midpoint test is unreliable. Nudge 2px toward the viewer so the test
-          // point is safely inside the visible area.
-          const inSight = state.visPolygons.some(({ poly, cx, cy }) => {
-            const dx = cx - midX;
-            const dy = cy - midY;
-            const dist = Math.hypot(dx, dy) || 1;
-            return isPointVisible(
-              { x: midX + (dx / dist) * 2, y: midY + (dy / dist) * 2 },
-              { x: 0, y: 0 },
-              poly
-            );
-          });
-          if (!inSight) continue;
+        if (state.lightingEnabled && !state.canSee((seg.x1 + seg.x2) / 2, (seg.y1 + seg.y2) / 2)) {
+          continue;
         }
         drawWallSegment(ctx, seg, zoom, state.wallColor, seg.id === state.hoveredDoorId);
       }

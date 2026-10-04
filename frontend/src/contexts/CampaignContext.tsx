@@ -10,6 +10,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   ReactNode,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -17,10 +18,11 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { withMemberRole } from '@/utils/campaignRoles';
 
 // ============================================
 // Types
@@ -53,7 +55,20 @@ interface CampaignContextState {
    * (e.g. token positions moved by other players during the drop).
    */
   refreshCurrentMap: () => Promise<void>;
+  /**
+   * After a reconnect: re-read what arrives only as events (the session's
+   * state, members' roles, the map the table is on) and reload that map.
+   */
+  catchUpAfterReconnect: () => Promise<void>;
   setCurrentMap: (map: Map | null) => void;
+  /**
+   * Keep `campaign.maps` in step with the Map Library: insert a created or
+   * imported map, or replace a renamed one by id. The Move to Map… submenu
+   * reads that list, so a map missing from it cannot be a move target.
+   */
+  upsertCampaignMap: (map: Map) => void;
+  /** Drop a deleted map from `campaign.maps`. */
+  removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
   /** DM-only local preference: show both planes simultaneously or only the active one */
@@ -127,7 +142,15 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   const { user } = useAuth();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [currentMap, setCurrentMap] = useState<Map | null>(null);
+  // The campaign the page shows now, for work that finishes after an await.
+  // None once the page closes: the next campaign's page reads the same token
+  // store, and a late answer for this one would write over it.
+  const shownCampaignId = useRef<string | null>(null);
+  useEffect(() => {
+    shownCampaignId.current = campaign?.id ?? null;
+    return () => { shownCampaignId.current = null; };
+  }, [campaign?.id]);
+  const [currentMap, setCurrentMapState] = useState<Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -197,14 +220,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (data.currentMapId) {
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
-          setCurrentMap(map);
+          setCurrentMapState(map);
           useGameStore.getState().setTokens(map.tokens || []);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
-            setCurrentMap(mapMeta);
+            setCurrentMapState(mapMeta);
             useGameStore.getState().setTokens([]);
           }
         }
@@ -242,12 +265,48 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     if (!campaign?.id || !currentMap?.id) return;
     try {
       const { map, spiritVisible } = await api.getMap(campaign.id, currentMap.id);
-      setCurrentMap(map);
+      setCurrentMapState(map);
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh current map after reconnect:', err);
       // Non-fatal — user will receive future real-time updates normally
+    }
+  }, [campaign?.id, currentMap?.id]);
+
+  // Events sent while this page was offline are not replayed: a pause or an
+  // end, a member's role, a switch to another map. Re-read them without the
+  // full reload's loading screen, then load the map the table is on now,
+  // which may not be the one this page had (a player may no longer read it).
+  const catchUpAfterReconnect = useCallback(async () => {
+    const campaignId = campaign?.id;
+    if (!campaignId) return;
+    // Each answer is applied only while the page still shows this campaign:
+    // one arriving after a switch to another would write over it.
+    const stillShown = () => shownCampaignId.current === campaignId;
+    let mapId = currentMap?.id ?? null;
+    try {
+      const fresh = await campaignService.getCampaign(campaignId);
+      if (!stillShown()) return;
+      setCampaign((prev) =>
+        prev && prev.id === fresh.id
+          ? { ...prev, status: fresh.status, memberships: fresh.memberships, currentMapId: fresh.currentMapId }
+          : prev
+      );
+      setActiveSession(fresh.activeSession ?? null);
+      mapId = fresh.currentMapId ?? null;
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', err);
+    }
+    if (!mapId) return;
+    try {
+      const { map, spiritVisible } = await api.getMap(campaignId, mapId);
+      if (!stillShown()) return;
+      setCurrentMapState(map);
+      useGameStore.getState().setTokens(map.tokens || []);
+      setPlayerSpiritVisible(spiritVisible ?? false);
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', err);
     }
   }, [campaign?.id, currentMap?.id]);
 
@@ -265,6 +324,38 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // Update campaign.status in local state (called by session WebSocket listeners)
   const updateCampaignStatus = useCallback((status: CampaignStatus) => {
     setCampaign((prev) => (prev ? { ...prev, status } : null));
+  }, []);
+
+  // The campaign's current map and campaign.currentMapId are one fact: every
+  // switch goes through here, so the id follows the map. The Map Library
+  // re-reads campaign.currentMapId each time it opens for its Active badge,
+  // which pointed at the map the page loaded with until this kept it current.
+  const setCurrentMap = useCallback((map: Map | null) => {
+    setCurrentMapState(map);
+    if (map) {
+      setCampaign((prev) =>
+        prev && prev.currentMapId !== map.id ? { ...prev, currentMapId: map.id } : prev,
+      );
+    }
+  }, []);
+
+  // Keep campaign.maps in step with the Map Library (create, rename, import).
+  const upsertCampaignMap = useCallback((map: Map) => {
+    setCampaign((prev) => {
+      if (!prev) return prev;
+      const maps = prev.maps ?? [];
+      return maps.some((m) => m.id === map.id)
+        ? { ...prev, maps: maps.map((m) => (m.id === map.id ? map : m)) }
+        : { ...prev, maps: [map, ...maps] };
+    });
+  }, []);
+
+  // Drop a deleted map from campaign.maps.
+  const removeCampaignMap = useCallback((mapId: string) => {
+    setCampaign((prev) => {
+      if (!prev?.maps) return prev;
+      return { ...prev, maps: prev.maps.filter((m) => m.id !== mapId) };
+    });
   }, []);
 
   // Update atmosphere effect (called by AtmospherePlayer on WS broadcast)
@@ -336,6 +427,45 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, []);
 
+  /**
+   * A member's role changed, possibly this user's own. The server has
+   * already applied it to what it accepts, so the page follows: `userRole`
+   * is read from the membership list. The `authenticated` reply also carries
+   * this user's role, which catches a change made while this page was
+   * offline and never heard.
+   */
+  useEffect(() => {
+    const handleRoleChanged = (data: MemberRoleChangedBroadcast) => {
+      setCampaign((prev) => (prev && prev.id === data.campaignId ? withMemberRole(prev, data.userId, data.role) : prev));
+    };
+    const handleAuthenticated = (data: { campaignId?: string; userId?: string; role?: CampaignRole }) => {
+      if (!data?.campaignId || !data.userId || !data.role) return;
+      const { campaignId, userId, role } = data;
+      setCampaign((prev) => (prev && prev.id === campaignId ? withMemberRole(prev, userId, role) : prev));
+    };
+    // Someone joined, left, or brought a character: the roster refetches, and
+    // so does the member list everything else on the page reads (Duplicate
+    // keeps a token's controller only while they are a player here).
+    const handleRosterUpdated = (data: { campaignId?: string }) => {
+      const campaignId = data?.campaignId;
+      if (!campaignId) return;
+      campaignService
+        .getCampaign(campaignId)
+        .then((fresh) => {
+          setCampaign((prev) => (prev && prev.id === fresh.id ? { ...prev, memberships: fresh.memberships } : prev));
+        })
+        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', err));
+    };
+    socketClient.onMemberRoleChanged(handleRoleChanged);
+    socketClient.on('authenticated', handleAuthenticated);
+    socketClient.on('roster.updated', handleRosterUpdated);
+    return () => {
+      socketClient.off('campaign.role.changed', handleRoleChanged);
+      socketClient.off('authenticated', handleAuthenticated);
+      socketClient.off('roster.updated', handleRosterUpdated);
+    };
+  }, []);
+
   // Update spirit layer enabled/style in local campaign state
   const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
     setCampaign((prev) =>
@@ -375,7 +505,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    catchUpAfterReconnect,
     setCurrentMap,
+    upsertCampaignMap,
+    removeCampaignMap,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     setDmViewBothPlanes,
@@ -403,6 +536,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    catchUpAfterReconnect,
+    upsertCampaignMap,
+    removeCampaignMap,
     updateCampaignSpiritLayer,
     dmViewBothPlanes,
     playerSpiritVisible,

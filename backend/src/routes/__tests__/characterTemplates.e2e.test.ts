@@ -208,6 +208,30 @@ describe('Character template routes', () => {
       expect(res.body.tokenImageUrl).toBeNull();
     });
 
+    // Every viewer's browser requests the stored address, so anything more
+    // than an asset's own address (dot segments, a query) could point it at
+    // another page of the app, requested with the viewer's own session.
+    it.each([
+      ['dot segments', (id: string) => `/api/assets/tokens/${id}/../../../campaigns/x/export`],
+      ['a query', (id: string) => `/api/assets/tokens/${id}?v=2`],
+      ['another host', (id: string) => `https://elsewhere.example/api/assets/tokens/${id}`],
+    ])('rejects an address with %s, on create and on update', async (_label, address) => {
+      const created = await createTemplate(authorAgent, { tokenImageUrl: address(globalAssetId) });
+      expect(created.status).toBe(400);
+      const plain = await createTemplate(authorAgent, {});
+      expect(plain.status).toBe(201);
+      const updated = await authorAgent
+        .put(`/api/character-templates/${plain.body.id}`)
+        .send({ tokenImageUrl: address(globalAssetId) });
+      expect(updated.status).toBe(400);
+    });
+
+    it('accepts a bare asset id, stored as the asset\'s address', async () => {
+      const res = await createTemplate(authorAgent, { tokenImageUrl: globalAssetId });
+      expect(res.status).toBe(201);
+      expect(res.body.tokenImageUrl).toBe(`/api/assets/tokens/${globalAssetId}`);
+    });
+
     it('applies the same rule on update', async () => {
       const created = await createTemplate(authorAgent);
       const res = await authorAgent

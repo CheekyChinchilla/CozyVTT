@@ -41,6 +41,12 @@ interface CharacterRollPickerProps {
    */
   onRoll: (expression: string, purpose: string, characterName?: string) => void;
   /**
+   * The name to file rolls under in place of the character's. The dice log
+   * goes to the whole table, so a picker opened from an obscured token passes
+   * the name everyone may see; opened for the character, leave it out.
+   */
+  publicName?: string;
+  /**
    * Called when the chosen roll spends a hit die, with the position of the
    * pool. The roll itself still goes through `onRoll`; this is the decrement.
    */
@@ -123,6 +129,7 @@ export default function CharacterRollPicker({
   character: initialCharacter,
   characterId,
   onRoll,
+  publicName,
   onSpendHitDie,
   onRollInitiative,
   onClose,
@@ -195,7 +202,7 @@ export default function CharacterRollPicker({
       purpose = `${purpose} (${modeLabel})`;
     }
 
-    onRoll(expr, purpose, character?.name);
+    onRoll(expr, purpose, publicName ?? character?.name);
     // Spending is recorded after the roll, so a failure to decrement cannot
     // swallow the roll the player just made.
     if (opt.hitDiceIndex !== undefined) onSpendHitDie?.(opt.hitDiceIndex);
@@ -348,7 +355,7 @@ export default function CharacterRollPicker({
           their name, and there is nothing to file it under until then. */}
       {!loading && !error && character && (
         <CustomRollFooter
-          onRoll={(expression, purpose) => { onRoll(expression, purpose, character.name); onClose(); }}
+          onRoll={(expression, purpose) => { onRoll(expression, purpose, publicName ?? character.name); onClose(); }}
         />
       )}
     </div>

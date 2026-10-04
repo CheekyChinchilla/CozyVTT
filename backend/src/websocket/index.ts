@@ -6,6 +6,7 @@ import { sessionConfig } from '../config/session';
 import { registerEventHandlers } from './events';
 import { setSocketInstance } from './utils';
 import logger from '../utils/logger';
+import { socketAllowRequest } from '../middleware/originCheck';
 
 /**
  * WebSocket Infrastructure Setup
@@ -34,6 +35,9 @@ export function initializeWebSocket(httpServer: HTTPServer): Server {
     pingTimeout: 60000, // Disconnect if no pong within 60 seconds
     // Connection settings
     transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
+    // A handshake a browser makes from another site is refused, as the API
+    // refuses its requests: the socket acts as whoever is signed in.
+    allowRequest: socketAllowRequest,
   });
 
   // Share Express session with Socket.io

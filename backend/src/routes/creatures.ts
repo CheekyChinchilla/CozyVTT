@@ -12,8 +12,11 @@ import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { seedSrdCreatures, getSrdSeedStatus } from '../services/creatureSeed';
 import { normalizeAssetUrl } from '../utils/asset-urls';
+import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
 import { toJson } from '../utils/prisma-json';
+import { readEnumQuery } from '../utils/queryEnum';
+import { GameSystem } from '../game-systems';
 import logger from '../utils/logger';
 
 const router = Router({ mergeParams: true });
@@ -27,9 +30,9 @@ let seedInProgress = false;
 // Any campaign member can check.
 // ============================================
 
-router.get('/seed/status', campaignMember, async (_req: AuthenticatedRequest, res: Response) => {
+router.get('/seed/status', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const status = await getSrdSeedStatus(prisma);
+    const status = await getSrdSeedStatus(prisma, req.params.campaignId);
     return res.json({
       ...status,
       seedInProgress,
@@ -75,13 +78,18 @@ router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Respons
 // ============================================
 // LIST — GET /
 // Returns SRD + campaign-specific templates, with search/filter support.
-// Any campaign member can list.
+// DM only: a template carries the DM's notes, stat block and hit points.
 // ============================================
 
-router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { search, source, cr, gameSystem, limit = '50', offset = '0' } = req.query;
+    const { search, source, cr, limit = '50', offset = '0' } = req.query;
+    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', Object.values(GameSystem));
+    if (!system.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: system.message });
+    }
+    const gameSystem = system.value;
 
     const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
     const skip = Math.max(0, parseInt(offset as string, 10) || 0);
@@ -97,7 +105,7 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
       // Creatures with no system recorded are usable anywhere, so they are
       // never filtered out — only creatures belonging to a *different* system
       // are excluded.
-      scopes.push({ OR: [{ gameSystem: gameSystem as string }, { gameSystem: null }] });
+      scopes.push({ OR: [{ gameSystem }, { gameSystem: null }] });
     }
 
     const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };
@@ -155,7 +163,7 @@ function isVisibleFromCampaign(
 // GET ONE — GET /:creatureId
 // ============================================
 
-router.get('/:creatureId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
 
@@ -195,6 +203,12 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     }
     const data = parsed.data;
 
+    // A picture the DM may read: a creature's picture counts as the campaign using it.
+    const imageUrl = normalizeAssetUrl(data.imageUrl || null, 'tokens');
+    if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     const template = await prisma.creatureTemplate.create({
       data: {
         id: randomUUID(),
@@ -206,7 +220,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         alignment: data.alignment || null,
         // Stored as the canonical /api/assets/tokens/{uuid}, matching characters
         // and maps. Clients may send either a bare asset id or a full path.
-        imageUrl: normalizeAssetUrl(data.imageUrl || null, 'tokens'),
+        imageUrl,
         statBlock: toJson(data.statBlock),
         size: data.size || { width: 1, height: 1 },
         disposition: data.disposition || 'hostile',
@@ -262,6 +276,12 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(403).json({ error: 'Forbidden', message: 'Cannot edit creatures from another campaign' });
     }
 
+    // A new picture the DM may read; the one already stored may stay.
+    const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+
     const updated = await prisma.creatureTemplate.update({
       where: { id: creatureId },
       data: {
@@ -271,9 +291,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
         ...(data.creatureType !== undefined && { creatureType: data.creatureType }),
         ...(data.alignment !== undefined && { alignment: data.alignment }),
         // Empty string clears the image; anything else normalises to a full path.
-        ...(data.imageUrl !== undefined && {
-          imageUrl: data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null,
-        }),
+        ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
         ...(data.statBlock !== undefined && { statBlock: toJson(data.statBlock) }),
         ...(data.size !== undefined && { size: data.size }),
         ...(data.disposition !== undefined && { disposition: data.disposition }),
@@ -372,7 +390,7 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
 // Returns creature IDs that the current user has favorited in this campaign.
 // ============================================
 
-router.get('/favorites/list', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/favorites/list', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -400,7 +418,7 @@ router.get('/favorites/list', campaignMember, async (req: AuthenticatedRequest, 
 // Toggle favorite for the current user in this campaign.
 // ============================================
 
-router.post('/:creatureId/favorite', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:creatureId/favorite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
     const userId = req.session.userId!;

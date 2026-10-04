@@ -30,6 +30,14 @@ import { useStoreWithEqualityFn } from 'zustand/traditional';
 import type { CombatState, Position, Token } from '@/types';
 
 /** Combat is inactive until the DM starts it; matches the server's default. */
+/** The same record without `key`, or the same record when it has none. */
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
 const EMPTY_COMBAT: CombatState = {
   active: false,
   round: 0,
@@ -38,6 +46,13 @@ const EMPTY_COMBAT: CombatState = {
 };
 
 interface GameState {
+  /**
+   * Where a token someone else is carrying is drawn, by id. A drag frame moves
+   * only this. `tokens[id].position`, which sight, lighting and explored
+   * memory read, moves when the token is put down, so a DM carrying a
+   * player's token about reveals nothing to that player on the way.
+   */
+  heldAt: Record<string, Position>;
   /** Normalized token map — authoritative live positions live here. */
   tokens: Record<string, Token>;
   /** Render/list order (server order preserved from the last full set). */
@@ -64,6 +79,8 @@ interface GameState {
   setTokens: (tokens: Token[]) => void;
   /** `token.moved` stream + local drag commit: position-only update. */
   applyTokenMove: (tokenId: string, position: Position) => void;
+  /** `token.moved` — a drag frame (`dragging`) or where the token was put down. */
+  receiveTokenMove: (tokenId: string, position: Position, dragging: boolean) => void;
   /** New token placed (REST response or DM action). */
   addToken: (token: Token) => void;
   /** `token:appeared` — update position if known, otherwise add. */
@@ -83,6 +100,7 @@ interface GameState {
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
+  heldAt: {},
   tokens: {},
   tokenOrder: [],
   combat: EMPTY_COMBAT,
@@ -93,12 +111,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       tokens: Object.fromEntries(list.map((t) => [t.id, t])),
       tokenOrder: list.map((t) => t.id),
+      heldAt: {},
     }),
 
   applyTokenMove: (tokenId, position) => {
     const token = get().tokens[tokenId];
     if (!token) return;
-    set({ tokens: { ...get().tokens, [tokenId]: { ...token, position } } });
+    set({ tokens: { ...get().tokens, [tokenId]: { ...token, position } }, heldAt: withoutKey(get().heldAt, tokenId) });
+  },
+
+  receiveTokenMove: (tokenId, position, dragging) => {
+    const token = get().tokens[tokenId];
+    if (!token) return;
+    if (!dragging) {
+      get().applyTokenMove(tokenId, position);
+      return;
+    }
+    // A cancelled drag sends one last frame back to where the token stands.
+    const home = token.position.x === position.x && token.position.y === position.y;
+    set({ heldAt: home ? withoutKey(get().heldAt, tokenId) : { ...get().heldAt, [tokenId]: position } });
   },
 
   addToken: (token) =>
@@ -123,7 +154,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!s.tokens[tokenId]) return s;
       const tokens = { ...s.tokens };
       delete tokens[tokenId];
-      return { tokens, tokenOrder: s.tokenOrder.filter((id) => id !== tokenId) };
+      return { tokens, tokenOrder: s.tokenOrder.filter((id) => id !== tokenId), heldAt: withoutKey(s.heldAt, tokenId) };
     }),
 
   patchToken: (tokenId, patch) => {
@@ -149,7 +180,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null }),
+    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null }),
 }));
 
 // ============================================

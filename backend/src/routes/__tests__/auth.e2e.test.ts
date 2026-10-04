@@ -10,7 +10,7 @@
 
 // Mock rate limiter before any imports that load the auth router
 jest.mock('express-rate-limit', () => {
-  return () => (_req: any, _res: any, next: any) => next();
+  return () => (_req: Request, _res: Response, next: NextFunction) => next();
 });
 
 // Mock system settings so the register route behaves predictably
@@ -30,6 +30,7 @@ jest.mock('../../services/systemSettings', () => ({
 }));
 
 import request from 'supertest';
+import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,

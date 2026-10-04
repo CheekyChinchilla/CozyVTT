@@ -8,13 +8,15 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, loadFogState, applyWsFogOperation, revealedCellIndices } from '../shared';
+import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
+import { canReadMap } from '../../services/permissions';
+import { bestEffort } from '../utils';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * fog:operation — DM applies a fog operation (reveal/hide cells).
-   * Throttled to 10 operations/second per socket.
+   * Throttled to 10 operations/second per user, across all their sockets.
    * DM receives full fogState; players receive only revealed cell indices.
    */
   socket.on('fog:operation', async (data: { mapId: string; operation: unknown }) => {
@@ -25,8 +27,8 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
-      // Throttle: max 10 fog ops/second
-      if (!fogOperationLimiter.check(socket.id, 10, 1000)) {
+      // Throttle: max 10 fog ops/second per user
+      if (!fogOperationLimiter.check(limiterKey(socket), 10, 1000)) {
         return; // Silently drop — brush strokes fire fast, flooding is expected
       }
 
@@ -41,10 +43,15 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, fogData: true, width: true, height: true, gridSize: true },
+        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
       });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      // The map's flag is the single source of truth for whether fog applies.
+      if (!map.fogEnabled) {
+        socket.emit('error', { message: 'Fog of war is off for this map' });
         return;
       }
 
@@ -53,22 +60,9 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       await prisma.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
 
-      // Broadcast: DM gets full state; all others get revealed-cell indices + grid metadata
-      const campaignSockets = await io.in(socket.campaignId).fetchSockets();
-      for (const s of campaignSockets) {
-        const authed = s as unknown as AuthenticatedSocket;
-        if (authed.role === 'DM') {
-          s.emit('fog:updated', { mapId, fogState: fog });
-        } else {
-          s.emit('fog:cells', {
-            mapId,
-            revealedCells: revealedCellIndices(fog),
-            fogCols: fog.fogCols,
-            fogRows: fog.fogRows,
-            cellPx: fog.cellPx,
-          });
-        }
-      }
+      // Saved: failing to tell the table is logged, not reported as failed.
+      const campaignId = socket.campaignId;
+      await bestEffort('fog:cells', () => broadcastFogState(io, campaignId, mapId, fog));
     } catch (error) {
       logger.error('fog:operation failed', { err: error });
       socket.emit('error', { message: 'Failed to apply fog operation' });
@@ -82,14 +76,20 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
   socket.on('fog:request_state', async (data: { mapId: string }) => {
     try {
       if (!socket.campaignId) return;
+      if (!stateRequestAllowed(socket, 'fog:request_state')) return;
       const { mapId } = data;
       if (!mapId) return;
 
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, fogData: true, width: true, height: true, gridSize: true },
+        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
+      // A prepared map is the DM's alone; a player is answered only about
+      // the map the campaign is showing.
+      if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
+      // Fog off: nothing to send. A client that receives no reply draws no fog.
+      if (!map.fogEnabled) return;
 
       const fog: FogState = loadFogState(map, map.fogData as FogState | null);
 

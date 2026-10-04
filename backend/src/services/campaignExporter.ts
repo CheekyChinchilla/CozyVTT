@@ -13,12 +13,20 @@ import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { readTokens } from '../utils/prisma-json';
+import { extractAssetId } from '../utils/asset-urls';
+import { canReadAsset } from './permissions';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
 export interface ExportOptions {
   includeAudio?: boolean;
   includeTokens?: boolean;
+}
+
+/** Who is exporting: only assets they may read go into the archive. */
+export interface ExportViewer {
+  userId: string;
+  isAdmin: boolean;
 }
 
 export interface ExportResult {
@@ -28,21 +36,16 @@ export interface ExportResult {
 
 // ── Asset reference extractor ───────────────────────────────────────────────
 
-/** Extract a UUID from an asset URL like "/api/assets/maps/uuid" or just "uuid". */
-function extractAssetId(url: string | null | undefined): string | null {
-  if (!url) return null;
-  // Strip /api/assets/{type}/ prefix if present
-  const match = url.match(/\/api\/assets\/\w+\/([0-9a-f-]+)$/i);
-  if (match) return match[1];
-  // Check if it's already a UUID
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url)) return url;
-  return null;
-}
-
-/** Resolve an asset ID to its file path on disk. Returns null if not found. */
-async function resolveAssetFile(assetId: string): Promise<{ filePath: string; mimeType: string; originalName: string; type: string; fileSize: number } | null> {
+/**
+ * Resolve an asset ID to its file path on disk, if the exporting user may read
+ * the asset. Returns null if not. An archive is a way of reading every file
+ * in it, so what goes in follows the same read rule as the asset routes: a
+ * campaign could otherwise name another user's private file and export it.
+ */
+async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<{ filePath: string; mimeType: string; originalName: string; type: string; fileSize: number } | null> {
   const asset = await prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) return null;
+  if (!(await canReadAsset(asset, viewer.userId, viewer.isAdmin))) return null;
 
   // asset.filePath is stored as a relative path from the project root (e.g. "uploads/maps/...")
   const fullPath = path.resolve(asset.filePath.replace(/\\/g, '/'));
@@ -64,6 +67,7 @@ async function resolveAssetFile(assetId: string): Promise<{ filePath: string; mi
 
 export async function exportCampaign(
   campaignId: string,
+  viewer: ExportViewer,
   options: ExportOptions = {}
 ): Promise<ExportResult> {
   const { includeAudio = false, includeTokens = true } = options;
@@ -89,7 +93,7 @@ export async function exportCampaign(
     const id = extractAssetId(url);
     if (!id) return null;
     if (!assetMap.has(id)) {
-      const resolved = await resolveAssetFile(id);
+      const resolved = await resolveAssetFile(id, viewer);
       if (resolved) {
         // Skip audio files unless explicitly included
         if (resolved.type === 'AUDIO' && !includeAudio) return null;
@@ -136,6 +140,9 @@ export async function exportCampaign(
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
+      fogEnabled: map.fogEnabled,
+      globalIllumination: map.globalIllumination,
+      explorationEnabled: map.explorationEnabled,
       lights: map.lights || [],
     });
   }
@@ -198,7 +205,7 @@ export async function exportCampaign(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.4.0'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,

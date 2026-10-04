@@ -13,6 +13,7 @@
  */
 
 import { z } from 'zod';
+import { TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { GameSystem } from '@prisma/client';
 import { NpcStatBlockSchema } from './statBlock';
 
@@ -21,8 +22,8 @@ const SizeSchema = z.object({
   height: z.number().int().min(1).max(10),
 });
 
-const DispositionSchema = z.enum(['friendly', 'neutral', 'hostile']);
-const DisplayModeSchema = z.enum(['pog', 'top-down', 'full-art']);
+const DispositionSchema = z.enum(TOKEN_DISPOSITIONS);
+const DisplayModeSchema = z.enum(TOKEN_DISPLAY_MODES);
 
 /**
  * Fields shared by create and update. Kept separate so update can make every

@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io';
-import type { SessionData } from 'express-session';
+import type { SessionData, Store } from 'express-session';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 
@@ -15,6 +15,43 @@ export interface AuthenticatedSocket extends Socket {
   userId?: string;
   campaignId?: string;
   role?: string;
+  /** The login session this socket was opened under, so ending that sign-in can end the socket. */
+  sessionId?: string;
+  /** The `authenticate` in progress, so the next one on this socket waits for it (events.ts). */
+  authenticating?: Promise<void>;
+  /**
+   * On a DM's socket, the player whose explored memory its Player Preview is
+   * showing, as its last `exploration:request` named them: the one other
+   * member's memory it is sent as it grows.
+   */
+  previewingMemoryOf?: string;
+}
+
+/**
+ * The fields authentication sets on a socket. `fetchSockets()` hands back a
+ * RemoteSocket, whose type does not know about them; with the default
+ * in-memory adapter the objects are the sockets themselves, so the fields are
+ * there to read and write. Casting to this, not to a literal of its own,
+ * keeps the fields declared once.
+ */
+export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId'>;
+
+/**
+ * Whether the sign-in this socket was opened under still exists in the session
+ * store and is still this user's. The handshake checks the session once; a
+ * sign-in that ends later (signing out, expiry, a password change elsewhere)
+ * leaves the socket open, and `authenticate` asks this before letting it join
+ * a campaign. Read through the socket's own session store, the one the
+ * handshake used, so a store error counts as ended.
+ */
+export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<boolean> {
+  const { sessionStore } = socket.request as { sessionStore?: Store };
+  const sessionId = socket.sessionId;
+  if (!sessionStore || !sessionId || !socket.userId) return false;
+  const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
+    sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
+  });
+  return stored?.userId === socket.userId;
 }
 
 /**
@@ -31,7 +68,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     // a local `{ userId?: string }` would keep compiling if that field were
     // renamed, and this socket would then silently reject every connection
     // while the REST routes failed loudly at build time.
-    const session = (socket.request as { session?: Partial<SessionData> }).session;
+    const { session, sessionID } = socket.request as { session?: Partial<SessionData>; sessionID?: string };
 
     if (!session || !session.userId) {
       return false;
@@ -54,6 +91,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     }
 
     socket.userId = user.id;
+    socket.sessionId = sessionID;
     return true;
   } catch (error) {
     logger.error('WebSocket authentication error', { err: error });
@@ -62,8 +100,11 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
 }
 
 /**
- * Validate campaign membership and assign role
- * Called when user joins a campaign room
+ * Check that the socket's user belongs to the campaign, and report their role.
+ *
+ * Reports only. The `authenticate` handler owns the socket's campaign and role
+ * fields, because it has to leave the previous campaign's room first, and it
+ * can only know which room that was if nothing has overwritten the id yet.
  */
 export async function authenticateCampaign(
   socket: AuthenticatedSocket,
@@ -98,9 +139,6 @@ export async function authenticateCampaign(
     if (!membership) {
       return { success: false, error: 'You are not a member of this campaign' };
     }
-
-    socket.campaignId = campaignId;
-    socket.role = membership.role;
 
     return {
       success: true,

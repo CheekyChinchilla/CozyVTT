@@ -37,6 +37,11 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const campaignsQuery = useCampaignsQuery();
   const charactersQuery = useCharactersQuery();
+  // TODO(ui): nothing refreshes this list while the dashboard is open. The page
+  // has no socket, so nothing hears the invitation.received event the server
+  // sends, and the query neither polls nor refetches on focus, so a player
+  // sees a new invitation only after pressing Refresh. Listen for that event,
+  // or refetch this query on focus.
   const invitationsQuery = usePendingInvitationsQuery();
 
   const campaigns = campaignsQuery.data ?? [];

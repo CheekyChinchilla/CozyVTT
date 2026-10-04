@@ -2,7 +2,7 @@
  * Flexible Character Sheet Edit
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Save, X, Plus, User, Upload } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import type { Character } from '../../../types';
@@ -25,15 +25,19 @@ interface FlexibleCharacterSheetEditProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Told whenever the sheet gains or loses unsaved changes. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProps> = ({
   character,
   onSave,
   onCancel,
+  onDirtyChange,
 }) => {
   const initialData = initializeFlexibleData(character.data);
   const [sections, setSections] = useState<FlexibleSection[]>(initialData.sections || []);
+  const [cleanSections] = useState(() => JSON.stringify(sections));
   const [isSaving, setIsSaving] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [tokenImageFile, setTokenImageFile] = useState<File | null>(null);
@@ -42,6 +46,24 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   );
   const [tokenError, setTokenError] = useState<string>('');
   const { data: serverConfig } = useServerConfigQuery();
+
+  // Unsaved means the sections differ from what the sheet opened with, or a
+  // new token picture is waiting to be uploaded.
+  const dirtyRef = useRef(false);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
+  useEffect(() => {
+    const dirty = tokenImageFile !== null || JSON.stringify(sections) !== cleanSections;
+    if (dirty !== dirtyRef.current) {
+      dirtyRef.current = dirty;
+      onDirtyChangeRef.current?.(dirty);
+    }
+  }, [sections, tokenImageFile, cleanSections]);
+  // The editor closes once a save is done or the edits are discarded; either
+  // way nothing it held is waiting any more.
+  useEffect(() => () => {
+    if (dirtyRef.current) onDirtyChangeRef.current?.(false);
+  }, []);
 
   // Handle token image upload
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +119,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       }
 
       await onSave({ sections }, true, newTokenImageUrl);
+    } catch (error) {
+      // Whoever hosts the sheet says why; the sections stay as typed.
+      console.error('Error saving character:', error);
     } finally {
       setIsSaving(false);
     }

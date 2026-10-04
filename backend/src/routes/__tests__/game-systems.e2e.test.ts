@@ -81,9 +81,7 @@ describe('Game Systems - E2E Tests', () => {
       });
 
       expect(character).toBeDefined();
-      expect(() => {
-        validateCharacterData(GameSystem.DND_5E, character!.data);
-      }).not.toThrow();
+      expect(validateCharacterData(GameSystem.DND_5E, character!.data).success).toBe(true);
     });
 
     it('should update D&D 5e character data', async () => {
@@ -109,8 +107,8 @@ describe('Game Systems - E2E Tests', () => {
         data: { data: updatedData },
       });
 
-      expect((character.data as any).level).toBe(6);
-      expect((character.data as any).stats.strength.score).toBe(17);
+      expect((character.data as unknown as typeof updatedData).level).toBe(6);
+      expect((character.data as unknown as typeof updatedData).stats.strength.score).toBe(17);
     });
 
     it('should assign D&D 5e character to campaign', async () => {
@@ -194,9 +192,7 @@ describe('Game Systems - E2E Tests', () => {
         where: { id: characterId },
       });
 
-      expect(() => {
-        validateCharacterData(GameSystem.PATHFINDER_2E, character!.data);
-      }).not.toThrow();
+      expect(validateCharacterData(GameSystem.PATHFINDER_2E, character!.data).success).toBe(true);
     });
   });
 
@@ -238,9 +234,7 @@ describe('Game Systems - E2E Tests', () => {
         where: { id: characterId },
       });
 
-      expect(() => {
-        validateCharacterData(GameSystem.CALL_OF_CTHULHU_7E, character!.data);
-      }).not.toThrow();
+      expect(validateCharacterData(GameSystem.CALL_OF_CTHULHU_7E, character!.data).success).toBe(true);
     });
   });
 
@@ -293,9 +287,7 @@ describe('Game Systems - E2E Tests', () => {
         where: { id: characterId },
       });
 
-      expect(() => {
-        validateCharacterData(GameSystem.SHADOWRUN_6E, character!.data);
-      }).not.toThrow();
+      expect(validateCharacterData(GameSystem.SHADOWRUN_6E, character!.data).success).toBe(true);
     });
   });
 

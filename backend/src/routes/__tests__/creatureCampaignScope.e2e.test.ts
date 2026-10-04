@@ -171,3 +171,15 @@ describe('the shipped SRD content and their own campaign', () => {
     await prisma.creatureTemplate.delete({ where: { id: mine } });
   });
 });
+
+describe('the seed status count of homebrew', () => {
+  it("counts only creatures this campaign can see, not another campaign's homebrew", async () => {
+    const res = await outsider.get(`/api/campaigns/${outsiderCampaignId}/creatures/seed/status`);
+    expect(res.status).toBe(200);
+
+    const visible = await prisma.creatureTemplate.count({
+      where: { source: 'custom', OR: [{ campaignId: null }, { campaignId: outsiderCampaignId }] },
+    });
+    expect(res.body.customCount).toBe(visible);
+  });
+});

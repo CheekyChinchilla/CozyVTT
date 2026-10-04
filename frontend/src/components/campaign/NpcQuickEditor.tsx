@@ -14,6 +14,7 @@ import {
   X,
   Eye,
   EyeOff,
+  HelpCircle,
   Trash2,
   Upload,
   Loader2,
@@ -22,13 +23,16 @@ import {
 } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/contexts/ToastContext';
+import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import api from '@/services/api';
-import type { Token, TokenHp, NpcStatBlock, Asset } from '@/types';
+import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
+import TokenVisionField from './TokenVisionField';
 
 // ============================================
 // Constants
@@ -72,7 +76,8 @@ function getEffectiveType(token: Token): TokenType {
 
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
   const { socket } = useWebSocket();
-  const { campaign } = useCampaign();
+  const { campaign, currentMap } = useCampaign();
+  const { showToast } = useToast();
 
   // Local editable state (mirrors token, updates on save)
   const [name, setName] = useState(token.name);
@@ -83,6 +88,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [conditions, setConditions] = useState<string[]>(token.conditions ?? []);
   const [notes, setNotes] = useState(token.notes ?? '');
   const [visible, setVisible] = useState(token.visible);
+  const [obscured, setObscured] = useState(token.obscured ?? false);
   const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [enableHpPrompt, setEnableHpPrompt] = useState(false);
@@ -108,16 +114,21 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const isSaving = useRef(false);
 
   // ── Generic update helper ──
-  const saveUpdate = useCallback(async (changes: Partial<Token>) => {
+  const saveUpdate = useCallback(async (changes: UpdateTokenRequest) => {
     if (isSaving.current) return;
     try {
-      const result = await api.updateToken(campaignId, mapId, token.id, changes as Parameters<typeof api.updateToken>[3]);
-      onTokenUpdate(result.token);
+      const result = await api.updateToken(campaignId, mapId, token.id, changes);
+      // The DM, the only one this editor opens for, always gets the token back.
+      if (result.token) onTokenUpdate(result.token);
       socket?.emitMapChange(mapId);
     } catch (err) {
+      // Say why, or the edit stays in the field looking saved. A token from
+      // an earlier release can hold more than the server now accepts (notes
+      // past 5,000 characters, a name past 200), and the reason names the field.
       console.error('NpcQuickEditor: failed to update token', err);
+      showToast(apiErrorMessage(err) || 'Could not save that change to the token', 'error');
     }
-  }, [campaignId, mapId, token.id, onTokenUpdate, socket]);
+  }, [campaignId, mapId, token.id, onTokenUpdate, socket, showToast]);
 
   // ── HP adjustment ──
   const adjustHp = useCallback(async (delta: number) => {
@@ -155,7 +166,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // ── Stat block ──
   const handleStatBlockChange = useCallback(async (updated: NpcStatBlock) => {
     setStatBlock(updated);
-    await saveUpdate({ statBlock: updated } as Partial<Token>);
+    await saveUpdate({ statBlock: updated });
   }, [saveUpdate]);
 
   const handleCreateStatBlock = useCallback(async () => {
@@ -167,13 +178,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setStatBlock(newBlock);
     setEditingStatBlock(true);
     setShowCreateStatBlock(false);
-    await saveUpdate({ statBlock: newBlock } as Partial<Token>);
+    await saveUpdate({ statBlock: newBlock });
   }, [saveUpdate]);
 
   const handleRemoveStatBlock = useCallback(async () => {
     setStatBlock(null);
     setEditingStatBlock(false);
-    await saveUpdate({ statBlock: null } as Partial<Token>);
+    await saveUpdate({ statBlock: null });
   }, [saveUpdate]);
 
   // ── Token image ──
@@ -181,7 +192,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     if (assets.length > 0) return; // already loaded
     setIsLoadingAssets(true);
     try {
-      const res = await api.listAssets({ type: AssetType.TOKEN, limit: 100 });
+      const res = await api.listAssets({ type: AssetType.TOKEN, limit: 100, usable: true });
       setAssets(res.assets);
     } catch {
       console.error('NpcQuickEditor: failed to load token assets');
@@ -291,7 +302,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
         imageUrl: token.imageUrl,
       });
       // Relink this token to the new custom creature
-      await saveUpdate({ creatureTemplateId: duplicate.id } as Partial<Token>);
+      await saveUpdate({ creatureTemplateId: duplicate.id });
       setShowDuplicateNamePrompt(false);
       setDuplicateWarning(null);
       setShowImagePicker(false);
@@ -348,6 +359,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     await saveUpdate({ visible: next });
   }, [visible, saveUpdate]);
 
+  // ── Identity toggle ──
+  const toggleObscured = useCallback(async () => {
+    const next = !obscured;
+    setObscured(next);
+    await saveUpdate({ obscured: next });
+  }, [obscured, saveUpdate]);
+
   // ── Controller change ──
   const handleControllerChange = useCallback(async (userId: string | null) => {
     setControlledBy(userId);
@@ -382,6 +400,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setConditions(token.conditions ?? []);
     setNotes(token.notes ?? '');
     setVisible(token.visible);
+    setObscured(token.obscured ?? false);
     setControlledBy(token.controlledBy ?? null);
     setStatBlock((token.statBlock as NpcStatBlock) ?? null);
     setEditingStatBlock(false);
@@ -469,7 +488,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 ? 'bg-stone-gray/10 text-stone-gray'
                 : 'bg-moss-green/10 text-brand-ink'
             }`}>
-              {tokenType === TokenType.OBJECT ? 'Object' : 'NPC'}
+              {tokenType === TokenType.OBJECT ? 'Object' : tokenType === TokenType.PLAYER ? 'Player' : 'NPC'}
             </span>
 
             {/* Close */}
@@ -849,6 +868,18 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               />
             </section>
 
+            {/* ── Darkvision (objects do not see) ── */}
+            {tokenType !== TokenType.OBJECT && (
+              <section>
+                <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
+                <TokenVisionField
+                  value={token.sightRadius ?? 0}
+                  onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
+                  feetPerSquare={currentMap?.feetPerSquare ?? 5}
+                />
+              </section>
+            )}
+
             {/* ── Conditions ── */}
             <section>
               <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
@@ -916,9 +947,15 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 onChange={(e) => handleControllerChange(e.target.value === 'none' ? null : e.target.value)}
                 className="input-cozy w-full text-sm"
               >
+                {/* TODO(ui): only players are listed, so a token still
+                   naming a spectator or a former member has no matching
+                   entry, the box shows the first option, and the hint below
+                   still says "This player can move the token on the map."
+                   Add an entry for that controller saying they can no longer
+                   move it, and show the hint only for a player. */}
                 <option value="none">Nobody (DM controls)</option>
                 {(campaign?.memberships ?? [])
-                  .filter((m) => m.role !== 'DM')
+                  .filter((m) => m.role === 'PLAYER')
                   .map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.user?.displayName ?? m.userId}
@@ -949,6 +986,18 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 >
                   {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   {visible ? 'Hide from Players' : 'Show to Players'}
+                </button>
+
+                <button
+                  onClick={toggleObscured}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
+                    obscured
+                      ? 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
+                      : 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  {obscured ? 'Reveal Identity' : 'Obscure Identity'}
                 </button>
 
                 <button

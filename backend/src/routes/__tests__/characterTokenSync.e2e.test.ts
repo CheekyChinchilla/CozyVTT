@@ -42,8 +42,10 @@ describe('character token image sync', () => {
   let mapBId: string;
   let playerAgent: ReturnType<typeof request.agent>;
 
-  const OLD_IMAGE = '/uploads/tokens/old.png';
-  const NEW_IMAGE = '/uploads/tokens/new.png';
+  // Addresses of the only form a picture may take on this server, naming
+  // assets that do not exist (accepted: they grant nothing).
+  const OLD_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000a01d';
+  const NEW_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000b3e7';
 
   async function seedMapTokens() {
     const tokensFor = (label: string) => [
@@ -183,7 +185,7 @@ describe('character token image sync', () => {
 
       for (const mapId of [mapAId, mapBId]) {
         const bound = (await tokensOf(mapId)).find((t) => t.characterId === characterId);
-        expect(bound!.imageUrl).toContain('new.png');
+        expect(bound!.imageUrl).toBe(NEW_IMAGE);
       }
     });
 
@@ -208,7 +210,7 @@ describe('character token image sync', () => {
     expect(res.status).toBe(200);
 
     const bound = (await tokensOf(mapAId)).find((t) => t.id === 'a-bound');
-    expect(bound!.imageUrl).toContain('new.png');
+    expect(bound!.imageUrl).toBe(NEW_IMAGE);
   });
 
   it('updates tokens on every map in the campaign', async () => {
@@ -216,7 +218,7 @@ describe('character token image sync', () => {
 
     for (const mapId of [mapAId, mapBId]) {
       const bound = (await tokensOf(mapId)).find((t) => t.characterId === characterId);
-      expect(bound!.imageUrl).toContain('new.png');
+      expect(bound!.imageUrl).toBe(NEW_IMAGE);
     }
   });
 

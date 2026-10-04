@@ -28,7 +28,8 @@ import {
   IMPORT_LIMITS,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
-import { preserveAtmosphereAudio } from '../utils/vibe-presets';
+import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { isSafeArchivePath } from '../utils/archive';
 import logger from '../utils/logger';
 
@@ -95,6 +96,34 @@ async function getMaxImportSize(): Promise<number> {
 }
 
 // ── Preview ───────────────────────────────────────────────────────
+
+/**
+ * Point each vibe period's audio at the imported copy of its asset.
+ *
+ * Returns the settings to store, or null when the archive's settings name no
+ * audio at all (nothing to change). A value that is not an asset id, or an
+ * id the archive's asset manifest does not carry, becomes no audio.
+ */
+export function remapVibePeriodAudio(
+  vibeSettings: unknown,
+  assetIdMap: Map<string, string>,
+): Record<string, unknown> | null {
+  if (!vibeSettings || typeof vibeSettings !== 'object' || Array.isArray(vibeSettings)) return null;
+  const settings = vibeSettings as Record<string, unknown>;
+  if (!Array.isArray(settings.periods)) return null;
+
+  let touched = false;
+  const periods = settings.periods.map((period) => {
+    if (!period || typeof period !== 'object' || Array.isArray(period)) return period;
+    const p = period as Record<string, unknown>;
+    if (p.audio == null) return period;
+    touched = true;
+    const oldId = vibePeriodAudioAssetId(p.audio);
+    return { ...p, audio: (oldId && assetIdMap.get(oldId)) ?? null };
+  });
+
+  return touched ? { ...settings, periods } : null;
+}
 
 export async function previewCampaignImport(
   zipBuffer: Buffer
@@ -192,14 +221,9 @@ export async function importCampaign(
 
   // 6. Create Campaign first (assets have a FK to campaign)
   const newCampaignId = randomUUID();
-  const defaultVibeSettings = {
-    periods: [
-      { name: 'dawn', hue: '30', filter: 'sepia(0.1) brightness(0.9)' },
-      { name: 'day', hue: '0', filter: 'none' },
-      { name: 'dusk', hue: '280', filter: 'sepia(0.15) brightness(0.85)' },
-      { name: 'night', hue: '220', filter: 'brightness(0.5) contrast(1.2)' },
-    ],
-  };
+  // The same presets a new campaign gets, so an archive with no atmosphere
+  // settings imports with the atmosphere the allowlists accept.
+  const defaultVibeSettings = JSON.parse(JSON.stringify(DEFAULT_VIBE_SETTINGS)) as Prisma.InputJsonValue;
 
   const campaign = await prisma.campaign.create({
     data: {
@@ -232,6 +256,7 @@ export async function importCampaign(
 
   // 7. Import assets (so we can remap references)
   const assetRefMap = new Map<string, string>(); // old UUID → new asset URL
+  const assetIdMap = new Map<string, string>(); // old UUID → new asset id
 
   for (const [oldId, assetInfo] of Object.entries(assetManifest)) {
     // Find the file in the archive
@@ -279,6 +304,18 @@ export async function importCampaign(
 
     // Store mapping: old reference → new API URL
     assetRefMap.set(oldId, `/api/assets/${typeDir}/${newId}`);
+    assetIdMap.set(oldId, newId);
+  }
+
+  // Vibe periods name audio assets by id; point them at the imported copies.
+  // A track the archive does not carry becomes no audio, so an old note or a
+  // reference to an asset left out of the export never dangles.
+  const remappedVibe = remapVibePeriodAudio(campaignSettings.vibeSettings, assetIdMap);
+  if (remappedVibe) {
+    await prisma.campaign.update({
+      where: { id: newCampaignId },
+      data: { vibeSettings: preserveAtmosphereAudio(remappedVibe) as Prisma.InputJsonValue },
+    });
   }
 
   /** Remap an asset reference from the archive to the new URL. */
@@ -309,7 +346,7 @@ export async function importCampaign(
     const tokens = importTokens ? mapData.tokens.map((t) => ({
       ...t,
       id: randomUUID(),
-      imageUrl: remapAsset(t.imageUrl) || t.imageUrl || '',
+      imageUrl: remapAsset(t.imageUrl) || '',
       characterId: null,
       controlledBy: null,
     })) : [];
@@ -334,6 +371,11 @@ export async function importCampaign(
         wallSegments: (mapData.wallSegments || []) as unknown as Prisma.InputJsonValue,
         fogData: mapData.fogData ? (mapData.fogData as Prisma.InputJsonValue) : Prisma.JsonNull,
         lightingEnabled: mapData.lightingEnabled ?? false,
+        // Absent in archives from before 1.5.0: leave the column default, which
+        // keeps fog on, as those maps always had it.
+        ...(mapData.fogEnabled !== undefined ? { fogEnabled: mapData.fogEnabled } : {}),
+        ...(mapData.globalIllumination !== undefined ? { globalIllumination: mapData.globalIllumination } : {}),
+        ...(mapData.explorationEnabled !== undefined ? { explorationEnabled: mapData.explorationEnabled } : {}),
         lights: (mapData.lights || []) as unknown as Prisma.InputJsonValue,
       },
     });

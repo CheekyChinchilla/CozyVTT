@@ -11,6 +11,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  HelpCircle,
   Ghost,
   Map as MapIcon,
   Trash2,
@@ -22,10 +23,14 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
-import type { Asset, Token, TokenDisplayMode } from '@/types';
+import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
+import { dmTokenControls } from '@/utils/tokenControls';
+import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
+import TokenVisionField from './TokenVisionField';
+import { setTokenFlag } from '@/utils/tokenFlags';
 
 // ============================================
 // Constants
@@ -79,7 +84,13 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [tokenNotes, setTokenNotes] = useState('');
   const [showHpBar, setShowHpBar] = useState(true);
   const [initiative, setInitiative] = useState<string>('');
-  const [objectHidden, setObjectHidden] = useState(true);
+  const [sightRadius, setSightRadius] = useState(0);
+  // Placing a token already hidden. Offered for the tokens that are secrets
+  // (see utils/tokenControls.ts). An object defaults to hidden, which is what
+  // a secret door or a trapped chest wants; a creature defaults to visible, so
+  // an ordinary monster is not placed invisible by accident. The form opens on
+  // NPC, and the type buttons keep the two in step.
+  const [placeHidden, setPlaceHidden] = useState(false);
 
   // ── Token list action state ──
   const [movingTokenId, setMovingTokenId] = useState<string | null>(null);
@@ -100,6 +111,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       .listAssets({
         type: AssetType.TOKEN,
         limit: 100,
+        usable: true,
       })
       .then((res) => setAssets(res.assets))
       .catch(() => setError('Failed to load token assets'))
@@ -107,7 +119,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   }, [isOpen, campaign?.id]);
 
   // ── Derived values ──
-  const players = campaign?.memberships?.filter((m) => m.role !== 'DM') ?? [];
+  // Only a player can be given a token; the server refuses a spectator.
+  const players = campaign?.memberships?.filter((m) => m.role === 'PLAYER') ?? [];
   const otherMaps = (campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id);
   const canAdd = !!tokenName.trim() && !!currentMap;
 
@@ -173,7 +186,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         conditions: [] as string[],
       };
 
-      let tokenPayload: typeof basePayload & Record<string, unknown>;
+      let tokenPayload: CreateTokenRequest;
       if (tokenType === TokenType.PLAYER) {
         tokenPayload = {
           ...basePayload,
@@ -185,26 +198,28 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           showHpBar: false,
           notes: '',
           initiative: null,
+          sightRadius,
         };
       } else if (tokenType === TokenType.NPC) {
         const hpValue = hpMax > 0 ? { current: hpMax, max: hpMax, temp: 0 } : null;
         tokenPayload = {
           ...basePayload,
           layer: tokenLayer,
-          visible: true,
+          visible: !placeHidden,
           controlledBy: assignTo !== 'none' ? assignTo : null,
           disposition,
           hp: hpValue,
           showHpBar: hpMax > 0 ? showHpBar : false,
           notes: tokenNotes.trim(),
           initiative: initiative !== '' ? parseInt(initiative, 10) : null,
+          sightRadius,
         };
       } else {
         // Object
         tokenPayload = {
           ...basePayload,
           layer: TokenLayer.TOKEN,
-          visible: !objectHidden,
+          visible: !placeHidden,
           controlledBy: null,
           disposition: null,
           hp: null,
@@ -214,7 +229,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         };
       }
 
-      const result = await api.addToken(campaign.id, currentMap.id, tokenPayload as Parameters<typeof api.addToken>[2]);
+      const result = await api.addToken(campaign.id, currentMap.id, tokenPayload);
 
       // Optimistic local update then broadcast so other clients get the new token
       useGameStore.getState().addToken(result.token);
@@ -230,13 +245,17 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setTokenNotes('');
       setShowHpBar(true);
       setInitiative('');
-      setObjectHidden(true);
+      setSightRadius(0);
+      setPlaceHidden(tokenType === TokenType.OBJECT);
     } catch {
+      // TODO(ui): a refusal is reported only as this fixed sentence, without
+      // the reason the server gave. Show apiErrorMessage(err) first, as the
+      // move to another map below does.
       setError('Failed to add token to map');
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, objectHidden, socket]);
+  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden, socket]);
 
   // ============================================
   // Token List Actions
@@ -246,11 +265,21 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     if (!campaign || !currentMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await api.updateToken(campaign.id, currentMap.id, token.id, { visible: !token.visible });
-      useGameStore.getState().patchToken(token.id, { visible: !token.visible });
-      socket?.emitMapChange(currentMap.id);
+      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
     } catch {
       setError('Failed to toggle token visibility');
+    } finally {
+      setTogglingVisibilityId(null);
+    }
+  };
+
+  const handleToggleObscured = async (token: Token) => {
+    if (!campaign || !currentMap) return;
+    setTogglingVisibilityId(token.id);
+    try {
+      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+    } catch {
+      setError('Failed to toggle token identity');
     } finally {
       setTogglingVisibilityId(null);
     }
@@ -279,34 +308,15 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     const targetMap = campaign.maps?.find((m) => m.id === targetMapId);
     if (!targetMap) return;
 
-    // Read the live position (this list ignores movement, so the row's
-    // token prop can be stale), clamped to fit the target map grid.
-    const livePosition = useGameStore.getState().tokens[token.id]?.position ?? token.position;
-    const position = {
-      x: Math.min(livePosition.x, targetMap.width - token.size.width),
-      y: Math.min(livePosition.y, targetMap.height - token.size.height),
-    };
-
     try {
-      await api.addToken(campaign.id, targetMapId, {
-        name: token.name,
-        imageUrl: token.imageUrl,
-        position,
-        size: token.size,
-        layer: token.layer,
-        visible: token.visible,
-        controlledBy: token.controlledBy,
-      });
-      await api.deleteToken(campaign.id, currentMap.id, token.id);
+      // One request: the server moves the token as it is, clamped onto the
+      // target map, and tells everyone on this map itself.
+      await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
 
       useGameStore.getState().removeToken(token.id);
       setMovingTokenId(null);
-
-      // Broadcast to both maps
-      socket?.emitMapChange(currentMap.id);
-      socket?.emitMapChange(targetMapId);
-    } catch {
-      setError('Failed to move token to map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to move token to map');
     } finally {
       setIsMovingTokenMap(false);
     }
@@ -392,7 +402,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                     ] as const).map(({ type, label }) => (
                       <button
                         key={type}
-                        onClick={() => setTokenType(type)}
+                        onClick={() => { setTokenType(type); setPlaceHidden(type === TokenType.OBJECT); }}
                         className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                           tokenType === type
                             ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
@@ -613,25 +623,27 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   </>
                 )}
 
+                {/* Hidden on placement — NPCs and objects, the tokens that are secrets */}
+                {dmTokenControls(tokenType).placeHidden && (
+                  <div className="mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={placeHidden}
+                        onChange={(e) => setPlaceHidden(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-stone-gray">Hidden from players on placement</span>
+                    </label>
+                    <p className="text-[10px] text-stone-gray/50 mt-0.5">
+                      Reveal later by right-clicking it — useful for a monster waiting in a room, a secret door, a trapped chest.
+                    </p>
+                  </div>
+                )}
+
                 {/* Object-specific fields */}
                 {tokenType === TokenType.OBJECT && (
                   <>
-                    {/* Hidden toggle */}
-                    <div className="mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={objectHidden}
-                          onChange={(e) => setObjectHidden(e.target.checked)}
-                          className="rounded"
-                        />
-                        <span className="text-xs text-stone-gray">Hidden from players on placement</span>
-                      </label>
-                      <p className="text-[10px] text-stone-gray/50 mt-0.5">
-                        Reveal later via the context menu — useful for secret doors, hidden chests.
-                      </p>
-                    </div>
-
                     {/* DM Notes */}
                     <div className="mb-3">
                       <label className="text-xs text-stone-gray font-medium block mb-1">
@@ -703,6 +715,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {/* Darkvision (NPC and Player only; objects do not see) */}
+                {tokenType !== TokenType.OBJECT && (
+                  <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={currentMap?.feetPerSquare ?? 5} />
                 )}
 
                 {/* Assign to player (NPC and Player only) */}
@@ -811,6 +828,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                     Hidden
                                   </span>
                                 )}
+                                {/* TODO(ui): players holds only members whose role is
+                                   PLAYER, so a token still naming someone who became a
+                                   spectator or left the campaign shows a "Player" chip.
+                                   Show the chip only when the controller is found, or
+                                   say the controller is no longer a player. */}
                                 {token.controlledBy && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-warm-amber/10 text-warm-amber">
                                     {players.find((p) => p.userId === token.controlledBy)?.user?.displayName ?? 'Player'}
@@ -821,6 +843,16 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
                             {/* Action buttons */}
                             <div className="flex items-center gap-0.5 flex-shrink-0">
+                              {/* Obscure / reveal identity */}
+                              <button
+                                onClick={() => handleToggleObscured(token)}
+                                disabled={isTogglingVis}
+                                className="p-1.5 rounded hover:bg-moss-green/10 transition-colors"
+                                title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+                              >
+                                <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
+                              </button>
+
                               {/* Visibility toggle */}
                               <button
                                 onClick={() => handleToggleVisibility(token)}
@@ -837,6 +869,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                 )}
                               </button>
 
+                              {/* TODO(tokens): this is offered for objects too, while
+                                 the map's right-click menu keeps objects on the
+                                 material plane. Render it only when
+                                 dmTokenControls(token.type).crossPlanes holds, as the
+                                 menu does. */}
                               {/* Spirit layer toggle */}
                               <button
                                 onClick={() => handleToggleLayer(token)}

@@ -105,12 +105,23 @@
 - ✅ spiritLayerUrl: nullable string
 - ✅ tokens: JSON array
 - ✅ annotations: JSON array
+- ✅ lightingEnabled: boolean (default false)
+- ✅ fogEnabled: boolean (default true; the create route sets false for new maps)
+- ✅ globalIllumination: boolean (default true; the create route sets false for new maps)
+- ✅ explorationEnabled: boolean (default true; the create route sets false for new maps)
+
+### MapExploration Model
+- ✅ id: uuid (primary key)
+- ✅ mapId: foreign key to Map with cascade delete
+- ✅ userId: foreign key to User with cascade delete
+- ✅ explored: JSON (FogState shape)
+- ✅ unique (mapId, userId); index on mapId
 
 ### Asset Model
 - ✅ id: uuid (primary key)
 - ✅ type: AssetType enum
 - ✅ scope: AssetScope enum
-- ✅ uploadedById: foreign key to User
+- ✅ uploadedById: nullable foreign key to User, set to null when the user is deleted
 - ✅ campaignId: nullable foreign key with cascade delete
 - ✅ filePath: string (relative path)
 - ✅ tags: string array

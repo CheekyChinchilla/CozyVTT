@@ -4,7 +4,7 @@ Prisma schema and migrations for CozyVTT. PostgreSQL 14+.
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA
@@ -18,7 +18,8 @@ The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by dom
 
 **Game content**
 - `Character` — flexible JSON-backed character sheets, optionally bound to a campaign + game system
-- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations
+- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour)
+- `MapExploration` — one player's explored cells on one map; never read when deciding which tokens to send
 - `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global)
 - `CreatureFavorite` — DM's per-campaign starred creatures
 - `TokenTemplate` — reusable token configurations copyable across campaigns
@@ -40,9 +41,9 @@ The schema is in [`schema.prisma`](./schema.prisma) — 18 models grouped by dom
   document; deleting the asset removes every link to it
 
 **Assets & messages**
-- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN
+- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN; `uploadedById` becomes null when the uploader's account is deleted, and the file stays
 - `Message` — chat history (player, DM, system, dice rolls, character actions)
-- `DiceRoll` — historical dice rolls with breakdowns
+- `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 
 **Platform**
 - `SystemLog` — admin-visible audit log
@@ -71,6 +72,7 @@ Note: `AssetType` includes `DOCUMENT` and `OTHER`, but the upload route rejects 
 - **Cascade deletions** — deleting a campaign cascades to its memberships, maps, sessions, messages, dice rolls, creature templates, token templates, personal notes, and (campaign-scoped) assets
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
+- **Deleting a user** keeps their chat messages, dice rolls and uploads with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they are that DM
 
 ## JSON columns
 
@@ -84,6 +86,7 @@ Several models use Prisma's `Json` type for flexibility:
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
+| `MapExploration.explored` | One player's explored cells on one map, in the fog grid's shape; never read when deciding which tokens to send |
 | `Character.data` | Per-game-system sheet (validated by Zod at the route layer) |
 | `Message.metadata` | Optional context (e.g. character ID for character actions) |
 | `DiceRoll.breakdown` | Full roll math — individual dice, kept/dropped, modifiers |
@@ -122,6 +125,6 @@ npx prisma migrate reset
 
 - **No raw queries with user input.** All DB access goes through Prisma, which parameterizes for us. SQL injection is not a vector.
 - **Password hashing happens at the application layer**, not the database. Argon2id; see `backend/src/services/auth.ts`.
-- **MFA backup codes are hashed** before storage (`backend/src/services/mfa.ts`). Plaintext is shown to the user exactly once at setup.
+- **MFA backup codes are hashed** with Argon2id before storage (`backend/src/utils/backupCodes.ts`). Plaintext is shown to the user exactly once, at setup or when they regenerate them.
 - **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema).
 - **File paths are stored relatively** (e.g. `uploads/maps/global/<uuid>.png`), never absolute. Path-traversal mitigation lives at the upload layer.

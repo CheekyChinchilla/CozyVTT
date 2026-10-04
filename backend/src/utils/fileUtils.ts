@@ -26,6 +26,11 @@ export const CONFIGURABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO', 'AVATAR', 'DOC
 
 export type ConfigurableAssetType = (typeof CONFIGURABLE_ASSET_TYPES)[number];
 
+/** The environment variable that sets one asset type's upload limit. */
+export function fileSizeLimitVar(assetType: ConfigurableAssetType): string {
+  return `MAX_${assetType}_SIZE_MB`;
+}
+
 export function isConfigurableAssetType(value: string): value is ConfigurableAssetType {
   return (CONFIGURABLE_ASSET_TYPES as readonly string[]).includes(value);
 }
@@ -65,7 +70,7 @@ export function resolveFileSizeLimits(
   const limits = { OTHER: 0 } as Record<AssetType, number>;
 
   for (const assetType of CONFIGURABLE_ASSET_TYPES) {
-    const varName = `MAX_${assetType}_SIZE_MB`;
+    const varName = fileSizeLimitVar(assetType);
     const raw = env[varName];
     const fallbackMB = DEFAULT_FILE_SIZE_LIMITS_MB[assetType];
     let sizeMB = fallbackMB;

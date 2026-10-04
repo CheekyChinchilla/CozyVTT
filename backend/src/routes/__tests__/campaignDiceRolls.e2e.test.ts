@@ -97,6 +97,10 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     await prisma.$disconnect();
   });
 
+  // TODO(test): flaky under a full parallel run. Rolls seeded in the same
+  // millisecond share a createdAt and the route orders by that alone, so the
+  // order of the tie is whatever the database returns. Seed with distinct
+  // timestamps, or give the route a secondary order, in its own commit.
   it('returns rolls newest first', async () => {
     await addRoll(dmId, '1d4', false);
     await addRoll(playerId, '1d6', false);

@@ -96,33 +96,74 @@ export function categorizeProficiencyList(items: readonly string[]): Proficiency
   };
 }
 
+/** The strings of a list, or none when it is not a list. */
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+/**
+ * Add languages to the Languages box, skipping any already in one of the boxes.
+ *
+ * For the separate `languages` list a sheet written before 1.3.0 carries. They
+ * are known to be languages, so nothing is guessed.
+ */
+function withLanguages(groups: ProficiencyGroups, languages: readonly string[]): ProficiencyGroups {
+  const present = new Set(flattenProficiencyGroups(groups).map((entry) => entry.toLowerCase()));
+  const added: string[] = [];
+  for (const language of languages) {
+    const trimmed = language.trim();
+    if (!trimmed || present.has(trimmed.toLowerCase())) continue;
+    present.add(trimmed.toLowerCase());
+    added.push(trimmed);
+  }
+  if (added.length === 0) return groups;
+  return { ...groups, languages: [groups.languages, ...added].filter((part) => part.trim()).join(', ') };
+}
+
 /**
  * The four boxes as the sheet should display and edit them.
  *
  * Takes the whole sheet rather than a field, because which source is right
  * depends on what the sheet happens to carry. A sheet holding the structured
  * object is read from it verbatim; anything older falls back to the guess.
+ *
+ * A sheet written before 1.3.0 keeps a flat list under `proficiencies` itself
+ * and its languages in a separate `languages` list. The flat list is guessed
+ * like the one above, and the languages go to the Languages box, including on a
+ * sheet that has the boxes already, where they were never shown.
  */
 export function readProficiencyGroups(sheet: unknown): ProficiencyGroups {
   const data = record(sheet);
   if (!data) return { ...EMPTY };
+  const oldLanguages = strings(data.languages);
 
   const structured = record(data.proficiencies);
   if (structured) {
-    return {
-      armor: box(structured, 'armor'),
-      weapons: box(structured, 'weapons'),
-      tools: box(structured, 'tools'),
-      languages: box(structured, 'languages'),
-    };
+    return withLanguages(
+      {
+        armor: box(structured, 'armor'),
+        weapons: box(structured, 'weapons'),
+        tools: box(structured, 'tools'),
+        languages: box(structured, 'languages'),
+      },
+      oldLanguages
+    );
   }
 
-  const flat = data.proficienciesAndLanguages;
-  if (Array.isArray(flat)) {
-    return categorizeProficiencyList(flat.filter((entry): entry is string => typeof entry === 'string'));
-  }
-
-  return { ...EMPTY };
+  const flat = [...strings(data.proficienciesAndLanguages), ...strings(data.proficiencies)];
+  const seen = new Set<string>();
+  const unique = flat.filter((entry) => {
+    const key = entry.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  // TODO(sheets): an entry the language list does not know, such as "Druidic"
+  // or "Thieves' Cant", is guessed into Weapons here, and withLanguages then
+  // skips it as already present even when the sheet's own languages list names
+  // it. Take the entries of oldLanguages out of the flat list before guessing,
+  // so the languages the sheet recorded land under Languages.
+  return withLanguages(categorizeProficiencyList(unique), oldLanguages);
 }
 
 /**

@@ -53,10 +53,11 @@ import CampaignDocumentsModal from '@/components/documents/CampaignDocumentsModa
 import SessionSidebar from '@/components/campaign/SessionSidebar';
 import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import ConnectionStatus from '@/components/ConnectionStatus';
-import { CampaignStatus, TokenType } from '@/types';
+import { CampaignStatus } from '@/types';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import Tooltip from '@/components/ui/Tooltip';
+import { useOnRejoin } from '@/hooks/useOnRejoin';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -64,7 +65,7 @@ import Tooltip from '@/components/ui/Tooltip';
 
 function CampaignPageContent() {
   const navigate = useNavigate();
-  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap } = useCampaign();
+  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
   const { user } = useAuth();
 
   /**
@@ -77,7 +78,7 @@ function CampaignPageContent() {
    */
   const isOwner = isCampaignOwner(campaign, user?.id);
   const canOpenSettings = userRole === 'DM' || isOwner;
-  const { socket, reconnectCount, status } = useWebSocket();
+  const { socket, joinedEpoch, status } = useWebSocket();
 
   // Mirror combat/initiative state into the game store. Owned here rather than
   // by the initiative panel so both the tracker and the map's active-token
@@ -85,19 +86,14 @@ function CampaignPageContent() {
   // collapsed or unmounted.
   useInitiativeSync();
 
-  // After a WebSocket reconnect, refetch the current map's state via REST.
-  // The real-time stream only pushes deltas; any moves/wall edits/fog ops
-  // that broadcast while this client was offline are not replayed, so without
-  // this refresh the local map view stays frozen on pre-disconnect state
-  // until the next live event arrives (or a hard refresh). reconnectCount is
-  // 0 on initial load and ticks once per successful reconnect, so this skips
-  // the initial mount.
-  useEffect(() => {
-    if (reconnectCount > 0) {
-      refreshCurrentMap();
-    }
-    // refreshCurrentMap is stable enough for this trigger pattern
-  }, [reconnectCount]);
+  // After a WebSocket reconnect, catch up via REST. The real-time stream
+  // only pushes deltas; moves, wall edits and fog ops, a pause or an end, a
+  // member's new role and a switch to another map that broadcast while this
+  // client was offline are not replayed, so without this the page stays on
+  // its pre-disconnect state until the next live event arrives (or a hard
+  // refresh). Once the connection has joined the campaign again, so nothing
+  // sent while the read is in flight is missed.
+  useOnRejoin(joinedEpoch, catchUpAfterReconnect);
 
   // A player changing their character's token image rewrites the image on every
   // token bound to that character, server-side — tokens hold their own copy. The
@@ -396,7 +392,7 @@ function CampaignPageContent() {
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-warm-amber/10 border-b border-warm-amber/20">
           <PauseCircle className="w-4 h-4 text-warm-amber flex-shrink-0" />
           <p className="text-xs font-medium text-warm-amber">
-            Session is paused. Token movement is disabled and dice rolls are automatically secret.
+            Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.
           </p>
         </div>
       )}
@@ -424,14 +420,7 @@ function CampaignPageContent() {
               <CampaignRoster />
               {/* Token Roster — DM only */}
               {userRole === 'DM' && (
-                <TokenRoster
-                  onEditToken={(token) => {
-                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                      setQuickEditToken(token);
-                    }
-                  }}
-                />
+                <TokenRoster onEditToken={setQuickEditToken} />
               )}
             </aside>
           </Panel>
@@ -448,14 +437,7 @@ function CampaignPageContent() {
                   </div>
                 }
               >
-                <MapCanvas
-                  onEditToken={(token) => {
-                    const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-                    if (effectiveType === TokenType.NPC || effectiveType === TokenType.OBJECT) {
-                      setQuickEditToken(token);
-                    }
-                  }}
-                />
+                <MapCanvas onEditToken={setQuickEditToken} />
               </Suspense>
             </section>
           </Panel>

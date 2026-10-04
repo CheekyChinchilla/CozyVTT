@@ -21,6 +21,11 @@ export interface TokenDrawState {
   tokens: readonly Token[];
   tokenImages: ReadonlyMap<string, HTMLImageElement>;
   animatingTokens: ReadonlyMap<string, TokenAnimation>;
+  /**
+   * Where a token someone else is carrying is drawn (the store's `heldAt`).
+   * Only its picture moves; everything else reads `token.position`.
+   */
+  heldAt: Readonly<Record<string, { x: number; y: number }>>;
   /** Timestamp for tween progress (Date.now() at frame time). */
   now: number;
   draggedToken: Token | null;
@@ -121,7 +126,25 @@ function traceTokenOutline(
  * Exported because the hover panel shows the same placeholder, and a second
  * copy of this would drift into showing a different colour for the same token.
  */
+/**
+ * The cached art for a token, if the token has an address for it.
+ *
+ * The cache is keyed by token id, and the DM's holds the real art of every
+ * token. A masked token arrives with no address under the same id, so the
+ * address decides, not the cache; otherwise the DM's preview, the hover card
+ * and the drag ghost would show the table a picture the player is not sent.
+ */
+export function cachedTokenImage(
+  token: Pick<Token, 'id' | 'imageUrl'>,
+  images: ReadonlyMap<string, HTMLImageElement>
+): HTMLImageElement | undefined {
+  return token.imageUrl ? images.get(token.id) : undefined;
+}
+
 export function placeholderColor(token: Token): string {
+  // An obscured token reaches a player with no kind and no disposition, so it
+  // lands on the neutral stone below by itself; the DM, who holds the real
+  // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
   return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
     token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
@@ -152,15 +175,19 @@ export function drawTokens(
   for (const token of state.tokens) {
     if (!isTokenVisibleTo(token, view)) continue;
 
-    const tokenImg = state.tokenImages.get(token.id);
+    // The cache is keyed by id, so it can hold art for a token this view
+    // receives without an address: the DM's preview of an obscured token. The
+    // address decides whether art is drawn, not the cache.
+    const tokenImg = cachedTokenImage(token, state.tokenImages);
 
     // Skip dragged token (drawn separately as ghost)
     if (state.draggedToken?.id === token.id) continue;
 
     // Check if token is animating
     const animation = state.animatingTokens.get(token.id);
-    let posX = token.position.x;
-    let posY = token.position.y;
+    const at = state.heldAt[token.id] ?? token.position;
+    let posX = at.x;
+    let posY = at.y;
 
     if (animation) {
       const elapsed = state.now - animation.startTime;
@@ -402,6 +429,23 @@ export function drawTokens(
       ctx.fill();
     }
 
+    // Obscured indicator (DM-only small "?" badge). The DM sees the token as
+    // it is, so this badge is the only sign that the table sees a shape.
+    if (token.obscured && isDM) {
+      const badgeRadius = Math.max(5, 5 / zoom);
+      const bx = displayMode === 'full-art' ? tokenX + badgeRadius * 2 : centerX - radius * 0.6;
+      const by = displayMode === 'full-art' ? tokenY + badgeRadius * 2 : centerY - radius * 0.6;
+      ctx.fillStyle = 'rgba(124, 58, 237, 0.9)';
+      ctx.beginPath();
+      ctx.arc(bx, by, badgeRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `bold ${Math.max(8, badgeRadius * 1.4)}px 'Inter', system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('?', bx, by + badgeRadius * 0.05);
+    }
+
     // Hover border
     if (state.hoverTokenId === token.id) {
       ctx.strokeStyle = '#4a90e2';
@@ -485,7 +529,7 @@ export function drawTokens(
   // the cursor during drag.
   if (state.draggedToken && state.dragOffset && state.hoverCoords) {
     const draggedToken = state.draggedToken;
-    const tokenImg = state.tokenImages.get(draggedToken.id);
+    const tokenImg = cachedTokenImage(draggedToken, state.tokenImages);
     const maxPosX = mapWidth - draggedToken.size.width;
     const maxPosY = mapHeight - draggedToken.size.height;
     const ghostPosX = Math.max(0, Math.min(maxPosX, state.hoverCoords.x - state.dragOffset.x));
