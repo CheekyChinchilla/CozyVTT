@@ -4093,8 +4093,9 @@ paths:
         - `gameSystem` in the body is only compared with the character's
           current value: the same value is accepted and ignored, a different
           one (or null on a typed character) answers 400. A character's game
-          system cannot change. This comparison happens before the permission
-          check.
+          system cannot change. This comparison happens after the permission
+          check, so a caller who may not edit the character gets 403 whatever
+          they send.
         - If the character has a `gameSystem`, `data` is validated against
           that system's sheet schema (after moving sheet fields from before
           version 1.3.0 to their current names) and stored as the schema's

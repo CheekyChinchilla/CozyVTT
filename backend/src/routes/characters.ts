@@ -483,14 +483,6 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Prevent changing gameSystem after creation
-    if (gameSystem !== undefined && gameSystem !== character.gameSystem) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot change game system after character creation. Create a new character instead.',
-      });
-    }
-
     // Check authorization: the owner, or the DM of the character's campaign.
     // A spectator in that campaign may not edit even their own character: a
     // token bound to it follows the sheet on every screen (its bar, its
@@ -514,6 +506,15 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       return res.status(403).json({
         error: 'Forbidden',
         message: 'You do not have permission to edit this character',
+      });
+    }
+
+    // Prevent changing gameSystem after creation. Checked after the permission
+    // check, so the answer tells a stranger nothing about the character.
+    if (gameSystem !== undefined && gameSystem !== character.gameSystem) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Cannot change game system after character creation. Create a new character instead.',
       });
     }
 

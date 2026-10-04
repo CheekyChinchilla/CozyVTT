@@ -310,6 +310,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Campaigns, maps and members
 
+- **Saving someone else's character no longer reveals its game system.** Someone who knew a character's id, but could not edit it, could tell which game system it used from whether the refusal named the system or their permission.
+
 - **Maps the DM has not shown yet are private to the DM.** Any member could list every map and fetch any of them, with its artwork, walls, lights and visible tokens. Players and spectators now get only the campaign's current map and the art it uses, cannot change anything on other maps (moving a staged token, rolling its initiative, opening its doors or recording explored areas), and are not sent the DM's live edits to them. The DM still sees every map. Art in the campaign's asset library stays visible to every member, and that includes art uploaded from inside the campaign and the picture of a map imported from a UVTT file. The DM Guide explains how to keep a surprise map's art private until it is shown.
 
 - **Players are not told about combatants on a map the table is not showing**, and do not hear their initiative rolls.
