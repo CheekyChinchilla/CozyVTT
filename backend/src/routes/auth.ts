@@ -381,7 +381,7 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
   try {
     const { email } = req.body;
 
-    if (!email) {
+    if (typeof email !== 'string' || !email) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Email is required',
@@ -442,7 +442,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
   try {
     const { token, newPassword } = req.body;
 
-    if (!token || !newPassword) {
+    if (typeof token !== 'string' || !token || typeof newPassword !== 'string' || !newPassword) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Token and new password are required',

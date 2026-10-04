@@ -252,6 +252,8 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 #### Setup, imports and documentation
 
+- **Malformed requests from scripts get a 400 that says what is wrong, not an internal error.** The app never sends these, but a program driving the API could, and got "An unexpected error occurred". This covers a password reset request whose email, link or new password is not text.
+
 - **A map whose picture was deleted before the campaign was exported now imports without a picture**, keeping its walls, tokens and fog. Such maps used to be left out of the import, including from archives made on 1.4.0.
 
 - **`SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` and `LOG_LEVEL` in `.env` now work on Docker.** They were never passed to the backend. The guides and the app's messages also now say that `docker compose restart` keeps the old settings (use `docker compose up -d` after changing `.env`), and that `BACKUP_DIR` is only for installs without Docker.
