@@ -1029,6 +1029,26 @@ The backend writes structured JSON logs to `backend/logs/` on the host:
 - `backend/logs/combined.log` — all log levels
 - `backend/logs/error.log` — errors only
 
+Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
+
+```json
+{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+```
+
+To see the most recent errors:
+
+```bash
+tail -n 20 backend/logs/error.log
+```
+
+**What the logs hold.** Email addresses are cut to their first letter and their domain, such as `a***@example.com`, which is enough to tell accounts apart. Accounts, campaigns and maps are mostly named by their internal ids, and a few lines include a campaign's name. A value longer than 8,000 characters keeps only its first and last 4,000, so one oversized request cannot produce a huge line. Log files written by older versions can still hold full email addresses. To remove them, stop the backend, delete the files, and start it again; it begins new ones:
+
+```bash
+docker compose stop backend
+sudo rm backend/logs/*.log
+docker compose start backend
+```
+
 ### Health Check Endpoint
 
 ```

@@ -51,6 +51,7 @@ If you become a collaborator, here's what the codebase expects:
 ### Security
 
 - Never log sensitive data (passwords, session tokens, full `DATABASE_URL`)
+- Log a caught error as `logger.error('What failed', { err: error })`. The logger writes the error's message, code and stack, masks email addresses and shortens very long values; it removes nothing else, so never log a request body or a socket payload as it arrived
 - All authorization checks happen server-side — never trust the client
 - File uploads must go through the existing magic byte validation middleware
 - Any new WebSocket events that modify state must verify campaign membership server-side

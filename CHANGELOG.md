@@ -10,9 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The backend's log files say what went wrong.** Almost every error was written as an empty `{}`, so a log kept a label such as "Error adding token" and nothing about the cause. Each error is now written with its message and where in the code it happened, on the console and in the log files, so a log attached to a bug report can be diagnosed. A value longer than 8,000 characters keeps only its start and end, so one oversized request cannot write a huge line.
+
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
+
+### Security
+
+- **Log files no longer keep full email addresses.** Every address the backend logs, from the emails it sends to the errors it records, is cut to its first letter and its domain, such as `a***@example.com`. That is enough to tell accounts apart, and an account deleted later no longer leaves its address behind in the logs. Logs written by older versions still hold full addresses; the deployment guide's section on log files says how to remove them.
 
 ---
 
