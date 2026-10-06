@@ -5,14 +5,18 @@ import logger from '../utils/logger';
 
 const PgSession = connectPgSimple(session);
 
-// PostgreSQL connection pool for session storage
-// TODO(deploy): this pool has no 'error' listener. node-postgres emits an error
-// on the pool when an idle client's connection drops, as it does when Postgres
-// stops or restarts, and with no listener that error crashes the backend. Log
-// it with pgPool.on('error', ...); the pool opens a new client for the next
-// query.
-const pgPool = new Pool({
+// PostgreSQL connection pool for session storage. Exported so a clean
+// shutdown can close it.
+export const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
+});
+
+// node-postgres emits 'error' on the pool when an idle connection drops, as
+// every one does when PostgreSQL stops or restarts. An 'error' event with no
+// listener is thrown and would end the process. The pool opens a new
+// connection for the next query, so the drop is only logged.
+sessionPool.on('error', (err) => {
+  logger.error('Session store lost a database connection', { err });
 });
 
 // Validate SESSION_SECRET — fail loudly in production rather than silently run insecure
@@ -41,7 +45,7 @@ if (!SESSION_SECRET || INSECURE_PLACEHOLDERS.includes(SESSION_SECRET)) {
 // Session configuration
 export const sessionConfig: session.SessionOptions = {
   store: new PgSession({
-    pool: pgPool,
+    pool: sessionPool,
     tableName: 'session',
     createTableIfMissing: true,
   }),
