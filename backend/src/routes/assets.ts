@@ -22,6 +22,7 @@ import {
   TYPED_DOCUMENT_MIME,
 } from '../validators/documents';
 import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, spiritLayerAssetIdsHiddenFrom } from '../services/permissions';
+import { assetUsageFor } from '../services/assetUsage';
 import path from 'path';
 import fs from 'fs';
 import { generateThumbnail } from '../utils/thumbnails';
@@ -550,6 +551,10 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
  * DELETE /api/assets/:id
  * Delete an asset
  * Requires: Authentication + ownership or campaign DM
+ *
+ * Answers 409 with code ASSET_IN_USE and the list of uses while a map, token,
+ * character, template, creature or campaign setting still names the asset,
+ * unless the request carries `?force=true`.
  */
 router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -623,6 +628,24 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
         return res.status(403).json({
           error: 'Forbidden',
           message: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
+        });
+      }
+    }
+
+    // Whatever shows this asset is not told when it goes, and a deleted file
+    // cannot come back. Say where it is used and delete only when asked to
+    // anyway. Permissions were decided above, so the list goes only to someone
+    // who may delete the asset, and names only what they may see.
+    if (req.query.force !== 'true') {
+      const { usage, omitted } = await assetUsageFor(asset.id, { userId, isAdmin });
+      if (usage.length > 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          // Clients branch on the code, never the wording.
+          code: 'ASSET_IN_USE',
+          message: 'This asset is still in use. Deleting it leaves those places without it. Send force=true to delete it anyway.',
+          usage,
+          omitted,
         });
       }
     }

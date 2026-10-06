@@ -80,6 +80,7 @@ const mine = (id: string, name: string, originalName: string): Asset =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  deleteAsset.mockReset();
   listCampaignDocuments.mockResolvedValue({ documents: [shared('d1', 'Core Rules', 'rules.pdf')] });
   listAssets.mockResolvedValue({
     assets: [mine('d1', 'Core Rules', 'rules.pdf'), mine('d2', 'House Rules', 'house.md')],
@@ -226,6 +227,54 @@ describe('CampaignDocumentsModal', () => {
       await waitFor(() => expect(deleteAsset).toHaveBeenCalledWith('d5'));
       await waitFor(() => expect(screen.queryByText('Orphaned Notes')).not.toBeInTheDocument());
       expect(screen.getByText('Core Rules')).toBeInTheDocument();
+    });
+
+    it('shows where a document in use is used before deleting it anyway', async () => {
+      // Refused until the request says to force it.
+      deleteAsset.mockImplementation(async (_id: string, options?: { force?: boolean }) => {
+        if (options?.force) return { message: 'ok' };
+        throw {
+          response: {
+            status: 409,
+            data: {
+              code: 'ASSET_IN_USE',
+              message: 'This asset is still in use.',
+              usage: [{ kind: 'map', name: 'Library', campaignId: 'c1', campaignName: 'Lost Mine', count: 1 }],
+              omitted: 0,
+            },
+          },
+        };
+      });
+      listCampaignDocuments.mockResolvedValue({
+        documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
+      });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Orphaned Notes');
+
+      fireEvent.click(screen.getByLabelText('Delete Orphaned Notes'));
+      fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+
+      expect(await screen.findByText(/Map "Library" \(Lost Mine\)/)).toBeInTheDocument();
+      expect(deleteAsset).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Orphaned Notes', { selector: 'button' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete anyway' }));
+      await waitFor(() => expect(deleteAsset).toHaveBeenLastCalledWith('d5', { force: true }));
+      await waitFor(() => expect(screen.queryByText('Orphaned Notes', { selector: 'button' })).not.toBeInTheDocument());
+    });
+
+    it('shows the reason when a document cannot be deleted', async () => {
+      deleteAsset.mockRejectedValue({ response: { status: 403, data: { message: 'Not yours to delete' } } });
+      listCampaignDocuments.mockResolvedValue({
+        documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
+      });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Orphaned Notes');
+
+      fireEvent.click(screen.getByLabelText('Delete Orphaned Notes'));
+      fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Not yours to delete');
     });
 
     it('says so when there is nothing left to share', async () => {

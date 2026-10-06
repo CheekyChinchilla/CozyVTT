@@ -4784,11 +4784,24 @@ paths:
         global asset manager.
 
         Removes the database row, the file and its thumbnail (if any), and
-        for a document every share of it with a campaign. Nothing checks
-        whether a map, token, character, token template, creature or a
-        campaign's atmosphere track still names the asset: those references
-        are left in place and now point at nothing. Deleting a user's newest
-        avatar makes their previous one current.
+        for a document every share of it with a campaign. Deleting a user's
+        newest avatar makes their previous one current.
+
+        While a map (its image, base layer or spirit layer), a token on a map,
+        a character's token picture, a character template, a creature, a token
+        template or a campaign's atmosphere track still names the asset, the
+        route answers **409** with `code: ASSET_IN_USE` and the list of uses,
+        and deletes nothing. Those records are not told when an asset goes, so
+        deleting one anyway leaves them pointing at nothing. Send
+        `force=true` to delete it regardless; any other value of `force` is
+        ignored. Permissions are checked first, so only someone who may delete
+        the asset is told where it is used. An admin sees every record by name;
+        anyone else sees a name and campaign only for what is in a campaign
+        they are the DM of, a character they own, or a character template. The
+        rest is counted per kind with `name` and `campaignName` null. Only an
+        address that names this asset counts: one that merely contains its id
+        (a longer id, a query string) is not a use. Profile pictures are not
+        checked.
       operationId: deleteAsset
       security:
         - cookieAuth: []
@@ -4799,6 +4812,15 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: force
+          in: query
+          required: false
+          description: >-
+            `true` deletes the asset even though something still uses it. Any
+            other value, or none, leaves an in-use asset alone and answers 409.
+          schema:
+            type: string
+            enum: ['true']
       responses:
         '200':
           description: Asset deleted
@@ -4814,6 +4836,54 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            Something still uses the asset, and the request did not carry
+            `force=true`. Nothing was deleted. Route on `code`, not the message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: ASSET_IN_USE
+                  message:
+                    type: string
+                  usage:
+                    type: array
+                    description: >-
+                      At most 100 entries; `omitted` counts the rest. Each is
+                      one map, character, template, creature or campaign, or a
+                      map's tokens together (`count`), or, where the caller may
+                      not see the record, every use of one kind folded into a
+                      single entry with `name`, `campaignId` and `campaignName`
+                      null.
+                    items:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting]
+                        name:
+                          type: string
+                          nullable: true
+                          description: The map, character, template, creature or campaign.
+                        campaignId:
+                          type: string
+                          nullable: true
+                        campaignName:
+                          type: string
+                          nullable: true
+                        count:
+                          type: integer
+                          description: How many tokens (kind `token`) or folded entries it stands for; 1 otherwise.
+                  omitted:
+                    type: integer
+                    description: Uses past the 100 listed.
 
   /api/assets/{id}/scope:
     parameters:

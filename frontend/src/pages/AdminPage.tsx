@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAssetDelete } from '@/hooks/useAssetDelete';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -300,6 +301,8 @@ export default function AdminPage() {
   const [assetScopePicker, setAssetScopePicker] = useState<{ assetId: string; campaignId: string } | null>(null);
   const [assetScopeChanging, setAssetScopeChanging] = useState<string | null>(null);
   const [assetDeleting, setAssetDeleting] = useState<string | null>(null);
+  // The asset whose bin was clicked, until the delete is confirmed or cancelled.
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
 
   // ---- Global Asset Manager toggle ----
   const [togglingGlobalAssets, setTogglingGlobalAssets] = useState<string | null>(null);
@@ -741,15 +744,24 @@ export default function AdminPage() {
     }
   };
 
-  const handleAdminDeleteAsset = async (assetId: string) => {
-    setAssetDeleting(assetId);
-    try {
-      await api.deleteAsset(assetId);
+  // Deleting an asset takes two questions: this tab asks "delete this?", and if
+  // the server says something still uses it, the hook's dialog shows where and
+  // asks again before forcing it.
+  const assetDelete = useAssetDelete({
+    onDeleted: ({ id: assetId }) => {
       setAdminAssets(prev => prev.filter(a => a.id !== assetId));
       setAdminAssetsTotal(prev => prev - 1);
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      showToast(apiErrorMessage(e) ?? 'Failed to delete asset', 'error');
+    },
+    onError: (message) => showToast(message, 'error'),
+  });
+
+  const handleAdminDeleteAsset = async () => {
+    const asset = assetToDelete;
+    if (!asset) return;
+    setAssetToDelete(null);
+    setAssetDeleting(asset.id);
+    try {
+      await assetDelete.deleteAsset(asset);
     } finally {
       setAssetDeleting(null);
     }
@@ -1765,10 +1777,11 @@ export default function AdminPage() {
                                   </div>
                                   {/* Delete */}
                                   <button
-                                    onClick={() => handleAdminDeleteAsset(asset.id)}
+                                    onClick={() => setAssetToDelete(asset)}
                                     disabled={isDeleting || isChangingScope}
                                     className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
                                     title="Delete asset"
+                                    aria-label={`Delete asset ${asset.name}`}
                                   >
                                     {isDeleting
                                       ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -2775,6 +2788,22 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Delete asset confirmation; the in-use question follows if the server asks it */}
+      <ConfirmDialog
+        isOpen={assetToDelete !== null}
+        title="Delete Asset"
+        message={
+          assetToDelete
+            ? `Delete "${assetToDelete.name}" (${assetScopeLabel(assetToDelete.scope)} ${assetToDelete.type.toLowerCase()}), uploaded by ${assetToDelete.uploadedBy?.displayName ?? 'a deleted account'}${assetToDelete.campaign ? ` in the campaign "${assetToDelete.campaign.name}"` : ''}? The file is removed from the server and cannot be brought back. If a map, token or anything else still uses it, you will be shown where before it is deleted.`
+            : ''
+        }
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleAdminDeleteAsset}
+        onCancel={() => setAssetToDelete(null)}
+      />
+      {assetDelete.inUseDialog}
 
       {/* Restore backup confirmation */}
       <ConfirmDialog

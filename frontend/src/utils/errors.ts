@@ -26,7 +26,7 @@
  * this yields `undefined` and the call site's fallback instead.
  */
 
-import type { DeletionBlocker } from '@/types';
+import type { AssetUse, AssetUseKind, DeletionBlocker } from '@/types';
 
 /** An axios-shaped error body, as this API returns it. */
 interface ApiErrorBody {
@@ -35,6 +35,8 @@ interface ApiErrorBody {
   code?: unknown;
   validationErrors?: unknown;
   campaigns?: unknown;
+  usage?: unknown;
+  omitted?: unknown;
 }
 
 function errorResponse(err: unknown): { status?: unknown; data?: ApiErrorBody } | undefined {
@@ -73,8 +75,8 @@ export function apiErrorStatus(err: unknown): number | undefined {
  *
  * The backend sends a machine-readable code alongside the wording on responses
  * a client has to act on, so routing on it cannot break when the message is
- * reworded. `PASSWORD_CHANGE_REQUIRED` and `UVTT_IMPORT_NEEDS_CONFIRMATION`
- * are the ones in use.
+ * reworded. `PASSWORD_CHANGE_REQUIRED`, `UVTT_IMPORT_NEEDS_CONFIRMATION` and
+ * `ASSET_IN_USE` are the ones in use.
  */
 export function apiErrorCode(err: unknown): string | undefined {
   const code = errorResponse(err)?.data?.code;
@@ -133,6 +135,39 @@ export function apiDeletionBlockers(err: unknown): DeletionBlocker[] | undefined
     blockers.push({ id: record.id, name: record.name, members });
   }
   return blockers;
+}
+
+const ASSET_USE_KINDS: readonly AssetUseKind[] = [
+  'map', 'token', 'character', 'characterTemplate', 'creature', 'tokenTemplate', 'campaignSetting',
+];
+
+/**
+ * Where an asset is used, from the server's refusal to delete one that
+ * something still names (`ASSET_IN_USE`). Undefined for any other error, so a
+ * caller can tell this refusal from a failure. Entries that are not shaped
+ * like a use are left out.
+ */
+export function apiAssetInUse(err: unknown): { usage: AssetUse[]; omitted: number } | undefined {
+  if (apiErrorCode(err) !== 'ASSET_IN_USE') return undefined;
+  const body = errorResponse(err)?.data;
+  const usage: AssetUse[] = [];
+  if (Array.isArray(body?.usage)) {
+    for (const entry of body.usage) {
+      if (!entry || typeof entry !== 'object') continue;
+      const record = entry as Record<string, unknown>;
+      const kind = ASSET_USE_KINDS.find((k) => k === record.kind);
+      if (!kind) continue;
+      usage.push({
+        kind,
+        name: typeof record.name === 'string' ? record.name : null,
+        campaignId: typeof record.campaignId === 'string' ? record.campaignId : null,
+        campaignName: typeof record.campaignName === 'string' ? record.campaignName : null,
+        count: typeof record.count === 'number' && record.count > 0 ? record.count : 1,
+      });
+    }
+  }
+  const omitted = typeof body?.omitted === 'number' && body.omitted > 0 ? body.omitted : 0;
+  return { usage, omitted };
 }
 
 /** `err.message` when the thrown value is a real Error, or carries a string message. */
