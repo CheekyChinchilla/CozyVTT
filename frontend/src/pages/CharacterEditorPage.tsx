@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { canEditCharacterIn, characterEditRefusal } from '@/services/permissions';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucide-react';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
 import CharacterSheetSkeleton from '@/components/skeletons/CharacterSheetSkeleton';
@@ -16,6 +17,7 @@ import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import characterService from '@/services/character.service';
+import { storeCharacterInList } from '@/hooks/queries';
 import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
@@ -30,6 +32,7 @@ export default function CharacterEditorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   // State
   const [character, setCharacter] = useState<Character | null>(null);
@@ -151,8 +154,10 @@ export default function CharacterEditorPage() {
 
         reportSignedIn();
 
-        // Update local state
+        // Update local state, and the Characters page's list, which would
+        // otherwise go on handing out the version from before this save.
         setCharacter(updated);
+        storeCharacterInList(queryClient, updated);
         setLastSaved(new Date());
 
         if (doShowToast) {
@@ -177,7 +182,9 @@ export default function CharacterEditorPage() {
         if (isStaleCharacterSave(err)) {
           showToast(STALE_CHARACTER_RELOADED, 'error');
           try {
-            setCharacter(await characterService.getCharacter(character.id));
+            const fresh = await characterService.getCharacter(character.id);
+            setCharacter(fresh);
+            storeCharacterInList(queryClient, fresh);
             setHasUnsavedChanges(false);
             setSheetKey((key) => key + 1);
           } catch (reloadError) {
@@ -203,7 +210,7 @@ export default function CharacterEditorPage() {
         setSaving(false);
       }
     },
-    [character, showToast]
+    [character, showToast, queryClient]
   );
 
   // ============================================
@@ -212,9 +219,6 @@ export default function CharacterEditorPage() {
 
   const handleSheetSave = useCallback(
     async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
-      // Log the data being saved for debugging
-      console.log('Saving character data:', data);
-
       // Save immediately when user clicks save in character sheet
       // Pass tokenImageUrl through so token images are persisted
       await handleSave(data, showToast ?? true, tokenImageUrl);

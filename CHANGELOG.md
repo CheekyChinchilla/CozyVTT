@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
 
+- **The Characters page shows a character as you last saved it.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) After saving in the Character Editor and going back, the Characters page could go on showing the character from before the save: on its card, in the sheet that opens when you click it, in **Export as JSON**, and in the editor opened from that sheet. Saving from that editor was then refused as out of date, which made it look as if your earlier changes had been lost. A character made from a template now also appears on the Characters page straight away.
+
+- **Saving in the Character Editor no longer copies the whole sheet into the browser's console,** where it could end up in a log attached to a bug report.
+
 ---
 
 ## [1.5.0] — 2026-10-03
