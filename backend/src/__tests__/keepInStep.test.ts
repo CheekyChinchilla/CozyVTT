@@ -19,7 +19,7 @@
  * command line brings back what the dashboard's restore removes.
  *
  * The password rule's special characters, checked in the browser as you type
- * and decided on the server.
+ * and decided on the server. The email address check, likewise.
  *
  * The combat state. The server sends it and the client reads it, and each
  * package declares it; the first field added to it after the split already
@@ -163,6 +163,27 @@ describe('the special characters a password needs one of', () => {
 
   it('are the same in the browser and on the server', () => {
     expect(pattern('frontend/src/utils/validation.ts')).toBe(pattern('backend/src/utils/validation.ts'));
+  });
+});
+
+describe('the email address check', () => {
+  // Written in both packages. The browser's copy decides whether the sign-in
+  // page sends an address at all, so it must never refuse one the server
+  // would take.
+  const body = (rel: string, name: string) => {
+    const m = new RegExp(`export function ${name}\\(email: string\\): boolean \\{\\n([\\s\\S]*?)\\n\\}`).exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares ${name}; update this test with the file`);
+    return m[1];
+  };
+  const limit = (rel: string) => {
+    const m = /export const MAX_EMAIL_LENGTH = (\d+);/.exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares MAX_EMAIL_LENGTH; update this test with the file`);
+    return m[1];
+  };
+
+  it('is the same in the browser and on the server', () => {
+    expect(body('frontend/src/utils/validation.ts', 'isValidEmail')).toBe(body('backend/src/utils/validation.ts', 'validateEmail'));
+    expect(limit('frontend/src/utils/validation.ts')).toBe(limit('backend/src/utils/validation.ts'));
   });
 });
 

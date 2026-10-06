@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
 
+### Security
+
+- **A specially crafted email address could make the server stop responding for minutes.** Addresses are now checked safely. One over 254 characters, the most the email standards allow, is now refused when registering, during setup, on a profile change, or when an administrator adds or invites a user. No real address is that long, so no existing account is affected.
+
 ---
 
 ## [1.5.0] — 2026-10-03
