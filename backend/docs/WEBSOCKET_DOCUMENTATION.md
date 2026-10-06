@@ -346,6 +346,8 @@ push and would otherwise show everyone offline until somebody moved.
 - "Token position out of bounds" - Invalid coordinates
 - "Map not found" - Invalid map ID
 
+`error` only goes from the server to the client. Socket.io does not reserve the name, so a client can emit an event called `error`; the server ignores it, answers nothing, and writes none of its payload to the log.
+
 ---
 
 ## Token Movement — a worked example
