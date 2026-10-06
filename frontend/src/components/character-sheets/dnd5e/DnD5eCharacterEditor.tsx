@@ -222,52 +222,59 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const data = character.data as DnD5eFormData;
 
 
-  // Form state - initialize with character data
-  const [formData, setFormData] = useState<DnD5eFormData>(() => ({
-    ...withoutOrphanLanguages(withoutOrphanFeatures(data)),
-    // Ensure nested objects exist.
-    //
-    // TODO(typing): `{}` is not a valid container — none of these has its keys,
-    // and the effects below read `.score` / `.proficient` off each entry. A
-    // sheet stored without one of these blocks therefore reads `undefined`
-    // where a number is expected. Pre-existing; the casts keep the behaviour
-    // exactly as it was rather than changing what a malformed sheet does.
-    stats: (data.stats || {}) as DnD5eStats,
-    savingThrows: (data.savingThrows || {}) as DnD5eSavingThrows,
-    skills: (data.skills || {}) as DnD5eSkills,
-    hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
-    deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    // Same TODO(typing) as the containers above: this default omits `class`,
-    // which the type requires. Cast rather than corrected.
-    spellcasting: (data.spellcasting
-      ? { ...data.spellcasting, slots: withAllSlotLevels(data.spellcasting.slots) }
-      : {
-          ability: '',
-          spellSaveDC: 0,
-          spellAttackBonus: 0,
-          cantrips: [],
-          slots: withAllSlotLevels(undefined),
-          spells: [],
-        }) as DnD5eSpellcasting,
-    currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-    inventory: data.inventory || [],
-    attacks: data.attacks || [],
-    hitDice: data.hitDice || [],
-    conditions: data.conditions || [],
-    proficienciesAndLanguages: data.proficienciesAndLanguages || [],
-    // Always four strings, so the textareas are controlled from the first
-    // render. The shared reader settles where they come from: the stored boxes
-    // when the sheet has them, otherwise a one-time guess from the flat list a
-    // sheet written before the boxes existed carries.
-    proficiencies: readProficiencyGroups(data),
-    // featuresAndTraits is not defaulted here: the spread above has already
-    // settled it, folding in the template-era `features` field. Re-reading
-    // `data` would throw that away.
-    // Same TODO(typing) as the containers above.
-    appearance: (data.appearance || {}) as DnD5eAppearance,
-    personality: (data.personality || {}) as DnD5ePersonality,
-    alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
-  }));
+  // Form state, initialised from the editor's own copy of the sheet. The
+  // effects below write derived numbers into the form, and with the stored
+  // sheet's inner objects shared they wrote them into the character the host,
+  // the sheet behind and the Characters page's list are holding, before
+  // anything was saved.
+  const [formData, setFormData] = useState<DnD5eFormData>(() => {
+    const own = JSON.parse(JSON.stringify(data ?? {})) as DnD5eFormData;
+    return {
+      ...withoutOrphanLanguages(withoutOrphanFeatures(own)),
+      // Ensure nested objects exist.
+      //
+      // TODO(typing): `{}` is not a valid container — none of these has its keys,
+      // and the effects below read `.score` / `.proficient` off each entry. A
+      // sheet stored without one of these blocks therefore reads `undefined`
+      // where a number is expected. Pre-existing; the casts keep the behaviour
+      // exactly as it was rather than changing what a malformed sheet does.
+      stats: (own.stats || {}) as DnD5eStats,
+      savingThrows: (own.savingThrows || {}) as DnD5eSavingThrows,
+      skills: (own.skills || {}) as DnD5eSkills,
+      hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
+      deathSaves: own.deathSaves || { successes: 0, failures: 0 },
+      // Same TODO(typing) as the containers above: this default omits `class`,
+      // which the type requires. Cast rather than corrected.
+      spellcasting: (own.spellcasting
+        ? { ...own.spellcasting, slots: withAllSlotLevels(own.spellcasting.slots) }
+        : {
+            ability: '',
+            spellSaveDC: 0,
+            spellAttackBonus: 0,
+            cantrips: [],
+            slots: withAllSlotLevels(undefined),
+            spells: [],
+          }) as DnD5eSpellcasting,
+      currency: own.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+      inventory: own.inventory || [],
+      attacks: own.attacks || [],
+      hitDice: own.hitDice || [],
+      conditions: own.conditions || [],
+      proficienciesAndLanguages: own.proficienciesAndLanguages || [],
+      // Always four strings, so the textareas are controlled from the first
+      // render. The shared reader settles where they come from: the stored boxes
+      // when the sheet has them, otherwise a one-time guess from the flat list a
+      // sheet written before the boxes existed carries.
+      proficiencies: readProficiencyGroups(own),
+      // featuresAndTraits is not defaulted here: the spread above has already
+      // settled it, folding in the template-era `features` field. Re-reading
+      // `data` would throw that away.
+      // Same TODO(typing) as the containers above.
+      appearance: (own.appearance || {}) as DnD5eAppearance,
+      personality: (own.personality || {}) as DnD5ePersonality,
+      alliesAndOrganizations: own.alliesAndOrganizations || { name: '', description: '' },
+    };
+  });
 
   // Report unsaved work up to whoever is hosting this sheet, so leaving with
   // pending edits can be caught. One effect over the whole form rather than a
@@ -368,25 +375,28 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     setShowColorPicker(false);
   };
 
+  // The derived-number effects below each build their update from `prev`,
+  // replacing every entry they change rather than writing into it. Running in
+  // order within one commit, each sees what the one before it settled: the
+  // saving throws are worked out from the modifiers just corrected.
+
   // Auto-calculate modifiers when ability scores change
   useEffect(() => {
-    if (formData.stats) {
-      const updatedStats = { ...formData.stats };
+    setFormData((prev) => {
+      if (!prev.stats) return prev;
+      const updatedStats = { ...prev.stats };
       let hasChanges = false;
 
       (Object.keys(updatedStats) as (keyof DnD5eStats)[]).forEach(ability => {
-        const score = updatedStats[ability].score;
-        const newModifier = calculateModifier(score);
+        const newModifier = calculateModifier(updatedStats[ability].score);
         if (updatedStats[ability].modifier !== newModifier) {
-          updatedStats[ability].modifier = newModifier;
+          updatedStats[ability] = { ...updatedStats[ability], modifier: newModifier };
           hasChanges = true;
         }
       });
 
-      if (hasChanges) {
-        setFormData((prev) => ({ ...prev, stats: updatedStats }));
-      }
-    }
+      return hasChanges ? { ...prev, stats: updatedStats } : prev;
+    });
   }, [
     formData.stats?.strength?.score,
     formData.stats?.dexterity?.score,
@@ -398,25 +408,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Auto-calculate saving throws when proficiency or stats change
   useEffect(() => {
-    if (formData.stats && formData.savingThrows && formData.proficiencyBonus !== undefined) {
-      const updatedSavingThrows = { ...formData.savingThrows };
+    setFormData((prev) => {
+      if (!prev.stats || !prev.savingThrows || prev.proficiencyBonus === undefined) return prev;
+      const updatedSavingThrows = { ...prev.savingThrows };
       let hasChanges = false;
 
       (Object.keys(updatedSavingThrows) as (keyof DnD5eSavingThrows)[]).forEach(ability => {
-        const abilityMod = formData.stats[ability]?.modifier || 0;
+        const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSavingThrows[ability].proficient;
-        const newBonus = abilityMod + (proficient ? formData.proficiencyBonus : 0);
+        const newBonus = abilityMod + (proficient ? prev.proficiencyBonus : 0);
 
         if (updatedSavingThrows[ability].bonus !== newBonus) {
-          updatedSavingThrows[ability].bonus = newBonus;
+          updatedSavingThrows[ability] = { ...updatedSavingThrows[ability], bonus: newBonus };
           hasChanges = true;
         }
       });
 
-      if (hasChanges) {
-        setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
-      }
-    }
+      return hasChanges ? { ...prev, savingThrows: updatedSavingThrows } : prev;
+    });
   }, [
     formData.proficiencyBonus,
     formData.stats?.strength?.modifier,
@@ -476,25 +485,26 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Auto-calculate skill bonuses when ability scores, proficiency, or expertise change
   useEffect(() => {
-    if (formData.stats && formData.skills && formData.proficiencyBonus !== undefined) {
-      const updatedSkills = { ...formData.skills };
+    setFormData((prev) => {
+      if (!prev.stats || !prev.skills || prev.proficiencyBonus === undefined) return prev;
+      const updatedSkills = { ...prev.skills };
       let hasChanges = false;
 
       (Object.keys(updatedSkills) as (keyof DnD5eSkills)[]).forEach(skill => {
         const ability = skillAbilities[skill];
-        const abilityMod = formData.stats[ability]?.modifier || 0;
+        const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSkills[skill].proficient;
         const expertise = updatedSkills[skill].expertise;
 
         let newBonus = abilityMod;
         if (expertise) {
-          newBonus += formData.proficiencyBonus * 2; // Expertise = double proficiency
+          newBonus += prev.proficiencyBonus * 2; // Expertise = double proficiency
         } else if (proficient) {
-          newBonus += formData.proficiencyBonus;
+          newBonus += prev.proficiencyBonus;
         }
 
         if (updatedSkills[skill].bonus !== newBonus) {
-          updatedSkills[skill].bonus = newBonus;
+          updatedSkills[skill] = { ...updatedSkills[skill], bonus: newBonus };
           hasChanges = true;
         }
       });
@@ -510,28 +520,27 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // character imported with the Observant feat would silently lose its +5
       // the first time the sheet was saved.
       const perceptionBonus = updatedSkills.perception?.bonus ?? 0;
-      const storedTotal = formData.passivePerception;
+      const storedTotal = prev.passivePerception;
       const backfilledPassiveBonus =
-        formData.passivePerceptionBonus === undefined || formData.passivePerceptionBonus === null
+        prev.passivePerceptionBonus === undefined || prev.passivePerceptionBonus === null
           ? (typeof storedTotal === 'number' && Number.isFinite(storedTotal)
               ? storedTotal - passiveScore(perceptionBonus)
               : 0)
           : null;
-      const passiveBonus = backfilledPassiveBonus ?? formData.passivePerceptionBonus ?? 0;
+      const passiveBonus = backfilledPassiveBonus ?? prev.passivePerceptionBonus ?? 0;
       const newPassivePerception = passiveScore(perceptionBonus + passiveBonus);
 
       const passiveChanged =
-        formData.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
+        prev.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
 
-      if (hasChanges || passiveChanged) {
-        setFormData((prev) => ({
-          ...prev,
-          skills: updatedSkills,
-          passivePerceptionBonus: passiveBonus,
-          passivePerception: newPassivePerception,
-        }));
-      }
-    }
+      if (!hasChanges && !passiveChanged) return prev;
+      return {
+        ...prev,
+        skills: updatedSkills,
+        passivePerceptionBonus: passiveBonus,
+        passivePerception: newPassivePerception,
+      };
+    });
   }, [
     formData.proficiencyBonus,
     formData.stats?.strength?.modifier,
@@ -787,9 +796,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       updatedData.featuresAndTraits = collectSheetFeatures(updatedData);
       delete (updatedData as Record<string, unknown>).features;
 
-      // Cantrips
+      // Cantrips, parsed into a new spellcasting block. Written into the one
+      // the form holds, the array showed up in the form while the save was in
+      // flight, so the sheet still counted as changed once it had gone through.
       if (updatedData.spellcasting) {
-        updatedData.spellcasting.cantrips = parseCommaSeparated(updatedData.spellcasting.cantrips);
+        updatedData.spellcasting = {
+          ...updatedData.spellcasting,
+          cantrips: parseCommaSeparated(updatedData.spellcasting.cantrips),
+        };
       }
 
       // Upload token image if a new one was selected

@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Saving in the Character Editor no longer copies the whole sheet into the browser's console,** where it could end up in a log attached to a bug report.
 
+- **Opening a D&D 5e sheet's editor and cancelling leaves the sheet as it was.** On a sheet whose modifiers, saving throws or skill bonuses did not match its ability scores, an imported one for example, opening the editor wrote the corrected numbers into the sheet behind it and into the Characters page before anything was saved. After **Cancel** they showed numbers that had never been saved, and **Export as JSON** wrote them out.
+
+- **A D&D 5e sheet with cantrips typed in counts as saved once you save it.** The Character Editor went on saying there were unsaved changes, so leaving asked you to confirm and the time of the last save was not shown.
+
 ---
 
 ## [1.5.0] — 2026-10-03
