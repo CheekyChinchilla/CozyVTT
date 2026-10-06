@@ -27,10 +27,19 @@
 # nginx you need path-based ingress rules (specific paths first, catch-all last).
 # See docs/DEPLOYMENT.md → "Using an External Reverse Proxy" for all three setups.
 
+# Docker's own log of each container, which `docker compose logs` reads, is
+# kept to five files of 10 MB. Without a limit it grows until the disk is full.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   database:
     image: postgres:15-alpine
     container_name: cozyvtt-database
+    logging: *logging
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
@@ -55,6 +64,7 @@ services:
       dockerfile: Dockerfile.prod
     image: cozyvtt-backend:latest
     container_name: cozyvtt-backend
+    logging: *logging
     restart: unless-stopped
     depends_on:
       database:
@@ -130,6 +140,7 @@ services:
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest
     container_name: cozyvtt-frontend
+    logging: *logging
     restart: unless-stopped
     depends_on:
       - backend
@@ -145,6 +156,7 @@ services:
   nginx:
     image: nginx:alpine
     container_name: cozyvtt-nginx
+    logging: *logging
     restart: unless-stopped
     depends_on:
       - frontend

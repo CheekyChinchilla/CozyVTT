@@ -230,7 +230,7 @@ The practical consequence: **a CSP violation cannot appear during development**.
 | Database port | **Not exposed to host** | Exposed on `localhost:5432` |
 | Backend port | **Not exposed to host** | Exposed on `localhost:4000` |
 | Public entry | Nginx reverse proxy on 80/443 | Direct ports per service |
-| Logging | JSON, written to disk | Pretty-printed, console |
+| Logging | JSON, written to disk and rotated at 10 MB | Pretty-printed, console |
 | Suitable for | Internet-facing instances | Local hacking only |
 
 ---

@@ -106,6 +106,15 @@ const sanitize = winston.format((info) => {
   return info;
 });
 
+/**
+ * Each production log file starts afresh at 10 MB and five are kept, so the
+ * two files take about 100 MB between them at most. `tailable` keeps the
+ * newest lines under the plain name (`combined.log`), with `combined1.log` the
+ * next newest. The backend holds its files open, so it has to be what rotates
+ * them: a host logrotate rule that renames a file leaves it writing there.
+ */
+const ROTATION = { maxsize: 10 * 1024 * 1024, maxFiles: 5, tailable: true };
+
 const devFormat = printf(({ level, message, timestamp: ts, ...meta }) => {
   const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
   return `${ts} [${level}] ${message}${metaStr}`;
@@ -117,8 +126,8 @@ const logger = winston.createLogger({
   transports:
     process.env.NODE_ENV === 'production'
       ? [
-          new winston.transports.File({ filename: 'logs/error.log', level: 'error', format: json() }),
-          new winston.transports.File({ filename: 'logs/combined.log', format: json() }),
+          new winston.transports.File({ filename: 'logs/error.log', level: 'error', format: json(), ...ROTATION }),
+          new winston.transports.File({ filename: 'logs/combined.log', format: json(), ...ROTATION }),
           new winston.transports.Console({ format: combine(timestamp(), json()) }),
         ]
       : [

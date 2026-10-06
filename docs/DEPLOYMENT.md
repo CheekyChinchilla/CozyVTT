@@ -1022,12 +1022,16 @@ docker compose logs -f backend
 docker compose logs backend | grep -i error
 ```
 
+Docker keeps each container's log in up to five files of 10 MB and deletes the oldest as it goes, so these logs cannot fill the disk. The limit is set by the `logging:` lines in `docker-compose.yml`. If you send container logs elsewhere with a different Docker log driver, set `logging:` for each service in your `docker-compose.override.yml`.
+
 ### Persistent Log Files
 
 The backend writes structured JSON logs to `backend/logs/` on the host:
 
 - `backend/logs/combined.log` — all log levels
 - `backend/logs/error.log` — errors only
+
+The backend rotates these files itself. When one reaches 10 MB it becomes `combined1.log` (or `error1.log`), the older ones move up a number, and the fifth and oldest is deleted, so the two logs take about 100 MB at most. The newest lines are always in the file without a number. There is nothing to set up: do not add a `logrotate` rule for this folder. If you added one for an earlier version, remove it. The backend keeps its files open, so a rule that renames them leaves it writing to the renamed file, and the space is not freed.
 
 Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
 
@@ -1227,7 +1231,7 @@ Before going live:
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
 - [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
-- [ ] **Log rotation** — `backend/logs/` directory is being rotated (consider `logrotate` for the host-mounted path)
+- [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
 - [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limit is 5 failed sign-ins per 15 minutes per visitor address, but a host-level ban catches scanners earlier
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)

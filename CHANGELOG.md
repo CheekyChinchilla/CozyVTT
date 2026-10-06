@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The backend's log files say what went wrong.** Almost every error was written as an empty `{}`, so a log kept a label such as "Error adding token" and nothing about the cause. Each error is now written with its message and where in the code it happened, on the console and in the log files, so a log attached to a bug report can be diagnosed. A value longer than 8,000 characters keeps only its start and end, so one oversized request cannot write a huge line.
 
+- **Log files no longer grow until the disk is full.** The backend's two log files, and Docker's log of each container, had no size limit, and the deployment guide's advice to rotate them with logrotate did not free any space, because the backend keeps its files open. The backend now starts a new file at 10 MB and keeps five of each, and Docker keeps five files of 10 MB for each container. There is nothing to set up, and any logrotate rule added for the backend's logs can be removed. The container limits take effect the next time the stack is started with `docker compose up -d`.
+
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
