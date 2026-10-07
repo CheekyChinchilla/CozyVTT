@@ -44,6 +44,15 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
 }) => {
   const initialData = initializeFlexibleData(character.data);
   const [sections, setSections] = useState<FlexibleSection[]>(initialData.sections || []);
+  // Whatever the sheet stores beside its sections, from an import or a program
+  // using the API, goes back with every save. Saving only the sections dropped
+  // it the first time the sheet was saved.
+  const [storedBeside] = useState<Record<string, unknown>>(() => {
+    const stored: unknown = character.data;
+    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
+    const { sections: _sections, ...rest } = stored as Record<string, unknown>;
+    return rest;
+  });
   // What the sections were when last saved, or opened. Changes are measured
   // against it.
   const [cleanSections, setCleanSections] = useState(() => JSON.stringify(sections));
@@ -134,7 +143,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         }
       }
 
-      await onSave({ sections: savedSections }, true, newTokenImageUrl);
+      await onSave({ ...storedBeside, sections: savedSections } as CharacterData, true, newTokenImageUrl);
 
       // A picture that went up with this save is on the character now. Leave
       // the editor only if nothing else was changed while the save was in

@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Edit Template keeps your sheet edits when a save fails.** When the server refused a template's sheet, the sheet went back to the template as it was and every edit was lost, with only an error message. It now stays in its editor with your changes. Closing **Edit Template** with sheet changes you haven't saved asks first, and **Save Details** no longer closes the dialog over them. After a sheet save the dialog stays open and shows the saved sheet. A token picture chosen on the sheet cannot be used, since a template's picture has to be a global asset; the message after saving now says so, where before the picture was dropped without a word.
 
+- **Saving a Flexible sheet keeps everything stored in it.** The Flexible sheet, used for characters with no game system, saved only its sections, so anything else it held, from an imported file or a program using the API, was deleted the first time it was saved.
+
 ---
 
 ## [1.5.0] — 2026-10-03
