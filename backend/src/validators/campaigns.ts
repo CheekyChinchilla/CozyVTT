@@ -84,7 +84,7 @@ export const UpdateCampaignSchema = z.object({
   }).nullish(),
   vibeSettings: VibeSettingsSchema.optional(),
   spiritLayerEnabled: z.boolean({ error: 'spiritLayerEnabled must be true or false' }).optional(),
-  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100)
+  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100, { abort: true })
     .regex(SPIRIT_STYLE_PATTERN, 'spiritLayerStyle must be wispy, ethereal, shadow, dream, or custom:#RRGGBB with an optional :<look>')
     .optional(),
   chatCooldownEnabled: z.boolean({ error: 'chatCooldownEnabled must be true or false' }).optional(),
