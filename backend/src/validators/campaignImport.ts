@@ -84,7 +84,7 @@ export const CampaignSettingsSchema = z.object({
   vibeSettings: VibeSettingsSchema.optional().catch(undefined),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
-  spiritLayerStyle: z.string().max(100).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
+  spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
 }).strip();
 
 // ── Wall segment ────────────────────────────────────────────────────────────

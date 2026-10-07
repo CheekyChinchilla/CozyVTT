@@ -77,7 +77,14 @@ export function isSettingUnknownToServer(line: string): boolean {
  * it finds in an older backup: everything the dump creates is then owned by
  * the user running the restore, which is the one the app connects as.
  */
-const OWNERSHIP_LINE = /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/;
+/**
+ * `ALTER <kind> <name> OWNER TO <role>;`, on one line. The lookahead settles
+ * that the line ends with `;` before the name is searched, and the name stops
+ * at the first ` OWNER TO `, so a long crafted line is read in one pass. The
+ * pattern this replaces matched the same lines, but let the words of the kind
+ * and the name overlap, and took minutes on one such line.
+ */
+const OWNERSHIP_LINE = /^ALTER [A-Z]+ (?=.*;$).+? OWNER TO .+;$/;
 const PRIVILEGE_LINE = /^(?:GRANT|REVOKE) /;
 
 /** Whether `line` is an `ALTER ... OWNER TO ...` statement. */

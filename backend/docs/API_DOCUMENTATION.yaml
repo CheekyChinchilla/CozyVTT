@@ -332,6 +332,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 password:
                   type: string
                   minLength: 12
@@ -432,6 +433,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 password:
                   type: string
                   minLength: 12
@@ -1488,6 +1490,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                   description: >-
                     Stored lowercased. An address that differs from the
                     current one only in letter case changes nothing.
@@ -8263,6 +8266,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 displayName:
                   type: string
                   maxLength: 50
@@ -8332,6 +8336,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 displayName:
                   type: string
                   maxLength: 50

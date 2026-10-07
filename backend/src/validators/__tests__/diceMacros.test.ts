@@ -130,6 +130,15 @@ describe('CreateDiceMacroSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // The length is the only thing said about an over-long expression: the
+  // parser never sees it.
+  it('refuses a 1 MB expression on its length alone, within 50 ms', () => {
+    const started = performance.now();
+    const result = CreateDiceMacroSchema.safeParse({ name: 'Long', expression: '1d6+' + '1'.repeat(1_000_000) });
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(result.error?.issues.map((issue) => issue.code)).toEqual(['too_big']);
+  });
 });
 
 describe('what the person typing is told', () => {

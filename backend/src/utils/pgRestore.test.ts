@@ -131,9 +131,27 @@ describe('isOwnershipStatement', () => {
       'ALTER SEQUENCE public."Note_id_seq" OWNER TO cozyvtt;',
       'ALTER SCHEMA public OWNER TO cozyvtt;',
       'ALTER FUNCTION public.f() OWNER TO cozyvtt;',
+      'ALTER FUNCTION public.f(a integer, b text) OWNER TO "old user";',
+      'ALTER MATERIALIZED VIEW public.v OWNER TO cozyvtt;',
+      'ALTER TEXT SEARCH CONFIGURATION public.c OWNER TO cozyvtt;',
+      'ALTER LARGE OBJECT 16401 OWNER TO cozyvtt;',
     ]) {
       expect(isOwnershipStatement(line)).toBe(true);
     }
+  });
+
+  // Every line of an uploaded backup outside table data is checked, and a
+  // crafted file can hold a line of any length.
+  it.each([
+    ['100,000 characters of upper-case words', 'ALTER A' + ' A'.repeat(50_000) + 'x'],
+    ['100,000 characters repeating OWNER TO with no closing semicolon', 'ALTER TABLE x' + ' OWNER TO x'.repeat(9_000) + '!'],
+    ['100,000 characters repeating OWNER TO, then a carriage return', 'ALTER TABLE x' + ' OWNER TO x'.repeat(9_000) + '\r;'],
+    // The old pattern took hours on this shape at 100,000 characters.
+    ['10,000 characters of OWNER TO as the kind of object', 'ALTER A' + ' OWNER TO'.repeat(1_100) + 'x'],
+  ])('answers %s within 50 ms', (_label, crafted) => {
+    const started = performance.now();
+    expect(isOwnershipStatement(crafted)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
   });
 
   it('leaves the other ALTER statements a dump needs', () => {
