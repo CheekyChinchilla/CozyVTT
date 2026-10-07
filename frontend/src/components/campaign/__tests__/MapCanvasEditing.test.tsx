@@ -1,5 +1,7 @@
 /**
- * The DM's wall editing on the map, driven through MapCanvas itself.
+ * Editing the map, and keeping it in step with the server, driven through
+ * MapCanvas itself: wall undo and shortcuts, wall and light events, map
+ * changes after a role change, rejoins, map settings and token removal.
  *
  * The campaign, socket and sign-in contexts are replaced by small stand-ins:
  * the campaign's current map and the viewer's role live in a store the test
