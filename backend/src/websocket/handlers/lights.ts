@@ -14,9 +14,18 @@ import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { lightOutsideMap, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
+import { withMapsLocked } from '../../utils/mapTokens';
 
 /** What a light edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
+
+/**
+ * Every edit below reads the map's whole light list, changes it and writes it
+ * back, under the map's lock and reading the list after taking it, so edits
+ * sent together apply one after another instead of each overwriting the
+ * last. A refusal is returned as its message.
+ */
+type Locked = { refused: string } | { done: true };
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -40,30 +49,27 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
-      if (!map || map.campaignId !== socket.campaignId) {
-        socket.emit('error', { message: 'Map not found' });
-        return;
-      }
-      if (lightOutsideMap([parsed.data], map)) {
-        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
+      const campaignId = socket.campaignId;
+      const added = parsed.data;
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+        const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
+        if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
+        if (lightOutsideMap([added], map)) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
+
+        const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
+        if (existing.length >= 200) return { refused: 'Maximum 200 light sources per map' };
+        if (existing.some((l) => l.id === added.id)) return { refused: DUPLICATE_LIGHT_ID_MESSAGE };
+
+        await tx.map.update({ where: { id: mapId }, data: { lights: toJson([...existing, added]) } });
+        return { done: true };
+      });
+      if ('refused' in outcome) {
+        socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-      if (existing.length >= 200) {
-        socket.emit('error', { message: 'Maximum 200 light sources per map' });
-        return;
-      }
-      if (existing.some((l) => l.id === parsed.data.id)) {
-        socket.emit('error', { message: DUPLICATE_LIGHT_ID_MESSAGE });
-        return;
-      }
-
-      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson([...existing, parsed.data]) } });
-
-      await emitToMapReaders(io, socket.campaignId, mapId, 'light:added', { mapId, light: parsed.data });
-      resendSightAfterChange(io, socket.campaignId, mapId);
+      await emitToMapReaders(io, campaignId, mapId, 'light:added', { mapId, light: added });
+      resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:add failed', { err: error });
       socket.emit('error', { message: 'Failed to add light source' });
@@ -85,19 +91,23 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       const { mapId, lightId } = data;
       if (!mapId || !lightId) { socket.emit('error', { message: 'mapId and lightId required' }); return; }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, lights: true } });
-      if (!map || map.campaignId !== socket.campaignId) {
-        socket.emit('error', { message: 'Map not found' });
+      const campaignId = socket.campaignId;
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+        const map = await tx.map.findUnique({ where: { id: mapId }, select: { campaignId: true, lights: true } });
+        if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
+
+        const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
+        const filtered = existing.filter((l) => l.id !== lightId);
+        await tx.map.update({ where: { id: mapId }, data: { lights: toJson(filtered) } });
+        return { done: true };
+      });
+      if ('refused' in outcome) {
+        socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-      const filtered = existing.filter((l) => l.id !== lightId);
-
-      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(filtered) } });
-
-      await emitToMapReaders(io, socket.campaignId, mapId, 'light:removed', { mapId, lightId });
-      resendSightAfterChange(io, socket.campaignId, mapId);
+      await emitToMapReaders(io, campaignId, mapId, 'light:removed', { mapId, lightId });
+      resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:remove failed', { err: error });
       socket.emit('error', { message: 'Failed to remove light source' });
@@ -125,30 +135,30 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
-      if (!map || map.campaignId !== socket.campaignId) {
-        socket.emit('error', { message: 'Map not found' });
+      const campaignId = socket.campaignId;
+      const updated = parsed.data;
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+        const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
+        if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
+
+        const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
+        const idx = existing.findIndex((l) => l.id === updated.id);
+        if (idx === -1) return { refused: 'Light source not found' };
+        // Within the map's bounds; one stored outside them before they existed
+        // may stay where it is.
+        if (lightOutsideMap([updated], map, [existing[idx]])) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
+
+        existing[idx] = updated;
+        await tx.map.update({ where: { id: mapId }, data: { lights: toJson(existing) } });
+        return { done: true };
+      });
+      if ('refused' in outcome) {
+        socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-      const idx = existing.findIndex((l) => l.id === parsed.data.id);
-      if (idx === -1) {
-        socket.emit('error', { message: 'Light source not found' });
-        return;
-      }
-      // Within the map's bounds; one stored outside them before they existed
-      // may stay where it is.
-      if (lightOutsideMap([parsed.data], map, [existing[idx]])) {
-        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
-        return;
-      }
-
-      existing[idx] = parsed.data;
-      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(existing) } });
-
-      await emitToMapReaders(io, socket.campaignId, mapId, 'light:updated', { mapId, light: parsed.data });
-      resendSightAfterChange(io, socket.campaignId, mapId);
+      await emitToMapReaders(io, campaignId, mapId, 'light:updated', { mapId, light: updated });
+      resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update light source' });
@@ -176,20 +186,23 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
-      if (!map || map.campaignId !== socket.campaignId) {
-        socket.emit('error', { message: 'Map not found' });
-        return;
-      }
-      if (lightOutsideMap(parsed.data, map, map.lights)) {
-        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
+      const campaignId = socket.campaignId;
+      const next = parsed.data;
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+        const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
+        if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
+        if (lightOutsideMap(next, map, map.lights)) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
+
+        await tx.map.update({ where: { id: mapId }, data: { lights: toJson(next) } });
+        return { done: true };
+      });
+      if ('refused' in outcome) {
+        socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      await prisma.map.update({ where: { id: mapId }, data: { lights: toJson(parsed.data) } });
-
-      await emitToMapReaders(io, socket.campaignId, mapId, 'lights:replaced', { mapId, lights: parsed.data });
-      resendSightAfterChange(io, socket.campaignId, mapId);
+      await emitToMapReaders(io, campaignId, mapId, 'lights:replaced', { mapId, lights: next });
+      resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('lights:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace light sources' });
