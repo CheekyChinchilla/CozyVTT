@@ -206,6 +206,8 @@ export default function AdminPage() {
 
   // Role change
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
+  // The user whose role chip was clicked, until the change is confirmed or cancelled.
+  const [roleChangeTarget, setRoleChangeTarget] = useState<User | null>(null);
 
   // Create user modal
   const [createUserOpen, setCreateUserOpen] = useState(false);
@@ -273,6 +275,8 @@ export default function AdminPage() {
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [backupCreateError, setBackupCreateError] = useState('');
   const [deletingBackupFile, setDeletingBackupFile] = useState<string | null>(null);
+  // The backup whose bin was clicked, until the delete is confirmed or cancelled.
+  const [backupToDelete, setBackupToDelete] = useState<string | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
@@ -516,6 +520,7 @@ export default function AdminPage() {
   };
 
   const handleRoleChange = async (u: User) => {
+    setRoleChangeTarget(null);
     setRoleChangingId(u.id);
     try {
       const newRole = u.platformRole === PlatformRole.ADMIN
@@ -803,10 +808,8 @@ export default function AdminPage() {
     }
   };
 
-  // TODO(ui): the bin button in the Backups list calls this directly, so one
-  // click deletes a backup for good with no confirmation. Ask first, naming
-  // the file, with a ConfirmDialog as the restore below does.
   const handleDeleteBackup = async (filename: string) => {
+    setBackupToDelete(null);
     setDeletingBackupFile(filename);
     try {
       await adminService.deleteBackup(filename);
@@ -1206,9 +1209,10 @@ export default function AdminPage() {
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <button
-                                      onClick={() => !isSelf && !isRoleChanging && handleRoleChange(u)}
+                                      onClick={() => !isSelf && !isRoleChanging && setRoleChangeTarget(u)}
                                       disabled={isSelf || isRoleChanging}
-                                      title={isSelf ? 'Cannot change your own role' : 'Click to toggle role'}
+                                      aria-label={`Change role of ${u.displayName} (currently ${u.platformRole})`}
+                                      title={isSelf ? 'Cannot change your own role' : 'Change role (asks to confirm)'}
                                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                         u.platformRole === PlatformRole.ADMIN
                                           ? 'bg-moss-green/20 text-brand-ink hover:bg-moss-green/30'
@@ -2311,9 +2315,11 @@ export default function AdminPage() {
                                 Download
                               </a>
                               <button
-                                onClick={() => handleDeleteBackup(b.filename)}
+                                onClick={() => setBackupToDelete(b.filename)}
                                 disabled={deletingBackupFile === b.filename}
                                 className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
+                                title="Delete backup"
+                                aria-label={`Delete backup ${b.filename}`}
                               >
                                 {deletingBackupFile === b.filename
                                   ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -2804,6 +2810,32 @@ export default function AdminPage() {
         onCancel={() => setAssetToDelete(null)}
       />
       {assetDelete.inUseDialog}
+
+      {/* Delete backup confirmation */}
+      <ConfirmDialog
+        isOpen={backupToDelete !== null}
+        title="Delete Backup"
+        message={`Delete the backup "${backupToDelete ?? ''}"? The file is removed from the server and cannot be brought back.`}
+        confirmLabel="Delete Backup"
+        variant="danger"
+        onConfirm={() => backupToDelete && handleDeleteBackup(backupToDelete)}
+        onCancel={() => setBackupToDelete(null)}
+      />
+
+      {/* Role change confirmation */}
+      <ConfirmDialog
+        isOpen={roleChangeTarget !== null}
+        title={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove Admin Rights' : 'Make Administrator'}
+        message={
+          roleChangeTarget?.platformRole === PlatformRole.ADMIN
+            ? `Remove ${roleChangeTarget.displayName}'s administrator rights? They become a regular user and can no longer open the Admin Panel.`
+            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups.`
+        }
+        confirmLabel={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove admin rights' : 'Make administrator'}
+        variant="warning"
+        onConfirm={() => roleChangeTarget && handleRoleChange(roleChangeTarget)}
+        onCancel={() => setRoleChangeTarget(null)}
+      />
 
       {/* Restore backup confirmation */}
       <ConfirmDialog

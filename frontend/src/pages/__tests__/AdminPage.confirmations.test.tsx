@@ -1,10 +1,11 @@
 /**
- * The Admin Panel asks before it deletes an asset.
+ * The Admin Panel asks before it does anything that cannot be taken back.
  *
- * The bin on an asset row removed the file for good on one click, and blanked
- * every map or token that used it. It now opens a confirmation naming the asset,
- * its uploader and its campaign; if the server says the asset is still in use,
- * a second one lists where, and the delete is forced only after that.
+ * Three controls used to act on one click: the bin on an asset row (which
+ * removes the file for good and blanks every map or token that uses it), the
+ * bin on a backup, and the role chip beside a user, which made them an
+ * administrator, or took that away, with only a toast afterwards. Each now opens
+ * a confirmation that names what is affected, and Cancel does nothing.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -184,5 +185,69 @@ describe('the asset bin in the Admin Panel', () => {
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Failed to delete asset', 'error'));
+  });
+});
+
+describe('the bin on a backup', () => {
+  it('asks first, naming the file, and Cancel deletes nothing', async () => {
+    renderPage();
+    await openTab('Backups');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete backup cozyvtt-backup-2026-01-01.zip' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('cozyvtt-backup-2026-01-01.zip');
+    expect(adminService.deleteBackup).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(adminService.deleteBackup).not.toHaveBeenCalled();
+    expect(screen.getByText('cozyvtt-backup-2026-01-01.zip')).toBeInTheDocument();
+  });
+
+  it('deletes the backup once confirmed', async () => {
+    renderPage();
+    await openTab('Backups');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete backup cozyvtt-backup-2026-01-01.zip' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete Backup' }));
+
+    await waitFor(() => expect(adminService.deleteBackup).toHaveBeenCalledWith('cozyvtt-backup-2026-01-01.zip'));
+    await waitFor(() => expect(screen.queryByText('cozyvtt-backup-2026-01-01.zip')).not.toBeInTheDocument());
+  });
+});
+
+describe('the role chip beside a user', () => {
+  it('asks before making someone an administrator, and Cancel changes nothing', async () => {
+    renderPage();
+    await openTab('Users');
+    await userEvent.click(await screen.findByRole('button', { name: /change role of sam player/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Sam Player');
+    expect(dialog).toHaveTextContent(/administrator/i);
+    expect(adminService.updateUser).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(adminService.updateUser).not.toHaveBeenCalled();
+  });
+
+  it('promotes once confirmed', async () => {
+    renderPage();
+    await openTab('Users');
+    await userEvent.click(await screen.findByRole('button', { name: /change role of sam player/i }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Make administrator' }));
+
+    await waitFor(() => expect(adminService.updateUser).toHaveBeenCalledWith('u-2', { platformRole: PlatformRole.ADMIN }));
+  });
+
+  it('asks before taking administrator rights away, naming the user', async () => {
+    renderPage();
+    await openTab('Users');
+    await userEvent.click(await screen.findByRole('button', { name: /change role of ada admin/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Ada Admin');
+    expect(adminService.updateUser).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove admin rights' }));
+
+    await waitFor(() => expect(adminService.updateUser).toHaveBeenCalledWith('u-3', { platformRole: PlatformRole.USER }));
   });
 });

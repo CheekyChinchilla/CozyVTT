@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Deleting an asset that is still in use now shows where it is used before anything is removed.** If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses an image or a sound, the delete is held back and a window lists what would lose it. The file is removed only if you choose **Delete anyway**. This covers the Asset Library, the Documents pages and the Admin Panel's Assets tab, which used to delete on one click and now asks first, naming the asset, who uploaded it and its campaign. An admin sees every campaign by name; anyone else sees names only for the campaigns they run, their own characters and shared character templates, and just a count for the rest. A refused delete now shows the reason instead of a general "failed" message.
 
+- **The Admin Panel asks before deleting a backup or changing someone's role.** The bin beside a backup and the USER / ADMIN pill beside a person used to act on one click. Each now opens a window that names the backup or the person, and the pill says what an administrator can do before it makes one, or that taking the role away removes their access to the Admin Panel. Those buttons also have names a screen reader can read.
+
 ### Fixed
 
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
