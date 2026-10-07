@@ -11,7 +11,7 @@ import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filte
 import type { Map as MapRow } from '@prisma/client';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { Token, tokenMoveLimiter, limiterKey } from '../shared';
+import { Token, tokenMoveLimiter, limiterKey, withinCeiling } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
@@ -176,12 +176,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Flood ceiling: drop excess starts silently. A start reads the whole
-      // map before any of its refusals, and a drag sends one, so it shares
-      // the per-user budget of token.move and token.move.end.
-      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
-        return;
-      }
+      // Flood ceiling, before any work: a start reads the whole map before
+      // any of its refusals, and on a lit map decides line of sight for the
+      // drag. A drag sends one, so it has a budget of its own, apart from
+      // the frames.
+      if (!withinCeiling(socket, 'token.move.start')) return;
 
       const { tokenId, mapId } = data;
 
@@ -257,7 +256,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Flood ceiling: drop excess frames silently — the 16ms throttle
-      // already paces legitimate drags well under this limit.
+      // already paces legitimate drags well under this limit. Frames have
+      // this budget to themselves; the start and the drop have their own.
       if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
         return;
       }
@@ -341,11 +341,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Flood ceiling: drop excess finalize writes silently. Shares the
-      // per-user budget with token.move; a normal drag stays far under it.
-      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
-        return;
-      }
+      // Flood ceiling, before any work: each drop is a write under the
+      // map's lock and, on a lit map, line of sight for every player. A drag
+      // ends with one, so the drops have a budget of their own; the frames
+      // keep theirs.
+      if (!withinCeiling(socket, 'token.move.end')) return;
 
       const { tokenId, mapId, x: dropX, y: dropY } = data;
 

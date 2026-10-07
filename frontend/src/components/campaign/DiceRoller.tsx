@@ -854,6 +854,8 @@ export default function DiceRoller() {
               value={characterName}
               onChange={(e) => setCharacterName(e.target.value)}
               placeholder="Character"
+              // The longest name and purpose the server stores with a roll.
+              maxLength={200}
               disabled={isRolling}
               className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             />
@@ -864,6 +866,7 @@ export default function DiceRoller() {
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Purpose"
+              maxLength={300}
               disabled={isRolling}
               className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             />

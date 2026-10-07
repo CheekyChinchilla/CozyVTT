@@ -62,7 +62,8 @@ src/
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
-│   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
+│   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
+│   │                  (the other HTTP limiters are declared beside their routes)
 │   └── upload.ts      Multer configuration, magic byte validation
 ├── routes/            HTTP route handlers
 │   ├── auth.ts        Login, logout, register, password reset
@@ -83,7 +84,8 @@ src/
 ├── websocket/
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
-│   ├── shared.ts      Rate limiters, the Token shape, fog helpers
+│   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
+│   │                  Token shape, fog helpers
 │   ├── auth.ts        Socket session + campaign-membership authentication
 │   ├── utils.ts       System-message / broadcast helpers
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
@@ -626,7 +628,7 @@ The server never parses a document; the defence is in how it is served. `GET /ap
 ### Serving Images
 
 Maps, tokens and avatars are served with an explicit `Content-Type` from a small
-whitelist of image types (and a PDF, for maps), keyed on the file's extension,
+whitelist of image types (and a PDF, kept for maps stored as one before PDF maps were refused), keyed on the file's extension,
 with `X-Content-Type-Options: nosniff`. Anything whose extension is not on that
 list goes out as `application/octet-stream`, which a browser downloads rather
 than renders. This matters because the extension is not trusted on its own: the

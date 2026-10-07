@@ -45,7 +45,11 @@ beforeEach(() => {
 });
 
 async function expandBat() {
+  const loadsBefore = api.listCreatures.mock.calls.length;
   render(<CreatureLibrary isOpen onClose={() => {}} />);
+  // Opening loads the list, and the search box's 300 ms debounce loads it again.
+  // Wait for both, so that second load cannot return the creature after a delete.
+  await waitFor(() => expect(api.listCreatures.mock.calls.length).toBeGreaterThanOrEqual(loadsBefore + 2));
   await userEvent.click(await screen.findByText('Boss Bat'));
 }
 
@@ -70,7 +74,7 @@ describe('deleting a custom creature', () => {
 
     await waitFor(() => expect(api.deleteCreature).toHaveBeenCalledWith('campaign-1', 'c1'));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Boss Bat' })).not.toBeInTheDocument());
-    expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument());
   });
 
   it('offers no delete for an SRD creature', async () => {

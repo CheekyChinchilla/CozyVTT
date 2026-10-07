@@ -31,9 +31,14 @@ function refuseRepeatedIds(what: 'wall segments' | 'light sources') {
   };
 }
 
+/** Most wall segments, doors included, one map holds. */
+export const MAX_WALL_SEGMENTS = 5000;
+/** Most light sources one map holds. */
+export const MAX_LIGHT_SOURCES = 200;
+
 export const WallSegmentsArraySchema = z
   .array(WallSegmentSchema)
-  .max(5000, 'Maximum 5000 wall segments per map')
+  .max(MAX_WALL_SEGMENTS, `Maximum ${MAX_WALL_SEGMENTS} wall segments per map`)
   .superRefine(refuseRepeatedIds('wall segments'));
 
 // ── Light Sources ────────────────────────────────────────────────────────────
@@ -56,7 +61,7 @@ export const LightSourceSchema = LightSourceBaseShape.refine(
 
 export const LightSourcesArraySchema = z
   .array(LightSourceBaseShape)
-  .max(200, 'Maximum 200 light sources per map')
+  .max(MAX_LIGHT_SOURCES, `Maximum ${MAX_LIGHT_SOURCES} light sources per map`)
   .superRefine((lights, ctx) => {
     for (let i = 0; i < lights.length; i++) {
       if (lights[i].dimRadius < lights[i].brightRadius) {

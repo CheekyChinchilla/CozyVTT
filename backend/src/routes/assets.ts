@@ -889,8 +889,8 @@ const DOCUMENT_CONTENT_TYPES: Record<string, string> = {
 
 /**
  * The Content-Type a map or token image is served with, keyed on its stored
- * extension. Maps also allow a PDF, which every image type here does not; both
- * are safe to send with an explicit type. Anything not in this table is served
+ * extension. A PDF is listed so a map stored as one before PDF maps were
+ * refused is still served; both are safe to send with an explicit type. Anything not in this table is served
  * as bytes to download, so a file that reached disk under a name it should not
  * have is never handed to the browser as a page or a script.
  */

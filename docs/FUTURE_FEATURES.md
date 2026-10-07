@@ -84,7 +84,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - `1.5.2` **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
 - `1.5.3` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
-- `1.5.1` **A Universal VTT upload the server refuses answers 500.** A file with the wrong extension, over 100 MB, or sent under the wrong form field gets "An unexpected error occurred", and a file whose `map_size` has no numeric `y` fails after its picture has been saved (`routes/maps.ts`, `services/uvttParser.ts`). The asset upload route answers the same mistakes with 400.
 
 ### Accounts
 
@@ -100,7 +99,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Server and deployment
 
-- `1.5.1` **The bundled nginx keeps the backend's address from its own start,** so recreating only the backend container can leave `/api` answering 502 until nginx is restarted. A `resolver` with a variable upstream in `nginx/nginx.conf` would fix it; the file carries no TODO because any change to it needs a new `NGINX_CONF_STAMP` in `docker-compose.yml`.
 - `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
 - `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
 

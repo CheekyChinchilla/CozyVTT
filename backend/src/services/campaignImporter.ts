@@ -3,21 +3,28 @@
  * Securely imports a .cozyvtt archive into a new campaign.
  *
  * Security mitigations:
- * - Path traversal: all filenames sanitized, extracted to randomized temp dir
- * - Zip bombs: max decompressed size enforced, byte tracking during extraction
- * - Malicious files: magic byte validation for every asset
+ * - Path traversal: every entry path is checked, and files are written under
+ *   new names of the importer's choosing
+ * - Zip bombs: the archive is read from disk, and each entry is unpacked
+ *   through a counter that stops it at its own limit (10 MB for a data file,
+ *   the upload limit of its type for a picture or track) and stops the import
+ *   once everything unpacked passes the archive limit
+ * - Resource exhaustion: the entry count is read from the archive's end and
+ *   refused before its directory is read; manifest counts are capped
+ * - Malicious files: every asset must be a MAP, TOKEN or AUDIO file whose
+ *   bytes are a format the upload route allows for that type, and is stored
+ *   under the format and extension its bytes show
  * - JSON injection: size limits, Zod schema validation, depth checking
- * - Resource exhaustion: manifest count limits enforced before extraction
  * - Scope isolation: new IDs for everything, no references to existing data
  */
 
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import unzipper from 'unzipper';
-import { Prisma, type AssetType, type GameSystem } from '@prisma/client';
+import type { File as ArchiveEntry } from 'unzipper';
+import { Prisma, type GameSystem } from '@prisma/client';
 import { prisma } from '../config/database';
-import { fileTypeFromBuffer } from 'file-type';
+import { fileTypeFromFile } from 'file-type';
 import {
   ManifestSchema,
   CampaignSettingsSchema,
@@ -26,15 +33,28 @@ import {
   TokenTemplateImportSchema,
   AssetManifestSchema,
   IMPORT_LIMITS,
+  IMPORTABLE_ASSET_TYPES,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
 import { wallOutsideMap, lightOutsideMap } from '../validators/maps';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
-import { isSafeArchivePath } from '../utils/archive';
+import {
+  isSafeArchivePath,
+  openArchiveFile,
+  readArchiveEntry,
+  writeArchiveEntry,
+  ArchiveLimitError,
+  UnpackedTotal,
+} from '../utils/archive';
+import { getFileSizeLimit, isAllowedMimeType, isAllowedExtension } from '../utils/fileUtils';
+import { startsWithMp3Header } from '../middleware/fileValidation';
+import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
 const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
+
+type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -69,31 +89,72 @@ export interface ImportResult {
 
 // ── Security helpers ────────────────────────────────────────────────────────
 
-/** Parse JSON with a size limit. Throws if too large. */
-function safeJsonParse(buffer: Buffer, maxBytes: number = IMPORT_LIMITS.MAX_JSON_SIZE_BYTES): unknown {
-  if (buffer.length > maxBytes) {
-    throw new Error(`JSON file exceeds maximum size of ${maxBytes} bytes (got ${buffer.length})`);
+/**
+ * Unpack one of the archive's data files and parse it, within the data-file
+ * limit and the archive's running total.
+ */
+async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
+  let bytes: Buffer;
+  try {
+    bytes = await readArchiveEntry(archivePath, entry, { maxEntryBytes: IMPORT_LIMITS.MAX_JSON_SIZE_BYTES, total });
+  } catch (error) {
+    throw describeLimit(error, entry, total);
   }
-  return JSON.parse(buffer.toString('utf-8'));
+  return JSON.parse(bytes.toString('utf-8'));
 }
 
-/** Validate magic bytes for an asset file. */
-async function validateMagicBytes(buffer: Buffer, declaredMime: string): Promise<boolean> {
-  const detected = await fileTypeFromBuffer(buffer);
-  if (!detected) {
-    // If we can't detect, only allow if it's a type where detection may fail (e.g. SVG, text)
-    return false;
+/** Say in words which limit an archive passed, or pass any other error on. */
+function describeLimit(error: unknown, entry: ArchiveEntry, total: UnpackedTotal): unknown {
+  if (!(error instanceof ArchiveLimitError)) return error;
+  if (error.limit === 'total') {
+    return new Error(
+      `The archive unpacks to more than ${megabytes(total.maxBytes)}, the most this server accepts for one campaign. ` +
+        'It may be damaged, or not a CozyVTT export.'
+    );
   }
-  // Allow if the detected MIME matches or is a subtype
-  const mimeRoot = declaredMime.split('/')[0]; // 'image' or 'audio'
-  const detectedRoot = detected.mime.split('/')[0];
-  return mimeRoot === detectedRoot;
+  return new Error(
+    `${entry.path} in the archive unpacks to more than ${megabytes(IMPORT_LIMITS.MAX_JSON_SIZE_BYTES)}, ` +
+      'more than a campaign archive ever holds there. It may be damaged, or not a CozyVTT export.'
+  );
 }
 
-/** Get max decompressed size from system settings. */
-async function getMaxImportSize(): Promise<number> {
-  const settings = await prisma.systemSettings.findFirst();
-  return settings?.campaignExportSizeLimit ?? 524288000; // 500 MB default
+/** The archive's size on disk, refused when it is over the limit. */
+async function checkArchiveSize(archivePath: string, maxSize: number): Promise<void> {
+  const { size } = await fs.promises.stat(archivePath);
+  if (size > maxSize) {
+    throw new Error(`The archive is ${megabytes(size)}, more than the ${megabytes(maxSize)} this server accepts.`);
+  }
+}
+
+/**
+ * What an imported asset file is, by its bytes, when that is a format the
+ * upload route accepts for its type; null otherwise. The same rule as an
+ * upload (middleware/fileValidation.ts): the detected type must be on the
+ * type's allowlist, and an MP3 the detector does not know is accepted on its
+ * header when its name says it is one.
+ */
+async function identifyAsset(
+  filePath: string,
+  type: ImportableAssetType,
+  originalName: string
+): Promise<{ mime: string; ext: string } | null> {
+  const detected = await fileTypeFromFile(filePath);
+  if (detected) return isAllowedMimeType(type, detected.mime) ? { mime: detected.mime, ext: detected.ext } : null;
+  const named = path.extname(originalName).toLowerCase();
+  if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };
+  return null;
+}
+
+/**
+ * The name an imported asset is shown and downloaded under: the archive's,
+ * unless its extension is not one its type allows, when the extension its
+ * bytes call for replaces it. A picture named `rules.exe` downloads as
+ * `rules.png`.
+ */
+function displayName(originalName: string, type: ImportableAssetType, ext: string): string {
+  if (isAllowedExtension(type, path.extname(originalName))) return originalName;
+  const base = originalName.replace(/\.[^.]*$/, '') || 'asset';
+  return `${base}.${ext}`;
 }
 
 // ── Preview ───────────────────────────────────────────────────────
@@ -127,22 +188,19 @@ export function remapVibePeriodAudio(
 }
 
 export async function previewCampaignImport(
-  zipBuffer: Buffer
+  archivePath: string
 ): Promise<CampaignImportPreview> {
-  const maxSize = await getMaxImportSize();
-  if (zipBuffer.length > maxSize) {
-    throw new Error(`Archive exceeds maximum size of ${Math.round(maxSize / 1024 / 1024)} MB`);
-  }
+  const maxSize = await getCampaignArchiveSizeLimit();
+  await checkArchiveSize(archivePath, maxSize);
 
   // Extract only manifest.json
-  const directory = await unzipper.Open.buffer(zipBuffer);
+  const directory = await openArchiveFile(archivePath, IMPORT_LIMITS.MAX_FILE_COUNT);
   const manifestEntry = directory.files.find((f) => f.path === 'manifest.json');
   if (!manifestEntry) {
     throw new Error('Invalid archive: missing manifest.json');
   }
 
-  const manifestBuffer = await manifestEntry.buffer();
-  const manifestRaw = safeJsonParse(manifestBuffer);
+  const manifestRaw = await readJsonEntry(archivePath, manifestEntry, new UnpackedTotal(maxSize));
   const parsed = ManifestSchema.safeParse(manifestRaw);
   if (!parsed.success) {
     throw new Error(`Invalid manifest: ${parsed.error.issues.map((i) => i.message).join('; ')}`);
@@ -154,19 +212,16 @@ export async function previewCampaignImport(
 // ── Import ────────────────────────────────────────────────────────
 
 export async function importCampaign(
-  zipBuffer: Buffer,
+  archivePath: string,
   importingUserId: string,
   options: ImportOptions = {}
 ): Promise<ImportResult> {
   const { importTokens = true, campaignName } = options;
-  const maxSize = await getMaxImportSize();
-
-  if (zipBuffer.length > maxSize) {
-    throw new Error(`Archive exceeds maximum size of ${Math.round(maxSize / 1024 / 1024)} MB`);
-  }
+  const maxSize = await getCampaignArchiveSizeLimit();
+  await checkArchiveSize(archivePath, maxSize);
 
   // 1. Open ZIP and validate structure
-  const directory = await unzipper.Open.buffer(zipBuffer);
+  const directory = await openArchiveFile(archivePath, IMPORT_LIMITS.MAX_FILE_COUNT);
 
   // Enforce max file count
   if (directory.files.length > IMPORT_LIMITS.MAX_FILE_COUNT) {
@@ -184,7 +239,10 @@ export async function importCampaign(
   const manifestEntry = directory.files.find((f) => f.path === 'manifest.json');
   if (!manifestEntry) throw new Error('Invalid archive: missing manifest.json');
 
-  const manifestData = ManifestSchema.parse(safeJsonParse(await manifestEntry.buffer()));
+  // Everything unpacked from the archive, against its limit (zip bomb protection).
+  const total = new UnpackedTotal(maxSize);
+
+  const manifestData = ManifestSchema.parse(await readJsonEntry(archivePath, manifestEntry, total));
 
   // Validate manifest counts
   if (manifestData.mapCount > IMPORT_LIMITS.MAX_MAPS) {
@@ -198,26 +256,13 @@ export async function importCampaign(
   const campaignEntry = directory.files.find((f) => f.path === 'campaign.json');
   if (!campaignEntry) throw new Error('Invalid archive: missing campaign.json');
 
-  const campaignSettings = CampaignSettingsSchema.parse(safeJsonParse(await campaignEntry.buffer()));
+  const campaignSettings = CampaignSettingsSchema.parse(await readJsonEntry(archivePath, campaignEntry, total));
 
   // 4. Extract asset manifest
   const assetManifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
   let assetManifest: AssetManifestData = {};
   if (assetManifestEntry) {
-    assetManifest = AssetManifestSchema.parse(safeJsonParse(await assetManifestEntry.buffer()));
-  }
-
-  // 5. Track total bytes extracted (zip bomb protection)
-  let totalBytesExtracted = 0;
-
-  /** Extract a file buffer and track bytes. */
-  async function extractWithLimit(entry: unzipper.File): Promise<Buffer> {
-    const buf = await entry.buffer();
-    totalBytesExtracted += buf.length;
-    if (totalBytesExtracted > maxSize) {
-      throw new Error('Decompressed archive exceeds maximum size limit (possible zip bomb)');
-    }
-    return buf;
+    assetManifest = AssetManifestSchema.parse(await readJsonEntry(archivePath, assetManifestEntry, total));
   }
 
   // 6. Create Campaign first (assets have a FK to campaign)
@@ -260,46 +305,64 @@ export async function importCampaign(
   const assetIdMap = new Map<string, string>(); // old UUID → new asset id
 
   for (const [oldId, assetInfo] of Object.entries(assetManifest)) {
+    if (!assetInfo) {
+      logger.warn('Skipping asset of a type a campaign archive does not carry', { oldId });
+      continue;
+    }
     // Find the file in the archive
     const assetEntry = directory.files.find((f) => f.path.startsWith(`assets/${oldId}`));
     if (!assetEntry) continue;
 
-    const assetBuffer = await extractWithLimit(assetEntry);
-
-    // Validate magic bytes
-    const isValid = await validateMagicBytes(assetBuffer, assetInfo.mimeType);
-    if (!isValid) {
-      logger.warn('Skipping asset with invalid magic bytes', { oldId, declaredMime: assetInfo.mimeType });
-      continue;
-    }
-
     // Determine upload subdirectory — match the upload system's path structure
     const typeDir = assetInfo.type === 'MAP' ? 'maps' : assetInfo.type === 'AUDIO' ? 'audio' : 'tokens';
-    const ext = path.extname(assetInfo.originalName) || '';
     const newId = randomUUID();
-    const newFilename = `${newId}${ext}`;
     // Store under uploads/{type}/campaigns/{campaignId}/ to match the upload system
-    const newFilePath = path.join(UPLOADS_BASE, typeDir, 'campaigns', newCampaignId, newFilename);
-    const fullNewPath = path.resolve(newFilePath);
+    const dir = path.join(UPLOADS_BASE, typeDir, 'campaigns', newCampaignId);
+    fs.mkdirSync(path.resolve(dir), { recursive: true });
+    // Unpacked under a name with no extension a serving route knows, and
+    // named after its content once that is known.
+    const unpackedPath = path.resolve(dir, `${newId}.importing`);
 
-    // Ensure directory exists
-    fs.mkdirSync(path.dirname(fullNewPath), { recursive: true });
-    fs.writeFileSync(fullNewPath, assetBuffer);
+    // A picture or track may be as large as an upload of its type, and no larger.
+    let assetBytes: number;
+    try {
+      assetBytes = await writeArchiveEntry(archivePath, assetEntry, unpackedPath, {
+        maxEntryBytes: getFileSizeLimit(assetInfo.type),
+        total,
+      });
+    } catch (error) {
+      if (error instanceof ArchiveLimitError && error.limit === 'entry') {
+        logger.warn('Skipping asset larger than the upload limit for its type', { oldId, type: assetInfo.type });
+        continue;
+      }
+      throw describeLimit(error, assetEntry, total);
+    }
+
+    const content = await identifyAsset(unpackedPath, assetInfo.type, assetInfo.originalName);
+    if (!content) {
+      logger.warn('Skipping asset whose content is not a format its type allows', { oldId, type: assetInfo.type, declaredMime: assetInfo.mimeType });
+      fs.rmSync(unpackedPath, { force: true });
+      continue;
+    }
+    const newFilename = `${newId}.${content.ext}`;
+    const newFilePath = path.join(dir, newFilename);
+    fs.renameSync(unpackedPath, path.resolve(newFilePath));
+    const originalName = displayName(assetInfo.originalName, assetInfo.type, content.ext);
 
     // Create Asset record — filePath matches the format used by the upload system
     await prisma.asset.create({
       data: {
         id: newId,
-        type: assetInfo.type as AssetType,
+        type: assetInfo.type,
         scope: 'CAMPAIGN',
         uploadedById: importingUserId,
         campaignId: newCampaignId,
         filename: newFilename,
-        originalName: assetInfo.originalName,
-        mimeType: assetInfo.mimeType,
-        fileSize: assetBuffer.length,
+        originalName,
+        mimeType: content.mime,
+        fileSize: assetBytes,
         filePath: newFilePath.replace(/\\/g, '/'),
-        name: assetInfo.originalName.replace(/\.[^.]+$/, ''),
+        name: originalName.replace(/\.[^.]+$/, ''),
       },
     });
 
@@ -332,7 +395,7 @@ export async function importCampaign(
     const mapEntry = directory.files.find((f) => f.path === `maps/map-${i}.json`);
     if (!mapEntry) continue;
 
-    const mapRaw = safeJsonParse(await extractWithLimit(mapEntry));
+    const mapRaw = await readJsonEntry(archivePath, mapEntry, total);
     const mapParsed = MapDataSchema.safeParse(mapRaw);
     if (!mapParsed.success) {
       logger.warn('Skipping invalid map', { index: i, errors: mapParsed.error.issues });
@@ -400,7 +463,7 @@ export async function importCampaign(
   let creatureCount = 0;
   const creaturesEntry = directory.files.find((f) => f.path === 'creatures/creatures.json');
   if (creaturesEntry) {
-    const creaturesRaw = safeJsonParse(await extractWithLimit(creaturesEntry));
+    const creaturesRaw = await readJsonEntry(archivePath, creaturesEntry, total);
     if (Array.isArray(creaturesRaw)) {
       for (const raw of creaturesRaw.slice(0, IMPORT_LIMITS.MAX_CREATURES)) {
         const parsed = CreatureTemplateSchema.safeParse(raw);
@@ -434,7 +497,7 @@ export async function importCampaign(
   let tokenTemplateCount = 0;
   const templatesEntry = directory.files.find((f) => f.path === 'token-templates/templates.json');
   if (templatesEntry) {
-    const templatesRaw = safeJsonParse(await extractWithLimit(templatesEntry));
+    const templatesRaw = await readJsonEntry(archivePath, templatesEntry, total);
     if (Array.isArray(templatesRaw)) {
       for (const raw of templatesRaw.slice(0, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES)) {
         const parsed = TokenTemplateImportSchema.safeParse(raw);

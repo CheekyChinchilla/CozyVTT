@@ -63,3 +63,13 @@ describe('DiceRoller for a spectator', () => {
     expect(await screen.findByText(/Spectators watch the dice/)).toBeTruthy();
   });
 });
+
+describe('DiceRoller labels', () => {
+  // The server refuses a roll whose name or purpose is longer than it stores,
+  // so the boxes stop there instead of letting a roll be typed that will fail.
+  it('stop the character name at 200 characters and the purpose at 300', () => {
+    render(<DiceRoller />);
+    expect((screen.getByPlaceholderText('Character') as HTMLInputElement).maxLength).toBe(200);
+    expect((screen.getByPlaceholderText('Purpose') as HTMLInputElement).maxLength).toBe(300);
+  });
+});

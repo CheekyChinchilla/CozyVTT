@@ -12,6 +12,12 @@
 jest.mock('express-rate-limit', () => {
   return () => (_req: Request, _res: Response, next: NextFunction) => next();
 });
+// The sign-in limiter is not express-rate-limit, and these cases send more
+// wrong answers from one address than it allows. It is tested in
+// signInLimiter.e2e.test.ts.
+jest.mock('../../middleware/failureLimiter', () => ({
+  failureLimiter: () => Object.assign((_req: Request, _res: Response, next: NextFunction) => next(), { recordFailure: () => undefined }),
+}));
 
 // Mock system settings so the register route behaves predictably
 jest.mock('../../services/systemSettings', () => ({

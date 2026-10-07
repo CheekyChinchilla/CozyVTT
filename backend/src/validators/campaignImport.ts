@@ -213,14 +213,25 @@ export const TokenTemplateImportSchema = z.object({
 
 // ── Asset manifest ──────────────────────────────────────────────────────────
 
+/**
+ * The asset types an export writes, and so the only ones an import takes. A
+ * campaign's documents, and anyone's avatar, are not part of a campaign
+ * archive.
+ */
+export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
+
+// The declared MIME type is kept for the log only: the stored type and file
+// extension come from the file's own bytes, as on upload.
 const AssetEntrySchema = z.object({
   originalName: z.string().max(500),
   mimeType: z.string().max(100),
-  type: z.string().max(20), // MAP, TOKEN, AUDIO
+  type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
 }).strip();
 
-export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchema)
+// An entry that is not one (another asset type, say) becomes null and is left
+// out of the import, as an asset whose content does not match is.
+export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchema.nullable().catch(null))
   .refine(
     (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_ASSETS,
     { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_ASSETS} assets` }

@@ -58,9 +58,16 @@ info:
     allowance. Uploads and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
-      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **failed**
-      requests per 15 minutes. Successful requests are not counted, so getting your
-      password right never moves you towards a lockout.
+      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
+      answers** per 15 minutes per address: a wrong password, a wrong MFA code, or
+      a reset link that does not exist, has been used or has expired. Nothing else
+      counts: not a correct answer, not a malformed or refused request, and not the
+      429 itself. The limit is checked before the credential is, so correct
+      sign-ins arriving together from one address all succeed; wrong ones sent
+      together are checked five at most (the rest wait for those to be checked,
+      then get 429 if all five were wrong). An unknown email counts and answers
+      exactly as a wrong password does. The 429 carries `Retry-After`, the seconds
+      until the oldest counted failure leaves the window
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -74,13 +81,16 @@ info:
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
-    - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
-      cooldown (off by default), which allows each member one message per 1 to
-      300 seconds, as the DM sets it
-    - Dice rolls: 30 per minute (WebSocket)
-    - Token movement: 150 events per second per user (WebSocket), shared by
-      `token.move.start`, `token.move` and `token.move.end`; events over the limit
-      are dropped without an error
+    - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
+      The DM can also turn on the campaign's chat cooldown (off by default),
+      which allows each member one message per 1 to 300 seconds
+    - Dice rolls (WebSocket): 50 a second and 200 a minute per user
+    - Token movement (WebSocket), per user: drag frames (`token.move`) 150 a
+      second, dropped without an error; picking a token up (`token.move.start`)
+      and putting it down (`token.move.end`) 30 a second each, with one `error`
+      to the sender when reached
+    - Every other event a member can send over the WebSocket has a per-user
+      ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
     The body is JSON `{ error, message }` for the global limit, uploads and the
@@ -496,7 +506,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited (5 failed requests per 15 minutes, shared with the other credential endpoints; a 403 counts as failed).
+        Authenticate user and create a session on a fresh session id. Rate limited: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints. Only a 401 counts; a 400, a 403, a correct sign-in and a 429 do not.
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
@@ -728,8 +738,10 @@ paths:
         and using it voids the account's other unused tokens. Clears
         `mustChangePassword`, and ends every login session and live WebSocket
         connection of the account; the request itself does not sign anyone
-        in. Rate limited (5 failed requests per 15 minutes, shared with the
-        other credential endpoints).
+        in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        with the other credential endpoints, where a link that does not exist,
+        has been used or has expired is a wrong answer and a password too weak
+        to take is not.
       operationId: resetPassword
       security: []
       requestBody:
@@ -858,7 +870,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -1071,7 +1083,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -1147,7 +1159,7 @@ paths:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
@@ -4612,14 +4624,14 @@ paths:
         not by the filename:
         | Type | Content |
         |------|---------|
-        | MAP | PNG, JPEG, WebP, PDF |
+        | MAP | PNG, JPEG, WebP |
         | TOKEN | PNG, JPEG, WebP, GIF |
         | AUDIO | MPEG audio (MP3), Ogg audio, WAV |
         | AVATAR | PNG, JPEG, WebP |
         | DOCUMENT | PDF; plain text or Markdown |
 
         The original filename's extension matters only where the bytes
-        cannot be identified: a MAP named `.pdf` that starts with `%PDF-`, an
+        cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
         and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
         with no control characters besides tab, line feed, form feed and
@@ -5247,7 +5259,8 @@ paths:
         A refused read answers 403 here and on the token route. The file is
         served with its content type chosen from its stored extension
         (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
-        `application/pdf`, since a map may be a PDF; anything else as
+        `application/pdf`, for a map stored as a PDF before PDFs were refused
+        as maps; anything else as
         `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
         It is cached as `private, max-age=31536000, immutable` with the ETag
         `"<asset id>"`; send that in `If-None-Match` for a 304.
@@ -7755,11 +7768,18 @@ paths:
       summary: Export campaign
       description: |
         Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
-        built in memory and sent whole, with no size limit of its own. It
+        sent as it is made, with no `Content-Length`; asset files are stored
+        in it uncompressed. Before anything is sent, the asset files' recorded
+        sizes, the JSON files and the ZIP's own overhead are added up, and an
+        archive over the `campaignExportSizeLimit` setting (500 MB, and never
+        more than the import accepts) is refused with 422. A failure after
+        the first bytes have been sent cuts the response off. It
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Only the API-wide rate limit applies.
+        without a picture. Each user may export 20 campaigns an hour
+        (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
+        previews, and run one archive operation at a time.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -7791,6 +7811,36 @@ paths:
                 format: binary
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The archive would be larger than the size setting. The message
+            gives its size and the limit, and says whether leaving out audio
+            would bring it under.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Export Too Large
+                message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
+        '429':
+          description: >-
+            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
         '500':
           description: The export failed
           content:
@@ -7808,12 +7858,16 @@ paths:
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
         anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it. The upload is one file in the `file` field, at most
+        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
         instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it).
+        has changed it), list no more than 1,000 files, and have a
+        `manifest.json` that unpacks to no more than 10 MB. The upload is
+        written to a temporary file, which is removed before the answer is
+        sent.
       operationId: previewCampaignImport
       security:
         - cookieAuth: []
@@ -7840,15 +7894,39 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), a file over 500 MB (`File Too
-            Large`), another upload problem such as a refused file type or a
-            malformed body (`Upload Error`), or an archive that cannot be read, is over the
-            size setting, or has a missing or invalid manifest (`Invalid
-            Archive`, with the reason in `message`).
+            No file (`Validation Error`), an upload problem such as a refused
+            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
+            is over the size setting, lists more than 1,000 files, or has a
+            missing, oversized or invalid manifest (`Invalid Archive`, with
+            the reason in `message`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: >-
+            The file is over 500 MB (`File Too Large`). A proxy in front of
+            the server may answer 413 for a smaller body, with a page of its
+            own; the bundled nginx allows this path and the import 512 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: The archive is larger than 500 MB, the most a campaign archive may be.
+        '429':
+          description: >-
+            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/campaigns/import:
     post:
@@ -7859,12 +7937,26 @@ paths:
         signed-in user may call it; they become the new campaign's owner and
         DM. The upload rules are those of the preview route, and the
         `campaignExportSizeLimit` setting bounds both the archive and the
-        total size of the files read out of it. Only the API-wide rate limit
-        applies.
+        total size of the files read out of it. Each user may import 20
+        campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
+        previews and exports, and run one archive operation at a time.
+
+        Every file in the archive is unpacked through a counter and stopped
+        as soon as it passes its limit. Each JSON file may unpack to 10 MB,
+        and a JSON file over that fails the import. Each asset may unpack to
+        the upload limit of its type (`MAX_<TYPE>_SIZE_MB`), and an asset over
+        that is skipped. Everything unpacked together past the size setting
+        fails the import.
+
+        Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
+        content, a format the upload route allows for its type, and is stored
+        under the detected MIME type and extension; its `originalName` is
+        kept unless that name's extension is not allowed for the type, when
+        the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Assets whose content does not match their declared type,
-        and maps, creatures or templates that fail validation, are skipped.
+        current map. Maps, creatures or templates that fail validation are
+        skipped.
         Imported tokens are linked to no character and controlled by no one.
 
         The import is not one transaction. A failure after the campaign has
@@ -7928,6 +8020,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: The file is over 500 MB (`File Too Large`), as on the preview route.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   # ============================================
   # ADMIN ENDPOINTS
@@ -9247,9 +9357,14 @@ paths:
         A file with walls or lights more than 500 grid squares outside its
         map is refused with **400** before anything is asked or saved, since
         the map editor could not hold them. A file with more wall segments or
-        lights than a map can hold (5000 segments, 200 lights), or with a
-        light the map editor could not save, is refused with **400**, because import used to write past the limits
-        every later edit enforces, leaving a map that could not be saved. A
+        lights than a map can hold (5000 segments, doors counted with walls,
+        and 200 lights), or with a light the map editor could not save, is
+        refused with **400**, because import used to write past the limits
+        every later edit enforces, leaving a map that could not be saved. The
+        walls, doors and lights are counted as soon as the file is read, so a
+        file with millions of points is refused without any of them being built.
+        When the file would fit without its furniture walls, the message says
+        so. A
         light's `range` becomes its dim radius and half of it its bright
         radius, so a range over 100 squares, or under 0.5, answers 400. A
         file that is not JSON or lacks `resolution.map_size`, `image` or
@@ -9257,16 +9372,21 @@ paths:
 
 
         The embedded picture is checked by its bytes, not by what the file
-        claims: anything that is not one of the types a map upload accepts
-        (PNG, JPEG, WebP, PDF) is refused with 400, as is one over the
-        `MAX_MAP_SIZE_MB` limit. It is saved as a new campaign map asset
+        claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
+        drawn as a map) is refused with 400, as is one over the
+        `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
+        text before it is decoded. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
-        upload does.
+        upload does, and a user may run one import at a time: a second sent
+        while the first is still being read answers **429** with `Another
+        import is still running`. Imports sent one after another are never
+        held back.
 
 
         The map is named after `name`, or the file's name without its
-        extension when `name` is missing or blank. Its size in squares is the
+        extension when `name` is missing or blank. A name is at most 200
+        characters, and sending the field more than once answers 400. Its size in squares is the
         file's `map_size`, rounded, and must be from 1 to 500 on each side, as
         for any map: a larger one, or one without a numeric `x` and `y`,
         answers 400 before anything is asked or saved. Lighting is turned on only when the file
@@ -9275,11 +9395,14 @@ paths:
         `door-open` segments, as the file says.
 
 
-        Some bad requests answer 500 with the generic `An unexpected error
-        occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
-        `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        a file sent under a field other than `file`, or a body that is cut off
-        or malformed or breaks the field limits of `POST /api/assets/upload`.
+        A refused upload answers with its reason, as `POST /api/assets/upload`
+        does: **400** for a file whose name does not end in `.uvtt`, `.dd2vtt`
+        or `.df2vtt` (unless it is sent as `application/json`), a file sent
+        under a field other than `file`, more than one file, or a body that is
+        cut off or malformed or breaks the field limits; and **413** for a file
+        over the size limit, which is the map size limit plus a third for the
+        base64 text and 8 MB for the walls and lights (75 MB at the default
+        50 MB).
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9384,6 +9507,17 @@ paths:
                 message: This file needs a decision before it can be imported.
                 outOfBounds: { walls: 79, doors: 20, lights: 0 }
                 objectWalls: 0
+        '413':
+          description: >-
+            The file is over the size limit (the map size limit plus a third
+            for the base64 text and 8 MB for the walls and lights).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -9397,8 +9531,13 @@ paths:
         other than letters, digits, spaces, `_` and `-` removed) holding the
         map's picture as base64, its size in squares, its walls and windows as
         `line_of_sight`, its doors as `portals` (a locked door is written as
-        closed), and its enabled lights, each with its dim radius as `range`.
-        Tokens, fog and the spirit layer are not included.
+        closed), its windows as open portals (a window does not block sight, so
+        it is not written as a wall), and every light, switched off ones
+        included, each with its dim radius as `range`, `intensity` 0 when it is
+        off, and two keys of CozyVTT's own, `bright_range` and `enabled`, which
+        other tools skip and a re-import reads back. Walls are joined into
+        polylines in time proportional to their number. Tokens, fog and the
+        spirit layer are not included.
 
 
         Answers 422 when the picture cannot be put in the file: the map's
@@ -9439,7 +9578,7 @@ paths:
                         description: The picture's width in pixels divided by the map's width in squares, rounded; the map's `gridSize` when the width cannot be read.
                   line_of_sight:
                     type: array
-                    description: Walls and windows in grid units, joined into polylines where their ends meet.
+                    description: Walls in grid units, joined into polylines where their ends meet.
                     items:
                       type: array
                       items:

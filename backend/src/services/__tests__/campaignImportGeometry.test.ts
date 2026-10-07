@@ -11,6 +11,9 @@
 
 import archiver from 'archiver';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { importCampaign } from '../campaignImporter';
 import { prisma, createTestUser, cleanupUsers, cleanupCampaigns } from '../../__tests__/helpers/db';
 
@@ -49,6 +52,14 @@ function archive(maps: object[]): Promise<Buffer> {
   return zipOf(entries);
 }
 
+/** The importer reads an archive from disk, as the import route saves it. */
+const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-geometry-'));
+function onDisk(zip: Buffer): string {
+  const file = path.join(SCRATCH, `${randomUUID()}.cozyvtt`);
+  fs.writeFileSync(file, zip);
+  return file;
+}
+
 let userId: string;
 const campaigns: string[] = [];
 
@@ -60,6 +71,7 @@ afterAll(async () => {
   await cleanupCampaigns(campaigns);
   await cleanupUsers([userId]);
   await prisma.$disconnect();
+  fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
 
 it('imports the maps whose walls and lights are in bounds, and skips the rest', async () => {
@@ -70,7 +82,7 @@ it('imports the maps whose walls and lights are in bounds, and skips the rest', 
     map('Light far off the map', { lights: [light(1000 + 25000 + 50)] }),
   ]);
 
-  const result = await importCampaign(zip, userId);
+  const result = await importCampaign(onDisk(zip), userId);
   campaigns.push(result.campaignId);
 
   const maps = await prisma.map.findMany({ where: { campaignId: result.campaignId }, select: { name: true, wallSegments: true } });

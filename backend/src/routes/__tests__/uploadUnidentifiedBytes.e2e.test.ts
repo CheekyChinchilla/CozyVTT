@@ -1,16 +1,16 @@
 /**
  * What happens when file-type cannot identify an upload.
  *
- * The validator had two exceptions for that case: a file named .pdf uploaded
- * as a MAP, and one named .mp3 uploaded as AUDIO, were both accepted without
- * further checks. The reasoning was that file-type might miss those formats.
- * It does not: a real PDF and a real MP3 are both identified by their bytes and
- * pass the ordinary MIME check. So the exceptions only ever fired for bytes
- * nothing could identify, and accepted them on the strength of a filename.
+ * The validator had an exception for that case: a file named .mp3 uploaded
+ * as AUDIO was accepted without further checks. The reasoning was that
+ * file-type might miss the format. It does not: a real MP3 is identified by
+ * its bytes and passes the ordinary MIME check. So the exception only ever
+ * fired for bytes nothing could identify, and accepted them on the strength of
+ * a filename.
  *
- * The fix checks the leading bytes itself in that branch. A real PDF starts
- * with %PDF- and a real MP3 with an ID3 tag or an MPEG frame sync. Anything
- * else named .pdf or .mp3 is refused.
+ * The fix checks the leading bytes itself in that branch: a real MP3 starts
+ * with an ID3 tag or an MPEG frame sync. Anything else named .mp3 is refused.
+ * A MAP named .pdf is refused outright, since a PDF cannot be drawn as a map.
  *
  * file-type is stubbed to report nothing, which is the branch under test.
  *
@@ -71,9 +71,9 @@ describe('uploads file-type cannot identify', () => {
   }
 
   describe('a MAP named .pdf', () => {
-    it('is accepted when the bytes really start a PDF', async () => {
+    it('is refused even when the bytes really start a PDF, since a PDF cannot be drawn as a map', async () => {
       const res = await upload('MAP', 'floorplan.pdf', REAL_PDF_HEADER, 'application/pdf');
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(400);
     });
 
     it('is refused when the bytes are garbage', async () => {
@@ -110,7 +110,7 @@ describe('uploads file-type cannot identify', () => {
   });
 
   it('leaves nothing in the temp directory after the refusals', () => {
-    expect(uploadedIds).toHaveLength(3);
+    expect(uploadedIds).toHaveLength(2);
     const temp = path.join(UPLOAD_DIR, 'temp');
     expect(fs.existsSync(temp) ? fs.readdirSync(temp) : []).toEqual([]);
   });

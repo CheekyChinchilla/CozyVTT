@@ -244,7 +244,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 
 - Update HP (current, max, and temporary)
 - Rename the token
-- View and edit the stat block (for NPC tokens with creature template data)
+- View and edit the stat block (for NPC tokens with creature template data). An edit is saved a moment after you stop typing, or straight away when you click out of the stat block, switch it back to **View** or close the editor
 - **Change the token image** — click the token avatar in the editor's header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
@@ -528,7 +528,11 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 2. In the **General** tab, scroll to the **Export Campaign** section
 3. Optionally toggle **Include audio assets** (off by default to reduce file size)
 4. Click **Export Campaign**
-5. A `.cozyvtt` file downloads to your computer
+5. In Chrome and Edge, choose where to save the file; the archive is written there as it arrives. Other browsers download it as they would any file, and save it once it has all arrived
+
+A large campaign takes as long to export as your connection needs; nothing gives up after a set time. Choose where to save within a minute or so: on a large campaign the server stops sending if nothing takes the file for longer than that.
+
+**Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
 - All maps (images, grid settings, wall segments, fog, lighting)
@@ -554,14 +558,17 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
 
+An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
+
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 
 ### Security Notes
 
 Imported archives are validated at multiple levels:
 - File paths are sanitized to prevent directory traversal
-- Decompressed size is tracked to prevent zip bomb attacks
-- Asset files are validated by magic bytes, not just extension
+- Each file inside the archive is unpacked a piece at a time and stopped as soon as it passes its limit, so a small archive that would unpack to gigabytes (a "zip bomb") is refused without harm. The limits are 10 MB for each of the campaign's data files, the upload limit of its kind for each picture or sound file (50 MB for a map picture unless your server's admin has changed it), and 500 MB for the whole archive. A picture or sound file over its limit is left out of the import; anything else over a limit stops the import with a message saying which
+- An archive listing more than 1,000 files is refused before it is opened
+- Each picture and sound file must be, by its content, a format the upload window accepts for its kind (a map picture is PNG, JPEG or WebP; a token picture PNG, JPEG, WebP or GIF; a sound file MP3, Ogg or WAV), and is stored as what it really is, whatever the archive calls it. Anything else is left out of the import
 - All JSON data is validated against strict schemas with size limits
 - New UUIDs are generated for all entities — nothing from the archive can reference existing data
 
@@ -988,6 +995,10 @@ straight after importing (it has the map's name), and under **Move to…** choos
 players can see it once you switch to that map. Until you move it, anyone
 browsing the library can see it.
 
+**Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
+
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
 map in CozyVTT. That is how the format works everywhere, not a CozyVTT limit.
@@ -1008,6 +1019,10 @@ they cannot block sight, because sight stops at the edge of the map. If a whole
 section of your map is missing its artwork, check whether the tool you exported
 from can export that section on its own, or export the map as a PNG instead and
 [add it as an ordinary map](#adding-maps-to-your-campaign).
+
+### Exporting a Universal VTT file
+
+The app has no button for this yet. The server can produce a `.uvtt` file for a map, for a script or a tool built on the unsupported HTTP surface (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only), and importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
 ### Undo / Redo
 
