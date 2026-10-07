@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A request that is not valid JSON is no longer logged with the text around the mistake.** The log line quoted part of the request, which in a sign-in could include the password. It now records only that a request was refused, why, and where it was sent. The browser never sends such requests; a hand-written script could.
 
-- **Log files no longer keep full email addresses.** Every address the backend logs, from the emails it sends to the errors it records, is cut to its first letter and its domain, such as `a***@example.com`. That is enough to tell accounts apart, and an account deleted later no longer leaves its address behind in the logs. Logs written by older versions still hold full addresses; the deployment guide's section on log files says how to remove them.
+- **Log files no longer keep full email addresses.** Every address the backend logs, from the emails it sends to the errors it records, is cut to its first letter and its domain, such as `a***@example.com`. That is enough to tell accounts apart, and an account deleted later no longer leaves its address behind in the logs. The database's own error messages, which quote the request that caused them, used to go to the container log in full; they now go through the same masking, and a very long value in them is shortened like any other. Logs written by older versions still hold full addresses; the deployment guide's section on log files says how to remove them.
 
 ---
 
