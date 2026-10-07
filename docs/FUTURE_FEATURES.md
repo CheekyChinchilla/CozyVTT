@@ -41,7 +41,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.2` **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
 - `1.5.1` **D&D 5e: an old sheet's less common languages land under Weapons.** For sheets saved before the four proficiency boxes were stored, `utils/proficiencies.ts` sorts entries by a fixed list of language names, so "Druidic" or "Thieves' Cant" goes to Weapons even when the sheet's own languages list names it.
 - `1.5.3` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
-- `1.5.1` **The full-page character editor discards edits after a stale save.** It has no live connection, so hit points changed at the table make its save stale, and the refused save (409) reloads the sheet over what was typed (`CharacterEditorPage.tsx`); it should offer to keep the edits.
 - `1.5.3` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.3` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 
@@ -221,19 +220,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   transfer deliberately leaves alone. **Revisit if** people actually ask to
   co-run games — the handover added for #33 covers the cases reported so far
   (handing off, stepping back, an agent DM narrating while the owner plays).
-
-- **Saving a flexible character discards every top-level field except
-  `sections`.** `FlexibleCharacterSheetEdit.tsx:99` calls
-  `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than
-  spreading what was loaded — so anything else stored alongside is dropped on
-  the next save, silently. Reproduced on a test character: two top-level keys
-  before saving, one after. Untouched since v1.1.2, so it predates the 1.2.2
-  work; found by round-tripping every system's sheet through save while
-  verifying the typing changes. `FlexibleCharacterData` declares only
-  `sections`, so nothing the sheet *renders* is lost, which is why it has gone
-  unnoticed — but a character imported from elsewhere, or one that gains a
-  field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
-  needs a moment's thought about whether any field is meant to be dropped.
 
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with
