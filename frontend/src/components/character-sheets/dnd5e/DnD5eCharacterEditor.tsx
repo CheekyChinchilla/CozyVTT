@@ -1235,6 +1235,9 @@ min={0}
   const renderStatsTab = () => (
     <div className="space-y-6">
       {/* Character Details */}
+      {/* TODO(ui): these labels are not tied to their inputs (no htmlFor and id),
+          so a screen reader announces each box by its placeholder alone. Give
+          each input an id and its label a matching htmlFor. */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
