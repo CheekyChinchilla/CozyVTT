@@ -9,6 +9,7 @@ import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema } from './maps';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -155,10 +156,11 @@ export const MapDataSchema = z.object({
   name: z.string().min(1).max(200),
   imageAssetRef: z.string().max(200).nullable().optional(),
   spiritLayerAssetRef: z.string().max(200).nullable().optional(),
-  width: z.number().int().min(1).max(500),
-  height: z.number().int().min(1).max(500),
-  gridSize: z.number().int().min(10).max(200),
-  feetPerSquare: z.number().int().min(1).max(100),
+  // The limits every other path that stores a map applies (validators/maps.ts)
+  width: MapSideSchema('Map width'),
+  height: MapSideSchema('Map height'),
+  gridSize: GridSizeSchema,
+  feetPerSquare: FeetPerSquareSchema,
   diagonalRule: z.enum(['flat', 'alternating']).optional(),
   tokens: z.array(TokenSchema).max(IMPORT_LIMITS.MAX_TOKENS_PER_MAP),
   annotations: z.array(z.record(z.string(), z.unknown())).max(500).optional(),

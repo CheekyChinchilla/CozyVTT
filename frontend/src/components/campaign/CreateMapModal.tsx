@@ -11,6 +11,8 @@ import type { Asset, Map, CreateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
+import { MAP_LIMITS } from '@/constants/mapLimits';
+import { withinMapLimits, feetPerSquareWithinLimits } from '@/utils/mapSize';
 import { Button, Modal } from '@/components/ui';
 
 interface CreateMapModalProps {
@@ -257,9 +259,10 @@ export default function CreateMapModal({
 
   const applyDetectedGrid = () => {
     if (!detectedGrid) return;
-    setWidth(detectedGrid.width);
-    setHeight(detectedGrid.height);
-    setGridSize(detectedGrid.gridSize);
+    const fitted = withinMapLimits(detectedGrid);
+    setWidth(fitted.width);
+    setHeight(fitted.height);
+    setGridSize(fitted.gridSize);
     setDetectedGrid(null); // dismiss banner after applying
   };
 
@@ -370,22 +373,22 @@ export default function CreateMapModal({
                         label="Width (grid squares)"
                         value={width}
                         onChange={setWidth}
-                        min={1}
-                        max={500}
+                        min={MAP_LIMITS.minSide}
+                        max={MAP_LIMITS.maxSide}
                       />
                       <DimensionField
                         label="Height (grid squares)"
                         value={height}
                         onChange={setHeight}
-                        min={1}
-                        max={500}
+                        min={MAP_LIMITS.minSide}
+                        max={MAP_LIMITS.maxSide}
                       />
                       <DimensionField
                         label="Grid Size (px/square)"
                         value={gridSize}
                         onChange={setGridSize}
-                        min={10}
-                        max={500}
+                        min={MAP_LIMITS.minGridSize}
+                        max={MAP_LIMITS.maxGridSize}
                       />
                     </div>
                     <p className="text-xs text-stone-gray/50 mt-2">
@@ -430,9 +433,9 @@ export default function CreateMapModal({
                           <input
                             type="number"
                             value={feetCustom}
-                            onChange={(e) => setFeetCustom(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-                            min={1}
-                            max={100}
+                            onChange={(e) => setFeetCustom(feetPerSquareWithinLimits(e.target.value))}
+                            min={MAP_LIMITS.minFeetPerSquare}
+                            max={MAP_LIMITS.maxFeetPerSquare}
                             className="input-cozy w-20"
                             placeholder="ft"
                           />

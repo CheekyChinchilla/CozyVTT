@@ -32,7 +32,8 @@ import { getState as getCombatState, setState as setCombatState, removeCombatant
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem } from '../validators/maps';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -50,13 +51,10 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-/**
- * A map's width, height or grid size: a positive whole number that fits the
- * integer column it is stored in. A fraction used to reach Prisma and fail.
- */
-const MAX_INT_COLUMN = 2_147_483_647;
-function isMapDimension(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_INT_COLUMN;
+/** A grid size or feet-per-square value usable as sent, or undefined for the default. */
+function usable(schema: typeof GridSizeSchema | typeof FeetPerSquareSchema, value: unknown): number | undefined {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**
@@ -140,26 +138,17 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    if (!isMapDimension(width)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Map width must be a positive whole number',
-      });
-    }
-
-    if (!isMapDimension(height)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Map height must be a positive whole number',
-      });
+    // Width and height within the map limits (validators/maps.ts)
+    const sizeProblem = dimensionProblem(MapSideSchema('Map width'), width) ?? dimensionProblem(MapSideSchema('Map height'), height);
+    if (sizeProblem) {
+      return res.status(400).json({ error: 'Validation Error', message: sizeProblem });
     }
 
     // gridSize is optional; anything unusable gets the default of 50
-    const mapGridSize = isMapDimension(gridSize) ? gridSize : 50;
+    const mapGridSize = usable(GridSizeSchema, gridSize) ?? 50;
 
-    // feetPerSquare: positive integer, defaults to 5
-    const mapFeetPerSquare = feetPerSquare && Number.isInteger(feetPerSquare) && feetPerSquare > 0 && feetPerSquare <= 100
-      ? feetPerSquare : 5;
+    // feetPerSquare: whole number from 1 to 100, defaults to 5
+    const mapFeetPerSquare = usable(FeetPerSquareSchema, feetPerSquare) ?? 5;
 
     // diagonalRule: must be "flat" or "alternating", defaults to "flat"
     const mapDiagonalRule = diagonalRule === 'flat' || diagonalRule === 'alternating' ? diagonalRule : 'flat';
@@ -300,8 +289,7 @@ router.post(
 
       const mapName = (req.body.name as string)?.trim() || path.basename(req.file.originalname, path.extname(req.file.originalname));
       // Optional; anything that is not a usable grid size gets the default
-      const requestedGridSize = Number(req.body.gridSize);
-      const gridSizePx = isMapDimension(requestedGridSize) ? requestedGridSize : 70;
+      const gridSizePx = usable(GridSizeSchema, Number(req.body.gridSize)) ?? 70;
 
       // ── Parse the UVTT file ──────────────────────────────────────────────
       const confirmed = req.body.confirm === 'true' || req.body.confirm === true;
@@ -314,6 +302,19 @@ router.post(
       } catch (parseErr) {
         const msg = parseErr instanceof Error ? parseErr.message : 'Failed to parse UVTT file';
         return res.status(400).json({ error: 'Parse Error', message: msg });
+      }
+
+      // ── A map the app can hold ───────────────────────────────────────────
+      // The same limits as Create Map, checked before anything is asked or
+      // saved, so a file that cannot become a map leaves nothing behind.
+      if (dimensionProblem(MapSideSchema('Map width'), parsed.mapWidth) || dimensionProblem(MapSideSchema('Map height'), parsed.mapHeight)) {
+        const limit = `A map can be from ${MAP_LIMITS.minSide} to ${MAP_LIMITS.maxSide} squares on each side.`;
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: Number.isFinite(parsed.mapWidth) && Number.isFinite(parsed.mapHeight)
+            ? `This file's map is ${parsed.mapWidth} by ${parsed.mapHeight} squares. ${limit}`
+            : `This file does not say how many squares its map is (resolution.map_size). ${limit}`,
+        });
       }
 
       // ── Anything for the DM to decide before this becomes a map ──────────
@@ -671,44 +672,24 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.name = name.trim();
     }
 
-    if (width !== undefined) {
-      if (!isMapDimension(width)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Map width must be a positive whole number',
-        });
+    // Width, height, grid size and feet per square within the map limits
+    // (validators/maps.ts). A value equal to the stored one is taken as it
+    // is: Edit Map sends every field, and a map stored larger than the
+    // limits, before they existed, must still save an edit that leaves its
+    // size alone.
+    const sizeFields = [
+      ['width', width, MapSideSchema('Map width'), existingMap.width],
+      ['height', height, MapSideSchema('Map height'), existingMap.height],
+      ['gridSize', gridSize, GridSizeSchema, existingMap.gridSize],
+      ['feetPerSquare', feetPerSquare, FeetPerSquareSchema, existingMap.feetPerSquare],
+    ] as const;
+    for (const [field, value, schema, stored] of sizeFields) {
+      if (value === undefined) continue;
+      const problem = value === stored ? null : dimensionProblem(schema, value);
+      if (problem) {
+        return res.status(400).json({ error: 'Validation Error', message: problem });
       }
-      updateData.width = width;
-    }
-
-    if (height !== undefined) {
-      if (!isMapDimension(height)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Map height must be a positive whole number',
-        });
-      }
-      updateData.height = height;
-    }
-
-    if (gridSize !== undefined) {
-      if (!isMapDimension(gridSize)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Grid size must be a positive whole number',
-        });
-      }
-      updateData.gridSize = gridSize;
-    }
-
-    if (feetPerSquare !== undefined) {
-      if (!Number.isInteger(feetPerSquare) || feetPerSquare < 1 || feetPerSquare > 100) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'feetPerSquare must be a positive integer between 1 and 100',
-        });
-      }
-      updateData.feetPerSquare = feetPerSquare;
+      updateData[field] = value as number;
     }
 
     if (diagonalRule !== undefined) {
@@ -786,6 +767,23 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         return res.status(400).json({ error: 'Validation Error', message: 'explorationEnabled must be a boolean' });
       }
       updateData.explorationEnabled = explorationEnabled;
+    }
+
+    // Fog and explored areas are one stored cell per grid square, so a map
+    // too large for them (only one stored before the size limits can be)
+    // may not turn either on. One already on stays on, and its fog requests
+    // answer with the same reason.
+    const turningOn = (updateData.fogEnabled === true && !existingMap.fogEnabled)
+      || (updateData.explorationEnabled === true && !existingMap.explorationEnabled);
+    const resulting = {
+      width: typeof updateData.width === 'number' ? updateData.width : existingMap.width,
+      height: typeof updateData.height === 'number' ? updateData.height : existingMap.height,
+    };
+    if (turningOn && !fogFits(resulting)) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: new FogTooLargeError(resulting.width, resulting.height).message,
+      });
     }
 
     // Update the map
@@ -1951,6 +1949,9 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
     const fog = loadFogState(map, map.fogData as FogState | null);
     return res.status(200).json({ fogState: fog });
   } catch (error) {
+    if (error instanceof FogTooLargeError) {
+      return res.status(409).json({ error: 'Conflict', message: error.message });
+    }
     logger.error('Error fetching fog state', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch fog state' });
   }
@@ -1994,6 +1995,9 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
     return res.status(200).json({ fogState: updated.fogData });
   } catch (error) {
+    if (error instanceof FogTooLargeError) {
+      return res.status(409).json({ error: 'Conflict', message: error.message });
+    }
     logger.error('Error applying fog operation', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to apply fog operation' });
   }

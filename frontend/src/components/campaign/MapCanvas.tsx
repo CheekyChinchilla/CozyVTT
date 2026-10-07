@@ -3502,8 +3502,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               if (!enabled) { setFogMode(null); cancelFogDrag(); }
               try {
                 await mapService.updateMap(campaign.id, currentMap.id, { fogEnabled: enabled });
-              } catch {
+              } catch (err) {
+                // Say why: a map stored larger than the size limits is
+                // refused fog, and the box would otherwise just untick.
                 setCurrentMap(before);
+                showToast(apiErrorMessage(err) || 'Could not change fog of war for this map', 'error');
               }
             }}
             onCollapse={() => {

@@ -64,6 +64,25 @@ describe('MapDataSchema picture', () => {
   });
 });
 
+// An archive's map is held to the limits every other path applies to a
+// map: 1 to 500 squares a side, grid size 10 to 500. The importer used to cap
+// grid size at 200 while Create Map and Edit Map allowed 500, so a map the
+// app had made was dropped from its own archive.
+describe('MapDataSchema size', () => {
+  const map = { name: 'Hall', width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [] };
+
+  it.each([256, 500])('takes grid size %s, which Edit Map allows', (gridSize) => {
+    expect(MapDataSchema.safeParse({ ...map, gridSize }).success).toBe(true);
+  });
+
+  it.each([['gridSize', 501], ['gridSize', 9], ['width', 501], ['height', 0], ['feetPerSquare', 101]])(
+    'refuses %s %s, as the map routes do',
+    (field, value) => {
+      expect(MapDataSchema.safeParse({ ...map, [field]: value }).success).toBe(false);
+    }
+  );
+});
+
 describe('CreatureTemplateSchema allowlist fallbacks', () => {
   const base = { name: 'Bandit', statBlock: { ac: 12, speed: '30 ft.', abilities: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 } } };
 

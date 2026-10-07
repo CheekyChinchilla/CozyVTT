@@ -148,6 +148,18 @@ Once your map is in the asset library:
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
+**Map size limits.** A map can be:
+
+| Setting | Smallest | Largest |
+|---|---|---|
+| Width and Height (grid squares) | 1 | 500 |
+| Grid Size (pixels per square) | 10 | 500 |
+| Feet per square (**Grid Scale**) | 1 | 100 |
+
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+
+A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
+
 *Screenshot pending — Map Library panel with multiple maps.*
 
 ### Switching Maps

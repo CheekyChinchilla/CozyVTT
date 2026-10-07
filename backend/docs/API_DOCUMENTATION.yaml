@@ -5423,10 +5423,10 @@ paths:
 
         `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
         missing or out-of-range value is replaced with its default (50, 5,
-        `flat`); a `gridSize` that is not a positive whole number counts as
-        out of range. Only `name`, `imageUrl`, `width` and `height` can make
-        this route answer 400; `width` and `height` must be positive whole
-        numbers.
+        `flat`). `gridSize` is in range as a whole number from 10 to 500,
+        `feetPerSquare` as a whole number from 1 to 100. Only `name`,
+        `imageUrl`, `width` and `height` can make this route answer 400;
+        `width` and `height` must be whole numbers from 1 to 500.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -5453,15 +5453,17 @@ paths:
                 width:
                   type: integer
                   minimum: 1
+                  maximum: 500
                   description: In grid squares.
                 height:
                   type: integer
                   minimum: 1
+                  maximum: 500
                   description: In grid squares.
                 gridSize:
                   type: integer
                   default: 50
-                  description: Pixels per grid square. Falls back to 50 when omitted or not a positive whole number.
+                  description: Pixels per grid square. Falls back to 50 when omitted or not a whole number from 10 to 500.
                 feetPerSquare:
                   type: integer
                   default: 5
@@ -5551,9 +5553,19 @@ paths:
       description: |
         Update map settings (DM only). Send only the fields to change. Each
         field sent is checked and a bad one answers 400; unlike on create,
-        nothing is replaced with a default. `feetPerSquare` must be an
-        integer from 1 to 100, `diagonalRule` `flat` or `alternating`, and
-        `width`, `height` and `gridSize` positive whole numbers.
+        nothing is replaced with a default. `width` and `height` must be
+        whole numbers from 1 to 500, `gridSize` from 10 to 500,
+        `feetPerSquare` from 1 to 100, and `diagonalRule` `flat` or
+        `alternating`. A `width`, `height`, `gridSize` or `feetPerSquare`
+        equal to the stored value is accepted as it is, so a map stored
+        larger than these limits, before they existed, still saves an edit
+        that sends its size back unchanged.
+
+        Turning `fogEnabled` or `explorationEnabled` on from off answers 400,
+        and changes nothing, when the map would have more than 250,000 grid
+        squares (500 by 500): fog and explored areas are stored one cell per
+        square. A request that also makes the map small enough is accepted.
+        A flag already on is left alone.
 
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
@@ -5606,12 +5618,15 @@ paths:
                 width:
                   type: integer
                   minimum: 1
+                  maximum: 500
                 height:
                   type: integer
                   minimum: 1
+                  maximum: 500
                 gridSize:
                   type: integer
-                  minimum: 1
+                  minimum: 10
+                  maximum: 500
                 feetPerSquare:
                   type: integer
                   minimum: 1
@@ -6596,6 +6611,12 @@ paths:
         `gridSize`, answers a fresh, fully hidden grid. Players do not see the
         raw fog state; they receive the revealed cells over WebSocket
         (`fog:cells`) as the DM reveals areas. DM only.
+
+
+        A map with more than 250,000 grid squares (only one stored before
+        the 500-square size limit can have that many) is too large for fog:
+        it answers 409 with a message saying to make the map 500 by 500
+        squares or smaller.
       operationId: getFogState
       security:
         - cookieAuth: []
@@ -6613,6 +6634,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -6636,7 +6659,8 @@ paths:
         for the map the campaign is showing; for any other map, only the DM's
         connections are told. Refused with 409 (`Fog of war is off for this
         map`) while `fogEnabled` is off for the map, before the body is
-        checked. DM only.
+        checked, and with 409 and nothing stored for a map with more than
+        250,000 grid squares, which is too large for fog. DM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -9091,7 +9115,9 @@ paths:
 
         The map is named after `name`, or the file's name without its
         extension when `name` is missing or blank. Its size in squares is the
-        file's `map_size`, rounded. Lighting is turned on only when the file
+        file's `map_size`, rounded, and must be from 1 to 500 on each side, as
+        for any map: a larger one, or one without a numeric `x` and `y`,
+        answers 400 before anything is asked or saved. Lighting is turned on only when the file
         brings lights of its own; fog of war, Global Illumination and
         exploration memory start off. Doors become `door-closed` or
         `door-open` segments, as the file says.
@@ -9100,9 +9126,7 @@ paths:
         Some bad requests answer 500 with the generic `An unexpected error
         occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
         `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        or a file sent under a field other than `file`. A `map_size` without
-        a numeric `y` answers 500 (`Failed to import UVTT file`) after the
-        picture has already been saved as an asset.
+        or a file sent under a field other than `file`.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9127,8 +9151,9 @@ paths:
                   default: 70
                   description: >-
                     Pixels per grid square on the new map, used to place the
-                    file's walls and lights. Anything other than a positive
-                    whole number, including a missing value, means 70.
+                    file's walls and lights. Anything other than a whole
+                    number from 10 to 500, including a missing value, means
+                    70.
                 confirm:
                   type: string
                   enum: ['true']
@@ -9980,14 +10005,18 @@ components:
           description: Null for anyone but the DM unless the spirit layer is visible to them.
         width:
           type: integer
+          description: In grid squares, 1 to 500. A map stored before that limit may be larger.
         height:
           type: integer
+          description: In grid squares, 1 to 500. A map stored before that limit may be larger.
         gridSize:
           type: integer
           default: 50
+          description: Pixels per grid square, 10 to 500. A map stored before that limit may be outside it.
         feetPerSquare:
           type: integer
           default: 5
+          description: 1 to 100.
         diagonalRule:
           type: string
           enum: [flat, alternating]
