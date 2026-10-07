@@ -57,9 +57,11 @@ import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
+import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField } from './skillEdits';
 import { cocDodgeBase, settleDodge } from './dodge';
+import { parsePossessions, formatPossessions } from './possessions';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -1072,28 +1074,12 @@ value={formData.wealth?.cash}
       {/* Possessions — free-text field */}
       <div>
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions & Equipment</h3>
-        <textarea
-          value={
-            Array.isArray(formData.possessions)
-              ? formData.possessions.map((p) => `${p.name}${p.notes ? ` - ${p.notes}` : ''}`).join('\n')
-              : ''
-          }
-          onChange={(e) => {
-            // TODO(sheets): this parses and re-renders on every keystroke, so a
-            // new line typed at the end is dropped as an empty line, and a " -
-            // " typed before any notes is dropped because an item with no notes
-            // renders without it. Pasting works. Keep the raw text while the
-            // box has focus and parse it on blur.
-            const lines = e.target.value.split('\n').filter(line => line.trim());
-            // Split at the first " - " only: the notes may hold one too.
-            const possessions = lines.map(line => {
-              const at = line.indexOf(' - ');
-              return at > 0
-                ? { name: line.slice(0, at), notes: line.slice(at + 3) }
-                : { name: line, notes: '' };
-            });
-            setFormData({ ...formData, possessions });
-          }}
+        <ListField
+          multiline
+          value={Array.isArray(formData.possessions) ? formData.possessions : []}
+          onChange={(possessions) => setFormData((prev) => ({ ...prev, possessions }))}
+          parse={parsePossessions}
+          format={formatPossessions}
           placeholder="List possessions, one per line. Format: Item Name - Notes"
           rows={8}
           className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sepia-500"
@@ -1166,23 +1152,22 @@ value={formData.wealth?.cash}
           </div>
           <div>
             <label className="text-xs text-sepia-600 uppercase block mb-1">Spells (one per line)</label>
-            <textarea
+            <ListField
+              multiline
               rows={4}
-              value={(formData.spellsAndMythos?.spells ?? []).join('\n')}
-              onChange={(e) => {
-                setFormData({
-                  ...formData,
+              value={formData.spellsAndMythos?.spells ?? []}
+              onChange={(spells) => {
+                setFormData((prev) => ({
+                  ...prev,
                   spellsAndMythos: {
-                    cthulhuMythos: formData.spellsAndMythos?.cthulhuMythos ?? 0,
-                    // TODO(sheets): trimming and dropping empty lines on every
-                    // keystroke eats a new line or a space typed at the end, so
-                    // a two-word spell cannot be typed in order. Keep the raw
-                    // text while the box has focus and split it on blur.
-                    spells: e.target.value.split('\n').map((line) => line.trim()).filter(Boolean),
+                    cthulhuMythos: prev.spellsAndMythos?.cthulhuMythos ?? 0,
+                    spells,
                   },
-                });
+                }));
               }}
-              placeholder="Contact Nyarlathotep&#10;Elder Sign"
+              parse={parseLineList}
+              format={formatLineList}
+              placeholder={'Contact Nyarlathotep\nElder Sign'}
               className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
             />
           </div>

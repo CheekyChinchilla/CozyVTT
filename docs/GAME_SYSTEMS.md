@@ -690,6 +690,7 @@ one shared function rather than one per component.
 **Styling.** Use the shared UI primitives and theme tokens so the sheet follows every theme:
 
 - Inputs: the `input-cozy` class (or the `<Input>` / `<Field>` components in `frontend/src/components/ui/`).
+- Numbers: `<NumberField>`, so a box can be cleared and retyped. Lists typed as text ("Common, Elven", or one per line): `<ListField>`, which keeps the text as typed while the box is in use. Splitting and joining the text on every keystroke throws away the comma, space or new line typed after a word.
 - Buttons: the `<Button>` component (`frontend/src/components/ui/Button.tsx`).
 - Text/surfaces: theme tokens — `text-ink`, `text-ink-muted`, `bg-surface`, `bg-paper`, `border-ink/10`, panels via `glass-panel`. **Do not** hardcode `gray-`/`slate-`/`stone-` colors or a fixed hex — those break the non-default themes. (The `sepia-*` scale is the one intentional exception, used only by the Call of Cthulhu sheet for its 1920s look.)
 

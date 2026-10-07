@@ -46,6 +46,7 @@ import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
+import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
@@ -996,13 +997,7 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
-          {/* TODO(sheets): this box, and the speeds, resistances,
-             immunities, weaknesses, conditions, strike traits and languages
-             boxes, splits, trims and re-joins the text on every keystroke,
-             so a comma or a trailing space typed at the end vanishes before
-             the next word; pasting a whole list works. Keep the raw text
-             while the box has focus and split it on blur. */}
-          <input type="text" value={(formData.perception?.senses || []).join(', ')} onChange={(e) => updateField('perception.senses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <ListField value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
 
@@ -1136,7 +1131,7 @@ min={0} value={formData.speed?.land} onChange={(v: number) => updateField('speed
             </div>
             <div>
               <label className="text-sm text-stone-700 mb-1 block">Other (comma-separated):</label>
-              <input type="text" value={(formData.speed?.other || []).join(', ')} onChange={(e) => updateField('speed.other', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -1174,15 +1169,15 @@ min={0} value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Resistances (comma-sep)</label>
-            <input type="text" value={(formData.hp?.resistances || []).join(', ')} onChange={(e) => updateField('hp.resistances', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Immunities (comma-sep)</label>
-            <input type="text" value={(formData.hp?.immunities || []).join(', ')} onChange={(e) => updateField('hp.immunities', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Weaknesses (comma-sep)</label>
-            <input type="text" value={(formData.hp?.weaknesses || []).join(', ')} onChange={(e) => updateField('hp.weaknesses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
       </div>
@@ -1212,7 +1207,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
       {/* Conditions */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Conditions (comma-separated)</h3>
-        <input type="text" value={(formData.conditions || []).join(', ')} onChange={(e) => updateField('conditions', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Proficiencies */}
@@ -1272,7 +1267,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
                 <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <input type="text" value={(strike.traits || []).join(', ')} onChange={(e) => updateField(`strikes.${index}.traits`, e.target.value.split(',').map(t => t.trim()).filter(t => t))} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <input type="text" value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
@@ -1740,7 +1735,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       {/* Languages */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Languages (comma-separated)</h3>
-        <input type="text" value={(formData.languages || []).join(', ')} onChange={(e) => updateField('languages', e.target.value.split(',').map(l => l.trim()).filter(l => l))} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Backstory */}
