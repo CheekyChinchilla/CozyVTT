@@ -85,6 +85,7 @@ services:
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
       ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      CAMPAIGN_ARCHIVE_RATE_LIMIT: ${CAMPAIGN_ARCHIVE_RATE_LIMIT:-20}
       # Session timeouts (milliseconds) and logging. Every setting .env.example
       # offers is named here, or it never reaches the container: a test keeps
       # the two files in step.

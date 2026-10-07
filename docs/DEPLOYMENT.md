@@ -740,6 +740,26 @@ NGINX_MAX_BODY_SIZE=55M is smaller than the largest upload limit AUDIO (250 MB).
 
 The admin panel shows the same numbers under **Settings → Upload Size Limits**, along with the body size your proxy needs.
 
+### Campaign Import and Export Limits
+
+A campaign archive (the `.cozyvtt` file made by **Export Campaign** and read by **Import**) can be up to 500 MB, and the server reads all of it. So each user may, in any hour:
+
+- preview 20 archives (the step where the import window shows what an archive holds),
+- import 20 campaigns,
+- export 20 campaigns,
+
+and run only one of these at a time. Moving a campaign to another server takes one preview and one import, so a real table never comes near these numbers; they are there to stop a script. Someone who reaches one is told how many minutes to wait.
+
+To change the number, set this in `.env` (it is the same number for all three):
+
+```env
+CAMPAIGN_ARCHIVE_RATE_LIMIT=20
+```
+
+Then apply it with `docker compose up -d`. Leave it out and the default of 20 applies. A value that is not a whole number above zero is ignored, with a warning in the backend log.
+
+Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
+
 ---
 
 ## File Storage
@@ -1303,7 +1323,7 @@ There is no need to serve it from your instance. The bundled nginx only sees its
 The routes are the same whether the file is published or not, since the web client's own code shows them to anyone who loads the page. What protects an instance is:
 
 - every request is checked on the server: that the caller is signed in, their role in the campaign, and that they may touch what they ask for (`backend/src/middleware/` and `backend/src/services/permissions.ts`)
-- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, and 30 uploads a minute per user
+- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, 30 uploads a minute per user, and 20 campaign imports, 20 import previews and 20 campaign exports an hour per user, one at a time
 - uploads checked by what the file contains, not by its name or the type it claims
 - Argon2id password hashing and a strong `SESSION_SECRET`
 - security headers on every response: from helmet on the API, and from the bundled nginx on the app page

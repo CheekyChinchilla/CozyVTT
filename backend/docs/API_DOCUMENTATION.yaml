@@ -7592,7 +7592,9 @@ paths:
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Only the API-wide rate limit applies.
+        without a picture. Each user may export 20 campaigns an hour
+        (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
+        previews, and run one archive operation at a time.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -7624,6 +7626,18 @@ paths:
                 format: binary
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          description: >-
+            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
         '500':
           description: The export failed
           content:
@@ -7641,7 +7655,8 @@ paths:
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
         anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it. The upload is one file in the `file` field, at most
+        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
@@ -7686,6 +7701,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/campaigns/import:
     post:
@@ -7696,8 +7723,9 @@ paths:
         signed-in user may call it; they become the new campaign's owner and
         DM. The upload rules are those of the preview route, and the
         `campaignExportSizeLimit` setting bounds both the archive and the
-        total size of the files read out of it. Only the API-wide rate limit
-        applies.
+        total size of the files read out of it. Each user may import 20
+        campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
+        previews and exports, and run one archive operation at a time.
 
         Every file in the archive is unpacked through a counter and stopped
         as soon as it passes its limit. Each JSON file may unpack to 10 MB,
@@ -7772,6 +7800,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   # ============================================
   # ADMIN ENDPOINTS

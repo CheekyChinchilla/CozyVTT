@@ -25,6 +25,13 @@ import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import {
+  campaignPreviewLimiter,
+  campaignImportLimiter,
+  campaignExportLimiter,
+  oneCampaignArchiveAtATime,
+  whileHoldingArchiveSlot,
+} from '../middleware/campaignArchiveLimits';
 import { getTempDirectory } from '../utils/fileUtils';
 import { randomUUID } from 'crypto';
 import path from 'path';
@@ -2171,38 +2178,41 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  * Query params:
  *   includeAudio (boolean, default false)
  *   includeTokens (boolean, default true)
- * Requires: Campaign DM role
+ * Requires: Campaign DM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
  */
-router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { campaignId } = req.params;
-    const includeAudio = req.query.includeAudio === 'true';
-    const includeTokens = req.query.includeTokens !== 'false'; // default true
+router.get('/:campaignId/export', campaignDM, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
+  await whileHoldingArchiveSlot(res, async () => {
+    try {
+      const { campaignId } = req.params;
+      const includeAudio = req.query.includeAudio === 'true';
+      const includeTokens = req.query.includeTokens !== 'false'; // default true
 
-    logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
+      logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
 
-    const result = await exportCampaign(
-      campaignId,
-      { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
-      { includeAudio, includeTokens }
-    );
+      const result = await exportCampaign(
+        campaignId,
+        { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
+        { includeAudio, includeTokens }
+      );
 
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-    res.setHeader('Content-Length', result.buffer.length);
-    return res.send(result.buffer);
-  } catch (error: unknown) {
-    logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: errorMessage(error) });
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.setHeader('Content-Length', result.buffer.length);
+      return res.send(result.buffer);
+    } catch (error: unknown) {
+      logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: errorMessage(error) });
 
-    if (errorMessage(error) === 'Campaign not found') {
-      return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
+      if (errorMessage(error) === 'Campaign not found') {
+        return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
+      }
+
+      return res.status(500).json({
+        error: 'Export Failed',
+        message: 'Failed to export campaign. Please try again.',
+      });
     }
-
-    return res.status(500).json({
-      error: 'Export Failed',
-      message: 'Failed to export campaign. Please try again.',
-    });
-  }
+  });
 });
 
 /**
@@ -2240,24 +2250,27 @@ async function answerAfterRemovingArchive(
   res: Response,
   work: (archivePath: string) => Promise<ImportReply>
 ): Promise<void> {
-  let reply: ImportReply;
+  let reply: ImportReply | undefined;
   try {
-    reply = req.file
-      ? await work(req.file.path)
+    const file = req.file;
+    reply = file
+      ? await whileHoldingArchiveSlot(res, () => work(file.path))
       : { status: 400, body: { error: 'Validation Error', message: 'No file uploaded.' } };
   } finally {
     await removeUploadedArchive(req.file);
   }
-  res.status(reply.status).json(reply.body);
+  // Undefined when the caller hung up before the work could start.
+  if (reply) res.status(reply.status).json(reply.body);
 }
 
 /**
  * POST /api/campaigns/import/preview
  * Upload a .cozyvtt archive and return its manifest preview.
  * Does NOT create anything — just reads manifest.json.
- * Requires: Authentication
+ * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
  */
-router.post('/import/preview', authenticated, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/import/preview', authenticated, oneCampaignArchiveAtATime, campaignPreviewLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
   await answerAfterRemovingArchive(req, res, async (archivePath) => {
     try {
       const preview = await previewCampaignImport(archivePath);
@@ -2275,9 +2288,10 @@ router.post('/import/preview', authenticated, takeImportUpload, async (req: Auth
  * Body (multipart): file + optional JSON fields:
  *   campaignName (string) — override campaign name
  *   importTokens (boolean, default true)
- * Requires: Authentication
+ * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
  */
-router.post('/import', authenticated, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
   await answerAfterRemovingArchive(req, res, async (archivePath) => {
     try {
       const userId = req.session.userId!;

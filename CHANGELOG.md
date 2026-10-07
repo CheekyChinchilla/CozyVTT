@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A crafted campaign archive can no longer crash the server.** Importing a campaign, or only previewing one, unpacked each file inside the archive into memory before checking its size, so any signed-in user could send a small archive that unpacked to gigabytes and stop the server for every table. An archive listing a very large number of files did the same. Archives are now read from disk a piece at a time and stopped as soon as they pass a limit, and one listing more than 1,000 files is refused before it is opened. A picture or sound file inside an archive that is larger than the upload limit for its kind is left out of the import, as it would be refused if uploaded.
 
+- **Campaign imports and exports are limited per person.** Each one moves up to 500 MB through the server every table shares, and nothing stopped one account from starting dozens at once, which was enough to stop the server. Each person may now preview 20 archives, import 20 campaigns and export 20 campaigns an hour, one at a time; someone who reaches a limit is told how many minutes to wait. Moving a campaign takes one preview and one import, so a real table never comes near this. Players can still import campaigns, under the same limits. The number can be changed with the new optional `CAMPAIGN_ARCHIVE_RATE_LIMIT` setting (see the deployment guide). Picture, sound and document uploads, and Universal VTT map imports, are not affected.
+
 ---
 
 ## [1.5.0] — 2026-10-03
