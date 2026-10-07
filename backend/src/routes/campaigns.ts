@@ -13,7 +13,8 @@ import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
-import { exportCampaign } from '../services/campaignExporter';
+import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
+import { CAMPAIGN_ARCHIVE_MAX_BYTES } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
@@ -74,7 +75,7 @@ const importUpload = multer({
     },
     filename: (_req, _file, cb) => cb(null, `${randomUUID()}.cozyvtt`),
   }),
-  limits: { fileSize: 524288000, files: 1, ...MULTIPART_FIELD_LIMITS }, // 500 MB hard cap
+  limits: { fileSize: CAMPAIGN_ARCHIVE_MAX_BYTES, files: 1, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     // Accept .cozyvtt or .zip MIME types
     const allowed = [
@@ -2183,35 +2184,46 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  */
 router.get('/:campaignId/export', campaignDM, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
   await whileHoldingArchiveSlot(res, async () => {
+    const { campaignId } = req.params;
+    const includeAudio = req.query.includeAudio === 'true';
+    const includeTokens = req.query.includeTokens !== 'false'; // default true
+
+    logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
+
+    let prepared: PreparedExport;
     try {
-      const { campaignId } = req.params;
-      const includeAudio = req.query.includeAudio === 'true';
-      const includeTokens = req.query.includeTokens !== 'false'; // default true
-
-      logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
-
-      const result = await exportCampaign(
+      prepared = await prepareCampaignExport(
         campaignId,
         { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
         { includeAudio, includeTokens }
       );
-
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-      res.setHeader('Content-Length', result.buffer.length);
-      return res.send(result.buffer);
     } catch (error: unknown) {
-      logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: errorMessage(error) });
-
+      if (error instanceof ExportTooLargeError) {
+        return res.status(422).json({ error: 'Export Too Large', message: error.message });
+      }
+      logger.error('Campaign export failed', { campaignId, error: errorMessage(error) });
       if (errorMessage(error) === 'Campaign not found') {
         return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
       }
-
       return res.status(500).json({
         error: 'Export Failed',
         message: 'Failed to export campaign. Please try again.',
       });
     }
+
+    // No Content-Length: the archive's size is known only once it is written.
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${prepared.filename}"`);
+    try {
+      await prepared.writeTo(res);
+    } catch (error: unknown) {
+      // Part of the archive may be on its way already, so there is no status
+      // left to send. The response is cut off, which the browser reports as a
+      // failed download, never as a finished but short one.
+      logger.error('Campaign export stopped part-way', { campaignId, error: errorMessage(error) });
+      res.destroy();
+    }
+    return undefined;
   });
 });
 

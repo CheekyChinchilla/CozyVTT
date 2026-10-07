@@ -511,7 +511,11 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 2. In the **General** tab, scroll to the **Export Campaign** section
 3. Optionally toggle **Include audio assets** (off by default to reduce file size)
 4. Click **Export Campaign**
-5. A `.cozyvtt` file downloads to your computer
+5. In Chrome and Edge, choose where to save the file; the archive is written there as it arrives. Other browsers download it as they would any file, and save it once it has all arrived
+
+A large campaign takes as long to export as your connection needs; nothing gives up after a set time. Choose where to save within a minute or so: on a large campaign the server stops sending if nothing takes the file for longer than that.
+
+**Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
 - All maps (images, grid settings, wall segments, fog, lighting)
@@ -536,6 +540,8 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 4. Optionally rename the campaign and toggle whether to import tokens
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
+
+An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time.
 
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 

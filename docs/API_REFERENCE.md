@@ -542,7 +542,7 @@ Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may e
 - `includeAudio` — `true` to include audio assets (default: `false`)
 - `includeTokens` — `false` to exclude tokens on maps (default: `true`)
 
-**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`.
+**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`, sent as it is made (no `Content-Length`). A campaign whose files would make an archive over 500 MB, the most an import accepts, answers `422` with `error: "Export Too Large"` and a `message` giving the size.
 
 ---
 

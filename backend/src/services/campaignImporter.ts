@@ -50,6 +50,7 @@ import {
 } from '../utils/archive';
 import { getFileSizeLimit, isAllowedMimeType, isAllowedExtension } from '../utils/fileUtils';
 import { startsWithPdfHeader, startsWithMp3Header } from '../middleware/fileValidation';
+import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
 const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
@@ -86,9 +87,6 @@ export interface ImportResult {
 }
 
 // ── Security helpers ────────────────────────────────────────────────────────
-
-const MB = 1024 * 1024;
-const megabytes = (bytes: number) => `${Math.round(bytes / MB)} MB`;
 
 /**
  * Unpack one of the archive's data files and parse it, within the data-file
@@ -159,12 +157,6 @@ function displayName(originalName: string, type: ImportableAssetType, ext: strin
   return `${base}.${ext}`;
 }
 
-/** Get max decompressed size from system settings. */
-async function getMaxImportSize(): Promise<number> {
-  const settings = await prisma.systemSettings.findFirst();
-  return settings?.campaignExportSizeLimit ?? 524288000; // 500 MB default
-}
-
 // ── Preview ───────────────────────────────────────────────────────
 
 /**
@@ -198,7 +190,7 @@ export function remapVibePeriodAudio(
 export async function previewCampaignImport(
   archivePath: string
 ): Promise<CampaignImportPreview> {
-  const maxSize = await getMaxImportSize();
+  const maxSize = await getCampaignArchiveSizeLimit();
   await checkArchiveSize(archivePath, maxSize);
 
   // Extract only manifest.json
@@ -225,7 +217,7 @@ export async function importCampaign(
   options: ImportOptions = {}
 ): Promise<ImportResult> {
   const { importTokens = true, campaignName } = options;
-  const maxSize = await getMaxImportSize();
+  const maxSize = await getCampaignArchiveSizeLimit();
   await checkArchiveSize(archivePath, maxSize);
 
   // 1. Open ZIP and validate structure

@@ -7588,7 +7588,12 @@ paths:
       summary: Export campaign
       description: |
         Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
-        built in memory and sent whole, with no size limit of its own. It
+        sent as it is made, with no `Content-Length`; asset files are stored
+        in it uncompressed. Before anything is sent, the asset files' recorded
+        sizes, the JSON files and the ZIP's own overhead are added up, and an
+        archive over the `campaignExportSizeLimit` setting (500 MB, and never
+        more than the import accepts) is refused with 422. A failure after
+        the first bytes have been sent cuts the response off. It
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
@@ -7626,6 +7631,24 @@ paths:
                 format: binary
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The archive would be larger than the size setting. The message
+            gives its size and the limit, and says whether leaving out audio
+            would bring it under.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Export Too Large
+                message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
         '429':
           description: >-
             The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,

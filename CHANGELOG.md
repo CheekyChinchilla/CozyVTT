@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
 
+- **Exporting a large campaign no longer risks stopping the server, and works on slow connections.** The export was built whole in the server's memory before any of it was sent, so a campaign with a few large maps could stop the server for every table, and the browser gave up on any export that took longer than 30 seconds to arrive. The archive is now sent as it is made, and the browser waits for as long as it takes. In Chrome and Edge you choose where to save it and it is written straight there; other browsers download it as before. An export whose pictures and sound add up to more than 500 MB, the most an import accepts, is now refused with a message giving its size and saying whether leaving out audio would bring it under, where it used to make an archive no server could import. The refusal used to show only "Failed to export campaign".
+
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
 
 ### Security
