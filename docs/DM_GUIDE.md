@@ -148,6 +148,20 @@ Once your map is in the asset library:
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
+**Map size limits.** A map can be:
+
+| Setting | Smallest | Largest |
+|---|---|---|
+| Width and Height (grid squares) | 1 | 500 |
+| Grid Size (pixels per square) | 10 | 500 |
+| Feet per square (**Grid Scale**) | 1 | 100 |
+
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+
+A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
+
+A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
+
 *Screenshot pending — Map Library panel with multiple maps.*
 
 ### Switching Maps
@@ -164,6 +178,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
 - **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
+- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature or the campaign's ambient sound still uses the file, a second window lists them (the campaigns you run are named; other people's are only counted) and removes it only if you choose **Delete anyway**. A map left without its picture shows "This map has no picture" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
 
@@ -195,7 +210,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or delete it.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them, and a failed action now shows a message. Removing a token, here or in the Token Manager or the quick editor, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -276,7 +291,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
-> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back, and they are told. The editor then loads the new version, or closes so it can be opened again on it; one opened with **Edit Character Sheet** from the roster's right-click menu just closes, and the roster fetches the character again. The same goes the other way when you are editing a sheet the player changes.
+> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back. Their editor stays open, puts their own changes onto the new version, which keeps the hit points you set, and asks them to confirm before saving; where you both changed the same thing, they choose which to keep. The same goes the other way when you are editing a sheet the player changes, including one opened with **Edit Character Sheet** from the roster's right-click menu.
 
 **What each system offers.** The rolls on the menu depend on your campaign's game system, because not every system has something meaningful to compute from a stat block:
 
@@ -384,7 +399,9 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Disposition** — Hostile, friendly, or neutral
 - **Display Mode** — Pog, top-down, or full-art
 
-Custom creatures are scoped to your campaign and fully editable.
+Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
+
+A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it, with a message saying it is too large.
 
 ### Saving Throws and Skills
 
@@ -491,7 +508,7 @@ Expand a template in the library and click **Place on Map** to create a new toke
 
 ### Editing and Deleting Templates
 
-Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently.
+Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently. Delete asks first, naming the template.
 
 For **NPC-type templates**, the edit form includes the full stat block editor — AC, ability scores, saves, skills, traits, actions, bonus actions, reactions, and legendary actions — so you can build a complete monster once and reuse it across maps and campaigns. Saves and skills work exactly as they do in the Creature Library: tick what the creature is proficient in and the bonus is derived from its ability scores and Challenge Rating (see [Saving Throws and Skills](#saving-throws-and-skills)). The right-click NPC roll picker (see [Rolling for NPC Tokens](#rolling-for-npc-tokens)) reads from the same stat block, so a template with a well-filled-in action list gets clickable attack and damage rolls automatically.
 
@@ -551,7 +568,7 @@ Imported archives are validated at multiple levels:
 - File paths are sanitized to prevent directory traversal
 - Each file inside the archive is unpacked a piece at a time and stopped as soon as it passes its limit, so a small archive that would unpack to gigabytes (a "zip bomb") is refused without harm. The limits are 10 MB for each of the campaign's data files, the upload limit of its kind for each picture or sound file (50 MB for a map picture unless your server's admin has changed it), and 500 MB for the whole archive. A picture or sound file over its limit is left out of the import; anything else over a limit stops the import with a message saying which
 - An archive listing more than 1,000 files is refused before it is opened
-- Each picture and sound file must be, by its content, a format the upload window accepts for its kind (a map picture is PNG, JPEG, WebP or PDF; a token picture PNG, JPEG, WebP or GIF; a sound file MP3, Ogg or WAV), and is stored as what it really is, whatever the archive calls it. Anything else is left out of the import
+- Each picture and sound file must be, by its content, a format the upload window accepts for its kind (a map picture is PNG, JPEG or WebP; a token picture PNG, JPEG, WebP or GIF; a sound file MP3, Ogg or WAV), and is stored as what it really is, whatever the archive calls it. Anything else is left out of the import
 - All JSON data is validated against strict schemas with size limits
 - New UUIDs are generated for all entities — nothing from the archive can reference existing data
 
@@ -606,7 +623,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 - **Upload** — upload a PDF, text or Markdown file straight into the campaign. It belongs to the campaign from the start, so members can read it at once with no share step.
 - **Write** — write a text or Markdown document on the spot, for a handout or the session's notes. Same as Upload: the campaign's own, readable immediately.
 
-**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
+**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
 A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
 
@@ -866,6 +883,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Door (Locked) | Red | Yes | DM must unlock |
 | Window | Blue | No | Transparent to light |
 
+Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
+
 ### Polygon Drawing Mode
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:
@@ -972,6 +991,10 @@ straight after importing (it has the map's name), and under **Move to…** choos
 players can see it once you switch to that map. Until you move it, anyone
 browsing the library can see it.
 
+**Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
+
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
 map in CozyVTT. That is how the format works everywhere, not a CozyVTT limit.
@@ -992,6 +1015,10 @@ they cannot block sight, because sight stops at the edge of the map. If a whole
 section of your map is missing its artwork, check whether the tool you exported
 from can export that section on its own, or export the map as a PNG instead and
 [add it as an ordinary map](#adding-maps-to-your-campaign).
+
+### Exporting a Universal VTT file
+
+The app has no button for this yet. The server can produce a `.uvtt` file for a map, for a script or a tool built on the unsupported HTTP surface (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only), and importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
 ### Undo / Redo
 

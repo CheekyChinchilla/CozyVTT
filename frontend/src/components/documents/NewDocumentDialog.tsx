@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { FilePlus, Loader2 } from 'lucide-react';
 import { Modal, Button, Input, Textarea } from '@/components/ui';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,9 +48,11 @@ export default function NewDocumentDialog({
   const [scope, setScope] = useState<AssetScope>(lockedScope ?? AssetScope.USER);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
+    setConfirmingDiscard(false);
     setName('');
     setFormat('md');
     setContent('');
@@ -58,6 +61,14 @@ export default function NewDocumentDialog({
   }, [isOpen, lockedScope]);
 
   const canSave = name.trim().length > 0 && !saving;
+
+  // Closing from Escape, the X or Cancel throws away what was typed, so once
+  // there is any, ask first. Saving closes through onClose directly.
+  const hasText = name.trim().length > 0 || content.trim().length > 0;
+  const requestClose = () => {
+    if (hasText) setConfirmingDiscard(true);
+    else onClose();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -80,16 +91,17 @@ export default function NewDocumentDialog({
   };
 
   return (
+    <>
     <Modal
       open={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="New document"
       icon={FilePlus}
       size="lg"
       closeDisabled={saving}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+          <Button type="button" variant="secondary" onClick={requestClose} disabled={saving}>
             Cancel
           </Button>
           <Button type="button" onClick={handleSave} disabled={!canSave} className="flex items-center gap-2">
@@ -175,5 +187,19 @@ export default function NewDocumentDialog({
         </p>
       </div>
     </Modal>
+    <ConfirmDialog
+      isOpen={confirmingDiscard}
+      title="Discard this document?"
+      message={`What you have written${name.trim() ? ` in "${name.trim()}"` : ''} has not been saved. If you close now, it is lost.`}
+      confirmLabel="Discard"
+      cancelLabel="Keep writing"
+      variant="danger"
+      onConfirm={() => {
+        setConfirmingDiscard(false);
+        onClose();
+      }}
+      onCancel={() => setConfirmingDiscard(false)}
+    />
+    </>
   );
 }

@@ -8,7 +8,7 @@ import session from 'express-session';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { sessionConfig } from './config/session';
+import { sessionConfig, sessionPool } from './config/session';
 import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
@@ -35,6 +35,7 @@ import logger from './utils/logger';
 import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
+import { createShutdown, onShutdownSignals } from './utils/shutdown';
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
@@ -215,7 +216,11 @@ app.use(errorHandler);
 // WEBSOCKET
 // ============================================
 
-initializeWebSocket(httpServer);
+const io = initializeWebSocket(httpServer);
+
+// Docker's stop, a service manager's stop and Ctrl+C all end the backend
+// here, which closes the sockets, the database and the session store first.
+onShutdownSignals(createShutdown({ io, prisma, sessionPool }));
 
 // ============================================
 // START SERVER

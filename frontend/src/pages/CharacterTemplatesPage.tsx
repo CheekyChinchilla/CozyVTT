@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Home, Plus, Search, X, Loader2, Pencil, Trash2, Copy, Upload, User as UserIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCharacterTemplatesQuery } from '@/hooks/queries';
+import { useCharacterTemplatesQuery, storeCharacterInList } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
 import { GameSystem, type CharacterTemplate } from '@/types';
@@ -65,6 +65,7 @@ export default function CharacterTemplatesPage() {
         data: template.data as never,
         tokenImageUrl: template.tokenImageUrl ?? undefined,
       });
+      storeCharacterInList(queryClient, created.character);
       showToast(`Created "${created.character.name}" from this template`, 'success');
       navigate(`/characters/${created.character.id}/edit`);
     } catch {
@@ -314,10 +315,7 @@ export default function CharacterTemplatesPage() {
         <CharacterTemplateEditorModal
           template={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            refresh();
-          }}
+          onSaved={refresh}
         />
       )}
 

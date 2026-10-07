@@ -807,8 +807,17 @@ class ApiClient {
     return response.data;
   }
 
-  async deleteAsset(id: string): Promise<{ message: string }> {
-    const response = await this.client.delete(`/api/assets/${id}`);
+  /**
+   * Delete an asset.
+   *
+   * Answers 409 with `ASSET_IN_USE` and where it is used while something
+   * still names it, having deleted nothing. Pass `force` only after the person
+   * has seen that list and chosen to delete anyway; see useAssetDelete.
+   */
+  async deleteAsset(id: string, options?: { force?: boolean }): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/assets/${id}`, {
+      params: options?.force ? { force: 'true' } : undefined,
+    });
     return response.data;
   }
 

@@ -69,14 +69,17 @@ export const TokenMetadataSchema = z.record(z.string(), z.unknown()).refine(
 );
 
 /**
- * Where a token stands, in grid squares. Rebuilt from x and y, so nothing that
- * arrives beside them is stored: a player may move their own token, and the
- * stored position goes to every member on each map fetch. Whether the square
- * is on the map is the route's check, since only it has the map.
+ * Where a token stands, in whole grid squares: the client only ever sends
+ * whole ones, and other clients draw a fraction half a square from where it
+ * counts. Rebuilt from x and y, so nothing that arrives beside them is
+ * stored: a player may move their own token, and the stored position goes to
+ * every member on each map fetch. Whether the square is on the map is the
+ * route's check, since only it has the map; it also keeps the footprint on
+ * the map with clampTokenPosition.
  */
 export const TokenPositionSchema = z.object({
-  x: z.number(),
-  y: z.number(),
+  x: z.number().int('must be a whole number of squares'),
+  y: z.number().int('must be a whole number of squares'),
 });
 
 /** Which way a token faces, in degrees. */

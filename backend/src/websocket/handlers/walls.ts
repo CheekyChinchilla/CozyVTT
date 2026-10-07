@@ -7,13 +7,17 @@ import { Server } from 'socket.io';
 import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { WallSegmentSchema, WallSegmentsArraySchema } from '../../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
+import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
+
+/** What a wall edit reads of the map to check it: whose it is, and its extent. */
+const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -37,15 +41,23 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, wallSegments: true } });
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, wallSegments: true } });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      if (wallOutsideMap([parsed.data], map)) {
+        socket.emit('error', { message: WALL_OUTSIDE_MAP_MESSAGE });
         return;
       }
 
       const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
       if (existing.length >= 5000) {
         socket.emit('error', { message: 'Maximum 5000 wall segments per map' });
+        return;
+      }
+      if (existing.some((w) => w.id === parsed.data.id)) {
+        socket.emit('error', { message: DUPLICATE_WALL_ID_MESSAGE });
         return;
       }
 
@@ -119,7 +131,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // a prepared map is the DM's until they switch to it.
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { campaignId: true, wallSegments: true, campaign: { select: { currentMapId: true } } },
+        select: { ...EXTENT, wallSegments: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
         socket.emit('error', { message: 'Map not found' });
@@ -158,6 +170,12 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         }
         updated = { ...existing[idx], type: targetType };
       } else {
+        // The DM may move a wall, within the map's bounds. One stored outside
+        // them before they existed may stay where it is.
+        if (wallOutsideMap([parsed.data], map, [existing[idx]])) {
+          socket.emit('error', { message: WALL_OUTSIDE_MAP_MESSAGE });
+          return;
+        }
         updated = parsed.data;
       }
 
@@ -193,9 +211,13 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true } });
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, wallSegments: true } });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      if (wallOutsideMap(parsed.data, map, map.wallSegments)) {
+        socket.emit('error', { message: WALL_OUTSIDE_MAP_MESSAGE });
         return;
       }
 

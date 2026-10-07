@@ -239,7 +239,9 @@ The Character Editor is where you fill in every detail about your character — 
 
 *Screenshot pending — Character editor with D&D 5e sheet open.*
 
-Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent.
+Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent. Anything you type while a save is still going through stays in the editor, which then stays open with it, counted as unsaved, until you press **Save** again.
+
+**If the character changed while you were editing it**, for example your DM took hit points at the table or you saved it from another window, your save is refused so that it cannot put the old values back. Nothing you typed is lost. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the newest version of the character. Press **Save my changes** to save them, or **Keep editing** to go back to the editor without saving anything. If you changed something that was also changed in the newer version, it is listed under **Changed in both places** with both values; pick the one to keep for each, and **Save my changes** becomes available. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
 While a sheet has changes you haven't saved, you stay signed in however long you take. **If you are signed out anyway**, for example because your computer slept for over an hour or your password was changed on another device, your changes are not lost. Pressing **Save** shows "You've been signed out" above the sheet and keeps everything you typed. Click **Sign in in a new tab**, sign in there, come back to the editor and press **Save** again. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
@@ -261,6 +263,8 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - **Import** on the templates page, which publishes a character JSON file as a template
 
 Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time.
+
+**Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. A token picture chosen on the sheet is not used for a template, because a template's picture has to be a global asset (see the note below).
 
 **Importing from another instance.** The **Import** button accepts any character JSON — one you exported from this instance, one you wrote yourself, or one exported from a *different* CozyVTT server. That last case is the useful one: export a character from wherever you built it, bring the file to a new instance, and publish it there for that group to copy. Character exports and templates hold the same thing — a sheet plus a game system — so no conversion is involved. You'll see a preview before anything is published, and you can set the name and description at that point.
 
@@ -378,6 +382,8 @@ Use the **search bar** to find assets by name or tag. Filter by scope (Global, P
 
 Click any asset card to open its **detail panel** on the right. From there you can see full metadata, edit tags, or delete the asset.
 
+**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page.
+
 *Screenshot pending — Asset detail panel.*
 
 ---
@@ -416,7 +422,7 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown.
+Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 

@@ -3,9 +3,10 @@
 // Allows editing characters for any game system
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { canEditCharacterIn, characterEditRefusal } from '@/services/permissions';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, AlertCircle, Loader2, Lock, Download, FileText } from 'lucide-react';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
 import CharacterSheetSkeleton from '@/components/skeletons/CharacterSheetSkeleton';
@@ -16,12 +17,14 @@ import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import characterService from '@/services/character.service';
+import { storeCharacterInList } from '@/hooks/queries';
 import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
-import { isStaleCharacterSave, STALE_CHARACTER_RELOADED } from '@/utils/staleCharacter';
+import { isStaleCharacterSave } from '@/utils/staleCharacter';
+import { useStaleSaveReapply } from '@/components/character/StaleSaveDialog';
 import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
 import type { CharacterData } from '@/types';
 
@@ -30,6 +33,7 @@ export default function CharacterEditorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   // State
   const [character, setCharacter] = useState<Character | null>(null);
@@ -46,9 +50,14 @@ export default function CharacterEditorPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
-  // Changed to open a fresh sheet on a character loaded again, discarding the
-  // editor's own copy of the old one.
-  const [sheetKey, setSheetKey] = useState(0);
+  // The version the open editor's form was made from. `character` is the
+  // newest version this page knows of, which is what the read-only sheet,
+  // Export and Save as Template show; the two part company when a refused
+  // save's changes are carried onto a newer version, until the editor closes.
+  const editingFromRef = useRef<Character | null>(null);
+  const characterRef = useRef(character);
+  characterRef.current = character;
+  const staleSave = useStaleSaveReapply();
 
 
   // ============================================
@@ -127,6 +136,10 @@ export default function CharacterEditorPage() {
   const handleSave = useCallback(
     async (data: CharacterData, doShowToast = true, tokenImageUrl?: string) => {
       if (!character) return;
+      const editingFrom = editingFromRef.current ?? character;
+      // Only a newly uploaded picture. Sending back the one this page loaded
+      // would put it back if it had been changed since.
+      const picture = tokenImageUrl !== undefined ? { tokenImageUrl } : {};
 
       try {
         setSaving(true);
@@ -139,20 +152,50 @@ export default function CharacterEditorPage() {
         // the *old* column value on every save, which counted as an explicit
         // name and suppressed the sync, so renaming on the sheet never reached
         // the gallery or the title bar from this page.
-        const updated = await characterService.updateCharacter(character.id, {
-          data,
-          // The version the sheet was opened on, so a save made after the
-          // character changed elsewhere is refused and cannot undo that change.
-          updatedAt: character.updatedAt,
-          // Only a newly uploaded picture. Sending back the one this page
-          // loaded would put it back if it had been changed since.
-          ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
-        });
+        let updated: Character;
+        let carriedOver = false;
+        try {
+          updated = await characterService.updateCharacter(character.id, {
+            data,
+            // The version the sheet was opened on, so a save made after the
+            // character changed elsewhere is refused and cannot undo that change.
+            updatedAt: editingFrom.updatedAt,
+            ...picture,
+          });
+        } catch (err: unknown) {
+          // This page has no live connection, so hit points changed at the
+          // table since it opened make its save stale. The editor stays as it
+          // is, the user's changes are carried onto the newest version, and
+          // that is saved once they say so.
+          if (!isStaleCharacterSave(err)) throw err;
+          const stored = await staleSave.reapply({
+            opened: editingFrom.data,
+            edited: data,
+            withNewPicture: tokenImageUrl !== undefined,
+            fetchLatest: () => characterService.getCharacter(character.id),
+            onLatest: (latest) => {
+              setCharacter(latest);
+              storeCharacterInList(queryClient, latest);
+            },
+            save: (merged, updatedAt) =>
+              characterService.updateCharacter(character.id, { data: merged, updatedAt, ...picture }),
+          });
+          if (!stored) throw err;
+          updated = stored;
+          carriedOver = true;
+        }
 
         reportSignedIn();
 
-        // Update local state
+        // Update local state, and the Characters page's list, which would
+        // otherwise go on handing out the version from before this save.
         setCharacter(updated);
+        storeCharacterInList(queryClient, updated);
+        // An editor left open by typing during the save holds this version
+        // plus that typing. After changes were carried over, its form is still
+        // the older version's, so it keeps that one: another save is refused
+        // and carried over in turn, and cannot put the older values back.
+        if (!carriedOver) editingFromRef.current = updated;
         setLastSaved(new Date());
 
         if (doShowToast) {
@@ -169,22 +212,8 @@ export default function CharacterEditorPage() {
           throw err;
         }
 
-        // TODO(sheets): this page has no live connection, so hit points changed
-        // at the table since it opened make its next save stale, and the reload
-        // below throws away everything the user typed. Offer to keep the edits,
-        // for instance by carrying the table's changed fields into the form and
-        // saving again.
-        if (isStaleCharacterSave(err)) {
-          showToast(STALE_CHARACTER_RELOADED, 'error');
-          try {
-            setCharacter(await characterService.getCharacter(character.id));
-            setHasUnsavedChanges(false);
-            setSheetKey((key) => key + 1);
-          } catch (reloadError) {
-            console.error('Failed to reload character:', reloadError);
-          }
-          throw err;
-        }
+        // The user chose to keep editing; the dialog has said why.
+        if (isStaleCharacterSave(err)) throw err;
 
         // Said in a toast, and thrown on so the sheet stays in edit mode with
         // everything typed into it. This used to set the page's load error,
@@ -203,7 +232,7 @@ export default function CharacterEditorPage() {
         setSaving(false);
       }
     },
-    [character, showToast]
+    [character, showToast, queryClient, staleSave.reapply]
   );
 
   // ============================================
@@ -212,9 +241,6 @@ export default function CharacterEditorPage() {
 
   const handleSheetSave = useCallback(
     async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
-      // Log the data being saved for debugging
-      console.log('Saving character data:', data);
-
       // Save immediately when user clicks save in character sheet
       // Pass tokenImageUrl through so token images are persisted
       await handleSave(data, showToast ?? true, tokenImageUrl);
@@ -411,8 +437,8 @@ export default function CharacterEditorPage() {
       <div className="p-4">
         {signedOut && <SignedOutNotice />}
         <CharacterSheetRouter
-          key={sheetKey}
           onDirtyChange={setHasUnsavedChanges}
+          onEditStart={() => { editingFromRef.current = characterRef.current; }}
           character={character}
           mode="edit"
           onSave={handleSheetSave}
@@ -420,6 +446,8 @@ export default function CharacterEditorPage() {
         />
       </div>
     </div>
+
+    {staleSave.dialog}
 
     {showSaveAsTemplate && character && (
       <NewCharacterTemplateModal

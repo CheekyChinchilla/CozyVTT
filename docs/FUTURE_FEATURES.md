@@ -41,7 +41,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.2` **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
 - `1.5.1` **D&D 5e: an old sheet's less common languages land under Weapons.** For sheets saved before the four proficiency boxes were stored, `utils/proficiencies.ts` sorts entries by a fixed list of language names, so "Druidic" or "Thieves' Cant" goes to Weapons even when the sheet's own languages list names it.
 - `1.5.3` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
-- `1.5.1` **The full-page character editor discards edits after a stale save.** It has no live connection, so hit points changed at the table make its save stale, and the refused save (409) reloads the sheet over what was typed (`CharacterEditorPage.tsx`); it should offer to keep the edits.
 - `1.5.3` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.3` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 
@@ -67,7 +66,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
 - `1.5.1` **Suspected: the map-change listener keeps the role from MapCanvas's first render,** so after a role change without a reload a former DM may see a stale "Spirit Realm" badge and a new DM may hear the crossing sound (`MapCanvas.tsx`).
 - `1.5.1` **A campaign import that fails part-way leaves a partial campaign behind.** `services/campaignImporter.ts` creates the campaign before its maps, tokens and pictures and does not undo them when a later step fails, so a refused archive still leaves an incomplete campaign and its files.
-- `1.5.1` **An audio request for the last bytes of a file, or starting past its end, answers 500.** `routes/assets.ts` passes a `Range` of `bytes=-N` or a start beyond the file straight to the file stream, which throws; it should answer 416, and an end past the file should be cut to the file's length. Browsers do not send these during normal playback.
 - `1.5.3` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 
 ### Play and connection
@@ -86,9 +84,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - `1.5.2` **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
 - `1.5.3` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
-- `1.5.1` **A Universal VTT upload the server refuses answers 500.** A file with the wrong extension, over 100 MB, or sent under the wrong form field gets "An unexpected error occurred", and a file whose `map_size` has no numeric `y` fails after its picture has been saved (`routes/maps.ts`, `services/uvttParser.ts`). The asset upload route answers the same mistakes with 400.
-- `1.5.1` **Editing a single light can store a dim radius smaller than its bright one.** `LightSourceUpdateSchema` in `validators/walls.ts` lacks the check that creating a light and saving the whole list make, so a later save of the full list is refused.
-- `1.5.1` **Editing a single wall refuses the locked-door type,** which creating walls, saving the whole list and the DM's live wall edit all accept (`routes/maps.ts`).
 - `1.5.1` **Suspected: two edits to a map's walls or lights at the same moment can lose one.** The wall and light routes read, change and write the stored list without the map lock the token routes take (`routes/maps.ts`).
 
 ### Accounts
@@ -105,8 +100,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Server and deployment
 
-- `1.5.1` **Stopping Postgres can crash the backend.** The session store's pool in `config/session.ts` has no `'error'` listener, so an idle client's dropped connection becomes an unhandled error.
-- `1.5.1` **The Backups list's bin icon deletes a backup without asking** (`AdminPage.tsx`).
 - `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
 - `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
 
@@ -223,19 +216,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   transfer deliberately leaves alone. **Revisit if** people actually ask to
   co-run games — the handover added for #33 covers the cases reported so far
   (handing off, stepping back, an agent DM narrating while the owner plays).
-
-- **Saving a flexible character discards every top-level field except
-  `sections`.** `FlexibleCharacterSheetEdit.tsx:99` calls
-  `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than
-  spreading what was loaded — so anything else stored alongside is dropped on
-  the next save, silently. Reproduced on a test character: two top-level keys
-  before saving, one after. Untouched since v1.1.2, so it predates the 1.2.2
-  work; found by round-tripping every system's sheet through save while
-  verifying the typing changes. `FlexibleCharacterData` declares only
-  `sections`, so nothing the sheet *renders* is lost, which is why it has gone
-  unnoticed — but a character imported from elsewhere, or one that gains a
-  field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
-  needs a moment's thought about whether any field is meant to be dropped.
 
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with

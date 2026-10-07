@@ -685,9 +685,14 @@ Create a new map (DM only).
 ```json
 {
   "name": "Goblin Cave Level 1",
-  "assetId": "cuid-of-map-asset"
+  "imageUrl": "uuid-of-map-asset",
+  "width": 30,
+  "height": 20,
+  "gridSize": 70
 }
 ```
+
+`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default.
 
 ---
 
@@ -1019,6 +1024,12 @@ The `Content-Type` comes from the file's validated extension, never from the
 type declared at upload, and the response carries `X-Content-Type-Options:
 nosniff`.
 
+One byte range is served: `bytes=0-`, `bytes=1000-1999` or `bytes=-500` (the
+last 500 bytes) answer `206` with `Content-Range`, and an end past the file is
+cut to it. A range starting past the end answers `416` with
+`Content-Range: bytes */<size>`. Several ranges, or a malformed header, are
+ignored and the whole file is sent with `200`.
+
 ---
 
 ### `GET /api/assets/avatars/:userId`
@@ -1096,6 +1107,14 @@ Who may delete depends on the asset's scope:
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
+
+While a map, a token, a character, a character template, a creature, a token
+template or a campaign's atmosphere track still uses the asset, the route
+answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
+nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
+what the caller may see: an admin sees everything, anyone else sees only the
+campaigns they are the DM of, their own characters and shared character
+templates, and the rest is counted without names.
 
 ---
 

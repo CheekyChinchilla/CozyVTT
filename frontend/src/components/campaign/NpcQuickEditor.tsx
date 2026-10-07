@@ -33,6 +33,7 @@ import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
+import RemoveTokenDialog from './RemoveTokenDialog';
 
 // ============================================
 // Constants
@@ -91,6 +92,8 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [obscured, setObscured] = useState(token.obscured ?? false);
   const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
   const [isRemoving, setIsRemoving] = useState(false);
+  // Set while the Remove confirmation is open.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [enableHpPrompt, setEnableHpPrompt] = useState(false);
   const [newHpMax, setNewHpMax] = useState('');
   const [statBlock, setStatBlock] = useState<NpcStatBlock | null>((token.statBlock as NpcStatBlock) ?? null);
@@ -375,16 +378,17 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // ── Remove token ──
   const handleRemove = useCallback(async () => {
     if (isRemoving) return;
+    setConfirmingRemove(false);
     setIsRemoving(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
       socket?.emitMapChange(mapId);
       onClose();
     } catch (err) {
-      console.error('NpcQuickEditor: failed to remove token', err);
+      showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsRemoving(false);
     }
-  }, [campaignId, mapId, token.id, socket, onClose, isRemoving]);
+  }, [campaignId, mapId, token.id, socket, onClose, isRemoving, showToast]);
 
   // HP bar rendering values
   const hpPct = hp && hp.max > 0 ? Math.max(0, Math.min(1, hp.current / hp.max)) : 0;
@@ -412,6 +416,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [token.id]);
 
   return (
+    <>
     <AnimatePresence>
       <>
         {/* Backdrop */}
@@ -1001,7 +1006,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 </button>
 
                 <button
-                  onClick={handleRemove}
+                  onClick={() => setConfirmingRemove(true)}
                   disabled={isRemoving}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors"
                 >
@@ -1015,5 +1020,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
         </motion.div>
       </>
     </AnimatePresence>
+    <RemoveTokenDialog
+      token={confirmingRemove ? token : null}
+      isLoading={isRemoving}
+      onConfirm={handleRemove}
+      onCancel={() => setConfirmingRemove(false)}
+    />
+    </>
   );
 }

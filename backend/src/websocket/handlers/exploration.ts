@@ -20,7 +20,7 @@ import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
+import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -59,6 +59,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
+      // A map stored before the size limits can be too large to remember.
+      // exploration:request says so; this one is sent by the page as vision
+      // moves, so it is dropped without a word.
+      if (!fogFits(map)) return;
 
       const isDM = socket.role === 'DM';
       let userId = socket.userId;
@@ -133,6 +137,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
       socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
     } catch (error) {
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('exploration:request failed', { err: error });
     }
   });

@@ -29,12 +29,16 @@ export const THEME_COLOR_PATTERN = /^(|#[0-9A-Fa-f]{6}|[A-Za-z][A-Za-z0-9 ]{0,39
  * An atmosphere period's CSS filter: `none`, empty, or any combination of the
  * four functions the atmosphere editor's sliders produce. `url()` and every
  * other function is refused.
+ *
+ * The pattern is tested against the trimmed value, which is how spaces at
+ * either end are allowed. Matching them inside the pattern, on both sides of
+ * an optional middle, made a long run of spaces take minutes to refuse.
  */
 const FILTER_FUNCTION = String.raw`(?:(?:brightness|saturate|contrast)\(\d+(?:\.\d+)?\)|hue-rotate\(-?\d+(?:\.\d+)?deg\))`;
-export const VIBE_FILTER_PATTERN = new RegExp(String.raw`^\s*(?:none|${FILTER_FUNCTION}(?:\s+${FILTER_FUNCTION})*)?\s*$`);
+export const VIBE_FILTER_PATTERN = new RegExp(String.raw`^(?:none|${FILTER_FUNCTION}(?:\s+${FILTER_FUNCTION})*)?$`);
 
 export function isSafeVibeFilter(value: string): boolean {
-  return value.length <= 200 && VIBE_FILTER_PATTERN.test(value);
+  return typeof value === 'string' && value.length <= 200 && VIBE_FILTER_PATTERN.test(value.trim());
 }
 
 /** The spirit realm's named looks. */

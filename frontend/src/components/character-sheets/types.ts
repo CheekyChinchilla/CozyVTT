@@ -45,4 +45,12 @@ export interface CharacterSheetProps {
    * when only viewing.
    */
   onDirtyChange?: (dirty: boolean) => void;
+
+  /**
+   * Called each time the sheet opens its editor, including when it is first
+   * shown in edit mode. The editor's form is made from the `character` passed
+   * at that moment, so a host that saves for the sheet takes that one as the
+   * version the edit started from.
+   */
+  onEditStart?: () => void;
 }

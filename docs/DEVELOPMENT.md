@@ -230,7 +230,7 @@ The practical consequence: **a CSP violation cannot appear during development**.
 | Database port | **Not exposed to host** | Exposed on `localhost:5432` |
 | Backend port | **Not exposed to host** | Exposed on `localhost:4000` |
 | Public entry | Nginx reverse proxy on 80/443 | Direct ports per service |
-| Logging | JSON, written to disk | Pretty-printed, console |
+| Logging | JSON, written to disk and rotated at 10 MB | Pretty-printed, console |
 | Suitable for | Internet-facing instances | Local hacking only |
 
 ---
@@ -393,9 +393,11 @@ Two of those deserve a note:
   unpinned `postgresql-client`, or when the stage that runs (the last one) does
   not install it. It also fails when `backend/scripts/restore.sh`
   stops ending its load with the statements the dashboard restore ends it with,
-  when the combat state's fields differ between the two packages, and when the
+  when the combat state's fields differ between the two packages, when the
   special characters a password needs differ between the browser and the
-  server.
+  server, and when the map limits file (`backend/src/validators/mapLimits.ts`,
+  copied as `frontend/src/constants/mapLimits.ts` for the map dialogs) differs
+  between the two.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file

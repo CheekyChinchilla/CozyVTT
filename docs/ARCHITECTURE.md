@@ -99,6 +99,8 @@ src/
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
+│   ├── byteRange.ts      HTTP Range header reading for audio streaming
+│   ├── shutdown.ts       SIGTERM/SIGINT: close sockets, database and session store, then exit
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```
@@ -175,6 +177,8 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 | **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
 | **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, hover cross-highlight (walls, fog and lights are still MapCanvas-local; walls additionally keep their own undo/redo history) |
 | **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
+
+A page that changes a server resource away from the page that lists it updates that list's cache itself. The characters list, for instance, is served from cache for 30 seconds, so the full-page character editor and the templates page write what they saved or created into it with `storeCharacterInList` (`hooks/queries`); otherwise the Characters page would hand out the version from before the change.
 
 The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.
 
@@ -621,7 +625,7 @@ The server never parses a document; the defence is in how it is served. `GET /ap
 ### Serving Images
 
 Maps, tokens and avatars are served with an explicit `Content-Type` from a small
-whitelist of image types (and a PDF, for maps), keyed on the file's extension,
+whitelist of image types (and a PDF, kept for maps stored as one before PDF maps were refused), keyed on the file's extension,
 with `X-Content-Type-Options: nosniff`. Anything whose extension is not on that
 list goes out as `application/octet-stream`, which a browser downloads rather
 than renders. This matters because the extension is not trusted on its own: the
@@ -681,6 +685,10 @@ User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
 → The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
   does not declare is dropped; a stale updatedAt (the character changed since the
   sheet was loaded) is refused with 409 and nothing is written
+→ On a 409 the editor stays open: the host fetches the newest version, carries the
+  user's changes onto it (utils/reapplyEdits, the difference between the version
+  the editor opened and what it sent), shows them, and saves only on confirmation
+  (components/character/StaleSaveDialog)
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```

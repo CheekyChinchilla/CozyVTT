@@ -137,6 +137,8 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway, inside the 10 seconds Docker allows before it forces a container to stop. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+
 ---
 
 ## Port Configuration
@@ -730,13 +732,15 @@ MAX_AVATAR_SIZE_MB=2
 MAX_DOCUMENT_SIZE_MB=50
 
 # Request body cap for the bundled Nginx — must be >= the largest limit above
-# plus ~5 MB of multipart overhead
+# plus ~5 MB of multipart overhead (a Universal VTT import needs more: see below)
 NGINX_MAX_BODY_SIZE=55M
 ```
 
 These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
 
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
+
+**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself, so the proxy has to accept the map limit times 4/3 plus about 5 MB, not the map limit plus 5 MB. With the defaults (`MAX_MAP_SIZE_MB=50`, `NGINX_MAX_BODY_SIZE=55M`) a picture of up to about 37 MB imports and a larger one is refused with a 413 by the proxy, although a plain map upload of up to 50 MB works. To import pictures up to the full map limit, set `NGINX_MAX_BODY_SIZE` to 72M (50 MB x 4/3 + 5 MB, rounded up); for another limit, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 5. CozyVTT itself accepts a file of up to that much plus 8 MB for the walls and lights, and answers a larger one with a message saying so.
 
 **If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
 
@@ -816,6 +820,8 @@ Beyond the platform role (Admin / User), two permissions are granted individuall
 
 Grant these sparingly: both write content visible to every user on the instance. Revoking either takes effect on the user's next request; they do not need to sign out.
 
+The **USER** / **ADMIN** pill beside a name changes that person's role, and it asks first: making someone an administrator spells out what that gives them, and taking it away says they lose the Admin Panel. Nothing changes until you confirm.
+
 An instance always keeps at least one admin. While you are the only one, you cannot remove your own admin role or delete your own account; promote another user to **Admin** first. Nothing else can make someone an admin once setup has run, so this is what stops an instance ending up with nobody able to manage it.
 
 ---
@@ -824,7 +830,7 @@ An instance always keeps at least one admin. While you are the only one, you can
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand.
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
 
 To keep them in another folder under Docker, name that folder in a small file of your own, `docker-compose.override.yml`, next to `docker-compose.yml`. Docker Compose reads it automatically on top of the shipped file, and `git pull` never touches it.
 
@@ -1061,12 +1067,36 @@ docker compose logs -f backend
 docker compose logs backend | grep -i error
 ```
 
+Docker keeps each container's log in up to five files of 10 MB and deletes the oldest as it goes, so these logs cannot fill the disk. The limit is set by the `logging:` lines in `docker-compose.yml`. If you send container logs elsewhere with a different Docker log driver, set `logging:` for each service in your `docker-compose.override.yml`.
+
 ### Persistent Log Files
 
 The backend writes structured JSON logs to `backend/logs/` on the host:
 
 - `backend/logs/combined.log` — all log levels
 - `backend/logs/error.log` — errors only
+
+The backend rotates these files itself. When one reaches 10 MB it becomes `combined1.log` (or `error1.log`), the older ones move up a number, and the fifth and oldest is deleted, so the two logs take about 100 MB at most. The newest lines are always in the file without a number. There is nothing to set up: do not add a `logrotate` rule for this folder. If you added one for an earlier version, remove it. The backend keeps its files open, so a rule that renames them leaves it writing to the renamed file, and the space is not freed.
+
+Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
+
+```json
+{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+```
+
+To see the most recent errors:
+
+```bash
+tail -n 20 backend/logs/error.log
+```
+
+**What the logs hold.** Email addresses are cut to their first letter and their domain, such as `a***@example.com`, which is enough to tell accounts apart. Accounts, campaigns and maps are mostly named by their internal ids, and a few lines include a campaign's name. A value longer than 8,000 characters keeps only its first and last 4,000, so one oversized request cannot produce a huge line. The database's own errors are logged the same way, as `Database error` lines whose `target` names the kind of record and the operation, such as `character.findUnique`. Log files written by older versions can still hold full email addresses. To remove them, stop the backend, delete the files, and start it again; it begins new ones:
+
+```bash
+docker compose stop backend
+sudo rm backend/logs/*.log
+docker compose start backend
+```
 
 ### Health Check Endpoint
 
@@ -1246,7 +1276,7 @@ Before going live:
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
 - [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
-- [ ] **Log rotation** — `backend/logs/` directory is being rotated (consider `logrotate` for the host-mounted path)
+- [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
 - [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limit is 5 failed sign-ins per 15 minutes per visitor address, but a host-level ban catches scanners earlier
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)

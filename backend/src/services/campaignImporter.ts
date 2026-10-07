@@ -36,8 +36,7 @@ import {
   IMPORTABLE_ASSET_TYPES,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
-
-type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
+import { wallOutsideMap, lightOutsideMap } from '../validators/maps';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import {
@@ -49,11 +48,13 @@ import {
   UnpackedTotal,
 } from '../utils/archive';
 import { getFileSizeLimit, isAllowedMimeType, isAllowedExtension } from '../utils/fileUtils';
-import { startsWithPdfHeader, startsWithMp3Header } from '../middleware/fileValidation';
+import { startsWithMp3Header } from '../middleware/fileValidation';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
 const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
+
+type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -129,8 +130,8 @@ async function checkArchiveSize(archivePath: string, maxSize: number): Promise<v
  * What an imported asset file is, by its bytes, when that is a format the
  * upload route accepts for its type; null otherwise. The same rule as an
  * upload (middleware/fileValidation.ts): the detected type must be on the
- * type's allowlist, and a PDF map or an MP3 the detector does not know is
- * accepted on its header when its name says it is one.
+ * type's allowlist, and an MP3 the detector does not know is accepted on its
+ * header when its name says it is one.
  */
 async function identifyAsset(
   filePath: string,
@@ -140,7 +141,6 @@ async function identifyAsset(
   const detected = await fileTypeFromFile(filePath);
   if (detected) return isAllowedMimeType(type, detected.mime) ? { mime: detected.mime, ext: detected.ext } : null;
   const named = path.extname(originalName).toLowerCase();
-  if (type === 'MAP' && named === '.pdf' && (await startsWithPdfHeader(filePath))) return { mime: 'application/pdf', ext: 'pdf' };
   if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };
   return null;
 }
@@ -402,6 +402,12 @@ export async function importCampaign(
       continue;
     }
     const mapData: MapData = mapParsed.data;
+    // Walls and lights held to the bounds the map editor applies, so an
+    // archive cannot store geometry the editor would refuse.
+    if (wallOutsideMap(mapData.wallSegments ?? [], mapData) || lightOutsideMap(mapData.lights ?? [], mapData)) {
+      logger.warn('Skipping map with walls or lights outside it', { index: i });
+      continue;
+    }
 
     const imageUrl = remapAsset(mapData.imageAssetRef) || '';
     const spiritLayerUrl = remapAsset(mapData.spiritLayerAssetRef);

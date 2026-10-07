@@ -9,7 +9,7 @@
 
 import { AssetScope } from '@/types';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import NewDocumentDialog from '../NewDocumentDialog';
 
 const authUser = { id: 'u1', platformRole: 'USER', globalAssetManager: false };
@@ -102,3 +102,70 @@ describe('NewDocumentDialog', () => {
     expect(screen.getByLabelText('Document content')).toHaveValue('lots');
   });
 });
+
+describe('closing a document with text in it', () => {
+  const escape = () => fireEvent.keyDown(document, { key: 'Escape' });
+
+  it('closes at once when nothing has been typed', () => {
+    const onClose = vi.fn();
+    render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
+    escape();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard this document?' })).not.toBeInTheDocument();
+  });
+
+  it('asks on Escape once something is typed, and Keep writing leaves the text alone', async () => {
+    const onClose = vi.fn();
+    render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Document content'), { target: { value: 'Session 3: the bridge' } });
+
+    escape();
+
+    const ask = await screen.findByRole('dialog', { name: 'Discard this document?' });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(within(ask).getByRole('button', { name: 'Keep writing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard this document?' })).not.toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Document content')).toHaveValue('Session 3: the bridge');
+  });
+
+  it('closes after Discard', async () => {
+    const onClose = vi.fn();
+    render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'Session 3' } });
+
+    escape();
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Discard this document?' })).getByRole('button', { name: 'Discard' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the same from the X and from Cancel', async () => {
+    const onClose = vi.fn();
+    render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Document content'), { target: { value: 'notes' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(await screen.findByRole('dialog', { name: 'Discard this document?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep writing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard this document?' })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+    expect(await screen.findByRole('dialog', { name: 'Discard this document?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not ask after a successful Create', async () => {
+    createDocument.mockResolvedValue({ asset: { id: 'a9', name: 'Saved' } });
+    const onClose = vi.fn();
+    render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'Saved' } });
+    fireEvent.change(screen.getByLabelText('Document content'), { target: { value: 'kept' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: 'Discard this document?' })).not.toBeInTheDocument();
+  });
+});
+

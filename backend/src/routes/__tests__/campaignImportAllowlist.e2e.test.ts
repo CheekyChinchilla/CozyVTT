@@ -136,8 +136,13 @@ describe('an imported asset', () => {
     expect(stored.type).toBe('TOKEN');
   });
 
+  // No client can draw a PDF as a map, so the upload route refuses one, and
+  // so does an import.
+  it('is refused when it is a PDF map, as an upload would be', async () => {
+    expect(await importOne({ type: 'MAP', mimeType: 'application/pdf', originalName: 'dungeon.pdf', bytes: BYTES.pdf })).toEqual([]);
+  });
+
   it.each([
-    ['a PDF map', { type: 'MAP', mimeType: 'application/pdf', originalName: 'dungeon.pdf', bytes: BYTES.pdf }, 'application/pdf'],
     ['an Ogg track', { type: 'AUDIO', mimeType: 'audio/ogg', originalName: 'rain.ogg', bytes: BYTES.ogg }, 'audio/ogg'],
     ['an MP3 the detector does not know', { type: 'AUDIO', mimeType: 'audio/mpeg', originalName: 'tavern.mp3', bytes: BYTES.mp3 }, 'audio/mpeg'],
   ])('is accepted when it is %s, as an upload would be', async (_label, asset, mime) => {
