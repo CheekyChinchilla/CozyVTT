@@ -948,6 +948,10 @@ a wall set that does not line up with its artwork.
 | Delete what is selected | **Delete** or **Backspace** |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
+These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
+are not typing. In the chat box, a note or any other text box they type as
+usual and leave the walls alone.
+
 Changing the wall type applies to everything selected, so a boxful of walls can
 become windows at once. **Ctrl+Z** undoes a move or a delete like any other wall
 edit, and players see the change straight away without reloading.

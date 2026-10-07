@@ -69,6 +69,7 @@ import { useFogStateRequest } from './map/useFogStateRequest';
 import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
+import { isTypingInto } from './map/typingTarget';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 import { isSeen, type Viewer, type Lit, type InsideFn } from '@/utils/visibilityRule';
@@ -1416,6 +1417,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A key typed into a text box, a note or a dialog is left to it: none
+      // of the shortcuts below apply.
+      if (isTypingInto(e.target) || isTypingInto(document.activeElement)) return;
+
       // ── Tab: ping at the cursor ──────────────────────────────────────
       // Tab is the keyboard-navigation key and this listener is on `window`,
       // so it is only safe to claim under strict guards: the pointer must be

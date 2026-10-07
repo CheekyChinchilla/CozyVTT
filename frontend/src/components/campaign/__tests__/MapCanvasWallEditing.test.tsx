@@ -192,3 +192,90 @@ describe('wall undo after a map switch', () => {
     expect(screen.getByLabelText('Undo wall edit')).toBeDisabled();
   });
 });
+
+describe('wall shortcuts while typing', () => {
+  function renderWithChat() {
+    render(
+      <>
+        <MapCanvas />
+        <textarea aria-label="Chat message" />
+        <input aria-label="Note title" />
+      </>
+    );
+    return {
+      chat: screen.getByLabelText('Chat message'),
+      note: screen.getByLabelText('Note title'),
+    };
+  }
+
+  it('lets Backspace reach the chat box and deletes no selected walls', () => {
+    const { chat } = renderWithChat();
+    openWallSelect();
+    press('a', { ctrlKey: true });
+
+    chat.focus();
+    const reachedTheBox = fireEvent.keyDown(chat, { key: 'Backspace' });
+    fireEvent.keyDown(chat, { key: 'Delete' });
+
+    expect(emittedOf('walls:replace')).toEqual([]);
+    expect(screen.getByText('(2)')).toBeInTheDocument();
+    expect(reachedTheBox).toBe(true);
+  });
+
+  it('does not undo or redo a wall edit on Ctrl+Z or Ctrl+Y in a text box', () => {
+    const { note } = renderWithChat();
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('Delete');
+    expect(emittedOf('walls:replace')).toHaveLength(1);
+
+    note.focus();
+    const undoReached = fireEvent.keyDown(note, { key: 'z', ctrlKey: true });
+    const redoReached = fireEvent.keyDown(note, { key: 'y', ctrlKey: true });
+
+    expect(emittedOf('walls:replace')).toHaveLength(1);
+    expect(undoReached).toBe(true);
+    expect(redoReached).toBe(true);
+  });
+
+  it('leaves Ctrl+A and the arrow keys to a text box', () => {
+    const { note } = renderWithChat();
+    openWallSelect();
+
+    note.focus();
+    expect(fireEvent.keyDown(note, { key: 'a', ctrlKey: true })).toBe(true);
+    note.blur();
+    press('Delete');
+    expect(emittedOf('walls:replace')).toEqual([]);
+
+    press('a', { ctrlKey: true });
+    note.focus();
+    expect(fireEvent.keyDown(note, { key: 'ArrowRight' })).toBe(true);
+    expect(emittedOf('walls:replace')).toEqual([]);
+  });
+
+  it('keeps the selection when Escape is pressed in a text box', () => {
+    const { note } = renderWithChat();
+    openWallSelect();
+    press('a', { ctrlKey: true });
+
+    note.focus();
+    fireEvent.keyDown(note, { key: 'Escape' });
+    note.blur();
+    press('Delete');
+
+    expect(emittedOf('walls:replace')).toEqual([{ mapId: 'map-a', segments: [] }].map((p) => expect.objectContaining(p)));
+  });
+
+  it('still works with focus on a tool button', () => {
+    render(<MapCanvas />);
+    openWallSelect();
+    const selectButton = screen.getByLabelText('Wall select mode');
+    selectButton.focus();
+
+    fireEvent.keyDown(selectButton, { key: 'a', ctrlKey: true });
+    fireEvent.keyDown(selectButton, { key: 'Delete' });
+
+    expect(emittedOf('walls:replace')).toEqual([expect.objectContaining({ mapId: 'map-a', segments: [] })]);
+  });
+});

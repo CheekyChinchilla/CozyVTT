@@ -66,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Undoing a wall change after switching maps no longer puts the old map's walls on the new one.** The wall undo history carried over from one map to the next, so pressing Ctrl+Z, or Undo in the Walls panel, on the new map replaced all of its walls with the previous map's, for everyone at the table. Each map now starts with nothing to undo.
 
+- **Typing in the chat box, or any other text box, no longer edits the map's walls.** With the wall Select tool up, pressing Backspace or Delete in the chat box deleted the selected walls for everyone, and the key never reached the box. In the same way Ctrl+Z and Ctrl+Y undid or redid a wall edit, the arrow keys moved the selected walls, and Ctrl+A selected every wall. The map's keyboard shortcuts now apply only when you are not typing.
+
 ### Security
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
