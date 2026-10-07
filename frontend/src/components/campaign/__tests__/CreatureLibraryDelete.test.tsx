@@ -45,7 +45,11 @@ beforeEach(() => {
 });
 
 async function expandBat() {
+  const loadsBefore = api.listCreatures.mock.calls.length;
   render(<CreatureLibrary isOpen onClose={() => {}} />);
+  // Opening loads the list, and the search box's 300 ms debounce loads it again.
+  // Wait for both, so that second load cannot return the creature after a delete.
+  await waitFor(() => expect(api.listCreatures.mock.calls.length).toBeGreaterThanOrEqual(loadsBefore + 2));
   await userEvent.click(await screen.findByText('Boss Bat'));
 }
 
