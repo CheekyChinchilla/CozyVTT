@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import DocumentReader, { documentFormat } from '../DocumentReader';
 
 vi.mock('@/services/api', () => {
@@ -245,15 +245,75 @@ describe('DocumentReader', () => {
       expect(screen.getByLabelText('Edit N')).toHaveValue('attempt');
     });
 
-    it('cancel discards the draft and returns to reading', async () => {
+    it('cancel returns to reading at once when nothing was changed', async () => {
+      mockFetch('original');
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
+      await screen.findByText('original');
+      fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+      expect(screen.queryByRole('dialog', { name: 'Discard your changes?' })).not.toBeInTheDocument();
+      expect(screen.getByText('original')).toBeInTheDocument();
+    });
+
+    it('cancel asks before throwing away changes, then returns to reading', async () => {
       mockFetch('original');
       render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
       await screen.findByText('original');
       fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
       fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'changed' } });
       fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+      const ask = await screen.findByRole('dialog', { name: 'Discard your changes?' });
+      expect(screen.getByLabelText('Edit N')).toHaveValue('changed');
+      fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+
       expect(updateDocumentContent).not.toHaveBeenCalled();
-      expect(screen.getByText('original')).toBeInTheDocument();
+      expect(await screen.findByText('original')).toBeInTheDocument();
+    });
+
+    describe('closing with changes', () => {
+      const escape = () => fireEvent.keyDown(document, { key: 'Escape' });
+
+      async function editAndChange(onClose: () => void) {
+        mockFetch('original');
+        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" originalName="n.txt" canEdit />);
+        await screen.findByText('original');
+        fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+        fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'changed' } });
+      }
+
+      it('asks on Escape, and Keep editing leaves the draft where it was', async () => {
+        const onClose = vi.fn();
+        await editAndChange(onClose);
+
+        escape();
+
+        const ask = await screen.findByRole('dialog', { name: 'Discard your changes?' });
+        expect(onClose).not.toHaveBeenCalled();
+        fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard your changes?' })).not.toBeInTheDocument());
+        expect(onClose).not.toHaveBeenCalled();
+        expect(screen.getByLabelText('Edit N')).toHaveValue('changed');
+      });
+
+      it('closes after Discard changes', async () => {
+        const onClose = vi.fn();
+        await editAndChange(onClose);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+        fireEvent.click(within(await screen.findByRole('dialog', { name: 'Discard your changes?' })).getByRole('button', { name: 'Discard changes' }));
+
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
+
+      it('closes at once when the text was not changed, or while only reading', async () => {
+        const onClose = vi.fn();
+        mockFetch('original');
+        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" originalName="n.txt" canEdit />);
+        await screen.findByText('original');
+        escape();
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });
