@@ -40,6 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A dice roll's character name and purpose are limited in length.** They were stored and sent to every member exactly as sent, so one roll could carry close to a megabyte of text to every screen at the table and into the dice log. The name may now be up to 200 characters and the purpose up to 300; the dice panel's boxes stop there, and a roll sent with more is refused with a message saying which. A roll's secret setting must be on or off.
 
+- **Exploring a map no longer rewrites a player's whole memory of it several times a second.** Each time a player's view moved, their remembered areas of the map were read and written back in full, even when nothing new had been seen, so a modified page could keep the database busy rewriting a large map's memory indefinitely. What a player sees is now saved at most once a second, and not at all when it adds nothing. A player with the map open in two tabs could also lose some of what they explored, because the second tab's reports were turned away; they no longer are.
+
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
 
 ---
