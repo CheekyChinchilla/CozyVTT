@@ -12,12 +12,10 @@ import logger from '../utils/logger';
 
 export function errorHandler(
   err: Error,
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
   _next: express.NextFunction
 ): void {
-  logger.error('Unhandled error', { message: err.message, stack: err.stack });
-
   // Body-parser reports an oversized body as 413 and malformed JSON as 400.
   // Reporting those as 500 blamed the server for something the caller could fix
   // and told them nothing useful — a note too large to save looked like a crash.
@@ -31,8 +29,24 @@ export function errorHandler(
   // valid code, from inside the handler that exists to stop things throwing.
   const rawStatus = 'status' in err ? (err as { status?: unknown }).status : undefined;
   const parserType = 'type' in err ? (err as { type?: unknown }).type : undefined;
+  const tooLarge = rawStatus === 413 || parserType === 'entity.too.large';
+  const notJson = parserType === 'entity.parse.failed';
 
-  if (rawStatus === 413 || parserType === 'entity.too.large') {
+  if (tooLarge || notJson) {
+    // The caller's mistake, not the server's, and never logged with its
+    // message: the JSON parser's message quotes the text around the error,
+    // which in a sign-in request is the password.
+    logger.warn('Request body refused', {
+      type: typeof parserType === 'string' ? parserType : undefined,
+      status: tooLarge ? 413 : 400,
+      method: req.method,
+      path: req.path,
+    });
+  } else {
+    logger.error('Unhandled error', { message: err.message, stack: err.stack });
+  }
+
+  if (tooLarge) {
     res.status(413).json({
       error: 'Payload Too Large',
       message: 'That is too large to send in one request.',
@@ -40,7 +54,7 @@ export function errorHandler(
     return;
   }
 
-  if (parserType === 'entity.parse.failed') {
+  if (notJson) {
     res.status(400).json({
       error: 'Bad Request',
       message: 'The request body was not valid JSON.',

@@ -1,3 +1,4 @@
+import { types } from 'util';
 import { Server } from 'socket.io';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { broadcastPresence, getOnlineUserIds } from './utils';
@@ -228,10 +229,19 @@ export function registerEventHandlers(io: Server): void {
 
     // ============================================
     // ERROR HANDLER
-    // Catch unhandled socket errors
+    // Socket.io emits 'error' for a packet it cannot decode and for one a
+    // middleware refuses, always as an Error. It does not reserve the name,
+    // so a client can emit 'error' too, with any payload up to a megabyte;
+    // that arrives as plain JSON, never an Error, and none of it is logged.
+    // The listener has to stay either way: an 'error' with no listener is
+    // thrown, and would end the process.
     // ============================================
-    socket.on('error', (error: Error) => {
-      logger.error('socket error', { err: error });
+    socket.on('error', (error: unknown) => {
+      if (types.isNativeError(error)) {
+        logger.error('socket error', { err: error, socketId: socket.id, userId: socket.userId });
+        return;
+      }
+      logger.debug('ws client sent an error event; ignored', { socketId: socket.id, userId: socket.userId });
     });
   });
 }

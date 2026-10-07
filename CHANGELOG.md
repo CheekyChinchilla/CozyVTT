@@ -20,6 +20,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Closing a document you are writing or editing no longer throws the text away silently.** Pressing Escape, the X or Cancel in the New document window, or in the reader while editing, now asks whether to discard when there is typed text or unsaved changes. With nothing typed it closes straight away.
 
+- **The backend's log files say what went wrong.** Almost every error was written as an empty `{}`, so a log kept a label such as "Error adding token" and nothing about the cause. Each error is now written with its message and where in the code it happened, on the console and in the log files, so a log attached to a bug report can be diagnosed. A value longer than 8,000 characters keeps only its start and end, so one oversized request cannot write a huge line.
+
+- **Log files no longer grow until the disk is full.** The backend's two log files, and Docker's log of each container, had no size limit, and the deployment guide's advice to rotate them with logrotate did not free any space, because the backend keeps its files open. The backend now starts a new file at 10 MB and keeps five of each, and Docker keeps five files of 10 MB for each container. There is nothing to set up, and any logrotate rule added for the backend's logs can be removed. The container limits take effect the next time the stack is started with `docker compose up -d`.
+
+- **The backend keeps running when the database restarts.** Stopping or restarting PostgreSQL, as a database upgrade or a host reboot does, could stop the backend with it, because the login-session store treated a dropped database connection as a crash. The drop is now logged, and the store opens a new connection for the next request.
+
+- **Audio tracks are served correctly from any point in the file.** A request for the last part of a track, or for a part beyond its end, failed with a server error, and a request running past the end promised more than it sent. These now get the right part of the file, or a clear "outside the file" answer. Switching or seeking a track also no longer leaves the old file open on the server, which over a long session could stop it opening any more files, and a file that cannot be read part-way through no longer stops the backend.
+
+- **Stopping, restarting or upgrading the stack is quick and clean.** The backend ignored the stop signal Docker sends, so every stop, restart and upgrade waited ten seconds and then killed it outright, cutting off whatever it was doing. It now finishes the requests in progress, disconnects everyone at the table, closes its database connections and exits, usually within a second. Players' browsers reconnect by themselves once it is back. A backend run without Docker stops the same way on Ctrl+C or a service manager's stop.
+
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
 - **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
@@ -29,6 +39,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
+
+- **A signed-in user can no longer fill the server's disk through its log.** A client could send an event named "error" carrying up to a megabyte of text, as often as it liked, and the server wrote each one to its log files and the console. Such events are now ignored, and nothing they carry is written.
+
+- **A request that is not valid JSON is no longer logged with the text around the mistake.** The log line quoted part of the request, which in a sign-in could include the password. It now records only that a request was refused, why, and where it was sent. The browser never sends such requests; a hand-written script could.
+
+- **Log files no longer keep full email addresses.** Every address the backend logs, from the emails it sends to the errors it records, is cut to its first letter and its domain, such as `a***@example.com`. That is enough to tell accounts apart, and an account deleted later no longer leaves its address behind in the logs. The database's own error messages, which quote the request that caused them, used to go to the container log in full; they now go through the same masking, and a very long value in them is shortened like any other. Logs written by older versions still hold full addresses; the deployment guide's section on log files says how to remove them.
 
 ---
 

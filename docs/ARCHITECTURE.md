@@ -99,6 +99,8 @@ src/
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
+│   ├── byteRange.ts      HTTP Range header reading for audio streaming
+│   ├── shutdown.ts       SIGTERM/SIGINT: close sockets, database and session store, then exit
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```

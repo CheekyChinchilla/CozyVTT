@@ -5339,11 +5339,17 @@ paths:
         which the upload accepts) answers 404. No caching headers or ETag
         are sent.
 
-        A `Range` header is read as `bytes=<start>-<end>`, end optional, and
-        answers 206 with `Content-Range`. A suffix range (`bytes=-500`), or an
-        open range whose start is beyond the end of the file, answers 500;
-        there is no 416. An end beyond the file is not clamped, so the
-        declared `Content-Length` can exceed what is sent.
+        One byte range is served, as RFC 9110 describes. `bytes=<start>-<end>`
+        with the end optional, or `bytes=-<n>` for the last n bytes, answers
+        206 with `Content-Range`. An end beyond the file is cut to the file's
+        last byte, and a suffix longer than the file gives the whole file. A
+        range starting at or beyond the end of the file, or `bytes=-0`,
+        answers 416 with `Content-Range: bytes */<size>`. A header that is not
+        one byte range (several ranges, another unit, a last byte before the
+        first, or anything malformed) is ignored and the whole file is sent
+        with 200. Every 200 and 206 carries `Accept-Ranges: bytes`. A HEAD
+        request answers the same headers with no body. A file missing from
+        disk answers 404.
       operationId: streamAudio
       security:
         - cookieAuth: []
@@ -5354,16 +5360,36 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: Range
+          in: header
+          required: false
+          description: One byte range, such as `bytes=0-`, `bytes=1000-1999` or `bytes=-500`.
+          schema:
+            type: string
       responses:
         '200':
-          description: Audio stream
+          description: The whole file (no Range header, or one that is ignored)
+          headers:
+            Accept-Ranges:
+              schema:
+                type: string
+                example: bytes
           content:
             audio/*:
               schema:
                 type: string
                 format: binary
         '206':
-          description: Partial content (range request)
+          description: The requested byte range
+          headers:
+            Accept-Ranges:
+              schema:
+                type: string
+                example: bytes
+            Content-Range:
+              schema:
+                type: string
+                example: bytes 0-1023/48000
           content:
             audio/*:
               schema:
@@ -5371,15 +5397,20 @@ paths:
                 format: binary
         '404':
           $ref: '#/components/responses/NotFound'
-        '500':
-          description: A suffix range, or an open range starting beyond the end of the file.
+        '416':
+          description: The range starts at or beyond the end of the file.
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes */48000
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Internal Server Error
-                message: Failed to stream audio
+                error: Range Not Satisfiable
+                message: The requested range is outside the file.
 
   /api/assets/avatars/{userId}:
     get:

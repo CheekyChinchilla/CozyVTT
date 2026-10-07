@@ -67,7 +67,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
 - `1.5.1` **Suspected: the map-change listener keeps the role from MapCanvas's first render,** so after a role change without a reload a former DM may see a stale "Spirit Realm" badge and a new DM may hear the crossing sound (`MapCanvas.tsx`).
 - `1.5.1` **A campaign import that fails part-way leaves a partial campaign behind.** `services/campaignImporter.ts` creates the campaign before its maps, tokens and pictures and does not undo them when a later step fails, so a refused archive still leaves an incomplete campaign and its files.
-- `1.5.1` **An audio request for the last bytes of a file, or starting past its end, answers 500.** `routes/assets.ts` passes a `Range` of `bytes=-N` or a start beyond the file straight to the file stream, which throws; it should answer 416, and an end past the file should be cut to the file's length. Browsers do not send these during normal playback.
 - `1.5.3` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 
 ### Play and connection
@@ -105,7 +104,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Server and deployment
 
-- `1.5.1` **Stopping Postgres can crash the backend.** The session store's pool in `config/session.ts` has no `'error'` listener, so an idle client's dropped connection becomes an unhandled error.
 - `1.5.1` **The bundled nginx keeps the backend's address from its own start,** so recreating only the backend container can leave `/api` answering 502 until nginx is restarted. A `resolver` with a variable upstream in `nginx/nginx.conf` would fix it; the file carries no TODO because any change to it needs a new `NGINX_CONF_STAMP` in `docker-compose.yml`.
 - `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
 - `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
