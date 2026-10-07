@@ -443,3 +443,26 @@ describe('walls and lights after a reconnect', () => {
     expect(sent.segments[0].type).toBe('door-open');
   });
 });
+
+describe('map settings broadcast', () => {
+  it('changes only the flags, keeping an edit made to the same map since it was opened', () => {
+    render(<MapCanvas />);
+    // Edit Map saves a new picture and grid size for the map showing.
+    act(() => {
+      h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/new', gridSize: 70, name: 'Renamed' } });
+    });
+
+    fire('map:settings:updated', { mapId: 'map-a', lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: true });
+
+    expect(h.state.currentMap).toMatchObject({
+      id: 'map-a', imageUrl: '/api/assets/maps/new', gridSize: 70, name: 'Renamed',
+      lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: true,
+    });
+  });
+
+  it('ignores the flags of another map', () => {
+    render(<MapCanvas />);
+    fire('map:settings:updated', { mapId: 'map-b', lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: true });
+    expect(h.state.currentMap).toMatchObject({ id: 'map-a', lightingEnabled: false, fogEnabled: false });
+  });
+});

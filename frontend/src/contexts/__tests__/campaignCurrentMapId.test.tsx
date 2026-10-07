@@ -105,4 +105,21 @@ describe('campaign.currentMapId follows setCurrentMap', () => {
       expect(get().campaign?.currentMapId).toBe('m2');
     });
   });
+
+  it('an update of the map showing applies to its latest value and keeps currentMapId', async () => {
+    const get = await mount();
+    act(() => {
+      get().setCurrentMap(mapMeta('m2', 'Second Map'));
+    });
+    act(() => {
+      get().setCurrentMap({ ...mapMeta('m2', 'Renamed'), imageUrl: '/api/assets/maps/new' } as Map);
+    });
+    act(() => {
+      get().setCurrentMap((prev) => (prev?.id === 'm2' ? { ...prev, fogEnabled: true } : prev));
+    });
+    await waitFor(() => {
+      expect(get().currentMap).toMatchObject({ id: 'm2', name: 'Renamed', imageUrl: '/api/assets/maps/new', fogEnabled: true });
+      expect(get().campaign?.currentMapId).toBe('m2');
+    });
+  });
 });
