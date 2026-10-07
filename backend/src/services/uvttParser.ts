@@ -178,6 +178,38 @@ function isOutside(p: { x: number; y: number }, mapWidth: number, mapHeight: num
   return p.x < 0 || p.y < 0 || p.x > mapWidth || p.y > mapHeight;
 }
 
+/**
+ * The most values a UVTT file may hold, where each point, door, light and
+ * setting is a few. A map takes at most 5,000 walls and 200 lights, a few tens
+ * of thousands of values; Dungeondraft's furniture walls stay in the file even
+ * when they are left out, and can add a few hundred thousand more. Reading 2.7
+ * million points as JSON took the backend past its memory limit.
+ */
+export const MAX_UVTT_JSON_VALUES = 1_000_000;
+
+/**
+ * Whether the JSON in `bytes` holds more than `max` values, counted without
+ * parsing it: one for each object or list opened and one for each comma,
+ * outside strings. JSON's structural characters are ASCII, and no byte of a
+ * multi-byte UTF-8 character is, so the bytes are read as they are.
+ */
+function holdsMoreValuesThan(bytes: Buffer, max: number): boolean {
+  let count = 0;
+  let inString = false;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x7b || c === 0x5b || c === 0x2c) {
+      if (++count > max) return true;
+    }
+  }
+  return false;
+}
+
 // ── Parser ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -191,6 +223,15 @@ export function parseUVTT(
   gridSizePx: number = 70,
   options: UVTTParseOptions = {}
 ): UVTTParseResult {
+  // Counted from the bytes, because parsing a file with millions of points
+  // is itself what runs out of memory.
+  if (holdsMoreValuesThan(fileBuffer, MAX_UVTT_JSON_VALUES)) {
+    throw new Error(
+      `This file holds more than ${MAX_UVTT_JSON_VALUES.toLocaleString('en-US')} points, doors, lights and settings, ` +
+        'far more than a map can hold. Split it into smaller maps in the tool that made it.'
+    );
+  }
+
   // Parse the JSON
   let data: UVTTFile;
   try {
@@ -214,9 +255,9 @@ export function parseUVTT(
   }
 
   // ── Refuse what cannot become a map, before building anything ──────────────
-  // A file can hold millions of tiny polyline points inside the size the
-  // upload allows. Counting from the parsed arrays costs nothing; making a
-  // segment and an id for each one first is what exhausts memory.
+  // A file can hold many more points than a map takes and still pass the
+  // count above. Counting from the parsed arrays costs nothing; making a
+  // segment and an id for each one first would double what parsing built.
   const objectWallsRaw = Array.isArray(data.objects_line_of_sight) ? data.objects_line_of_sight : [];
   const countSegments = (polylines: unknown[]): number =>
     polylines.reduce<number>(
