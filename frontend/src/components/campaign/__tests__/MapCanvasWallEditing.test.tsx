@@ -406,3 +406,40 @@ describe('map changes after a role change without a reload', () => {
     expect(h.setPlayerSpiritVisible).toHaveBeenCalledWith(true);
   });
 });
+
+describe('walls and lights after a reconnect', () => {
+  it('asks for the walls and lights again once the page has rejoined', () => {
+    render(<MapCanvas />);
+    h.emitted.length = 0;
+
+    act(() => { h.set({ joinedEpoch: 2 }); });
+
+    expect(emittedOf('walls:request')).toEqual([{ mapId: 'map-a' }]);
+    expect(emittedOf('lights:request')).toEqual([{ mapId: 'map-a' }]);
+  });
+
+  it('does not ask before the page has joined the campaign', () => {
+    h.set({ joinedEpoch: 0 });
+    render(<MapCanvas />);
+    expect(emittedOf('walls:request')).toEqual([]);
+
+    act(() => { h.set({ joinedEpoch: 1 }); });
+
+    expect(emittedOf('walls:request')).toEqual([{ mapId: 'map-a' }]);
+    expect(emittedOf('lights:request')).toEqual([{ mapId: 'map-a' }]);
+  });
+
+  it('takes the answer, so a door opened while disconnected shows', () => {
+    h.set({ currentMap: mapWith('map-a', [wall('d1', 100, 'door-closed')]) });
+    render(<MapCanvas />);
+    act(() => { h.set({ joinedEpoch: 2 }); });
+
+    fire('walls:replaced', { mapId: 'map-a', segments: [wall('d1', 100, 'door-open')] });
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('ArrowRight');
+
+    const [sent] = emittedOf('walls:replace') as Array<{ segments: WallSegment[] }>;
+    expect(sent.segments[0].type).toBe('door-open');
+  });
+});

@@ -66,6 +66,7 @@ import {
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
+import { useWallLightRequest } from './map/useWallLightRequest';
 import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
@@ -1149,18 +1150,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     resetWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
-    const socketInstance = socket?.getSocket();
-    if (socketInstance) {
-      socketInstance.emit('walls:request', { mapId: currentMap.id });
-      socketInstance.emit('lights:request', { mapId: currentMap.id });
-    }
-
     // Invalidate wall cache and offscreen lighting canvas when map changes
     wallCacheValidRef.current = false;
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
   }, [currentMap?.id]);  
+
+  // The stored walls and lights are asked for once the campaign is joined,
+  // and again after each rejoin, so a change missed while disconnected
+  // arrives. The answers carry no operation id and are applied like any
+  // other change.
+  useWallLightRequest(socket, currentMap?.id, joinedEpoch);
 
   // Fog state is requested whenever the map changes or fog is switched on for
   // it (DMs get the full grid, players their revealed cells), once the socket

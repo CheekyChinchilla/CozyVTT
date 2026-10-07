@@ -110,6 +110,8 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Handing over the DM seat no longer mixes up the spirit realm for the two people involved.** Until they reloaded, the former DM, now a player, was not told when their token crossed into or out of the spirit realm on a map change, so their "Spirit Realm" badge could stay wrong, and the new DM heard the crossing sound meant for players.
 
+- **Reconnecting brings back doors and lights changed while you were away.** After a dropped connection the page did not fetch the map's walls and lights again, so a door opened in the meantime stayed closed on that screen, blocking the player's sight, and a light added or switched off did not change, until a reload.
+
 ### Security
 
 - **One player can no longer flood the chat, hit points, hit dice or token moves.** Chat had no limit unless the DM turned the chat cooldown on, and changing hit points or spending hit dice had none at all, so a script could fill everyone's chat, or tie up the database until the whole instance stalled. Picking a token up and putting it down shared the allowance of the drag itself, so a script could rewrite the map 150 times a second. Each now has a limit per player, counted across all their open tabs, far above anything a real table sends: 50 chat messages a second and 300 a minute, 50 hit point changes a second, 50 hit dice spent a second, and 30 pick-ups and 30 drops a second. Anything past the limit changes nothing, and the sender is told once. The DM's chat cooldown still works as before, on top of this.
