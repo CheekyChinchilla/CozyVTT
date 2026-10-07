@@ -566,6 +566,8 @@ An archive can be up to **500 MB**. Anyone with an account can import one, playe
 
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 
+An import either brings in the whole campaign or nothing at all. If it stops part-way, because the archive turns out to be damaged or the server runs into a problem of its own, no half-made campaign is left in your list and none of its pictures are left on the server. The window says what went wrong; when the problem was the server's, it says so and whoever runs the server can find the details in its log. Try again once that is sorted out.
+
 ### Security Notes
 
 Imported archives are validated at multiple levels:

@@ -15,7 +15,8 @@ import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAt
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
 import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
-import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
+import { previewCampaignImport, importCampaign, importTempDirectory, IMPORT_FAILED_MESSAGE } from '../services/campaignImporter';
+import { ArchiveRefusedError } from '../utils/archive';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
@@ -33,7 +34,6 @@ import {
   oneCampaignArchiveAtATime,
   whileHoldingArchiveSlot,
 } from '../middleware/campaignArchiveLimits';
-import { getTempDirectory } from '../utils/fileUtils';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fsp from 'fs/promises';
@@ -44,18 +44,19 @@ const router = Router();
 // memory: the backend shares a few hundred megabytes between every table, and
 // an archive may be 500 MB. The folder sits in the uploads volume, beside the
 // asset uploads' own temp folder, and is made the first time it is needed.
-const IMPORT_TEMP_DIR = path.join(getTempDirectory(), 'campaign-imports');
-/** An archive older than this was left by a backend that stopped mid-import. */
+// The importer stages the files it unpacks in the same folder.
+const IMPORT_TEMP_DIR = importTempDirectory();
+/** An archive or staging folder older than this was left by a backend that stopped mid-import. */
 const STALE_IMPORT_MS = 24 * 60 * 60 * 1000;
 
-/** Remove archives a stopped backend left behind. Best effort: a failure here stops no import. */
+/** Remove archives and staging folders a stopped backend left behind. Best effort: a failure here stops no import. */
 async function removeStaleImports(): Promise<void> {
   try {
     const now = Date.now();
     for (const name of await fsp.readdir(IMPORT_TEMP_DIR)) {
       const file = path.join(IMPORT_TEMP_DIR, name);
       const stats = await fsp.stat(file).catch(() => null);
-      if (stats?.isFile() && now - stats.mtimeMs > STALE_IMPORT_MS) await fsp.rm(file, { force: true });
+      if (stats && now - stats.mtimeMs > STALE_IMPORT_MS) await fsp.rm(file, { recursive: true, force: true });
     }
   } catch (error) {
     logger.warn('Could not clear old campaign import files', { error: errorMessage(error) });
@@ -2291,8 +2292,13 @@ router.post('/import/preview', authenticated, oneCampaignArchiveAtATime, campaig
       const preview = await previewCampaignImport(archivePath);
       return { status: 200, body: { preview } };
     } catch (error: unknown) {
-      logger.warn('Campaign import preview failed', { error: errorMessage(error) });
-      return { status: 400, body: { error: 'Invalid Archive', message: errorMessage(error) || 'Could not read archive.' } };
+      if (error instanceof ArchiveRefusedError) {
+        logger.warn('Campaign import preview refused', { error: error.message });
+        return { status: 400, body: { error: 'Invalid Archive', message: error.message } };
+      }
+      // The server's own failure: its detail is for the log, not the caller.
+      logger.error('Campaign import preview failed', { error: errorMessage(error) });
+      return { status: 500, body: { error: 'Preview Failed', message: 'The archive could not be read. The server log has the details.' } };
     }
   });
 });
@@ -2329,8 +2335,14 @@ router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportL
 
       return { status: 201, body: { message: 'Campaign imported successfully', ...result } };
     } catch (error: unknown) {
+      if (error instanceof ArchiveRefusedError) {
+        logger.warn('Campaign import refused', { error: error.message, userId: req.session?.userId });
+        return { status: 400, body: { error: 'Import Failed', message: error.message } };
+      }
+      // Nothing was kept (the importer undoes a failed import), and the
+      // detail of the server's own failure is for the log, not the caller.
       logger.error('Campaign import failed', { error: errorMessage(error), userId: req.session?.userId });
-      return { status: 400, body: { error: 'Import Failed', message: errorMessage(error) || 'Failed to import campaign.' } };
+      return { status: 500, body: { error: 'Import Failed', message: IMPORT_FAILED_MESSAGE } };
     }
   });
 });

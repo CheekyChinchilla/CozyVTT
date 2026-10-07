@@ -7904,9 +7904,18 @@ paths:
           description: >-
             No file (`Validation Error`), an upload problem such as a refused
             file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
-            is over the size setting, lists more than 1,000 files, or has a
+            is damaged, is over the size setting, lists more than 1,000 files, or has a
             missing, oversized or invalid manifest (`Invalid Archive`, with
             the reason in `message`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            The server failed to read the archive for a reason of its own
+            (`Preview Failed`). The message says only that; the detail is in
+            the server log.
           content:
             application/json:
               schema:
@@ -7967,9 +7976,12 @@ paths:
         skipped.
         Imported tokens are linked to no character and controlled by no one.
 
-        The import is not one transaction. A failure after the campaign has
-        been created answers 400 and leaves the partly imported campaign in
-        place.
+        The import is all or nothing. Assets are unpacked into a staging
+        folder under the uploads folder's `temp/campaign-imports`, every row
+        is written in one transaction, and the files are moved into place
+        once it has committed. A failure at any point leaves no campaign, no
+        rows and no files; a staging folder left by a backend that stopped
+        mid-import is removed after a day.
       operationId: importCampaign
       security:
         - cookieAuth: []
@@ -8021,13 +8033,25 @@ paths:
         '400':
           description: >-
             The upload errors of the preview route, a `campaignName` out of
-            range (`Validation Error`), or any failure while importing
-            (`Import Failed`, with the reason in `message`). Every import
-            failure, including a database error, answers 400.
+            range (`Validation Error`), or an archive the server refuses
+            (`Import Failed`, with the reason in `message`). Nothing is
+            created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            The import failed for a reason of the server's own, such as a
+            database or disk error (`Import Failed`). Nothing is kept, and the
+            message says so; the detail is in the server log.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Import Failed
+                message: The campaign could not be saved, so nothing was imported. The server log has the details.
         '413':
           description: The file is over 500 MB (`File Too Large`), as on the preview route.
           content:

@@ -261,22 +261,73 @@ describe('POST /api/campaigns/import', () => {
     }
   }, 120_000);
 
-  it('clears archives a stopped server left in its temporary folder', async () => {
+  it('clears archives and staging folders a stopped server left in its temporary folder', async () => {
     fs.mkdirSync(IMPORT_TEMP, { recursive: true });
     const stale = path.join(IMPORT_TEMP, 'left-behind.cozyvtt');
+    const staleStaging = path.join(IMPORT_TEMP, 'left-behind.staging');
     const recent = path.join(IMPORT_TEMP, 'in-progress.cozyvtt');
     fs.writeFileSync(stale, 'old');
+    fs.mkdirSync(staleStaging);
+    fs.writeFileSync(path.join(staleStaging, 'picture.png'), PNG);
     fs.writeFileSync(recent, 'new');
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     fs.utimesSync(stale, twoDaysAgo, twoDaysAgo);
+    fs.utimesSync(staleStaging, twoDaysAgo, twoDaysAgo);
 
     const res = await player.post('/api/campaigns/import/preview').attach('file', exported);
     expect(res.status).toBe(200);
     // The clearing runs beside the upload; give it a moment.
-    for (let waited = 0; fs.existsSync(stale) && waited < 2000; waited += 50) await new Promise((r) => setTimeout(r, 50));
+    for (let waited = 0; (fs.existsSync(stale) || fs.existsSync(staleStaging)) && waited < 2000; waited += 50) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
 
     expect(fs.existsSync(stale)).toBe(false);
+    expect(fs.existsSync(staleStaging)).toBe(false);
     expect(fs.existsSync(recent)).toBe(true);
     fs.rmSync(recent);
+  });
+
+  // PostgreSQL cannot store a NUL character, so this map's row is refused by
+  // the database itself once the campaign and the map before it are written.
+  it('answers 500 with no database detail when a campaign cannot be saved, and keeps none of it', async () => {
+    const file = path.join(SCRATCH, 'nul.cozyvtt');
+    const map = (name: string) => JSON.stringify({ name, width: 5, height: 5, gridSize: 50, feetPerSquare: 5, tokens: [] });
+    await writeZip(file, [
+      { name: 'manifest.json', data: manifest.replace('"mapCount":0', '"mapCount":2') },
+      { name: 'campaign.json', data: '{"name":"Crafted"}' },
+      { name: 'maps/map-0.json', data: map('Fine') },
+      { name: 'maps/map-1.json', data: map('Not\u0000fine') },
+    ]);
+    const before = await prisma.campaign.count({ where: { ownerId: playerId } });
+
+    const res = await player.post('/api/campaigns/import').attach('file', file);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({
+      error: 'Import Failed',
+      message: 'The campaign could not be saved, so nothing was imported. The server log has the details.',
+    });
+    expect(await prisma.campaign.count({ where: { ownerId: playerId } })).toBe(before);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('refuses an archive whose data cannot be unpacked, saying it is damaged', async () => {
+    const file = path.join(SCRATCH, 'damaged.cozyvtt');
+    await writeZip(file, [
+      { name: 'manifest.json', data: manifest },
+      { name: 'campaign.json', data: JSON.stringify({ name: 'Damaged', description: 'x'.repeat(2000) }) },
+    ]);
+    // Overwrite the start of campaign.json's packed bytes, after its local
+    // header's name and extra field, with a block type deflate does not have.
+    const bytes = fs.readFileSync(file);
+    const nameAt = bytes.indexOf(Buffer.from('campaign.json'));
+    const dataAt = nameAt + 'campaign.json'.length + bytes.readUInt16LE(nameAt - 2);
+    bytes.fill(0xff, dataAt, dataAt + 16);
+    fs.writeFileSync(file, bytes);
+
+    const res = await player.post('/api/campaigns/import').attach('file', file);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('The archive is damaged: campaign.json cannot be read.');
   });
 });
