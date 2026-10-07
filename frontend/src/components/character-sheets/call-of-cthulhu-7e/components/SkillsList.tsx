@@ -204,6 +204,10 @@ const SkillRow: React.FC<{
       </div>
 
       {/* Current Value */}
+      {/* TODO(sheets): `parseInt(...) || 0` commits 0 the moment the box is
+         cleared, so selecting a value and typing a new one starts from 0, the
+         problem NumberField exists to solve. Use NumberField here with min at
+         the base value. */}
       <div className="w-14">
         {editable && name !== 'cthulhuMythos' ? (
           <input
