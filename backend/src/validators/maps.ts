@@ -42,6 +42,12 @@ export const FeetPerSquareSchema = z
   .min(MAP_LIMITS.minFeetPerSquare, FEET_MESSAGE)
   .max(MAP_LIMITS.maxFeetPerSquare, FEET_MESSAGE);
 
+/**
+ * What a map name over MAP_LIMITS.maxNameLength answers, on every path that
+ * names a map. A campaign archive import shortens one instead.
+ */
+export const MAP_NAME_TOO_LONG_MESSAGE = `A map name can be at most ${MAP_LIMITS.maxNameLength} characters.`;
+
 /** Width, height and grid size together, as every path that stores a map has them. */
 export const MapDimensionsSchema = z.object({
   width: MapSideSchema('Map width'),

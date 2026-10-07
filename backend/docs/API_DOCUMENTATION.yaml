@@ -5548,7 +5548,9 @@ paths:
         `flat`). `gridSize` is in range as a whole number from 10 to 500,
         `feetPerSquare` as a whole number from 1 to 100. Only `name`,
         `imageUrl`, `width` and `height` can make this route answer 400;
-        `width` and `height` must be whole numbers from 1 to 500.
+        `width` and `height` must be whole numbers from 1 to 500, and `name`
+        at most 200 characters once trimmed (`A map name can be at most 200
+        characters.`).
       operationId: createMap
       security:
         - cookieAuth: []
@@ -5568,7 +5570,8 @@ paths:
               properties:
                 name:
                   type: string
-                  description: Trimmed; must not be blank.
+                  maxLength: 200
+                  description: Trimmed; must not be blank, and at most 200 characters.
                 imageUrl:
                   type: string
                   description: Asset id or exact asset address.
@@ -5681,7 +5684,9 @@ paths:
         `alternating`. A `width`, `height`, `gridSize` or `feetPerSquare`
         equal to the stored value is accepted as it is, so a map stored
         larger than these limits, before they existed, still saves an edit
-        that sends its size back unchanged.
+        that sends its size back unchanged. `name` is trimmed, must not be
+        blank, and may be at most 200 characters, unless it is the name
+        already stored, sent back unchanged.
 
         Turning `fogEnabled` or `explorationEnabled` on from off answers 400,
         and changes nothing, when the map would have more than 250,000 grid
@@ -5737,6 +5742,7 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Trimmed; at most 200 characters unless unchanged.
                 width:
                   type: integer
                   minimum: 1

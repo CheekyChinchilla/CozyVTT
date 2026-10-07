@@ -34,7 +34,7 @@ import { sendInitiativeState, resendInitiative } from '../websocket/handlers/ini
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /**
  * The largest UVTT file accepted. The picture travels as base64 text, about
@@ -47,9 +47,6 @@ const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_
 /** What a map picture inside a UVTT may be. A PDF cannot be drawn as a map. */
 const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
 const UVTT_IMAGE_EXTENSIONS = '.png, .jpg, .jpeg, .webp';
-
-/** The longest map name the import accepts; the archive importer's limit. */
-const UVTT_NAME_MAX_LENGTH = 200;
 
 /** Multer configured for UVTT file uploads, held in memory while it is parsed. */
 const uvttUpload = multer({
@@ -176,16 +173,16 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     const { campaignId } = req.params;
     const { name, imageUrl, width, height, gridSize, spiritLayerUrl, feetPerSquare, diagonalRule } = req.body;
 
-    // TODO(maps): the name has no length cap here or on update, while UVTT
-    // import and the campaign archive importer refuse more than 200
-    // characters, so a longer name set through the API makes that map drop out
-    // of a later archive import. Cap it at 200 on both.
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Map name is required',
       });
+    }
+    // The limit every path that names a map applies (validators/mapLimits.ts).
+    if (name.trim().length > MAP_LIMITS.maxNameLength) {
+      return res.status(400).json({ error: 'Validation Error', message: MAP_NAME_TOO_LONG_MESSAGE });
     }
 
     if (!imageUrl || typeof imageUrl !== 'string') {
@@ -352,12 +349,9 @@ router.post(
       }
       const mapName =
         rawName?.trim() ||
-        path.basename(req.file.originalname, path.extname(req.file.originalname)).slice(0, UVTT_NAME_MAX_LENGTH);
-      if (mapName.length > UVTT_NAME_MAX_LENGTH) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `A map name can be at most ${UVTT_NAME_MAX_LENGTH} characters.`,
-        });
+        path.basename(req.file.originalname, path.extname(req.file.originalname)).slice(0, MAP_LIMITS.maxNameLength);
+      if (mapName.length > MAP_LIMITS.maxNameLength) {
+        return res.status(400).json({ error: 'Validation Error', message: MAP_NAME_TOO_LONG_MESSAGE });
       }
       // Optional; anything that is not a usable grid size gets the default
       const gridSizePx = usable(GridSizeSchema, Number(req.body.gridSize)) ?? 70;
@@ -751,6 +745,11 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
           error: 'Validation Error',
           message: 'Map name must be a non-empty string',
         });
+      }
+      // A name stored longer before the limit existed is taken back as it
+      // is, as the size fields below are: Edit Map sends every field.
+      if (name.trim().length > MAP_LIMITS.maxNameLength && name.trim() !== existingMap.name) {
+        return res.status(400).json({ error: 'Validation Error', message: MAP_NAME_TOO_LONG_MESSAGE });
       }
       updateData.name = name.trim();
     }
