@@ -137,3 +137,15 @@ export function lightOutsideMap(lights: LightLike[], map: MapExtent, stored: unk
   const kept = new Set((Array.isArray(stored) ? (stored as LightLike[]) : []).map(lightKey));
   return lights.find((l) => !pointInRegion(l.x, l.y, region) && !kept.has(lightKey(l)));
 }
+
+// ── Tokens on a map ─────────────────────────────────────────────────────────
+
+/**
+ * What adding tokens past MAP_LIMITS.maxTokens answers. A map's tokens are
+ * one JSON column that every token write, drag and map fetch reads whole, so
+ * the count bounds what each of those costs.
+ */
+export function tooManyTokensMessage(count: number): string {
+  return `A map can hold ${MAP_LIMITS.maxTokens.toLocaleString('en-US')} tokens, and this would make ${count.toLocaleString('en-US')}. ` +
+    'Remove some from the map first, or put them on another map.';
+}

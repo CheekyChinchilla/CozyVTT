@@ -158,6 +158,8 @@ You can change a map's **Width**, **Height** and **Grid Size** later with the **
 
 Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
 
+A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
+
 A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
 
 *Screenshot pending — Map Library panel with multiple maps.*
@@ -397,6 +399,8 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Display Mode** — Pog, top-down, or full-art
 
 Custom creatures are scoped to your campaign and fully editable.
+
+A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it, with a message saying it is too large.
 
 ### Saving Throws and Skills
 

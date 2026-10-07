@@ -33,7 +33,7 @@ import { sendInitiativeState, resendInitiative } from '../websocket/handlers/ini
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -1166,10 +1166,18 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     // Appended under the map's lock, to the list as it is then: another
     // write landing between this route's read and its write used to be lost.
-    const updatedMap = await withMapsLocked([mapId], async (tx) => {
+    // The token limit is counted there too, so two adds at once cannot both
+    // take the last place.
+    const appended = await withMapsLocked([mapId], async (tx) => {
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
+      const tokens = readTokens(fresh.tokens);
+      if (tokens.length >= MAP_LIMITS.maxTokens) return { full: tokens.length + 1 };
+      return { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, newToken]) } }) };
     });
+    if (appended.full !== undefined) {
+      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
+    }
+    const updatedMap = appended.map;
 
     // A player's spirit-layer token placed on the map the table is on moves
     // them to the spirit plane, which changes what they are sent of the
@@ -1507,18 +1515,25 @@ router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, re
       const moved = sourceTokens
         .filter((t) => wanted.has(t.id))
         .map((t) => ({ ...t, position: clampTokenPosition(t.position, t.size, target) }));
+      const targetTokens = [...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved];
+      if (targetTokens.length > MAP_LIMITS.maxTokens) {
+        return { full: targetTokens.length };
+      }
       const updatedSource = await tx.map.update({
         where: { id: sourceId },
         data: { tokens: toJson(sourceTokens.filter((t) => !wanted.has(t.id))) },
       });
       const updatedTarget = await tx.map.update({
         where: { id: targetMapId },
-        data: { tokens: toJson([...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved]) },
+        data: { tokens: toJson(targetTokens) },
       });
       return { moved, updatedSource, updatedTarget };
     });
     if ('refused' in outcome) {
       return res.status(404).json({ error: 'Not Found', message: outcome.refused });
+    }
+    if (outcome.full !== undefined) {
+      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(outcome.full) });
     }
     const { moved, updatedSource, updatedTarget } = outcome;
 

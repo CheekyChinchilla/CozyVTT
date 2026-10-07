@@ -16,4 +16,6 @@ export const MAP_LIMITS = {
   /** Feet per grid square. */
   minFeetPerSquare: 1,
   maxFeetPerSquare: 100,
+  /** Tokens on one map. */
+  maxTokens: 1000,
 } as const;

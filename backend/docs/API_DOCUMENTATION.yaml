@@ -5772,6 +5772,12 @@ paths:
         the reply's `token.position` is where it was placed. The server
         assigns the token's `id`.
 
+        A map holds at most 1,000 tokens. Adding one to a full map answers
+        400 with `error: Limit Exceeded` and adds nothing; the count is taken
+        under the map's lock, so two adds at once cannot both take the last
+        place. A map stored with more, before the limit, keeps its tokens,
+        and they can still be moved, edited and removed.
+
         `imageUrl` takes an asset id or an asset's exact address
         (`/api/assets/<kind>/<id>`); a bare id is stored as
         `/api/assets/tokens/<id>`, and anything else, an outside URL included,
@@ -6105,7 +6111,9 @@ paths:
         id that is not on this map answers 404 (`Token not found on this map:
         <ids>`) and nothing changes, as does a `targetMapId` that is not a map
         of this campaign (`Target map not found in this campaign`).
-        `targetMapId` naming the source map itself answers 400. Whichever of
+        `targetMapId` naming the source map itself answers 400, and so does a
+        move that would leave the target map with more than 1,000 tokens
+        (`error: Limit Exceeded`), with nothing moved. Whichever of
         the two maps the campaign is showing is then sent again to every
         member as `map.changed`, as each may see it; the other stays the DM's
         until they switch. While anything is in the initiative order it is
@@ -6911,8 +6919,11 @@ paths:
                     characters) and `abilities` with all six scores as
                     integers. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
-                    up to 200 and descriptions up to 5000 characters. Unknown
-                    keys are kept.
+                    up to 200 and descriptions up to 5000 characters. Up to 20
+                    unknown keys are kept, and more answer 400. The whole
+                    stat block, as stored JSON, may be at most 64 KB
+                    (65,536 characters); a larger one answers 400 (`Stat
+                    block is too large`).
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -7049,8 +7060,11 @@ paths:
                     characters) and `abilities` with all six scores as
                     integers. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
-                    up to 200 and descriptions up to 5000 characters. Unknown
-                    keys are kept.
+                    up to 200 and descriptions up to 5000 characters. Up to 20
+                    unknown keys are kept, and more answer 400. The whole
+                    stat block, as stored JSON, may be at most 64 KB
+                    (65,536 characters); a larger one answers 400 (`Stat
+                    block is too large`).
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -10361,8 +10375,10 @@ components:
             0-99), `speed` (string, at most 200 characters) and `abilities` with
             all six scores as integers. Traits, actions, bonus actions,
             reactions and legendary actions hold at most 50 entries each, with
-            names up to 200 and descriptions up to 5000 characters. Unknown keys
-            are kept.
+            names up to 200 and descriptions up to 5000 characters. Up to 20
+            unknown keys are kept, and more answer 400. The whole stat block,
+            as stored JSON, may be at most 64 KB (65,536 characters); a larger
+            one answers 400 (`Stat block is too large`).
         creatureTemplateId:
           type: string
           format: uuid
