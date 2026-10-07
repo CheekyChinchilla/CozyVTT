@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Saving a Flexible sheet keeps everything stored in it.** The Flexible sheet, used for characters with no game system, saved only its sections, so anything else it held, from an imported file or a program using the API, was deleted the first time it was saved.
 
+- **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.** When the character was updated elsewhere during your edit, at the table for example, the colour saved there replaced the one you had just picked in the editor.
+
 ---
 
 ## [1.5.0] — 2026-10-03

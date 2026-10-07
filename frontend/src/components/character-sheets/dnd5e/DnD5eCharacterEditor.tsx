@@ -349,7 +349,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     }
   }, [sheetSnapshot, onDirtyChange]);
 
-  // Load saved color preference from character metadata
+  // The sheet's saved colour, read once as the editor opens. The character
+  // handed in is refreshed while the editor is open, and following it put a
+  // colour saved elsewhere over the one the user had picked.
   useEffect(() => {
     if (data.themeColor) {
       const savedColor = COLOR_PRESETS.find(c => c.name === data.themeColor);
@@ -366,7 +368,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         }
       }
     }
-  }, [data.themeColor]);
+  }, []);
 
   // Handle custom color change
   const handleCustomColorChange = (hex: string) => {

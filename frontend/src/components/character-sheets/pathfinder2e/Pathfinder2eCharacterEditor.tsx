@@ -325,6 +325,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     }
   }, [sheetSnapshot, onDirtyChange]);
 
+  // The sheet's saved colour, read once as the editor opens. The character
+  // handed in is refreshed while the editor is open, and following it put a
+  // colour saved elsewhere over the one the user had picked.
   useEffect(() => {
     if (data.themeColor) {
       const savedColor = COLOR_PRESETS.find(c => c.name === data.themeColor);
@@ -341,7 +344,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         }
       }
     }
-  }, [data.themeColor]);
+  }, []);
 
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
