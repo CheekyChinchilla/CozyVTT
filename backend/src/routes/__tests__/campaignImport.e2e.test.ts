@@ -162,7 +162,7 @@ describe('POST /api/campaigns/import', () => {
     const res = await player.post('/api/campaigns/import').field('campaignName', 'My Copy').attach('file', exported);
 
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ campaignName: 'My Copy', mapCount: 1, tokenCount: 1 });
+    expect(res.body).toMatchObject({ campaignName: 'My Copy', mapCount: 1, tokenCount: 1, warnings: [], skipped: [] });
     const campaign = await prisma.campaign.findUniqueOrThrow({
       where: { id: res.body.campaignId },
       include: { maps: true, memberships: true, assets: true },
