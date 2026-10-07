@@ -114,6 +114,8 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Switching a map's lighting or fog no longer brings back its old picture.** After you changed the picture, grid size or name of the map on show in Edit Map, the next change to its dynamic lighting, fog of war, Global Illumination or explored areas put the old picture, grid and name back on the map until a reload.
 
+- **Saving Edit Map no longer removes the map's spirit layer picture.** Opened from the Map Library, the dialog showed no spirit layer picture, and saving, even after changing only the name, cleared the picture. The dialog now shows the map's spirit layer picture and changes it only when you pick another or clear it. It also saves only what you changed.
+
 ### Security
 
 - **One player can no longer flood the chat, hit points, hit dice or token moves.** Chat had no limit unless the DM turned the chat cooldown on, and changing hit points or spending hit dice had none at all, so a script could fill everyone's chat, or tie up the database until the whole instance stalled. Picking a token up and putting it down shared the allowance of the drag itself, so a script could rewrite the map 150 times a second. Each now has a limit per player, counted across all their open tabs, far above anything a real table sends: 50 chat messages a second and 300 a minute, 50 hit point changes a second, 50 hit dice spent a second, and 30 pick-ups and 30 drops a second. Anything past the limit changes nothing, and the sender is told once. The DM's chat cooldown still works as before, on top of this.
