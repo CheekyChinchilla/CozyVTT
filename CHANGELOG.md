@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upgrading from 1.5.0
+
+If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` stops at it because this release changes that file. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict, keep your own lines, then compare your HTTPS block with the new commented-out one and add what it has that yours lacks:
+
+- the two `set` lines after `server_name`, naming `$cozyvtt_backend` and `$cozyvtt_frontend`,
+- `$cozyvtt_backend` in place of `http://backend:4000`, and `$cozyvtt_frontend` in place of `http://frontend:80`, in every `proxy_pass` line,
+- the whole `location /api/campaigns/import` block.
+
+The new `resolver` line near the top of the file covers both blocks.
+
+If you use your own proxy instead of the bundled nginx, give `/api/campaigns/import` a body limit of at least 505 MB and 300 seconds to answer, as [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements) describes, or larger campaign archives cannot be imported. There is one new setting, `CAMPAIGN_ARCHIVE_RATE_LIMIT`, and it is optional: leave it out and the default applies.
+
 ### Changed
 
 - **PDF files are no longer accepted as a map picture.** Nothing can draw a PDF as a map, so one used as a map's picture gave a blank map that could not be exported. Uploading a map now takes PNG, JPEG or WebP only, from the Asset Library, from a Universal VTT import and through the API; PDFs still go in the Documents library. No part of the app offered a PDF as a map, so nothing you can see changes, and a map already stored as a PDF is still served.
@@ -43,6 +55,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
 - **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
+
+- **Exporting a large campaign no longer risks stopping the server, and works on slow connections.** The export was built whole in the server's memory before any of it was sent, so a campaign with a few large maps could stop the server for every table, and the browser gave up on any export that took longer than 30 seconds to arrive. The archive is now sent as it is made, and the browser waits for as long as it takes. In Chrome and Edge you choose where to save it and it is written straight there; other browsers download it as before. An export whose pictures and sound add up to more than 500 MB, the most an import accepts, is now refused with a message giving its size and saying whether leaving out audio would bring it under, where it used to make an archive no server could import. The refusal used to show only "Failed to export campaign".
+
+- **Campaign archives up to 500 MB can be imported through the bundled nginx.** Imports had the 55 MB body limit every other upload has, so a campaign with a couple of large maps could be exported but not imported again, and the import window said only "Request failed with status code 413". Imports now have a limit of 512 MB there and five minutes to finish unpacking, the import window waits for a slow upload instead of giving up after 30 seconds, and when a proxy refuses an archive as too large the window says so and what whoever runs the server can do about it.
+
+- **A large campaign import or backup restore on a slow connection is no longer cut off after five minutes.** The server gave every request five minutes to arrive in full, so a 500 MB archive needed an upload speed of about 13 Mbit/s, and a slower one failed with an error after the wait. It now allows an hour, enough for a 500 MB archive at a little over 1 Mbit/s. An upload that stops altogether is still dropped within a minute.
+
+- **The site no longer answers 502 after only the backend is recreated.** When `docker compose up -d` recreated the backend, after a change to `.env` for example, the bundled nginx went on sending to the old container's address until it was restarted itself, so the pages loaded but signing in failed. It now finds a recreated backend or frontend within ten seconds.
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
 
@@ -95,6 +115,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **One map can no longer be grown until the server stalls.** A map's tokens are stored together and read in full every time any token on the map is moved, dragged or changed, and nothing limited how many tokens a map could hold or how much a token's stat block could carry, so anyone able to create a campaign could make one map hundreds of megabytes and slow the server for every table. A map now holds up to 1,000 tokens, and a stat block up to 64 KB, about ten times the largest creature in the SRD. Adding a token past the limit, or moving tokens onto a map that would go past it, is refused with a message. A map that already has more keeps all of them, and they can still be moved, edited and removed.
 
 - **A wall placed absurdly far away can no longer freeze the server.** Wall and light positions had no limit, and working out what players can see on a map with more than 200 walls walked over every part of the map a wall's ends spanned, so one wall reaching millions of pixels stopped the server for every table, and froze players' browsers too. Walls and lights may now reach up to 500 grid squares past the edge of their map, which leaves plenty of room for drawing past the edge and for Universal VTT files whose walls run outside their picture. One further out is refused with a message when it is drawn or saved, a Universal VTT file holding one is refused on import, and a map holding one in a campaign archive is left out of the import. Walls and lights already stored further out are kept, and the wall list still saves with them in it. Working out sight also no longer costs more the further a wall reaches.
+
+- **A crafted campaign archive can no longer crash the server.** Importing a campaign, or only previewing one, unpacked each file inside the archive into memory before checking its size, so any signed-in user could send a small archive that unpacked to gigabytes and stop the server for every table. An archive listing a very large number of files did the same. Archives are now read from disk a piece at a time and stopped as soon as they pass a limit, and one listing more than 1,000 files is refused before it is opened. A picture or sound file inside an archive that is larger than the upload limit for its kind is left out of the import, as it would be refused if uploaded.
+
+- **Campaign imports and exports are limited per person.** Each one moves up to 500 MB through the server every table shares, and nothing stopped one account from starting dozens at once, which was enough to stop the server. Each person may now preview 20 archives, import 20 campaigns and export 20 campaigns an hour, one at a time; someone who reaches a limit is told how many minutes to wait. Moving a campaign takes one preview and one import, so a real table never comes near this. Players can still import campaigns, under the same limits. The number can be changed with the new optional `CAMPAIGN_ARCHIVE_RATE_LIMIT` setting (see the deployment guide). Picture, sound and document uploads, and Universal VTT map imports, are not affected.
+
+- **Campaign imports take only the files an upload would.** A crafted archive could put any kind of file into a campaign, a program among them, labelled as a PDF handout or a picture, and members could then download it from the campaign's library under whatever name the archive gave it. Each picture and sound file in an archive must now be a format the upload window accepts for its kind, judged by its content, and is stored as what it really is. Anything else is left out of the import. Archives exported by CozyVTT hold nothing else, so they import as before.
 
 ---
 

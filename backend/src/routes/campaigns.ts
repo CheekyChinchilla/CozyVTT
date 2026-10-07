@@ -13,7 +13,8 @@ import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
-import { exportCampaign } from '../services/campaignExporter';
+import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
+import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
@@ -25,12 +26,56 @@ import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import {
+  campaignPreviewLimiter,
+  campaignImportLimiter,
+  campaignExportLimiter,
+  oneCampaignArchiveAtATime,
+  whileHoldingArchiveSlot,
+} from '../middleware/campaignArchiveLimits';
+import { getTempDirectory } from '../utils/fileUtils';
+import { randomUUID } from 'crypto';
+import path from 'path';
+import fsp from 'fs/promises';
 const router = Router();
 
-// ── Import file upload (memory storage — ZIP stays in buffer) ───────────────
+// ── Import file upload ──────────────────────────────────────────────────────
+// A campaign archive is written to disk and read from there, never held in
+// memory: the backend shares a few hundred megabytes between every table, and
+// an archive may be 500 MB. The folder sits in the uploads volume, beside the
+// asset uploads' own temp folder, and is made the first time it is needed.
+const IMPORT_TEMP_DIR = path.join(getTempDirectory(), 'campaign-imports');
+/** An archive older than this was left by a backend that stopped mid-import. */
+const STALE_IMPORT_MS = 24 * 60 * 60 * 1000;
+
+/** Remove archives a stopped backend left behind. Best effort: a failure here stops no import. */
+async function removeStaleImports(): Promise<void> {
+  try {
+    const now = Date.now();
+    for (const name of await fsp.readdir(IMPORT_TEMP_DIR)) {
+      const file = path.join(IMPORT_TEMP_DIR, name);
+      const stats = await fsp.stat(file).catch(() => null);
+      if (stats?.isFile() && now - stats.mtimeMs > STALE_IMPORT_MS) await fsp.rm(file, { force: true });
+    }
+  } catch (error) {
+    logger.warn('Could not clear old campaign import files', { error: errorMessage(error) });
+  }
+}
+
 const importUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 524288000, files: 1, ...MULTIPART_FIELD_LIMITS }, // 500 MB hard cap
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fsp
+        .mkdir(IMPORT_TEMP_DIR, { recursive: true })
+        .then(() => {
+          void removeStaleImports();
+          cb(null, IMPORT_TEMP_DIR);
+        })
+        .catch((err: Error) => cb(err, IMPORT_TEMP_DIR));
+    },
+    filename: (_req, _file, cb) => cb(null, `${randomUUID()}.cozyvtt`),
+  }),
+  limits: { fileSize: CAMPAIGN_ARCHIVE_MAX_BYTES, files: 1, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     // Accept .cozyvtt or .zip MIME types
     const allowed = [
@@ -45,6 +90,11 @@ const importUpload = multer({
     }
   },
 });
+
+/** Remove an uploaded archive once its request is done with it. */
+async function removeUploadedArchive(file: Express.Multer.File | undefined): Promise<void> {
+  if (file?.path) await fsp.rm(file.path, { force: true }).catch(() => undefined);
+}
 
 
 /**
@@ -2129,51 +2179,65 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  * Query params:
  *   includeAudio (boolean, default false)
  *   includeTokens (boolean, default true)
- * Requires: Campaign DM role
+ * Requires: Campaign DM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
  */
-router.get('/:campaignId/export', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
-  try {
+router.get('/:campaignId/export', campaignDM, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
+  await whileHoldingArchiveSlot(res, async () => {
     const { campaignId } = req.params;
     const includeAudio = req.query.includeAudio === 'true';
     const includeTokens = req.query.includeTokens !== 'false'; // default true
 
     logger.info('Campaign export started', { campaignId, includeAudio, includeTokens, userId: req.session.userId });
 
-    const result = await exportCampaign(
-      campaignId,
-      { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
-      { includeAudio, includeTokens }
-    );
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-    res.setHeader('Content-Length', result.buffer.length);
-    return res.send(result.buffer);
-  } catch (error: unknown) {
-    logger.error('Campaign export failed', { campaignId: req.params.campaignId, error: errorMessage(error) });
-
-    if (errorMessage(error) === 'Campaign not found') {
-      return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
+    let prepared: PreparedExport;
+    try {
+      prepared = await prepareCampaignExport(
+        campaignId,
+        { userId: req.session.userId!, isAdmin: req.session.platformRole === 'ADMIN' },
+        { includeAudio, includeTokens }
+      );
+    } catch (error: unknown) {
+      if (error instanceof ExportTooLargeError) {
+        return res.status(422).json({ error: 'Export Too Large', message: error.message });
+      }
+      logger.error('Campaign export failed', { campaignId, error: errorMessage(error) });
+      if (errorMessage(error) === 'Campaign not found') {
+        return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
+      }
+      return res.status(500).json({
+        error: 'Export Failed',
+        message: 'Failed to export campaign. Please try again.',
+      });
     }
 
-    return res.status(500).json({
-      error: 'Export Failed',
-      message: 'Failed to export campaign. Please try again.',
-    });
-  }
+    // No Content-Length: the archive's size is known only once it is written.
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${prepared.filename}"`);
+    try {
+      await prepared.writeTo(res);
+    } catch (error: unknown) {
+      // Part of the archive may be on its way already, so there is no status
+      // left to send. The response is cut off, which the browser reports as a
+      // failed download, never as a finished but short one.
+      logger.error('Campaign export stopped part-way', { campaignId, error: errorMessage(error) });
+      res.destroy();
+    }
+    return undefined;
+  });
 });
 
 /**
- * POST /api/campaigns/import/preview
- * Upload a .cozyvtt archive and return its manifest preview.
- * Does NOT create anything — just reads manifest.json.
- * Requires: Authentication
+ * Take the archive upload of an import route, answering a refused one itself.
  */
-router.post('/import/preview', authenticated, (req: Request, res: Response, next: NextFunction): void => {
+function takeImportUpload(req: Request, res: Response, next: NextFunction): void {
   importUpload.single('file')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        res.status(400).json({ error: 'File Too Large', message: 'Archive exceeds 500 MB limit.' });
+        res.status(413).json({
+          error: 'File Too Large',
+          message: `The archive is larger than ${megabytes(CAMPAIGN_ARCHIVE_MAX_BYTES)}, the most a campaign archive may be.`,
+        });
         return;
       }
       res.status(400).json({ error: 'Upload Error', message: err.message });
@@ -2185,21 +2249,52 @@ router.post('/import/preview', authenticated, (req: Request, res: Response, next
     }
     next();
   });
-}, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Validation Error', message: 'No file uploaded.' });
-    }
+}
 
-    const preview = await previewCampaignImport(req.file.buffer);
-    return res.status(200).json({ preview });
-  } catch (error: unknown) {
-    logger.warn('Campaign import preview failed', { error: errorMessage(error) });
-    return res.status(400).json({
-      error: 'Invalid Archive',
-      message: errorMessage(error) || 'Could not read archive.',
-    });
+interface ImportReply {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+/**
+ * Answer an import route with what `work` decides, once the uploaded archive
+ * has been removed, so nothing of it is left by the time the caller hears back.
+ */
+async function answerAfterRemovingArchive(
+  req: AuthenticatedRequest,
+  res: Response,
+  work: (archivePath: string) => Promise<ImportReply>
+): Promise<void> {
+  let reply: ImportReply | undefined;
+  try {
+    const file = req.file;
+    reply = file
+      ? await whileHoldingArchiveSlot(res, () => work(file.path))
+      : { status: 400, body: { error: 'Validation Error', message: 'No file uploaded.' } };
+  } finally {
+    await removeUploadedArchive(req.file);
   }
+  // Undefined when the caller hung up before the work could start.
+  if (reply) res.status(reply.status).json(reply.body);
+}
+
+/**
+ * POST /api/campaigns/import/preview
+ * Upload a .cozyvtt archive and return its manifest preview.
+ * Does NOT create anything — just reads manifest.json.
+ * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
+ */
+router.post('/import/preview', authenticated, oneCampaignArchiveAtATime, campaignPreviewLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+  await answerAfterRemovingArchive(req, res, async (archivePath) => {
+    try {
+      const preview = await previewCampaignImport(archivePath);
+      return { status: 200, body: { preview } };
+    } catch (error: unknown) {
+      logger.warn('Campaign import preview failed', { error: errorMessage(error) });
+      return { status: 400, body: { error: 'Invalid Archive', message: errorMessage(error) || 'Could not read archive.' } };
+    }
+  });
 });
 
 /**
@@ -2208,59 +2303,36 @@ router.post('/import/preview', authenticated, (req: Request, res: Response, next
  * Body (multipart): file + optional JSON fields:
  *   campaignName (string) — override campaign name
  *   importTokens (boolean, default true)
- * Requires: Authentication, rate limited
+ * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * (20 by default), and one archive operation at a time.
  */
-router.post('/import', authenticated, (req: Request, res: Response, next: NextFunction): void => {
-  importUpload.single('file')(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        res.status(400).json({ error: 'File Too Large', message: 'Archive exceeds 500 MB limit.' });
-        return;
+router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+  await answerAfterRemovingArchive(req, res, async (archivePath) => {
+    try {
+      const userId = req.session.userId!;
+      const campaignName = typeof req.body.campaignName === 'string' ? req.body.campaignName.trim() : undefined;
+      const importTokens = req.body.importTokens !== 'false'; // default true
+
+      if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > 200)) {
+        return {
+          status: 400,
+          body: { error: 'Validation Error', message: 'Campaign name must be between 1 and 200 characters.' },
+        };
       }
-      res.status(400).json({ error: 'Upload Error', message: err.message });
-      return;
-    }
-    if (err) {
-      res.status(400).json({ error: 'Upload Error', message: err.message });
-      return;
-    }
-    next();
-  });
-}, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Validation Error', message: 'No file uploaded.' });
-    }
 
-    const userId = req.session.userId!;
-    const campaignName = typeof req.body.campaignName === 'string' ? req.body.campaignName.trim() : undefined;
-    const importTokens = req.body.importTokens !== 'false'; // default true
+      logger.info('Campaign import started', { userId, importTokens, hasNameOverride: !!campaignName });
 
-    if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > 200)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Campaign name must be between 1 and 200 characters.',
+      const result = await importCampaign(archivePath, userId, {
+        importTokens,
+        campaignName: campaignName || undefined,
       });
+
+      return { status: 201, body: { message: 'Campaign imported successfully', ...result } };
+    } catch (error: unknown) {
+      logger.error('Campaign import failed', { error: errorMessage(error), userId: req.session?.userId });
+      return { status: 400, body: { error: 'Import Failed', message: errorMessage(error) || 'Failed to import campaign.' } };
     }
-
-    logger.info('Campaign import started', { userId, importTokens, hasNameOverride: !!campaignName });
-
-    const result = await importCampaign(req.file.buffer, userId, {
-      importTokens,
-      campaignName: campaignName || undefined,
-    });
-
-    return res.status(201).json({
-      message: 'Campaign imported successfully',
-      ...result,
-    });
-  } catch (error: unknown) {
-    logger.error('Campaign import failed', { error: errorMessage(error), userId: req.session?.userId });
-    return res.status(400).json({
-      error: 'Import Failed',
-      message: errorMessage(error) || 'Failed to import campaign.',
-    });
-  }
+  });
 });
 
 export default router;

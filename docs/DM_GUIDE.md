@@ -528,7 +528,11 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 2. In the **General** tab, scroll to the **Export Campaign** section
 3. Optionally toggle **Include audio assets** (off by default to reduce file size)
 4. Click **Export Campaign**
-5. A `.cozyvtt` file downloads to your computer
+5. In Chrome and Edge, choose where to save the file; the archive is written there as it arrives. Other browsers download it as they would any file, and save it once it has all arrived
+
+A large campaign takes as long to export as your connection needs; nothing gives up after a set time. Choose where to save within a minute or so: on a large campaign the server stops sending if nothing takes the file for longer than that.
+
+**Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
 - All maps (images, grid settings, wall segments, fog, lighting)
@@ -554,14 +558,17 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
 
+An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
+
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 
 ### Security Notes
 
 Imported archives are validated at multiple levels:
 - File paths are sanitized to prevent directory traversal
-- Decompressed size is tracked to prevent zip bomb attacks
-- Asset files are validated by magic bytes, not just extension
+- Each file inside the archive is unpacked a piece at a time and stopped as soon as it passes its limit, so a small archive that would unpack to gigabytes (a "zip bomb") is refused without harm. The limits are 10 MB for each of the campaign's data files, the upload limit of its kind for each picture or sound file (50 MB for a map picture unless your server's admin has changed it), and 500 MB for the whole archive. A picture or sound file over its limit is left out of the import; anything else over a limit stops the import with a message saying which
+- An archive listing more than 1,000 files is refused before it is opened
+- Each picture and sound file must be, by its content, a format the upload window accepts for its kind (a map picture is PNG, JPEG or WebP; a token picture PNG, JPEG, WebP or GIF; a sound file MP3, Ogg or WAV), and is stored as what it really is, whatever the archive calls it. Anything else is left out of the import
 - All JSON data is validated against strict schemas with size limits
 - New UUIDs are generated for all entities — nothing from the archive can reference existing data
 

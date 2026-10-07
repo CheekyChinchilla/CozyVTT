@@ -7756,11 +7756,18 @@ paths:
       summary: Export campaign
       description: |
         Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
-        built in memory and sent whole, with no size limit of its own. It
+        sent as it is made, with no `Content-Length`; asset files are stored
+        in it uncompressed. Before anything is sent, the asset files' recorded
+        sizes, the JSON files and the ZIP's own overhead are added up, and an
+        archive over the `campaignExportSizeLimit` setting (500 MB, and never
+        more than the import accepts) is refused with 422. A failure after
+        the first bytes have been sent cuts the response off. It
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Only the API-wide rate limit applies.
+        without a picture. Each user may export 20 campaigns an hour
+        (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
+        previews, and run one archive operation at a time.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -7792,6 +7799,36 @@ paths:
                 format: binary
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The archive would be larger than the size setting. The message
+            gives its size and the limit, and says whether leaving out audio
+            would bring it under.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Export Too Large
+                message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
+        '429':
+          description: >-
+            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
         '500':
           description: The export failed
           content:
@@ -7809,12 +7846,16 @@ paths:
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
         anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it. The upload is one file in the `file` field, at most
+        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
         instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it).
+        has changed it), list no more than 1,000 files, and have a
+        `manifest.json` that unpacks to no more than 10 MB. The upload is
+        written to a temporary file, which is removed before the answer is
+        sent.
       operationId: previewCampaignImport
       security:
         - cookieAuth: []
@@ -7841,15 +7882,39 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), a file over 500 MB (`File Too
-            Large`), another upload problem such as a refused file type or a
-            malformed body (`Upload Error`), or an archive that cannot be read, is over the
-            size setting, or has a missing or invalid manifest (`Invalid
-            Archive`, with the reason in `message`).
+            No file (`Validation Error`), an upload problem such as a refused
+            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
+            is over the size setting, lists more than 1,000 files, or has a
+            missing, oversized or invalid manifest (`Invalid Archive`, with
+            the reason in `message`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: >-
+            The file is over 500 MB (`File Too Large`). A proxy in front of
+            the server may answer 413 for a smaller body, with a page of its
+            own; the bundled nginx allows this path and the import 512 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: The archive is larger than 500 MB, the most a campaign archive may be.
+        '429':
+          description: >-
+            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/campaigns/import:
     post:
@@ -7860,12 +7925,26 @@ paths:
         signed-in user may call it; they become the new campaign's owner and
         DM. The upload rules are those of the preview route, and the
         `campaignExportSizeLimit` setting bounds both the archive and the
-        total size of the files read out of it. Only the API-wide rate limit
-        applies.
+        total size of the files read out of it. Each user may import 20
+        campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
+        previews and exports, and run one archive operation at a time.
+
+        Every file in the archive is unpacked through a counter and stopped
+        as soon as it passes its limit. Each JSON file may unpack to 10 MB,
+        and a JSON file over that fails the import. Each asset may unpack to
+        the upload limit of its type (`MAX_<TYPE>_SIZE_MB`), and an asset over
+        that is skipped. Everything unpacked together past the size setting
+        fails the import.
+
+        Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
+        content, a format the upload route allows for its type, and is stored
+        under the detected MIME type and extension; its `originalName` is
+        kept unless that name's extension is not allowed for the type, when
+        the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Assets whose content does not match their declared type,
-        and maps, creatures or templates that fail validation, are skipped.
+        current map. Maps, creatures or templates that fail validation are
+        skipped.
         Imported tokens are linked to no character and controlled by no one.
 
         The import is not one transaction. A failure after the campaign has
@@ -7929,6 +8008,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: The file is over 500 MB (`File Too Large`), as on the preview route.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   # ============================================
   # ADMIN ENDPOINTS

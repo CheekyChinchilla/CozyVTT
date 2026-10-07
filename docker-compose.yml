@@ -95,6 +95,7 @@ services:
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
       ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      CAMPAIGN_ARCHIVE_RATE_LIMIT: ${CAMPAIGN_ARCHIVE_RATE_LIMIT:-20}
       # Session timeouts (milliseconds) and logging. Every setting .env.example
       # offers is named here, or it never reaches the container: a test keeps
       # the two files in step.
@@ -174,7 +175,7 @@ services:
       # `docker compose up -d --build` leaves a running container alone unless
       # its definition changed, so without a change here an upgrade keeps
       # serving the previous config.
-      NGINX_CONF_STAMP: "507e7aa210aa"
+      NGINX_CONF_STAMP: "0e74b6c0efb2"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
