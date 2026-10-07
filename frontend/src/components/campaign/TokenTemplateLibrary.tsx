@@ -30,6 +30,7 @@ import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
 import StatBlockEditor from './npc-stat-blocks/StatBlockEditor';
 import Button from '@/components/ui/Button';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 
@@ -74,6 +75,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TokenTemplate | null>(null);
+  // The template whose Delete button was clicked, until it is confirmed or cancelled.
+  const [templateToDelete, setTemplateToDelete] = useState<TokenTemplate | null>(null);
   const [copyMenuId, setCopyMenuId] = useState<string | null>(null);
   const [dmCampaigns, setDmCampaigns] = useState<Campaign[]>([]);
 
@@ -170,6 +173,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // ── Delete template ──
   const handleDelete = useCallback(async (id: string) => {
     if (!campaign) return;
+    setTemplateToDelete(null);
     try {
       await api.deleteTokenTemplate(campaign.id, id);
       setTemplates((prev) => prev.filter((t) => t.id !== id));
@@ -203,6 +207,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   }, [campaign]);
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <>
@@ -307,7 +312,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                       onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
                       onPlace={() => handlePlace(template)}
                       onEdit={() => handleEdit(template)}
-                      onDelete={() => handleDelete(template.id)}
+                      onDelete={() => setTemplateToDelete(template)}
                       onToggleCopyMenu={() => setCopyMenuId(copyMenuId === template.id ? null : template.id)}
                       onCopyToCampaign={(targetId) => handleCopyToCampaign(template.id, targetId)}
                     />
@@ -344,6 +349,16 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         </>
       )}
     </AnimatePresence>
+    <ConfirmDialog
+      isOpen={templateToDelete !== null}
+      title="Delete token template"
+      message={`Delete the token template "${templateToDelete?.name ?? ''}"? Tokens already placed from it stay on their maps. This cannot be undone.`}
+      confirmLabel="Delete"
+      variant="danger"
+      onConfirm={() => templateToDelete && handleDelete(templateToDelete.id)}
+      onCancel={() => setTemplateToDelete(null)}
+    />
+    </>
   );
 }
 
@@ -475,6 +490,7 @@ function TemplateRow({
             </div>
             <button
               onClick={onDelete}
+              aria-label={`Delete ${template.name}`}
               className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-danger/20 text-danger-ink hover:bg-danger/10 transition-colors"
             >
               <Trash2 className="w-3 h-3" /> Delete

@@ -196,7 +196,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or delete it.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them, and a failed action now shows a message. Removing a token, here or in the Token Manager or the quick editor, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -385,7 +385,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Disposition** — Hostile, friendly, or neutral
 - **Display Mode** — Pog, top-down, or full-art
 
-Custom creatures are scoped to your campaign and fully editable.
+Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
 
 ### Saving Throws and Skills
 
@@ -492,7 +492,7 @@ Expand a template in the library and click **Place on Map** to create a new toke
 
 ### Editing and Deleting Templates
 
-Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently.
+Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently. Delete asks first, naming the template.
 
 For **NPC-type templates**, the edit form includes the full stat block editor — AC, ability scores, saves, skills, traits, actions, bonus actions, reactions, and legendary actions — so you can build a complete monster once and reuse it across maps and campaigns. Saves and skills work exactly as they do in the Creature Library: tick what the creature is proficient in and the bonus is derived from its ability scores and Challenge Rating (see [Saving Throws and Skills](#saving-throws-and-skills)). The right-click NPC roll picker (see [Rolling for NPC Tokens](#rolling-for-npc-tokens)) reads from the same stat block, so a template with a well-filled-in action list gets clickable attack and damage rolls automatically.
 
