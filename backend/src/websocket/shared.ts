@@ -54,6 +54,9 @@ export interface Token {
   obscured?: boolean;
 }
 
+/** Every limiter, so the housekeeping below reaches each one without a list to keep in step. */
+const everyLimiter = new Set<RateLimiter>();
+
 /**
  * Rate Limiter for WebSocket Events
  * Tracks timestamps of recent events per user
@@ -61,6 +64,12 @@ export interface Token {
  */
 export class RateLimiter {
   private events: Map<string, number[]> = new Map();
+  /** The longest window any check has used: how long an event can still be counted. */
+  private longestWindowMs = 0;
+
+  constructor() {
+    everyLimiter.add(this);
+  }
 
   /**
    * Check if user is within rate limit
@@ -71,6 +80,7 @@ export class RateLimiter {
    */
   check(userId: string, limit: number, windowMs: number): boolean {
     const now = Date.now();
+    if (windowMs > this.longestWindowMs) this.longestWindowMs = windowMs;
     const userEvents = this.events.get(userId) || [];
 
     // Remove timestamps outside the time window
@@ -89,12 +99,15 @@ export class RateLimiter {
   }
 
   /**
-   * Clear old events periodically to prevent memory leaks
+   * Forget the events no check can count any more. Pruned by the longest
+   * window this limiter has been checked with, not one the caller picks: the
+   * chat cooldown runs up to five minutes, and pruning it at one let a player
+   * post before their cooldown was over.
    */
-  cleanup(windowMs: number): void {
+  cleanup(): void {
     const now = Date.now();
     for (const [userId, timestamps] of this.events.entries()) {
-      const recentEvents = timestamps.filter((timestamp) => now - timestamp < windowMs);
+      const recentEvents = timestamps.filter((timestamp) => now - timestamp < this.longestWindowMs);
       if (recentEvents.length === 0) {
         this.events.delete(userId);
       } else {
@@ -147,17 +160,12 @@ export function stateRequestAllowed(socket: { userId?: string; id: string }, eve
   return stateRequestLimiter.check(`${limiterKey(socket)}:${event}`, STATE_REQUESTS_PER_SECOND, 1000);
 }
 
-// Cleanup old events every 5 minutes. unref() so this housekeeping timer
-// never holds the process open on its own (matters for test runners and
-// graceful shutdown — the HTTP server keeps the process alive in production).
+// Cleanup old events every 5 minutes, in every limiter there is. unref() so
+// this housekeeping timer never holds the process open on its own (matters
+// for test runners and graceful shutdown — the HTTP server keeps the process
+// alive in production).
 setInterval(() => {
-  diceRollLimiter.cleanup(60 * 1000); // Dice rolls: 1 minute window
-  chatMessageLimiter.cleanup(60 * 1000); // Chat messages: 1 minute window
-  fogOperationLimiter.cleanup(5 * 1000); // Fog ops: 5 second window
-  tokenMoveLimiter.cleanup(1000); // Token moves: 1 second window
-  mapEditLimiter.cleanup(1000); // Map edits: 1 second window
-  pingLimiter.cleanup(10 * 1000); // Map pings: 10 second window
-  explorationRevealLimiter.cleanup(5 * 1000); // Explored-memory reveals: 5 second window
+  for (const limiter of everyLimiter) limiter.cleanup();
 }, 5 * 60 * 1000).unref();
 
 // ── Fog/Wall Helpers ─────────────────────────────────────────────────────────
