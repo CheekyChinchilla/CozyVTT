@@ -1781,8 +1781,10 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const validTypes = ['wall', 'door-closed', 'door-open', 'window'];
-    if (!req.body.type || !validTypes.includes(req.body.type)) {
+    // The types every other wall path accepts, locked doors included.
+    const validTypes = WallSegmentSchema.shape.type.options;
+    const type = WallSegmentSchema.shape.type.safeParse(req.body.type);
+    if (!type.success) {
       return res.status(400).json({ error: 'Validation Error', message: `type must be one of: ${validTypes.join(', ')}` });
     }
 
@@ -1793,7 +1795,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
     }
 
-    existing[segIndex] = { ...existing[segIndex], type: req.body.type };
+    existing[segIndex] = { ...existing[segIndex], type: type.data };
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
@@ -1924,6 +1926,15 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     }
 
     const merged = { ...existing[idx], ...parsed.data };
+    // The radii are checked against each other as they will be stored, not
+    // as the patch sends them: a dim radius alone, under the stored bright
+    // one, used to be saved and then made every save of the whole list fail.
+    // Only when the patch changes a radius, so a light stored before this
+    // check can still be switched on and off.
+    const radiusChanged = parsed.data.brightRadius !== undefined || parsed.data.dimRadius !== undefined;
+    if (radiusChanged && !(merged.dimRadius >= merged.brightRadius)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'dimRadius must be >= brightRadius' });
+    }
     if (lightOutsideMap([merged], map, [existing[idx]])) {
       return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
     }

@@ -6341,9 +6341,9 @@ paths:
       description: |
         Change the `type` of a single wall segment, most commonly to open or
         close a door. Only `type` is read; any other field in the body is
-        ignored, so the segment keeps its position. `door-locked` is refused
-        with 400 here, although `PUT` and `POST` on the wall list and the
-        DM's socket `wall:update` event accept it. DM only. Connected clients are
+        ignored, so the segment keeps its position. Any of the five wall
+        types is accepted, `door-locked` included, as on every other wall
+        path; anything else answers 400. DM only. Connected clients are
         sent `wall:updated` (see `replaceWalls`).
       operationId: updateWallType
       security:
@@ -6357,7 +6357,7 @@ paths:
               properties:
                 type:
                   type: string
-                  enum: [wall, door-closed, door-open, window]
+                  enum: [wall, door-closed, door-open, door-locked, window]
               required: [type]
             example:
               type: door-open
@@ -6545,10 +6545,10 @@ paths:
         Send only the fields you want to change. Other fields, `id` included,
         are ignored, and a body with none of these six answers 400 (`At least
         one field must be provided`). `brightRadius` and `dimRadius` are each
-        checked against their own limits but not against each other, so a
-        patch can leave the light stored with a dim radius smaller than its
-        bright radius, which `PUT` and `POST` on the light list refuse. A
-        new position is held to the bounds `replaceLights` describes. DM
+        checked against their own limits, and a patch that changes either is
+        checked against the light as it would be stored: one that would leave
+        the dim radius smaller than the bright one answers 400 (`dimRadius
+        must be >= brightRadius`) and changes nothing. A new position is held to the bounds `replaceLights` describes. DM
         only. Connected clients are sent `light:updated` (see
         `replaceLights`).
       operationId: updateLight
