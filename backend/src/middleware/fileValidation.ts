@@ -112,6 +112,7 @@ export async function validateFileType(
     // an MPEG frame sync.
     if (!fileType) {
       if (isMP3 && assetType === 'AUDIO' && (await startsWithMp3Header(filePath))) {
+        req.detectedMimeType = 'audio/mpeg';
         next();
         return;
       } else if (isTextDocument && (await isPlainTextFile(filePath))) {
@@ -120,6 +121,7 @@ export async function validateFileType(
         // trusted on its own: the bytes have to prove they are text. A PDF
         // document does not need this branch, because file-type identifies a
         // real PDF and it passes the MIME check below like any other file.
+        req.detectedMimeType = ext === '.md' ? 'text/markdown' : 'text/plain';
         next();
         return;
       } else {
@@ -148,6 +150,7 @@ export async function validateFileType(
     // The content is known and allowed. Force the stored extension to match it,
     // so the serving route cannot be told the file is a page or a script.
     await normalizeStoredExtension(req.file, fileType.ext);
+    req.detectedMimeType = fileType.mime;
 
     // File is valid, proceed
     next();

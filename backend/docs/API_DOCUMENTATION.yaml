@@ -4641,9 +4641,11 @@ paths:
         `GET /api/assets/audio/{id}` answers 404 for them. Ogg Opus is
         refused.
 
-        The stored row's `mimeType` is the content type the client declared
-        for the file part, not the detected one; the file routes do not use
-        it.
+        The stored row's `mimeType` is the detected type, whatever the client
+        declared for the file part: `audio/mpeg` for an MP3 accepted on its
+        header, and `text/markdown` or `text/plain` for a text document, by
+        its extension. Assets uploaded before 1.5.1 keep the type the client
+        declared. The file routes do not use it.
 
         **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
         environment variables (defaults shown). The effective values are
@@ -10058,7 +10060,10 @@ components:
           example: players-handbook.pdf
         mimeType:
           type: string
-          description: As declared at upload. Not what the file is served as.
+          description: >-
+            What the file's bytes showed at upload; as the uploader declared
+            it on an asset uploaded before 1.5.1. Not what the file is served
+            as.
         fileSize:
           type: integer
         createdAt:
@@ -10247,6 +10252,9 @@ components:
           type: string
         mimeType:
           type: string
+          description: >-
+            The format the file's bytes showed at upload. An asset uploaded
+            before 1.5.1 holds the type its uploader declared.
         fileSize:
           type: integer
         name:

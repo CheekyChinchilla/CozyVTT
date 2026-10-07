@@ -421,6 +421,9 @@ router.post(
       }
       const { name, description, tags } = req.body;
       const file = req.file!;
+      // What the bytes are (validateFileType), never what the browser said:
+      // the export writes this into its archive, and it decides the thumbnail.
+      const mimeType = req.detectedMimeType ?? 'application/octet-stream';
 
       // Parse tags if provided
       const tagArray = tags
@@ -429,7 +432,7 @@ router.post(
 
       // Generate thumbnail for images (MAP and TOKEN types)
       const thumbnailPath =
-        (req.assetType === 'MAP' || req.assetType === 'TOKEN') && file.mimetype.startsWith('image/')
+        (req.assetType === 'MAP' || req.assetType === 'TOKEN') && mimeType.startsWith('image/')
           ? await generateThumbnail(file.path)
           : null;
 
@@ -444,7 +447,7 @@ router.post(
           campaignId: req.campaignId || null,
           filename: file.filename,
           originalName: file.originalname,
-          mimeType: file.mimetype,
+          mimeType,
           fileSize: file.size,
           filePath: file.path.replace(/\\/g, '/'),
           thumbnailPath,
@@ -860,11 +863,11 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 
 /**
  * The content type an audio file is served with, decided from its validated
- * extension, never from the stored `mimeType`. That field is whatever the
- * uploading browser declared, and validation checks the bytes rather than it,
- * so it can say `text/html`; echoing it would let an uploaded file be rendered
- * as a page on this instance's own origin. The three keys are the audio
- * extensions the upload allowlist accepts.
+ * extension, never from the stored `mimeType`. An upload now records the
+ * format its bytes show, but an asset stored before that holds whatever the
+ * uploading browser declared, which can say `text/html`; echoing it would let
+ * an uploaded file be rendered as a page on this instance's own origin. The
+ * three keys are the audio extensions the upload allowlist accepts.
  */
 const AUDIO_CONTENT_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
@@ -875,7 +878,8 @@ const AUDIO_CONTENT_TYPES: Record<string, string> = {
 /**
  * The content type a document is served with, decided from its extension.
  *
- * Never from `Asset.mimeType`: that value arrived with the upload, and handing
+ * Never from `Asset.mimeType`: on an asset stored before uploads recorded the
+ * format their bytes show, that value is the browser's, and handing
  * an uploader control of the served content type is how a file that is also
  * valid HTML gets rendered as a page. Markdown is served as plain text on
  * purpose. The reader fetches it and renders it itself with raw HTML disabled;
