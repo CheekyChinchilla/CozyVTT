@@ -15,12 +15,13 @@ export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props)
   const { mode, character, onSave, onDirtyChange } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
+  // Saving leaves edit mode only through the editor's onDone, which it calls
+  // when nothing was typed while the save was in flight. Going back to the
+  // view here, as soon as the save finished, threw that typing away.
   const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }
-    onDirtyChange?.(false);
-    setCurrentMode('view');
   };
 
   const handleCancel = () => {
@@ -40,6 +41,7 @@ export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props)
         onSave={handleSave}
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
+        onDone={() => setCurrentMode('view')}
       />
     );
   }

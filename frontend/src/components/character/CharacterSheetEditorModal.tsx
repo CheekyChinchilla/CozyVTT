@@ -39,10 +39,11 @@ export default function CharacterSheetEditorModal({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const signedOut = useUnsavedWorkGuard(hasUnsavedChanges);
   const { showToast } = useToast();
-  // The version the editor opened. The character handed in here can be
-  // refreshed while the editor is open, since the sheet behind it follows the
+  // The version the editor's form was made from: the one it opened, then the
+  // one each save stored while the editor stays open. The character handed in
+  // here can be refreshed meanwhile, since the sheet behind it follows the
   // table, but the editor's form is not, so its save is made from this one.
-  const [loadedAt] = useState(character.updatedAt);
+  const [loadedAt, setLoadedAt] = useState(character.updatedAt);
 
   // Handle save. The editors pass a freshly-uploaded token image URL as the
   // third argument — forward it so the character's token actually updates.
@@ -51,20 +52,21 @@ export default function CharacterSheetEditorModal({
   const handleSave = async (data: CharacterData, _showToast?: boolean, tokenImageUrl?: string) => {
     try {
       setSaving(true);
-      await api.updateCharacter(character.id, {
+      const { character: saved } = await api.updateCharacter(character.id, {
         data,
         updatedAt: loadedAt,
         ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
       });
       reportSignedIn();
+      // The editor closes through onDone once it holds nothing unsaved. With
+      // something typed while this save was in flight it stays open, and its
+      // next save is made from the version just stored.
+      setLoadedAt(saved.updatedAt);
 
       // Call optional callback
       if (onSaved) {
         onSaved();
       }
-
-      // Close modal
-      onClose();
     } catch (error) {
       console.error('Error saving character:', error);
 
@@ -130,6 +132,7 @@ export default function CharacterSheetEditorModal({
             onSave={handleSave}
             onCancel={handleCancel}
             onDirtyChange={setHasUnsavedChanges}
+            onDone={onClose}
           />
         );
       case 'PATHFINDER_2E':
@@ -139,6 +142,7 @@ export default function CharacterSheetEditorModal({
             onSave={handleSave}
             onCancel={handleCancel}
             onDirtyChange={setHasUnsavedChanges}
+            onDone={onClose}
           />
         );
       case 'CALL_OF_CTHULHU_7E':
@@ -148,6 +152,7 @@ export default function CharacterSheetEditorModal({
             onSave={handleSave}
             onCancel={handleCancel}
             onDirtyChange={setHasUnsavedChanges}
+            onDone={onClose}
           />
         );
       case 'SHADOWRUN_6E':
@@ -178,6 +183,7 @@ export default function CharacterSheetEditorModal({
             onSave={handleSave}
             onCancel={handleCancel}
             onDirtyChange={setHasUnsavedChanges}
+            onDone={onClose}
           />
         );
     }

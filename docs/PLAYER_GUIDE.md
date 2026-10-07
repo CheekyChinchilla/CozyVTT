@@ -491,7 +491,7 @@ The card's menu (**⋮**) holds the rest:
 
 Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
 
-If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. Simply opening a sheet and reading it never counts as a change.
+If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 

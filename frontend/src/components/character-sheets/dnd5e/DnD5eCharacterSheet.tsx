@@ -24,13 +24,13 @@ export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
     setCurrentMode('view');
   };
 
-  // Handle save - save data and return to view mode
+  // Saving leaves edit mode only through the editor's onDone, which it calls
+  // when nothing was typed while the save was in flight. Going back to the
+  // view here, as soon as the save finished, threw that typing away.
   const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }
-    onDirtyChange?.(false);
-    setCurrentMode('view');
   };
 
   // Render based on mode
@@ -41,6 +41,7 @@ export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
         onSave={handleSave}
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
+        onDone={() => setCurrentMode('view')}
       />
     );
   }

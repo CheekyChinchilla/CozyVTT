@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A D&D 5e sheet with cantrips typed in counts as saved once you save it.** The Character Editor went on saying there were unsaved changes, so leaving asked you to confirm and the time of the last save was not shown.
 
+- **What you type while a sheet is saving is kept.** Every box stays editable while a save, and any new token picture with it, goes through. The sheet went back to its read-only view as soon as the save finished, dropping anything typed in those seconds, and the Character Editor then warned about unsaved changes when there was nothing left on screen to save. The editor now stays open with what you typed, still counted as unsaved, until you save again. This applies to every game system, in the Character Editor and in the editor that opens over a sheet.
+
 ---
 
 ## [1.5.0] — 2026-10-03

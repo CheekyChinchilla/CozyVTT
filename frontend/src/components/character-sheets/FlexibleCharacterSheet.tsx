@@ -16,11 +16,12 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
     setCurrentMode('view');
   };
 
+  // Saving leaves edit mode only through the editor's onDone, so what was
+  // typed while the save was in flight is not thrown away.
   const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) {
       await onSave(data, showToast, tokenImageUrl);
     }
-    setCurrentMode('view');
   };
 
   if (currentMode === 'edit') {
@@ -30,6 +31,7 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
         onSave={handleSave}
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
+        onDone={() => setCurrentMode('view')}
       />
     );
   }

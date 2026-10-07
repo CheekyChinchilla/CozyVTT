@@ -79,6 +79,12 @@ type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Called once a save has gone through and nothing was typed while it was in
+   * flight, so the editor holds nothing unsaved and its host can close it.
+   * With something typed meanwhile, the editor stays open with it instead.
+   */
+  onDone?: () => void;
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
@@ -211,6 +217,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   onSave,
   onCancel,
   onDirtyChange,
+  onDone,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -316,13 +323,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // The header colour and a newly chosen token picture are kept outside the
   // form, and are unsaved changes too.
-  const sheetSnapshot = JSON.stringify({
-    formData,
-    themeColor: isCustomColor ? customColorHex : selectedColor.name,
-    tokenImage: tokenImageFile
-      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
-      : null,
+  const snapshotOf = (form: typeof formData, theme: string, picture: File | null) => JSON.stringify({
+    formData: form,
+    themeColor: theme,
+    tokenImage: picture ? `${picture.name}:${picture.size}:${picture.lastModified}` : null,
   });
+  const themeChoice = isCustomColor ? customColorHex : selectedColor.name;
+  const sheetSnapshot = snapshotOf(formData, themeChoice, tokenImageFile);
   if (cleanSnapshotRef.current === null) {
     cleanSnapshotRef.current = sheetSnapshot;
   }
@@ -753,11 +760,23 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     // A completed save means nothing is pending any more — unless the sheet was
     // edited again while the save was in flight, which the recheck preserves.
     const savedSnapshot = sheetSnapshot;
+    const savedForm = formData;
+    const savedTheme = themeChoice;
+    const uploadedPicture = tokenImageFile;
     const markClean = () => {
-      cleanSnapshotRef.current = savedSnapshot;
       const stillDirty = latestSnapshotRef.current !== savedSnapshot;
+      // A picture that went up with this save is on the character now, so the
+      // next save must not upload it again. One chosen while saving stays.
+      if (uploadedPicture) {
+        setTokenImageFile((current) => (current === uploadedPicture ? null : current));
+        cleanSnapshotRef.current = snapshotOf(savedForm, savedTheme, null);
+      } else {
+        cleanSnapshotRef.current = savedSnapshot;
+      }
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
+      // Typed while the save was in flight: the editor keeps it, unsaved.
+      if (!stillDirty) onDone?.();
     };
     if (!validateForm()) {
       return;

@@ -27,6 +27,12 @@ interface FlexibleCharacterSheetEditProps {
   onCancel: () => void;
   /** Told whenever the sheet gains or loses unsaved changes. */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Called once a save has gone through and nothing was changed while it was
+   * in flight, so its host can close the editor. Otherwise the editor stays
+   * open with those changes.
+   */
+  onDone?: () => void;
 }
 
 export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProps> = ({
@@ -34,10 +40,16 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   onSave,
   onCancel,
   onDirtyChange,
+  onDone,
 }) => {
   const initialData = initializeFlexibleData(character.data);
   const [sections, setSections] = useState<FlexibleSection[]>(initialData.sections || []);
-  const [cleanSections] = useState(() => JSON.stringify(sections));
+  // What the sections were when last saved, or opened. Changes are measured
+  // against it.
+  const [cleanSections, setCleanSections] = useState(() => JSON.stringify(sections));
+  // Always the current sections, for reading once a save has finished.
+  const latestSectionsRef = useRef(sections);
+  latestSectionsRef.current = sections;
   const [isSaving, setIsSaving] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [tokenImageFile, setTokenImageFile] = useState<File | null>(null);
@@ -45,6 +57,8 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
     character.tokenImageUrl
   );
   const [tokenError, setTokenError] = useState<string>('');
+  const latestPictureRef = useRef(tokenImageFile);
+  latestPictureRef.current = tokenImageFile;
   const { data: serverConfig } = useServerConfigQuery();
 
   // Unsaved means the sections differ from what the sheet opened with, or a
@@ -89,6 +103,8 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   const handleSave = async () => {
+    const savedSections = sections;
+    const uploadedPicture = tokenImageFile;
     setIsSaving(true);
     try {
       // Upload token image if a new one was selected
@@ -118,7 +134,19 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         }
       }
 
-      await onSave({ sections }, true, newTokenImageUrl);
+      await onSave({ sections: savedSections }, true, newTokenImageUrl);
+
+      // A picture that went up with this save is on the character now. Leave
+      // the editor only if nothing else was changed while the save was in
+      // flight; otherwise stay with those changes, still unsaved.
+      const saved = JSON.stringify(savedSections);
+      setCleanSections(saved);
+      if (uploadedPicture) {
+        setTokenImageFile((current) => (current === uploadedPicture ? null : current));
+      }
+      const changedMeanwhile =
+        JSON.stringify(latestSectionsRef.current) !== saved || latestPictureRef.current !== uploadedPicture;
+      if (!changedMeanwhile) onDone?.();
     } catch (error) {
       // Whoever hosts the sheet says why; the sections stay as typed.
       console.error('Error saving character:', error);
