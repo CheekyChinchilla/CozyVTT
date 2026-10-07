@@ -543,7 +543,8 @@ The imported campaign is created fresh with new IDs — it does not interfere wi
 
 Imported archives are validated at multiple levels:
 - File paths are sanitized to prevent directory traversal
-- Decompressed size is tracked to prevent zip bomb attacks
+- Each file inside the archive is unpacked a piece at a time and stopped as soon as it passes its limit, so a small archive that would unpack to gigabytes (a "zip bomb") is refused without harm. The limits are 10 MB for each of the campaign's data files, the upload limit of its kind for each picture or sound file (50 MB for a map picture unless your server's admin has changed it), and 500 MB for the whole archive. A picture or sound file over its limit is left out of the import; anything else over a limit stops the import with a message saying which
+- An archive listing more than 1,000 files is refused before it is opened
 - Asset files are validated by magic bytes, not just extension
 - All JSON data is validated against strict schemas with size limits
 - New UUIDs are generated for all entities — nothing from the archive can reference existing data

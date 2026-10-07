@@ -7646,7 +7646,10 @@ paths:
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
         instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it).
+        has changed it), list no more than 1,000 files, and have a
+        `manifest.json` that unpacks to no more than 10 MB. The upload is
+        written to a temporary file, which is removed before the answer is
+        sent.
       operationId: previewCampaignImport
       security:
         - cookieAuth: []
@@ -7675,9 +7678,10 @@ paths:
           description: >-
             No file (`Validation Error`), a file over 500 MB (`File Too
             Large`), another upload problem such as a refused file type or a
-            malformed body (`Upload Error`), or an archive that cannot be read, is over the
-            size setting, or has a missing or invalid manifest (`Invalid
-            Archive`, with the reason in `message`).
+            malformed body (`Upload Error`), or an archive that is not a ZIP,
+            is over the size setting, lists more than 1,000 files, or has a
+            missing, oversized or invalid manifest (`Invalid Archive`, with
+            the reason in `message`).
           content:
             application/json:
               schema:
@@ -7694,6 +7698,13 @@ paths:
         `campaignExportSizeLimit` setting bounds both the archive and the
         total size of the files read out of it. Only the API-wide rate limit
         applies.
+
+        Every file in the archive is unpacked through a counter and stopped
+        as soon as it passes its limit. Each JSON file may unpack to 10 MB,
+        and a JSON file over that fails the import. Each asset may unpack to
+        the upload limit of its type (`MAX_<TYPE>_SIZE_MB`), and an asset over
+        that is skipped. Everything unpacked together past the size setting
+        fails the import.
 
         The campaign starts in PREPARATION with the first imported map as its
         current map. Assets whose content does not match their declared type,

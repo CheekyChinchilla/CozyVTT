@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
 
+- **A crafted campaign archive can no longer crash the server.** Importing a campaign, or only previewing one, unpacked each file inside the archive into memory before checking its size, so any signed-in user could send a small archive that unpacked to gigabytes and stop the server for every table. An archive listing a very large number of files did the same. Archives are now read from disk a piece at a time and stopped as soon as they pass a limit, and one listing more than 1,000 files is refused before it is opened. A picture or sound file inside an archive that is larger than the upload limit for its kind is left out of the import, as it would be refused if uploaded.
+
 ---
 
 ## [1.5.0] — 2026-10-03
