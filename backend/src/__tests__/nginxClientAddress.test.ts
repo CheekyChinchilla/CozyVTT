@@ -17,11 +17,15 @@
  *
  * Also here, because it is the same file's promise about who reaches the
  * backend: the backup restore upload streams to the backend, which refuses
- * a non-admin before nginx has taken the body.
+ * a non-admin before nginx has taken the body, and so does a campaign import,
+ * which has room for the largest archive the backend accepts. And nginx
+ * finds the backend and frontend again after either container is recreated.
  */
 
 import fs from 'fs';
 import path from 'path';
+import { CAMPAIGN_ARCHIVE_MAX_BYTES } from '../utils/campaignArchiveSize';
+import { UPLOAD_OVERHEAD_BYTES, parseProxyBodySize } from '../utils/proxyLimits';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -107,6 +111,44 @@ describe('the bundled nginx configuration', () => {
     expect(restore).toHaveLength(1);
     expect(values(restore[0].directives, 'proxy_request_buffering')).toEqual(['off']);
     expect(values(restore[0].directives, 'client_max_body_size')).toEqual(['4096M']);
+  });
+
+  // A campaign archive is up to 500 MB, ten times the body every other route
+  // gets. Under the general /api/ location a large one met a 413 page, and
+  // one that took more than a minute to unpack met a 504 while the backend
+  // went on importing it.
+  it.each([
+    ['HTTP', live],
+    ['commented HTTPS', https],
+  ])('streams a campaign import to the backend with room for the largest archive in the %s block', (_name, lines) => {
+    const imports = proxyingLocations(lines).filter((l) => l.name === 'location /api/campaigns/import {');
+    expect(imports).toHaveLength(1);
+    const [location] = imports;
+    expect(values(location.directives, 'proxy_request_buffering')).toEqual(['off']);
+    const [bodySize] = values(location.directives, 'client_max_body_size');
+    expect(parseProxyBodySize(bodySize)).toBeGreaterThanOrEqual(CAMPAIGN_ARCHIVE_MAX_BYTES + UPLOAD_OVERHEAD_BYTES);
+    const [readTimeout] = values(location.directives, 'proxy_read_timeout');
+    expect(Number(/^(\d+)s$/.exec(readTimeout)?.[1])).toBeGreaterThanOrEqual(300);
+  });
+
+  // A name written into proxy_pass is looked up once, when nginx starts.
+  // Recreating only the backend, as `docker compose up -d` does after a
+  // change to .env, left nginx sending to an address nobody had any more.
+  it("looks the containers up through Docker's name server when a request needs them", () => {
+    expect(values(live, 'resolver')).toEqual(['127.0.0.11 valid=10s ipv6=off']);
+  });
+
+  it.each([
+    ['HTTP', live],
+    ['commented HTTPS', https],
+  ])('names the backend and frontend only through variables in the %s block', (_name, lines) => {
+    expect(values(lines, 'set').map((v) => v.replace(/\s+/g, ' '))).toEqual([
+      '$cozyvtt_backend http://backend:4000',
+      '$cozyvtt_frontend http://frontend:80',
+    ]);
+    const targets = proxyingLocations(lines).map((l) => values(l.directives, 'proxy_pass')[0]);
+    expect(targets.length).toBeGreaterThanOrEqual(6);
+    expect(targets.filter((t) => t !== '$cozyvtt_backend' && t !== '$cozyvtt_frontend')).toEqual([]);
   });
 
   it('is paired with a backend that trusts exactly one proxy, this one', () => {

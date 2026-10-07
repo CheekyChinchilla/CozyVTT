@@ -35,6 +35,7 @@ import logger from './utils/logger';
 import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
+import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals } from './utils/shutdown';
 
 // A production instance on the placeholder database password stops here.
@@ -225,6 +226,10 @@ onShutdownSignals(createShutdown({ io, prisma, sessionPool }));
 // ============================================
 // START SERVER
 // ============================================
+
+// A large import or restore streamed through nginx can take longer than
+// Node's default five minutes to arrive; see config/httpServer.ts.
+applyRequestTimeouts(httpServer);
 
 httpServer.listen(PORT, () => {
   logger.info(`CozyVTT Backend running on port ${PORT}`);

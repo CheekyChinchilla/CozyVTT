@@ -58,9 +58,16 @@ info:
     allowance. Uploads and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
-      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **failed**
-      requests per 15 minutes. Successful requests are not counted, so getting your
-      password right never moves you towards a lockout.
+      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
+      answers** per 15 minutes per address: a wrong password, a wrong MFA code, or
+      a reset link that does not exist, has been used or has expired. Nothing else
+      counts: not a correct answer, not a malformed or refused request, and not the
+      429 itself. The limit is checked before the credential is, so correct
+      sign-ins arriving together from one address all succeed; wrong ones sent
+      together are checked five at most (the rest wait for those to be checked,
+      then get 429 if all five were wrong). An unknown email counts and answers
+      exactly as a wrong password does. The 429 carries `Retry-After`, the seconds
+      until the oldest counted failure leaves the window
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -74,13 +81,16 @@ info:
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
-    - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
-      cooldown (off by default), which allows each member one message per 1 to
-      300 seconds, as the DM sets it
-    - Dice rolls: 30 per minute (WebSocket)
-    - Token movement: 150 events per second per user (WebSocket), shared by
-      `token.move.start`, `token.move` and `token.move.end`; events over the limit
-      are dropped without an error
+    - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
+      The DM can also turn on the campaign's chat cooldown (off by default),
+      which allows each member one message per 1 to 300 seconds
+    - Dice rolls (WebSocket): 50 a second and 200 a minute per user
+    - Token movement (WebSocket), per user: drag frames (`token.move`) 150 a
+      second, dropped without an error; picking a token up (`token.move.start`)
+      and putting it down (`token.move.end`) 30 a second each, with one `error`
+      to the sender when reached
+    - Every other event a member can send over the WebSocket has a per-user
+      ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
     The body is JSON `{ error, message }` for the global limit, uploads and the
@@ -496,7 +506,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited (5 failed requests per 15 minutes, shared with the other credential endpoints; a 403 counts as failed).
+        Authenticate user and create a session on a fresh session id. Rate limited: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints. Only a 401 counts; a 400, a 403, a correct sign-in and a 429 do not.
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
@@ -728,8 +738,10 @@ paths:
         and using it voids the account's other unused tokens. Clears
         `mustChangePassword`, and ends every login session and live WebSocket
         connection of the account; the request itself does not sign anyone
-        in. Rate limited (5 failed requests per 15 minutes, shared with the
-        other credential endpoints).
+        in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        with the other credential endpoints, where a link that does not exist,
+        has been used or has expired is a wrong answer and a password too weak
+        to take is not.
       operationId: resetPassword
       security: []
       requestBody:
@@ -858,7 +870,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -1071,7 +1083,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -1147,7 +1159,7 @@ paths:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
@@ -4612,14 +4624,14 @@ paths:
         not by the filename:
         | Type | Content |
         |------|---------|
-        | MAP | PNG, JPEG, WebP, PDF |
+        | MAP | PNG, JPEG, WebP |
         | TOKEN | PNG, JPEG, WebP, GIF |
         | AUDIO | MPEG audio (MP3), Ogg audio, WAV |
         | AVATAR | PNG, JPEG, WebP |
         | DOCUMENT | PDF; plain text or Markdown |
 
         The original filename's extension matters only where the bytes
-        cannot be identified: a MAP named `.pdf` that starts with `%PDF-`, an
+        cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
         and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
         with no control characters besides tab, line feed, form feed and
@@ -5247,7 +5259,8 @@ paths:
         A refused read answers 403 here and on the token route. The file is
         served with its content type chosen from its stored extension
         (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
-        `application/pdf`, since a map may be a PDF; anything else as
+        `application/pdf`, for a map stored as a PDF before PDFs were refused
+        as maps; anything else as
         `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
         It is cached as `private, max-age=31536000, immutable` with the ETag
         `"<asset id>"`; send that in `If-None-Match` for a 304.
@@ -5532,10 +5545,10 @@ paths:
 
         `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
         missing or out-of-range value is replaced with its default (50, 5,
-        `flat`); a `gridSize` that is not a positive whole number counts as
-        out of range. Only `name`, `imageUrl`, `width` and `height` can make
-        this route answer 400; `width` and `height` must be positive whole
-        numbers.
+        `flat`). `gridSize` is in range as a whole number from 10 to 500,
+        `feetPerSquare` as a whole number from 1 to 100. Only `name`,
+        `imageUrl`, `width` and `height` can make this route answer 400;
+        `width` and `height` must be whole numbers from 1 to 500.
       operationId: createMap
       security:
         - cookieAuth: []
@@ -5562,15 +5575,17 @@ paths:
                 width:
                   type: integer
                   minimum: 1
+                  maximum: 500
                   description: In grid squares.
                 height:
                   type: integer
                   minimum: 1
+                  maximum: 500
                   description: In grid squares.
                 gridSize:
                   type: integer
                   default: 50
-                  description: Pixels per grid square. Falls back to 50 when omitted or not a positive whole number.
+                  description: Pixels per grid square. Falls back to 50 when omitted or not a whole number from 10 to 500.
                 feetPerSquare:
                   type: integer
                   default: 5
@@ -5660,9 +5675,19 @@ paths:
       description: |
         Update map settings (DM only). Send only the fields to change. Each
         field sent is checked and a bad one answers 400; unlike on create,
-        nothing is replaced with a default. `feetPerSquare` must be an
-        integer from 1 to 100, `diagonalRule` `flat` or `alternating`, and
-        `width`, `height` and `gridSize` positive whole numbers.
+        nothing is replaced with a default. `width` and `height` must be
+        whole numbers from 1 to 500, `gridSize` from 10 to 500,
+        `feetPerSquare` from 1 to 100, and `diagonalRule` `flat` or
+        `alternating`. A `width`, `height`, `gridSize` or `feetPerSquare`
+        equal to the stored value is accepted as it is, so a map stored
+        larger than these limits, before they existed, still saves an edit
+        that sends its size back unchanged.
+
+        Turning `fogEnabled` or `explorationEnabled` on from off answers 400,
+        and changes nothing, when the map would have more than 250,000 grid
+        squares (500 by 500): fog and explored areas are stored one cell per
+        square. A request that also makes the map small enough is accepted.
+        A flag already on is left alone.
 
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
@@ -5715,12 +5740,15 @@ paths:
                 width:
                   type: integer
                   minimum: 1
+                  maximum: 500
                 height:
                   type: integer
                   minimum: 1
+                  maximum: 500
                 gridSize:
                   type: integer
-                  minimum: 1
+                  minimum: 10
+                  maximum: 500
                 feetPerSquare:
                   type: integer
                   minimum: 1
@@ -5858,9 +5886,19 @@ paths:
         controlled by that character's owner, while the owner is a player of
         this campaign, unless `controlledBy` says otherwise. A character
         owned by the DM or a spectator gives its token no controller.
-        `name` and `position` are required, and the position must be on the
-        map (`x` at least 0 and less than the map's width, `y` likewise with
-        its height; 400 otherwise). The server assigns the token's `id`.
+        `name` and `position` are required. The position is whole grid
+        squares and must be on the map (`x` at least 0 and less than the
+        map's width, `y` likewise with its height; 400 otherwise). A token
+        whose footprint (`size`) would then hang off the far edge is moved
+        back until it fits, and one larger than the map is put at its corner;
+        the reply's `token.position` is where it was placed. The server
+        assigns the token's `id`.
+
+        A map holds at most 1,000 tokens. Adding one to a full map answers
+        400 with `error: Limit Exceeded` and adds nothing; the count is taken
+        under the map's lock, so two adds at once cannot both take the last
+        place. A map stored with more, before the limit, keeps its tokens,
+        and they can still be moved, edited and removed.
 
         `imageUrl` takes an asset id or an asset's exact address
         (`/api/assets/<kind>/<id>`); a bare id is stored as
@@ -5950,6 +5988,10 @@ paths:
         `metadata` is merged into what the token already holds, and the
         merged object must stay within 8 KB. `characterId` cannot be changed
         here.
+
+        A `position` is whole grid squares, on the map (400 otherwise), and
+        is moved back from the far edge until the token's footprint fits, at
+        the `size` sent in the same request or else the token's own.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,
@@ -6191,7 +6233,9 @@ paths:
         id that is not on this map answers 404 (`Token not found on this map:
         <ids>`) and nothing changes, as does a `targetMapId` that is not a map
         of this campaign (`Target map not found in this campaign`).
-        `targetMapId` naming the source map itself answers 400. Whichever of
+        `targetMapId` naming the source map itself answers 400, and so does a
+        move that would leave the target map with more than 1,000 tokens
+        (`error: Limit Exceeded`), with nothing moved. Whichever of
         the two maps the campaign is showing is then sent again to every
         member as `map.changed`, as each may see it; the other stays the DM's
         until they switch. While anything is in the initiative order it is
@@ -6289,9 +6333,15 @@ paths:
       summary: Replace all wall segments
       description: |
         Replaces the map's entire wall list atomically. DM only. Every
-        segment needs a UUID `id`, and a map holds at most 5000; a
-        list over that, or any invalid segment, answers 400 and changes
-        nothing.
+        segment needs a UUID `id`, no two the same, and a map holds at most
+        5000; a list over that, one that repeats an id, or any invalid
+        segment, answers 400 and changes nothing.
+
+        Wall ends must lie within 250,000 pixels of the map's corner either
+        way, and no more than 500 of the map's grid squares outside its
+        edges; a segment past either answers 400 and changes nothing. A
+        segment already stored outside the second bound, before it existed,
+        is accepted when sent back unchanged.
 
         Each wall route tells connected clients of the change with the event
         the matching socket edit sends (`walls:replaced`, `wall:added`,
@@ -6342,9 +6392,10 @@ paths:
       summary: Add a wall segment
       description: |
         Append a single wall segment. The server assigns an `id` if the body
-        omits one, and keeps one it sent, which must be a UUID. A map holds
-        at most 5000 segments; adding to a full map answers 400 with
-        `error: Limit Exceeded`. DM only. Connected clients are sent
+        omits one, and keeps one it sent, which must be a UUID not already on
+        the map (400 otherwise). A map holds at most 5000 segments; adding to a full map answers 400 with
+        `error: Limit Exceeded`. Its ends are held to the bounds
+        `replaceWalls` describes. DM only. Connected clients are sent
         `wall:added` (see `replaceWalls`).
       operationId: addWall
       security:
@@ -6428,9 +6479,9 @@ paths:
       description: |
         Change the `type` of a single wall segment, most commonly to open or
         close a door. Only `type` is read; any other field in the body is
-        ignored, so the segment keeps its position. `door-locked` is refused
-        with 400 here, although `PUT` and `POST` on the wall list and the
-        DM's socket `wall:update` event accept it. DM only. Connected clients are
+        ignored, so the segment keeps its position. Any of the five wall
+        types is accepted, `door-locked` included, as on every other wall
+        path; anything else answers 400. DM only. Connected clients are
         sent `wall:updated` (see `replaceWalls`).
       operationId: updateWallType
       security:
@@ -6444,7 +6495,7 @@ paths:
               properties:
                 type:
                   type: string
-                  enum: [wall, door-closed, door-open, window]
+                  enum: [wall, door-closed, door-open, door-locked, window]
               required: [type]
             example:
               type: door-open
@@ -6504,9 +6555,16 @@ paths:
       description: |
         Replaces the map's entire light list atomically. Used when committing
         a large batch of changes or restoring saved lighting state. DM only.
-        Every light needs a UUID `id` and a `dimRadius` at least its
-        `brightRadius`, and a map holds at most 200; a list over that, or any
-        invalid light, answers 400 and changes nothing.
+        Every light needs a UUID `id`, no two the same, and a `dimRadius` at
+        least its `brightRadius`, and a map holds at most 200; a list over
+        that, one that repeats an id, or any invalid light, answers 400 and
+        changes nothing.
+
+        A light must lie within 250,000 pixels of the map's corner either
+        way, and no more than 500 of the map's grid squares outside its
+        edges; one past either answers 400. A light already stored outside
+        the second bound, before it existed, is accepted when sent back
+        unchanged.
 
         Each light route tells connected clients of the change with the event
         the matching socket edit sends (`lights:replaced`, `light:added`,
@@ -6557,8 +6615,10 @@ paths:
       summary: Add a light source
       description: >-
         Add a single light. The server assigns an `id` if the body omits
-        one, and keeps one it sent, which must be a UUID. `dimRadius` must be
-        at least `brightRadius`. A map holds at most 200 lights; adding to a
+        one, and keeps one it sent, which must be a UUID not already on the
+        map (400 otherwise). `dimRadius` must be
+        at least `brightRadius`, and the position is held to the bounds
+        `replaceLights` describes. A map holds at most 200 lights; adding to a
         full map answers 400 with `error: Limit Exceeded`. DM only. Connected
         clients are sent `light:added` (see `replaceLights`).
       operationId: addLight
@@ -6623,11 +6683,12 @@ paths:
         Send only the fields you want to change. Other fields, `id` included,
         are ignored, and a body with none of these six answers 400 (`At least
         one field must be provided`). `brightRadius` and `dimRadius` are each
-        checked against their own limits but not against each other, so a
-        patch can leave the light stored with a dim radius smaller than its
-        bright radius, which `PUT` and `POST` on the light list refuse. DM
-        only. Connected clients are sent `light:updated` (see
-        `replaceLights`).
+        checked against their own limits, and a patch that changes either is
+        checked against the light as it would be stored: one that would leave
+        the dim radius smaller than the bright one answers 400 (`dimRadius
+        must be >= brightRadius`) and changes nothing. A new position is held
+        to the bounds `replaceLights` describes. DM only. Connected clients
+        are sent `light:updated` (see `replaceLights`).
       operationId: updateLight
       security:
         - cookieAuth: []
@@ -6638,8 +6699,8 @@ paths:
             schema:
               type: object
               properties:
-                x: { type: number }
-                y: { type: number }
+                x: { type: number, minimum: -250000, maximum: 250000 }
+                y: { type: number, minimum: -250000, maximum: 250000 }
                 brightRadius: { type: number, minimum: 0, maximum: 100 }
                 dimRadius: { type: number, minimum: 0.5, maximum: 100 }
                 color:
@@ -6705,6 +6766,12 @@ paths:
         `gridSize`, answers a fresh, fully hidden grid. Players do not see the
         raw fog state; they receive the revealed cells over WebSocket
         (`fog:cells`) as the DM reveals areas. DM only.
+
+
+        A map with more than 250,000 grid squares (only one stored before
+        the 500-square size limit can have that many) is too large for fog:
+        it answers 409 with a message saying to make the map 500 by 500
+        squares or smaller.
       operationId: getFogState
       security:
         - cookieAuth: []
@@ -6722,6 +6789,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -6745,7 +6814,8 @@ paths:
         for the map the campaign is showing; for any other map, only the DM's
         connections are told. Refused with 409 (`Fog of war is off for this
         map`) while `fogEnabled` is off for the map, before the body is
-        checked. DM only.
+        checked, and with 409 and nothing stored for a map with more than
+        250,000 grid squares, which is too large for fog. DM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -6971,8 +7041,11 @@ paths:
                     characters) and `abilities` with all six scores as
                     integers. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
-                    up to 200 and descriptions up to 5000 characters. Unknown
-                    keys are kept.
+                    up to 200 and descriptions up to 5000 characters. Up to 20
+                    unknown keys are kept, and more answer 400. The whole
+                    stat block, as stored JSON, may be at most 64 KB
+                    (65,536 characters); a larger one answers 400 (`Stat
+                    block is too large`).
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -7109,8 +7182,11 @@ paths:
                     characters) and `abilities` with all six scores as
                     integers. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
-                    up to 200 and descriptions up to 5000 characters. Unknown
-                    keys are kept.
+                    up to 200 and descriptions up to 5000 characters. Up to 20
+                    unknown keys are kept, and more answer 400. The whole
+                    stat block, as stored JSON, may be at most 64 KB
+                    (65,536 characters); a larger one answers 400 (`Stat
+                    block is too large`).
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -7692,11 +7768,18 @@ paths:
       summary: Export campaign
       description: |
         Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
-        built in memory and sent whole, with no size limit of its own. It
+        sent as it is made, with no `Content-Length`; asset files are stored
+        in it uncompressed. Before anything is sent, the asset files' recorded
+        sizes, the JSON files and the ZIP's own overhead are added up, and an
+        archive over the `campaignExportSizeLimit` setting (500 MB, and never
+        more than the import accepts) is refused with 422. A failure after
+        the first bytes have been sent cuts the response off. It
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Only the API-wide rate limit applies.
+        without a picture. Each user may export 20 campaigns an hour
+        (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
+        previews, and run one archive operation at a time.
       operationId: exportCampaign
       security:
         - cookieAuth: []
@@ -7728,6 +7811,36 @@ paths:
                 format: binary
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The campaign does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The archive would be larger than the size setting. The message
+            gives its size and the limit, and says whether leaving out audio
+            would bring it under.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Export Too Large
+                message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
+        '429':
+          description: >-
+            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
         '500':
           description: The export failed
           content:
@@ -7745,12 +7858,16 @@ paths:
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
         anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it. The upload is one file in the `file` field, at most
+        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
         instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it).
+        has changed it), list no more than 1,000 files, and have a
+        `manifest.json` that unpacks to no more than 10 MB. The upload is
+        written to a temporary file, which is removed before the answer is
+        sent.
       operationId: previewCampaignImport
       security:
         - cookieAuth: []
@@ -7777,15 +7894,39 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), a file over 500 MB (`File Too
-            Large`), another upload problem such as a refused file type or a
-            malformed body (`Upload Error`), or an archive that cannot be read, is over the
-            size setting, or has a missing or invalid manifest (`Invalid
-            Archive`, with the reason in `message`).
+            No file (`Validation Error`), an upload problem such as a refused
+            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
+            is over the size setting, lists more than 1,000 files, or has a
+            missing, oversized or invalid manifest (`Invalid Archive`, with
+            the reason in `message`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: >-
+            The file is over 500 MB (`File Too Large`). A proxy in front of
+            the server may answer 413 for a smaller body, with a page of its
+            own; the bundled nginx allows this path and the import 512 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: The archive is larger than 500 MB, the most a campaign archive may be.
+        '429':
+          description: >-
+            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/campaigns/import:
     post:
@@ -7796,12 +7937,26 @@ paths:
         signed-in user may call it; they become the new campaign's owner and
         DM. The upload rules are those of the preview route, and the
         `campaignExportSizeLimit` setting bounds both the archive and the
-        total size of the files read out of it. Only the API-wide rate limit
-        applies.
+        total size of the files read out of it. Each user may import 20
+        campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
+        previews and exports, and run one archive operation at a time.
+
+        Every file in the archive is unpacked through a counter and stopped
+        as soon as it passes its limit. Each JSON file may unpack to 10 MB,
+        and a JSON file over that fails the import. Each asset may unpack to
+        the upload limit of its type (`MAX_<TYPE>_SIZE_MB`), and an asset over
+        that is skipped. Everything unpacked together past the size setting
+        fails the import.
+
+        Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
+        content, a format the upload route allows for its type, and is stored
+        under the detected MIME type and extension; its `originalName` is
+        kept unless that name's extension is not allowed for the type, when
+        the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Assets whose content does not match their declared type,
-        and maps, creatures or templates that fail validation, are skipped.
+        current map. Maps, creatures or templates that fail validation are
+        skipped.
         Imported tokens are linked to no character and controlled by no one.
 
         The import is not one transaction. A failure after the campaign has
@@ -7865,6 +8020,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: The file is over 500 MB (`File Too Large`), as on the preview route.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
+            20 by default), or already has a campaign export, import or
+            preview running. Each user may run one of the three at a time.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   # ============================================
   # ADMIN ENDPOINTS
@@ -9181,10 +9354,17 @@ paths:
         are, so a wall on the map's edge does not trigger it.
 
 
-        A file with more wall segments or lights than a map can hold (5000
-        segments, 200 lights), or with a light the map editor could not save,
-        is refused with **400**, because import used to write past the limits
-        every later edit enforces, leaving a map that could not be saved. A
+        A file with walls or lights more than 500 grid squares outside its
+        map is refused with **400** before anything is asked or saved, since
+        the map editor could not hold them. A file with more wall segments or
+        lights than a map can hold (5000 segments, doors counted with walls,
+        and 200 lights), or with a light the map editor could not save, is
+        refused with **400**, because import used to write past the limits
+        every later edit enforces, leaving a map that could not be saved. The
+        walls, doors and lights are counted as soon as the file is read, so a
+        file with millions of points is refused without any of them being built.
+        When the file would fit without its furniture walls, the message says
+        so. A
         light's `range` becomes its dim radius and half of it its bright
         radius, so a range over 100 squares, or under 0.5, answers 400. A
         file that is not JSON or lacks `resolution.map_size`, `image` or
@@ -9192,29 +9372,37 @@ paths:
 
 
         The embedded picture is checked by its bytes, not by what the file
-        claims: anything that is not one of the types a map upload accepts
-        (PNG, JPEG, WebP, PDF) is refused with 400, as is one over the
-        `MAX_MAP_SIZE_MB` limit. It is saved as a new campaign map asset
+        claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
+        drawn as a map) is refused with 400, as is one over the
+        `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
+        text before it is decoded. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
-        upload does.
+        upload does, and a user may run one import at a time: a second sent
+        while the first is still being read answers **429** with `Another
+        import is still running`. Imports sent one after another are never
+        held back.
 
 
         The map is named after `name`, or the file's name without its
-        extension when `name` is missing or blank. Its size in squares is the
-        file's `map_size`, rounded. Lighting is turned on only when the file
+        extension when `name` is missing or blank. A name is at most 200
+        characters, and sending the field more than once answers 400. Its size in squares is the
+        file's `map_size`, rounded, and must be from 1 to 500 on each side, as
+        for any map: a larger one, or one without a numeric `x` and `y`,
+        answers 400 before anything is asked or saved. Lighting is turned on only when the file
         brings lights of its own; fog of war, Global Illumination and
         exploration memory start off. Doors become `door-closed` or
         `door-open` segments, as the file says.
 
 
-        Some bad requests answer 500 with the generic `An unexpected error
-        occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
-        `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        a file sent under a field other than `file`, or a body that is cut off
-        or malformed or breaks the field limits of `POST /api/assets/upload`.
-        A `map_size` without a numeric `y` answers 500 (`Failed to import
-        UVTT file`) after the picture has already been saved as an asset.
+        A refused upload answers with its reason, as `POST /api/assets/upload`
+        does: **400** for a file whose name does not end in `.uvtt`, `.dd2vtt`
+        or `.df2vtt` (unless it is sent as `application/json`), a file sent
+        under a field other than `file`, more than one file, or a body that is
+        cut off or malformed or breaks the field limits; and **413** for a file
+        over the size limit, which is the map size limit plus a third for the
+        base64 text and 8 MB for the walls and lights (75 MB at the default
+        50 MB).
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9239,8 +9427,9 @@ paths:
                   default: 70
                   description: >-
                     Pixels per grid square on the new map, used to place the
-                    file's walls and lights. Anything other than a positive
-                    whole number, including a missing value, means 70.
+                    file's walls and lights. Anything other than a whole
+                    number from 10 to 500, including a missing value, means
+                    70.
                 confirm:
                   type: string
                   enum: ['true']
@@ -9318,6 +9507,17 @@ paths:
                 message: This file needs a decision before it can be imported.
                 outOfBounds: { walls: 79, doors: 20, lights: 0 }
                 objectWalls: 0
+        '413':
+          description: >-
+            The file is over the size limit (the map size limit plus a third
+            for the base64 text and 8 MB for the walls and lights).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -9331,8 +9531,13 @@ paths:
         other than letters, digits, spaces, `_` and `-` removed) holding the
         map's picture as base64, its size in squares, its walls and windows as
         `line_of_sight`, its doors as `portals` (a locked door is written as
-        closed), and its enabled lights, each with its dim radius as `range`.
-        Tokens, fog and the spirit layer are not included.
+        closed), its windows as open portals (a window does not block sight, so
+        it is not written as a wall), and every light, switched off ones
+        included, each with its dim radius as `range`, `intensity` 0 when it is
+        off, and two keys of CozyVTT's own, `bright_range` and `enabled`, which
+        other tools skip and a re-import reads back. Walls are joined into
+        polylines in time proportional to their number. Tokens, fog and the
+        spirit layer are not included.
 
 
         Answers 422 when the picture cannot be put in the file: the map's
@@ -9373,7 +9578,7 @@ paths:
                         description: The picture's width in pixels divided by the map's width in squares, rounded; the map's `gridSize` when the width cannot be read.
                   line_of_sight:
                     type: array
-                    description: Walls and windows in grid units, joined into polylines where their ends meet.
+                    description: Walls in grid units, joined into polylines where their ends meet.
                     items:
                       type: array
                       items:
@@ -10092,14 +10297,18 @@ components:
           description: Null for anyone but the DM unless the spirit layer is visible to them.
         width:
           type: integer
+          description: In grid squares, 1 to 500. A map stored before that limit may be larger.
         height:
           type: integer
+          description: In grid squares, 1 to 500. A map stored before that limit may be larger.
         gridSize:
           type: integer
           default: 50
+          description: Pixels per grid square, 10 to 500. A map stored before that limit may be outside it.
         feetPerSquare:
           type: integer
           default: 5
+          description: 1 to 100.
         diagonalRule:
           type: string
           enum: [flat, alternating]
@@ -10328,12 +10537,12 @@ components:
           required:
             - x
             - y
-          description: Grid square, within the map. Only x and y are stored.
+          description: Grid square, within the map, in whole squares. Only x and y are stored, moved back from the far edge until the token's footprint fits.
           properties:
             x:
-              type: number
+              type: integer
             y:
-              type: number
+              type: integer
         size:
           type: object
           required: [width, height]
@@ -10417,8 +10626,10 @@ components:
             0-99), `speed` (string, at most 200 characters) and `abilities` with
             all six scores as integers. Traits, actions, bonus actions,
             reactions and legendary actions hold at most 50 entries each, with
-            names up to 200 and descriptions up to 5000 characters. Unknown keys
-            are kept.
+            names up to 200 and descriptions up to 5000 characters. Up to 20
+            unknown keys are kept, and more answer 400. The whole stat block,
+            as stored JSON, may be at most 64 KB (65,536 characters); a larger
+            one answers 400 (`Stat block is too large`).
         creatureTemplateId:
           type: string
           format: uuid
@@ -10785,16 +10996,24 @@ components:
           format: uuid
         x1:
           type: number
-          description: Start X in map-space pixels (origin top-left)
+          minimum: -250000
+          maximum: 250000
+          description: Start X in map-space pixels (origin top-left). Each end is also held to 500 grid squares outside the map.
           example: 240
         y1:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 180
         x2:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 400
         y2:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 180
         type:
           type: string
@@ -10815,10 +11034,10 @@ components:
           type: string
           format: uuid
           description: Optional; kept when sent.
-        x1: { type: number }
-        y1: { type: number }
-        x2: { type: number }
-        y2: { type: number }
+        x1: { type: number, minimum: -250000, maximum: 250000 }
+        y1: { type: number, minimum: -250000, maximum: 250000 }
+        x2: { type: number, minimum: -250000, maximum: 250000 }
+        y2: { type: number, minimum: -250000, maximum: 250000 }
         type:
           type: string
           enum: [wall, door-closed, door-open, door-locked, window]
@@ -10833,10 +11052,14 @@ components:
           format: uuid
         x:
           type: number
-          description: X position in map-space pixels
+          minimum: -250000
+          maximum: 250000
+          description: X position in map-space pixels. Also held to 500 grid squares outside the map.
           example: 320
         y:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 240
         brightRadius:
           type: number
@@ -10868,8 +11091,8 @@ components:
           type: string
           format: uuid
           description: Optional; kept when sent.
-        x: { type: number }
-        y: { type: number }
+        x: { type: number, minimum: -250000, maximum: 250000 }
+        y: { type: number, minimum: -250000, maximum: 250000 }
         brightRadius: { type: number, minimum: 0, maximum: 100 }
         dimRadius:
           type: number

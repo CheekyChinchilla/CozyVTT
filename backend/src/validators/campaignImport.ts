@@ -9,6 +9,7 @@ import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, CoordinateSchema } from './maps';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -89,12 +90,14 @@ export const CampaignSettingsSchema = z.object({
 
 // ── Wall segment ────────────────────────────────────────────────────────────
 
+// Coordinates are bounded as on every other path (validators/maps.ts); the
+// importer also checks them against the map they are on.
 const WallSegmentSchema = z.object({
   id: z.string().max(100),
-  x1: z.number().finite(),
-  y1: z.number().finite(),
-  x2: z.number().finite(),
-  y2: z.number().finite(),
+  x1: CoordinateSchema,
+  y1: CoordinateSchema,
+  x2: CoordinateSchema,
+  y2: CoordinateSchema,
   type: z.string().max(50),
 }).strip();
 
@@ -102,8 +105,8 @@ const WallSegmentSchema = z.object({
 
 const LightSourceSchema = z.object({
   id: z.string().max(100),
-  x: z.number().finite(),
-  y: z.number().finite(),
+  x: CoordinateSchema,
+  y: CoordinateSchema,
   brightRadius: z.number().min(0).max(200),
   dimRadius: z.number().min(0).max(200),
   color: z.string().max(20),
@@ -155,10 +158,11 @@ export const MapDataSchema = z.object({
   name: z.string().min(1).max(200),
   imageAssetRef: z.string().max(200).nullable().optional(),
   spiritLayerAssetRef: z.string().max(200).nullable().optional(),
-  width: z.number().int().min(1).max(500),
-  height: z.number().int().min(1).max(500),
-  gridSize: z.number().int().min(10).max(200),
-  feetPerSquare: z.number().int().min(1).max(100),
+  // The limits every other path that stores a map applies (validators/maps.ts)
+  width: MapSideSchema('Map width'),
+  height: MapSideSchema('Map height'),
+  gridSize: GridSizeSchema,
+  feetPerSquare: FeetPerSquareSchema,
   diagonalRule: z.enum(['flat', 'alternating']).optional(),
   tokens: z.array(TokenSchema).max(IMPORT_LIMITS.MAX_TOKENS_PER_MAP),
   annotations: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
@@ -209,14 +213,25 @@ export const TokenTemplateImportSchema = z.object({
 
 // ── Asset manifest ──────────────────────────────────────────────────────────
 
+/**
+ * The asset types an export writes, and so the only ones an import takes. A
+ * campaign's documents, and anyone's avatar, are not part of a campaign
+ * archive.
+ */
+export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
+
+// The declared MIME type is kept for the log only: the stored type and file
+// extension come from the file's own bytes, as on upload.
 const AssetEntrySchema = z.object({
   originalName: z.string().max(500),
   mimeType: z.string().max(100),
-  type: z.string().max(20), // MAP, TOKEN, AUDIO
+  type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
 }).strip();
 
-export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchema)
+// An entry that is not one (another asset type, say) becomes null and is left
+// out of the import, as an asset whose content does not match is.
+export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchema.nullable().catch(null))
   .refine(
     (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_ASSETS,
     { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_ASSETS} assets` }

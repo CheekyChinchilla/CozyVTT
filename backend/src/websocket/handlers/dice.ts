@@ -7,19 +7,20 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import logger from '../../utils/logger';
-import { diceRollLimiter } from '../shared';
+import { withinCeiling } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
 import { campaignSockets } from '../utils';
+import { DiceRollSchema } from '../../validators/dice';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * DICE.ROLL - User rolls dice
    * Validates expression, calculates result, saves to database, and broadcasts.
-   * Rate limited to 30 rolls per minute per user.
+   * Under the per-user dice ceiling (SOCKET_CEILINGS).
    * SECURITY: Uses server-authenticated socket.campaignId only.
    */
-  socket.on('dice.roll', async (data: { expression: string; characterName?: string; purpose?: string; secret?: boolean }) => {
+  socket.on('dice.roll', async (data: unknown) => {
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
@@ -32,19 +33,16 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const { expression, characterName, purpose, secret } = data;
-
-      // Validate expression is provided
-      if (!expression || typeof expression !== 'string') {
-        socket.emit('error', { message: 'Dice expression required' });
+      // The labels are stored with the roll and sent to every member, so
+      // they are bounded here (validators/dice.ts).
+      const parsed = DiceRollSchema.safeParse(data);
+      if (!parsed.success) {
+        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Dice expression required' });
         return;
       }
+      const { expression, characterName, purpose, secret } = parsed.data;
 
-      // Rate limiting: 30 rolls per minute per user
-      if (!diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
-        socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
-        return;
-      }
+      if (!withinCeiling(socket, 'dice.roll')) return;
 
       // Validate expression syntax (without rolling)
       try {
@@ -161,6 +159,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+      if (!withinCeiling(socket, 'dice.clearHistory')) return;
 
       // Who is running the game, not who owns the campaign. These are separate
       // facts — `Campaign.ownerId` never moves, while the DM seat can — and they

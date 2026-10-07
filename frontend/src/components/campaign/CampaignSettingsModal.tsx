@@ -214,17 +214,13 @@ export default function CampaignSettingsModal({
   const handleExport = async () => {
     setExporting(true);
     try {
-      const blob = await api.exportCampaign(campaign.id, { includeAudio: exportIncludeAudio });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const safeName = campaign.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
-      a.download = `${safeName}-export.cozyvtt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Campaign exported successfully', 'success');
+      const outcome = await api.downloadCampaignExport(
+        campaign.id,
+        { includeAudio: exportIncludeAudio },
+        `${safeName}-export.cozyvtt`
+      );
+      if (outcome === 'saved') showToast('Campaign exported successfully', 'success');
     } catch (err) {
       showToast(apiErrorMessage(err) ?? 'Failed to export campaign', 'error');
     } finally {

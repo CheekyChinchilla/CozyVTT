@@ -536,21 +536,21 @@ Copy a token template to another campaign. Requires DM role in both the source a
 
 ### `GET /api/campaigns/:campaignId/export`
 
-Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Rate limited to 1 per 5 minutes per user.
+Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
 
 **Query params:**
 - `includeAudio` — `true` to include audio assets (default: `false`)
 - `includeTokens` — `false` to exclude tokens on maps (default: `true`)
 
-**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`.
+**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`, sent as it is made (no `Content-Length`). A campaign whose files would make an archive over 500 MB, the most an import accepts, answers `422` with `error: "Export Too Large"` and a `message` giving the size.
 
 ---
 
 ### `POST /api/campaigns/import/preview`
 
-Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication.
+Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
 
-**Request:** `multipart/form-data` with field `file` containing the archive.
+**Request:** `multipart/form-data` with field `file` containing the archive, at most 500 MB; a larger one answers `413`. The bundled nginx gives this route and the import 512 MB, apart from `NGINX_MAX_BODY_SIZE`, and five minutes to answer.
 
 **Response:**
 ```json
@@ -576,7 +576,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
 
 ### `POST /api/campaigns/import`
 
-Import a `.cozyvtt` archive and create a new campaign. Requires authentication. Rate limited to 1 per 5 minutes per user.
+Import a `.cozyvtt` archive and create a new campaign. Requires authentication; any signed-in user may import, and becomes the new campaign's DM. Each user may import 20 campaigns an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with fields:
 - `file` — the `.cozyvtt` archive (required)
@@ -685,9 +685,14 @@ Create a new map (DM only).
 ```json
 {
   "name": "Goblin Cave Level 1",
-  "assetId": "cuid-of-map-asset"
+  "imageUrl": "uuid-of-map-asset",
+  "width": 30,
+  "height": 20,
+  "gridSize": 70
 }
 ```
+
+`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default.
 
 ---
 
@@ -1474,26 +1479,32 @@ when it sees it.
 
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
-| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
+| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
 | General API | 300 requests | 1 minute | Every request |
-| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
-| Token movement (WebSocket) | 60 events | 1 second | Every event |
+| Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
+| Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
+| Token drag frames (WebSocket) | 150 events | 1 second | Every event |
+| Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |
 
-The **Counts** column matters. Where only failures count, signing in correctly
-never uses up the allowance — otherwise a household sharing one address could
-lock itself out by logging in normally. Where every request counts, the success
+The **Counts** column matters. Where only wrong answers count, signing in
+correctly never uses up the allowance, and neither does being refused: a
+household sharing one address could otherwise lock itself out by logging in
+normally. Correct sign-ins arriving together from one address all succeed. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
-Chat messages are not on this list because they are limited per campaign rather
-than globally: a DM can switch on a cooldown of between 1 and 300 seconds
-between messages, and it is **off by default**.
+On top of the chat limit, a DM can switch on a cooldown of between 1 and 300
+seconds between messages for their campaign; it is **off by default**. The
+WebSocket limits are counted per user, across every connection they have open,
+and are set well above what a busy table sends. The other live table events have
+limits of their own, listed in the WebSocket guide.
 
-The upload and general-API limits are configurable with the
-`ASSET_UPLOAD_RATE_LIMIT` and `RATE_LIMIT_MAX_REQUESTS` environment variables;
-the rest are fixed.
+The upload, campaign-archive and general-API limits are configurable with the
+`ASSET_UPLOAD_RATE_LIMIT`, `CAMPAIGN_ARCHIVE_RATE_LIMIT` and
+`RATE_LIMIT_MAX_REQUESTS` environment variables; the rest are fixed.
 
 Rate limit responses return HTTP `429` with a `Retry-After` header indicating when the limit resets.

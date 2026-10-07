@@ -6,7 +6,8 @@
  * opened more sockets got another 40 door toggles a second with each one.
  * `token.move.start` had no ceiling at all and read the whole map before any
  * of its refusals, and a spectator's `initiative.roll` read the whole map
- * before being refused, uncounted.
+ * before being refused, uncounted. (The ceilings on the events a member sends
+ * by hand are in socketCeilings.integration.test.ts.)
  *
  * Each flood here is of requests that fail validation, which the ceiling is
  * checked ahead of: every one that gets past the ceiling is answered with an
@@ -140,19 +141,21 @@ describe.each([
 });
 
 describe('token.move.start', () => {
-  it('drops starts over the ceiling silently', async () => {
+  it('stops at its own ceiling, and says so once', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
-    expect(await errorsFrom(player, 'token.move.start', { mapId }, 160)).toBe(150);
+    // 30 get far enough to be refused for the missing token; one notice
+    // answers the ten past the ceiling.
+    expect(await errorsFrom(player, 'token.move.start', { mapId }, 40)).toBe(31);
 
     player.disconnect();
   });
 
-  it("shares the user's move budget across sockets, and reads nothing once it is spent", async () => {
+  it("is one budget across the user's sockets, and reads nothing once it is spent", async () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const first = await server.connectAndAuth(playerCookie, campaignId);
     const second = await server.connectAndAuth(playerCookie, campaignId);
-    expect(await errorsFrom(first, 'token.move.end', { tokenId: PAWN, mapId }, 150, { expected: 150 })).toBe(150);
+    expect(await errorsFrom(first, 'token.move.start', { mapId }, 30, { expected: 30 })).toBe(30);
     const reads = jest.spyOn(prisma.map, 'findUnique');
 
     const quiet = expectNoEvent(dm, 'token.move.start', 500);

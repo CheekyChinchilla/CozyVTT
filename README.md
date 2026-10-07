@@ -96,7 +96,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Password reset** via email (SMTP configurable)
 - **Admin-approval registration** (optional)
 - **File upload validation** — magic-byte content checks (not just MIME header), size limits by type; text uploads must genuinely be text, and documents are served as plain text or PDF, never as a web page
-- **Per-endpoint rate limiting** — global API limit, strict auth limit, asset upload limit (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
+- **Per-endpoint rate limiting** — global API limit, strict auth limit, asset upload limit (configurable via `ASSET_UPLOAD_RATE_LIMIT`), and per-account limits on everything sent to the live table, set far above what a game sends
 - **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
 - **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs

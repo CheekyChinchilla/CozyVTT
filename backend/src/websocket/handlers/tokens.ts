@@ -11,9 +11,9 @@ import { canActOnTokenPlane, getSpiritVisibilityBatch, filterTokensByRole, filte
 import type { Map as MapRow } from '@prisma/client';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { Token, tokenMoveLimiter, limiterKey } from '../shared';
+import { Token, tokenMoveLimiter, limiterKey, withinCeiling } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
-import { withMapsLocked } from '../../utils/mapTokens';
+import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets, stillInCampaign } from '../utils';
 
@@ -176,12 +176,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Flood ceiling: drop excess starts silently. A start reads the whole
-      // map before any of its refusals, and a drag sends one, so it shares
-      // the per-user budget of token.move and token.move.end.
-      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
-        return;
-      }
+      // Flood ceiling, before any work: a start reads the whole map before
+      // any of its refusals, and on a lit map decides line of sight for the
+      // drag. A drag sends one, so it has a budget of its own, apart from
+      // the frames.
+      if (!withinCeiling(socket, 'token.move.start')) return;
 
       const { tokenId, mapId } = data;
 
@@ -257,7 +256,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Flood ceiling: drop excess frames silently — the 16ms throttle
-      // already paces legitimate drags well under this limit.
+      // already paces legitimate drags well under this limit. Frames have
+      // this budget to themselves; the start and the drop have their own.
       if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
         return;
       }
@@ -341,15 +341,17 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Flood ceiling: drop excess finalize writes silently. Shares the
-      // per-user budget with token.move; a normal drag stays far under it.
-      if (!tokenMoveLimiter.check(limiterKey(socket), 150, 1000)) {
-        return;
-      }
+      // Flood ceiling, before any work: each drop is a write under the
+      // map's lock and, on a lit map, line of sight for every player. A drag
+      // ends with one, so the drops have a budget of their own; the frames
+      // keep theirs.
+      if (!withinCeiling(socket, 'token.move.end')) return;
 
-      const { tokenId, mapId, x, y } = data;
+      const { tokenId, mapId, x: dropX, y: dropY } = data;
 
-      if (!tokenId || !mapId || typeof x !== 'number' || typeof y !== 'number') {
+      // Whole squares, as the client always sends: other clients draw a
+      // fraction half a square from where sight and stored position count it.
+      if (!tokenId || !mapId || !Number.isInteger(dropX) || !Number.isInteger(dropY)) {
         socket.emit('error', { message: 'Invalid token move data' });
         return;
       }
@@ -368,7 +370,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Validate coordinates are within map bounds
-      if (x < 0 || x >= map.width || y < 0 || y >= map.height) {
+      if (dropX < 0 || dropX >= map.width || dropY < 0 || dropY >= map.height) {
         socket.emit('error', { message: 'Token position out of bounds' });
         return;
       }
@@ -383,6 +385,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       const token = tokensArray[tokenIndex];
+      // The whole footprint on the map, the rule the client applies before
+      // it sends a drop; everyone, the mover included, is told where it went.
+      const { x, y } = clampTokenPosition({ x: dropX, y: dropY }, token.size ?? { width: 1, height: 1 }, map);
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
       const sawTheDrag = dragRecipients.get(tokenId)?.deciding;
