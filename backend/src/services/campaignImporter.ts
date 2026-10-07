@@ -28,6 +28,7 @@ import {
   IMPORT_LIMITS,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
+import { wallOutsideMap, lightOutsideMap } from '../validators/maps';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { isSafeArchivePath } from '../utils/archive';
@@ -338,6 +339,12 @@ export async function importCampaign(
       continue;
     }
     const mapData: MapData = mapParsed.data;
+    // Walls and lights held to the bounds the map editor applies, so an
+    // archive cannot store geometry the editor would refuse.
+    if (wallOutsideMap(mapData.wallSegments ?? [], mapData) || lightOutsideMap(mapData.lights ?? [], mapData)) {
+      logger.warn('Skipping map with walls or lights outside it', { index: i });
+      continue;
+    }
 
     const imageUrl = remapAsset(mapData.imageAssetRef) || '';
     const spiritLayerUrl = remapAsset(mapData.spiritLayerAssetRef);

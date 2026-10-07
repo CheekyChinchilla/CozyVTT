@@ -6199,6 +6199,12 @@ paths:
         list over that, or any invalid segment, answers 400 and changes
         nothing.
 
+        Wall ends must lie within 250,000 pixels of the map's corner either
+        way, and no more than 500 of the map's grid squares outside its
+        edges; a segment past either answers 400 and changes nothing. A
+        segment already stored outside the second bound, before it existed,
+        is accepted when sent back unchanged.
+
         Each wall route tells connected clients of the change with the event
         the matching socket edit sends (`walls:replaced`, `wall:added`,
         `wall:updated`, `wall:removed`): to every member for the map the
@@ -6250,7 +6256,8 @@ paths:
         Append a single wall segment. The server assigns an `id` if the body
         omits one, and keeps one it sent, which must be a UUID. A map holds
         at most 5000 segments; adding to a full map answers 400 with
-        `error: Limit Exceeded`. DM only. Connected clients are sent
+        `error: Limit Exceeded`. Its ends are held to the bounds
+        `replaceWalls` describes. DM only. Connected clients are sent
         `wall:added` (see `replaceWalls`).
       operationId: addWall
       security:
@@ -6414,6 +6421,12 @@ paths:
         `brightRadius`, and a map holds at most 200; a list over that, or any
         invalid light, answers 400 and changes nothing.
 
+        A light must lie within 250,000 pixels of the map's corner either
+        way, and no more than 500 of the map's grid squares outside its
+        edges; one past either answers 400. A light already stored outside
+        the second bound, before it existed, is accepted when sent back
+        unchanged.
+
         Each light route tells connected clients of the change with the event
         the matching socket edit sends (`lights:replaced`, `light:added`,
         `light:updated`, `light:removed`): to every member for the map the
@@ -6464,7 +6477,8 @@ paths:
       description: >-
         Add a single light. The server assigns an `id` if the body omits
         one, and keeps one it sent, which must be a UUID. `dimRadius` must be
-        at least `brightRadius`. A map holds at most 200 lights; adding to a
+        at least `brightRadius`, and the position is held to the bounds
+        `replaceLights` describes. A map holds at most 200 lights; adding to a
         full map answers 400 with `error: Limit Exceeded`. DM only. Connected
         clients are sent `light:added` (see `replaceLights`).
       operationId: addLight
@@ -6531,7 +6545,8 @@ paths:
         one field must be provided`). `brightRadius` and `dimRadius` are each
         checked against their own limits but not against each other, so a
         patch can leave the light stored with a dim radius smaller than its
-        bright radius, which `PUT` and `POST` on the light list refuse. DM
+        bright radius, which `PUT` and `POST` on the light list refuse. A
+        new position is held to the bounds `replaceLights` describes. DM
         only. Connected clients are sent `light:updated` (see
         `replaceLights`).
       operationId: updateLight
@@ -6544,8 +6559,8 @@ paths:
             schema:
               type: object
               properties:
-                x: { type: number }
-                y: { type: number }
+                x: { type: number, minimum: -250000, maximum: 250000 }
+                y: { type: number, minimum: -250000, maximum: 250000 }
                 brightRadius: { type: number, minimum: 0, maximum: 100 }
                 dimRadius: { type: number, minimum: 0.5, maximum: 100 }
                 color:
@@ -9094,9 +9109,11 @@ paths:
         are, so a wall on the map's edge does not trigger it.
 
 
-        A file with more wall segments or lights than a map can hold (5000
-        segments, 200 lights), or with a light the map editor could not save,
-        is refused with **400**, because import used to write past the limits
+        A file with walls or lights more than 500 grid squares outside its
+        map is refused with **400** before anything is asked or saved, since
+        the map editor could not hold them. A file with more wall segments or
+        lights than a map can hold (5000 segments, 200 lights), or with a
+        light the map editor could not save, is refused with **400**, because import used to write past the limits
         every later edit enforces, leaving a map that could not be saved. A
         light's `range` becomes its dim radius and half of it its bright
         radius, so a range over 100 squares, or under 0.5, answers 400. A
@@ -10702,16 +10719,24 @@ components:
           format: uuid
         x1:
           type: number
-          description: Start X in map-space pixels (origin top-left)
+          minimum: -250000
+          maximum: 250000
+          description: Start X in map-space pixels (origin top-left). Each end is also held to 500 grid squares outside the map.
           example: 240
         y1:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 180
         x2:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 400
         y2:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 180
         type:
           type: string
@@ -10732,10 +10757,10 @@ components:
           type: string
           format: uuid
           description: Optional; kept when sent.
-        x1: { type: number }
-        y1: { type: number }
-        x2: { type: number }
-        y2: { type: number }
+        x1: { type: number, minimum: -250000, maximum: 250000 }
+        y1: { type: number, minimum: -250000, maximum: 250000 }
+        x2: { type: number, minimum: -250000, maximum: 250000 }
+        y2: { type: number, minimum: -250000, maximum: 250000 }
         type:
           type: string
           enum: [wall, door-closed, door-open, door-locked, window]
@@ -10750,10 +10775,14 @@ components:
           format: uuid
         x:
           type: number
-          description: X position in map-space pixels
+          minimum: -250000
+          maximum: 250000
+          description: X position in map-space pixels. Also held to 500 grid squares outside the map.
           example: 320
         y:
           type: number
+          minimum: -250000
+          maximum: 250000
           example: 240
         brightRadius:
           type: number
@@ -10785,8 +10814,8 @@ components:
           type: string
           format: uuid
           description: Optional; kept when sent.
-        x: { type: number }
-        y: { type: number }
+        x: { type: number, minimum: -250000, maximum: 250000 }
+        y: { type: number, minimum: -250000, maximum: 250000 }
         brightRadius: { type: number, minimum: 0, maximum: 100 }
         dimRadius:
           type: number

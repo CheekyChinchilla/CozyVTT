@@ -871,6 +871,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Door (Locked) | Red | Yes | DM must unlock |
 | Window | Blue | No | Transparent to light |
 
+Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
+
 ### Polygon Drawing Mode
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:

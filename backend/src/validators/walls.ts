@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { CoordinateSchema } from './maps';
 
 export const WallSegmentSchema = z.object({
   id: z.string().uuid(),
-  x1: z.number(),
-  y1: z.number(),
-  x2: z.number(),
-  y2: z.number(),
+  // Bounded (validators/maps.ts); where on the map is the route's check.
+  x1: CoordinateSchema,
+  y1: CoordinateSchema,
+  x2: CoordinateSchema,
+  y2: CoordinateSchema,
   type: z.enum(['wall', 'door-closed', 'door-open', 'door-locked', 'window']),
 });
 
@@ -18,8 +20,8 @@ export const WallSegmentsArraySchema = z
 /** Base shape for a light source (without cross-field refinement). */
 const LightSourceBaseShape = z.object({
   id: z.string().uuid(),
-  x: z.number().finite(),
-  y: z.number().finite(),
+  x: CoordinateSchema,
+  y: CoordinateSchema,
   brightRadius: z.number().min(0).max(100),
   dimRadius: z.number().min(0.5).max(100),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -48,8 +50,8 @@ export const LightSourcesArraySchema = z
 
 /** Partial schema for PATCH updates — all fields optional except id. */
 export const LightSourceUpdateSchema = z.object({
-  x: z.number().finite().optional(),
-  y: z.number().finite().optional(),
+  x: CoordinateSchema.optional(),
+  y: CoordinateSchema.optional(),
   brightRadius: z.number().min(0).max(100).optional(),
   dimRadius: z.number().min(0.5).max(100).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),

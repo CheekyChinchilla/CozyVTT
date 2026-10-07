@@ -9,7 +9,7 @@ import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema } from './maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, CoordinateSchema } from './maps';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -90,12 +90,14 @@ export const CampaignSettingsSchema = z.object({
 
 // ── Wall segment ────────────────────────────────────────────────────────────
 
+// Coordinates are bounded as on every other path (validators/maps.ts); the
+// importer also checks them against the map they are on.
 const WallSegmentSchema = z.object({
   id: z.string().max(100),
-  x1: z.number().finite(),
-  y1: z.number().finite(),
-  x2: z.number().finite(),
-  y2: z.number().finite(),
+  x1: CoordinateSchema,
+  y1: CoordinateSchema,
+  x2: CoordinateSchema,
+  y2: CoordinateSchema,
   type: z.string().max(50),
 }).strip();
 
@@ -103,8 +105,8 @@ const WallSegmentSchema = z.object({
 
 const LightSourceSchema = z.object({
   id: z.string().max(100),
-  x: z.number().finite(),
-  y: z.number().finite(),
+  x: CoordinateSchema,
+  y: CoordinateSchema,
   brightRadius: z.number().min(0).max(200),
   dimRadius: z.number().min(0).max(200),
   color: z.string().max(20),

@@ -61,3 +61,79 @@ export function dimensionProblem(schema: z.ZodType, value: unknown): string | nu
   const parsed = schema.safeParse(value);
   return parsed.success ? null : (parsed.error.issues[0]?.message ?? 'Invalid map size');
 }
+
+// ── Where walls and lights may be ───────────────────────────────────────────
+
+/**
+ * The furthest any wall end or light may be from the map's corner, in
+ * pixels, either way: the far side of the largest map at the largest grid
+ * size (500 squares of 500 pixels).
+ *
+ * Coordinates had no bound at all. Sight on a map with more than 200 walls
+ * walks a grid over every wall's extent, so one wall reaching ten million
+ * pixels froze the server for every table.
+ */
+export const MAX_COORDINATE = MAP_LIMITS.maxSide * MAP_LIMITS.maxGridSize;
+
+const COORDINATE_MESSAGE = `Coordinates must be within ${MAX_COORDINATE.toLocaleString('en-US')} pixels of the map's corner`;
+/** A wall end's or a light's x or y, in map pixels. */
+export const CoordinateSchema = z
+  .number()
+  .finite()
+  .min(-MAX_COORDINATE, COORDINATE_MESSAGE)
+  .max(MAX_COORDINATE, COORDINATE_MESSAGE);
+
+/**
+ * How far outside a map its walls and lights may reach, in its own grid
+ * squares: as far as the largest map is wide. Generous on purpose. A
+ * Universal VTT export can carry walls well past its picture, and a DM can
+ * draw past the edge; this only refuses geometry nowhere near the map.
+ */
+export const GEOMETRY_MARGIN_SQUARES = MAP_LIMITS.maxSide;
+
+export const WALL_OUTSIDE_MAP_MESSAGE =
+  `A wall reaches too far outside the map. Walls can extend up to ${GEOMETRY_MARGIN_SQUARES} squares past its edges.`;
+export const LIGHT_OUTSIDE_MAP_MESSAGE =
+  `A light is too far outside the map. Lights can be placed up to ${GEOMETRY_MARGIN_SQUARES} squares past its edges.`;
+
+export interface MapExtent { width: number; height: number; gridSize: number }
+interface WallLike { id: string; x1: number; y1: number; x2: number; y2: number }
+interface LightLike { id: string; x: number; y: number }
+
+/** The box, in map pixels, that a map's walls and lights must lie in. */
+export function geometryRegion(map: MapExtent): { minX: number; minY: number; maxX: number; maxY: number } {
+  const margin = GEOMETRY_MARGIN_SQUARES * map.gridSize;
+  return {
+    minX: Math.max(-MAX_COORDINATE, -margin),
+    minY: Math.max(-MAX_COORDINATE, -margin),
+    maxX: Math.min(MAX_COORDINATE, map.width * map.gridSize + margin),
+    maxY: Math.min(MAX_COORDINATE, map.height * map.gridSize + margin),
+  };
+}
+
+function pointInRegion(x: number, y: number, r: ReturnType<typeof geometryRegion>): boolean {
+  return x >= r.minX && x <= r.maxX && y >= r.minY && y <= r.maxY;
+}
+
+const wallKey = (w: WallLike) => `${w.id}|${w.x1}|${w.y1}|${w.x2}|${w.y2}`;
+const lightKey = (l: LightLike) => `${l.id}|${l.x}|${l.y}`;
+
+/**
+ * The first wall that lies outside the map's region, or undefined. A wall
+ * that is already stored, unchanged, is let through: one put there before
+ * this bound existed must not stop the DM saving the rest of the list.
+ */
+export function wallOutsideMap(walls: WallLike[], map: MapExtent, stored: unknown = []): WallLike | undefined {
+  const region = geometryRegion(map);
+  const kept = new Set((Array.isArray(stored) ? (stored as WallLike[]) : []).map(wallKey));
+  return walls.find((w) =>
+    !(pointInRegion(w.x1, w.y1, region) && pointInRegion(w.x2, w.y2, region)) && !kept.has(wallKey(w))
+  );
+}
+
+/** The first light outside the map's region, or undefined; as wallOutsideMap. */
+export function lightOutsideMap(lights: LightLike[], map: MapExtent, stored: unknown = []): LightLike | undefined {
+  const region = geometryRegion(map);
+  const kept = new Set((Array.isArray(stored) ? (stored as LightLike[]) : []).map(lightKey));
+  return lights.find((l) => !pointInRegion(l.x, l.y, region) && !kept.has(lightKey(l)));
+}

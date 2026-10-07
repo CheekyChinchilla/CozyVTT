@@ -33,7 +33,7 @@ import { sendInitiativeState, resendInitiative } from '../websocket/handlers/ini
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES } from '../validators/maps';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -314,6 +314,18 @@ router.post(
           message: Number.isFinite(parsed.mapWidth) && Number.isFinite(parsed.mapHeight)
             ? `This file's map is ${parsed.mapWidth} by ${parsed.mapHeight} squares. ${limit}`
             : `This file does not say how many squares its map is (resolution.map_size). ${limit}`,
+        });
+      }
+      // Geometry outside the picture is kept, once the DM agrees below, but
+      // not so far out that the map editor would refuse it. Refused before
+      // asking, since no answer would make it importable.
+      const extent = { width: parsed.mapWidth, height: parsed.mapHeight, gridSize: gridSizePx };
+      if (wallOutsideMap(parsed.wallSegments, extent) || lightOutsideMap(parsed.lightSources, extent)) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message:
+            `This file has walls or lights more than ${GEOMETRY_MARGIN_SQUARES} squares outside its map, ` +
+            'which a map cannot hold. Export it again from the tool that made it, covering the whole map.',
         });
       }
 
@@ -1670,6 +1682,9 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segments' });
     }
+    if (wallOutsideMap(parsed.data, map, map.wallSegments)) {
+      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
+    }
 
     const updated = await prisma.map.update({
       where: { id },
@@ -1701,6 +1716,9 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     const parsed = WallSegmentSchema.safeParse(segmentData);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segment' });
+    }
+    if (wallOutsideMap([parsed.data], map)) {
+      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
     }
 
     const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
@@ -1820,6 +1838,9 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid lights array' });
     }
+    if (lightOutsideMap(parsed.data, map, map.lights)) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
+    }
 
     const updated = await prisma.map.update({
       where: { id },
@@ -1850,6 +1871,9 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     const parsed = LightSourceSchema.safeParse(lightData);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid light source' });
+    }
+    if (lightOutsideMap([parsed.data], map)) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
     }
 
     const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
@@ -1893,7 +1917,11 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
       return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
     }
 
-    existing[idx] = { ...existing[idx], ...parsed.data };
+    const merged = { ...existing[idx], ...parsed.data };
+    if (lightOutsideMap([merged], map, [existing[idx]])) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
+    }
+    existing[idx] = merged;
     await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
