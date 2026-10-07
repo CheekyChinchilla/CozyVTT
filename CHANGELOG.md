@@ -54,6 +54,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.** When the character was updated elsewhere during your edit, at the table for example, the colour saved there replaced the one you had just picked in the editor.
 
+- **Players can no longer see through a wall that shares another wall's id.** On a map with more than 200 walls, a second wall or door given the same id as another was ignored when working out what players could see, so they saw, and were sent tokens, through it. The map editor never does this, but a script or another client could. Both walls now block sight, and saving a wall or light list with a repeated id, or adding one whose id is already on the map, is refused.
+
+- **Editing one light can no longer leave its dim radius smaller than its bright radius.** Changing only one of the two radii skipped the check that they make sense together, and the light was then saved in a state that made every later save of the map's lights fail. The change is now refused with a message.
+
+- **A single wall can be set to a locked door.** Changing one wall's type refused the locked-door type, which drawing walls, saving the wall list and the DM's live wall editing all accept.
+
+- **Tokens always stand on whole squares, with all of them on the map.** The server took a token placed between squares, or one hanging mostly off the edge of the map, from a script or another client, and other players then saw it out of line with the grid. A position between squares is now refused, and a token too big for where it is put is moved back until it fits on the map, as dragging one already does. Placing a large creature from the Creature Library or a template on a small map now lands it fully on the map.
+
 ### Security
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
@@ -71,6 +79,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **A specially crafted hit dice entry on a character sheet could freeze the browser of anyone who opened the sheet.** Hit dice are now read safely, and every existing sheet shows them as before.
 
 - **Restoring a specially crafted backup from the Admin Dashboard could make the server stop responding.** Every line of a backup is now read safely, and backups CozyVTT made restore exactly as before.
+
+- **A very large map can no longer take the whole server down.** Any signed-in user can create a campaign of their own, and the server accepted a map of any size, so a map tens of thousands of squares wide with fog of war on made the server run out of memory and stop for every table. Maps now have the limits Create Map and Edit Map already offered: 1 to 500 squares on each side, a grid size of 10 to 500 pixels, and 1 to 100 feet per square. The same limits apply to Universal VTT and campaign imports, so a campaign archive holding a map with a grid size between 201 and 500, which the app allows, now imports instead of losing that map. A map made before this release that is larger still opens and still saves edits that leave its size alone, but fog of war and explored areas cannot be turned on for it, and one that already had fog on shows no fog. The message says to make the map 500 by 500 squares or smaller.
+
+- **One map can no longer be grown until the server stalls.** A map's tokens are stored together and read in full every time any token on the map is moved, dragged or changed, and nothing limited how many tokens a map could hold or how much a token's stat block could carry, so anyone able to create a campaign could make one map hundreds of megabytes and slow the server for every table. A map now holds up to 1,000 tokens, and a stat block up to 64 KB, about ten times the largest creature in the SRD. Adding a token past the limit, or moving tokens onto a map that would go past it, is refused with a message. A map that already has more keeps all of them, and they can still be moved, edited and removed.
+
+- **A wall placed absurdly far away can no longer freeze the server.** Wall and light positions had no limit, and working out what players can see on a map with more than 200 walls walked over every part of the map a wall's ends spanned, so one wall reaching millions of pixels stopped the server for every table, and froze players' browsers too. Walls and lights may now reach up to 500 grid squares past the edge of their map, which leaves plenty of room for drawing past the edge and for Universal VTT files whose walls run outside their picture. One further out is refused with a message when it is drawn or saved, a Universal VTT file holding one is refused on import, and a map holding one in a campaign archive is left out of the import. Walls and lights already stored further out are kept, and the wall list still saves with them in it. Working out sight also no longer costs more the further a wall reaches.
 
 ---
 

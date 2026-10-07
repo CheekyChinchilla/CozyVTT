@@ -25,6 +25,10 @@
  * package declares it; the first field added to it after the split already
  * disagreed (required on one side, optional on the other). The fields are
  * compared here, comments aside.
+ *
+ * The map limits. The server enforces them and the map dialogs offer what
+ * they allow; a dialog offering more than the server takes is a map the DM
+ * fills in and cannot save. The file is kept identical in both packages.
  */
 
 import crypto from 'crypto';
@@ -204,5 +208,11 @@ describe('the combat state the server sends and the client reads', () => {
 
   it.each(['CombatantEntry', 'CombatState'])('%s has the same fields on both sides', (name) => {
     expect(interfaceFields(client, name)).toEqual(interfaceFields(server, name));
+  });
+});
+
+describe('the map limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
   });
 });

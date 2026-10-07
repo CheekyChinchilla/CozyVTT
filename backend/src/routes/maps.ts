@@ -10,7 +10,7 @@ import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibil
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
-import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -33,7 +33,8 @@ import { getState as getCombatState, setState as setCombatState, removeCombatant
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
-import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange } from '../websocket/shared';
+import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
@@ -52,13 +53,10 @@ const uvttUpload = multer({
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-/**
- * A map's width, height or grid size: a positive whole number that fits the
- * integer column it is stored in. A fraction used to reach Prisma and fail.
- */
-const MAX_INT_COLUMN = 2_147_483_647;
-function isMapDimension(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_INT_COLUMN;
+/** A grid size or feet-per-square value usable as sent, or undefined for the default. */
+function usable(schema: typeof GridSizeSchema | typeof FeetPerSquareSchema, value: unknown): number | undefined {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**
@@ -142,26 +140,17 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
       });
     }
 
-    if (!isMapDimension(width)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Map width must be a positive whole number',
-      });
-    }
-
-    if (!isMapDimension(height)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Map height must be a positive whole number',
-      });
+    // Width and height within the map limits (validators/maps.ts)
+    const sizeProblem = dimensionProblem(MapSideSchema('Map width'), width) ?? dimensionProblem(MapSideSchema('Map height'), height);
+    if (sizeProblem) {
+      return res.status(400).json({ error: 'Validation Error', message: sizeProblem });
     }
 
     // gridSize is optional; anything unusable gets the default of 50
-    const mapGridSize = isMapDimension(gridSize) ? gridSize : 50;
+    const mapGridSize = usable(GridSizeSchema, gridSize) ?? 50;
 
-    // feetPerSquare: positive integer, defaults to 5
-    const mapFeetPerSquare = feetPerSquare && Number.isInteger(feetPerSquare) && feetPerSquare > 0 && feetPerSquare <= 100
-      ? feetPerSquare : 5;
+    // feetPerSquare: whole number from 1 to 100, defaults to 5
+    const mapFeetPerSquare = usable(FeetPerSquareSchema, feetPerSquare) ?? 5;
 
     // diagonalRule: must be "flat" or "alternating", defaults to "flat"
     const mapDiagonalRule = diagonalRule === 'flat' || diagonalRule === 'alternating' ? diagonalRule : 'flat';
@@ -306,8 +295,7 @@ router.post(
 
       const mapName = (req.body.name as string)?.trim() || path.basename(req.file.originalname, path.extname(req.file.originalname));
       // Optional; anything that is not a usable grid size gets the default
-      const requestedGridSize = Number(req.body.gridSize);
-      const gridSizePx = isMapDimension(requestedGridSize) ? requestedGridSize : 70;
+      const gridSizePx = usable(GridSizeSchema, Number(req.body.gridSize)) ?? 70;
 
       // ── Parse the UVTT file ──────────────────────────────────────────────
       const confirmed = req.body.confirm === 'true' || req.body.confirm === true;
@@ -320,6 +308,31 @@ router.post(
       } catch (parseErr) {
         const msg = parseErr instanceof Error ? parseErr.message : 'Failed to parse UVTT file';
         return res.status(400).json({ error: 'Parse Error', message: msg });
+      }
+
+      // ── A map the app can hold ───────────────────────────────────────────
+      // The same limits as Create Map, checked before anything is asked or
+      // saved, so a file that cannot become a map leaves nothing behind.
+      if (dimensionProblem(MapSideSchema('Map width'), parsed.mapWidth) || dimensionProblem(MapSideSchema('Map height'), parsed.mapHeight)) {
+        const limit = `A map can be from ${MAP_LIMITS.minSide} to ${MAP_LIMITS.maxSide} squares on each side.`;
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: Number.isFinite(parsed.mapWidth) && Number.isFinite(parsed.mapHeight)
+            ? `This file's map is ${parsed.mapWidth} by ${parsed.mapHeight} squares. ${limit}`
+            : `This file does not say how many squares its map is (resolution.map_size). ${limit}`,
+        });
+      }
+      // Geometry outside the picture is kept, once the DM agrees below, but
+      // not so far out that the map editor would refuse it. Refused before
+      // asking, since no answer would make it importable.
+      const extent = { width: parsed.mapWidth, height: parsed.mapHeight, gridSize: gridSizePx };
+      if (wallOutsideMap(parsed.wallSegments, extent) || lightOutsideMap(parsed.lightSources, extent)) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message:
+            `This file has walls or lights more than ${GEOMETRY_MARGIN_SQUARES} squares outside its map, ` +
+            'which a map cannot hold. Export it again from the tool that made it, covering the whole map.',
+        });
       }
 
       // ── Anything for the DM to decide before this becomes a map ──────────
@@ -677,44 +690,24 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       updateData.name = name.trim();
     }
 
-    if (width !== undefined) {
-      if (!isMapDimension(width)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Map width must be a positive whole number',
-        });
+    // Width, height, grid size and feet per square within the map limits
+    // (validators/maps.ts). A value equal to the stored one is taken as it
+    // is: Edit Map sends every field, and a map stored larger than the
+    // limits, before they existed, must still save an edit that leaves its
+    // size alone.
+    const sizeFields = [
+      ['width', width, MapSideSchema('Map width'), existingMap.width],
+      ['height', height, MapSideSchema('Map height'), existingMap.height],
+      ['gridSize', gridSize, GridSizeSchema, existingMap.gridSize],
+      ['feetPerSquare', feetPerSquare, FeetPerSquareSchema, existingMap.feetPerSquare],
+    ] as const;
+    for (const [field, value, schema, stored] of sizeFields) {
+      if (value === undefined) continue;
+      const problem = value === stored ? null : dimensionProblem(schema, value);
+      if (problem) {
+        return res.status(400).json({ error: 'Validation Error', message: problem });
       }
-      updateData.width = width;
-    }
-
-    if (height !== undefined) {
-      if (!isMapDimension(height)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Map height must be a positive whole number',
-        });
-      }
-      updateData.height = height;
-    }
-
-    if (gridSize !== undefined) {
-      if (!isMapDimension(gridSize)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'Grid size must be a positive whole number',
-        });
-      }
-      updateData.gridSize = gridSize;
-    }
-
-    if (feetPerSquare !== undefined) {
-      if (!Number.isInteger(feetPerSquare) || feetPerSquare < 1 || feetPerSquare > 100) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: 'feetPerSquare must be a positive integer between 1 and 100',
-        });
-      }
-      updateData.feetPerSquare = feetPerSquare;
+      updateData[field] = value as number;
     }
 
     if (diagonalRule !== undefined) {
@@ -792,6 +785,23 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
         return res.status(400).json({ error: 'Validation Error', message: 'explorationEnabled must be a boolean' });
       }
       updateData.explorationEnabled = explorationEnabled;
+    }
+
+    // Fog and explored areas are one stored cell per grid square, so a map
+    // too large for them (only one stored before the size limits can be)
+    // may not turn either on. One already on stays on, and its fog requests
+    // answer with the same reason.
+    const turningOn = (updateData.fogEnabled === true && !existingMap.fogEnabled)
+      || (updateData.explorationEnabled === true && !existingMap.explorationEnabled);
+    const resulting = {
+      width: typeof updateData.width === 'number' ? updateData.width : existingMap.width,
+      height: typeof updateData.height === 'number' ? updateData.height : existingMap.height,
+    };
+    if (turningOn && !fogFits(resulting)) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: new FogTooLargeError(resulting.width, resulting.height).message,
+      });
     }
 
     // Update the map
@@ -1038,8 +1048,8 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const position = shapes.value.position;
-    if (!position) {
+    const requested = shapes.value.position;
+    if (!requested) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Token position {x, y} is required',
@@ -1047,13 +1057,18 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     // Validate position is within map bounds
-    if (position.x < 0 || position.x >= map.width ||
-        position.y < 0 || position.y >= map.height) {
+    if (requested.x < 0 || requested.x >= map.width ||
+        requested.y < 0 || requested.y >= map.height) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
       });
     }
+    // And its whole footprint on the map, as the client keeps it on a move.
+    // Placing from a library puts a token at the map's centre, so a large
+    // creature on a small map would otherwise hang off the far edge.
+    const size = shapes.value.size ?? { width: 1, height: 1 };
+    const position = clampTokenPosition(requested, size, map);
 
     // Validate layer
     const layer = tokenData.layer || 'token';
@@ -1133,7 +1148,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
       position,
-      size: shapes.value.size ?? { width: 1, height: 1 },
+      size,
       layer,
       visible: shapes.value.visible ?? true,
       controlledBy,
@@ -1157,10 +1172,18 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     // Appended under the map's lock, to the list as it is then: another
     // write landing between this route's read and its write used to be lost.
-    const updatedMap = await withMapsLocked([mapId], async (tx) => {
+    // The token limit is counted there too, so two adds at once cannot both
+    // take the last place.
+    const appended = await withMapsLocked([mapId], async (tx) => {
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...readTokens(fresh.tokens), newToken]) } });
+      const tokens = readTokens(fresh.tokens);
+      if (tokens.length >= MAP_LIMITS.maxTokens) return { full: tokens.length + 1 };
+      return { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, newToken]) } }) };
     });
+    if (appended.full !== undefined) {
+      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
+    }
+    const updatedMap = appended.map;
 
     // A player's spirit-layer token placed on the map the table is on moves
     // them to the spirit plane, which changes what they are sent of the
@@ -1334,13 +1357,17 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const position = shapes.value.position;
-    if (position && (position.x < 0 || position.x >= map.width || position.y < 0 || position.y >= map.height)) {
+    const requested = shapes.value.position;
+    if (requested && (requested.x < 0 || requested.x >= map.width || requested.y < 0 || requested.y >= map.height)) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
       });
     }
+    // The whole footprint on the map, at the size the token will have.
+    const position = requested
+      ? clampTokenPosition(requested, shapes.value.size ?? existingToken.size ?? { width: 1, height: 1 }, map)
+      : undefined;
 
     // Control can only be handed to a player of this campaign: the DM needs
     // no naming, and a spectator controls nothing.
@@ -1494,18 +1521,25 @@ router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, re
       const moved = sourceTokens
         .filter((t) => wanted.has(t.id))
         .map((t) => ({ ...t, position: clampTokenPosition(t.position, t.size, target) }));
+      const targetTokens = [...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved];
+      if (targetTokens.length > MAP_LIMITS.maxTokens) {
+        return { full: targetTokens.length };
+      }
       const updatedSource = await tx.map.update({
         where: { id: sourceId },
         data: { tokens: toJson(sourceTokens.filter((t) => !wanted.has(t.id))) },
       });
       const updatedTarget = await tx.map.update({
         where: { id: targetMapId },
-        data: { tokens: toJson([...readTokens(target.tokens).filter((t) => !wanted.has(t.id)), ...moved]) },
+        data: { tokens: toJson(targetTokens) },
       });
       return { moved, updatedSource, updatedTarget };
     });
     if ('refused' in outcome) {
       return res.status(404).json({ error: 'Not Found', message: outcome.refused });
+    }
+    if (outcome.full !== undefined) {
+      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(outcome.full) });
     }
     const { moved, updatedSource, updatedTarget } = outcome;
 
@@ -1678,6 +1712,9 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segments' });
     }
+    if (wallOutsideMap(parsed.data, map, map.wallSegments)) {
+      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
+    }
 
     const updated = await prisma.map.update({
       where: { id },
@@ -1710,10 +1747,16 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segment' });
     }
+    if (wallOutsideMap([parsed.data], map)) {
+      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
+    }
 
     const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
     if (existing.length >= 5000) {
       return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 5000 wall segments per map' });
+    }
+    if (existing.some((w) => w.id === parsed.data.id)) {
+      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_WALL_ID_MESSAGE });
     }
 
     const updated = await prisma.map.update({
@@ -1768,8 +1811,10 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const validTypes = ['wall', 'door-closed', 'door-open', 'window'];
-    if (!req.body.type || !validTypes.includes(req.body.type)) {
+    // The types every other wall path accepts, locked doors included.
+    const validTypes = WallSegmentSchema.shape.type.options;
+    const type = WallSegmentSchema.shape.type.safeParse(req.body.type);
+    if (!type.success) {
       return res.status(400).json({ error: 'Validation Error', message: `type must be one of: ${validTypes.join(', ')}` });
     }
 
@@ -1780,7 +1825,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
     }
 
-    existing[segIndex] = { ...existing[segIndex], type: req.body.type };
+    existing[segIndex] = { ...existing[segIndex], type: type.data };
     await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
@@ -1828,6 +1873,9 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid lights array' });
     }
+    if (lightOutsideMap(parsed.data, map, map.lights)) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
+    }
 
     const updated = await prisma.map.update({
       where: { id },
@@ -1859,10 +1907,16 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid light source' });
     }
+    if (lightOutsideMap([parsed.data], map)) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
+    }
 
     const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
     if (existing.length >= 200) {
       return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 200 light sources per map' });
+    }
+    if (existing.some((l) => l.id === parsed.data.id)) {
+      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_LIGHT_ID_MESSAGE });
     }
 
     const updated = await prisma.map.update({
@@ -1901,7 +1955,20 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
       return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
     }
 
-    existing[idx] = { ...existing[idx], ...parsed.data };
+    const merged = { ...existing[idx], ...parsed.data };
+    // The radii are checked against each other as they will be stored, not
+    // as the patch sends them: a dim radius alone, under the stored bright
+    // one, used to be saved and then made every save of the whole list fail.
+    // Only when the patch changes a radius, so a light stored before this
+    // check can still be switched on and off.
+    const radiusChanged = parsed.data.brightRadius !== undefined || parsed.data.dimRadius !== undefined;
+    if (radiusChanged && !(merged.dimRadius >= merged.brightRadius)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'dimRadius must be >= brightRadius' });
+    }
+    if (lightOutsideMap([merged], map, [existing[idx]])) {
+      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
+    }
+    existing[idx] = merged;
     await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
 
     await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
@@ -1957,6 +2024,9 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
     const fog = loadFogState(map, map.fogData as FogState | null);
     return res.status(200).json({ fogState: fog });
   } catch (error) {
+    if (error instanceof FogTooLargeError) {
+      return res.status(409).json({ error: 'Conflict', message: error.message });
+    }
     logger.error('Error fetching fog state', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch fog state' });
   }
@@ -2000,6 +2070,9 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
     return res.status(200).json({ fogState: updated.fogData });
   } catch (error) {
+    if (error instanceof FogTooLargeError) {
+      return res.status(409).json({ error: 'Conflict', message: error.message });
+    }
     logger.error('Error applying fog operation', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to apply fog operation' });
   }

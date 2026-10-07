@@ -8,7 +8,7 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
+import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { bestEffort } from '../utils';
@@ -64,6 +64,10 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
       const campaignId = socket.campaignId;
       await bestEffort('fog:cells', () => broadcastFogState(io, campaignId, mapId, fog));
     } catch (error) {
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('fog:operation failed', { err: error });
       socket.emit('error', { message: 'Failed to apply fog operation' });
     }
@@ -105,6 +109,13 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         });
       }
     } catch (error) {
+      // A map stored before the size limits can be too large for fog. Say
+      // so, once per request, rather than leaving the page without fog and
+      // without a reason.
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('fog:request_state failed', { err: error });
     }
   });

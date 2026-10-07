@@ -13,7 +13,7 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { Token, tokenMoveLimiter, limiterKey } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
-import { withMapsLocked } from '../../utils/mapTokens';
+import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { campaignSockets, stillInCampaign } from '../utils';
 
@@ -347,9 +347,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const { tokenId, mapId, x, y } = data;
+      const { tokenId, mapId, x: dropX, y: dropY } = data;
 
-      if (!tokenId || !mapId || typeof x !== 'number' || typeof y !== 'number') {
+      // Whole squares, as the client always sends: other clients draw a
+      // fraction half a square from where sight and stored position count it.
+      if (!tokenId || !mapId || !Number.isInteger(dropX) || !Number.isInteger(dropY)) {
         socket.emit('error', { message: 'Invalid token move data' });
         return;
       }
@@ -368,7 +370,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Validate coordinates are within map bounds
-      if (x < 0 || x >= map.width || y < 0 || y >= map.height) {
+      if (dropX < 0 || dropX >= map.width || dropY < 0 || dropY >= map.height) {
         socket.emit('error', { message: 'Token position out of bounds' });
         return;
       }
@@ -383,6 +385,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       const token = tokensArray[tokenIndex];
+      // The whole footprint on the map, the rule the client applies before
+      // it sends a drop; everyone, the mover included, is told where it went.
+      const { x, y } = clampTokenPosition({ x: dropX, y: dropY }, token.size ?? { width: 1, height: 1 }, map);
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
       const sawTheDrag = dragRecipients.get(tokenId)?.deciding;

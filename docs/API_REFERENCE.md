@@ -685,9 +685,14 @@ Create a new map (DM only).
 ```json
 {
   "name": "Goblin Cave Level 1",
-  "assetId": "cuid-of-map-asset"
+  "imageUrl": "uuid-of-map-asset",
+  "width": 30,
+  "height": 20,
+  "gridSize": 70
 }
 ```
+
+`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default.
 
 ---
 

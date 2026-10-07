@@ -85,8 +85,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.2` **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
 - `1.5.3` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
 - `1.5.1` **A Universal VTT upload the server refuses answers 500.** A file with the wrong extension, over 100 MB, or sent under the wrong form field gets "An unexpected error occurred", and a file whose `map_size` has no numeric `y` fails after its picture has been saved (`routes/maps.ts`, `services/uvttParser.ts`). The asset upload route answers the same mistakes with 400.
-- `1.5.1` **Editing a single light can store a dim radius smaller than its bright one.** `LightSourceUpdateSchema` in `validators/walls.ts` lacks the check that creating a light and saving the whole list make, so a later save of the full list is refused.
-- `1.5.1` **Editing a single wall refuses the locked-door type,** which creating walls, saving the whole list and the DM's live wall edit all accept (`routes/maps.ts`).
 - `1.5.1` **Suspected: two edits to a map's walls or lights at the same moment can lose one.** The wall and light routes read, change and write the stored list without the map lock the token routes take (`routes/maps.ts`).
 
 ### Accounts

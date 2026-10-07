@@ -148,6 +148,20 @@ Once your map is in the asset library:
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
+**Map size limits.** A map can be:
+
+| Setting | Smallest | Largest |
+|---|---|---|
+| Width and Height (grid squares) | 1 | 500 |
+| Grid Size (pixels per square) | 10 | 500 |
+| Feet per square (**Grid Scale**) | 1 | 100 |
+
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+
+A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
+
+A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
+
 *Screenshot pending — Map Library panel with multiple maps.*
 
 ### Switching Maps
@@ -386,6 +400,8 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Display Mode** — Pog, top-down, or full-art
 
 Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
+
+A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it, with a message saying it is too large.
 
 ### Saving Throws and Skills
 
@@ -859,6 +875,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Door (Open) | Green | No | Click to close |
 | Door (Locked) | Red | Yes | DM must unlock |
 | Window | Blue | No | Transparent to light |
+
+Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
 ### Polygon Drawing Mode
 
