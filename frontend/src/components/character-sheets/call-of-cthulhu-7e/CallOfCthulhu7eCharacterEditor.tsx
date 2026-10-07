@@ -59,6 +59,7 @@ import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField } from './skillEdits';
+import { cocDodgeBase, settleDodge } from './dodge';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -300,6 +301,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     formData.characteristics?.EDU?.regular,
   ]);
 
+  // The DEX the derived stats were last worked out from, so a DEX change made
+  // here can move Dodge's base without taking away the points spent on it.
+  // Null until the sheet has been read once.
+  const dodgeDexRef = useRef<number | null>(null);
+
   // Auto-calculate derived stats
   useEffect(() => {
     const char = formData.characteristics;
@@ -325,64 +331,59 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       // Move Rate
       const moveRate = calculateMoveRate(str, dex, siz, age);
 
-      // Dodge
-      const dodge = Math.floor(dex / 2);
+      // Dodge's base is half DEX. Its value is the base plus the skill points
+      // and improvements the investigator has put into it, so it is kept.
+      const dodgeBase = cocDodgeBase(dex);
+      const previousDex = dodgeDexRef.current;
+      dodgeDexRef.current = dex;
+      const previousDodgeBase = previousDex === null ? null : cocDodgeBase(previousDex);
 
       // Max Sanity (99 - Cthulhu Mythos)
       const cthulhuMythos = formData.skills?.cthulhuMythos?.currentValue || 0;
       const maxSanity = 99 - cthulhuMythos;
 
-      setFormData((prev) => ({
-        ...prev,
-        derivedStats: {
-          ...prev.derivedStats,
-          hp: {
-            maximum: maxHP,
-            current: prev.derivedStats?.hp?.current ?? maxHP,
-            majorWoundThreshold,
-            formula: '(CON + SIZ) / 10, rounded down',
-          },
-          magicPoints: {
-            maximum: maxMP,
-            current: prev.derivedStats?.magicPoints?.current ?? maxMP,
-            formula: 'POW / 5',
-          },
-          damageBonus,
-          build,
-          moveRate,
-          dodge: {
-            value: dodge,
-            formula: 'DEX / 2',
-            improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
-          },
-          sanity: {
-            // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
-            // an investigator with POW 100 and no Sanity yet gets 100 for both
-            // of these and the sheet cannot be saved. Cap the starting value at
-            // 99 and the current value at maxSanity.
-            starting: prev.derivedStats?.sanity?.starting ?? pow,
-            maximum: maxSanity,
-            current: prev.derivedStats?.sanity?.current ?? pow,
-            formula: 'Starts equal to POW; max is 99 minus Cthulhu Mythos skill',
-          },
-          luck: prev.derivedStats?.luck || { score: 50, notes: '' },
-        },
-      }));
-
-      // Update dodge skill to match derived dodge
-      if (formData.skills?.dodge) {
-        setFormData((prev) => ({
+      setFormData((prev) => {
+        const storedDodge = prev.skills?.dodge;
+        const dodge = storedDodge ? settleDodge(storedDodge, dodgeBase, previousDodgeBase) : undefined;
+        return {
           ...prev,
-          skills: {
-            ...prev.skills,
-            dodge: {
-              ...prev.skills!.dodge,
-              baseValue: dodge,
-              currentValue: dodge,
+          ...(dodge && dodge !== storedDodge ? { skills: { ...prev.skills, dodge } as CoC7eSkills } : {}),
+          derivedStats: {
+            ...prev.derivedStats,
+            hp: {
+              maximum: maxHP,
+              current: prev.derivedStats?.hp?.current ?? maxHP,
+              majorWoundThreshold,
+              formula: '(CON + SIZ) / 10, rounded down',
             },
-          } as CoC7eSkills,
-        }));
-      }
+            magicPoints: {
+              maximum: maxMP,
+              current: prev.derivedStats?.magicPoints?.current ?? maxMP,
+              formula: 'POW / 5',
+            },
+            damageBonus,
+            build,
+            moveRate,
+            // The same number as the Dodge skill, which is what is rolled.
+            dodge: {
+              value: dodge?.currentValue ?? dodgeBase,
+              formula: 'DEX / 2',
+              improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
+            },
+            sanity: {
+              // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
+              // an investigator with POW 100 and no Sanity yet gets 100 for both
+              // of these and the sheet cannot be saved. Cap the starting value at
+              // 99 and the current value at maxSanity.
+              starting: prev.derivedStats?.sanity?.starting ?? pow,
+              maximum: maxSanity,
+              current: prev.derivedStats?.sanity?.current ?? pow,
+              formula: 'Starts equal to POW; max is 99 minus Cthulhu Mythos skill',
+            },
+            luck: prev.derivedStats?.luck || { score: 50, notes: '' },
+          },
+        };
+      });
     }
   }, [
     formData.characteristics?.CON?.regular,
@@ -444,6 +445,16 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         ...formData,
         themeColor: isCustomColor ? (toStoredHexColor(customColorHex) ?? '') : themeColor.name,
       };
+
+      // The derived copy of Dodge follows the skill, which is the one edited
+      // and rolled. It is not kept in step while typing, where holding the
+      // value at its base would turn a "5" on the way to "55" into 25.
+      if (updatedData.skills?.dodge && updatedData.derivedStats?.dodge) {
+        updatedData.derivedStats = {
+          ...updatedData.derivedStats,
+          dodge: { ...updatedData.derivedStats.dodge, value: updatedData.skills.dodge.currentValue },
+        };
+      }
 
       // Upload token image if a new one was selected
       let newTokenImageUrl: string | undefined = undefined;
@@ -843,8 +854,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             </div>
             <div>
               <span className="text-blue-700 font-semibold">Dodge:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.dodge?.value || 0}%</span>
-              <div className="text-xs text-blue-600">DEX / 2</div>
+              <span className="text-blue-900">
+                {formData.skills?.dodge?.currentValue ?? formData.derivedStats?.dodge?.value ?? 0}%
+              </span>
+              <div className="text-xs text-blue-600">
+                Starts at half DEX ({cocDodgeBase(formData.characteristics?.DEX?.regular || 0)}); raise it on the Skills tab
+              </div>
             </div>
             <div>
               <span className="text-blue-700 font-semibold">Move:</span>{' '}

@@ -114,6 +114,17 @@ question, and getting it wrong invents numbers the designers never intended.
   dice-pool systems have neither ability modifiers nor a proficiency bonus, so
   there is nothing to derive and nothing sensible to offer from this data.
 
+  **A derived base is not a derived value.** Call of Cthulhu's Dodge is listed
+  as "Dodge (half DEX)": half DEX, rounded down, is its *base*, and occupation
+  points, personal-interest points and improvement checks raise it like any
+  other skill. The editor therefore derives only `skills.dodge.baseValue`. The
+  value, `skills.dodge.currentValue`, is the player's, editable with the base
+  as its floor, and when DEX changes in the editor the points above the old
+  base stay above the new one. `derivedStats.dodge.value` is a copy kept for
+  older readers and follows the skill on save; the sheet shows and rolls the
+  skill. The helpers are in
+  `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
+
 **Where a number is derived, give it a manual bonus alongside.** The 5e sheet
 derives initiative, passive Perception, spell save DC and spell attack, and each
 carries an "other bonus" box. Deriving without one is a trap: a feat or an item

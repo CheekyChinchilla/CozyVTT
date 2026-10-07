@@ -323,6 +323,7 @@ For when the vibes turn from cozy to eldritch:
 
 - Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU), plus a separate Luck Score
 - Derived stats: HP, Sanity, Magic Points, Movement Rate
+- Dodge, which starts at half DEX and is raised with skill points and improvements on the Skills tab, like any other skill
 - Skills with base values and advancement tracking
 - Weapons and attacks
 - Backstory, personal description, and ideals
