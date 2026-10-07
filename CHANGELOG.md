@@ -54,6 +54,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.** When the character was updated elsewhere during your edit, at the table for example, the colour saved there replaced the one you had just picked in the editor.
 
+- **D&D 5e features that share a name are all kept.** A sheet with two features of the same name, such as Ability Score Improvement at level 4 and again at level 8, showed only the first, and saving it in the editor deleted the second along with its description, without a warning. Every feature is now shown and saved, whatever its name. A feature already lost this way is not brought back by upgrading: the only way to recover it is a backup taken before it was lost.
+
 ### Security
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
