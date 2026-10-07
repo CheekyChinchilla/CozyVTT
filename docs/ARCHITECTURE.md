@@ -683,6 +683,10 @@ User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
 → The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
   does not declare is dropped; a stale updatedAt (the character changed since the
   sheet was loaded) is refused with 409 and nothing is written
+→ On a 409 the editor stays open: the host fetches the newest version, carries the
+  user's changes onto it (utils/reapplyEdits, the difference between the version
+  the editor opened and what it sent), shows them, and saves only on confirmation
+  (components/character/StaleSaveDialog)
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```

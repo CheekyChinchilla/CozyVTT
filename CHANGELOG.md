@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **What you type while a sheet is saving is kept.** Every box stays editable while a save, and any new token picture with it, goes through. The sheet went back to its read-only view as soon as the save finished, dropping anything typed in those seconds, and the Character Editor then warned about unsaved changes when there was nothing left on screen to save. The editor now stays open with what you typed, still counted as unsaved, until you save again. This applies to every game system, in the Character Editor and in the editor that opens over a sheet.
 
+- **A save refused because the character changed keeps your edits.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) When a character changes after you open its editor, for example the DM takes hit points at the table or you save it from another window, your save is refused so that it cannot put the old values back. The editor used to close, or load the newer version over your work, and everything typed since you opened it was lost. It now stays open, puts your changes onto the newest version, and lists them in a box headed **This character has changed**. **Save my changes** saves them; **Keep editing** goes back to the editor with nothing saved. Anything changed both by you and in the newer version is shown with both values, and you pick which to keep before saving. This works in the Character Editor and in the editor that opens over a sheet on the Characters page or at the table.
+
 ---
 
 ## [1.5.0] — 2026-10-03

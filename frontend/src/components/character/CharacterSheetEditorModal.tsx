@@ -2,7 +2,7 @@
  * Character Sheet Editor Modal
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useUnsavedWorkGuard } from '@/hooks/useUnsavedWorkGuard';
@@ -18,7 +18,8 @@ import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfi
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
 import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
-import { isStaleCharacterSave, STALE_CHARACTER_REOPEN } from '@/utils/staleCharacter';
+import { isStaleCharacterSave } from '@/utils/staleCharacter';
+import { useStaleSaveReapply } from './StaleSaveDialog';
 import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
 import { reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import type { CharacterData } from '@/types';
@@ -42,26 +43,54 @@ export default function CharacterSheetEditorModal({
   // The version the editor's form was made from: the one it opened, then the
   // one each save stored while the editor stays open. The character handed in
   // here can be refreshed meanwhile, since the sheet behind it follows the
-  // table, but the editor's form is not, so its save is made from this one.
+  // table, but the editor's form is not, so its save is made from this one,
+  // and a refused save's changes are measured from its sheet.
   const [loadedAt, setLoadedAt] = useState(character.updatedAt);
+  const openedSheetRef = useRef(character.data);
+  const staleSave = useStaleSaveReapply();
 
   // Handle save. The editors pass a freshly-uploaded token image URL as the
   // third argument — forward it so the character's token actually updates.
   // (Omit it when undefined so an edit that didn't touch the token keeps the
   // existing image.)
   const handleSave = async (data: CharacterData, _showToast?: boolean, tokenImageUrl?: string) => {
+    const picture = tokenImageUrl !== undefined ? { tokenImageUrl } : {};
     try {
       setSaving(true);
-      const { character: saved } = await api.updateCharacter(character.id, {
-        data,
-        updatedAt: loadedAt,
-        ...(tokenImageUrl !== undefined ? { tokenImageUrl } : {}),
-      });
+      let saved: Character;
+      let carriedOver = false;
+      try {
+        ({ character: saved } = await api.updateCharacter(character.id, { data, updatedAt: loadedAt, ...picture }));
+      } catch (error) {
+        // Saving over a newer version would undo it. The editor stays open,
+        // the player's changes are carried onto the newest version, and that
+        // is saved once they say so.
+        if (!isStaleCharacterSave(error)) throw error;
+        const stored = await staleSave.reapply({
+          opened: openedSheetRef.current,
+          edited: data,
+          withNewPicture: tokenImageUrl !== undefined,
+          fetchLatest: async () => (await api.getCharacter(character.id)).character,
+          // The sheet behind loads it too, and the Characters page with it.
+          onLatest: () => onSaved?.(),
+          save: async (merged, updatedAt) =>
+            (await api.updateCharacter(character.id, { data: merged, updatedAt, ...picture })).character,
+        });
+        if (!stored) throw error;
+        saved = stored;
+        carriedOver = true;
+      }
       reportSignedIn();
       // The editor closes through onDone once it holds nothing unsaved. With
       // something typed while this save was in flight it stays open, and its
-      // next save is made from the version just stored.
-      setLoadedAt(saved.updatedAt);
+      // next save is made from the version just stored. After changes were
+      // carried over, its form is still the older version's, so it keeps that
+      // one: another save is refused and carried over in turn, and cannot put
+      // the older values back.
+      if (!carriedOver) {
+        setLoadedAt(saved.updatedAt);
+        openedSheetRef.current = saved.data;
+      }
 
       // Call optional callback
       if (onSaved) {
@@ -78,14 +107,8 @@ export default function CharacterSheetEditorModal({
         throw error;
       }
 
-      // Saving over a newer version would undo it. The sheet behind is loaded
-      // again and the editor, holding the old one, is closed.
-      if (isStaleCharacterSave(error)) {
-        showToast(STALE_CHARACTER_REOPEN, 'error');
-        onSaved?.();
-        onClose();
-        return;
-      }
+      // The player chose to keep editing; the dialog has said why.
+      if (isStaleCharacterSave(error)) throw error;
 
       // Show detailed error message
       const message = apiErrorMessage(error) || 'Failed to save character. Please try again.';
@@ -118,9 +141,9 @@ export default function CharacterSheetEditorModal({
     setConfirmClose(true);
   };
 
-  // Escape does what Cancel does. While the question is up, Escape is its to
+  // Escape does what Cancel does. While a question is up, Escape is its to
   // answer, so this one stands aside.
-  const modalRef = useFocusTrap(true, confirmClose ? undefined : handleCancel);
+  const modalRef = useFocusTrap(true, confirmClose || staleSave.asking ? undefined : handleCancel);
 
   // Render appropriate character sheet editor based on game system
   const renderCharacterEditor = () => {
@@ -246,6 +269,7 @@ export default function CharacterSheetEditorModal({
       onConfirm={onClose}
       onCancel={() => setConfirmClose(false)}
     />
+    {staleSave.dialog}
     </>
   );
 }

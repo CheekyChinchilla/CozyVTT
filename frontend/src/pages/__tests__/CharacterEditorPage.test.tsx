@@ -8,7 +8,7 @@
  *
  * A save also says which version of the character it was made from, so one
  * made from a sheet that changed in the meantime is refused with 409 and does
- * not undo that change.
+ * not undo that change (what happens then is in CharacterEditorPage.staleSave).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -101,25 +101,5 @@ describe('the version a save is made from', () => {
     const body = updateCharacter.mock.calls[0][1] as Record<string, unknown>;
     expect(body.updatedAt).toBe('2026-01-01T00:00:00.000Z');
     expect(body).not.toHaveProperty('tokenImageUrl');
-  });
-
-  it('says so and loads the new version when the character changed meanwhile', async () => {
-    updateCharacter.mockRejectedValue({
-      response: { status: 409, data: { error: 'Conflict', code: 'CHARACTER_CHANGED', message: 'changed' } },
-    });
-    getCharacter
-      .mockResolvedValueOnce(pf2eCharacter())
-      .mockResolvedValueOnce(pf2eCharacter({ characterName: 'Changed at the table' }));
-    renderPage();
-
-    const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'My edit' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/changed/i), 'error'));
-    await waitFor(() =>
-      expect((screen.getByPlaceholderText('Character Name') as HTMLInputElement).value).toBe('Changed at the table')
-    );
-    expect(getCharacter).toHaveBeenCalledTimes(2);
   });
 });

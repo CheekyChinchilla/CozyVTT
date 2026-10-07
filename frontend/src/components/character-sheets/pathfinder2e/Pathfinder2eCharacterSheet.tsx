@@ -5,15 +5,20 @@
  * for Pathfinder 2nd Edition character sheets.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CharacterSheetProps } from '../types';
 import type { CharacterData } from '../../../types';
 import Pathfinder2eCharacterView from './Pathfinder2eCharacterView';
 import Pathfinder2eCharacterEditor from './Pathfinder2eCharacterEditor';
 
 export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave, onDirtyChange } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
+
+  // Each time the editor opens, its form is made from the character passed now.
+  useEffect(() => {
+    if (currentMode === 'edit') onEditStart?.();
+  }, [currentMode]);
 
   // Saving leaves edit mode only through the editor's onDone, which it calls
   // when nothing was typed while the save was in flight. Going back to the
