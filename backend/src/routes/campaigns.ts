@@ -24,12 +24,13 @@ import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
+import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 const router = Router();
 
 // ── Import file upload (memory storage — ZIP stays in buffer) ───────────────
 const importUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 524288000, files: 1 }, // 500 MB hard cap
+  limits: { fileSize: 524288000, files: 1, ...MULTIPART_FIELD_LIMITS }, // 500 MB hard cap
   fileFilter: (_req, file, cb) => {
     // Accept .cozyvtt or .zip MIME types
     const allowed = [

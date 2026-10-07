@@ -25,6 +25,7 @@ import {
   ALLOWED_EXTENSIONS,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
+import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
@@ -37,7 +38,8 @@ import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broad
 /** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
 const uvttUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB — UVTT files can be large (embedded image)
+  // 100 MB: UVTT files can be large (embedded image)
+  limits: { fileSize: 100 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (['.uvtt', '.dd2vtt', '.df2vtt'].includes(ext) || file.mimetype === 'application/json') {
@@ -287,6 +289,10 @@ router.post(
   campaignDM,
   // Writes a file to disk exactly as an upload does, so it shares the ceiling.
   uploadLimiter,
+  // TODO(upload): a refused body (the file filter's, or the parser's for a
+  // malformed or over-limit one) reaches the generic error handler and answers
+  // 500 "An unexpected error occurred". Answer 400 with the refusal's message,
+  // as the asset and campaign import uploads do.
   uvttUpload.single('file'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {

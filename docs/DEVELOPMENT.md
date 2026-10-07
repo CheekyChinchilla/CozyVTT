@@ -378,6 +378,12 @@ Two of those deserve a note:
   it ends; if you see that error again, look there first, not at the code.
   That disconnect runs before a file's own top-level `afterAll`, so a file
   that cleans up the database there ends it with `prisma.$disconnect()`.
+- **A test that needs the server to survive a request runs it as a process of
+  its own.** An uncaught exception inside Jest fails the test and nothing
+  else, so it cannot show that a request would end the real server.
+  `src/__tests__/helpers/serve-test-app.ts` starts the test app on a free
+  port in a child process, and `malformedUpload.e2e.test.ts` uses it to send
+  crafted upload bodies and check that the server answers and is still up.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which

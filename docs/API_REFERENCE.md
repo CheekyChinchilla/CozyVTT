@@ -993,6 +993,8 @@ Upload a new asset. Uses `multipart/form-data`.
 - `campaignId` — required when `scope` is `CAMPAIGN`
 - `tags` — comma-separated list of tags (optional)
 
+A request may carry at most 100 text fields. A field name is at most 100 characters, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+
 ---
 
 ### `GET /api/assets/:id`

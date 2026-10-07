@@ -4712,8 +4712,13 @@ paths:
             not determine file type...") or is not accepted for the declared
             `type` ("Invalid file type..."). `error` is `File Too Large` when
             the file exceeds its type's limit. Other multipart problems, such
-            as more than one file, answer with `Upload Error` or
-            `Validation Error`. A refused file is deleted.
+            as more than one file, a body that is cut off or malformed, more
+            than 100 text fields, a field name longer than 100 characters, or
+            a name such as `a[b][c]` nested more than five levels deep or
+            with a number above 1000 between the brackets, answer with
+            `Upload Error` or `Validation Error`. A refused file is deleted,
+            and so is the part of one the client stopped sending. The same
+            field limits apply to every route that accepts an upload.
           content:
             application/json:
               schema:
@@ -7669,8 +7674,8 @@ paths:
         '400':
           description: >-
             No file (`Validation Error`), a file over 500 MB (`File Too
-            Large`), another upload problem such as a refused file type
-            (`Upload Error`), or an archive that cannot be read, is over the
+            Large`), another upload problem such as a refused file type or a
+            malformed body (`Upload Error`), or an archive that cannot be read, is over the
             size setting, or has a missing or invalid manifest (`Invalid
             Archive`, with the reason in `message`).
           content:
@@ -9100,9 +9105,10 @@ paths:
         Some bad requests answer 500 with the generic `An unexpected error
         occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
         `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        or a file sent under a field other than `file`. A `map_size` without
-        a numeric `y` answers 500 (`Failed to import UVTT file`) after the
-        picture has already been saved as an asset.
+        a file sent under a field other than `file`, or a body that is cut off
+        or malformed or breaks the field limits of `POST /api/assets/upload`.
+        A `map_size` without a numeric `y` answers 500 (`Failed to import
+        UVTT file`) after the picture has already been saved as an asset.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9367,9 +9373,9 @@ paths:
             Restore Failed (nothing changed), Restore Incomplete (the database was
             restored but migrating it or copying its files failed), a tool is not
             available in the image, or Internal Server Error for an oversized or
-            wrongly-named upload, an uploaded file that is not actually a ZIP, or an
-            archive over the entry-count or decompressed-size limit (nothing changed
-            in any of these)
+            wrongly-named upload, a body that is cut off or malformed, an uploaded
+            file that is not actually a ZIP, or an archive over the entry-count or
+            decompressed-size limit (nothing changed in any of these)
 
 components:
   securitySchemes:
