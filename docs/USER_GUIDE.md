@@ -298,6 +298,7 @@ The classic. Covers all the D&D 5e essentials:
 - Ability scores and modifiers
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
+- Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
 - Spells, spell slots, and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info
@@ -323,6 +324,7 @@ For when the vibes turn from cozy to eldritch:
 
 - Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU), plus a separate Luck Score
 - Derived stats: HP, Sanity, Magic Points, Movement Rate
+- Dodge, which starts at half DEX and is raised with skill points and improvements on the Skills tab, like any other skill
 - Skills with base values and advancement tracking
 - Weapons and attacks
 - Backstory, personal description, and ideals

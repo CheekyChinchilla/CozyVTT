@@ -1,19 +1,27 @@
 /**
  * Character Validation Script
- * Validates all characters against their game system schemas
+ *
+ * Checks every character against its game system's schema, the way the server
+ * checks a sheet when it is saved, and lists the ones it would refuse. Older
+ * fields are moved first, as the character routes do, so a sheet from before
+ * 1.3.0 is judged as its next save would be. Nothing is written.
  *
  * Usage:
- *   npm run validate:characters              (validate all)
- *   npm run validate:characters -- --system dnd5e  (validate specific system)
- *   npm run validate:characters -- --verbose (show full error details)
+ *   npm run validate:characters                         (validate all)
+ *   npm run validate:characters -- --system DND_5E      (one system; dnd5e works too)
+ *   npm run validate:characters -- --verbose            (show every error)
+ *   npm run validate:characters -- --export             (write validation-report.json)
+ *
+ * Exits 0 when every character passes, and 1 when one does not, when an
+ * argument is not understood, or when the check could not run.
  */
 
+import fs from 'fs';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
-
-const prisma = new PrismaClient();
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 
 interface ValidationIssue {
   characterId: string;
@@ -41,6 +49,13 @@ interface ValidationReport {
   issues: ValidationIssue[];
 }
 
+interface ValidateOptions {
+  gameSystem?: GameSystem;
+  verbose: boolean;
+  export: boolean;
+  help: boolean;
+}
+
 /**
  * Format Zod error for readable output
  */
@@ -53,12 +68,48 @@ function formatZodError(error: ZodError): Array<{ path: string; message: string;
 }
 
 /**
- * Validate all characters or filter by game system
+ * A game system named on the command line: the name itself in any case, with
+ * or without its underscores, so "DND_5E", "dnd_5e" and "dnd5e" all work.
  */
-async function validateCharacters(options: {
-  gameSystem?: GameSystem;
-  verbose?: boolean;
-}): Promise<ValidationReport> {
+function readGameSystem(value: string): GameSystem | null {
+  const squash = (name: string) => name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return Object.values(GameSystem).find((system) => squash(system) === squash(value)) ?? null;
+}
+
+/** The command line, or what is wrong with it. */
+export function parseValidateArgs(args: readonly string[]): ValidateOptions | { error: string } {
+  const options: ValidateOptions = { verbose: false, export: false, help: false };
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--verbose') options.verbose = true;
+    else if (arg === '--export') options.export = true;
+    else if (arg === '--help' || arg === '-h') options.help = true;
+    else if (arg === '--system') {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        return { error: '--system needs a game system after it, for example --system DND_5E' };
+      }
+      const system = readGameSystem(value);
+      if (!system) {
+        return { error: `Unknown game system "${value}". Use one of: ${Object.values(GameSystem).join(', ')}` };
+      }
+      options.gameSystem = system;
+      i += 1;
+    } else {
+      return { error: `Unknown option "${arg}". Run with --help to see the options.` };
+    }
+  }
+  return options;
+}
+
+/**
+ * Validate the characters `where` selects, all of them by default, or those of
+ * one game system.
+ */
+export async function validateCharacters(
+  prisma: PrismaClient,
+  options: { gameSystem?: GameSystem; verbose?: boolean; where?: Prisma.CharacterWhereInput }
+): Promise<ValidationReport> {
   console.log(`\n${'='.repeat(60)}`);
   console.log('Character Validation Script');
   if (options.gameSystem) {
@@ -75,95 +126,63 @@ async function validateCharacters(options: {
     issues: [],
   };
 
-  try {
-    // Build query filter
-    const where: Prisma.CharacterWhereInput = {};
-    if (options.gameSystem) {
-      where.gameSystem = options.gameSystem;
+  const where: Prisma.CharacterWhereInput = { ...options.where };
+  if (options.gameSystem) {
+    where.gameSystem = options.gameSystem;
+  }
+
+  const characters = await prisma.character.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      gameSystem: true,
+      data: true,
+    },
+  });
+
+  report.totalCharacters = characters.length;
+  console.log(`Found ${characters.length} characters\n`);
+
+  for (const character of characters) {
+    // Flexible characters have no schema to check against.
+    if (!character.gameSystem) {
+      report.noGameSystem++;
+      continue;
     }
 
-    // Fetch characters
-    const characters = await prisma.character.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        gameSystem: true,
-        data: true,
-      },
+    const gameSystem = character.gameSystem as GameSystem; // Cast Prisma enum to game-systems enum
+    const breakdown = (report.systemBreakdown[gameSystem] ??= { total: 0, valid: 0, invalid: 0 });
+    breakdown.total++;
+
+    // As the character routes do before validating a save.
+    const sheet = migrateLegacySheetFields(gameSystem, character.data);
+    const result = validateCharacterData(gameSystem, sheet);
+
+    if (result.success) {
+      report.validCharacters++;
+      breakdown.valid++;
+      if (options.verbose) console.log(`✓ "${character.name}" (${gameSystem}) ${character.id} - VALID`);
+      continue;
+    }
+
+    report.invalidCharacters++;
+    breakdown.invalid++;
+    const formattedErrors = formatZodError(result.errors);
+    report.issues.push({
+      characterId: character.id,
+      characterName: character.name,
+      gameSystem,
+      errors: formattedErrors,
     });
 
-    report.totalCharacters = characters.length;
-    console.log(`Found ${characters.length} characters\n`);
-
-    // Validate each character
-    for (const character of characters) {
-      // Skip if no game system
-      if (!character.gameSystem) {
-        report.noGameSystem++;
-        continue;
-      }
-
-      const gameSystem = character.gameSystem as GameSystem; // Cast Prisma enum to game-systems enum
-
-      // Initialize system breakdown
-      if (!report.systemBreakdown[gameSystem]) {
-        report.systemBreakdown[gameSystem] = {
-          total: 0,
-          valid: 0,
-          invalid: 0,
-        };
-      }
-      report.systemBreakdown[gameSystem]!.total++;
-
-      try {
-        // Validate character data
-        validateCharacterData(gameSystem, character.data);
-
-        // Valid character
-        report.validCharacters++;
-        report.systemBreakdown[gameSystem]!.valid++;
-
-        if (options.verbose) {
-          console.log(`✓ "${character.name}" (${gameSystem}) - VALID`);
-        }
-      } catch (error) {
-        // Invalid character
-        report.invalidCharacters++;
-        report.systemBreakdown[gameSystem]!.invalid++;
-
-        if (error instanceof ZodError) {
-          const formattedErrors = formatZodError(error);
-
-          report.issues.push({
-            characterId: character.id,
-            characterName: character.name,
-            gameSystem: gameSystem,
-            errors: formattedErrors,
-          });
-
-          console.log(`✗ "${character.name}" (${gameSystem}) - INVALID`);
-          if (options.verbose) {
-            formattedErrors.forEach(err => {
-              console.log(`    ${err.path}: ${err.message}`);
-            });
-          }
-        } else {
-          console.error(`✗ "${character.name}" (${gameSystem}) - ERROR:`, error);
-        }
-      }
+    console.log(`✗ "${character.name}" (${gameSystem}) ${character.id} - INVALID`);
+    if (options.verbose) {
+      formattedErrors.forEach((err) => console.log(`    ${err.path}: ${err.message}`));
     }
-
-    // Print report
-    printReport(report, options);
-
-    return report;
-  } catch (error) {
-    console.error('Validation failed:', error);
-    throw error;
-  } finally {
-    await prisma.$disconnect();
   }
+
+  return report;
 }
 
 /**
@@ -218,8 +237,8 @@ function printReport(report: ValidationReport, options: { verbose?: boolean }) {
 
   if (report.invalidCharacters > 0) {
     console.log(`${'='.repeat(60)}`);
-    console.log(`⚠ ${report.invalidCharacters} character(s) have validation issues`);
-    console.log('Players can use the Data Fixer Tool to resolve these issues');
+    console.log(`⚠ ${report.invalidCharacters} character(s) would be refused when next saved`);
+    console.log('Open each one in the Character Editor and save it: the message names the field to correct.');
     console.log(`${'='.repeat(60)}\n`);
   } else {
     console.log(`${'='.repeat(60)}`);
@@ -239,9 +258,7 @@ function getPercentage(part: number, total: number): number {
 /**
  * Export validation issues to JSON
  */
-async function exportValidationIssues(report: ValidationReport, outputPath: string) {
-  const fs = require('fs');
-
+function exportValidationIssues(report: ValidationReport, outputPath: string) {
   const exportData = {
     generatedAt: new Date().toISOString(),
     summary: {
@@ -257,60 +274,63 @@ async function exportValidationIssues(report: ValidationReport, outputPath: stri
   console.log(`\n✓ Validation issues exported to: ${outputPath}\n`);
 }
 
-/**
- * CLI entry point
- */
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`
+const HELP = `
 Character Validation Script
 
 Usage:
-  npm run validate:characters                     # Validate all characters
-  npm run validate:characters -- --verbose        # Show full error details
-  npm run validate:characters -- --system dnd5e   # Validate specific system
-  npm run validate:characters -- --export         # Export issues to JSON
+  npm run validate:characters                      # Validate all characters
+  npm run validate:characters -- --verbose         # Show full error details
+  npm run validate:characters -- --system DND_5E   # Validate one game system
+  npm run validate:characters -- --export          # Export issues to JSON
 
 Options:
-  --system <system>   Filter by game system (DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E)
+  --system <system>   Only this game system: DND_5E, PATHFINDER_2E, SHADOWRUN_6E or
+                      CALL_OF_CTHULHU_7E, in any case, with or without the underscores
   --verbose           Show detailed error messages for each character
   --export            Export validation issues to validation-report.json
   --help              Show this help message
 
-Game Systems:
-  DND_5E              Dungeons & Dragons 5th Edition
-  PATHFINDER_2E       Pathfinder 2nd Edition
-  SHADOWRUN_6E        Shadowrun 6th Edition
-  CALL_OF_CTHULHU_7E  Call of Cthulhu 7th Edition
+Exits 0 when every character passes, and 1 when one does not or the check
+could not run.
 
 Examples:
   npm run validate:characters
-  npm run validate:characters -- --verbose
-  npm run validate:characters -- --system DND_5E
+  npm run validate:characters -- --system dnd5e --verbose
   npm run validate:characters -- --export --verbose
-    `);
-    process.exit(0);
+`;
+
+/**
+ * CLI entry point. Resolves to the exit code.
+ */
+async function main(prisma: PrismaClient): Promise<number> {
+  const parsed = parseValidateArgs(process.argv.slice(2));
+  if ('error' in parsed) {
+    console.error(parsed.error);
+    return 1;
+  }
+  if (parsed.help) {
+    console.log(HELP);
+    return 0;
   }
 
-  const options = {
-    gameSystem: args.find(arg => arg !== '--verbose' && arg !== '--export' && !arg.startsWith('--system'))
-      ? args[args.indexOf('--system') + 1] as GameSystem
-      : undefined,
-    verbose: args.includes('--verbose'),
-  };
-
-  const report = await validateCharacters(options);
-
-  if (args.includes('--export')) {
-    await exportValidationIssues(report, 'validation-report.json');
-  }
+  const report = await validateCharacters(prisma, { gameSystem: parsed.gameSystem, verbose: parsed.verbose });
+  printReport(report, parsed);
+  if (parsed.export) exportValidationIssues(report, 'validation-report.json');
+  return report.invalidCharacters > 0 ? 1 : 0;
 }
 
 // Run if called directly
 if (require.main === module) {
-  main().catch(console.error);
+  const prisma = new PrismaClient();
+  main(prisma)
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error('Validation failed:', error);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
 }
 
-export { validateCharacters, ValidationReport, ValidationIssue };
+export type { ValidationReport, ValidationIssue };

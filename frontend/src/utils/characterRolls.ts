@@ -4,7 +4,7 @@ import { isValidDiceExpression } from './diceExpression';
 
 // Re-exported so the many callers that reach for it here keep working.
 export { isValidDiceExpression };
-import { readCustomSkills, dnd5eCustomSkillBonus } from '@/utils/rules/dnd5e';
+import { readCustomSkills, dnd5eCustomSkillBonus, dnd5eSkillBonus, dnd5eSaveBonus } from '@/utils/rules/dnd5e';
 import type {
   DnD5eCharacterData,
   DnD5eStats,
@@ -155,7 +155,9 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
     for (const [key, name] of Object.entries(DND5E_ABILITY_NAMES)) {
       const save = data.savingThrows[key as keyof DnD5eSavingThrows];
       if (!save) continue;
-      const bonus = save.bonus ?? 0;
+      // The scores plus the other bonus; a sheet saved before the other bonus
+      // existed rolls the total it stores, as it always has.
+      const bonus = dnd5eSaveBonus(data, key);
       const expr = `1d20${fmt(bonus)}`;
       saves.push({
         label:             `${name} Save ${fmt(bonus)}`,
@@ -171,7 +173,7 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
     for (const [key, name] of Object.entries(DND5E_SKILL_NAMES)) {
       const skill = data.skills[key as keyof DnD5eSkills];
       if (!skill) continue;
-      const bonus = skill.bonus ?? 0;
+      const bonus = dnd5eSkillBonus(data, key);
       const expr = `1d20${fmt(bonus)}`;
       skills.push({
         label:             `${name} ${fmt(bonus)}`,

@@ -1,6 +1,7 @@
 /**
  * rules/pathfinder2e.ts
- * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC.
+ * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC,
+ * and the attribute a sheet names.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -83,23 +84,36 @@ export function pf2eArmorClass(data: unknown): number {
   return 10 + cappedDex + pf2eProficiencyBonus(sheet?.level, ac.proficiencyRank) + num(ac.itemBonus);
 }
 
+/** The six attributes, as a sheet's `attributes` keys, in sheet order. */
+export const PF2E_ATTRIBUTE_NAMES = [
+  'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma',
+] as const;
+
+export type Pf2eAttributeName = (typeof PF2E_ATTRIBUTE_NAMES)[number];
+
+/**
+ * The attribute a sheet names, as an `attributes` key, or null.
+ *
+ * Attributes are stored in full ("strength"), abbreviated ("str") or
+ * capitalised ("Str", "STR"), depending on which version of the sheet or which
+ * template wrote them. The empty name is refused first because `startsWith('')`
+ * is true of every name: a sheet that never recorded one matched whichever came
+ * first, which is Strength, and used it without saying so.
+ */
+export function pf2eAttributeName(value: unknown): Pf2eAttributeName | null {
+  const key = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!key) return null;
+  return PF2E_ATTRIBUTE_NAMES.find((name) => name === key || name.startsWith(key)) ?? null;
+}
+
 /** Class DC: 10 + proficiency bonus + the class's key attribute modifier. */
 export function pf2eClassDC(data: unknown): number {
   const sheet = rec(data);
   const dc = rec(sheet?.classDC);
   if (!dc) return 10;
 
-  // The key attribute is stored either in full ("strength") or abbreviated
-  // ("str"), depending on which version of the sheet wrote it.
-  const key = typeof dc.keyAttribute === 'string' ? dc.keyAttribute.trim().toLowerCase() : '';
+  const matched = pf2eAttributeName(dc.keyAttribute);
   const attributes = rec(sheet?.attributes) ?? {};
-  // The empty key is checked first because `startsWith('')` is true of every
-  // name: a sheet that never recorded a key attribute matched whichever one
-  // came first, which is Strength on everything the app writes, and used it
-  // without saying so.
-  const matched = key
-    ? Object.keys(attributes).find((name) => name === key || name.startsWith(key))
-    : undefined;
   const attrMod = matched ? num(rec(attributes[matched])?.modifier) : 0;
 
   return 10 + attrMod + pf2eProficiencyBonus(sheet?.level, dc.proficiencyRank);
