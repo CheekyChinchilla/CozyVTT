@@ -149,6 +149,10 @@ export default function CampaignImportDialog({
 
   if (!isOpen) return null;
 
+  // TODO(ui): this overlay is not marked as a dialog (no role="dialog",
+  // aria-modal or aria-labelledby), so a screen reader is not told one opened
+  // and focus is not held inside it. The shared Modal in components/ui does
+  // all three; this dialog should use it.
   return (
     <AnimatePresence>
       <motion.div
