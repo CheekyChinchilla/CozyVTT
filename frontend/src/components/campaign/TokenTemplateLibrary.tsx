@@ -518,6 +518,70 @@ function TemplateRow({
 // Template Form — Create & Edit
 // ============================================
 
+/** The most hit points a token can have, as the server allows. */
+const MAX_TEMPLATE_HP = 99999;
+
+/**
+ * The Max HP box as a number: null when it is empty, meaning no hit points,
+ * and undefined when it holds something that is not a valid maximum.
+ */
+function readTemplateHpMax(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  const value = Number(trimmed);
+  if (!Number.isInteger(value) || value < 1 || value > MAX_TEMPLATE_HP) return undefined;
+  return value;
+}
+
+/**
+ * The fields of an edited template that differ from what is stored, so an
+ * update sends only what the DM changed and leaves the rest as it is: a
+ * template's current hit points, a stat block on a template that is not an
+ * NPC, and anything the form does not show.
+ */
+function changedTemplateFields(
+  original: TokenTemplate,
+  form: Partial<TokenTemplate>,
+  hpMax: number | null
+): Partial<TokenTemplate> {
+  const changes: Partial<TokenTemplate> = {};
+  if (form.name !== original.name) changes.name = form.name;
+  if ((form.imageUrl ?? null) !== (original.imageUrl ?? null)) changes.imageUrl = form.imageUrl;
+  if (form.type !== original.type) changes.type = form.type;
+  if ((form.disposition ?? null) !== (original.disposition ?? null)) changes.disposition = form.disposition;
+  if (form.displayMode !== original.displayMode) changes.displayMode = form.displayMode;
+  if (form.size?.width !== original.size?.width || form.size?.height !== original.size?.height) {
+    changes.size = form.size;
+  }
+  if ((form.notes ?? null) !== (original.notes ?? null)) changes.notes = form.notes;
+  if (form.showHpBar !== original.showHpBar) changes.showHpBar = form.showHpBar;
+
+  // A new maximum keeps the template's damage and temporary hit points: full
+  // stays full, and anything less is kept, capped at the new maximum.
+  const stored = original.hp ?? null;
+  if (hpMax !== (stored?.max ?? null)) {
+    if (hpMax === null) {
+      changes.hp = null;
+    } else if (stored) {
+      const full = stored.current >= stored.max;
+      changes.hp = { current: full ? hpMax : Math.min(stored.current, hpMax), max: hpMax, temp: stored.temp ?? 0 };
+    } else {
+      changes.hp = { current: hpMax, max: hpMax, temp: 0 };
+    }
+  }
+
+  // The stat block editor is offered for NPCs only. One kept on another kind
+  // of template is left alone; turning an NPC into something else clears it,
+  // as the form always has.
+  if (form.type === TokenType.NPC) {
+    if (form.statBlock !== original.statBlock) changes.statBlock = form.statBlock;
+  } else if (original.type === TokenType.NPC && original.statBlock) {
+    changes.statBlock = null;
+  }
+
+  return changes;
+}
+
 interface TemplateFormProps {
   campaignId: string;
   editingTemplate: TokenTemplate | null;
@@ -542,7 +606,12 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
   const [notes, setNotes] = useState(editingTemplate?.notes ?? '');
   const [imageUrl, setImageUrl] = useState(editingTemplate?.imageUrl ?? '');
   const [showHpBar, setShowHpBar] = useState(editingTemplate?.showHpBar ?? false);
-  const [hpMax, setHpMax] = useState(editingTemplate?.hp?.max ?? 10);
+  // The template's hit points, as typed. Separate from Show HP Bar, which only
+  // decides whether players see the bar: a goblin with its bar hidden still
+  // has hit points. Empty means the template has none.
+  const [hpMaxText, setHpMaxText] = useState(
+    editingTemplate?.hp?.max !== undefined ? String(editingTemplate.hp.max) : ''
+  );
   const [statBlock, setStatBlock] = useState<NpcStatBlock | null>(
     (editingTemplate?.statBlock as NpcStatBlock | null) ?? null
   );
@@ -582,6 +651,11 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
 
   const handleSubmit = async () => {
     if (!name.trim()) { setFormError('Name is required'); return; }
+    const hpMax = readTemplateHpMax(hpMaxText);
+    if (hpMax === undefined) {
+      setFormError(`Max HP must be a whole number from 1 to ${MAX_TEMPLATE_HP.toLocaleString()}, or empty for no hit points`);
+      return;
+    }
     setIsSubmitting(true);
     setFormError(null);
 
@@ -593,14 +667,20 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       displayMode: displayMode as TokenTemplate['displayMode'],
       size: { width, height },
       notes: notes || null,
-      hp: showHpBar ? { current: hpMax, max: hpMax, temp: 0 } : null,
+      hp: hpMax === null ? null : { current: hpMax, max: hpMax, temp: 0 },
       showHpBar,
       statBlock: type === 'npc' ? statBlock : null,
     };
 
     try {
       if (isEdit && editingTemplate) {
-        const updated = await api.updateTokenTemplate(campaignId, editingTemplate.id, payload);
+        const changes = changedTemplateFields(editingTemplate, payload, hpMax);
+        // Nothing to send, and the server refuses an empty update.
+        if (Object.keys(changes).length === 0) {
+          onEdited(editingTemplate);
+          return;
+        }
+        const updated = await api.updateTokenTemplate(campaignId, editingTemplate.id, changes);
         onEdited(updated);
       } else {
         const created = await api.createTokenTemplate(campaignId, payload);
@@ -698,13 +778,32 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
         </div>
       </div>
 
-      {/* HP Toggle */}
+      {/* Hit points, and whether players see them */}
       <div className="flex items-center gap-2">
-        <input type="checkbox" id="template-hp" checked={showHpBar} onChange={(e) => setShowHpBar(e.target.checked)} className="rounded border-moss-green/30" />
+        <label htmlFor="template-hp-max" className="text-[10px] text-stone-gray">Max HP</label>
+        <input
+          id="template-hp-max"
+          type="number"
+          inputMode="numeric"
+          value={hpMaxText}
+          onChange={(e) => setHpMaxText(e.target.value)}
+          min={1}
+          max={MAX_TEMPLATE_HP}
+          className="input-cozy input-cozy-number w-16 text-xs text-center"
+          placeholder="None"
+        />
+        <input
+          type="checkbox"
+          id="template-hp"
+          checked={showHpBar}
+          onChange={(e) => {
+            setShowHpBar(e.target.checked);
+            // A bar needs hit points to show; start from 10 as the form always has.
+            if (e.target.checked && hpMaxText.trim() === '') setHpMaxText('10');
+          }}
+          className="rounded border-moss-green/30 ml-2"
+        />
         <label htmlFor="template-hp" className="text-[10px] text-stone-gray">Show HP Bar</label>
-        {showHpBar && (
-          <input type="number" value={hpMax} onChange={(e) => setHpMax(Math.max(1, parseInt(e.target.value, 10) || 1))} min={1} className="input-cozy input-cozy-number w-16 text-xs text-center ml-2" placeholder="Max HP" />
-        )}
       </div>
 
       {/* Stat Block (NPC only) */}
