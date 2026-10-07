@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { CoordinateSchema } from './maps';
 
+/** What an add answers when the id it names is already on the map. */
+export const DUPLICATE_WALL_ID_MESSAGE = 'A wall segment with that id is already on this map';
+export const DUPLICATE_LIGHT_ID_MESSAGE = 'A light source with that id is already on this map';
+
 export const WallSegmentSchema = z.object({
   id: z.string().uuid(),
   // Bounded (validators/maps.ts); where on the map is the route's check.
@@ -11,9 +15,26 @@ export const WallSegmentSchema = z.object({
   type: z.enum(['wall', 'door-closed', 'door-open', 'door-locked', 'window']),
 });
 
+/**
+ * Ids are unique within a map's list: an edit, a delete and sight all find a
+ * wall or light by id, and two sharing one were each handled as the other.
+ */
+function refuseRepeatedIds(what: 'wall segments' | 'light sources') {
+  return (items: Array<{ id: string }>, ctx: z.RefinementCtx) => {
+    const seen = new Set<string>();
+    items.forEach((item, i) => {
+      if (seen.has(item.id)) {
+        ctx.addIssue({ code: 'custom', message: `Two ${what} have the same id (${item.id})`, path: [i, 'id'] });
+      }
+      seen.add(item.id);
+    });
+  };
+}
+
 export const WallSegmentsArraySchema = z
   .array(WallSegmentSchema)
-  .max(5000, 'Maximum 5000 wall segments per map');
+  .max(5000, 'Maximum 5000 wall segments per map')
+  .superRefine(refuseRepeatedIds('wall segments'));
 
 // ── Light Sources ────────────────────────────────────────────────────────────
 
@@ -46,7 +67,8 @@ export const LightSourcesArraySchema = z
         });
       }
     }
-  });
+  })
+  .superRefine(refuseRepeatedIds('light sources'));
 
 /** Partial schema for PATCH updates — all fields optional except id. */
 export const LightSourceUpdateSchema = z.object({

@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { throttle } from 'lodash';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { WallSegmentSchema, WallSegmentsArraySchema } from '../../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
@@ -54,6 +54,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
       if (existing.length >= 5000) {
         socket.emit('error', { message: 'Maximum 5000 wall segments per map' });
+        return;
+      }
+      if (existing.some((w) => w.id === parsed.data.id)) {
+        socket.emit('error', { message: DUPLICATE_WALL_ID_MESSAGE });
         return;
       }
 

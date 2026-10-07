@@ -6195,9 +6195,9 @@ paths:
       summary: Replace all wall segments
       description: |
         Replaces the map's entire wall list atomically. DM only. Every
-        segment needs a UUID `id`, and a map holds at most 5000; a
-        list over that, or any invalid segment, answers 400 and changes
-        nothing.
+        segment needs a UUID `id`, no two the same, and a map holds at most
+        5000; a list over that, one that repeats an id, or any invalid
+        segment, answers 400 and changes nothing.
 
         Wall ends must lie within 250,000 pixels of the map's corner either
         way, and no more than 500 of the map's grid squares outside its
@@ -6254,8 +6254,8 @@ paths:
       summary: Add a wall segment
       description: |
         Append a single wall segment. The server assigns an `id` if the body
-        omits one, and keeps one it sent, which must be a UUID. A map holds
-        at most 5000 segments; adding to a full map answers 400 with
+        omits one, and keeps one it sent, which must be a UUID not already on
+        the map (400 otherwise). A map holds at most 5000 segments; adding to a full map answers 400 with
         `error: Limit Exceeded`. Its ends are held to the bounds
         `replaceWalls` describes. DM only. Connected clients are sent
         `wall:added` (see `replaceWalls`).
@@ -6417,9 +6417,10 @@ paths:
       description: |
         Replaces the map's entire light list atomically. Used when committing
         a large batch of changes or restoring saved lighting state. DM only.
-        Every light needs a UUID `id` and a `dimRadius` at least its
-        `brightRadius`, and a map holds at most 200; a list over that, or any
-        invalid light, answers 400 and changes nothing.
+        Every light needs a UUID `id`, no two the same, and a `dimRadius` at
+        least its `brightRadius`, and a map holds at most 200; a list over
+        that, one that repeats an id, or any invalid light, answers 400 and
+        changes nothing.
 
         A light must lie within 250,000 pixels of the map's corner either
         way, and no more than 500 of the map's grid squares outside its
@@ -6476,7 +6477,8 @@ paths:
       summary: Add a light source
       description: >-
         Add a single light. The server assigns an `id` if the body omits
-        one, and keeps one it sent, which must be a UUID. `dimRadius` must be
+        one, and keeps one it sent, which must be a UUID not already on the
+        map (400 otherwise). `dimRadius` must be
         at least `brightRadius`, and the position is held to the bounds
         `replaceLights` describes. A map holds at most 200 lights; adding to a
         full map answers 400 with `error: Limit Exceeded`. DM only. Connected

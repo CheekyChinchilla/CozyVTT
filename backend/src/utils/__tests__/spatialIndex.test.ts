@@ -67,6 +67,16 @@ describe('WallGrid', () => {
     }
   });
 
+  it('returns two walls that share an id, each as itself', () => {
+    // Sight takes its candidates from here; dropping the second wall with a
+    // repeated id let players see through it on a map of more than 200 walls.
+    const a: WallSegment = { id: 'same', x1: 100, y1: 100, x2: 200, y2: 100, type: 'wall' };
+    const b: WallSegment = { id: 'same', x1: 2000, y1: 1500, x2: 2100, y2: 1500, type: 'wall' };
+    const found = new WallGrid([a, b], 256, mapW, mapH).query(1500, 1000, 3000);
+    expect(found).toHaveLength(2);
+    expect(found).toEqual(expect.arrayContaining([a, b]));
+  });
+
   it('takes well under 50 ms over a wall reaching ten million pixels', () => {
     const walls: WallSegment[] = Array.from({ length: 200 }, (_, i) => ({
       id: `w${i}`, x1: i * 10, y1: 100, x2: i * 10 + 5, y2: 100, type: 'wall',

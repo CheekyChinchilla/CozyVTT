@@ -10,7 +10,7 @@ import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibil
 import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
-import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema } from '../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -1725,6 +1725,9 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (existing.length >= 5000) {
       return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 5000 wall segments per map' });
     }
+    if (existing.some((w) => w.id === parsed.data.id)) {
+      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_WALL_ID_MESSAGE });
+    }
 
     const updated = await prisma.map.update({
       where: { id },
@@ -1879,6 +1882,9 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
     if (existing.length >= 200) {
       return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 200 light sources per map' });
+    }
+    if (existing.some((l) => l.id === parsed.data.id)) {
+      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_LIGHT_ID_MESSAGE });
     }
 
     const updated = await prisma.map.update({

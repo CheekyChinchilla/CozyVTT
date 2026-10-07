@@ -6,7 +6,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/walls';
+import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
@@ -53,6 +53,10 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
       if (existing.length >= 200) {
         socket.emit('error', { message: 'Maximum 200 light sources per map' });
+        return;
+      }
+      if (existing.some((l) => l.id === parsed.data.id)) {
+        socket.emit('error', { message: DUPLICATE_LIGHT_ID_MESSAGE });
         return;
       }
 

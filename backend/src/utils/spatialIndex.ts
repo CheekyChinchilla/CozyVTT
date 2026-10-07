@@ -82,7 +82,9 @@ export class WallGrid {
 
   /**
    * Query segments within a bounding box (x±radius, y±radius).
-   * Returns a de-duplicated list of candidate segments.
+   * Returns a de-duplicated list of candidate segments. Each wall is itself:
+   * two that share an id are both returned, where de-duplicating by id used
+   * to drop the second, and sight passed through it.
    */
   query(x: number, y: number, radius: number): WallSegment[] {
     const minCX = this.col(x - radius);
@@ -90,7 +92,7 @@ export class WallGrid {
     const minCY = this.row(y - radius);
     const maxCY = this.row(y + radius);
 
-    const seen = new Set<string>();
+    const seen = new Set<WallSegment>();
     const result: WallSegment[] = [];
 
     for (let cx = minCX; cx <= maxCX; cx++) {
@@ -98,8 +100,8 @@ export class WallGrid {
         const bucket = this.cells.get(cx * this.rows + cy);
         if (bucket) {
           for (const seg of bucket) {
-            if (!seen.has(seg.id)) {
-              seen.add(seg.id);
+            if (!seen.has(seg)) {
+              seen.add(seg);
               result.push(seg);
             }
           }
