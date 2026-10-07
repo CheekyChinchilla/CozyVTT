@@ -1036,29 +1036,32 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Bound to `getSocket()` this listener died with the first socket, so after
   // the browser came back online a player never received another map change,
   // and with it the DM's Hide or Obscure.
+  //
+  // The handler is registered once, so it reads the role and the campaign's
+  // spirit flag through refs: either can change without a reload, as in a DM
+  // handover, and a former DM kept skipping the spirit-realm update below
+  // while a new DM heard the crossing sound.
+  const userRoleRef = useRef(userRole);
+  userRoleRef.current = userRole;
+  const spiritLayerEnabledRef = useRef(campaign?.spiritLayerEnabled);
+  spiritLayerEnabledRef.current = campaign?.spiritLayerEnabled;
   useEffect(() => {
     if (!socket) return;
 
-    // TODO(play): suspected, not reproduced. This handler is registered once,
-    // so it reads userRole and campaign from the render that registered it,
-    // while the role can change without a reload, as in a DM handover. A former
-    // DM's handler then still skips the spirit-realm update below, which may
-    // leave a stale "Spirit Realm" badge, and a new DM's may play the crossing
-    // sound. Read both through refs, or list them as dependencies.
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
       setCurrentMap(mapData);
       useGameStore.getState().setTokens(mapData.tokens || []);
 
       // For non-DMs: track whether this player is personally in the spirit realm.
       // Play the ethereal audio cue if they are crossing in or out.
-      if (userRole !== 'DM' && sv !== undefined) {
+      if (userRoleRef.current !== 'DM' && sv !== undefined) {
         const prev = prevPlayerSpiritVisibleRef.current;
         if (sv !== prev) {
           prevPlayerSpiritVisibleRef.current = sv;
           setPlayerSpiritVisible(sv);
           // Only play for individual crossings that aren't covered by the global toggle handler
           // (global toggle already plays via handleSpiritLayerToggled)
-          if (!(campaign?.spiritLayerEnabled)) {
+          if (!spiritLayerEnabledRef.current) {
             playEtherealTransition(sv);
           }
         }

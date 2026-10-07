@@ -25,6 +25,7 @@ const h = vi.hoisted(() => {
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const emitted: Array<[string, unknown]> = [];
+  const setPlayerSpiritVisible = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -42,6 +43,7 @@ const h = vi.hoisted(() => {
   };
   return {
     state,
+    setPlayerSpiritVisible,
     handlers,
     emitted,
     raw,
@@ -73,7 +75,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         updateCampaignSpiritLayer: noop,
         dmViewBothPlanes: false,
         playerSpiritVisible: false,
-        setPlayerSpiritVisible: noop,
+        setPlayerSpiritVisible: h.setPlayerSpiritVisible,
         activeVibeEffect: null,
         updateVibe: noop,
         activeAtmosphereEffect: null,
@@ -158,6 +160,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   h.emitted.length = 0;
+  h.setPlayerSpiritVisible.mockClear();
   h.handlers.clear();
   h.set({ userRole: 'DM', joinedEpoch: 1, currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
 });
@@ -378,5 +381,28 @@ describe('wall and light events on the DM page', () => {
     act(() => { h.set({ userRole: 'DM' }); });
 
     expect(screen.getByText('(3)')).toBeInTheDocument();
+  });
+});
+
+describe('map changes after a role change without a reload', () => {
+  const changed = (spiritVisible: boolean) => ({ mapId: 'map-a', mapData: mapWith('map-a', []), spiritVisible });
+
+  it('no longer tracks a crossing to the spirit realm for a player who became DM', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    act(() => { h.set({ userRole: 'DM' }); });
+
+    fire('map.changed', changed(true));
+
+    expect(h.setPlayerSpiritVisible).not.toHaveBeenCalled();
+  });
+
+  it('tracks their own crossing for a DM who became a player', () => {
+    render(<MapCanvas />);
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+
+    fire('map.changed', changed(true));
+
+    expect(h.setPlayerSpiritVisible).toHaveBeenCalledWith(true);
   });
 });

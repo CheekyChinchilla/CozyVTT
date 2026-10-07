@@ -64,7 +64,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **The dashboard shows a new invitation only after Refresh.** The page has no socket to hear `invitation.received`, and its query does not refetch on focus (`DashboardPage.tsx`).
 - `1.5.3` **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
 - `1.5.3` **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
-- `1.5.1` **Suspected: the map-change listener keeps the role from MapCanvas's first render,** so after a role change without a reload a former DM may see a stale "Spirit Realm" badge and a new DM may hear the crossing sound (`MapCanvas.tsx`).
 - `1.5.1` **A campaign import that fails part-way leaves a partial campaign behind.** `services/campaignImporter.ts` creates the campaign before its maps, tokens and pictures and does not undo them when a later step fails, so a refused archive still leaves an incomplete campaign and its files.
 - `1.5.3` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 
