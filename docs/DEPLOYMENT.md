@@ -1179,7 +1179,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 **Neither 1.4.0 nor 1.5.0 needs a manual step here**: their database migrations run automatically and change no existing data. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
-Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place, so nothing is lost if someone saves a sheet before you run this. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
+Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 
 ```bash
 # See what would change, without writing anything
@@ -1191,7 +1191,14 @@ docker compose exec backend node dist/scripts/migrate-sheet-fields.js
 
 Without Docker, run the same two commands from the `backend` folder, without `docker compose exec backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
 
-Running it twice is harmless. Details in
+What to expect:
+
+- The dry run prints how many characters it looked at, then each character it would change, with its name, game system and id, and a line for each change, for example `moved 2 attack(s) to strikes`.
+- Nothing is deleted that has not been moved. Where a character already has its own text, the older text is added after it, and where there is no room for it, for example a second player name, the old field is left as it is and the character is listed under "keep something in an older field" so you can look at it.
+- You do not need to stop the stack. A player who saves, or a DM who changes hit points, while it runs keeps that change.
+- If it prints an error, or says a character changed while being written, it ends with an error status; run it again. Running it twice is harmless.
+
+Details in
 [backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).
 
 ### Without Docker

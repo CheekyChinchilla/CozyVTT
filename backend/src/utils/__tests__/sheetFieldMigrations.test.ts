@@ -127,30 +127,60 @@ describe('D&D 5e', () => {
     expect(out.proficiencies).toEqual(structured);
   });
 
-  it('does not overwrite personality the player has already written', () => {
-    const out = dnd({
+  it('does not overwrite personality the player has already written, and keeps the older text after it', () => {
+    const notes: string[] = [];
+    const out = migrateDnD5e({
       personalityTraits: 'From the template.',
       ideals: 'Template ideal.',
-      personality: { traits: 'Mine, thanks.' },
-    });
+      bonds: 'Same text.',
+      personality: { traits: 'Mine, thanks.', bonds: 'same text.' },
+    }, notes);
 
     expect(out.personality).toEqual({
-      traits: 'Mine, thanks.',
+      traits: 'Mine, thanks.\n\nFrom the template.',
       ideals: 'Template ideal.',
+      bonds: 'same text.',
     });
-    expect(out).not.toHaveProperty('personalityTraits');
+    for (const old of ['personalityTraits', 'ideals', 'bonds']) expect(out).not.toHaveProperty(old);
+    expect(notes.join('; ')).toMatch(/added 1 older personality field\(s\) after/);
   });
 
-  it('does not overwrite an allies entry the player has written', () => {
+  it('does not overwrite an allies entry the player has written, and keeps the older text after it', () => {
     const out = dnd({
       allies: 'Template allies',
       alliesAndOrganizations: { name: 'The Harpers', description: 'Old friends' },
     });
     expect(out.alliesAndOrganizations).toEqual({
       name: 'The Harpers',
-      description: 'Old friends',
+      description: 'Old friends\n\nTemplate allies',
     });
     expect(out).not.toHaveProperty('allies');
+  });
+
+  it('drops an allies entry the sheet already holds', () => {
+    const out = dnd({ allies: 'The Harpers', alliesAndOrganizations: { name: 'the harpers' } });
+    expect(out.alliesAndOrganizations).toEqual({ name: 'the harpers' });
+    expect(out).not.toHaveProperty('allies');
+  });
+
+  it('keeps template features whose description differs from the player\'s', () => {
+    const out = dnd({
+      featuresAndTraits: [{ name: 'Second Wind', description: 'My note.' }],
+      features: [{ name: 'Second Wind', description: 'Regain 1d10 + level.' }],
+    });
+    expect(out.featuresAndTraits).toEqual([
+      { name: 'Second Wind', description: 'My note.' },
+      { name: 'Second Wind', description: 'Regain 1d10 + level.' },
+    ]);
+    expect(out).not.toHaveProperty('features');
+  });
+
+  it('keeps a features field holding an entry it cannot read', () => {
+    const notes: string[] = [];
+    const out = migrateDnD5e({ features: [{ name: 'Second Wind' }, { description: 'No name, but text.' }] }, notes);
+    expect(out.featuresAndTraits).toEqual([{ name: 'Second Wind', description: '' }]);
+    expect(out.features).toEqual([{ name: 'Second Wind' }, { description: 'No name, but text.' }]);
+    expect(notes.join('; ')).toMatch(/kept 'features'/);
   });
 
   it('leaves a sheet with nothing to move untouched', () => {
@@ -188,11 +218,52 @@ describe('Pathfinder 2e', () => {
     expect(out).not.toHaveProperty('attacks');
   });
 
-  it('does not clobber strikes the player already has', () => {
-    const mine = [{ name: 'Mine', type: 'melee' }];
-    const out = pf2e({ strikes: mine, attacks: [{ name: 'From the template' }] });
-    expect(out.strikes).toEqual(mine);
+  it('keeps the strikes the player already has and adds the template attacks after them', () => {
+    const notes: string[] = [];
+    const mine = [{ name: 'Longsword', type: 'melee', attackBonus: 8 }];
+    const out = migratePathfinder2e({
+      strikes: mine,
+      attacks: [
+        { name: 'longsword', range: 'melee', attackBonus: 7 },
+        { name: 'Shortbow', range: 'ranged', attackBonus: 5 },
+      ],
+    }, notes);
+    expect(out.strikes).toEqual([...mine, { name: 'Shortbow', type: 'ranged', attackBonus: 5 }]);
     expect(out).not.toHaveProperty('attacks');
+    expect(notes.join('; ')).toMatch(/moved 1 attack\(s\) to strikes/);
+  });
+
+  it('keeps attacks it cannot move', () => {
+    const notes: string[] = [];
+    const attacks = [{ name: 'Warhammer', range: 'melee' }, 'Kick', { damageRoll: '1d4' }];
+    const out = migratePathfinder2e({ strikes: [{ name: 'Fist' }], attacks }, notes);
+    expect(out.strikes).toEqual([{ name: 'Fist' }, { name: 'Warhammer', type: 'melee' }]);
+    expect(out.attacks).toEqual(attacks);
+    expect(notes.join('; ')).toMatch(/kept 'attacks'/);
+  });
+
+  it('keeps a specialAbilities field that is not a list', () => {
+    const out = pf2e({ specialAbilities: 'Shield Block' });
+    expect(out.specialAbilities).toBe('Shield Block');
+  });
+
+  it('adds a top-level sense, resistance or immunity the nested list lacks before dropping it', () => {
+    const notes: string[] = [];
+    const out = migratePathfinder2e({
+      senses: ['Darkvision (60 feet)', 'darkvision'],
+      resistances: ['cold 5'],
+      hp: { maximum: 21, resistances: [], immunities: [] },
+      perception: { bonus: 6, senses: ['Darkvision'] },
+    }, notes);
+    expect((out.perception as { senses: string[] }).senses).toEqual(['Darkvision', 'Darkvision (60 feet)']);
+    expect((out.hp as { resistances: string[] }).resistances).toEqual(['cold 5']);
+    expect(out).not.toHaveProperty('senses');
+    expect(out).not.toHaveProperty('resistances');
+  });
+
+  it('keeps a top-level list with nowhere to go', () => {
+    const out = pf2e({ senses: ['Darkvision'] });
+    expect(out.senses).toEqual(['Darkvision']);
   });
 
   it('moves special abilities into class features, keeping descriptions', () => {
@@ -208,6 +279,14 @@ describe('Pathfinder 2e', () => {
       { name: 'Attack of Opportunity', description: 'Strike a creature that moves past.' },
     ]);
     expect(out).not.toHaveProperty('specialAbilities');
+  });
+
+  it('adds only the special abilities class features do not already hold', () => {
+    const out = pf2e({
+      specialAbilities: [{ name: 'Shield Block', description: '' }, { name: 'Bravery', description: 'Will save +1.' }],
+      classFeatures: [{ name: 'Shield Block', description: 'Mine.' }, 'Bravery'],
+    });
+    expect(out.classFeatures).toEqual([{ name: 'Shield Block', description: 'Mine.' }, { name: 'Bravery', description: 'Will save +1.' }]);
   });
 
   it('drops the stray top-level copies but keeps the nested ones', () => {
@@ -243,9 +322,16 @@ describe('Call of Cthulhu 7e', () => {
     expect(out).not.toHaveProperty('player');
   });
 
-  it('does not overwrite a playerName that is already set', () => {
-    const out = coc({ player: 'Old', playerName: 'Current' });
+  it('does not overwrite a playerName that is already set, and keeps the other name', () => {
+    const notes: string[] = [];
+    const out = migrateCallOfCthulhu({ player: 'Old', playerName: 'Current' }, notes);
     expect(out.playerName).toBe('Current');
+    expect(out.player).toBe('Old');
+    expect(notes.join('; ')).toMatch(/kept 'player'/);
+  });
+
+  it('drops a player that matches playerName', () => {
+    const out = coc({ player: 'tyke', playerName: 'Tyke' });
     expect(out).not.toHaveProperty('player');
   });
 

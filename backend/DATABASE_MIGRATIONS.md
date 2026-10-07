@@ -141,11 +141,44 @@ migrate:sheet-fields` (which runs the TypeScript source) works only in a
 development checkout. Outside Docker, run the compiled file from `backend/`
 after `npm run build`.
 
-Safe to run more than once — a sheet already converted is skipped. Each
-character is written in its own transaction, so an interruption cannot leave one
-half-converted, and nothing is removed until its content has been merged into
-the field that replaces it. Text a player typed is moved verbatim and never
-parsed. Take a backup first anyway, as with any data change.
+What it does with each older field:
+
+- **D&D 5e.** The template's `features` are added to Features & Traits; a
+  feature already there by name is filled in or skipped, and one whose text
+  differs is added beside it. The flat `proficiencies` list and `languages`
+  are added to the proficiency list (and the languages to the Languages box).
+  The loose `personalityTraits`, `ideals`, `bonds` and `flaws` fill empty
+  personality boxes; where a box already holds other text, the older text is
+  added after it as a new paragraph. `allies` fills an empty Allies name, or is
+  added after the description.
+- **Pathfinder 2e.** `attacks` are added after the character's own strikes,
+  skipping any with the name of one already there. `specialAbilities` are
+  added to the class features. Top-level `senses`, `resistances` and
+  `immunities` are added to the lists inside `perception` and `hp`.
+- **Call of Cthulhu 7e.** `player` becomes `playerName` when that is empty.
+
+An older field is removed only once everything in it is in the new place,
+whether it was there already or has just been added. A field holding
+something with nowhere to go, such as a second player name when `playerName`
+already holds a different one, or an entry with no name or that is not text,
+is left where it is, and the report lists that character under "keep something in an older
+field". Text a player typed is moved verbatim and never parsed. The report
+gives each changed character's name, game system and id, with a line for each
+change.
+
+It is safe to run while people are playing, and safe to run more than once.
+Each character is written in its own transaction: the row is locked, read
+again and migrated from that fresh copy, so a save or a hit point change made
+since the run started is kept, and an interruption cannot leave a sheet
+half-converted. A character already converted is skipped. The command ends
+with exit status 1 if it fails part-way, or if a character changed while it
+was being written and was left for the next run; run it again. Take a backup
+first anyway, as with any data change.
+
+Saving a character in the app applies the same moves, so a sheet saved before
+the script runs is moved already. The one difference is a field with nowhere
+to go: the script keeps it, but a save cannot, because the server stores only
+the fields the sheet declares.
 
 ## Troubleshooting
 
