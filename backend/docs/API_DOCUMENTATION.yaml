@@ -55,7 +55,8 @@ info:
     bundled nginx puts the visitor's own address there, taken from a tunnel or
     proxy in front of it only when that connects from a private address. Behind
     a proxy that does not pass the visitor's address on, every client shares one
-    allowance. Uploads and the WebSocket limits are counted per user.
+    allowance. Uploads, campaign archives and the WebSocket limits are counted
+    per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
       `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
@@ -63,11 +64,13 @@ info:
       a reset link that does not exist, has been used or has expired. Nothing else
       counts: not a correct answer, not a malformed or refused request, and not the
       429 itself. The limit is checked before the credential is, so correct
-      sign-ins arriving together from one address all succeed; wrong ones sent
+      passwords arriving together from one address all pass it; wrong ones sent
       together are checked five at most (the rest wait for those to be checked,
-      then get 429 if all five were wrong). An unknown email counts and answers
-      exactly as a wrong password does. The 429 carries `Retry-After`, the seconds
-      until the oldest counted failure leaves the window
+      then get 429 if all five were wrong). That covers the password step of a
+      sign-in only: the two-factor code step keeps its own limit, below. An
+      unknown email counts and answers exactly as a wrong password does. The 429
+      carries `Retry-After`, the seconds until the oldest counted failure leaves
+      the window
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -75,12 +78,22 @@ info:
       unknown address, so successes cannot be skipped without removing the limit
       on the mail it sends
     - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
-    - MFA login verification (`POST /api/auth/mfa/verify-login`): 5 failed attempts
-      per 15 minutes per address, and separately 5 failed attempts per 15 minutes
-      for the account, from any address
+    - MFA login verification (`POST /api/auth/mfa/verify-login`), the two-factor
+      code step of a sign-in: 5 failed codes per 15 minutes per address, and
+      separately 5 failed codes per 15 minutes for the account, from any address.
+      Each request counts as it arrives and a correct code is taken off the count
+      once it has been answered, so codes sent together count until then
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
-      30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
+      30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`).
+      A user may also run one Universal VTT import at a time; a second sent while
+      the first is still running answers 429
+    - Campaign archives (`POST /api/campaigns/import/preview`,
+      `POST /api/campaigns/import` and `GET /api/campaigns/{campaignId}/export`):
+      20 of each per hour per user, counted apart (configurable via
+      `CAMPAIGN_ARCHIVE_RATE_LIMIT`), and one archive operation at a time per
+      user across all three. Past either, the route answers 429; a request
+      refused for overlapping another is not counted against the hour
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -92,10 +105,13 @@ info:
     - Every other event a member can send over the WebSocket has a per-user
       ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
-    Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
-    The body is JSON `{ error, message }` for the global limit, uploads and the
-    MFA limits. The credential, registration and forgot-password limits answer
-    with a plain-text message instead.
+    Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers
+    and `Retry-After`. The body is JSON `{ error, message }` for the global
+    limit, uploads, the campaign archive limits and the MFA limits. The
+    credential, registration and forgot-password limits answer with a
+    plain-text message instead. The one-at-a-time refusals (a second Universal
+    VTT import, or a second campaign archive operation, while one is running)
+    answer 429 with JSON `{ error, message }` and neither header.
 
     ## Responses every route can give
     These are not repeated on each operation:
@@ -4730,7 +4746,7 @@ paths:
             `type` ("Invalid file type..."). `error` is `File Too Large` when
             the file exceeds its type's limit. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
-            than 100 text fields, a field name longer than 100 characters, or
+            than 100 text fields, a field name longer than 100 bytes, or
             a name such as `a[b][c]` nested more than five levels deep or
             with a number above 1000 between the brackets, answer with
             `Upload Error` or `Validation Error`. A refused file is deleted,
@@ -6820,10 +6836,12 @@ paths:
         `fog:operation` event does: `fog:updated` with the whole grid to the
         DM, and `fog:cells` with the revealed cells to every other member,
         for the map the campaign is showing; for any other map, only the DM's
-        connections are told. Refused with 409 (`Fog of war is off for this
-        map`) while `fogEnabled` is off for the map, before the body is
-        checked, and with 409 and nothing stored for a map with more than
-        250,000 grid squares, which is too large for fog. DM only.
+        connections are told. The body is checked first, so one that is not
+        a valid operation answers 400 even while fog is off. A valid one is
+        then refused with 409 (`Fog of war is off for this map`) while
+        `fogEnabled` is off for the map, and with 409 and nothing stored for
+        a map with more than 250,000 grid squares, which is too large for
+        fog. DM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -7824,7 +7842,10 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: The campaign does not exist
+          description: >-
+            The campaign was deleted after the DM check passed and before the
+            export read it. An unknown campaign id is answered 403 by the DM
+            check, as on every campaign route.
           content:
             application/json:
               schema:
@@ -7961,6 +7982,14 @@ paths:
         total size of the files read out of it. Each user may import 20
         campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
         previews and exports, and run one archive operation at a time.
+
+        The manifest is checked before anything is created. An archive whose
+        manifest gives more than 50 maps, 200 creatures, 500 token templates
+        or 500 assets is refused whole with 400 (`Import Failed`), as is one
+        whose asset manifest lists more than 500 assets; the preview route
+        refuses the same manifest with `Invalid Archive`. A creatures or
+        token templates file holding more than 200 or 500 entries keeps the
+        first ones and lists the rest in `skipped`.
 
         Every file in the archive is unpacked through a counter and stopped
         as soon as it passes its limit. Each JSON file may unpack to 10 MB,
@@ -9463,8 +9492,11 @@ paths:
         parsing one that large is itself enough to exhaust the server's memory.
         When the file would fit without its furniture walls, the message says
         so. A
-        light's `range` becomes its dim radius and half of it its bright
-        radius, so a range over 100 squares, or under 0.5, answers 400. A
+        light's `range` becomes its dim radius, so a range over 100 squares,
+        or under 0.5, answers 400. Its bright radius is the light's
+        `bright_range` when that is a number of 0 or more, capped at the dim
+        radius (CozyVTT's own export writes it), and otherwise half the
+        range. A light with `enabled: false` is imported switched off. A
         file that is not JSON or lacks `resolution.map_size`, `image` or
         `line_of_sight` answers 400 with `error: Parse Error`.
 

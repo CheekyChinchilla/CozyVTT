@@ -893,7 +893,10 @@ Enforced on every creature, token-template and campaign-import write:
   Pathfinder 2e modifiers legitimately exceed +30 at high level, so a bound
   fitted to D&D 5e would reject real creatures.
 - Ability scores: integers 0–30. Attribute modifiers: −10 to +20.
-- Unknown top-level keys are preserved, so older stat blocks survive a round trip.
+- Up to 20 unknown top-level keys are preserved, so older stat blocks survive a
+  round trip; more than 20 answers `400`.
+- The whole stat block, as stored, may be at most 64 KB (65,536 characters of
+  JSON); a larger one answers `400`.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
 A campaign import applies the same limits but does not refuse: it cuts text and
@@ -1006,7 +1009,7 @@ Upload a new asset. Uses `multipart/form-data`.
 - `campaignId` — required when `scope` is `CAMPAIGN`
 - `tags` — comma-separated list of tags (optional)
 
-A request may carry at most 100 text fields. A field name is at most 100 characters, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+A request may carry at most 100 text fields. A field name is at most 100 bytes, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
 
 ---
 
@@ -1501,7 +1504,10 @@ when it sees it.
 The **Counts** column matters. Where only wrong answers count, signing in
 correctly never uses up the allowance, and neither does being refused: a
 household sharing one address could otherwise lock itself out by logging in
-normally. Correct sign-ins arriving together from one address all succeed. Where every request counts, the success
+normally. Correct passwords arriving together from one address all pass this
+limit. That covers the password step of a sign-in only: the two-factor code step
+(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 failed codes per 15
+minutes per address, and 5 per 15 minutes per account from any address. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
@@ -1515,4 +1521,10 @@ The upload, campaign-archive and general-API limits are configurable with the
 `ASSET_UPLOAD_RATE_LIMIT`, `CAMPAIGN_ARCHIVE_RATE_LIMIT` and
 `RATE_LIMIT_MAX_REQUESTS` environment variables; the rest are fixed.
 
-Rate limit responses return HTTP `429` with a `Retry-After` header indicating when the limit resets.
+Rate limit responses return HTTP `429` with a `Retry-After` header giving the
+seconds until the limit resets. The one-at-a-time refusals (a second campaign
+import, preview or export while one of yours is running, and a second Universal
+VTT map import while one is running) also answer `429`, with no `Retry-After`:
+send the request again once the first has finished. The WebSocket limits are not
+HTTP responses: an event past its limit is dropped, or answered with one `error`
+event, as the WebSocket guide lists.

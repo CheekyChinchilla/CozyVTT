@@ -309,7 +309,11 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong two-factor code, or a password reset link that no longer works) counts. Signing in correctly never does, even when everyone in a household signs in at the same moment. It tells visitors apart by their *IP address*, the address their device connects from, so it has to see each visitor's own address and not your tunnel's or proxy's.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
+
+The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. A right code does not count against it, but this limit has no allowance for people signing in together: if more than five people behind one address enter their codes at the very same moment, the ones past five are refused and have to enter their code again.
+
+Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's.
 
 **With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
 
@@ -358,6 +362,8 @@ error: Your local changes to the following files would be overwritten by merge:
         docker-compose.yml
 Please commit your changes or stash them before you merge.
 ```
+
+The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf` (to turn on HTTPS, for example, or to add a proxy's addresses); the message then names that file instead.
 
 Set your changes aside, update, then put them back:
 
@@ -741,7 +747,7 @@ These take effect on `docker compose up -d` (no image rebuild needed): the backe
 
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
 
-**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself, so the proxy has to accept the map limit times 4/3 plus about 5 MB, not the map limit plus 5 MB. With the defaults (`MAX_MAP_SIZE_MB=50`, `NGINX_MAX_BODY_SIZE=55M`) a picture of up to about 37 MB imports and a larger one is refused with a 413 by the proxy, although a plain map upload of up to 50 MB works. To import pictures up to the full map limit, set `NGINX_MAX_BODY_SIZE` to 72M (50 MB x 4/3 + 5 MB, rounded up); for another limit, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 5. CozyVTT itself accepts a file of up to that much plus 8 MB for the walls and lights, and answers a larger one with a message saying so.
+**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself. CozyVTT accepts a `.uvtt` file of up to the map limit times 4/3, plus 8 MB for the walls and lights (about 75 MB with the default `MAX_MAP_SIZE_MB=50`), and answers a larger one with a message saying so. With the default `NGINX_MAX_BODY_SIZE=55M`, the proxy refuses any `.uvtt` file over 55 MB with a 413, which means a picture larger than about 40 MB, although a plain map upload of up to 50 MB works. To let through every file CozyVTT accepts, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 10: that covers the 8 MB for walls and lights and leaves a little over for the way the browser wraps the upload. With the default map limit, set `NGINX_MAX_BODY_SIZE=76M`.
 
 **If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
 
