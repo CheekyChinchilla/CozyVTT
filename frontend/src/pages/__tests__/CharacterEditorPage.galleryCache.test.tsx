@@ -8,7 +8,7 @@
  * date, which looked like the earlier save had been lost.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -59,6 +59,12 @@ function clientHoldingList(): QueryClient {
   client.setQueryData<Character[]>(queryKeys.characters, [pf2eCharacter(), other]);
   return client;
 }
+
+// The sheet loads on demand. Loaded here first, the first test does not wait
+// on the import, which on a busy machine outlasted the default wait.
+beforeAll(async () => {
+  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
+}, 30_000);
 
 beforeEach(() => {
   showToast.mockReset();

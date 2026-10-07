@@ -7,7 +7,7 @@
  * that text, and the next save is made from the version just saved.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -49,6 +49,12 @@ function renderPage() {
     </QueryClientProvider>
   );
 }
+
+// The sheet loads on demand. Loaded here first, the first test does not wait
+// on the import, which on a busy machine outlasted the default wait.
+beforeAll(async () => {
+  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
+}, 30_000);
 
 beforeEach(() => {
   getCharacter.mockReset().mockResolvedValue(dnd5eCharacter());

@@ -7,7 +7,7 @@
  * Details, which closed it too, dropped unsaved sheet edits without asking. A
  * token picture chosen in the sheet was uploaded and then silently ignored.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -58,6 +58,13 @@ function template(gameSystem: 'PATHFINDER_2E' | 'DND_5E'): CharacterTemplate {
 const refused = {
   response: { status: 400, data: { error: 'Validation Error', message: 'Character data does not match game system schema' } },
 };
+
+// The sheets load on demand. Loaded here first, the first test does not wait
+// on the import, which on a busy machine outlasted the default wait.
+beforeAll(async () => {
+  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
+  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
+}, 30_000);
 
 beforeEach(() => {
   showToast.mockReset();
