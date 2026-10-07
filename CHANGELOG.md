@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A specially crafted atmosphere setting could make the server stop responding for minutes.** Atmosphere filters are now checked safely, both when a DM saves them and when a campaign is imported. Every filter the atmosphere editor makes is accepted as before.
 
+- **A specially crafted hit dice entry on a character sheet could freeze the browser of anyone who opened the sheet.** Hit dice are now read safely, and every existing sheet shows them as before.
+
 ---
 
 ## [1.5.0] — 2026-10-03
