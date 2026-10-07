@@ -145,6 +145,10 @@ describe('exploration:reveal', () => {
     player.emit('exploration:reveal', { mapId, cells: [7] });
     await sleep(200);
     player.emit('exploration:reveal', { mapId, cells: [8] });
+    // Queued by now, and not due to be written for most of a second. (A
+    // report that reaches the server after the reset is written, as it should
+    // be: the player saw those cells after it.)
+    await sleep(150);
     dm.emit('exploration:reset', { mapId });
     await sleep(1600);
 
