@@ -5,7 +5,7 @@
  * free-text note, becomes no audio instead of a dangling reference.
  */
 
-import { remapVibePeriodAudio } from '../campaignImporter';
+import { remapVibePeriodAudio, remapAtmosphereAudio } from '../campaignImporter';
 
 const OLD = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const NEW = '11111111-2222-3333-4444-555555555555';
@@ -39,5 +39,26 @@ describe('remapVibePeriodAudio', () => {
     expect(remapVibePeriodAudio(settings(null), new Map())).toBeNull();
     expect(remapVibePeriodAudio(undefined, new Map())).toBeNull();
     expect(remapVibePeriodAudio('junk', new Map())).toBeNull();
+  });
+});
+
+describe('remapAtmosphereAudio', () => {
+  const vibe = (atmosphereAudio: unknown) => ({ periods: [], atmosphereAudio });
+
+  it('points the ambient track at the imported copy, keeping its volume and looping', () => {
+    expect(remapAtmosphereAudio(vibe({ assetId: OLD, volume: 0.25, loop: false }), new Map([[OLD, NEW]]))).toEqual({
+      assetId: NEW, volume: 0.25, loop: false,
+    });
+  });
+
+  it('drops a track the import did not bring in, or that is not an asset id', () => {
+    expect(remapAtmosphereAudio(vibe({ assetId: OLD, volume: 0.5, loop: true }), new Map())).toBeUndefined();
+    expect(remapAtmosphereAudio(vibe({ assetId: 'rain.mp3' }), new Map([[OLD, NEW]]))).toBeUndefined();
+    expect(remapAtmosphereAudio(vibe(null), new Map([[OLD, NEW]]))).toBeUndefined();
+  });
+
+  it('holds the volume between silent and full, as the Atmosphere panel does', () => {
+    expect(remapAtmosphereAudio(vibe({ assetId: OLD, volume: 7 }), new Map([[OLD, NEW]]))).toEqual({ assetId: NEW, volume: 1, loop: true });
+    expect(remapAtmosphereAudio(vibe({ assetId: OLD, volume: 'loud' }), new Map([[OLD, NEW]]))?.volume).toBe(0.5);
   });
 });

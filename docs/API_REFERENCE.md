@@ -539,7 +539,7 @@ Copy a token template to another campaign. Requires DM role in both the source a
 Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
 
 **Query params:**
-- `includeAudio` — `true` to include audio assets (default: `false`)
+- `includeAudio` — `true` to include audio assets (default: `false`): the tracks of the campaign's atmosphere periods and its ambient track. An import plays the imported copies.
 - `includeTokens` — `false` to exclude tokens on maps (default: `true`)
 
 **Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`, sent as it is made (no `Content-Length`). A campaign whose files would make an archive over 500 MB, the most an import accepts, answers `422` with `error: "Export Too Large"` and a `message` giving the size.

@@ -614,9 +614,12 @@ readable by every member while it plays. `canReadAsset` grants exactly that: the
 asset id recorded in the campaign's `vibeSettings.atmosphereAudio` is readable by
 that campaign's members for as long as it is recorded. Because setting a track is
 therefore an act of sharing, the socket handler checks the DM can read it first,
-and never as an admin. It is also the only writer of that setting: the campaign
-settings routes and campaign import carry the stored value through untouched,
-because neither can make that check. The route sends the `Content-Type` from the file's
+and never as an admin. It is also the only writer of that setting that takes an
+id from a client: the campaign settings routes carry the stored value through
+untouched, because they cannot make that check. A campaign import never keeps
+the archive's id either. It names only the copy of the track it has just
+imported into the new campaign, an asset of that campaign uploaded by the
+importer, or no track. The route sends the `Content-Type` from the file's
 validated extension, never the uploader-supplied `mimeType`, with `nosniff` on
 both whole-file and range responses.
 

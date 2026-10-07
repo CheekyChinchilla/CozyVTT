@@ -7795,7 +7795,11 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: includeAudio
           in: query
-          description: Audio files are included only for exactly `true`.
+          description: >-
+            Audio files are included only for exactly `true`: the AUDIO assets
+            the campaign's atmosphere names, each period's `audio` and
+            `vibeSettings.atmosphereAudio.assetId`, under the same read rule as
+            every other asset. An import points those settings at its copies.
           schema:
             type: boolean
             default: false
@@ -11032,6 +11036,9 @@ components:
           type: integer
         includesAudio:
           type: boolean
+          description: >-
+            Whether the archive holds any audio file. Archives exported before
+            1.5.1 with audio asked for say true and hold none.
         totalSizeBytes:
           type: integer
 

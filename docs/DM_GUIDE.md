@@ -530,7 +530,7 @@ Export your campaign as a portable `.cozyvtt` archive and import it on another C
 
 1. Open the campaign and click **Campaign Settings** (the gear icon)
 2. In the **General** tab, scroll to the **Export Campaign** section
-3. Optionally toggle **Include audio assets** (off by default to reduce file size)
+3. Optionally toggle **Include audio assets** (off by default to reduce file size). It adds the sound your atmosphere plays: the track of each time-of-day period and the ambient track
 4. Click **Export Campaign**
 5. In Chrome and Edge, choose where to save the file; the archive is written there as it arrives. Other browsers download it as they would any file, and save it once it has all arrived
 
@@ -545,6 +545,7 @@ A large campaign takes as long to export as your connection needs; nothing gives
 - Token templates
 - All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
 - Campaign settings (name, description, game system, vibe settings, spirit layer)
+- With **Include audio assets** ticked, the sound files the atmosphere uses, so each period and the ambient track play again in the imported campaign. Without it, the imported campaign's periods and ambient sound have no track, the import window says which, and you can choose new ones in the Atmosphere panel
 
 **What's NOT included:**
 - Character sheets (player privacy)

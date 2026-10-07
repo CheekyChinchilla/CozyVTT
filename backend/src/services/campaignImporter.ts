@@ -320,6 +320,59 @@ export function remapVibePeriodAudio(
   return touched ? { ...settings, periods } : null;
 }
 
+/**
+ * The campaign's ambient track, pointed at the imported copy of its file,
+ * with its volume and looping as the Atmosphere panel stores them; or
+ * undefined when the archive names no track this import brought in.
+ */
+export function remapAtmosphereAudio(
+  vibeSettings: unknown,
+  audioIdMap: Map<string, string>,
+): { assetId: string; volume: number; loop: boolean } | undefined {
+  if (!vibeSettings || typeof vibeSettings !== 'object' || Array.isArray(vibeSettings)) return undefined;
+  const ambient = (vibeSettings as Record<string, unknown>).atmosphereAudio;
+  if (!ambient || typeof ambient !== 'object' || Array.isArray(ambient)) return undefined;
+  const { assetId, volume, loop } = ambient as Record<string, unknown>;
+  const oldId = vibePeriodAudioAssetId(assetId);
+  const newId = oldId ? audioIdMap.get(oldId) : undefined;
+  if (!newId) return undefined;
+  return {
+    assetId: newId,
+    volume: typeof volume === 'number' && Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0.5,
+    loop: loop !== false,
+  };
+}
+
+/**
+ * Say which atmosphere tracks the archive names but does not hold: an
+ * export made without "Include audio assets", or by a version whose export
+ * never included sound.
+ */
+function sayMissingTracks(vibeSettings: unknown, audioIdMap: Map<string, string>, ambientKept: boolean, report: ImportReport): void {
+  if (!vibeSettings || typeof vibeSettings !== 'object' || Array.isArray(vibeSettings)) return;
+  const settings = vibeSettings as Record<string, unknown>;
+  const periods = Array.isArray(settings.periods) ? settings.periods : [];
+  const missing = periods
+    .filter((p): p is Record<string, unknown> => p !== null && typeof p === 'object' && !Array.isArray(p))
+    .filter((p) => {
+      const id = vibePeriodAudioAssetId(p.audio);
+      return id !== null && !audioIdMap.has(id);
+    })
+    .map((p) => label(p.name, 'unnamed'));
+  if (missing.length > 0) {
+    const names = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
+    report.warn(
+      `The archive holds no track for the atmosphere's ${names} ${missing.length === 1 ? 'period' : 'periods'}, so ${missing.length === 1 ? 'it has' : 'they have'} none. ` +
+        'Export with Include audio assets ticked to bring tracks across.'
+    );
+  }
+  const ambient = settings.atmosphereAudio;
+  const ambientId = ambient && typeof ambient === 'object' ? vibePeriodAudioAssetId((ambient as Record<string, unknown>).assetId) : null;
+  if (ambientId && !ambientKept) {
+    report.warn('The archive holds no file for the ambient track, so none is playing. Export with Include audio assets ticked to bring it across.');
+  }
+}
+
 export async function previewCampaignImport(
   archivePath: string
 ): Promise<CampaignImportPreview> {
@@ -563,21 +616,30 @@ export async function importCampaign(
     // 5. Unpack the pictures and tracks, so their new ids are known.
     const assets = await stageAssets(archivePath, directory.files, assetManifest, total, path.resolve(staging), newCampaignId, report);
     const assetRefMap = new Map(assets.map((a) => [a.oldId, `/api/assets/${a.typeDir}/${a.newId}`])); // old id → new address
-    const assetIdMap = new Map(assets.map((a) => [a.oldId, a.newId])); // old id → new id
+    // Old id → new id, for the sound files this import brought in: the only
+    // assets the atmosphere may name.
+    const audioIdMap = new Map(assets.filter((a) => a.type === 'AUDIO').map((a) => [a.oldId, a.newId]));
 
     /** Remap an asset reference from the archive to the new URL. */
     const remapAsset = (ref: string | null | undefined): string | null => (ref ? (assetRefMap.get(ref) ?? null) : null);
 
     // The same presets a new campaign gets, so an archive with no atmosphere
-    // settings imports with the atmosphere the allowlists accept. The
-    // archive is a file the importer chose, so its atmosphere track is a
-    // client-supplied asset id like any other; a new campaign has none.
+    // settings imports with the atmosphere the allowlists accept.
     const defaultVibeSettings = JSON.parse(JSON.stringify(DEFAULT_VIBE_SETTINGS)) as Prisma.InputJsonValue;
     // Vibe periods name audio assets by id; point them at the imported copies.
     // A track the archive does not carry becomes no audio, so an old note or a
     // reference to an asset left out of the export never dangles.
+    const periodsRemapped =
+      remapVibePeriodAudio(campaignSettings.vibeSettings, audioIdMap) ?? campaignSettings.vibeSettings;
+    // The archive is a file the importer chose, so its ambient track is a
+    // client-supplied asset id like any other and is never kept as it is.
+    // It is pointed at this import's own copy of the file instead, an asset
+    // of the new campaign, or dropped.
+    const ambient = remapAtmosphereAudio(campaignSettings.vibeSettings, audioIdMap);
+    sayMissingTracks(campaignSettings.vibeSettings, audioIdMap, ambient !== undefined, report);
+    const keptVibe = preserveAtmosphereAudio(periodsRemapped);
     const vibeSettings =
-      remapVibePeriodAudio(campaignSettings.vibeSettings, assetIdMap) ?? campaignSettings.vibeSettings;
+      keptVibe && typeof keptVibe === 'object' && ambient ? { ...(keptVibe as Record<string, unknown>), atmosphereAudio: ambient } : keptVibe;
     const name = campaignName || campaignSettings.name;
     const gameSystem = importedGameSystem(campaignSettings.gameSystem, "The campaign's", report);
 
@@ -594,7 +656,7 @@ export async function importCampaign(
               gameSystem,
               status: 'PREPARATION',
               ownerId: importingUserId,
-              vibeSettings: (preserveAtmosphereAudio(vibeSettings) as Prisma.InputJsonValue) || defaultVibeSettings,
+              vibeSettings: (vibeSettings as Prisma.InputJsonValue) || defaultVibeSettings,
               currentVibe: campaignSettings.currentVibe || null,
               spiritLayerEnabled: campaignSettings.spiritLayerEnabled ?? false,
               spiritLayerStyle: campaignSettings.spiritLayerStyle ?? 'wispy',

@@ -393,7 +393,7 @@ export default function CampaignSettingsModal({
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-stone-gray">Include audio assets</p>
-                          <p className="text-xs text-warm-gray">Ambient tracks and sound effects</p>
+                          <p className="text-xs text-warm-gray">The tracks your atmosphere plays</p>
                         </div>
                         <button
                           type="button"
