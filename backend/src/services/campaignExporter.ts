@@ -102,7 +102,9 @@ export async function prepareCampaignExport(
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: {
-      maps: true,
+      // Oldest first, so an import makes them in the order they were made
+      // and its Map Library lists them as this one does.
+      maps: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
       creatureTemplates: { where: { source: 'custom' } },
       tokenTemplates: true,
     },

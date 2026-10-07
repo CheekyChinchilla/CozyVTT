@@ -350,3 +350,45 @@ describe('an asset the import leaves out', () => {
     ]);
   });
 });
+
+// ── Order ───────────────────────────────────────────────────────────────────
+
+describe('the order of an imported campaign\'s maps and pictures', () => {
+  it('follows the original: the Map Library lists the maps as it did, and no two share a time', async () => {
+    const source = await createTestCampaign(userId, { name: 'In order' });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    const made = Date.parse('2026-01-01T00:00:00.000Z');
+    const maps = [];
+    for (const [i, name] of ['Act I', 'Act II', 'Act III'].entries()) {
+      const file = path.join(UPLOAD_DIR, `order-${i}.png`);
+      fs.writeFileSync(file, PNG);
+      const picture = await prisma.asset.create({
+        data: {
+          type: 'MAP', scope: 'CAMPAIGN', campaignId: source.id, uploadedById: userId, filename: `order-${i}.png`,
+          originalName: `${name}.png`, mimeType: 'image/png', fileSize: PNG.length, filePath: file, name, createdAt: new Date(made + i * 1000),
+        },
+      });
+      maps.push(await prisma.map.create({
+        data: {
+          campaignId: source.id, name, imageUrl: `/api/assets/maps/${picture.id}`, baseLayerUrl: `/api/assets/maps/${picture.id}`,
+          width: 10, height: 10, tokens: [], annotations: [], createdAt: new Date(made + i * 1000),
+        },
+      }));
+    }
+    // Editing the first map moves its row to the end of the table.
+    await prisma.map.update({ where: { id: maps[0].id }, data: { name: 'Act I' } });
+
+    const file = path.join(SCRATCH, 'order.cozyvtt');
+    await (await prepareCampaignExport(source.id, { userId, isAdmin: false })).writeTo(fs.createWriteStream(file));
+    const result = await importCampaign(file, userId);
+
+    const imported = await prisma.map.findMany({ where: { campaignId: result.campaignId }, orderBy: { createdAt: 'desc' } });
+    expect(imported.map((m) => m.name)).toEqual(['Act III', 'Act II', 'Act I']);
+    expect(new Set(imported.map((m) => m.createdAt.getTime())).size).toBe(3);
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: result.campaignId } });
+    expect(campaign.currentMapId).toBe(imported[2].id);
+    const pictures = await prisma.asset.findMany({ where: { campaignId: result.campaignId } });
+    expect(new Set(pictures.map((a) => a.createdAt.getTime())).size).toBe(3);
+  });
+});

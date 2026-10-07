@@ -7976,7 +7976,10 @@ paths:
         the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Imported tokens are linked to no character and
+        current map. Maps and assets are created in the archive's order, each
+        a millisecond after the last, and an export lists maps oldest first,
+        so the map list comes back in the original's order and the first map
+        is the oldest. Imported tokens are linked to no character and
         controlled by no one.
 
         Everything is held to what the app's own routes store, so anything

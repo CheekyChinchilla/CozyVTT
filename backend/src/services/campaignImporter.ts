@@ -644,6 +644,11 @@ export async function importCampaign(
     const gameSystem = importedGameSystem(campaignSettings.gameSystem, "The campaign's", report);
 
     // 6. Every row in one transaction: a failure anywhere leaves none of them.
+    // A row's creation time is the transaction's own start unless it is
+    // given one, and the Map Library and the asset library list by it, so
+    // each asset and map is given its own, a millisecond apart, in the
+    // archive's order.
+    const importedAt = Date.now();
     let counts: Pick<ImportResult, 'mapCount' | 'tokenCount' | 'creatureCount' | 'tokenTemplateCount'>;
     try {
       counts = await prisma.$transaction(
@@ -667,7 +672,7 @@ export async function importCampaign(
           });
           if (assets.length > 0) {
             await tx.asset.createMany({
-              data: assets.map((a) => ({
+              data: assets.map((a, i) => ({
                 id: a.newId,
                 type: a.type,
                 scope: 'CAMPAIGN' as const,
@@ -679,6 +684,7 @@ export async function importCampaign(
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
                 name: a.originalName.replace(/\.[^.]+$/, ''),
+                createdAt: new Date(importedAt + i),
               })),
             });
           }
@@ -706,7 +712,9 @@ export async function importCampaign(
             if (!prepared) continue;
 
             const mapId = randomUUID();
-            await tx.map.create({ data: { ...prepared.data, id: mapId, campaignId: newCampaignId } });
+            await tx.map.create({
+              data: { ...prepared.data, id: mapId, campaignId: newCampaignId, createdAt: new Date(importedAt + assets.length + i) },
+            });
             firstMapId ??= mapId;
             mapCount++;
             tokenCount += prepared.tokenCount;
