@@ -10,6 +10,12 @@
  * second, each write under the map's lock and, on a lit map, followed by line
  * of sight for every player.
  *
+ * Joining a campaign (`authenticate`) had no ceiling either, and each one
+ * told the whole table the player had arrived, and nothing capped how many
+ * sockets one user could hold open: every fan-out to a campaign is computed
+ * per socket, so a thousand of them multiplied what everyone else's moves
+ * cost the server.
+ *
  * The numbers are abuse ceilings: well above anything a busy table sends
  * (see busyTable.integration.test.ts). The sender is told once, not once per
  * refused event.
@@ -21,9 +27,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { Socket as ClientSocket } from 'socket.io-client';
+import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
-import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { toJson, readTokens } from '../../utils/prisma-json';
 import logger from '../../utils/logger';
 
@@ -268,5 +274,73 @@ describe('picking a token up and putting it down', () => {
     expect(moved.some((m) => m.dragging === true)).toBe(true);
     dm.disconnect();
     client.disconnect();
+  });
+});
+
+describe('authenticate', () => {
+  it('answers 50 joins every ten seconds per user, and says so once', async () => {
+    const player = await newPlayer();
+    const client = await server.connectClient(player.cookie);
+    const told = refusals(client);
+    const joined = collect(client, 'authenticated');
+
+    for (let i = 0; i < 60; i += 1) client.emit('authenticate', { campaignId });
+    await settle(() => joined.length >= 50);
+
+    expect(joined).toHaveLength(50);
+    expect(told).toHaveLength(1);
+    client.disconnect();
+  });
+
+  it('does not announce a socket again when it re-joins the campaign it is in', async () => {
+    const player = await newPlayer();
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const client = await server.connectAndAuth(player.cookie, campaignId);
+    await sleep(300);
+
+    const quiet = expectNoEvent(dm, 'user.joined', 600);
+    const again = waitForEvent(client, 'authenticated');
+    const presence = waitForEvent<{ onlineUserIds: string[] }>(client, 'presence.state');
+    client.emit('authenticate', { campaignId });
+    await again;
+    expect((await presence).onlineUserIds).toContain(player.id);
+    await quiet;
+
+    dm.disconnect();
+    client.disconnect();
+  });
+});
+
+describe('sockets per user', () => {
+  /** A raw connection: resolves with what the server says first, the connected ack or a refusal. */
+  function open(cookie: string): Promise<{ client: ClientSocket; answer: 'connected' | string }> {
+    return new Promise((resolve, reject) => {
+      const client = ioc(server.url, { transports: ['websocket'], extraHeaders: { cookie }, forceNew: true, reconnection: false });
+      const timer = setTimeout(() => reject(new Error('no answer within 5s')), 5000);
+      client.once('connected', () => { clearTimeout(timer); resolve({ client, answer: 'connected' }); });
+      client.once('error', (data: { message: string }) => { clearTimeout(timer); resolve({ client, answer: data.message }); });
+    });
+  }
+
+  it('refuses the 41st socket one user opens, and takes a new one once another closes', async () => {
+    const player = await newPlayer();
+    const held: ClientSocket[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      const { client, answer } = await open(player.cookie);
+      expect(answer).toBe('connected');
+      held.push(client);
+    }
+
+    const refused = await open(player.cookie);
+    expect(refused.answer).toMatch(CEILING_REFUSAL);
+    await settle(() => !refused.client.connected, 3000);
+    expect(refused.client.connected).toBe(false);
+
+    held[0].disconnect();
+    await sleep(300);
+    const after = await open(player.cookie);
+    expect(after.answer).toBe('connected');
+
+    for (const client of [...held, after.client]) client.disconnect();
   });
 });

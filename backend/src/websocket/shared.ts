@@ -213,9 +213,26 @@ export const SOCKET_CEILINGS = {
   // the map's lock, and on a lit map line of sight for every player.
   'token.move.start': tokenMoves,
   'token.move.end': tokenMoves,
+  // A page joins once per socket, and again after each reconnect; a browser
+  // restoring its tabs joins with all of them at once.
+  authenticate: {
+    windows: [{ limit: 50, windowMs: 10 * SECOND }],
+    refusal: 'Too many attempts to join a campaign at once. Wait a few seconds, then reload the page.',
+  },
 } satisfies Record<string, SocketCeiling>;
 
 export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
+
+/**
+ * How many sockets one user may hold open at once, in every campaign
+ * together. Each campaign page is one; a connection that dropped without
+ * closing lingers for up to 85 seconds until its heartbeat times out. Every
+ * fan-out to a campaign is worked out per socket, so this bounds how far one
+ * account can multiply what the rest of the table's events cost.
+ */
+export const MAX_SOCKETS_PER_USER = 40;
+export const TOO_MANY_SOCKETS =
+  `Too many CozyVTT tabs or devices are open on this account at once (the most is ${MAX_SOCKETS_PER_USER}). Close one, then reload this page.`;
 
 const ceilingLimiter = new RateLimiter();
 /** One refusal notice per socket and event in this long; the rest are refused quietly. */
