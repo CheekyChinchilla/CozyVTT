@@ -42,6 +42,12 @@ export const FeetPerSquareSchema = z
   .min(MAP_LIMITS.minFeetPerSquare, FEET_MESSAGE)
   .max(MAP_LIMITS.maxFeetPerSquare, FEET_MESSAGE);
 
+/**
+ * What a map name over MAP_LIMITS.maxNameLength answers, on every path that
+ * names a map. A campaign archive import shortens one instead.
+ */
+export const MAP_NAME_TOO_LONG_MESSAGE = `A map name can be at most ${MAP_LIMITS.maxNameLength} characters.`;
+
 /** Width, height and grid size together, as every path that stores a map has them. */
 export const MapDimensionsSchema = z.object({
   width: MapSideSchema('Map width'),
@@ -113,6 +119,17 @@ export function geometryRegion(map: MapExtent): { minX: number; minY: number; ma
 
 function pointInRegion(x: number, y: number, r: ReturnType<typeof geometryRegion>): boolean {
   return x >= r.minX && x <= r.maxX && y >= r.minY && y <= r.maxY;
+}
+
+/** Whether both ends of a wall lie in the region its map's walls may reach. */
+export function wallWithinMap(wall: WallLike, map: MapExtent): boolean {
+  const region = geometryRegion(map);
+  return pointInRegion(wall.x1, wall.y1, region) && pointInRegion(wall.x2, wall.y2, region);
+}
+
+/** Whether a light lies in the region its map's lights may reach. */
+export function lightWithinMap(light: LightLike, map: MapExtent): boolean {
+  return pointInRegion(light.x, light.y, geometryRegion(map));
 }
 
 const wallKey = (w: WallLike) => `${w.id}|${w.x1}|${w.y1}|${w.x2}|${w.y2}`;

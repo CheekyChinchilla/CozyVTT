@@ -122,8 +122,20 @@ const LOCAL_FILE_HEADER = 0x04034b50;
 /** How far from the end unzipper looks for the end-of-directory record. */
 const UNZIPPER_TAIL_BYTES = 80;
 
+/**
+ * An archive the server will not read, with a message for the person who
+ * sent it. Any other error while reading one is the server's own failure,
+ * and its message is not for them.
+ */
+export class ArchiveRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ArchiveRefusedError';
+  }
+}
+
 /** Why reading an archive stopped. */
-export class ArchiveLimitError extends Error {
+export class ArchiveLimitError extends ArchiveRefusedError {
   constructor(
     message: string,
     /** `entry`: one entry passed its own limit; `total`: the archive passed its limit. */
@@ -161,7 +173,7 @@ export async function countListedEntries(filePath: string): Promise<number> {
         break;
       }
     }
-    if (at === -1 || at + 22 > tail.length) throw new Error(NOT_A_ZIP);
+    if (at === -1 || at + 22 > tail.length) throw new ArchiveRefusedError(NOT_A_ZIP);
 
     const diskNumber = tail.readUInt16LE(at + 4);
     const listed = tail.readUInt16LE(at + 10);
@@ -171,9 +183,9 @@ export async function countListedEntries(filePath: string): Promise<number> {
     // ZIP64: the locator sits just before the short record and says where the
     // long one is, which carries the count in eight bytes.
     const locator = await readAt(handle, tailStart + at - 20, 20);
-    if (locator.length < 20 || locator.readUInt32LE(0) !== ZIP64_END_LOCATOR) throw new Error(NOT_A_ZIP);
+    if (locator.length < 20 || locator.readUInt32LE(0) !== ZIP64_END_LOCATOR) throw new ArchiveRefusedError(NOT_A_ZIP);
     const record = await readAt(handle, Number(locator.readBigUInt64LE(8)), 56);
-    if (record.length < 56 || record.readUInt32LE(0) !== ZIP64_END_OF_DIRECTORY) throw new Error(NOT_A_ZIP);
+    if (record.length < 56 || record.readUInt32LE(0) !== ZIP64_END_OF_DIRECTORY) throw new ArchiveRefusedError(NOT_A_ZIP);
     const count = record.readBigUInt64LE(32);
     return count > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(count);
   } finally {
@@ -188,11 +200,16 @@ export async function countListedEntries(filePath: string): Promise<number> {
 export async function openArchiveFile(filePath: string, maxEntries: number): Promise<CentralDirectory> {
   const listed = await countListedEntries(filePath);
   if (listed > maxEntries) {
-    throw new Error(
+    throw new ArchiveRefusedError(
       `The archive lists ${listed.toLocaleString('en-US')} files, more than the ${maxEntries.toLocaleString('en-US')} it may hold.`
     );
   }
-  return unzipper.Open.file(filePath);
+  try {
+    return await unzipper.Open.file(filePath);
+  } catch {
+    // The end of the archive was found but its directory cannot be read.
+    throw new ArchiveRefusedError(NOT_A_ZIP);
+  }
 }
 
 /** A running total of what one archive has unpacked, against its limit. */
@@ -236,11 +253,11 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
   }
   if (entry.flags & 0x1) {
     destination.destroy();
-    throw new Error(`${entry.path} is encrypted, which a campaign archive never is.`);
+    throw new ArchiveRefusedError(`${entry.path} is encrypted, which a campaign archive never is.`);
   }
   if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
     destination.destroy();
-    throw new Error(`${entry.path} is packed in a way this server cannot read.`);
+    throw new ArchiveRefusedError(`${entry.path} is packed in a way this server cannot read.`);
   }
 
   const handle = await fs.open(archivePath, 'r');
@@ -249,7 +266,7 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
     const header = await readAt(handle, entry.offsetToLocalFileHeader, 30);
     if (header.length < 30 || header.readUInt32LE(0) !== LOCAL_FILE_HEADER) {
       destination.destroy();
-      throw new Error(`The archive is damaged: ${entry.path} cannot be read.`);
+      throw new ArchiveRefusedError(`The archive is damaged: ${entry.path} cannot be read.`);
     }
     start = entry.offsetToLocalFileHeader + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
   } finally {
@@ -277,10 +294,20 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
     },
   });
 
-  if (entry.compressionMethod === 8) {
-    await pipeline(packed, zlib.createInflateRaw(), counter, destination);
-  } else {
+  if (entry.compressionMethod !== 8) {
     await pipeline(packed, counter, destination);
+    return;
+  }
+  try {
+    await pipeline(packed, zlib.createInflateRaw(), counter, destination);
+  } catch (error) {
+    // Packed bytes that do not inflate are the archive's fault, not the
+    // server's; zlib names its errors Z_DATA_ERROR and the like.
+    const code = typeof error === 'object' && error !== null ? (error as NodeJS.ErrnoException).code : undefined;
+    if (typeof code === 'string' && code.startsWith('Z_')) {
+      throw new ArchiveRefusedError(`The archive is damaged: ${entry.path} cannot be read.`);
+    }
+    throw error;
   }
 }
 

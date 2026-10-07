@@ -4641,9 +4641,11 @@ paths:
         `GET /api/assets/audio/{id}` answers 404 for them. Ogg Opus is
         refused.
 
-        The stored row's `mimeType` is the content type the client declared
-        for the file part, not the detected one; the file routes do not use
-        it.
+        The stored row's `mimeType` is the detected type, whatever the client
+        declared for the file part: `audio/mpeg` for an MP3 accepted on its
+        header, and `text/markdown` or `text/plain` for a text document, by
+        its extension. Assets uploaded before 1.5.1 keep the type the client
+        declared. The file routes do not use it.
 
         **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
         environment variables (defaults shown). The effective values are
@@ -5548,7 +5550,9 @@ paths:
         `flat`). `gridSize` is in range as a whole number from 10 to 500,
         `feetPerSquare` as a whole number from 1 to 100. Only `name`,
         `imageUrl`, `width` and `height` can make this route answer 400;
-        `width` and `height` must be whole numbers from 1 to 500.
+        `width` and `height` must be whole numbers from 1 to 500, and `name`
+        at most 200 characters once trimmed (`A map name can be at most 200
+        characters.`).
       operationId: createMap
       security:
         - cookieAuth: []
@@ -5568,7 +5572,8 @@ paths:
               properties:
                 name:
                   type: string
-                  description: Trimmed; must not be blank.
+                  maxLength: 200
+                  description: Trimmed; must not be blank, and at most 200 characters.
                 imageUrl:
                   type: string
                   description: Asset id or exact asset address.
@@ -5681,7 +5686,9 @@ paths:
         `alternating`. A `width`, `height`, `gridSize` or `feetPerSquare`
         equal to the stored value is accepted as it is, so a map stored
         larger than these limits, before they existed, still saves an edit
-        that sends its size back unchanged.
+        that sends its size back unchanged. `name` is trimmed, must not be
+        blank, and may be at most 200 characters, unless it is the name
+        already stored, sent back unchanged.
 
         Turning `fogEnabled` or `explorationEnabled` on from off answers 400,
         and changes nothing, when the map would have more than 250,000 grid
@@ -5737,6 +5744,7 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Trimmed; at most 200 characters unless unchanged.
                 width:
                   type: integer
                   minimum: 1
@@ -7787,7 +7795,11 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: includeAudio
           in: query
-          description: Audio files are included only for exactly `true`.
+          description: >-
+            Audio files are included only for exactly `true`: the AUDIO assets
+            the campaign's atmosphere names, each period's `audio` and
+            `vibeSettings.atmosphereAudio.assetId`, under the same read rule as
+            every other asset. An import points those settings at its copies.
           schema:
             type: boolean
             default: false
@@ -7896,9 +7908,18 @@ paths:
           description: >-
             No file (`Validation Error`), an upload problem such as a refused
             file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
-            is over the size setting, lists more than 1,000 files, or has a
+            is damaged, is over the size setting, lists more than 1,000 files, or has a
             missing, oversized or invalid manifest (`Invalid Archive`, with
             the reason in `message`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            The server failed to read the archive for a reason of its own
+            (`Preview Failed`). The message says only that; the detail is in
+            the server log.
           content:
             application/json:
               schema:
@@ -7955,13 +7976,43 @@ paths:
         the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Maps, creatures or templates that fail validation are
-        skipped.
-        Imported tokens are linked to no character and controlled by no one.
+        current map. Maps and assets are created in the archive's order, each
+        a millisecond after the last, and an export lists maps oldest first,
+        so the map list comes back in the original's order and the first map
+        is the oldest. Imported tokens are linked to no character and
+        controlled by no one.
 
-        The import is not one transaction. A failure after the campaign has
-        been created answers 400 and leaves the partly imported campaign in
-        place.
+        Everything is held to what the app's own routes store, so anything
+        imported can be edited and saved again. Text or a list over its limit
+        is cut to it and reported in `warnings`: a map name over 200
+        characters, a token name over 200 or notes over 5,000, and text or
+        lists in a stat block over the creature routes' limits. A stat block
+        that still does not fit is left off its token or template; a
+        creature without one is listed in `skipped`. A game system that is
+        not a `GameSystem` value, on the campaign or a creature, imports as
+        none. A data file nested more than 32 levels deep leaves out its map,
+        or its creatures or templates, and refuses the import when it is the
+        manifest, campaign settings or asset manifest. Tokens are moved to
+        whole squares with their
+        footprint on the map. Walls and lights get new ids. Each item the app
+        cannot store is left out on its own: a token is listed in `skipped`,
+        and walls, doors and lights are counted in `warnings`, as are those
+        more than 500 squares outside their map. A map keeps its first 1,000
+        tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
+        map is dropped, as the server would rebuild it anyway. A map is
+        left out whole only when its width, height, grid size or feet per
+        square are outside the map limits (1 to 500 squares, grid size 10 to
+        500, 1 to 100 feet), and is then listed in `skipped` with the reason.
+        Creatures, templates and assets that cannot be imported are listed
+        in `skipped` too. Each list holds at most 200 entries; a final
+        warning counts the rest.
+
+        The import is all or nothing. Assets are unpacked into a staging
+        folder under the uploads folder's `temp/campaign-imports`, every row
+        is written in one transaction, and the files are moved into place
+        once it has committed. A failure at any point leaves no campaign, no
+        rows and no files; a staging folder left by a backend that stopped
+        mid-import is removed after a day.
       operationId: importCampaign
       security:
         - cookieAuth: []
@@ -8003,23 +8054,66 @@ paths:
                     type: string
                   mapCount:
                     type: integer
-                    description: The count the archive's manifest declares, including any map that was skipped.
+                    description: The maps created. A map left out is not counted.
                   tokenCount:
                     type: integer
+                    description: The tokens created on those maps.
                   creatureCount:
                     type: integer
                   tokenTemplateCount:
                     type: integer
+                  warnings:
+                    type: array
+                    maxItems: 201
+                    description: What was imported in a changed form, one sentence each.
+                    items:
+                      type: string
+                    example:
+                      - 'Map "Cellar": shortened the notes of 1 token to 5,000 characters.'
+                  skipped:
+                    type: array
+                    maxItems: 200
+                    description: What was left out of the import, and why.
+                    items:
+                      type: object
+                      required: [kind, name, reason]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [map, token, creature, tokenTemplate, asset]
+                        name:
+                          type: string
+                          description: >-
+                            The item's name in the archive, cut to 80 characters, or a
+                            description such as `3 tokens on "Cellar"`.
+                        reason:
+                          type: string
+                    example:
+                      - kind: map
+                        name: Vast
+                        reason: Map width must be a whole number from 1 to 500 squares
         '400':
           description: >-
             The upload errors of the preview route, a `campaignName` out of
-            range (`Validation Error`), or any failure while importing
-            (`Import Failed`, with the reason in `message`). Every import
-            failure, including a database error, answers 400.
+            range (`Validation Error`), or an archive the server refuses
+            (`Import Failed`, with the reason in `message`). Nothing is
+            created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            The import failed for a reason of the server's own, such as a
+            database or disk error (`Import Failed`). Nothing is kept, and the
+            message says so; the detail is in the server log.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Import Failed
+                message: The campaign could not be saved, so nothing was imported. The server log has the details.
         '413':
           description: The file is over 500 MB (`File Too Large`), as on the preview route.
           content:
@@ -10052,7 +10146,10 @@ components:
           example: players-handbook.pdf
         mimeType:
           type: string
-          description: As declared at upload. Not what the file is served as.
+          description: >-
+            What the file's bytes showed at upload; as the uploader declared
+            it on an asset uploaded before 1.5.1. Not what the file is served
+            as.
         fileSize:
           type: integer
         createdAt:
@@ -10241,6 +10338,9 @@ components:
           type: string
         mimeType:
           type: string
+          description: >-
+            The format the file's bytes showed at upload. An asset uploaded
+            before 1.5.1 holds the type its uploader declared.
         fileSize:
           type: integer
         name:
@@ -10939,6 +11039,9 @@ components:
           type: integer
         includesAudio:
           type: boolean
+          description: >-
+            Whether the archive holds any audio file. Archives exported before
+            1.5.1 with audio asked for say true and hold none.
         totalSizeBytes:
           type: integer
 

@@ -215,6 +215,8 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
 /**
  * Limits for stat blocks authored in the app (creature library, token
  * templates). Matches what tokenTemplates.ts enforced before consolidation.
+ * A campaign import holds stat blocks to these too, cutting text and lists
+ * down to them, so anything imported can be placed and saved.
  */
 export const AUTHORING_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
   maxListEntries: 50,
@@ -223,18 +225,6 @@ export const AUTHORING_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
   maxSpeedLength: 200,
   maxStoredLength: MAX_STAT_BLOCK_LENGTH,
   maxExtraKeys: MAX_EXTRA_STAT_BLOCK_KEYS,
-};
-
-/**
- * Limits for stat blocks arriving in a campaign archive. Looser than the
- * authoring limits because archives may come from other instances; matches what
- * campaignImport.ts enforced before consolidation.
- */
-export const IMPORT_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
-  maxListEntries: 100,
-  maxNameLength: 500,
-  maxDescriptionLength: 10000,
-  maxSpeedLength: 500,
 };
 
 /** Stat block schema for content authored in the app. */

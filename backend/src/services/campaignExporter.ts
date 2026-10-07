@@ -20,8 +20,9 @@ import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
-import { readTokens } from '../utils/prisma-json';
+import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 
 // ── Exported types ──────────────────────────────────────────────────────────
@@ -101,7 +102,9 @@ export async function prepareCampaignExport(
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: {
-      maps: true,
+      // Oldest first, so an import makes them in the order they were made
+      // and its Map Library lists them as this one does.
+      maps: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
       creatureTemplates: { where: { source: 'custom' } },
       tokenTemplates: true,
     },
@@ -113,13 +116,16 @@ export async function prepareCampaignExport(
   const assetIds = new Set<string>();
   const assetMap: Map<string, { filePath: string; mimeType: string; originalName: string; type: string; fileSize: number }> = new Map();
 
-  /** Register an asset for inclusion. Returns the UUID reference key. */
-  async function registerAsset(url: string | null | undefined): Promise<string | null> {
+  /**
+   * Register an asset for inclusion. Returns the UUID reference key. With
+   * `onlyType`, an asset of any other type is left out.
+   */
+  async function registerAsset(url: string | null | undefined, onlyType?: 'AUDIO'): Promise<string | null> {
     const id = extractAssetId(url);
     if (!id) return null;
     if (!assetMap.has(id)) {
       const resolved = await resolveAssetFile(id, viewer);
-      if (resolved) {
+      if (resolved && (!onlyType || resolved.type === onlyType)) {
         // Skip audio files unless explicitly included
         if (resolved.type === 'AUDIO' && !includeAudio) return null;
         assetIds.add(id);
@@ -127,6 +133,13 @@ export async function prepareCampaignExport(
       }
     }
     return assetIds.has(id) ? id : null;
+  }
+
+  // 2b. Sound is used only by the atmosphere: each period's track and the
+  // ambient one. Their ids stay in the campaign settings as they are, and
+  // the importer points them at its copies of the files.
+  if (includeAudio) {
+    for (const id of atmosphereTrackIds(campaign.vibeSettings)) await registerAsset(id, 'AUDIO');
   }
 
   // 3. Build map data and register map assets
@@ -238,7 +251,8 @@ export async function prepareCampaignExport(
     creatureCount: creaturesData.length,
     tokenTemplateCount: tokenTemplatesData.length,
     assetCount: assetMap.size,
-    includesAudio: includeAudio,
+    // Whether the archive holds any sound, which an import window shows.
+    includesAudio: [...assetMap.values()].some((a) => a.type === 'AUDIO'),
     totalSizeBytes,
   };
 
@@ -324,6 +338,23 @@ export async function prepareCampaignExport(
       });
     },
   };
+}
+
+/** The audio assets a campaign's atmosphere names: its periods' tracks, then its ambient track. */
+function atmosphereTrackIds(vibeSettings: Parameters<typeof readJsonObject>[0]): string[] {
+  const settings = readJsonObject(vibeSettings);
+  if (!settings) return [];
+  const ids: string[] = [];
+  if (Array.isArray(settings.periods)) {
+    for (const period of settings.periods) {
+      const id = period && typeof period === 'object' ? vibePeriodAudioAssetId((period as Record<string, unknown>).audio) : null;
+      if (id) ids.push(id);
+    }
+  }
+  const ambient = settings.atmosphereAudio;
+  const ambientId = ambient && typeof ambient === 'object' ? vibePeriodAudioAssetId((ambient as Record<string, unknown>).assetId) : null;
+  if (ambientId) ids.push(ambientId);
+  return ids;
 }
 
 /** Map MIME type to file extension. */

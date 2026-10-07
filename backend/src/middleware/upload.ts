@@ -21,6 +21,12 @@ export interface UploadRequest extends Request {
   assetType?: AssetType;
   assetScope?: AssetScope;
   campaignId?: string;
+  /**
+   * The upload's format as its bytes show it, set by validateFileType. The
+   * file's own `mimetype` is whatever the browser declared, which can be
+   * anything.
+   */
+  detectedMimeType?: string;
 }
 
 /**

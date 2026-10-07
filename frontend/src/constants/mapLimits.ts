@@ -18,4 +18,6 @@ export const MAP_LIMITS = {
   maxFeetPerSquare: 100,
   /** Tokens on one map. */
   maxTokens: 1000,
+  /** Characters in a map's name. */
+  maxNameLength: 200,
 } as const;

@@ -539,7 +539,7 @@ Copy a token template to another campaign. Requires DM role in both the source a
 Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
 
 **Query params:**
-- `includeAudio` — `true` to include audio assets (default: `false`)
+- `includeAudio` — `true` to include audio assets (default: `false`): the tracks of the campaign's atmosphere periods and its ambient track. An import plays the imported copies.
 - `includeTokens` — `false` to exclude tokens on maps (default: `true`)
 
 **Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`, sent as it is made (no `Content-Length`). A campaign whose files would make an archive over 500 MB, the most an import accepts, answers `422` with `error: "Export Too Large"` and a `message` giving the size.
@@ -589,12 +589,16 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
   "message": "Campaign imported successfully",
   "campaignId": "uuid",
   "campaignName": "The Lost Mines",
-  "mapCount": 5,
+  "mapCount": 4,
   "tokenCount": 42,
   "creatureCount": 12,
-  "tokenTemplateCount": 8
+  "tokenTemplateCount": 8,
+  "warnings": ["Map \"Cellar\": shortened the notes of 1 token to 5,000 characters."],
+  "skipped": [{ "kind": "map", "name": "Vast", "reason": "Map width must be a whole number from 1 to 500 squares" }]
 }
 ```
+
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own and listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). A map is left out whole only when its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -692,7 +696,7 @@ Create a new map (DM only).
 }
 ```
 
-`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default.
+`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
 ---
 
@@ -892,6 +896,10 @@ Enforced on every creature, token-template and campaign-import write:
 - Unknown top-level keys are preserved, so older stat blocks survive a round trip.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
+A campaign import applies the same limits but does not refuse: it cuts text and
+lists over them down to them, leaves a stat block it cannot store off a token or
+template, and leaves out a creature whose stat block it cannot store, saying so
+in its `warnings` and `skipped`.
 
 ---
 
