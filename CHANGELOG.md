@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A specially crafted hit dice entry on a character sheet could freeze the browser of anyone who opened the sheet.** Hit dice are now read safely, and every existing sheet shows them as before.
 
+- **Restoring a specially crafted backup from the Admin Dashboard could make the server stop responding.** Every line of a backup is now read safely, and backups CozyVTT made restore exactly as before.
+
 ---
 
 ## [1.5.0] — 2026-10-03
