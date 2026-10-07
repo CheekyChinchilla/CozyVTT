@@ -70,7 +70,7 @@ describe('deleting a custom creature', () => {
 
     await waitFor(() => expect(api.deleteCreature).toHaveBeenCalledWith('campaign-1', 'c1'));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Delete Boss Bat' })).not.toBeInTheDocument());
-    expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument());
   });
 
   it('offers no delete for an SRD creature', async () => {
