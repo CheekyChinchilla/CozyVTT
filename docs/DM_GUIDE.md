@@ -566,6 +566,15 @@ An archive can be up to **500 MB**. Anyone with an account can import one, playe
 
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 
+**What comes back as it was, what is shortened, and what is left out.** Everything in the archive is held to what CozyVTT itself can store, so whatever arrives can be opened, edited and saved again. When the import finishes, its window lists anything it had to change under **Changed to fit**, and anything it could not bring in under **Left out**, each with the reason. The map count it shows is the maps it made.
+
+- **Kept as it was:** everything a campaign made in CozyVTT holds, up to the limits the app itself has: maps up to 500 by 500 squares with any grid size from 10 to 500, up to 1,000 tokens, 5,000 walls and doors and 200 lights on each map, and their fog.
+- **Shortened:** a map name over 200 characters, a token name over 200 characters, and token notes over 5,000 characters. Older versions of CozyVTT stored some of these at any length.
+- **Moved:** a token that is not on a whole square, or that hangs off the edge of its map, is put on the nearest whole square inside it.
+- **Left out on its own:** a token, wall, door or light that CozyVTT cannot store (a token with no position, for example), a wall or light more than 500 squares outside its map, and any tokens past the first 1,000 on a map. The rest of the map is imported.
+- **Left out whole:** a map larger than the map limits (more than 500 squares on a side, a grid size outside 10 to 500, or more than 100 feet per square). Make the map smaller on the server it came from, export again and import that.
+- **Pictures and sound** that are missing from the archive, larger than an upload of their kind may be, or not a format the upload window accepts, are left out, and whatever used them arrives without them.
+
 An import either brings in the whole campaign or nothing at all. If it stops part-way, because the archive turns out to be damaged or the server runs into a problem of its own, no half-made campaign is left in your list and none of its pictures are left on the server. The window says what went wrong; when the problem was the server's, it says so and whoever runs the server can find the details in its log. Try again once that is sorted out.
 
 ### Security Notes
@@ -575,7 +584,7 @@ Imported archives are validated at multiple levels:
 - Each file inside the archive is unpacked a piece at a time and stopped as soon as it passes its limit, so a small archive that would unpack to gigabytes (a "zip bomb") is refused without harm. The limits are 10 MB for each of the campaign's data files, the upload limit of its kind for each picture or sound file (50 MB for a map picture unless your server's admin has changed it), and 500 MB for the whole archive. A picture or sound file over its limit is left out of the import; anything else over a limit stops the import with a message saying which
 - An archive listing more than 1,000 files is refused before it is opened
 - Each picture and sound file must be, by its content, a format the upload window accepts for its kind (a map picture is PNG, JPEG or WebP; a token picture PNG, JPEG, WebP or GIF; a sound file MP3, Ogg or WAV), and is stored as what it really is, whatever the archive calls it. Anything else is left out of the import
-- All JSON data is validated against strict schemas with size limits
+- All JSON data is validated against strict schemas with size limits, the same ones the app applies when you make or edit a map, token, creature or template
 - New UUIDs are generated for all entities — nothing from the archive can reference existing data
 
 ---

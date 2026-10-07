@@ -2,9 +2,9 @@
  * A campaign archive's walls and lights are held to the bounds every other
  * path that stores them applies: no coordinate past 250,000 pixels, and
  * nothing more than 500 squares outside the map. An archive is a file anyone
- * can write, and a map whose geometry is outside them is skipped like any
- * other map that fails validation, instead of storing a wall that freezes
- * sight for the whole server.
+ * can write, and a wall or light outside them is left out of its map, which
+ * keeps everything else, instead of storing a wall that freezes sight for
+ * the whole server.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -74,7 +74,7 @@ afterAll(async () => {
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
 
-it('imports the maps whose walls and lights are in bounds, and skips the rest', async () => {
+it('imports every map, leaving out the walls and lights that are out of bounds', async () => {
   const zip = await archive([
     map('Tidy', { walls: [wall(300), wall(1400)], lights: [light(600)] }),
     map('Wall ten million pixels away', { walls: [wall(1e7)] }),
@@ -85,7 +85,20 @@ it('imports the maps whose walls and lights are in bounds, and skips the rest', 
   const result = await importCampaign(onDisk(zip), userId);
   campaigns.push(result.campaignId);
 
-  const maps = await prisma.map.findMany({ where: { campaignId: result.campaignId }, select: { name: true, wallSegments: true } });
-  expect(maps.map((m) => m.name)).toEqual(['Tidy']);
-  expect(maps[0].wallSegments).toHaveLength(2);
+  const maps = await prisma.map.findMany({
+    where: { campaignId: result.campaignId },
+    select: { name: true, wallSegments: true, lights: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  expect(maps.map((m) => [m.name, (m.wallSegments as unknown[]).length, (m.lights as unknown[]).length])).toEqual([
+    ['Tidy', 2, 1],
+    ['Wall ten million pixels away', 0, 0],
+    ['Wall far off the map', 0, 0],
+    ['Light far off the map', 0, 0],
+  ]);
+  expect(result.warnings).toEqual([
+    'Map "Wall ten million pixels away": left out 1 wall or door the app cannot store.',
+    'Map "Wall far off the map": left out 1 wall or door more than 500 squares outside the map.',
+    'Map "Light far off the map": left out 1 light more than 500 squares outside the map.',
+  ]);
 });

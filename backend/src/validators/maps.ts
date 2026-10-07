@@ -121,6 +121,17 @@ function pointInRegion(x: number, y: number, r: ReturnType<typeof geometryRegion
   return x >= r.minX && x <= r.maxX && y >= r.minY && y <= r.maxY;
 }
 
+/** Whether both ends of a wall lie in the region its map's walls may reach. */
+export function wallWithinMap(wall: WallLike, map: MapExtent): boolean {
+  const region = geometryRegion(map);
+  return pointInRegion(wall.x1, wall.y1, region) && pointInRegion(wall.x2, wall.y2, region);
+}
+
+/** Whether a light lies in the region its map's lights may reach. */
+export function lightWithinMap(light: LightLike, map: MapExtent): boolean {
+  return pointInRegion(light.x, light.y, geometryRegion(map));
+}
+
 const wallKey = (w: WallLike) => `${w.id}|${w.x1}|${w.y1}|${w.x2}|${w.y2}`;
 const lightKey = (l: LightLike) => `${l.id}|${l.x}|${l.y}`;
 

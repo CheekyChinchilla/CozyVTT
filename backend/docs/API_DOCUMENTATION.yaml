@@ -7972,9 +7972,26 @@ paths:
         the detected extension replaces it. Any other asset is skipped.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Maps, creatures or templates that fail validation are
-        skipped.
-        Imported tokens are linked to no character and controlled by no one.
+        current map. Imported tokens are linked to no character and
+        controlled by no one.
+
+        Everything is held to what the app's own routes store, so anything
+        imported can be edited and saved again. Text or a list over its limit
+        is cut to it and reported in `warnings`: a map name over 200
+        characters, a token name over 200 or notes over 5,000. Tokens are
+        moved to whole squares with their
+        footprint on the map. Walls and lights get new ids. Each item the app
+        cannot store is left out on its own: a token is listed in `skipped`,
+        and walls, doors and lights are counted in `warnings`, as are those
+        more than 500 squares outside their map. A map keeps its first 1,000
+        tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
+        map is dropped, as the server would rebuild it anyway. A map is
+        left out whole only when its width, height, grid size or feet per
+        square are outside the map limits (1 to 500 squares, grid size 10 to
+        500, 1 to 100 feet), and is then listed in `skipped` with the reason.
+        Creatures, templates and assets that cannot be imported are listed
+        in `skipped` too. Each list holds at most 200 entries; a final
+        warning counts the rest.
 
         The import is all or nothing. Assets are unpacked into a staging
         folder under the uploads folder's `temp/campaign-imports`, every row
@@ -8023,13 +8040,44 @@ paths:
                     type: string
                   mapCount:
                     type: integer
-                    description: The count the archive's manifest declares, including any map that was skipped.
+                    description: The maps created. A map left out is not counted.
                   tokenCount:
                     type: integer
+                    description: The tokens created on those maps.
                   creatureCount:
                     type: integer
                   tokenTemplateCount:
                     type: integer
+                  warnings:
+                    type: array
+                    maxItems: 201
+                    description: What was imported in a changed form, one sentence each.
+                    items:
+                      type: string
+                    example:
+                      - 'Map "Cellar": shortened the notes of 1 token to 5,000 characters.'
+                  skipped:
+                    type: array
+                    maxItems: 200
+                    description: What was left out of the import, and why.
+                    items:
+                      type: object
+                      required: [kind, name, reason]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [map, token, creature, tokenTemplate, asset]
+                        name:
+                          type: string
+                          description: >-
+                            The item's name in the archive, cut to 80 characters, or a
+                            description such as `3 tokens on "Cellar"`.
+                        reason:
+                          type: string
+                    example:
+                      - kind: map
+                        name: Vast
+                        reason: Map width must be a whole number from 1 to 500 squares
         '400':
           description: >-
             The upload errors of the preview route, a `campaignName` out of

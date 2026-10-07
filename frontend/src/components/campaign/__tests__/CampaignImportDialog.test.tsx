@@ -74,3 +74,44 @@ describe('CampaignImportDialog', () => {
     await waitFor(() => expect(screen.getByText(/This archive is larger than the server accepts\./)).toBeTruthy());
   });
 });
+
+describe('CampaignImportDialog done screen', () => {
+  const preview = {
+    formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.4.0', campaignName: 'Keep',
+    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+    includesAudio: false, totalSizeBytes: 100,
+  };
+
+  async function importArchive(result: Record<string, unknown>) {
+    previewCampaignImport.mockResolvedValue(preview);
+    importCampaign.mockResolvedValue({
+      campaignId: 'c1', campaignName: 'Keep', mapCount: 2, tokenCount: 11, creatureCount: 0, tokenTemplateCount: 0, ...result,
+    });
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    chooseArchive();
+    fireEvent.click(await screen.findByRole('button', { name: /Import Campaign/ }));
+    await screen.findByText('Import Complete!');
+  }
+
+  it('lists what the import left out, with the reason, and what it changed', async () => {
+    await importArchive({
+      warnings: ['Map "Cellar": shortened the notes of 1 token to 5,000 characters.'],
+      skipped: [{ kind: 'map', name: 'Vast', reason: 'Map width must be a whole number from 1 to 500 squares' }],
+    });
+
+    expect(screen.getByText('Left out')).toBeTruthy();
+    const leftOut = screen.getByRole('list', { name: 'Left out' });
+    expect(leftOut.textContent).toBe('Vast (map): Map width must be a whole number from 1 to 500 squares');
+    expect(screen.getByRole('list', { name: 'Changed to fit' }).textContent).toBe(
+      'Map "Cellar": shortened the notes of 1 token to 5,000 characters.'
+    );
+  });
+
+  it('counts the maps that were made, not the ones the archive held', async () => {
+    await importArchive({ warnings: [], skipped: [] });
+
+    expect(screen.getByText('Maps:').nextElementSibling?.textContent).toBe('2');
+    expect(screen.queryByText('Left out')).toBeNull();
+    expect(screen.queryByText('Changed to fit')).toBeNull();
+  });
+});

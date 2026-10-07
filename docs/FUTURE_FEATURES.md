@@ -24,7 +24,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Fix first: these lose data
 
-- `1.5.1` **Importing a campaign archive drops a whole map when one token has a name or notes over the limit.** `MapDataSchema` in `validators/campaignImport.ts` refuses the map with its walls and tokens, and the import result still reports the archive's map count; 1.4.0 stored token notes of any length, so an archive exported from 1.4.0 can lose maps.
+_Nothing at present._
 
 ### Character sheets
 

@@ -938,13 +938,25 @@ export interface CampaignImportPreview {
   totalSizeBytes: number;
 }
 
+/** Something a campaign import left out, and why. */
+export interface CampaignImportSkipped {
+  kind: 'map' | 'token' | 'creature' | 'tokenTemplate' | 'asset';
+  name: string;
+  reason: string;
+}
+
 export interface CampaignImportResult {
   campaignId: string;
   campaignName: string;
+  /** What was created, which may be fewer than the archive held. */
   mapCount: number;
   tokenCount: number;
   creatureCount: number;
   tokenTemplateCount: number;
+  /** What was imported in a changed form, in words. */
+  warnings: string[];
+  /** What was left out, and why. */
+  skipped: CampaignImportSkipped[];
 }
 
 // ============================================

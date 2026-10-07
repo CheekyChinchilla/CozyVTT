@@ -1,4 +1,11 @@
-import { CampaignSettingsSchema, MapDataSchema, CreatureTemplateSchema, TokenTemplateImportSchema } from '../campaignImport';
+import { CampaignSettingsSchema, ImportMapSchema, CreatureTemplateSchema, TokenTemplateImportSchema } from '../campaignImport';
+import { prepareMap, ImportReport } from '../../services/campaignImportContent';
+
+/** The tokens a map in an archive imports with. */
+function importedTokens(map: unknown): Array<Record<string, unknown>> {
+  const prepared = prepareMap(map, { index: 0, importTokens: true, remapAsset: () => null, report: new ImportReport() });
+  return prepared?.data.tokens as unknown as Array<Record<string, unknown>>;
+}
 
 /**
  * An archive's atmosphere and spirit settings are allowlisted like the live
@@ -34,7 +41,7 @@ describe('CampaignSettingsSchema allowlist fallbacks', () => {
   });
 });
 
-describe('MapDataSchema tokens', () => {
+describe('an imported map\'s tokens', () => {
   const map = {
     name: 'Arena', imageAssetRef: 'assets/arena.png', width: 10, height: 10, gridSize: 50, feetPerSquare: 5,
     tokens: [{
@@ -43,24 +50,22 @@ describe('MapDataSchema tokens', () => {
   };
 
   it('keeps whether a token is obscured, so an exported campaign comes back as it was', () => {
-    const parsed = MapDataSchema.parse(map);
-    expect(parsed.tokens[0].obscured).toBe(true);
+    expect(importedTokens(map)[0].obscured).toBe(true);
   });
 
   it('treats a token that says nothing about it as not obscured', () => {
-    const parsed = MapDataSchema.parse({ ...map, tokens: [{ name: 'Plain', position: { x: 1, y: 1 }, size: { width: 1, height: 1 } }] });
-    expect(parsed.tokens[0].obscured).toBe(false);
+    expect(importedTokens({ ...map, tokens: [{ name: 'Plain', position: { x: 1, y: 1 }, size: { width: 1, height: 1 } }] })[0].obscured).toBe(false);
   });
 });
 
 // An export leaves out a map picture the person exporting cannot open (or
 // one deleted since), and writes the map with no picture reference. Refusing
 // that map dropped its walls, tokens and fog along with the picture.
-describe('MapDataSchema picture', () => {
+describe('ImportMapSchema picture', () => {
   const map = { name: 'Crypt', width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [] };
 
   it.each([null, undefined])('takes a map whose picture was left out (%s)', (imageAssetRef) => {
-    expect(MapDataSchema.safeParse({ ...map, imageAssetRef }).success).toBe(true);
+    expect(ImportMapSchema.safeParse({ ...map, imageAssetRef }).success).toBe(true);
   });
 });
 
@@ -68,17 +73,17 @@ describe('MapDataSchema picture', () => {
 // map: 1 to 500 squares a side, grid size 10 to 500. The importer used to cap
 // grid size at 200 while Create Map and Edit Map allowed 500, so a map the
 // app had made was dropped from its own archive.
-describe('MapDataSchema size', () => {
+describe('ImportMapSchema size', () => {
   const map = { name: 'Hall', width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [] };
 
   it.each([256, 500])('takes grid size %s, which Edit Map allows', (gridSize) => {
-    expect(MapDataSchema.safeParse({ ...map, gridSize }).success).toBe(true);
+    expect(ImportMapSchema.safeParse({ ...map, gridSize }).success).toBe(true);
   });
 
   it.each([['gridSize', 501], ['gridSize', 9], ['width', 501], ['height', 0], ['feetPerSquare', 101]])(
     'refuses %s %s, as the map routes do',
     (field, value) => {
-      expect(MapDataSchema.safeParse({ ...map, [field]: value }).success).toBe(false);
+      expect(ImportMapSchema.safeParse({ ...map, [field]: value }).success).toBe(false);
     }
   );
 });
@@ -107,14 +112,14 @@ describe('CreatureTemplateSchema allowlist fallbacks', () => {
  * live routes accept. A value outside an allowlist falls back to the default,
  * like the creature templates above, instead of refusing the whole map.
  */
-describe('MapDataSchema token allowlists and limits', () => {
+describe('imported token allowlists and limits', () => {
   const map = (token: Record<string, unknown>) => ({
     name: 'Arena', imageAssetRef: 'assets/arena.png', width: 10, height: 10, gridSize: 50, feetPerSquare: 5,
     tokens: [{ name: 'T', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, ...token }],
   });
 
   it('keeps a layer, type, disposition and display mode the app knows', () => {
-    const t = MapDataSchema.parse(map({ layer: 'spirit', type: 'player', disposition: 'hostile', displayMode: 'full-art' })).tokens[0];
+    const t = importedTokens(map({ layer: 'spirit', type: 'player', disposition: 'hostile', displayMode: 'full-art' }))[0];
     expect([t.layer, t.type, t.disposition, t.displayMode]).toEqual(['spirit', 'player', 'hostile', 'full-art']);
   });
 
@@ -122,16 +127,16 @@ describe('MapDataSchema token allowlists and limits', () => {
     // 'Spirit' would vanish for players (the role filter matches exact
     // strings) and 'Hostile' would be refused the next time the DM edited
     // the token; the live routes take none of these.
-    const t = MapDataSchema.parse(map({ layer: 'Spirit', type: 'Monster', disposition: 'Hostile', displayMode: 'cutout' })).tokens[0];
+    const t = importedTokens(map({ layer: 'Spirit', type: 'Monster', disposition: 'Hostile', displayMode: 'cutout' }))[0];
     expect([t.layer, t.type, t.disposition, t.displayMode]).toEqual(['token', 'npc', null, 'pog']);
   });
 
   it('holds a token to the live size limit, since size decides what its player can see', () => {
-    expect(MapDataSchema.parse(map({ size: { width: 100, height: 100 } })).tokens[0].size).toEqual({ width: 1, height: 1 });
+    expect(importedTokens(map({ size: { width: 100, height: 100 } }))[0].size).toEqual({ width: 1, height: 1 });
   });
 
   it('holds conditions and hit points to the live limits, one condition at a time', () => {
-    const t = MapDataSchema.parse(map({ conditions: ['Prone', 'x'.repeat(100)], hp: { current: 1, max: 999999, temp: 0 } })).tokens[0];
+    const t = importedTokens(map({ conditions: ['Prone', 'x'.repeat(100)], hp: { current: 1, max: 999999, temp: 0 } }))[0];
     expect(t.conditions).toEqual(['Prone']);
     expect(t.hp).toBeNull();
   });
@@ -140,22 +145,22 @@ describe('MapDataSchema token allowlists and limits', () => {
 // An imported token is stored as it arrives, and Duplicate or Edit Token
 // then sends it through the live routes, which require a name and a UUID for
 // any link. One that fell short was refused there, long after the import.
-describe('MapDataSchema token names and links', () => {
+describe('imported token names and links', () => {
   const map = (token: Record<string, unknown>) => ({
     name: 'Arena', imageAssetRef: 'assets/arena.png', width: 10, height: 10, gridSize: 50, feetPerSquare: 5,
     tokens: [{ name: 'T', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, ...token }],
   });
 
   it('gives a token with no name one the live routes accept', () => {
-    expect(MapDataSchema.parse(map({ name: '' })).tokens[0].name).toBe('Unnamed token');
-    expect(MapDataSchema.parse(map({ name: '   ' })).tokens[0].name).toBe('Unnamed token');
-    expect(MapDataSchema.parse(map({ name: ' Troll ' })).tokens[0].name).toBe('Troll');
+    expect(importedTokens(map({ name: '' }))[0].name).toBe('Unnamed token');
+    expect(importedTokens(map({ name: '   ' }))[0].name).toBe('Unnamed token');
+    expect(importedTokens(map({ name: ' Troll ' }))[0].name).toBe('Troll');
   });
 
   it('drops a creature template link that is not a UUID, and keeps one that is', () => {
-    expect(MapDataSchema.parse(map({ creatureTemplateId: 'template-7' })).tokens[0].creatureTemplateId).toBeNull();
+    expect(importedTokens(map({ creatureTemplateId: 'template-7' }))[0].creatureTemplateId).toBeNull();
     const id = '0b6f4e7c-6a55-4d4b-9c49-2c8e0d3f5a11';
-    expect(MapDataSchema.parse(map({ creatureTemplateId: id })).tokens[0].creatureTemplateId).toBe(id);
+    expect(importedTokens(map({ creatureTemplateId: id }))[0].creatureTemplateId).toBe(id);
   });
 });
 

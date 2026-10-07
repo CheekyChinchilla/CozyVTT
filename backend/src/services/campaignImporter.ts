@@ -34,15 +34,15 @@ import { fileTypeFromFile } from 'file-type';
 import {
   ManifestSchema,
   CampaignSettingsSchema,
-  MapDataSchema,
   CreatureTemplateSchema,
   TokenTemplateImportSchema,
   AssetManifestSchema,
+  AssetEntrySchema,
   IMPORT_LIMITS,
   IMPORTABLE_ASSET_TYPES,
 } from '../validators/campaignImport';
-import type { MapData, AssetManifestData } from '../validators/campaignImport';
-import { wallOutsideMap, lightOutsideMap } from '../validators/maps';
+import type { AssetManifestData, AssetEntryData } from '../validators/campaignImport';
+import { ImportReport, prepareMap, describeIssue, label, type SkippedItem } from './campaignImportContent';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import {
@@ -54,7 +54,7 @@ import {
   ArchiveRefusedError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension } from '../utils/fileUtils';
+import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
@@ -120,10 +120,15 @@ export interface ImportOptions {
 export interface ImportResult {
   campaignId: string;
   campaignName: string;
+  /** What was created, which may be fewer than the archive held. */
   mapCount: number;
   tokenCount: number;
   creatureCount: number;
   tokenTemplateCount: number;
+  /** What was imported in a changed form, in words. */
+  warnings: string[];
+  /** What was left out, and why. */
+  skipped: SkippedItem[];
 }
 
 // ── Security helpers ────────────────────────────────────────────────────────
@@ -279,6 +284,13 @@ interface StagedAsset {
   fileSize: number;
 }
 
+/** Each kind of asset an archive carries, in words. */
+const ASSET_KIND_WORDS: Record<ImportableAssetType, string> = {
+  MAP: 'a map picture',
+  TOKEN: 'a token picture',
+  AUDIO: 'a sound file',
+};
+
 /** The folder each kind of imported asset is kept in, as uploads keep them. */
 function folderFor(type: ImportableAssetType): StagedAsset['typeDir'] {
   return type === 'MAP' ? 'maps' : type === 'AUDIO' ? 'audio' : 'tokens';
@@ -295,16 +307,30 @@ async function stageAssets(
   assetManifest: AssetManifestData,
   total: UnpackedTotal,
   staging: string,
-  campaignId: string
+  campaignId: string,
+  report: ImportReport
 ): Promise<StagedAsset[]> {
   const staged: StagedAsset[] = [];
-  for (const [oldId, assetInfo] of Object.entries(assetManifest)) {
-    if (!assetInfo) {
-      logger.warn('Skipping asset of a type a campaign archive does not carry', { oldId });
+  for (const [oldId, rawInfo] of Object.entries(assetManifest)) {
+    const fields = rawInfo !== null && typeof rawInfo === 'object' ? (rawInfo as Record<string, unknown>) : {};
+    const parsedInfo = AssetEntrySchema.safeParse(rawInfo);
+    if (!parsedInfo.success) {
+      const notCarried = typeof fields.type === 'string' && !(IMPORTABLE_ASSET_TYPES as readonly string[]).includes(fields.type);
+      report.skip(
+        'asset',
+        label(fields.originalName, oldId),
+        notCarried
+          ? 'A campaign archive carries map pictures, token pictures and audio, and this is none of them.'
+          : 'Its entry in the archive cannot be read.'
+      );
       continue;
     }
+    const assetInfo: AssetEntryData = parsedInfo.data;
     const assetEntry = files.find((f) => f.path.startsWith(`assets/${oldId}`));
-    if (!assetEntry) continue;
+    if (!assetEntry) {
+      report.skip('asset', label(assetInfo.originalName, oldId), 'Its file is missing from the archive.');
+      continue;
+    }
 
     const newId = randomUUID();
     // Unpacked under a name with no extension a serving route knows, and
@@ -320,7 +346,11 @@ async function stageAssets(
       });
     } catch (error) {
       if (error instanceof ArchiveLimitError && error.limit === 'entry') {
-        logger.warn('Skipping asset larger than the upload limit for its type', { oldId, type: assetInfo.type });
+        report.skip(
+          'asset',
+          label(assetInfo.originalName, oldId),
+          `It is larger than the ${megabytes(getFileSizeLimit(assetInfo.type))} an upload of its kind may be.`
+        );
         continue;
       }
       throw describeLimit(error, assetEntry, total);
@@ -329,6 +359,11 @@ async function stageAssets(
     const content = await identifyAsset(unpackedPath, assetInfo.type, assetInfo.originalName);
     if (!content) {
       logger.warn('Skipping asset whose content is not a format its type allows', { oldId, type: assetInfo.type, declaredMime: assetInfo.mimeType });
+      report.skip(
+        'asset',
+        label(assetInfo.originalName, oldId),
+        `Its content is not a format ${ASSET_KIND_WORDS[assetInfo.type]} can be (${ALLOWED_EXTENSIONS[assetInfo.type].join(', ')}).`
+      );
       await fs.promises.rm(unpackedPath, { force: true });
       continue;
     }
@@ -351,6 +386,11 @@ async function stageAssets(
     });
   }
   return staged;
+}
+
+/** The `name` an archive gives an item, whatever it is. */
+function nameOf(raw: unknown): unknown {
+  return raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).name : undefined;
 }
 
 /** Move a file, copying it when it has to cross from one disk to another. */
@@ -444,12 +484,13 @@ export async function importCampaign(
   }
 
   const newCampaignId = randomUUID();
+  const report = new ImportReport();
   const staging = path.join(importTempDirectory(), `${newCampaignId}.staging`);
   await fs.promises.mkdir(path.resolve(staging), { recursive: true });
 
   try {
     // 5. Unpack the pictures and tracks, so their new ids are known.
-    const assets = await stageAssets(archivePath, directory.files, assetManifest, total, path.resolve(staging), newCampaignId);
+    const assets = await stageAssets(archivePath, directory.files, assetManifest, total, path.resolve(staging), newCampaignId, report);
     const assetRefMap = new Map(assets.map((a) => [a.oldId, `/api/assets/${a.typeDir}/${a.newId}`])); // old id → new address
     const assetIdMap = new Map(assets.map((a) => [a.oldId, a.newId])); // old id → new id
 
@@ -515,62 +556,23 @@ export async function importCampaign(
           let firstMapId: string | null = null;
           for (let i = 0; i < manifestData.mapCount; i++) {
             const mapEntry = directory.files.find((f) => f.path === `maps/map-${i}.json`);
-            if (!mapEntry) continue;
-
-            const mapParsed = MapDataSchema.safeParse(await readJsonEntry(archivePath, mapEntry, total));
-            if (!mapParsed.success) {
-              logger.warn('Skipping invalid map', { index: i, errors: mapParsed.error.issues });
+            if (!mapEntry) {
+              report.skip('map', `Map ${i + 1}`, 'Its file is missing from the archive.');
               continue;
             }
-            const mapData: MapData = mapParsed.data;
-            // Walls and lights held to the bounds the map editor applies, so an
-            // archive cannot store geometry the editor would refuse.
-            if (wallOutsideMap(mapData.wallSegments ?? [], mapData) || lightOutsideMap(mapData.lights ?? [], mapData)) {
-              logger.warn('Skipping map with walls or lights outside it', { index: i });
-              continue;
-            }
-
-            const imageUrl = remapAsset(mapData.imageAssetRef) || '';
-            const tokens = importTokens
-              ? mapData.tokens.map((t) => ({
-                  ...t,
-                  id: randomUUID(),
-                  imageUrl: remapAsset(t.imageUrl) || '',
-                  characterId: null,
-                  controlledBy: null,
-                }))
-              : [];
+            const prepared = prepareMap(await readJsonEntry(archivePath, mapEntry, total), {
+              index: i,
+              importTokens,
+              remapAsset,
+              report,
+            });
+            if (!prepared) continue;
 
             const mapId = randomUUID();
-            await tx.map.create({
-              data: {
-                id: mapId,
-                campaignId: newCampaignId,
-                name: mapData.name,
-                imageUrl,
-                baseLayerUrl: imageUrl,
-                spiritLayerUrl: remapAsset(mapData.spiritLayerAssetRef),
-                width: mapData.width,
-                height: mapData.height,
-                gridSize: mapData.gridSize,
-                feetPerSquare: mapData.feetPerSquare,
-                diagonalRule: mapData.diagonalRule || 'flat',
-                tokens: tokens as unknown as Prisma.InputJsonValue,
-                annotations: (mapData.annotations || []) as unknown as Prisma.InputJsonValue,
-                wallSegments: (mapData.wallSegments || []) as unknown as Prisma.InputJsonValue,
-                fogData: mapData.fogData ? (mapData.fogData as Prisma.InputJsonValue) : Prisma.JsonNull,
-                lightingEnabled: mapData.lightingEnabled ?? false,
-                // Absent in archives from before 1.5.0: leave the column default, which
-                // keeps fog on, as those maps always had it.
-                ...(mapData.fogEnabled !== undefined ? { fogEnabled: mapData.fogEnabled } : {}),
-                ...(mapData.globalIllumination !== undefined ? { globalIllumination: mapData.globalIllumination } : {}),
-                ...(mapData.explorationEnabled !== undefined ? { explorationEnabled: mapData.explorationEnabled } : {}),
-                lights: (mapData.lights || []) as unknown as Prisma.InputJsonValue,
-              },
-            });
+            await tx.map.create({ data: { ...prepared.data, id: mapId, campaignId: newCampaignId } });
             firstMapId ??= mapId;
             mapCount++;
-            tokenCount += tokens.length;
+            tokenCount += prepared.tokenCount;
           }
           // The first map imported is the one the campaign opens on.
           if (firstMapId) {
@@ -584,9 +586,19 @@ export async function importCampaign(
             const creaturesRaw = await readJsonEntry(archivePath, creaturesEntry, total);
             if (Array.isArray(creaturesRaw)) {
               const creatures: Prisma.CreatureTemplateCreateManyInput[] = [];
+              if (creaturesRaw.length > IMPORT_LIMITS.MAX_CREATURES) {
+                report.skip(
+                  'creature',
+                  `${(creaturesRaw.length - IMPORT_LIMITS.MAX_CREATURES).toLocaleString('en-US')} creatures`,
+                  `An archive can carry ${IMPORT_LIMITS.MAX_CREATURES} creatures. These were the last in its list.`
+                );
+              }
               for (const raw of creaturesRaw.slice(0, IMPORT_LIMITS.MAX_CREATURES)) {
                 const parsed = CreatureTemplateSchema.safeParse(raw);
-                if (!parsed.success) continue;
+                if (!parsed.success) {
+                  report.skip('creature', label(nameOf(raw), 'Unnamed creature'), describeIssue(parsed.error.issues[0]));
+                  continue;
+                }
                 const c = parsed.data;
                 creatures.push({
                   id: randomUUID(),
@@ -617,9 +629,19 @@ export async function importCampaign(
             const templatesRaw = await readJsonEntry(archivePath, templatesEntry, total);
             if (Array.isArray(templatesRaw)) {
               const templates: Prisma.TokenTemplateCreateManyInput[] = [];
+              if (templatesRaw.length > IMPORT_LIMITS.MAX_TOKEN_TEMPLATES) {
+                report.skip(
+                  'tokenTemplate',
+                  `${(templatesRaw.length - IMPORT_LIMITS.MAX_TOKEN_TEMPLATES).toLocaleString('en-US')} token templates`,
+                  `An archive can carry ${IMPORT_LIMITS.MAX_TOKEN_TEMPLATES} token templates. These were the last in its list.`
+                );
+              }
               for (const raw of templatesRaw.slice(0, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES)) {
                 const parsed = TokenTemplateImportSchema.safeParse(raw);
-                if (!parsed.success) continue;
+                if (!parsed.success) {
+                  report.skip('tokenTemplate', label(nameOf(raw), 'Unnamed template'), describeIssue(parsed.error.issues[0]));
+                  continue;
+                }
                 const t = parsed.data;
                 templates.push({
                   id: randomUUID(),
@@ -664,9 +686,15 @@ export async function importCampaign(
       throw new CampaignImportFailedError();
     }
 
-    logger.info('Campaign imported', { campaignId: newCampaignId, campaignName: name, ...counts, importingUserId });
+    const { warnings, skipped } = report.result();
+    logger.info('Campaign imported', {
+      campaignId: newCampaignId, campaignName: name, ...counts, importingUserId, warnings: warnings.length, skipped: skipped.length,
+    });
+    // What was changed or left out, for whoever runs the server as well.
+    for (const warning of warnings) logger.warn('Campaign import changed', { campaignId: newCampaignId, warning });
+    for (const item of skipped) logger.warn('Campaign import left out', { campaignId: newCampaignId, ...item });
 
-    return { campaignId: newCampaignId, campaignName: name, ...counts };
+    return { campaignId: newCampaignId, campaignName: name, ...counts, warnings, skipped };
   } finally {
     await fs.promises.rm(path.resolve(staging), { recursive: true, force: true }).catch(() => undefined);
   }

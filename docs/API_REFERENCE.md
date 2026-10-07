@@ -589,12 +589,16 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
   "message": "Campaign imported successfully",
   "campaignId": "uuid",
   "campaignName": "The Lost Mines",
-  "mapCount": 5,
+  "mapCount": 4,
   "tokenCount": 42,
   "creatureCount": 12,
-  "tokenTemplateCount": 8
+  "tokenTemplateCount": 8,
+  "warnings": ["Map \"Cellar\": shortened the notes of 1 token to 5,000 characters."],
+  "skipped": [{ "kind": "map", "name": "Vast", "reason": "Map width must be a whole number from 1 to 500 squares" }]
 }
 ```
+
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own and listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). A map is left out whole only when its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
