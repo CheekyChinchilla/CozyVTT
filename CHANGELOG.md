@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A specially crafted email address could make the server stop responding for minutes.** Addresses are now checked safely. One over 254 characters, the most the email standards allow, is now refused when registering, during setup, on a profile change, or when an administrator adds or invites a user. No real address is that long, so no existing account is affected.
 
+- **A specially crafted atmosphere setting could make the server stop responding for minutes.** Atmosphere filters are now checked safely, both when a DM saves them and when a campaign is imported. Every filter the atmosphere editor makes is accepted as before.
+
 ---
 
 ## [1.5.0] — 2026-10-03
