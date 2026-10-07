@@ -5,7 +5,7 @@
  * FILE_SIZE_LIMITS, and the proxy body-size warnings derived from them.
  */
 
-import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension } from './fileUtils';
+import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType } from './fileUtils';
 import { parseProxyBodySize } from './proxyLimits';
 
 const MB = 1024 * 1024;
@@ -174,6 +174,12 @@ describe('isAllowedExtension', () => {
     expect(isAllowedExtension('AUDIO', '.png')).toBe(false);
     expect(isAllowedExtension('DOCUMENT', '.exe')).toBe(false);
     expect(isAllowedExtension('DOCUMENT', '.html')).toBe(false);
+  });
+
+  it('refuses a PDF as a map, which nothing can draw', () => {
+    expect(isAllowedExtension('MAP', '.pdf')).toBe(false);
+    expect(isAllowedMimeType('MAP', 'application/pdf')).toBe(false);
+    expect(isAllowedMimeType('DOCUMENT', 'application/pdf')).toBe(true);
   });
 
   it('refuses everything for OTHER, which has no upload path', () => {

@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **PDF files are no longer accepted as a map picture.** Nothing can draw a PDF as a map, so one used as a map's picture gave a blank map that could not be exported. Uploading a map now takes PNG, JPEG or WebP only, from the Asset Library, from a Universal VTT import and through the API; PDFs still go in the Documents library. No part of the app offered a PDF as a map, so nothing you can see changes, and a map already stored as a PDF is still served.
+
 - **Deleting an asset that is still in use now shows where it is used before anything is removed.** If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses an image or a sound, the delete is held back and a window lists what would lose it. The file is removed only if you choose **Delete anyway**. This covers the Asset Library, the Documents pages and the Admin Panel's Assets tab, which used to delete on one click and now asks first, naming the asset, who uploaded it and its campaign. An admin sees every campaign by name; anyone else sees names only for the campaigns they run, their own characters and shared character templates, and just a count for the rest. A refused delete now shows the reason instead of a general "failed" message.
 
 - **The Admin Panel asks before deleting a backup or changing someone's role.** The bin beside a backup and the USER / ADMIN pill beside a person used to act on one click. Each now opens a window that names the backup or the person, and the pill says what an administrator can do before it makes one, or that taking the role away removes their access to the Admin Panel. Those buttons also have names a screen reader can read.
@@ -17,6 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Deleting a custom creature, a token template or a token from the map now asks first.** Delete in the Creature Library and the Token Templates list, and Remove in the Token Roster, the Token Manager and the token's quick editor, used to act on one click with no undo. Each now names what will be deleted. In the Token Roster the row buttons also show while you tab through them and always on touch screens, are larger, and a failed hide, reveal or remove shows a message instead of nothing.
 
 ### Fixed
+
+- **A Universal VTT import that is refused now says why.** A file with the wrong extension, one over the size limit, one sent under the wrong form field, or a damaged upload answered a generic "An unexpected error occurred". It now answers with a message saying what is wrong, and a file over the limit is told the limit. A map name sent twice, or longer than 200 characters, is refused the same way.
+
+- **A Universal VTT import can no longer exhaust the server's memory.** A file packed with millions of tiny wall points, or with a picture far over the map limit, used to be built into millions of objects before it was refused, which could take the backend down for every campaign. The walls, doors and lights are now counted as soon as the file is read, and a picture over the map size limit is refused from its size before it is decoded. The largest file accepted now follows the map size limit instead of a fixed 100 MB, and one person can run one import at a time; a second file sent while the first is still being read is asked to wait. Importing a folder of maps one after another is not slowed down.
+
+- **Exporting a map to a Universal VTT file is quick on large maps, and keeps more of the map.** Joining a big map's walls into lines could take many seconds and hold up every other table on the server. It now takes a fraction of a second. Windows are written as open doorways instead of walls, so they no longer block sight in another tool or when imported again, and switched-off lights and each light's bright radius are kept, so an exported map imported again lights the same way. A locked door still comes back as an ordinary closed door.
+
+- **The proxy size advice now covers Universal VTT imports.** A `.uvtt` file is about a third bigger than its picture, so with the default 55 MB proxy limit a picture over about 37 MB was refused by the proxy with a bare 413. The deployment guide now explains the sizing rule and gives the value that lets a picture up to the full map limit through.
 
 - **Closing a document you are writing or editing no longer throws the text away silently.** Pressing Escape, the X or Cancel in the New document window, or in the reader while editing, now asks whether to discard when there is typed text or unsaved changes. With nothing typed it closes straight away.
 

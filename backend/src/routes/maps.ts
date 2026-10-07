@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -20,15 +20,15 @@ import { fileTypeFromBuffer } from 'file-type';
 import {
   getFilePath,
   ensureDirectory,
-  isAllowedMimeType,
   getFileSizeLimit,
-  ALLOWED_EXTENSIONS,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { oneAtATime } from '../utils/oneAtATime';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
+import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
@@ -36,11 +36,25 @@ import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
-/** Multer configured for UVTT file uploads (memory storage — files are small JSON). */
+/**
+ * The largest UVTT file accepted. The picture travels as base64 text, about
+ * four thirds of its size, so this follows the map size limit instead of
+ * being a number of its own, with room for the walls and lights around it.
+ */
+const UVTT_GEOMETRY_ALLOWANCE_BYTES = 8 * 1024 * 1024;
+const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_GEOMETRY_ALLOWANCE_BYTES;
+
+/** What a map picture inside a UVTT may be. A PDF cannot be drawn as a map. */
+const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
+const UVTT_IMAGE_EXTENSIONS = '.png, .jpg, .jpeg, .webp';
+
+/** The longest map name the import accepts; the archive importer's limit. */
+const UVTT_NAME_MAX_LENGTH = 200;
+
+/** Multer configured for UVTT file uploads, held in memory while it is parsed. */
 const uvttUpload = multer({
   storage: multer.memoryStorage(),
-  // 100 MB: UVTT files can be large (embedded image)
-  limits: { fileSize: 100 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS },
+  limits: { fileSize: UVTT_MAX_FILE_BYTES, files: 1, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (['.uvtt', '.dd2vtt', '.df2vtt'].includes(ext) || file.mimetype === 'application/json') {
@@ -50,6 +64,43 @@ const uvttUpload = multer({
     }
   },
 });
+
+/** Reads the upload, and answers a body it refuses with the reason instead of a 500. */
+function receiveUvtt(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  uvttUpload.single('file')(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      const limitMB = Math.round(UVTT_MAX_FILE_BYTES / (1024 * 1024));
+      res.status(413).json({
+        error: 'File Too Large',
+        message:
+          `This file is larger than the ${limitMB}MB a Universal VTT import accepts. ` +
+          `The picture inside it can be at most ${Math.round(getFileSizeLimit('MAP') / (1024 * 1024))}MB.`,
+      });
+      return;
+    }
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_UNEXPECTED_FILE') {
+      res.status(400).json({
+        error: 'Validation Error',
+        message: 'Send one file, in a form field called "file".',
+      });
+      return;
+    }
+    res.status(400).json({
+      error: 'Upload Error',
+      message: errorMessage(err) || 'The upload could not be read.',
+    });
+  });
+}
+
+/** One import per user at a time; each holds the whole file in memory. */
+const oneUvttImportAtATime = oneAtATime(
+  (req) => (req as AuthenticatedRequest).session?.userId,
+  'Another import is still running. Wait for it to finish, then import this file.'
+);
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
@@ -125,6 +176,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     const { campaignId } = req.params;
     const { name, imageUrl, width, height, gridSize, spiritLayerUrl, feetPerSquare, diagonalRule } = req.body;
 
+    // TODO(maps): the name has no length cap here or on update, while UVTT
+    // import and the campaign archive importer refuse more than 200
+    // characters, so a longer name set through the API makes that map drop out
+    // of a later archive import. Cap it at 200 on both.
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({
@@ -278,11 +333,8 @@ router.post(
   campaignDM,
   // Writes a file to disk exactly as an upload does, so it shares the ceiling.
   uploadLimiter,
-  // TODO(upload): a refused body (the file filter's, or the parser's for a
-  // malformed or over-limit one) reaches the generic error handler and answers
-  // 500 "An unexpected error occurred". Answer 400 with the refusal's message,
-  // as the asset and campaign import uploads do.
-  uvttUpload.single('file'),
+  oneUvttImportAtATime,
+  receiveUvtt,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { campaignId } = req.params;
@@ -293,7 +345,20 @@ router.post(
         return res.status(400).json({ error: 'Validation Error', message: 'No UVTT file uploaded' });
       }
 
-      const mapName = (req.body.name as string)?.trim() || path.basename(req.file.originalname, path.extname(req.file.originalname));
+      // A field sent twice arrives as a list, which is not a name.
+      const rawName: unknown = req.body.name;
+      if (rawName !== undefined && typeof rawName !== 'string') {
+        return res.status(400).json({ error: 'Validation Error', message: 'Send the map name once, as text.' });
+      }
+      const mapName =
+        rawName?.trim() ||
+        path.basename(req.file.originalname, path.extname(req.file.originalname)).slice(0, UVTT_NAME_MAX_LENGTH);
+      if (mapName.length > UVTT_NAME_MAX_LENGTH) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `A map name can be at most ${UVTT_NAME_MAX_LENGTH} characters.`,
+        });
+      }
       // Optional; anything that is not a usable grid size gets the default
       const gridSizePx = usable(GridSizeSchema, Number(req.body.gridSize)) ?? 70;
 
@@ -304,7 +369,7 @@ router.post(
 
       let parsed;
       try {
-        parsed = parseUVTT(req.file.buffer, gridSizePx, { includeObjectWalls });
+        parsed = parseUVTT(req.file.buffer, gridSizePx, { includeObjectWalls, maxImageBytes: getFileSizeLimit('MAP') });
       } catch (parseErr) {
         const msg = parseErr instanceof Error ? parseErr.message : 'Failed to parse UVTT file';
         return res.status(400).json({ error: 'Parse Error', message: msg });
@@ -386,12 +451,12 @@ router.post(
       // or not at all. Read the bytes rather than trusting the file: a UVTT is
       // JSON, and the base64 inside it can be anything.
       const imageType = await fileTypeFromBuffer(parsed.imageBuffer);
-      if (!imageType || !isAllowedMimeType('MAP', imageType.mime)) {
+      if (!imageType || !UVTT_IMAGE_TYPES.includes(imageType.mime)) {
         return res.status(400).json({
           error: 'Validation Error',
           message:
             'The picture inside this file is not an image CozyVTT can use. ' +
-            `Maps must be one of: ${ALLOWED_EXTENSIONS.MAP.join(', ')}.`,
+            `Maps must be one of: ${UVTT_IMAGE_EXTENSIONS}.`,
         });
       }
 

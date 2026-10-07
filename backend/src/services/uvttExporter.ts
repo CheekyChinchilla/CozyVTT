@@ -36,6 +36,10 @@ interface UVTTLight {
   range: number;
   intensity: number;
   color: string;
+  /** Not part of the format: other tools skip it, CozyVTT reads it back. */
+  bright_range: number;
+  /** Not part of the format: false for a light that is switched off. */
+  enabled: boolean;
 }
 
 interface UVTTOutput {
@@ -71,67 +75,73 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Two points are the same corner when they round to the same hundredth. */
+const cornerKey = (p: UVTTPoint): string => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+
 /**
  * Merge individual wall segments into polylines where endpoints connect.
- * Two segments connect if one's end matches another's start (within a small epsilon).
  * Returns arrays of connected points.
+ *
+ * Each corner is looked up in a map from corner to the segments touching it,
+ * so a chain is walked in one pass and the whole merge is linear in the number
+ * of segments. At a corner where three or more segments meet, the chain
+ * continues along whichever is found first and the others start chains of
+ * their own; no segment is dropped or written twice.
  */
 function mergeWallPolylines(segments: WallSegment[]): UVTTPoint[][] {
-  if (segments.length === 0) return [];
+  const starts = segments.map((s) => ({ x: s.x1, y: s.y1 }));
+  const ends = segments.map((s) => ({ x: s.x2, y: s.y2 }));
+  const startKeys = starts.map(cornerKey);
+  const endKeys = ends.map(cornerKey);
 
-  const EPSILON = 0.01; // grid-square units
+  // Segments touching each corner, as indices.
+  const touching = new Map<string, number[]>();
+  const touch = (key: string, index: number) => {
+    const list = touching.get(key);
+    if (list) list.push(index);
+    else touching.set(key, [index]);
+  };
+  for (let i = 0; i < segments.length; i++) {
+    touch(startKeys[i], i);
+    touch(endKeys[i], i);
+  }
 
-  const pointsMatch = (a: UVTTPoint, b: UVTTPoint): boolean =>
-    Math.abs(a.x - b.x) < EPSILON && Math.abs(a.y - b.y) < EPSILON;
+  const used = new Array<boolean>(segments.length).fill(false);
 
-  // Convert each segment to a 2-point polyline
-  type Poly = UVTTPoint[];
-  const polys: Poly[] = segments.map((s) => [
-    { x: s.x1, y: s.y1 },
-    { x: s.x2, y: s.y2 },
-  ]);
+  /** An unused segment at this corner, or -1. */
+  const unusedAt = (key: string): number => {
+    const list = touching.get(key);
+    if (!list) return -1;
+    // Spent entries are dropped from the end, so each is passed over once.
+    while (list.length > 0 && used[list[list.length - 1]]) list.pop();
+    return list.length > 0 ? list[list.length - 1] : -1;
+  };
 
-  // Greedy merging: try to concatenate polylines that share endpoints
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 0; i < polys.length; i++) {
-      for (let j = i + 1; j < polys.length; j++) {
-        const a = polys[i];
-        const b = polys[j];
-        const aEnd = a[a.length - 1];
-        const bStart = b[0];
-        const bEnd = b[b.length - 1];
-        const aStart = a[0];
+  const polys: UVTTPoint[][] = [];
+  for (let i = 0; i < segments.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
 
-        if (pointsMatch(aEnd, bStart)) {
-          // a's end matches b's start → a + b (skip duplicate point)
-          polys[i] = [...a, ...b.slice(1)];
-          polys.splice(j, 1);
-          merged = true;
-          break;
-        } else if (pointsMatch(aEnd, bEnd)) {
-          // a's end matches b's end → a + reverse(b)
-          polys[i] = [...a, ...b.slice(0, -1).reverse()];
-          polys.splice(j, 1);
-          merged = true;
-          break;
-        } else if (pointsMatch(aStart, bEnd)) {
-          // b's end matches a's start → b + a
-          polys[i] = [...b, ...a.slice(1)];
-          polys.splice(j, 1);
-          merged = true;
-          break;
-        } else if (pointsMatch(aStart, bStart)) {
-          // both start at same point → reverse(b) + a
-          polys[i] = [...b.reverse(), ...a.slice(1)];
-          polys.splice(j, 1);
-          merged = true;
-          break;
-        }
-      }
-      if (merged) break; // restart outer loop after mutation
+    // Grow forwards from this segment's far end, then backwards from its near end.
+    const forward: UVTTPoint[] = [ends[i]];
+    let tailKey = endKeys[i];
+    for (let next = unusedAt(tailKey); next !== -1; next = unusedAt(tailKey)) {
+      used[next] = true;
+      const startsHere = startKeys[next] === tailKey;
+      forward.push(startsHere ? ends[next] : starts[next]);
+      tailKey = startsHere ? endKeys[next] : startKeys[next];
     }
+
+    const backward: UVTTPoint[] = [];
+    let headKey = startKeys[i];
+    for (let next = unusedAt(headKey); next !== -1; next = unusedAt(headKey)) {
+      used[next] = true;
+      const endsHere = endKeys[next] === headKey;
+      backward.push(endsHere ? starts[next] : ends[next]);
+      headKey = endsHere ? startKeys[next] : endKeys[next];
+    }
+
+    polys.push([...backward.reverse(), starts[i], ...forward]);
   }
 
   return polys;
@@ -152,12 +162,12 @@ export function buildUVTT(input: UVTTExportInput): Buffer {
     ? Math.round(imageWidthPx / mapWidth)
     : gridSizePx;
 
-  // Separate walls from doors/portals
-  const wallSegs = wallSegments.filter(
-    (s) => s.type === 'wall' || s.type === 'window'
-  );
+  // Separate walls from doors/portals. A window does not block sight, so it
+  // goes out as an open portal: written into line_of_sight it would come back
+  // as a solid wall. A locked door has no UVTT form and goes out closed.
+  const wallSegs = wallSegments.filter((s) => s.type === 'wall');
   const doorSegs = wallSegments.filter(
-    (s) => s.type === 'door-closed' || s.type === 'door-open' || s.type === 'door-locked'
+    (s) => s.type === 'door-closed' || s.type === 'door-open' || s.type === 'door-locked' || s.type === 'window'
   );
 
   // Convert wall segments to grid-square coordinates
@@ -182,23 +192,26 @@ export function buildUVTT(input: UVTTExportInput): Buffer {
         y: round2((p1.y + p2.y) / 2),
       },
       bounds: [p1, p2],
-      closed: s.type !== 'door-open',
+      closed: s.type !== 'door-open' && s.type !== 'window',
       freestanding: false,
     };
   });
 
-  // Convert light sources to UVTT format
-  // Export using dimRadius as the UVTT range (total visible extent).
-  // UVTT format only has a single range + intensity, so map bright/dim
-  // back to the nearest approximation: range = dimRadius, intensity = 1.
-  const uvttLights: UVTTLight[] = lights.filter((l) => l.enabled).map((l) => ({
+  // Convert light sources to UVTT format. The format has one range and an
+  // intensity: range is the dim radius, and a switched-off light gets
+  // intensity 0 so other tools show it dark. The bright radius and the on/off
+  // state are also written under their own keys so that CozyVTT can read them
+  // back; every light is kept, on or off.
+  const uvttLights: UVTTLight[] = lights.map((l) => ({
     position: {
       x: round2(l.x / gridSizePx),
       y: round2(l.y / gridSizePx),
     },
     range: l.dimRadius,
-    intensity: 1,
+    intensity: l.enabled ? 1 : 0,
     color: l.color,
+    bright_range: l.brightRadius,
+    enabled: l.enabled,
   }));
 
   // Encode image as base64 (no data URI prefix — raw base64 per UVTT convention)
