@@ -7,7 +7,7 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import logger from '../../utils/logger';
-import { diceRollLimiter, withinCeiling } from '../shared';
+import { withinCeiling } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
 import { campaignSockets } from '../utils';
@@ -17,7 +17,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
   /**
    * DICE.ROLL - User rolls dice
    * Validates expression, calculates result, saves to database, and broadcasts.
-   * Rate limited to 30 rolls per minute per user.
+   * Under the per-user dice ceiling (SOCKET_CEILINGS).
    * SECURITY: Uses server-authenticated socket.campaignId only.
    */
   socket.on('dice.roll', async (data: unknown) => {
@@ -42,11 +42,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       }
       const { expression, characterName, purpose, secret } = parsed.data;
 
-      // Rate limiting: 30 rolls per minute per user
-      if (!diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
-        socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
-        return;
-      }
+      if (!withinCeiling(socket, 'dice.roll')) return;
 
       // Validate expression syntax (without rolling)
       try {

@@ -143,6 +143,7 @@ afterAll(async () => {
   await server?.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.message.deleteMany({ where: { campaignId } });
+  await prisma.diceRoll.deleteMany({ where: { campaignId } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.character.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
@@ -190,6 +191,29 @@ describe('chat.message', () => {
     await settle(async () => (await stored(player.id)) >= 300);
 
     expect(await stored(player.id)).toBe(300);
+    client.disconnect();
+  });
+});
+
+describe('dice.roll', () => {
+  const stored = (userId: string) => prisma.diceRoll.count({ where: { campaignId, userId } });
+
+  // A DM clicking through a mob's attacks and damage from the roll buttons
+  // passes 30 a minute in an ordinary round, which the old ceiling was.
+  it('takes 50 a second and 200 a minute, and says so once', async () => {
+    const player = await newPlayer();
+    const client = await server.connectAndAuth(player.cookie, campaignId);
+    const told = refusals(client);
+
+    for (let burst = 0; burst < 5; burst += 1) {
+      for (let i = 0; i < 50; i += 1) client.emit('dice.roll', { expression: '1d20', purpose: `burst ${burst}` });
+      await sleep(1050);
+    }
+    await settle(async () => (await stored(player.id)) >= 200);
+
+    expect(await stored(player.id)).toBe(200);
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatch(/^Rate limit exceeded/); // what the dice panel waits out
     client.disconnect();
   });
 });

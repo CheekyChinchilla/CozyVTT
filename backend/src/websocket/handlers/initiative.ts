@@ -34,7 +34,7 @@ import {
   type CombatState,
 } from '../initiativeState';
 import { bestEffort, campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
-import { diceRollLimiter, stateRequestAllowed, withinCeiling } from '../shared';
+import { stateRequestAllowed, withinCeiling } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
 type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
@@ -340,10 +340,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // and re-sends the order, and it used to bypass the ceiling dice.roll
       // applies. Every roll but the DM's is counted; the DM rolls for a whole
       // encounter at once.
-      if (socket.role !== 'DM' && !diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
-        socket.emit('error', { message: 'Rate limit exceeded. Maximum 30 dice rolls per minute.' });
-        return;
-      }
+      if (socket.role !== 'DM' && !withinCeiling(socket, 'dice.roll')) return;
 
       // `expression` is now only a fallback for combatants the server cannot
       // work initiative out for itself — see the resolution below. Validate it

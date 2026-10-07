@@ -129,7 +129,6 @@ export class RateLimiter {
 }
 
 // Rate limiter instances (shared across handler modules)
-export const diceRollLimiter = new RateLimiter();
 export const chatMessageLimiter = new RateLimiter();
 export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second per user
 
@@ -208,6 +207,13 @@ export const SOCKET_CEILINGS = {
   'chat.message': {
     windows: [{ limit: 50, windowMs: SECOND }, { limit: 300, windowMs: MINUTE }],
     refusal: 'Too many chat messages at once. Wait a few seconds, then send yours again.',
+  },
+  // A player's initiative.roll counts against the same budget. The web
+  // client's dice panel waits a short while after a refusal that starts
+  // "Rate limit exceeded".
+  'dice.roll': {
+    windows: [{ limit: 50, windowMs: SECOND }, { limit: 200, windowMs: MINUTE }],
+    refusal: 'Rate limit exceeded: too many dice rolls at once. Wait a few seconds, then roll again.',
   },
   'character.hp.update': {
     windows: [{ limit: 50, windowMs: SECOND }],

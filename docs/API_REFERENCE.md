@@ -1473,7 +1473,7 @@ when it sees it.
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
 | General API | 300 requests | 1 minute | Every request |
-| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
+| Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
 | Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
 | Token drag frames (WebSocket) | 150 events | 1 second | Every event |
 | Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |

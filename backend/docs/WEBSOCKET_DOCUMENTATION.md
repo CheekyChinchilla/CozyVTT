@@ -625,7 +625,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `token.move.end` | 30 a second, a budget of its own | `error` once |
 | The DM's events: `map.change`, `atmosphere.effect.set`, `atmosphere.audio.set`, `vibe.update`, `spirit_layer.toggle`, `spirit_layer.style_change`, `spirit_layer.token.toggle`, `initiative.add`, `initiative.remove`, `initiative.set`, `initiative.reorder`, `initiative.start`, `initiative.next`, `initiative.end`, the DM's own `initiative.roll`, `dice.clearHistory`, `exploration:reset` | 50 a second, each | `error` once |
 | `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
-| `dice.roll` | 30 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` each time |
+| `dice.roll` | 50 a second and 200 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` once, starting "Rate limit exceeded", which the web client's dice panel waits out |
 | Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
 | `fog:operation` | 10 a second | dropped silently |
 | `exploration:reveal` | 10 a second | dropped silently |

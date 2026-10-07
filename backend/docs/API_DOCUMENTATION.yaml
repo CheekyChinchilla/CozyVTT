@@ -77,7 +77,7 @@ info:
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
-    - Dice rolls: 30 per minute (WebSocket)
+    - Dice rolls (WebSocket): 50 a second and 200 a minute per user
     - Token movement (WebSocket), per user: drag frames (`token.move`) 150 a
       second, dropped without an error; picking a token up (`token.move.start`)
       and putting it down (`token.move.end`) 30 a second each, with one `error`

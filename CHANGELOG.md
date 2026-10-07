@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Deleting a custom creature, a token template or a token from the map now asks first.** Delete in the Creature Library and the Token Templates list, and Remove in the Token Roster, the Token Manager and the token's quick editor, used to act on one click with no undo. Each now names what will be deleted. In the Token Roster the row buttons also show while you tab through them and always on touch screens, are larger, and a failed hide, reveal or remove shows a message instead of nothing.
 
+- **Dice rolls allow far more before the limit.** The limit of 30 rolls a minute per player could be reached by a DM rolling attacks and damage for a group of monsters in one round. It is now 200 a minute, and 50 in any one second, which no table reaches.
+
 ### Fixed
 
 - **Closing a document you are writing or editing no longer throws the text away silently.** Pressing Escape, the X or Cancel in the New document window, or in the reader while editing, now asks whether to discard when there is typed text or unsaved changes. With nothing typed it closes straight away.
