@@ -34,7 +34,7 @@ import {
   type CombatState,
 } from '../initiativeState';
 import { bestEffort, campaignSockets, getSocketInstance, stillInCampaign } from '../utils';
-import { diceRollLimiter, stateRequestAllowed } from '../shared';
+import { diceRollLimiter, stateRequestAllowed, withinCeiling } from '../shared';
 
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
 type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
@@ -190,6 +190,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.add', async (data: { tokenId: string; mapId: string }) => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.add')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can modify initiative' }); return; }
 
       const { tokenId, mapId } = data;
@@ -247,6 +248,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.remove', async (data: { tokenId: string }) => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.remove')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can modify initiative' }); return; }
 
       const { tokenId } = data;
@@ -269,6 +271,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.set', async (data: { tokenId: string; mapId: string; value: number | null }) => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.set')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can modify initiative' }); return; }
 
       const { tokenId, mapId, value } = data;
@@ -314,6 +317,9 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
     // `characterName` is what older clients sent along; the server names the token itself now.
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      // The DM rolls for a whole encounter, so the DM's rolls have a ceiling
+      // of their own; everyone else's count as dice rolls, below.
+      if (socket.role === 'DM' && !withinCeiling(socket, 'initiative.roll')) return;
 
       // A spectator may not roll, as with dice.roll, and is told so before
       // anything is read. The token check below refuses one too, for a role
@@ -544,6 +550,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.reorder', async (data: { orderedTokenIds: string[] }) => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.reorder')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can reorder initiative' }); return; }
 
       const { orderedTokenIds } = data;
@@ -575,6 +582,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.start', async () => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.start')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can start combat' }); return; }
 
       const state = getCombatState(socket.campaignId);
@@ -598,6 +606,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.next', async () => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.next')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can advance the turn' }); return; }
 
       const state = getCombatState(socket.campaignId);
@@ -629,6 +638,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
   socket.on('initiative.end', async () => {
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
+      if (!withinCeiling(socket, 'initiative.end')) return;
       if (socket.role !== 'DM') { socket.emit('error', { message: 'Only the DM can end combat' }); return; }
 
       clearCombatState(socket.campaignId);

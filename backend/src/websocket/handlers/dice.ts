@@ -7,7 +7,7 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
 import logger from '../../utils/logger';
-import { diceRollLimiter } from '../shared';
+import { diceRollLimiter, withinCeiling } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
 import { campaignSockets } from '../utils';
@@ -161,6 +161,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+      if (!withinCeiling(socket, 'dice.clearHistory')) return;
 
       // Who is running the game, not who owns the campaign. These are separate
       // facts — `Campaign.ownerId` never moves, while the DM seat can — and they

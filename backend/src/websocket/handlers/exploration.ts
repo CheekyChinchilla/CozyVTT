@@ -20,7 +20,7 @@ import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
+import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -143,6 +143,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:reset', async (data: { mapId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
+      if (!withinCeiling(socket, 'exploration:reset')) return;
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only DMs can reset explored areas' });
         return;

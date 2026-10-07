@@ -183,6 +183,14 @@ const tokenMoves: SocketCeiling = {
   windows: [{ limit: 30, windowMs: SECOND }],
   refusal: 'Too many token moves at once. Wait a moment, then move it again.',
 };
+/** The DM's events, each its own budget: a click apiece in the web client, a tool call apiece from the bridge. */
+const dmEvent = (what: string): SocketCeiling => ({
+  windows: [{ limit: 50, windowMs: SECOND }],
+  refusal: `Too many ${what} at once. Wait a moment, then try again.`,
+});
+const atmosphere = dmEvent('atmosphere changes');
+const spiritLayer = dmEvent('spirit layer changes');
+const initiative = dmEvent('initiative changes');
 
 /**
  * Abuse ceilings on the events a member sends by hand, each its own budget
@@ -219,6 +227,27 @@ export const SOCKET_CEILINGS = {
     windows: [{ limit: 50, windowMs: 10 * SECOND }],
     refusal: 'Too many attempts to join a campaign at once. Wait a few seconds, then reload the page.',
   },
+  // The DM's. Any user can run a campaign of their own, so these are as open
+  // to a script as the players' events. map.change is the costly one: the
+  // whole map, rebuilt for and sent to every member.
+  'map.change': dmEvent('map updates'),
+  'atmosphere.effect.set': atmosphere,
+  'atmosphere.audio.set': atmosphere,
+  'vibe.update': atmosphere,
+  'spirit_layer.toggle': spiritLayer,
+  'spirit_layer.style_change': spiritLayer,
+  'spirit_layer.token.toggle': spiritLayer,
+  'initiative.add': initiative,
+  'initiative.remove': initiative,
+  'initiative.set': initiative,
+  'initiative.reorder': initiative,
+  'initiative.start': initiative,
+  'initiative.next': initiative,
+  'initiative.end': initiative,
+  // The DM's own rolls; a player's count against their dice rolls.
+  'initiative.roll': initiative,
+  'dice.clearHistory': dmEvent('requests to clear the dice log'),
+  'exploration:reset': dmEvent('explored-area resets'),
 } satisfies Record<string, SocketCeiling>;
 
 export type CeilingEvent = keyof typeof SOCKET_CEILINGS;

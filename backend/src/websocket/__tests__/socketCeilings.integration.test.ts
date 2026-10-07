@@ -16,6 +16,10 @@
  * per socket, so a thousand of them multiplied what everyone else's moves
  * cost the server.
  *
+ * The DM's own events had no ceiling at all, and any user can be the DM of a
+ * campaign of their own: `map.change` alone rebuilt and sent the whole map to
+ * every member, line of sight included on a lit map.
+ *
  * The numbers are abuse ceilings: well above anything a busy table sends
  * (see busyTable.integration.test.ts). The sender is told once, not once per
  * refused event.
@@ -342,5 +346,61 @@ describe('sockets per user', () => {
     expect(after.answer).toBe('connected');
 
     for (const client of [...held, after.client]) client.disconnect();
+  });
+});
+
+describe("the DM's events", () => {
+  /**
+   * Each refused for its payload after the ceiling is checked, so the
+   * answers that are not ceiling refusals count what got past it.
+   */
+  it.each([
+    ['map.change', {}],
+    ['atmosphere.audio.set', { assetId: randomUUID() }],
+    ['vibe.update', {}],
+    ['spirit_layer.toggle', { visible: 'yes' }],
+    ['spirit_layer.style_change', {}],
+    ['spirit_layer.token.toggle', {}],
+    ['initiative.add', {}],
+    ['initiative.remove', {}],
+    ['initiative.set', {}],
+    ['initiative.reorder', {}],
+    ['initiative.start', undefined],
+    ['initiative.next', undefined],
+    ['initiative.roll', {}],
+    ['exploration:reset', {}],
+  ])('%s takes 50 a second', async (event, payload) => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    let answered = 0;
+    let told = 0;
+    dm.on('error', (data: { message: string }) => {
+      if (CEILING_REFUSAL.test(data.message)) told += 1;
+      else answered += 1;
+    });
+
+    for (let i = 0; i < 60; i += 1) dm.emit(event, payload);
+    await settle(() => answered >= 50);
+
+    expect(answered).toBe(50);
+    expect(told).toBe(1);
+    dm.disconnect();
+  });
+
+  it.each([
+    ['atmosphere.effect.set', { effect: 'rain' }, 'atmosphere.effect.updated'],
+    ['dice.clearHistory', undefined, 'dice.historyCleared'],
+    ['initiative.end', undefined, 'initiative.state'],
+  ])('%s takes 50 a second', async (event, payload, reply) => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const told = refusals(dm);
+    const replies = collect(dm, reply);
+
+    for (let i = 0; i < 60; i += 1) dm.emit(event, payload);
+    await settle(() => replies.length >= 50, 5000);
+
+    // A newer initiative send overtakes an older one, so fewer may arrive.
+    expect(replies.length).toBeLessThanOrEqual(50);
+    expect(told).toHaveLength(1);
+    dm.disconnect();
   });
 });

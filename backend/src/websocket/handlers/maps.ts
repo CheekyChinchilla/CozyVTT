@@ -5,7 +5,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { broadcastMapData } from '../shared';
+import { broadcastMapData, withinCeiling } from '../shared';
 import logger from '../../utils/logger';
 import { getState as getCombatState } from '../initiativeState';
 import { resendInitiativeState } from './initiative';
@@ -18,6 +18,7 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
   socket.on('map.change', async (data: { mapId: string }) => {
     try {
       if (!socket.campaignId) return;
+      if (!withinCeiling(socket, 'map.change')) return;
 
       // DM only
       if (socket.role !== 'DM') {

@@ -623,6 +623,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `character.hitdice.spend` | 50 a second | `error` once |
 | `token.move.start` | 30 a second | `error` once |
 | `token.move.end` | 30 a second, a budget of its own | `error` once |
+| The DM's events: `map.change`, `atmosphere.effect.set`, `atmosphere.audio.set`, `vibe.update`, `spirit_layer.toggle`, `spirit_layer.style_change`, `spirit_layer.token.toggle`, `initiative.add`, `initiative.remove`, `initiative.set`, `initiative.reorder`, `initiative.start`, `initiative.next`, `initiative.end`, the DM's own `initiative.roll`, `dice.clearHistory`, `exploration:reset` | 50 a second, each | `error` once |
 | `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
 | `dice.roll` | 30 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` each time |
 | Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
@@ -631,7 +632,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `map.ping` | 10 every ten seconds | dropped silently |
 | The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
 
-An `initiative.request_state` while nothing is in the order is answered from memory without any database work. Any other event has no ceiling of its own; apart from `ping`, those are the DM's alone, and `dm:editing` is passed on at most twice a second per socket.
+An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only events with no ceiling of their own are `ping`, answered to its own socket alone, and `dm:editing`, which the DM sends and which is passed on at most twice a second per socket.
 
 **Connections per user.** One user may hold at most 40 sockets open at once, in every campaign together; each campaign page is one, and a connection that dropped without closing counts until its heartbeat times out, up to 85 seconds later. The next one is answered with `error` ("Too many CozyVTT tabs or devices are open on this account at once …") and closed before it can join anything. Every fan-out to a campaign is worked out per socket, so this bounds how far one account can multiply what everyone else's events cost.
 

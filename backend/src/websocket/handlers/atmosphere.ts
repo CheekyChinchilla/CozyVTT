@@ -8,6 +8,7 @@ import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { readJsonObject, toJson } from '../../utils/prisma-json';
 import { setCampaignAmbientAudio } from '../../services/atmosphereAudio';
+import { withinCeiling } from '../shared';
 
 export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -17,6 +18,7 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
   socket.on('atmosphere.effect.set', async (data: { effect: string | null }) => {
     try {
       if (!socket.campaignId) return;
+      if (!withinCeiling(socket, 'atmosphere.effect.set')) return;
 
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only the DM can set atmosphere effects' });
@@ -67,6 +69,7 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
   socket.on('atmosphere.audio.set', async (data: { assetId: string | null; volume?: number; loop?: boolean }) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
+      if (!withinCeiling(socket, 'atmosphere.audio.set')) return;
 
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only the DM can control ambient audio' });
