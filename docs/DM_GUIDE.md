@@ -1014,6 +1014,8 @@ Wall edits support full undo/redo:
 
 Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again.
 
+The history belongs to the map it was made on. Switching to another map starts with nothing to undo, so an undo can never put one map's walls onto another.
+
 ### Enabling Dynamic Lighting
 
 Dynamic lighting is off on a new map, unless the map was imported from a Universal VTT file that brought lights. To enable it:

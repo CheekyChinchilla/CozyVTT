@@ -244,7 +244,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const { markDirty } = useRenderLoop(drawLayerRef);
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
-  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
+  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
   const [fogState, setFogState] = useState<FogState | null>(null);
   // Player view: list of revealed fog cell indices (derived from server fog:cells event).
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
@@ -1127,15 +1127,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Load Walls & Fog on Map Change
   // ============================================
   useEffect(() => {
+    // A fresh undo history per map: one carried over from the previous map
+    // would undo the new map's walls into the old map's.
     if (!currentMap) {
-      replaceWallHistory([]);
+      resetWallHistory([]);
       setFogState(null);
       setRevealedCells(null);
       return;
     }
 
     // Load wall segments and light sources from the map response (included in GET /maps/:id)
-    replaceWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
+    resetWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
     const socketInstance = socket?.getSocket();

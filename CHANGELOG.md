@@ -64,6 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Wall, door, light and fog changes made at the same moment are all kept.** Placing a door on a wall, or splitting a wall in two, sends several changes at once, and the server could keep only the last of them: everyone's screen showed the door, but after a reload the original wall was back and the door was gone. The same could happen when a player opened a door while the DM was drawing walls, to lights placed or changed in quick succession, and to two fog reveals or hides that overlapped, which could leave part of a room covered again or uncovered. Changes to a map's walls, lights and fog are now saved one after another, so none of them is lost.
 
+- **Undoing a wall change after switching maps no longer puts the old map's walls on the new one.** The wall undo history carried over from one map to the next, so pressing Ctrl+Z, or Undo in the Walls panel, on the new map replaced all of its walls with the previous map's, for everyone at the table. Each map now starts with nothing to undo.
+
 ### Security
 
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
