@@ -70,6 +70,7 @@ import { releaseHeldToken } from './map/tokenHold';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
+import { createOwnEdits } from './map/ownEdits';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
 import { isSeen, type Viewer, type Lit, type InsideFn } from '@/utils/visibilityRule';
@@ -245,7 +246,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const { markDirty } = useRenderLoop(drawLayerRef);
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
-  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
+  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
+  // Every wall and light edit this page sends carries an id, so the server's
+  // echo of it can be told from anyone else's change (map/ownEdits.ts).
+  const [ownEdits] = useState(() => createOwnEdits());
   const [fogState, setFogState] = useState<FogState | null>(null);
   // Player view: list of revealed fog cell indices (derived from server fog:cells event).
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
@@ -465,7 +469,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     wallCacheValidRef.current = false;
     const socketInstance = socket?.getSocket();
     if (socketInstance && currentMap) {
-      socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: next });
+      socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
     }
   }, [pushWallHistory, socket, currentMap]);
 
@@ -633,16 +637,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setFogDragCurrent(null);
   }, []);
 
-  // Helper: change a door's type and broadcast. Uses wallSegmentsRef to avoid stale closure
-  // (changeDoorType is memoised with [currentMap, socket, replaceWallHistory] deps).
+  // Helper: change a door's type and broadcast.
   const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
     if (!currentMap) return;
     const updated = { ...door, type: newType };
-    replaceWallHistory(wallSegmentsRef.current.map(s => s.id === door.id ? updated : s));
+    // Opening or closing a door is not an undoable edit: carried into the
+    // whole history, so undo never closes a door again.
+    carryWallHistory((walls) => walls.map(s => s.id === door.id ? updated : s));
     wallCacheValidRef.current = false;
-    socket?.getSocket()?.emit('wall:update', { mapId: currentMap.id, segment: updated });
+    socket?.getSocket()?.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
     setDoorContextMenu(null);
-  }, [currentMap, socket, replaceWallHistory]);
+  }, [currentMap, socket, carryWallHistory, ownEdits]);
 
   // Player's own token on the current map — used as ruler origin for non-DM users
   const myToken = useMemo(() => {
@@ -1199,42 +1204,40 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const socketInstance = socket.getSocket();
     if (!socketInstance) return;
 
-    // TODO(maps): the DM's page skips every wall event below, taking each for
-    // the echo of its own edit. A player's door toggle, or a wall change made
-    // through the REST API, then never reaches the DM's canvas or preview until
-    // reload, and the DM's next walls:replace sends the stale list and undoes
-    // that change for everyone. Skip only the echo of this page's own emit and
-    // apply the rest.
-    const handleWallAdded = (data: { mapId: string; segment: WallSegment }) => {
-      // DM already applied the change optimistically before emitting; skip the echo to
-      // avoid reverting local state with stale data from the closed-over wallSegments.
-      if (isDM) return;
+    // Wall and light changes from the server. Each is applied unless it is
+    // the echo of this page's own edit, which is drawn already: the DM's page
+    // too, so a player's door toggle or a change made through the API reaches
+    // it. They are carried into the whole undo history, so the DM's undo does
+    // not put back what someone else changed. The role plays no part, so a
+    // DM handover without a reload changes nothing here.
+    const handleWallAdded = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      replaceWallHistory([...wallSegmentsRef.current, data.segment]);
+      carryWallHistory((walls) => walls.some((s) => s.id === data.segment.id)
+        ? walls.map((s) => s.id === data.segment.id ? data.segment : s)
+        : [...walls, data.segment]);
       wallCacheValidRef.current = false;
     };
 
-    const handleWallRemoved = (data: { mapId: string; segmentId: string }) => {
-      if (isDM) return;
+    const handleWallRemoved = (data: { mapId: string; segmentId: string; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      replaceWallHistory(wallSegmentsRef.current.filter((s) => s.id !== data.segmentId));
+      carryWallHistory((walls) => walls.filter((s) => s.id !== data.segmentId));
       wallCacheValidRef.current = false;
     };
 
-    const handleWallUpdated = (data: { mapId: string; segment: WallSegment }) => {
-      if (isDM) return;
+    const handleWallUpdated = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      replaceWallHistory(wallSegmentsRef.current.map((s) => s.id === data.segment.id ? data.segment : s));
+      carryWallHistory((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
       wallCacheValidRef.current = false;
     };
 
-    const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[] }) => {
-      // DM's local undo/redo stack is already correct; echoing walls:replaced causes
-      // a redundant re-render and can race with rapid pushes.
-      if (isDM) return;
+    const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[]; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      // Full canonical list from server — safe to use directly (no stale-closure risk)
-      replaceWallHistory(data.segments);
+      // The full stored list, from another page, the API or walls:request.
+      carryWallHistory(() => data.segments);
       wallCacheValidRef.current = false;
     };
 
@@ -1302,27 +1305,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socketInstance.on('token:disappeared', handleTokenDisappeared);
     socketInstance.on('map:settings:updated', handleSettingsUpdated);
 
-    // Light source events
-    // Same TODO(maps) as the wall handlers above: these skip every light event
-    // on the DM's page, so a light changed through the REST API does not reach
-    // the DM's canvas until reload.
-    const handleLightAdded = (data: { mapId: string; light: LightSource }) => {
-      if (isDM) return; // DM applied optimistically
+    // Light source events, applied unless they echo this page's own edit,
+    // as for walls above.
+    const handleLightAdded = (data: { mapId: string; light: LightSource; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      setLightSources((prev) => [...prev, data.light]);
+      setLightSources((prev) => prev.some((l) => l.id === data.light.id)
+        ? prev.map((l) => l.id === data.light.id ? data.light : l)
+        : [...prev, data.light]);
     };
-    const handleLightRemoved = (data: { mapId: string; lightId: string }) => {
-      if (isDM) return;
+    const handleLightRemoved = (data: { mapId: string; lightId: string; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       setLightSources((prev) => prev.filter((l) => l.id !== data.lightId));
     };
-    const handleLightUpdated = (data: { mapId: string; light: LightSource }) => {
-      if (isDM) return;
+    const handleLightUpdated = (data: { mapId: string; light: LightSource; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       setLightSources((prev) => prev.map((l) => l.id === data.light.id ? data.light : l));
     };
-    const handleLightsReplaced = (data: { mapId: string; lights: LightSource[] }) => {
-      if (isDM) return;
+    const handleLightsReplaced = (data: { mapId: string; lights: LightSource[]; opId?: string }) => {
+      if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       setLightSources(data.lights);
     };
@@ -1533,7 +1536,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
-            socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: prev });
+            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
           }
         }
       } else if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
@@ -1543,7 +1546,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
-            socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: next });
+            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
           }
         }
       }
@@ -1578,7 +1581,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Save to server
     const socketInstance = socket?.getSocket();
     if (socketInstance) {
-      socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: next });
+      socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
     }
   }, [polygonPoints, wallSegments, wallType, pushWallHistory, currentMap, socket]);
 
@@ -2254,10 +2257,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             const socketInstance = socket?.getSocket();
             if (socketInstance && currentMap) {
               for (const id of replace.remove) {
-                socketInstance.emit('wall:remove', { mapId: currentMap.id, segmentId: id });
+                socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: id }));
               }
               for (const seg of replace.add) {
-                socketInstance.emit('wall:add', { mapId: currentMap.id, segment: seg });
+                socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: seg }));
               }
             }
 
@@ -2283,7 +2286,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       // Emit to server
       const socketInstance = socket?.getSocket();
       if (socketInstance && currentMap) {
-        socketInstance.emit('wall:add', { mapId: currentMap.id, segment: newSeg });
+        socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: newSeg }));
       }
 
       setWallInProgress((prev) => [...prev, snapped]);
@@ -2399,9 +2402,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('wall:remove', { mapId: currentMap.id, segmentId: hit.id });
-          socketInstance.emit('wall:add', { mapId: currentMap.id, segment: segA });
-          socketInstance.emit('wall:add', { mapId: currentMap.id, segment: segB });
+          socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: hit.id }));
+          socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segA }));
+          socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segB }));
         }
       }
       return;
@@ -2451,7 +2454,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         setSelectedLightId(newLight.id);
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('light:add', { mapId: currentMap.id, light: newLight });
+          socketInstance.emit('light:add', ownEdits.tag({ mapId: currentMap.id, light: newLight }));
         }
         return;
       }
@@ -2498,11 +2501,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
         const newType = door.type === 'door-closed' ? 'door-open' : 'door-closed';
         const updated = { ...door, type: newType } as WallSegment;
-        replaceWallHistory(wallSegments.map((s) => s.id === door.id ? updated : s));
+        carryWallHistory((walls) => walls.map((s) => s.id === door.id ? updated : s));
         wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('wall:update', { mapId: currentMap.id, segment: updated });
+          socketInstance.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
         }
         return;
       }
@@ -2705,6 +2708,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
         if (!move.hasDragged) { markDirty('overlay'); return; }
         // Previewed against where the drag began, so the offset never compounds.
+        // TODO(maps): a wall change from someone else that arrives during the
+        // drag is carried into the history, but this preview starts again from
+        // preDragState, taken before it, and the drop sends that list, so a
+        // player's door toggle in the middle of the DM's drag is undone for
+        // everyone. Carry incoming changes into preDragState too, and into the
+        // endpoint drag's.
         const preview = move.preDragState.map((seg) =>
           selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg
         );
@@ -2931,7 +2940,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: finalSegments });
+          socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: finalSegments }));
         }
         setSelectedEndpoint(null);
       } else {
@@ -2948,7 +2957,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       if (movedLight) {
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('light:update', { mapId: currentMap.id, light: movedLight });
+          socketInstance.emit('light:update', ownEdits.tag({ mapId: currentMap.id, light: movedLight }));
         }
       }
     }
@@ -2967,7 +2976,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
-          socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: newSegs });
+          socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
         }
         wallErasedIdsRef.current = new Set();
         markDirty('overlay');
@@ -3003,7 +3012,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
-            socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: next });
+            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
           }
         }
       }
@@ -3581,7 +3590,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             onClearAll={() => {
               const socketInstance = socket?.getSocket();
               if (socketInstance && currentMap) {
-                socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: [] });
+                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: [] }));
               }
               pushWallHistory([]);
             }}
@@ -3593,7 +3602,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 wallCacheValidRef.current = false;
                 const socketInstance = socket?.getSocket();
                 if (socketInstance && currentMap) {
-                  socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: prev });
+                  socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
                 }
               }
             }}
@@ -3603,7 +3612,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 wallCacheValidRef.current = false;
                 const socketInstance = socket?.getSocket();
                 if (socketInstance && currentMap) {
-                  socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: next });
+                  socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
                 }
               }
             }}
@@ -3621,7 +3630,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               wallCacheValidRef.current = false;
               const socketInstance = socket?.getSocket();
               if (socketInstance) {
-                socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: updated });
+                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: updated }));
               }
             }}
             onDeleteSelected={deleteSelectedWalls}
@@ -3666,7 +3675,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               wallCacheValidRef.current = false;
               const socketInstance = socket?.getSocket();
               if (socketInstance) {
-                socketInstance.emit('walls:replace', { mapId: currentMap.id, segments: newSegs });
+                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
               }
               setSelectedEndpoint(null);
             }}
@@ -3691,7 +3700,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setSelectedLightId(null);
               const socketInstance = socket?.getSocket();
               if (socketInstance && currentMap) {
-                socketInstance.emit('lights:replace', { mapId: currentMap.id, lights: [] });
+                socketInstance.emit('lights:replace', ownEdits.tag({ mapId: currentMap.id, lights: [] }));
               }
             }}
             selectedLight={selectedLightId ? lightSources.find((l) => l.id === selectedLightId) ?? null : null}
@@ -3699,7 +3708,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setLightSources((prev) => prev.map((l) => l.id === updated.id ? updated : l));
               const socketInstance = socket?.getSocket();
               if (socketInstance && currentMap) {
-                socketInstance.emit('light:update', { mapId: currentMap.id, light: updated });
+                socketInstance.emit('light:update', ownEdits.tag({ mapId: currentMap.id, light: updated }));
               }
             }}
             onDeleteSelected={() => {
@@ -3707,7 +3716,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setLightSources((prev) => prev.filter((l) => l.id !== selectedLightId));
               const socketInstance = socket?.getSocket();
               if (socketInstance) {
-                socketInstance.emit('light:remove', { mapId: currentMap.id, lightId: selectedLightId });
+                socketInstance.emit('light:remove', ownEdits.tag({ mapId: currentMap.id, lightId: selectedLightId }));
               }
               setSelectedLightId(null);
             }}

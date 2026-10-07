@@ -139,6 +139,13 @@ function mapWith(id: string, walls: WallSegment[]): CampaignMap {
   } as unknown as CampaignMap;
 }
 
+/** Deliver a server event to every listener the page registered for it. */
+function fire(event: string, payload: unknown) {
+  act(() => {
+    h.handlers.get(event)?.forEach((fn) => (fn as (data: unknown) => void)(payload));
+  });
+}
+
 function emittedOf(event: string): unknown[] {
   return h.emitted.filter(([e]) => e === event).map(([, p]) => p);
 }
@@ -277,5 +284,99 @@ describe('wall shortcuts while typing', () => {
     fireEvent.keyDown(selectButton, { key: 'Delete' });
 
     expect(emittedOf('walls:replace')).toEqual([expect.objectContaining({ mapId: 'map-a', segments: [] })]);
+  });
+});
+
+describe('wall and light events on the DM page', () => {
+  const door = wall('d1', 100, 'door-closed');
+  const other = wall('a2', 300);
+  const lastReplace = () => {
+    const all = emittedOf('walls:replace');
+    return all[all.length - 1] as { segments: WallSegment[] } | undefined;
+  };
+
+  beforeEach(() => {
+    h.set({ currentMap: mapWith('map-a', [door, other]) });
+  });
+
+  it("applies a player's door toggle, so the DM's next bulk edit keeps it", () => {
+    render(<MapCanvas />);
+    fire('wall:updated', { mapId: 'map-a', segment: { ...door, type: 'door-open' } });
+
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('ArrowRight');
+
+    expect(lastReplace()?.segments.find((s) => s.id === 'd1')?.type).toBe('door-open');
+  });
+
+  it("keeps a player's door toggle through the DM's Undo", () => {
+    render(<MapCanvas />);
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('ArrowRight');
+    fire('wall:updated', { mapId: 'map-a', segment: { ...door, x1: door.x1 + 1, x2: door.x2 + 1, type: 'door-open' } });
+
+    press('z', { ctrlKey: true });
+
+    expect(lastReplace()?.segments.find((s) => s.id === 'd1')).toEqual({ ...door, type: 'door-open' });
+  });
+
+  it('shows walls added or replaced elsewhere, such as through the API', () => {
+    render(<MapCanvas />);
+    fire('wall:added', { mapId: 'map-a', segment: wall('a3', 500) });
+    expect(screen.getByText('(3)')).toBeInTheDocument();
+
+    fire('walls:replaced', { mapId: 'map-a', segments: [wall('r1', 100)] });
+    expect(screen.getByText('(1)')).toBeInTheDocument();
+  });
+
+  it('shows a light added elsewhere', () => {
+    render(<MapCanvas />);
+    fire('light:added', { mapId: 'map-a', light: { id: 'l1', x: 100, y: 100, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true } });
+    expect(screen.getByText('(1)')).toBeInTheDocument();
+  });
+
+  it('skips only the echo of its own edit', () => {
+    render(<MapCanvas />);
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('Delete');
+    const [deleted] = emittedOf('walls:replace') as Array<{ opId?: unknown }>;
+    expect(typeof deleted.opId).toBe('string');
+
+    press('z', { ctrlKey: true });
+    expect(screen.getByText('(2)')).toBeInTheDocument();
+
+    // The delete's echo arrives after the undo: it is this page's own, and
+    // the walls stay as the undo left them.
+    fire('walls:replaced', { mapId: 'map-a', segments: [], opId: deleted.opId });
+    expect(screen.getByText('(2)')).toBeInTheDocument();
+  });
+
+  it('sends an id with every wall and light edit', () => {
+    const lamp = { id: 'l1', x: 100, y: 100, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true };
+    h.set({ currentMap: { ...mapWith('map-a', [door, other]), lights: [lamp] } });
+    render(<MapCanvas />);
+    openWallSelect();
+    press('a', { ctrlKey: true });
+    press('ArrowLeft');
+    press('Delete');
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Clear All (1)'));
+    fireEvent.click(screen.getByText('Confirm Clear All'));
+
+    const edits = h.emitted.filter(([event]) => /^(wall|walls|light|lights):(add|remove|update|replace)$/.test(event));
+    expect(edits.length).toBeGreaterThan(0);
+    for (const [, payload] of edits) expect(typeof (payload as { opId?: unknown }).opId).toBe('string');
+  });
+
+  it('applies what arrived while the DM was a player, after the DM seat comes back', () => {
+    render(<MapCanvas />);
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+    fire('wall:added', { mapId: 'map-a', segment: wall('a3', 500) });
+    act(() => { h.set({ userRole: 'DM' }); });
+
+    expect(screen.getByText('(3)')).toBeInTheDocument();
   });
 });

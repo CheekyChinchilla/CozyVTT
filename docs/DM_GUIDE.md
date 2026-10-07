@@ -1031,7 +1031,7 @@ Wall edits support full undo/redo:
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
 - The undo/redo buttons are also in the Walls panel
 
-Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again.
+Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again. Nor is anything someone else changes: when a player opens a door, your map shows it at once, and undoing your own last edit leaves it open.
 
 The history belongs to the map it was made on. Switching to another map starts with nothing to undo, so an undo can never put one map's walls onto another.
 

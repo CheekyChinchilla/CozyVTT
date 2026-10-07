@@ -15,6 +15,7 @@ import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { lightOutsideMap, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
 import { withMapsLocked } from '../../utils/mapTokens';
+import { echoedOpId } from '../opId';
 
 /** What a light edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
@@ -31,7 +32,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   /**
    * light:add — DM places a single light source.
    */
-  socket.on('light:add', async (data: { mapId: string; light: unknown }) => {
+  socket.on('light:add', async (data: { mapId: string; light: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -68,7 +69,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'light:added', { mapId, light: added });
+      await emitToMapReaders(io, campaignId, mapId, 'light:added', { mapId, light: added, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:add failed', { err: error });
@@ -79,7 +80,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   /**
    * light:remove — DM removes a light source by id.
    */
-  socket.on('light:remove', async (data: { mapId: string; lightId: string }) => {
+  socket.on('light:remove', async (data: { mapId: string; lightId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -106,7 +107,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'light:removed', { mapId, lightId });
+      await emitToMapReaders(io, campaignId, mapId, 'light:removed', { mapId, lightId, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:remove failed', { err: error });
@@ -117,7 +118,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   /**
    * light:update — DM updates a light source (position, radius, color, enabled, etc.).
    */
-  socket.on('light:update', async (data: { mapId: string; light: unknown }) => {
+  socket.on('light:update', async (data: { mapId: string; light: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -157,7 +158,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'light:updated', { mapId, light: updated });
+      await emitToMapReaders(io, campaignId, mapId, 'light:updated', { mapId, light: updated, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:update failed', { err: error });
@@ -168,7 +169,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   /**
    * lights:replace — DM bulk-replaces all light sources.
    */
-  socket.on('lights:replace', async (data: { mapId: string; lights: unknown }) => {
+  socket.on('lights:replace', async (data: { mapId: string; lights: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -201,7 +202,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'lights:replaced', { mapId, lights: next });
+      await emitToMapReaders(io, campaignId, mapId, 'lights:replaced', { mapId, lights: next, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('lights:replace failed', { err: error });

@@ -25,10 +25,53 @@ export interface WallHistoryResult {
    * would send that map's walls as the new map's.
    */
   reset: (next: WallSegment[]) => void;
+  /**
+   * Apply a change that is not one of this page's undoable edits to every
+   * entry: another person's or another tab's edit, a change made through the
+   * API, or a door opened or closed. `change` gets the current walls and
+   * returns them changed, and the same walls added and removed and fields
+   * changed are made to the other entries, so undo and redo never put back
+   * what it did.
+   */
+  carry: (change: (walls: WallSegment[]) => WallSegment[]) => void;
   undo: () => WallSegment[] | null;
   redo: () => WallSegment[] | null;
   canUndo: boolean;
   canRedo: boolean;
+}
+
+/**
+ * Make the change that turned `before` into `after` on another list of the
+ * same map's walls: the walls it added, the ones it removed, and the fields
+ * it changed on the rest. A wall the other list does not hold gets no field
+ * changes, and one it already holds is not added twice.
+ */
+export function carryChange(before: WallSegment[], after: WallSegment[], walls: WallSegment[]): WallSegment[] {
+  const was = new Map(before.map((w) => [w.id, w]));
+  const now = new Set(after.map((w) => w.id));
+  const removed = new Set(before.filter((w) => !now.has(w.id)).map((w) => w.id));
+  const added = after.filter((w) => !was.has(w.id));
+  const patches = new Map<string, Partial<WallSegment>>();
+  for (const w of after) {
+    const old = was.get(w.id);
+    if (!old) continue;
+    const patch: Partial<WallSegment> = {};
+    const keys = new Set([...Object.keys(old), ...Object.keys(w)]) as Set<keyof WallSegment>;
+    for (const key of keys) {
+      if (old[key] !== w[key]) Object.assign(patch, { [key]: w[key] });
+    }
+    if (Object.keys(patch).length > 0) patches.set(w.id, patch);
+  }
+  if (removed.size === 0 && added.length === 0 && patches.size === 0) return walls;
+
+  const kept = walls
+    .filter((w) => !removed.has(w.id))
+    .map((w) => {
+      const patch = patches.get(w.id);
+      return patch ? { ...w, ...patch } : w;
+    });
+  const held = new Set(kept.map((w) => w.id));
+  return [...kept, ...added.filter((w) => !held.has(w.id))];
 }
 
 export function useWallHistory(initial: WallSegment[]): WallHistoryResult {
@@ -64,6 +107,16 @@ export function useWallHistory(initial: WallSegment[]): WallHistoryResult {
     setWs({ stack: [next], idx: 0 });
   }, []);
 
+  const carry = useCallback((change: (walls: WallSegment[]) => WallSegment[]) => {
+    setWs(prev => {
+      const before = prev.stack[prev.idx] ?? [];
+      const after = change(before);
+      if (after === before) return prev;
+      const stack = prev.stack.map((walls, i) => (i === prev.idx ? after : carryChange(before, after, walls)));
+      return { ...prev, stack };
+    });
+  }, []);
+
   // Undo: move idx back by 1. Returns the restored segments (or null if already at start).
   // Reads ws directly so the caller gets the correct wall list back synchronously.
   const undo = useCallback((): WallSegment[] | null => {
@@ -86,6 +139,7 @@ export function useWallHistory(initial: WallSegment[]): WallHistoryResult {
     push,
     replace,
     reset,
+    carry,
     undo,
     redo,
     canUndo: ws.idx > 0,

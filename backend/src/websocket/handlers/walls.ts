@@ -16,6 +16,7 @@ import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
 import { withMapsLocked } from '../../utils/mapTokens';
+import { echoedOpId } from '../opId';
 
 /** What a wall edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
@@ -33,7 +34,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   /**
    * wall:add — DM adds a single wall segment.
    */
-  socket.on('wall:add', async (data: { mapId: string; segment: unknown }) => {
+  socket.on('wall:add', async (data: { mapId: string; segment: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -70,7 +71,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:added', { mapId, segment: added });
+      await emitToMapReaders(io, campaignId, mapId, 'wall:added', { mapId, segment: added, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:add failed', { err: error });
@@ -81,7 +82,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   /**
    * wall:remove — DM removes a wall segment by id.
    */
-  socket.on('wall:remove', async (data: { mapId: string; segmentId: string }) => {
+  socket.on('wall:remove', async (data: { mapId: string; segmentId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -108,7 +109,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:removed', { mapId, segmentId });
+      await emitToMapReaders(io, campaignId, mapId, 'wall:removed', { mapId, segmentId, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:remove failed', { err: error });
@@ -120,7 +121,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
    * wall:update — Update a wall segment; a player may only open or close an unlocked door, and cannot move it.
    * Players may only toggle unlocked doors.
    */
-  socket.on('wall:update', async (data: { mapId: string; segment: unknown }) => {
+  socket.on('wall:update', async (data: { mapId: string; segment: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!canToggleDoor(socket.role)) {
@@ -190,7 +191,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:updated', { mapId, segment: outcome.done });
+      await emitToMapReaders(io, campaignId, mapId, 'wall:updated', { mapId, segment: outcome.done, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:update failed', { err: error });
@@ -201,7 +202,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   /**
    * walls:replace — DM bulk-replaces all wall segments.
    */
-  socket.on('walls:replace', async (data: { mapId: string; segments: unknown }) => {
+  socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
@@ -234,7 +235,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'walls:replaced', { mapId, segments: next });
+      await emitToMapReaders(io, campaignId, mapId, 'walls:replaced', { mapId, segments: next, ...echoedOpId(data) });
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
