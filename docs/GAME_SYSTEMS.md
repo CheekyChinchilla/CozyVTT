@@ -467,6 +467,17 @@ function createBlankMySystemCharacter(): MySystemCharacterData {
 > `templateSchemaParity.test.ts` compares each template's top-level keys against
 > its schema and fails on any extra. Run the suite after editing a template.
 
+> **Spell a value the way the editor offers it.** A schema that takes any
+> string accepts "str" as readily as "strength", but the editor compares with
+> the values its own dropdowns hold. The Pathfinder 2e templates abbreviated
+> every attribute, so the editor found no modifier for them and the Level 1
+> Fighter's Athletics was saved as +3 where the sheet said +6. The same test
+> file now checks that each Pathfinder 2e template names attributes,
+> traditions and casting types as the editor does, and that its stored skill
+> totals are the ones its own components give. The editor also accepts the
+> short forms on load, through `pf2eAttributeName` in `rules/pathfinder2e.ts`,
+> so sheets made before the templates were corrected recover.
+
 The template layer powers the "start from a preset" picker and the template API. Create `backend/src/utils/character-templates/mySystem-templates.ts` exporting **named `CharacterTemplate`s** plus two getter functions:
 
 ```typescript

@@ -20,7 +20,7 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC } from '../../rules/pathfinder2e';
+import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus } from '../../rules/pathfinder2e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -95,6 +95,38 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const stored = (data.classDC as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
       expect(stored).toBe(pf2eClassDC(data));
+    });
+
+    // The editor looks attributes up by their full name and offers the
+    // traditions and casting types in lower case. A template that abbreviates
+    // them has its skill totals recomputed without the attribute on first save.
+    it(`${template.name} names attributes and spellcasting as the editor does`, () => {
+      const attributes = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+      const skills = Object.values(data.skills as Record<string, { attribute: string }>).map((s) => s.attribute);
+      const lore = ((data.loreSkills ?? []) as { attribute: string }[]).map((l) => l.attribute);
+      const spellcasting = data.spellcasting as { tradition: string; type: string; keyAttribute: string };
+      const classDC = data.classDC as { keyAttribute: string };
+      const named = [...skills, ...lore, classDC.keyAttribute, spellcasting.keyAttribute];
+
+      expect(named.filter((name) => !attributes.includes(name))).toEqual([]);
+      expect(['arcane', 'divine', 'primal', 'occult']).toContain(spellcasting.tradition);
+      expect(['prepared', 'spontaneous']).toContain(spellcasting.type);
+    });
+
+    it(`${template.name} stores the skill and lore totals its own components give`, () => {
+      type Skill = { attribute: string; proficiencyRank: string; itemBonus?: number; armorPenalty?: number; bonus: number };
+      const attributes = data.attributes as Record<string, { modifier: number } | undefined>;
+      const total = (skill: Skill) =>
+        (attributes[skill.attribute]?.modifier ?? 0) +
+        pf2eProficiencyBonus(data.level, skill.proficiencyRank) +
+        (skill.itemBonus ?? 0) -
+        (skill.armorPenalty ?? 0);
+      const skills = [
+        ...Object.values(data.skills as Record<string, Skill>),
+        ...((data.loreSkills ?? []) as Skill[]),
+      ];
+
+      expect(skills.filter((skill) => skill.bonus !== total(skill))).toEqual([]);
     });
   }
 });

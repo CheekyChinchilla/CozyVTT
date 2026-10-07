@@ -58,6 +58,7 @@ import {
   newPf2eFocusSpell,
   newPf2eSpellcasting,
 } from './spellcastingEntries';
+import { withFullSkillAttributes, fullAttributeName, editorTradition, editorCastingType } from './attributeNames';
 
 /**
  * The sheet as this editor holds it.
@@ -185,7 +186,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       will: { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0 },
     },
     perception: data.perception || { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, senses: [] },
-    skills: data.skills || {
+    // Attributes and spellcasting are read in the editor's spelling, so a sheet
+    // a template wrote with "str" or "Arcane" keeps its numbers.
+    skills: data.skills ? withFullSkillAttributes(data.skills) : {
       acrobatics: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'intelligence', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       athletics: { attribute: 'strength', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
@@ -203,9 +206,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       survival: { attribute: 'wisdom', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       thievery: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
     },
-    loreSkills: data.loreSkills || [],
+    loreSkills: (data.loreSkills || []).map((lore) => ({ ...lore, attribute: fullAttributeName(lore.attribute) })),
     armorClass: data.armorClass || { total: 10, proficiencyRank: 'untrained', capDex: null, itemBonus: 0, armorPenalty: 0 },
-    classDC: data.classDC || { total: 10, keyAttribute: 'intelligence', proficiencyRank: 'untrained' },
+    classDC: data.classDC
+      ? { ...data.classDC, keyAttribute: fullAttributeName(data.classDC.keyAttribute) }
+      : { total: 10, keyAttribute: 'intelligence', proficiencyRank: 'untrained' },
     initiative: data.initiative || { usedStat: 'perception', bonus: 0 },
     speed: data.speed || { land: 30, other: [] },
     hp: data.hp || { maximum: 0, ancestryHp: 6, classHpPerLevel: 6, current: 0, temporary: 0, resistances: [], immunities: [], weaknesses: [] },
@@ -230,6 +235,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
       ...data.spellcasting,
+      tradition: editorTradition(data.spellcasting.tradition),
+      type: editorCastingType(data.spellcasting.type),
+      keyAttribute: fullAttributeName(data.spellcasting.keyAttribute),
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
@@ -419,15 +427,6 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
-      // TODO(sheets): the built-in templates store skill and lore attributes
-      // abbreviated ("str", "int") and spellcasting as "Arcane", "Prepared" and
-      // "int", but this effect, the lore and spellcasting effects below and the
-      // spell list compare them with full lowercase names. A template-made
-      // sheet opened here has every skill and lore total recomputed without
-      // its attribute modifier, which the next save stores (the Level 1
-      // Fighter's Athletics +6 becomes +3); spell totals ignore the key
-      // attribute, and spells added start unprepared. Resolve an abbreviated
-      // or capitalised value the way pf2eClassDC does.
       const attribute = updatedSkills[skill].attribute;
       const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
