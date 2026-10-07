@@ -21,10 +21,10 @@ import AssetUploadModal from '@/components/assets/AssetUploadModal';
 import DocumentReader, { documentFormat, FORMAT_LABEL } from '@/components/documents/DocumentReader';
 import NewDocumentDialog from '@/components/documents/NewDocumentDialog';
 import { useAssetsQuery } from '@/hooks/queries';
+import { useAssetDelete } from '@/hooks/useAssetDelete';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
-import { apiErrorMessage } from '@/utils/errors';
 import { AssetType, PlatformRole, type Asset } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
 
@@ -60,17 +60,24 @@ export default function DocumentsPage() {
    */
   const canDelete = (doc: Asset) => isAdmin || doc.uploadedById === user?.id;
 
+  // The page asks "delete this?" itself; if the server then says something still
+  // uses the document, this shows where and asks again.
+  const documentDelete = useAssetDelete({
+    onDeleted: (doc) => {
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      showToast(`"${doc.name}" deleted`, 'success');
+    },
+    onError: (message) => showToast(message, 'error'),
+    failureMessage: 'Could not delete that document.',
+  });
+
   const handleDelete = async () => {
     if (!toDelete) return;
     const doomed = toDelete;
     setToDelete(null);
     setDeletingId(doomed.id);
     try {
-      await api.deleteAsset(doomed.id);
-      queryClient.invalidateQueries({ queryKey: ['assets'] });
-      showToast(`"${doomed.name}" deleted`, 'success');
-    } catch (err) {
-      showToast(apiErrorMessage(err) ?? 'Could not delete that document.', 'error');
+      await documentDelete.deleteAsset(doomed);
     } finally {
       setDeletingId(null);
     }
@@ -271,6 +278,7 @@ export default function DocumentsPage() {
         onConfirm={handleDelete}
         onCancel={() => setToDelete(null)}
       />
+      {documentDelete.inUseDialog}
     </div>
   );
 }

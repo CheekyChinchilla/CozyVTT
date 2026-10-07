@@ -39,6 +39,7 @@ import {
 import { CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { extractAssetId } from '@/utils/assetUrl';
 
@@ -102,6 +103,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingCreature, setEditingCreature] = useState<CreatureTemplate | null>(null);
+  // The creature whose Delete button was clicked, until it is confirmed or cancelled.
+  const [creatureToDelete, setCreatureToDelete] = useState<CreatureTemplate | null>(null);
 
   // ── Favorites state ──
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -265,8 +268,13 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   }, [campaign]);
 
   // ── Delete creature ──
+  // TODO(ui): this removes the creature from the main list only, so deleting
+  // one from the Favorites section leaves its row there until the library is
+  // reopened. It should also drop it from `favoriteCreatures` and
+  // `favoriteIds`.
   const handleDelete = useCallback(async (creatureId: string) => {
     if (!campaign) return;
+    setCreatureToDelete(null);
     try {
       await api.deleteCreature(campaign.id, creatureId);
       setCreatures((prev) => prev.filter((c) => c.id !== creatureId));
@@ -339,6 +347,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const hasMore = creatures.length < total;
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <>
@@ -517,7 +526,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                           onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
                           onPlace={() => handlePlace(creature)}
                           onDuplicate={() => handleDuplicate(creature.id)}
-                          onDelete={() => handleDelete(creature.id)}
+                          onDelete={() => setCreatureToDelete(creature)}
                           onToggleFavorite={() => handleToggleFavorite(creature.id)}
                           onEdit={() => handleEdit(creature)}
                         />
@@ -601,7 +610,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
                       onPlace={() => handlePlace(creature)}
                       onDuplicate={() => handleDuplicate(creature.id)}
-                      onDelete={() => handleDelete(creature.id)}
+                      onDelete={() => setCreatureToDelete(creature)}
                       onToggleFavorite={() => handleToggleFavorite(creature.id)}
                       onEdit={() => handleEdit(creature)}
                     />
@@ -656,6 +665,16 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         </>
       )}
     </AnimatePresence>
+    <ConfirmDialog
+      isOpen={creatureToDelete !== null}
+      title="Delete creature"
+      message={`Delete "${creatureToDelete?.name ?? ''}" from this campaign's creature library? Tokens already on a map keep their own copy of its stats. This cannot be undone.`}
+      confirmLabel="Delete"
+      variant="danger"
+      onConfirm={() => creatureToDelete && handleDelete(creatureToDelete.id)}
+      onCancel={() => setCreatureToDelete(null)}
+    />
+    </>
   );
 }
 
@@ -791,6 +810,7 @@ function CreatureRow({
             {creature.source !== 'srd' && (
               <button
                 onClick={onDelete}
+                aria-label={`Delete ${creature.name}`}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-danger/20 text-danger-ink hover:bg-danger/10 transition-colors"
               >
                 <Trash2 className="w-3 h-3" /> Delete

@@ -1097,6 +1097,14 @@ Who may delete depends on the asset's scope:
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
 
+While a map, a token, a character, a character template, a creature, a token
+template or a campaign's atmosphere track still uses the asset, the route
+answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
+nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
+what the caller may see: an admin sees everything, anyone else sees only the
+campaigns they are the DM of, their own characters and shared character
+templates, and the rest is counted without names.
+
 ---
 
 ## Invitation Endpoints

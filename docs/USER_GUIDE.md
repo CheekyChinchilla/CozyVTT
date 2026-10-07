@@ -378,6 +378,8 @@ Use the **search bar** to find assets by name or tag. Filter by scope (Global, P
 
 Click any asset card to open its **detail panel** on the right. From there you can see full metadata, edit tags, or delete the asset.
 
+**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page.
+
 *Screenshot pending — Asset detail panel.*
 
 ---
@@ -416,7 +418,7 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown.
+Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 

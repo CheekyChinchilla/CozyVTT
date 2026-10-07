@@ -164,6 +164,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
 - **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
+- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature or the campaign's ambient sound still uses the file, a second window lists them (the campaigns you run are named; other people's are only counted) and removes it only if you choose **Delete anyway**. A map left without its picture shows "This map has no picture" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
 
@@ -195,7 +196,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or delete it.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them, and a failed action now shows a message. Removing a token, here or in the Token Manager or the quick editor, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -384,7 +385,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Disposition** — Hostile, friendly, or neutral
 - **Display Mode** — Pog, top-down, or full-art
 
-Custom creatures are scoped to your campaign and fully editable.
+Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
 
 ### Saving Throws and Skills
 
@@ -491,7 +492,7 @@ Expand a template in the library and click **Place on Map** to create a new toke
 
 ### Editing and Deleting Templates
 
-Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently.
+Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently. Delete asks first, naming the template.
 
 For **NPC-type templates**, the edit form includes the full stat block editor — AC, ability scores, saves, skills, traits, actions, bonus actions, reactions, and legendary actions — so you can build a complete monster once and reuse it across maps and campaigns. Saves and skills work exactly as they do in the Creature Library: tick what the creature is proficient in and the bonus is derived from its ability scores and Challenge Rating (see [Saving Throws and Skills](#saving-throws-and-skills)). The right-click NPC roll picker (see [Rolling for NPC Tokens](#rolling-for-npc-tokens)) reads from the same stat block, so a template with a well-filled-in action list gets clickable attack and damage rolls automatically.
 
@@ -599,7 +600,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 - **Upload** — upload a PDF, text or Markdown file straight into the campaign. It belongs to the campaign from the start, so members can read it at once with no share step.
 - **Write** — write a text or Markdown document on the spot, for a handout or the session's notes. Same as Upload: the campaign's own, readable immediately.
 
-**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
+**Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
 A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
 

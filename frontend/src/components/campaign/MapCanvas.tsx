@@ -4365,6 +4365,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
               <div className="h-px bg-moss-green/20 my-1" />
 
+              {/* TODO(ui): this removes the token on one click, as the Token
+                  Roster, Token Manager and quick editor did before they asked
+                  first. Ask through RemoveTokenDialog here too, and report a
+                  failure with a toast instead of the console. */}
               <button
                 className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
                 onClick={async () => {

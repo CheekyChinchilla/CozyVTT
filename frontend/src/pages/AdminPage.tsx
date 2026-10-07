@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAssetDelete } from '@/hooks/useAssetDelete';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -205,6 +206,8 @@ export default function AdminPage() {
 
   // Role change
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
+  // The user whose role chip was clicked, until the change is confirmed or cancelled.
+  const [roleChangeTarget, setRoleChangeTarget] = useState<User | null>(null);
 
   // Create user modal
   const [createUserOpen, setCreateUserOpen] = useState(false);
@@ -272,6 +275,8 @@ export default function AdminPage() {
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [backupCreateError, setBackupCreateError] = useState('');
   const [deletingBackupFile, setDeletingBackupFile] = useState<string | null>(null);
+  // The backup whose bin was clicked, until the delete is confirmed or cancelled.
+  const [backupToDelete, setBackupToDelete] = useState<string | null>(null);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
@@ -300,6 +305,8 @@ export default function AdminPage() {
   const [assetScopePicker, setAssetScopePicker] = useState<{ assetId: string; campaignId: string } | null>(null);
   const [assetScopeChanging, setAssetScopeChanging] = useState<string | null>(null);
   const [assetDeleting, setAssetDeleting] = useState<string | null>(null);
+  // The asset whose bin was clicked, until the delete is confirmed or cancelled.
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
 
   // ---- Global Asset Manager toggle ----
   const [togglingGlobalAssets, setTogglingGlobalAssets] = useState<string | null>(null);
@@ -513,6 +520,7 @@ export default function AdminPage() {
   };
 
   const handleRoleChange = async (u: User) => {
+    setRoleChangeTarget(null);
     setRoleChangingId(u.id);
     try {
       const newRole = u.platformRole === PlatformRole.ADMIN
@@ -741,15 +749,24 @@ export default function AdminPage() {
     }
   };
 
-  const handleAdminDeleteAsset = async (assetId: string) => {
-    setAssetDeleting(assetId);
-    try {
-      await api.deleteAsset(assetId);
+  // Deleting an asset takes two questions: this tab asks "delete this?", and if
+  // the server says something still uses it, the hook's dialog shows where and
+  // asks again before forcing it.
+  const assetDelete = useAssetDelete({
+    onDeleted: ({ id: assetId }) => {
       setAdminAssets(prev => prev.filter(a => a.id !== assetId));
       setAdminAssetsTotal(prev => prev - 1);
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      showToast(apiErrorMessage(e) ?? 'Failed to delete asset', 'error');
+    },
+    onError: (message) => showToast(message, 'error'),
+  });
+
+  const handleAdminDeleteAsset = async () => {
+    const asset = assetToDelete;
+    if (!asset) return;
+    setAssetToDelete(null);
+    setAssetDeleting(asset.id);
+    try {
+      await assetDelete.deleteAsset(asset);
     } finally {
       setAssetDeleting(null);
     }
@@ -791,10 +808,8 @@ export default function AdminPage() {
     }
   };
 
-  // TODO(ui): the bin button in the Backups list calls this directly, so one
-  // click deletes a backup for good with no confirmation. Ask first, naming
-  // the file, with a ConfirmDialog as the restore below does.
   const handleDeleteBackup = async (filename: string) => {
+    setBackupToDelete(null);
     setDeletingBackupFile(filename);
     try {
       await adminService.deleteBackup(filename);
@@ -1194,9 +1209,10 @@ export default function AdminPage() {
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <button
-                                      onClick={() => !isSelf && !isRoleChanging && handleRoleChange(u)}
+                                      onClick={() => !isSelf && !isRoleChanging && setRoleChangeTarget(u)}
                                       disabled={isSelf || isRoleChanging}
-                                      title={isSelf ? 'Cannot change your own role' : 'Click to toggle role'}
+                                      aria-label={`Change role of ${u.displayName} (currently ${u.platformRole})`}
+                                      title={isSelf ? 'Cannot change your own role' : 'Change role (asks to confirm)'}
                                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                         u.platformRole === PlatformRole.ADMIN
                                           ? 'bg-moss-green/20 text-brand-ink hover:bg-moss-green/30'
@@ -1765,10 +1781,11 @@ export default function AdminPage() {
                                   </div>
                                   {/* Delete */}
                                   <button
-                                    onClick={() => handleAdminDeleteAsset(asset.id)}
+                                    onClick={() => setAssetToDelete(asset)}
                                     disabled={isDeleting || isChangingScope}
                                     className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
                                     title="Delete asset"
+                                    aria-label={`Delete asset ${asset.name}`}
                                   >
                                     {isDeleting
                                       ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -2298,9 +2315,11 @@ export default function AdminPage() {
                                 Download
                               </a>
                               <button
-                                onClick={() => handleDeleteBackup(b.filename)}
+                                onClick={() => setBackupToDelete(b.filename)}
                                 disabled={deletingBackupFile === b.filename}
                                 className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
+                                title="Delete backup"
+                                aria-label={`Delete backup ${b.filename}`}
                               >
                                 {deletingBackupFile === b.filename
                                   ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -2775,6 +2794,48 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Delete asset confirmation; the in-use question follows if the server asks it */}
+      <ConfirmDialog
+        isOpen={assetToDelete !== null}
+        title="Delete Asset"
+        message={
+          assetToDelete
+            ? `Delete "${assetToDelete.name}" (${assetScopeLabel(assetToDelete.scope)} ${assetToDelete.type.toLowerCase()}), uploaded by ${assetToDelete.uploadedBy?.displayName ?? 'a deleted account'}${assetToDelete.campaign ? ` in the campaign "${assetToDelete.campaign.name}"` : ''}? The file is removed from the server and cannot be brought back. If a map, token or anything else still uses it, you will be shown where before it is deleted.`
+            : ''
+        }
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleAdminDeleteAsset}
+        onCancel={() => setAssetToDelete(null)}
+      />
+      {assetDelete.inUseDialog}
+
+      {/* Delete backup confirmation */}
+      <ConfirmDialog
+        isOpen={backupToDelete !== null}
+        title="Delete Backup"
+        message={`Delete the backup "${backupToDelete ?? ''}"? The file is removed from the server and cannot be brought back.`}
+        confirmLabel="Delete Backup"
+        variant="danger"
+        onConfirm={() => backupToDelete && handleDeleteBackup(backupToDelete)}
+        onCancel={() => setBackupToDelete(null)}
+      />
+
+      {/* Role change confirmation */}
+      <ConfirmDialog
+        isOpen={roleChangeTarget !== null}
+        title={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove Admin Rights' : 'Make Administrator'}
+        message={
+          roleChangeTarget?.platformRole === PlatformRole.ADMIN
+            ? `Remove ${roleChangeTarget.displayName}'s administrator rights? They become a regular user and can no longer open the Admin Panel.`
+            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups.`
+        }
+        confirmLabel={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove admin rights' : 'Make administrator'}
+        variant="warning"
+        onConfirm={() => roleChangeTarget && handleRoleChange(roleChangeTarget)}
+        onCancel={() => setRoleChangeTarget(null)}
+      />
 
       {/* Restore backup confirmation */}
       <ConfirmDialog

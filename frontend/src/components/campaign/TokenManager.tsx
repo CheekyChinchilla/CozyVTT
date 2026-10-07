@@ -30,6 +30,7 @@ import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
+import RemoveTokenDialog from './RemoveTokenDialog';
 import { setTokenFlag } from '@/utils/tokenFlags';
 
 // ============================================
@@ -98,6 +99,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [togglingVisibilityId, setTogglingVisibilityId] = useState<string | null>(null);
   const [togglingLayerId, setTogglingLayerId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // The token whose Remove button was clicked, until it is confirmed or cancelled.
+  const [tokenToRemove, setTokenToRemove] = useState<Token | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -324,6 +327,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
   const handleDelete = async (token: Token) => {
     if (!campaign || !currentMap) return;
+    setTokenToRemove(null);
     setDeletingId(token.id);
     try {
       await api.deleteToken(campaign.id, currentMap.id, token.id);
@@ -341,6 +345,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   // ============================================
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <>
@@ -911,10 +916,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
                               {/* Delete */}
                               <button
-                                onClick={() => handleDelete(token)}
+                                onClick={() => setTokenToRemove(token)}
                                 disabled={isDeleting}
                                 className="p-1.5 rounded hover:bg-danger/10 transition-colors"
                                 title="Remove from map"
+                                aria-label={`Remove ${token.name} from map`}
                               >
                                 {isDeleting ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
@@ -963,5 +969,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         </>
       )}
     </AnimatePresence>
+    <RemoveTokenDialog
+      token={tokenToRemove}
+      onConfirm={() => tokenToRemove && handleDelete(tokenToRemove)}
+      onCancel={() => setTokenToRemove(null)}
+    />
+    </>
   );
 }

@@ -777,6 +777,8 @@ Beyond the platform role (Admin / User), two permissions are granted individuall
 
 Grant these sparingly: both write content visible to every user on the instance. Revoking either takes effect on the user's next request; they do not need to sign out.
 
+The **USER** / **ADMIN** pill beside a name changes that person's role, and it asks first: making someone an administrator spells out what that gives them, and taking it away says they lose the Admin Panel. Nothing changes until you confirm.
+
 An instance always keeps at least one admin. While you are the only one, you cannot remove your own admin role or delete your own account; promote another user to **Admin** first. Nothing else can make someone an admin once setup has run, so this is what stops an instance ending up with nobody able to manage it.
 
 ---
@@ -785,7 +787,7 @@ An instance always keeps at least one admin. While you are the only one, you can
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand.
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
 
 To keep them in another folder under Docker, name that folder in a small file of your own, `docker-compose.override.yml`, next to `docker-compose.yml`. Docker Compose reads it automatically on top of the shipped file, and `git pull` never touches it.
 

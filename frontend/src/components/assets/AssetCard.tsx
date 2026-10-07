@@ -23,7 +23,8 @@ interface AssetCardProps {
   asset: Asset;
   viewMode: 'grid' | 'list';
   onView: () => void;
-  onDelete: (id: string) => void;
+  /** Resolves when the first delete request is answered; see useAssetDelete. */
+  onDelete: (asset: Asset) => void | Promise<void>;
 }
 
 /**
@@ -100,7 +101,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
-      await onDelete(asset.id);
+      await onDelete(asset);
     } catch (error) {
       console.error('Error deleting asset:', error);
     } finally {
@@ -219,6 +220,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 disabled={isDeleting}
                 className="p-2 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger-ink transition-colors disabled:opacity-50"
                 title="Delete"
+                aria-label={`Delete ${asset.name}`}
               >
                 <Trash2 className="w-5 h-5" />
               </button>
@@ -305,6 +307,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 disabled={isDeleting}
                 className="p-3 bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
                 title="Delete"
+                aria-label={`Delete ${asset.name}`}
               >
                 <Trash2 className="w-5 h-5 text-white" />
               </button>
