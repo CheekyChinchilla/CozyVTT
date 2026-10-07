@@ -315,10 +315,7 @@ export default function CharacterTemplatesPage() {
         <CharacterTemplateEditorModal
           template={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            refresh();
-          }}
+          onSaved={refresh}
         />
       )}
 

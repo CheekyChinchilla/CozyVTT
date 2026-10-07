@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A save refused because the character changed keeps your edits.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) When a character changes after you open its editor, for example the DM takes hit points at the table or you save it from another window, your save is refused so that it cannot put the old values back. The editor used to close, or load the newer version over your work, and everything typed since you opened it was lost. It now stays open, puts your changes onto the newest version, and lists them in a box headed **This character has changed**. **Save my changes** saves them; **Keep editing** goes back to the editor with nothing saved. Anything changed both by you and in the newer version is shown with both values, and you pick which to keep before saving. This works in the Character Editor and in the editor that opens over a sheet on the Characters page or at the table.
 
+- **Edit Template keeps your sheet edits when a save fails.** When the server refused a template's sheet, the sheet went back to the template as it was and every edit was lost, with only an error message. It now stays in its editor with your changes. Closing **Edit Template** with sheet changes you haven't saved asks first, and **Save Details** no longer closes the dialog over them. After a sheet save the dialog stays open and shows the saved sheet. A token picture chosen on the sheet cannot be used, since a template's picture has to be a global asset; the message after saving now says so, where before the picture was dropped without a word.
+
 ---
 
 ## [1.5.0] — 2026-10-03
