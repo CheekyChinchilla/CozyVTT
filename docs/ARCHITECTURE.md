@@ -62,7 +62,8 @@ src/
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
-│   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
+│   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
+│   │                  (the other HTTP limiters are declared beside their routes)
 │   └── upload.ts      Multer configuration, magic byte validation
 ├── routes/            HTTP route handlers
 │   ├── auth.ts        Login, logout, register, password reset
@@ -83,7 +84,8 @@ src/
 ├── websocket/
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
-│   ├── shared.ts      Rate limiters, the Token shape, fog helpers
+│   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
+│   │                  Token shape, fog helpers
 │   ├── auth.ts        Socket session + campaign-membership authentication
 │   ├── utils.ts       System-message / broadcast helpers
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,

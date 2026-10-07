@@ -9,6 +9,7 @@ import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { toJson } from '../../utils/prisma-json';
 import type { DnD5eHitDice } from '../../game-systems/dnd5e';
+import { withinCeiling } from '../shared';
 
 /** The parts of a character blob this handler touches — see `charData` below. */
 interface HpBlock {
@@ -91,6 +92,10 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+
+      // Each change holds the character's row for a transaction, so a burst
+      // of them would hold every database connection the instance has.
+      if (!withinCeiling(socket, 'character.hp.update')) return;
 
       const { characterId, delta } = data;
 
@@ -177,6 +182,8 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+
+      if (!withinCeiling(socket, 'character.hitdice.spend')) return;
 
       const { characterId, index } = data ?? {};
 

@@ -29,12 +29,17 @@
  * The map limits. The server enforces them and the map dialogs offer what
  * they allow; a dialog offering more than the server takes is a map the DM
  * fills in and cannot save. The file is kept identical in both packages.
+ *
+ * The socket flood ceilings, applied by the server and listed in the
+ * WebSocket guide, which is what a self-hoster or the author of a scripted
+ * client reads to know what the server will take.
  */
 
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
+import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -214,5 +219,25 @@ describe('the combat state the server sends and the client reads', () => {
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the socket flood ceilings in the WebSocket guide', () => {
+  const guide = read('backend/docs/WEBSOCKET_DOCUMENTATION.md');
+  const per: Record<number, string> = { 1000: 'a second', 10000: 'every ten seconds', 60000: 'a minute' };
+  const inWords = (windows: readonly CeilingWindow[]) =>
+    windows.map(({ limit, windowMs }) => `${limit} ${per[windowMs] ?? `every ${windowMs} ms`}`).join(' and ');
+  /** The rows of the guide's table of ceilings, as cells. */
+  const rows = guide
+    .slice(guide.indexOf('**Flood ceilings.**'), guide.indexOf('**Connections per user.**'))
+    .split('\n')
+    .filter((line) => line.startsWith('| '))
+    .map((line) => line.split('|').slice(1, -1).map((cell) => cell.trim()));
+  /** The ceiling the guide gives `event`: its row's second cell, up to the first comma or semicolon. */
+  const stated = (event: string) =>
+    rows.find((cells) => cells[0].includes(`\`${event}\``))?.[1].split(/[;,]/)[0].trim();
+
+  it.each(Object.entries(SOCKET_CEILINGS))('%s is stated as the server applies it', (event, ceiling) => {
+    expect(stated(event)).toBe(inWords(ceiling.windows));
   });
 });

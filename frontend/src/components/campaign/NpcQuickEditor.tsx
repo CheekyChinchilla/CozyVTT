@@ -35,6 +35,9 @@ import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
 
+/** How long typing in the stat block pauses before it is saved. */
+const STAT_BLOCK_SAVE_DELAY_MS = 750;
+
 // ============================================
 // Constants
 // ============================================
@@ -114,11 +117,8 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const tokenType = getEffectiveType(token);
   const isNpc = tokenType === TokenType.NPC;
 
-  const isSaving = useRef(false);
-
   // ── Generic update helper ──
   const saveUpdate = useCallback(async (changes: UpdateTokenRequest) => {
-    if (isSaving.current) return;
     try {
       const result = await api.updateToken(campaignId, mapId, token.id, changes);
       // The DM, the only one this editor opens for, always gets the token back.
@@ -167,10 +167,40 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [newHpMax, saveUpdate]);
 
   // ── Stat block ──
-  const handleStatBlockChange = useCallback(async (updated: NpcStatBlock) => {
+  // Typed into a field at a time, so it is saved once typing pauses, or at
+  // once when focus leaves the stat block or the editor closes, not on every
+  // keystroke: each save is followed by the whole map being sent to every
+  // player again. The waiting edit carries the save for the token it was
+  // made on, and saves run one after another, so the last edit is the one
+  // stored.
+  const pendingStatBlock = useRef<{ statBlock: NpcStatBlock; save: typeof saveUpdate } | null>(null);
+  const statBlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statBlockSaves = useRef<Promise<void>>(Promise.resolve());
+
+  const flushStatBlock = useCallback(() => {
+    if (statBlockTimer.current) clearTimeout(statBlockTimer.current);
+    statBlockTimer.current = null;
+    const pending = pendingStatBlock.current;
+    if (!pending) return;
+    pendingStatBlock.current = null;
+    statBlockSaves.current = statBlockSaves.current.then(() => pending.save({ statBlock: pending.statBlock }));
+  }, []);
+
+  const dropPendingStatBlock = useCallback(() => {
+    if (statBlockTimer.current) clearTimeout(statBlockTimer.current);
+    statBlockTimer.current = null;
+    pendingStatBlock.current = null;
+  }, []);
+
+  const handleStatBlockChange = useCallback((updated: NpcStatBlock) => {
     setStatBlock(updated);
-    await saveUpdate({ statBlock: updated });
-  }, [saveUpdate]);
+    pendingStatBlock.current = { statBlock: updated, save: saveUpdate };
+    if (statBlockTimer.current) clearTimeout(statBlockTimer.current);
+    statBlockTimer.current = setTimeout(flushStatBlock, STAT_BLOCK_SAVE_DELAY_MS);
+  }, [saveUpdate, flushStatBlock]);
+
+  // Closing the editor, or opening it on another token, saves what is waiting.
+  useEffect(() => flushStatBlock, [token.id, flushStatBlock]);
 
   const handleCreateStatBlock = useCallback(async () => {
     const newBlock: NpcStatBlock = {
@@ -185,10 +215,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [saveUpdate]);
 
   const handleRemoveStatBlock = useCallback(async () => {
+    dropPendingStatBlock();
     setStatBlock(null);
     setEditingStatBlock(false);
-    await saveUpdate({ statBlock: null });
-  }, [saveUpdate]);
+    // After any stat block save still under way, so that one cannot land last.
+    statBlockSaves.current = statBlockSaves.current.then(() => saveUpdate({ statBlock: null }));
+    await statBlockSaves.current;
+  }, [saveUpdate, dropPendingStatBlock]);
 
   // ── Token image ──
   const loadAssets = useCallback(async () => {
@@ -763,7 +796,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   {statBlock && (
                     <div className="flex gap-1">
                       <button
-                        onClick={() => setEditingStatBlock(!editingStatBlock)}
+                        onClick={() => {
+                          flushStatBlock();
+                          setEditingStatBlock(!editingStatBlock);
+                        }}
                         className="text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
                       >
                         {editingStatBlock ? 'View' : 'Edit'}
@@ -781,7 +817,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
                 {statBlock ? (
                   editingStatBlock ? (
-                    <div className="glass-panel p-3 max-h-96 overflow-y-auto">
+                    <div
+                      className="glass-panel p-3 max-h-96 overflow-y-auto"
+                      onBlur={(e) => {
+                        // Focus moving between the stat block's own fields is still typing.
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flushStatBlock();
+                      }}
+                    >
                       <StatBlockEditor
                         statBlock={statBlock}
                         onChange={handleStatBlockChange}

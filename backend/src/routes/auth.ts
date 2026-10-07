@@ -18,6 +18,7 @@ import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
+import { failureLimiter } from '../middleware/failureLimiter';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 
@@ -28,24 +29,23 @@ import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion
 const router = Router();
 
 /**
- * Rate limiting for endpoints that check a credential.
+ * Rate limiting for endpoints that check a credential: 5 wrong answers per 15
+ * minutes per address, shared by sign-in, password reset and the MFA changes.
  *
- * `skipSuccessfulRequests` is the important part: only failures count towards
- * the allowance. A brute-force guard exists to stop repeated *wrong* answers, so
- * counting the right ones as well punishes the legitimate user — five correct
- * logins in fifteen minutes locked the account out, which on a self-hosted
- * instance behind a proxy meant an entire household sharing one budget of five.
+ * Only a wrong answer counts, recorded by the route where it finds one: a
+ * wrong password, a wrong code, a reset link that is not valid. A correct
+ * answer never moves you towards a lockout, and nor does a refusal. Correct
+ * sign-ins arriving together from one address (a household, a club, every
+ * visitor behind a proxy that hides their addresses) are all let through;
+ * see middleware/failureLimiter for how wrong ones sent together are still
+ * held to five.
  *
- * Exported for the tests, which mount it on a bare app: the auth e2e suite mocks
- * express-rate-limit away entirely, so nothing else can exercise this.
+ * Exported for the tests, which mount it on a bare app.
  */
-export const credentialLimiter = rateLimit({
+export const credentialLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 failed attempts per window
+  max: 5, // 5 wrong answers per window
   message: 'Too many authentication attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
 });
 
 /**
@@ -245,7 +245,9 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       rememberMe,
     });
 
+    // The same answer, and the same count, whether or not the address has an account.
     if (!user) {
+      credentialLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Invalid email or password',
@@ -455,6 +457,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     });
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
+      credentialLimiter.recordFailure(req);
       return res.status(400).json({
         error: 'Invalid Token',
         message: 'This password reset link is invalid or has expired',
@@ -705,6 +708,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
     }
 
     if (!(await verifyPassword(user.passwordHash, password))) {
+      credentialLimiter.recordFailure(req);
       return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 
@@ -980,6 +984,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
     // Verify password
     const passwordValid = await verifyPassword(user.passwordHash, password);
     if (!passwordValid) {
+      credentialLimiter.recordFailure(req);
       return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 
@@ -987,6 +992,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
     const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, String(token));
 
     if (!tokenValid) {
+      credentialLimiter.recordFailure(req);
       return res.status(401).json({ error: 'Invalid Code', message: 'Invalid authentication code' });
     }
 
@@ -1040,6 +1046,7 @@ router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Req
     // Verify password
     const passwordValid = await verifyPassword(user.passwordHash, password);
     if (!passwordValid) {
+      credentialLimiter.recordFailure(req);
       return res.status(401).json({ error: 'Authentication Failed', message: 'Incorrect password' });
     }
 

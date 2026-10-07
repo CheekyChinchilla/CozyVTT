@@ -244,7 +244,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 
 - Update HP (current, max, and temporary)
 - Rename the token
-- View and edit the stat block (for NPC tokens with creature template data)
+- View and edit the stat block (for NPC tokens with creature template data). An edit is saved a moment after you stop typing, or straight away when you click out of the stat block, switch it back to **View** or close the editor
 - **Change the token image** — click the token avatar in the editor's header to open the image picker
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu

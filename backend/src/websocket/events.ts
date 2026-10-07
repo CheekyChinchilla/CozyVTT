@@ -3,7 +3,7 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { broadcastPresence, getOnlineUserIds } from './utils';
 import logger from '../utils/logger';
-import { stateRequestAllowed } from './shared';
+import { stateRequestAllowed, withinCeiling, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -47,8 +47,16 @@ export function registerEventHandlers(io: Server): void {
       return;
     }
 
-    // Add socket to user's personal room (for direct messaging)
+    // Add socket to user's personal room (for direct messaging), which is
+    // also how this user's open sockets are counted. Counted and joined in
+    // one step, with nothing awaited between, so sockets opened together
+    // cannot all pass the count.
     if (socket.userId) {
+      if ((io.sockets.adapter.rooms.get(socket.userId)?.size ?? 0) >= MAX_SOCKETS_PER_USER) {
+        socket.emit('error', { message: TOO_MANY_SOCKETS });
+        socket.disconnect(true);
+        return;
+      }
       socket.join(socket.userId);
       logger.debug('ws joined user room', { socketId: socket.id, userId: socket.userId });
     }
@@ -68,7 +76,10 @@ export function registerEventHandlers(io: Server): void {
     // two campaign rooms carrying one role. The chain never rejects (the
     // handler catches everything), so a refused attempt does not block the
     // next.
+    //
+    // Counted before it is queued, so a flood cannot grow the chain.
     socket.on('authenticate', (data: { campaignId: string }) => {
+      if (!withinCeiling(socket, 'authenticate')) return;
       socket.authenticating = (socket.authenticating ?? Promise.resolve()).then(() => authenticateInto(data));
     });
 
@@ -119,6 +130,10 @@ export function registerEventHandlers(io: Server): void {
           await broadcastPresence(room);
         }
 
+        // Already in this campaign with this role: nothing about this socket
+        // changes for anyone else, so the table is not told again.
+        const rejoined = socket.campaignId === data.campaignId && socket.role === result.role && socket.rooms.has(data.campaignId);
+
         // Join the campaign room. Role is refreshed even when the campaign is
         // the same, since a client re-authenticates after a reconnect.
         socket.join(data.campaignId);
@@ -132,6 +147,11 @@ export function registerEventHandlers(io: Server): void {
           role: result.role,
           timestamp: new Date().toISOString(),
         });
+
+        if (rejoined) {
+          socket.emit('presence.state', { campaignId: data.campaignId, onlineUserIds: await getOnlineUserIds(data.campaignId) });
+          return;
+        }
 
         // No "X has joined" chat message. This handler runs on every socket
         // authentication — so once per page load, per refresh and per recovered

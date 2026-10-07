@@ -1479,24 +1479,29 @@ when it sees it.
 
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
-| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
 | Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
 | General API | 300 requests | 1 minute | Every request |
-| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
-| Token movement (WebSocket) | 60 events | 1 second | Every event |
+| Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
+| Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
+| Token drag frames (WebSocket) | 150 events | 1 second | Every event |
+| Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |
 
-The **Counts** column matters. Where only failures count, signing in correctly
-never uses up the allowance — otherwise a household sharing one address could
-lock itself out by logging in normally. Where every request counts, the success
+The **Counts** column matters. Where only wrong answers count, signing in
+correctly never uses up the allowance, and neither does being refused: a
+household sharing one address could otherwise lock itself out by logging in
+normally. Correct sign-ins arriving together from one address all succeed. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
-Chat messages are not on this list because they are limited per campaign rather
-than globally: a DM can switch on a cooldown of between 1 and 300 seconds
-between messages, and it is **off by default**.
+On top of the chat limit, a DM can switch on a cooldown of between 1 and 300
+seconds between messages for their campaign; it is **off by default**. The
+WebSocket limits are counted per user, across every connection they have open,
+and are set well above what a busy table sends. The other live table events have
+limits of their own, listed in the WebSocket guide.
 
 The upload, campaign-archive and general-API limits are configurable with the
 `ASSET_UPLOAD_RATE_LIMIT`, `CAMPAIGN_ARCHIVE_RATE_LIMIT` and
