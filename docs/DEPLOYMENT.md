@@ -339,11 +339,12 @@ Whatever proxy you use, it must:
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
 - Pass `X-Forwarded-Proto` to the backend, and `X-Forwarded-For` with the visitor's own address last (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits))
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
+- For importing campaigns: allow `/api/campaigns/import` (which also covers `/api/campaigns/import/preview`) a request body of at least **505 MB**, the 500 MB largest archive plus overhead, and give it about **300 seconds** to answer, since a large archive takes minutes to unpack. The bundled nginx allows 512 MB there whatever `NGINX_MAX_BODY_SIZE` says. Without this, importing an archive bigger than your body limit shows "This archive is larger than the server accepts", and a slow import shows an error while the backend carries on and finishes it. Where your proxy can, pass the upload straight through instead of saving it first (`proxy_request_buffering off` in nginx)
 - For the Admin Dashboard's backups: allow `/api/admin/backups/restore` a request body as large as your biggest backup (the bundled nginx allows 4 GB), and give both `/api/admin/backups` and `/api/admin/backups/restore` about **600 seconds** to answer (most proxies wait 60). Making or restoring a backup, uploaded files and all, happens inside that one request. Without this, restoring a backup bigger than your body limit fails with **413**, and making a backup that takes longer than your proxy waits shows **504**; the backend carries on, and the backup appears in the list when it is done. Where your proxy can, have it pass the restore upload straight through instead of saving it first (`proxy_request_buffering off` in nginx), so a stranger cannot fill its disk
 
 > ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
 
-> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the dashboard's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. To restore a large backup, copy it to the server and use the restore script steps under [Via Admin Dashboard](#via-admin-dashboard).
+> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the dashboard's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. They apply to campaign imports too: an archive over 100 MB cannot be imported through Cloudflare, and a large import may show an error although it finishes. Exports are not affected, because the server starts sending an export straight away. To restore a large backup, copy it to the server and use the restore script steps under [Via Admin Dashboard](#via-admin-dashboard).
 
 ### Updating after you've edited `docker-compose.yml`
 
@@ -603,6 +604,22 @@ server {
         proxy_send_timeout      600s;
     }
 
+    # Campaign import and its preview → backend: an archive is up to 500 MB,
+    # passed straight through (the backend refuses anyone not signed in before
+    # reading it), with time to unpack it
+    location /api/campaigns/import {
+        proxy_pass              http://127.0.0.1:4000;
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        client_max_body_size    512M;
+        proxy_request_buffering off;
+        proxy_read_timeout      300s;
+        proxy_send_timeout      300s;
+    }
+
     # Making a backup → backend: it answers only once the backup is written
     location /api/admin/backups {
         proxy_pass              http://127.0.0.1:4000;
@@ -730,6 +747,8 @@ These take effect on `docker compose up -d` (no image rebuild needed): the backe
 | Traefik | `buffering.maxRequestBodyBytes` middleware (defaults to unlimited) |
 | Caddy | `request_body { max_size ... }` |
 | Cloudflare proxy / Tunnel | Hard 100 MB cap on Free/Pro — not configurable |
+
+**Campaign archives have a limit of their own.** Importing a campaign accepts an archive of up to 500 MB, and the bundled nginx gives the import its own body limit of 512 MB, so `NGINX_MAX_BODY_SIZE` does not have to be that large. If you use your own proxy, give `/api/campaigns/import` that limit as described under [Minimum proxy requirements](#minimum-proxy-requirements).
 
 The backend logs its effective limits at startup and warns when they exceed the configured proxy cap:
 
@@ -1121,13 +1140,13 @@ If you removed the bundled `nginx` service, the usual culprit is a missing `port
 
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
-When `docker compose up -d` recreates only the backend (after you change `.env`, for example), the bundled nginx can keep using the old backend container's address, so everything sent to the backend answers **502 Bad Gateway**: the pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
+The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
 
 ```bash
 docker compose restart nginx
 ```
 
-It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again.
+It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, bring your copy up to date with the `git stash` steps in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml), which work the same for `nginx/nginx.conf`.
 
 ### Live features don't work (dice, token movement, chat)
 

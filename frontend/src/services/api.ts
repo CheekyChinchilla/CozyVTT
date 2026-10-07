@@ -1166,9 +1166,14 @@ class ApiClient {
     return 'saved';
   }
 
+  // Both send the whole archive, up to 500 MB, which takes minutes on a slow
+  // connection. A limit of the page's own would count that upload and give up
+  // while the server carried on, so there is none: the bundled nginx still
+  // ends a request whose server goes silent for five minutes.
   async previewCampaignImport(formData: FormData): Promise<CampaignImportPreview> {
     const response = await this.client.post('/api/campaigns/import/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
     });
     return response.data.preview;
   }
@@ -1176,7 +1181,7 @@ class ApiClient {
   async importCampaign(formData: FormData): Promise<CampaignImportResult> {
     const response = await this.client.post('/api/campaigns/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000, // 5 min for large archives
+      timeout: 0,
     });
     return response.data;
   }

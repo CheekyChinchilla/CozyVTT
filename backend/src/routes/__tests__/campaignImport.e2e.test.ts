@@ -10,8 +10,10 @@
  */
 
 import fs from 'fs';
+import http from 'http';
 import os from 'os';
 import path from 'path';
+import type { AddressInfo } from 'net';
 
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-e2e-'));
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
@@ -59,6 +61,7 @@ const manifest = JSON.stringify({
 
 let dmId: string;
 let playerId: string;
+let playerEmail: string;
 let sourceCampaignId: string;
 let dm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
@@ -78,6 +81,7 @@ beforeAll(async () => {
   const playerUser = await createTestUser({ displayName: 'Import Player' });
   dmId = dmUser.id;
   playerId = playerUser.id;
+  playerEmail = playerUser.email;
   sourceCampaignId = (await createTestCampaign(dmId, { name: 'Round Trip' })).id;
   await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: sourceCampaignId, role: 'DM', characterIds: [] } });
 
@@ -198,6 +202,64 @@ describe('POST /api/campaigns/import', () => {
     expect(await prisma.campaign.count({ where: { ownerId: playerId } })).toBe(before);
     expect(fs.existsSync(path.join(UPLOAD_DIR, '..', 'escape.png'))).toBe(false);
   });
+
+  // nginx and the backend both answer 413 for a body too large to take, and
+  // the import window explains that status. The backend used to say 400.
+  it('answers 413 for an archive over 500 MB, saying so, and keeps none of it', async () => {
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    const { port } = server.address() as AddressInfo;
+    const login = await request(app).post('/api/auth/login').send({ email: playerEmail, password: TEST_PASSWORD });
+    const cookie = (login.headers['set-cookie'] as unknown as string[])[0].split(';')[0];
+    const boundary = '----CozyTooLarge';
+    const head = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="huge.cozyvtt"\r\nContent-Type: application/zip\r\n\r\n`
+    );
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const fileBytes = 500 * 1024 * 1024 + 1024;
+    const chunk = Buffer.alloc(1024 * 1024);
+
+    try {
+      const res = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const req = http.request(
+          {
+            host: '127.0.0.1', port, path: '/api/campaigns/import/preview', method: 'POST',
+            headers: { Cookie: cookie, 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': head.length + fileBytes + tail.length },
+          },
+          (answer) => {
+            const chunks: Buffer[] = [];
+            answer.on('data', (c: Buffer) => chunks.push(c));
+            answer.on('end', () => resolve({ status: answer.statusCode ?? 0, body: Buffer.concat(chunks).toString() }));
+          }
+        );
+        req.on('error', reject);
+        req.write(head);
+        let left = fileBytes;
+        const pump = () => {
+          while (left > 0) {
+            const piece = left >= chunk.length ? chunk : chunk.subarray(0, left);
+            left -= piece.length;
+            if (!req.write(piece)) {
+              req.once('drain', pump);
+              return;
+            }
+          }
+          req.end(tail);
+        };
+        pump();
+      });
+
+      expect(res.status).toBe(413);
+      expect(JSON.parse(res.body)).toEqual({
+        error: 'File Too Large',
+        message: 'The archive is larger than 500 MB, the most a campaign archive may be.',
+      });
+      expect(tempFiles()).toEqual([]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 120_000);
 
   it('clears archives a stopped server left in its temporary folder', async () => {
     fs.mkdirSync(IMPORT_TEMP, { recursive: true });

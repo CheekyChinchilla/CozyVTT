@@ -7714,9 +7714,8 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), a file over 500 MB (`File Too
-            Large`), another upload problem such as a refused file type or a
-            malformed body (`Upload Error`), or an archive that is not a ZIP,
+            No file (`Validation Error`), an upload problem such as a refused
+            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
             is over the size setting, lists more than 1,000 files, or has a
             missing, oversized or invalid manifest (`Invalid Archive`, with
             the reason in `message`).
@@ -7724,6 +7723,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: >-
+            The file is over 500 MB (`File Too Large`). A proxy in front of
+            the server may answer 413 for a smaller body, with a page of its
+            own; the bundled nginx allows this path and the import 512 MB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: The archive is larger than 500 MB, the most a campaign archive may be.
         '429':
           description: >-
             The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
@@ -7825,6 +7836,12 @@ paths:
             range (`Validation Error`), or any failure while importing
             (`Import Failed`, with the reason in `message`). Every import
             failure, including a database error, answers 400.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: The file is over 500 MB (`File Too Large`), as on the preview route.
           content:
             application/json:
               schema:

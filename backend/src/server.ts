@@ -221,6 +221,12 @@ initializeWebSocket(httpServer);
 // START SERVER
 // ============================================
 
+// TODO(upload): Node answers 408 to any request whose body takes longer than
+// httpServer.requestTimeout to arrive, 300 seconds by default. The bundled
+// nginx streams campaign imports and backup restores straight through, so an
+// archive slower than that to upload (500 MB needs about 13 Mbit/s) is cut
+// off here whatever nginx allows. These two uploads need longer, at the cost
+// of a longer hold on a slow request everywhere else.
 httpServer.listen(PORT, () => {
   logger.info(`CozyVTT Backend running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);

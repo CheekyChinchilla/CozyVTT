@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upgrading from 1.5.0
+
+If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` stops at it because this release changes that file. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict, keep your own lines, then compare your HTTPS block with the new commented-out one and add what it has that yours lacks:
+
+- the two `set` lines after `server_name`, naming `$cozyvtt_backend` and `$cozyvtt_frontend`,
+- `$cozyvtt_backend` in place of `http://backend:4000`, and `$cozyvtt_frontend` in place of `http://frontend:80`, in every `proxy_pass` line,
+- the whole `location /api/campaigns/import` block.
+
+The new `resolver` line near the top of the file covers both blocks.
+
+If you use your own proxy instead of the bundled nginx, give `/api/campaigns/import` a body limit of at least 505 MB and 300 seconds to answer, as [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements) describes, or larger campaign archives cannot be imported. There is one new setting, `CAMPAIGN_ARCHIVE_RATE_LIMIT`, and it is optional: leave it out and the default applies.
+
 ### Fixed
 
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
@@ -15,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
 
 - **Exporting a large campaign no longer risks stopping the server, and works on slow connections.** The export was built whole in the server's memory before any of it was sent, so a campaign with a few large maps could stop the server for every table, and the browser gave up on any export that took longer than 30 seconds to arrive. The archive is now sent as it is made, and the browser waits for as long as it takes. In Chrome and Edge you choose where to save it and it is written straight there; other browsers download it as before. An export whose pictures and sound add up to more than 500 MB, the most an import accepts, is now refused with a message giving its size and saying whether leaving out audio would bring it under, where it used to make an archive no server could import. The refusal used to show only "Failed to export campaign".
+
+- **Campaign archives up to 500 MB can be imported through the bundled nginx.** Imports had the 55 MB body limit every other upload has, so a campaign with a couple of large maps could be exported but not imported again, and the import window said only "Request failed with status code 413". Imports now have a limit of 512 MB there and five minutes to finish unpacking, the import window waits for a slow upload instead of giving up after 30 seconds, and when a proxy refuses an archive as too large the window says so and what whoever runs the server can do about it.
+
+- **The site no longer answers 502 after only the backend is recreated.** When `docker compose up -d` recreated the backend, after a change to `.env` for example, the bundled nginx went on sending to the old container's address until it was restarted itself, so the pages loaded but signing in failed. It now finds a recreated backend or frontend within ten seconds.
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
 

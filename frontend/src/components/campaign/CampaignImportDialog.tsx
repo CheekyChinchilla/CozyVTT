@@ -21,7 +21,7 @@ import {
 import api from '@/services/api';
 import type { CampaignImportPreview, CampaignImportResult } from '@/types';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, errorMessage as thrownMessage } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -30,6 +30,22 @@ interface CampaignImportDialogProps {
 }
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'done' | 'error';
+
+/**
+ * A web proxy in front of CozyVTT refuses a body over its own size limit
+ * with 413 and a page of HTML, before the server has seen it, so there is no
+ * message of the server's to show.
+ */
+const TOO_LARGE_FOR_SERVER =
+  'This archive is larger than the server accepts. Whoever runs the server can raise the size limit for campaign imports on the web proxy in front of CozyVTT; the deployment guide explains how.';
+
+/** What to tell the user about a refused preview or import. */
+function refusalMessage(err: unknown, fallback: string): string {
+  const message = apiErrorMessage(err);
+  if (message) return message;
+  if (apiErrorStatus(err) === 413) return TOO_LARGE_FOR_SERVER;
+  return thrownMessage(err) || fallback;
+}
 
 export default function CampaignImportDialog({
   isOpen,
@@ -79,8 +95,7 @@ export default function CampaignImportDialog({
       setCampaignName(previewData.campaignName);
       setStep('preview');
     } catch (err) {
-      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Failed to read archive.';
-      setErrorMessage(msg);
+      setErrorMessage(refusalMessage(err, 'Failed to read archive.'));
       setStep('error');
     } finally {
       setLoading(false);
@@ -112,8 +127,7 @@ export default function CampaignImportDialog({
       setStep('done');
       onSuccess?.();
     } catch (err) {
-      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Import failed.';
-      setErrorMessage(msg);
+      setErrorMessage(refusalMessage(err, 'Import failed.'));
       setStep('error');
     }
   };

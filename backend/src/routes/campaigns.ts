@@ -14,7 +14,7 @@ import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email
 import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
-import { CAMPAIGN_ARCHIVE_MAX_BYTES } from '../utils/campaignArchiveSize';
+import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign } from '../services/campaignImporter';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
@@ -2234,7 +2234,10 @@ function takeImportUpload(req: Request, res: Response, next: NextFunction): void
   importUpload.single('file')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        res.status(400).json({ error: 'File Too Large', message: 'Archive exceeds 500 MB limit.' });
+        res.status(413).json({
+          error: 'File Too Large',
+          message: `The archive is larger than ${megabytes(CAMPAIGN_ARCHIVE_MAX_BYTES)}, the most a campaign archive may be.`,
+        });
         return;
       }
       res.status(400).json({ error: 'Upload Error', message: err.message });
