@@ -10,7 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.5.0
 
-If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` stops at it because this release changes that file. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict, keep your own lines, then compare your HTTPS block with the new commented-out one and add what it has that yours lacks:
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is no database change, no new required setting and no manual step. Nothing you have stored is rewritten. All four containers are recreated, because `docker-compose.yml` now gives Docker's own log of each container a size limit. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch, but Docker's old container logs are removed with the old containers.
+
+If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, or `docker-compose.yml`, `git pull` stops at it because this release changes both files. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If `git stash pop` reports a conflict in `nginx/nginx.conf`, keep your own lines, then compare your HTTPS block with the new commented-out one and add what it has that yours lacks:
 
 - the two `set` lines after `server_name`, naming `$cozyvtt_backend` and `$cozyvtt_frontend`,
 - `$cozyvtt_backend` in place of `http://backend:4000`, and `$cozyvtt_frontend` in place of `http://frontend:80`, in every `proxy_pass` line,
@@ -18,7 +27,34 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 The new `resolver` line near the top of the file covers both blocks.
 
-If you use your own proxy instead of the bundled nginx, give `/api/campaigns/import` a body limit of at least 505 MB and 300 seconds to answer, as [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements) describes, or larger campaign archives cannot be imported. There is one new setting, `CAMPAIGN_ARCHIVE_RATE_LIMIT`, and it is optional: leave it out and the default applies.
+If you use your own proxy instead of the bundled nginx, give `/api/campaigns/import` a body limit of at least 505 MB and 300 seconds to answer, as [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements) describes, or larger campaign archives cannot be imported. There is one new setting, `CAMPAIGN_ARCHIVE_RATE_LIMIT`, and it is optional: leave it out and the default of 20 applies.
+
+#### What you will notice
+
+- **New limits, set far above what a table or a DM preparing a campaign does.** A map can be from 1 to 500 squares on each side and hold 1,000 tokens. A creature's stat block can be up to 64 KB, about ten times the largest monster in the SRD. Each account may import, preview and export 20 campaign archives an hour, one at a time, and the live table has a limit per account on every kind of event. Existing maps over these limits keep loading and keep their tokens. Only fog of war and explored areas are refused on a map bigger than 500 by 500 squares, with a message saying why.
+- **Deleting something now asks first,** and deleting a picture or sound that a map, token, sheet or atmosphere still uses shows where it is used before anything is removed.
+- **A PDF is no longer accepted as a map picture.** It could never be shown on the map. PDF map pictures you already have still load, and PDFs are still welcome as documents.
+- **A Universal VTT file can be up to 75 MB** with the default settings, so a 50 MB picture inside one still fits.
+- **D&D 5e skills and saving throws have an Other box** for bonuses the sheet cannot work out, such as Jack of All Trades. The first time an existing sheet is opened in the editor, any difference between its stored totals and the worked-out ones is put in that box, so no total changes.
+- **Edits that were lost before this release are not brought back by it.** That includes features that shared a name, raised Call of Cthulhu Dodge values, token template hit points and walls undone onto another map. A backup from before the loss is the only way back.
+
+#### What to do afterwards, if it applies to you
+
+- **If you set up a `logrotate` rule for `backend/logs`, remove it.** The backend now rotates its own log files, and the two would fight over them.
+- **Log lines written before the upgrade still contain full email addresses.** New lines keep only the first letter and the domain. To remove the old lines, follow [Persistent Log Files](docs/DEPLOYMENT.md#persistent-log-files).
+
+#### If a script or integration drives CozyVTT
+
+The HTTP and WebSocket interfaces are not a versioned public API, but programs do use them, so these are the changes a script may notice:
+
+- Deleting an asset that is still in use answers 409 with a list of where it is used. Add `?force=true` to delete it anyway.
+- An upload form may carry at most 100 fields, with names of at most 100 bytes, bracket nesting at most 5 deep and array indexes up to 1,000.
+- A campaign import's answer gains `warnings` and `skipped`, and `mapCount` counts the maps actually created. A failure on the server's side answers 500, where it answered 400.
+- A map name can be at most 200 characters, token positions are whole squares, and walls and lights must lie within 500 squares of their map.
+- Every live-table event has a per-account ceiling (the table is in the WebSocket documentation), and an account may hold 40 connections. A refusal arrives as one `error` event per socket and kind of event every ten seconds. A dice roll's character name is limited to 200 characters and its purpose to 300.
+- Wall and light events accept an optional `opId`, which the server sends back on the broadcast of that edit.
+- Five wrong passwords or codes per 15 minutes from one address still lock sign-in from that address, but correct sign-ins sent at the same moment are never refused.
+- An audio request for a range outside the file answers 416.
 
 ### Changed
 
