@@ -381,6 +381,12 @@ Roll before the DM clicks **Start Combat**. Once combat has started, the dice ic
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
 
+### Bonuses the sheet can't work out (D&D 5e)
+
+Every skill and saving throw is worked out for you from your ability scores, your proficiency bonus and the Prof and Exp boxes, so it keeps up as your character grows. Some things add to them that the sheet can't know about: a Bard's **Jack of All Trades**, a Paladin's **Aura of Protection**, a **Ring of Protection**, a feat. In **Edit**, under **Stats & Skills**, each skill and saving throw has a small box beside its total. Type the extra there, `1` for +1 or `-1` for a penalty, and the total, the sheet and the dice all include it.
+
+A character from an earlier version may have totals that already include something like this. The first time you open such a character in the editor, the difference is put in the box for you, so every total stays exactly as it was. If one of those boxes holds a number you don't recognise, the total was out of step with your ability scores; change the box to `0` to use the worked-out total.
+
 ### Skills the sheet doesn't have (D&D 5e)
 
 Thieves' tools, a musical instrument, a vehicle, or whatever your table invented — none of these are among the eighteen printed skills, but they roll the same way. Under **Stats & Skills** there's a **Your Own Skills** section: **+ Add Skill**, type the name, choose the ability it uses, and tick **Prof** (or **Exp** for expertise).

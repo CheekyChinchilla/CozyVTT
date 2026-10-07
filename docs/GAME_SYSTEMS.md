@@ -130,8 +130,26 @@ derives initiative, passive Perception, spell save DC and spell attack, and each
 carries an "other bonus" box. Deriving without one is a trap: a feat or an item
 adjusts the total without changing either input, and the player is then left with
 no way to record a character they legitimately have. Spell save DC and spell
-attack get **separate** boxes rather than sharing one, because items exist that
-raise the attack roll and not the DC.
+attack get **separate** boxes, because items exist that raise the attack roll
+and not the DC.
+
+The eighteen skills and six saving throws follow the same rule. Each entry
+stores its total as `bonus` and an optional `otherBonus` for what the maths
+cannot know: Jack of All Trades, Aura of Protection, a Ring of Protection. The
+editor keeps `bonus` equal to ability modifier, plus proficiency (doubled for a
+skill with expertise, never for a save), plus `otherBonus`. The view and the
+roll picker work the total out the same way, through `dnd5eSkillBonus` and
+`dnd5eSaveBonus` in `rules/dnd5e.ts`.
+
+**Adding a derived field to existing sheets: read the old total back once.** A
+sheet saved before `otherBonus` existed holds only a total, and that total is
+what it has always rolled. Deriving over it would silently take away whatever it
+included. So the editor, once as it opens and on the sheet as stored, records
+`stored − derived` as the other bonus wherever the two differ
+(`dnd5eBackfilledSkillOtherBonus`, `dnd5eBackfilledSaveOtherBonus`), and until
+then the view and the dice use the stored total. Doing it once matters: reading
+back a total the editor had itself just worked out from a changed score would
+turn the change into a bonus. The initiative bonus was converted the same way.
 
 **Do not let the templates seed a derived number.** They shipped spell save DC 8
 and attack +0 — the base with nothing added, which no character can legitimately

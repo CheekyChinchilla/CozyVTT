@@ -21,6 +21,7 @@ import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
 import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus } from '../../rules/pathfinder2e';
+import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -127,6 +128,23 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       ];
 
       expect(skills.filter((skill) => skill.bonus !== total(skill))).toEqual([]);
+    });
+  }
+});
+
+/**
+ * A D&D 5e template's skill and save totals are the ones its scores give, so a
+ * character made from one opens with no other bonus to explain.
+ */
+describe('D&D 5e templates agree with the rules maths', () => {
+  for (const template of getTemplatesForGameSystem(GameSystem.DND_5E)) {
+    const data = template.data as Record<string, unknown>;
+
+    it(`${template.name} stores the skill and save totals its scores give`, () => {
+      const skills = Object.keys((data.skills ?? {}) as Record<string, unknown>);
+      const saves = Object.keys((data.savingThrows ?? {}) as Record<string, unknown>);
+      expect(skills.filter((key) => dnd5eBackfilledSkillOtherBonus(data, key) !== null)).toEqual([]);
+      expect(saves.filter((key) => dnd5eBackfilledSaveOtherBonus(data, key) !== null)).toEqual([]);
     });
   }
 });

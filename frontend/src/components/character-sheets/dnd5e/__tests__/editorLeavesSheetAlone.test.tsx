@@ -46,12 +46,15 @@ describe('opening the D&D 5e editor', () => {
     const character = dnd5eCharacter();
     const data = character.data as unknown as {
       stats: Record<string, { score: number; modifier: number }>;
-      savingThrows: Record<string, { proficient: boolean; bonus: number }>;
-      skills: Record<string, { proficient: boolean; expertise: boolean; bonus: number }>;
+      savingThrows: Record<string, { proficient: boolean; bonus: number; otherBonus?: number }>;
+      skills: Record<string, { proficient: boolean; expertise: boolean; bonus: number; otherBonus?: number }>;
     };
     data.stats.strength = { score: 16, modifier: 0 };
-    data.savingThrows.strength = { proficient: true, bonus: 0 };
-    data.skills.perception = { proficient: false, expertise: true, bonus: 0 };
+    // Each entry records an other bonus, so its total is worked out from the
+    // scores. One stored without it keeps its total; see otherBonus.test.tsx.
+    data.savingThrows.strength = { proficient: true, bonus: 0, otherBonus: 0 };
+    data.skills.athletics = { proficient: false, expertise: false, bonus: 0, otherBonus: 0 };
+    data.skills.perception = { proficient: false, expertise: true, bonus: 0, otherBonus: 0 };
     render(<DnD5eCharacterEditor character={character} onSave={onSave} onCancel={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

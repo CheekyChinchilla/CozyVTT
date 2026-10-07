@@ -298,6 +298,7 @@ The classic. Covers all the D&D 5e essentials:
 - Ability scores and modifiers
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
+- Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
 - Spells, spell slots, and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info

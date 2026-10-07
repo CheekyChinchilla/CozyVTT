@@ -46,8 +46,15 @@ const slots = (ranks: number) =>
 
 describe('what the D&D 5e editor writes', () => {
   it('is kept whole', () => {
+    const sheet = blank(GameSystem.DND_5E);
+    const skills = sheet.skills as Record<string, Sheet>;
+    const saves = sheet.savingThrows as Record<string, Sheet>;
     expectKeptWhole(GameSystem.DND_5E, {
-      ...blank(GameSystem.DND_5E),
+      ...sheet,
+      // An other bonus beside the derived one: Jack of All Trades, Aura of
+      // Protection, a Ring of Protection.
+      skills: { ...skills, stealth: { ...skills.stealth, bonus: 1, otherBonus: 1 } },
+      savingThrows: { ...saves, wisdom: { ...saves.wisdom, bonus: 3, otherBonus: 3 } },
       themeColor: '#aabbcc',
       background: '',
       alignment: '',
