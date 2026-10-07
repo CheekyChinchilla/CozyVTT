@@ -1017,6 +1017,12 @@ The `Content-Type` comes from the file's validated extension, never from the
 type declared at upload, and the response carries `X-Content-Type-Options:
 nosniff`.
 
+One byte range is served: `bytes=0-`, `bytes=1000-1999` or `bytes=-500` (the
+last 500 bytes) answer `206` with `Content-Range`, and an end past the file is
+cut to it. A range starting past the end answers `416` with
+`Content-Range: bytes */<size>`. Several ranges, or a malformed header, are
+ignored and the whole file is sent with `200`.
+
 ---
 
 ### `GET /api/assets/avatars/:userId`

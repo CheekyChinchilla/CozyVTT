@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The backend keeps running when the database restarts.** Stopping or restarting PostgreSQL, as a database upgrade or a host reboot does, could stop the backend with it, because the login-session store treated a dropped database connection as a crash. The drop is now logged, and the store opens a new connection for the next request.
 
+- **Audio tracks are served correctly from any point in the file.** A request for the last part of a track, or for a part beyond its end, failed with a server error, and a request running past the end promised more than it sent. These now get the right part of the file, or a clear "outside the file" answer. Switching or seeking a track also no longer leaves the old file open on the server, which over a long session could stop it opening any more files, and a file that cannot be read part-way through no longer stops the backend.
+
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
