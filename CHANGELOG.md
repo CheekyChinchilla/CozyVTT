@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A single wall can be set to a locked door.** Changing one wall's type refused the locked-door type, which drawing walls, saving the wall list and the DM's live wall editing all accept.
 
+- **Tokens always stand on whole squares, with all of them on the map.** The server took a token placed between squares, or one hanging mostly off the edge of the map, from a script or another client, and other players then saw it out of line with the grid. A position between squares is now refused, and a token too big for where it is put is moved back until it fits on the map, as dragging one already does. Placing a large creature from the Creature Library or a template on a small map now lands it fully on the map.
+
 ### Security
 
 - **A very large map can no longer take the whole server down.** Any signed-in user can create a campaign of their own, and the server accepted a map of any size, so a map tens of thousands of squares wide with fog of war on made the server run out of memory and stop for every table. Maps now have the limits Create Map and Edit Map already offered: 1 to 500 squares on each side, a grid size of 10 to 500 pixels, and 1 to 100 feet per square. The same limits apply to Universal VTT and campaign imports, so a campaign archive holding a map with a grid size between 201 and 500, which the app allows, now imports instead of losing that map. A map made before this release that is larger still opens and still saves edits that leave its size alone, but fog of war and explored areas cannot be turned on for it, and one that already had fog on shows no fog. The message says to make the map 500 by 500 squares or smaller.

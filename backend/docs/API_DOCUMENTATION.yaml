@@ -5764,9 +5764,13 @@ paths:
         controlled by that character's owner, while the owner is a player of
         this campaign, unless `controlledBy` says otherwise. A character
         owned by the DM or a spectator gives its token no controller.
-        `name` and `position` are required, and the position must be on the
-        map (`x` at least 0 and less than the map's width, `y` likewise with
-        its height; 400 otherwise). The server assigns the token's `id`.
+        `name` and `position` are required. The position is whole grid
+        squares and must be on the map (`x` at least 0 and less than the
+        map's width, `y` likewise with its height; 400 otherwise). A token
+        whose footprint (`size`) would then hang off the far edge is moved
+        back until it fits, and one larger than the map is put at its corner;
+        the reply's `token.position` is where it was placed. The server
+        assigns the token's `id`.
 
         `imageUrl` takes an asset id or an asset's exact address
         (`/api/assets/<kind>/<id>`); a bare id is stored as
@@ -5856,6 +5860,10 @@ paths:
         `metadata` is merged into what the token already holds, and the
         merged object must stay within 8 KB. `characterId` cannot be changed
         here.
+
+        A `position` is whole grid squares, on the map (400 otherwise), and
+        is moved back from the far edge until the token's footprint fits, at
+        the `size` sent in the same request or else the token's own.
 
         The reply is filtered for the caller exactly as `GET /api/campaigns/{campaignId}/maps/{id}`
         is: a player receives only the tokens, and only the fields of each,
@@ -6548,9 +6556,9 @@ paths:
         checked against their own limits, and a patch that changes either is
         checked against the light as it would be stored: one that would leave
         the dim radius smaller than the bright one answers 400 (`dimRadius
-        must be >= brightRadius`) and changes nothing. A new position is held to the bounds `replaceLights` describes. DM
-        only. Connected clients are sent `light:updated` (see
-        `replaceLights`).
+        must be >= brightRadius`) and changes nothing. A new position is held
+        to the bounds `replaceLights` describes. DM only. Connected clients
+        are sent `light:updated` (see `replaceLights`).
       operationId: updateLight
       security:
         - cookieAuth: []
@@ -10264,12 +10272,12 @@ components:
           required:
             - x
             - y
-          description: Grid square, within the map. Only x and y are stored.
+          description: Grid square, within the map, in whole squares. Only x and y are stored, moved back from the far edge until the token's footprint fits.
           properties:
             x:
-              type: number
+              type: integer
             y:
-              type: number
+              type: integer
         size:
           type: object
           required: [width, height]

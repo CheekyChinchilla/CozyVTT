@@ -1042,8 +1042,8 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const position = shapes.value.position;
-    if (!position) {
+    const requested = shapes.value.position;
+    if (!requested) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Token position {x, y} is required',
@@ -1051,13 +1051,18 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     // Validate position is within map bounds
-    if (position.x < 0 || position.x >= map.width ||
-        position.y < 0 || position.y >= map.height) {
+    if (requested.x < 0 || requested.x >= map.width ||
+        requested.y < 0 || requested.y >= map.height) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
       });
     }
+    // And its whole footprint on the map, as the client keeps it on a move.
+    // Placing from a library puts a token at the map's centre, so a large
+    // creature on a small map would otherwise hang off the far edge.
+    const size = shapes.value.size ?? { width: 1, height: 1 };
+    const position = clampTokenPosition(requested, size, map);
 
     // Validate layer
     const layer = tokenData.layer || 'token';
@@ -1137,7 +1142,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
       position,
-      size: shapes.value.size ?? { width: 1, height: 1 },
+      size,
       layer,
       visible: shapes.value.visible ?? true,
       controlledBy,
@@ -1338,13 +1343,17 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const position = shapes.value.position;
-    if (position && (position.x < 0 || position.x >= map.width || position.y < 0 || position.y >= map.height)) {
+    const requested = shapes.value.position;
+    if (requested && (requested.x < 0 || requested.x >= map.width || requested.y < 0 || requested.y >= map.height)) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
       });
     }
+    // The whole footprint on the map, at the size the token will have.
+    const position = requested
+      ? clampTokenPosition(requested, shapes.value.size ?? existingToken.size ?? { width: 1, height: 1 }, map)
+      : undefined;
 
     // Control can only be handed to a player of this campaign: the DM needs
     // no naming, and a spectator controls nothing.

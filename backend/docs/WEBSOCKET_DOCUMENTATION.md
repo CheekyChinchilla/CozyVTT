@@ -549,10 +549,11 @@ socket.on('token.moved', (data) => {
 - Player can only move assigned tokens
 
 **Validation:**
-- Coordinates must be numbers
+- Coordinates must be whole numbers of grid squares (`error` "Invalid token move data" otherwise)
 - Position must be within map bounds
 - Token must exist
 - User must have permission
+- A drop whose footprint (the token's `size`) would hang off the far edge is moved back until it fits, as the client does before sending; the stored position and every `token.moved` carry the corrected `x` and `y`
 
 **Database Update:**
 - Updates `Map.tokens` JSON array
