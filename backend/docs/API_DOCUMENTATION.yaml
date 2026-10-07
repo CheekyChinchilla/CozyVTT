@@ -9457,6 +9457,10 @@ paths:
         every later edit enforces, leaving a map that could not be saved. The
         walls, doors and lights are counted as soon as the file is read, so a
         file with millions of points is refused without any of them being built.
+        Before that, a file holding more than 1,000,000 JSON values (each
+        object, list and comma outside a string counts one) is refused with
+        **400** and `error: Parse Error` without being parsed at all, since
+        parsing one that large is itself enough to exhaust the server's memory.
         When the file would fit without its furniture walls, the message says
         so. A
         light's `range` becomes its dim radius and half of it its bright

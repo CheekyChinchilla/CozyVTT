@@ -279,6 +279,22 @@ describe('parseUVTT', () => {
       expect(Date.now() - started).toBeLessThan(5000);
     }, 30000);
 
+    it('refuses a file with far more points than a map holds before reading it as JSON', () => {
+      // Reading 2.7 million points as JSON took the backend past its memory
+      // limit, so the count has to come before the parse.
+      const parse = jest.spyOn(JSON, 'parse');
+      expect(() => parseUVTT(manyPoints(400_000))).toThrow(/more than a map can hold/i);
+      expect(parse).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('still reads a file with a great many furniture points it leaves out', () => {
+      const furniture = Array.from({ length: 2_000 }, (_, i) =>
+        Array.from({ length: 50 }, (_, j) => ({ x: (i + j) % 10, y: j % 10 }))
+      );
+      const lineOfSight = [[{ x: 0, y: 0 }, { x: 1, y: 0 }]];
+      expect(parseUVTT(uvtt({ lineOfSight, objectsLineOfSight: furniture })).wallSegments).toHaveLength(1);
+    });
+
     it('counts walls and doors together against the limit', () => {
       const lineOfSight = [Array.from({ length: 4000 }, (_, i) => ({ x: i % 10, y: 0 }))];
       const portals = Array.from({ length: 1100 }, () => ({
