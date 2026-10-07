@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The DM's live controls have limits too.** Anyone can run a campaign of their own, so the DM's controls were as open to a script as a player's, and sending the map to the table had no limit at all, though each send rebuilds the whole map for every member. Sending the map, the atmosphere, ambient sound and vibe, the spirit layer, each initiative tracker action, clearing the dice log and resetting explored areas now each take up to 50 a second per account, far more than any click sends.
 
+- **A dice roll's character name and purpose are limited in length.** They were stored and sent to every member exactly as sent, so one roll could carry close to a megabyte of text to every screen at the table and into the dice log. The name may now be up to 200 characters and the purpose up to 300; the dice panel's boxes stop there, and a roll sent with more is refused with a message saying which. A roll's secret setting must be on or off.
+
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
 
 ---

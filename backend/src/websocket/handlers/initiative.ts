@@ -313,7 +313,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
    * This check is the real boundary: the tracker and the map menu only decide
    * whether to *offer* the control, and neither is trustworthy on its own.
    */
-  socket.on('initiative.roll', async (data: { tokenId: string; mapId: string; expression?: string; characterName?: string }) => {
+  socket.on('initiative.roll', async (data: { tokenId: string; mapId: string; expression?: unknown; characterName?: string }) => {
     // `characterName` is what older clients sent along; the server names the token itself now.
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
@@ -331,6 +331,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
 
       const { tokenId, mapId, expression } = data;
       if (!tokenId || !mapId) { socket.emit('error', { message: 'tokenId and mapId required' }); return; }
+      if (expression !== undefined && typeof expression !== 'string') {
+        socket.emit('error', { message: 'Invalid expression: it must be text, like 1d20+2' });
+        return;
+      }
 
       // An initiative roll is a dice roll: it writes the map, tells the table
       // and re-sends the order, and it used to bypass the ceiling dice.roll

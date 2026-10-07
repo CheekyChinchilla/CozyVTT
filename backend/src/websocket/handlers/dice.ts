@@ -11,6 +11,7 @@ import { diceRollLimiter, withinCeiling } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
 import { campaignSockets } from '../utils';
+import { DiceRollSchema } from '../../validators/dice';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -19,7 +20,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
    * Rate limited to 30 rolls per minute per user.
    * SECURITY: Uses server-authenticated socket.campaignId only.
    */
-  socket.on('dice.roll', async (data: { expression: string; characterName?: string; purpose?: string; secret?: boolean }) => {
+  socket.on('dice.roll', async (data: unknown) => {
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
@@ -32,13 +33,14 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const { expression, characterName, purpose, secret } = data;
-
-      // Validate expression is provided
-      if (!expression || typeof expression !== 'string') {
-        socket.emit('error', { message: 'Dice expression required' });
+      // The labels are stored with the roll and sent to every member, so
+      // they are bounded here (validators/dice.ts).
+      const parsed = DiceRollSchema.safeParse(data);
+      if (!parsed.success) {
+        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Dice expression required' });
         return;
       }
+      const { expression, characterName, purpose, secret } = parsed.data;
 
       // Rate limiting: 30 rolls per minute per user
       if (!diceRollLimiter.check(socket.userId!, 30, 60 * 1000)) {
