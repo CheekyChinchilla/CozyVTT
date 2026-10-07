@@ -984,6 +984,10 @@ straight after importing (it has the map's name), and under **Move to…** choos
 players can see it once you switch to that map. Until you move it, anyone
 browsing the library can see it.
 
+**Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
+
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
 map in CozyVTT. That is how the format works everywhere, not a CozyVTT limit.
@@ -1004,6 +1008,10 @@ they cannot block sight, because sight stops at the edge of the map. If a whole
 section of your map is missing its artwork, check whether the tool you exported
 from can export that section on its own, or export the map as a PNG instead and
 [add it as an ordinary map](#adding-maps-to-your-campaign).
+
+### Exporting a Universal VTT file
+
+The app has no button for this yet. The server can produce a `.uvtt` file for a map, for a script or a tool built on the unsupported HTTP surface (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only), and importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
 ### Undo / Redo
 

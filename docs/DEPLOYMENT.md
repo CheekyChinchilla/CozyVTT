@@ -715,13 +715,15 @@ MAX_AVATAR_SIZE_MB=2
 MAX_DOCUMENT_SIZE_MB=50
 
 # Request body cap for the bundled Nginx — must be >= the largest limit above
-# plus ~5 MB of multipart overhead
+# plus ~5 MB of multipart overhead (a Universal VTT import needs more: see below)
 NGINX_MAX_BODY_SIZE=55M
 ```
 
 These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
 
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
+
+**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself, so the proxy has to accept the map limit times 4/3 plus about 5 MB, not the map limit plus 5 MB. With the defaults (`MAX_MAP_SIZE_MB=50`, `NGINX_MAX_BODY_SIZE=55M`) a picture of up to about 37 MB imports and a larger one is refused with a 413 by the proxy, although a plain map upload of up to 50 MB works. To import pictures up to the full map limit, set `NGINX_MAX_BODY_SIZE` to 72M (50 MB x 4/3 + 5 MB, rounded up); for another limit, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 5. CozyVTT itself accepts a file of up to that much plus 8 MB for the walls and lights, and answers a larger one with a message saying so.
 
 **If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
 

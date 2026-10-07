@@ -18,6 +18,7 @@
 import { randomUUID } from 'crypto';
 import logger from '../utils/logger';
 import type { WallSegment, LightSource } from '../types/walls';
+import { MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
 
 // ── UVTT file types ────────────────────────────────────────────────────────────
 
@@ -45,6 +46,10 @@ interface UVTTLight {
   range: number;          // radius in grid squares
   intensity?: number;     // 0.0–1.0
   color?: string;         // hex color string (may or may not have #)
+  /** Written by CozyVTT: the bright radius, in grid squares. Other tools omit it. */
+  bright_range?: number;
+  /** Written by CozyVTT: false for a light that is switched off. */
+  enabled?: boolean;
 }
 
 interface UVTTFile {
@@ -148,6 +153,11 @@ export interface UVTTParseOptions {
    * call, so the import asks rather than deciding.
    */
   includeObjectWalls?: boolean;
+  /**
+   * Largest picture, in bytes once decoded. A longer one is refused from the
+   * length of its base64 text, before it is decoded. Unset means no ceiling.
+   */
+  maxImageBytes?: number;
 }
 
 /**
@@ -203,6 +213,36 @@ export function parseUVTT(
     throw new Error('Invalid UVTT file: missing "line_of_sight" array');
   }
 
+  // ── Refuse what cannot become a map, before building anything ──────────────
+  // A file can hold millions of tiny polyline points inside the size the
+  // upload allows. Counting from the parsed arrays costs nothing; making a
+  // segment and an id for each one first is what exhausts memory.
+  const objectWallsRaw = Array.isArray(data.objects_line_of_sight) ? data.objects_line_of_sight : [];
+  const countSegments = (polylines: unknown[]): number =>
+    polylines.reduce<number>(
+      (total, polyline) => total + (Array.isArray(polyline) ? Math.max(0, polyline.length - 1) : 0),
+      0
+    );
+  const lineWallTotal = countSegments(data.line_of_sight);
+  const objectWallTotal = countSegments(objectWallsRaw);
+  const doorTotal = Array.isArray(data.portals) ? data.portals.length : 0;
+  const wallTotal = lineWallTotal + doorTotal + (options.includeObjectWalls ? objectWallTotal : 0);
+  if (wallTotal > MAX_WALL_SEGMENTS) {
+    throw new Error(
+      `This file has ${wallTotal} wall segments, more than a map can hold (${MAX_WALL_SEGMENTS}). ` +
+        (options.includeObjectWalls && objectWallTotal > 0 && lineWallTotal + doorTotal <= MAX_WALL_SEGMENTS
+          ? 'Importing without its furniture walls may bring it under the limit.'
+          : 'Split it into smaller maps in the tool that made it.')
+    );
+  }
+  const lightTotal = Array.isArray(data.lights) ? data.lights.length : 0;
+  if (lightTotal > MAX_LIGHT_SOURCES) {
+    throw new Error(
+      `This file has ${lightTotal} lights, more than a map can hold (${MAX_LIGHT_SOURCES} lights). ` +
+        'Split it into smaller maps in the tool that made it.'
+    );
+  }
+
   const mapWidth  = Math.round(data.resolution.map_size.x);
   const mapHeight = Math.round(data.resolution.map_size.y);
   const ppg       = data.resolution.pixels_per_grid || 140;
@@ -233,9 +273,22 @@ export function parseUVTT(
 
   // ── Decode image ───────────────────────────────────────────────────────────
   // The image field may or may not include a data URI prefix
+  // The prefix is cut with indexOf and slice: split would copy the whole
+  // picture again as a separate string. The length is checked before decoding,
+  // so a picture over the limit never becomes a second full-size buffer.
   let imageBase64 = data.image;
   if (imageBase64.startsWith('data:')) {
-    imageBase64 = imageBase64.split(',')[1] || imageBase64;
+    const comma = imageBase64.indexOf(',');
+    if (comma !== -1 && comma < imageBase64.length - 1) imageBase64 = imageBase64.slice(comma + 1);
+  }
+  if (options.maxImageBytes !== undefined) {
+    // Three bytes per four characters, less the padding.
+    let digits = imageBase64.length;
+    while (digits > 0 && imageBase64.charCodeAt(digits - 1) === 61) digits--;
+    if (Math.floor((digits * 3) / 4) > options.maxImageBytes) {
+      const limitMB = Math.round(options.maxImageBytes / (1024 * 1024));
+      throw new Error(`The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`);
+    }
   }
   const imageBuffer = Buffer.from(imageBase64, 'base64');
 
@@ -244,13 +297,8 @@ export function parseUVTT(
   let wallCount = 0;
   const outOfBounds: UVTTOutOfBounds = { walls: 0, doors: 0, lights: 0 };
 
-  const objectWalls = Array.isArray(data.objects_line_of_sight)
-    ? data.objects_line_of_sight
-    : [];
-  const objectWallCount = objectWalls.reduce(
-    (total, polyline) => total + (Array.isArray(polyline) ? Math.max(0, polyline.length - 1) : 0),
-    0
-  );
+  const objectWalls = objectWallsRaw;
+  const objectWallCount = objectWallTotal;
   const polylines = options.includeObjectWalls
     ? [...data.line_of_sight, ...objectWalls]
     : data.line_of_sight;
@@ -323,7 +371,12 @@ export function parseUVTT(
       // UVTT files provide a single range — treat as dim (total) radius,
       // bright is half that (matching D&D 5e torch pattern: 20ft bright / 40ft dim).
       const dimR = light.range;
-      const brightR = Math.max(0, dimR * 0.5);
+      // CozyVTT's own export carries the real bright radius and whether the
+      // light was on. Files from other tools have neither.
+      const brightR =
+        typeof light.bright_range === 'number' && light.bright_range >= 0
+          ? Math.min(light.bright_range, dimR)
+          : Math.max(0, dimR * 0.5);
       const position = toPictureSpace(light.position, origin);
       lightSources.push({
         id: randomUUID(),
@@ -332,7 +385,7 @@ export function parseUVTT(
         brightRadius: brightR,
         dimRadius: dimR,
         color: normalizeColor(light.color, '#ffcc66'),
-        enabled: true,
+        enabled: light.enabled !== false,
       });
       lightCount++;
       if (isOutside(position, mapWidth, mapHeight)) {

@@ -4612,14 +4612,14 @@ paths:
         not by the filename:
         | Type | Content |
         |------|---------|
-        | MAP | PNG, JPEG, WebP, PDF |
+        | MAP | PNG, JPEG, WebP |
         | TOKEN | PNG, JPEG, WebP, GIF |
         | AUDIO | MPEG audio (MP3), Ogg audio, WAV |
         | AVATAR | PNG, JPEG, WebP |
         | DOCUMENT | PDF; plain text or Markdown |
 
         The original filename's extension matters only where the bytes
-        cannot be identified: a MAP named `.pdf` that starts with `%PDF-`, an
+        cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
         and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
         with no control characters besides tab, line feed, form feed and
@@ -5247,7 +5247,8 @@ paths:
         A refused read answers 403 here and on the token route. The file is
         served with its content type chosen from its stored extension
         (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
-        `application/pdf`, since a map may be a PDF; anything else as
+        `application/pdf`, for a map stored as a PDF before PDFs were refused
+        as maps; anything else as
         `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
         It is cached as `private, max-age=31536000, immutable` with the ETag
         `"<asset id>"`; send that in `If-None-Match` for a 304.
@@ -9247,9 +9248,14 @@ paths:
         A file with walls or lights more than 500 grid squares outside its
         map is refused with **400** before anything is asked or saved, since
         the map editor could not hold them. A file with more wall segments or
-        lights than a map can hold (5000 segments, 200 lights), or with a
-        light the map editor could not save, is refused with **400**, because import used to write past the limits
-        every later edit enforces, leaving a map that could not be saved. A
+        lights than a map can hold (5000 segments, doors counted with walls,
+        and 200 lights), or with a light the map editor could not save, is
+        refused with **400**, because import used to write past the limits
+        every later edit enforces, leaving a map that could not be saved. The
+        walls, doors and lights are counted as soon as the file is read, so a
+        file with millions of points is refused without any of them being built.
+        When the file would fit without its furniture walls, the message says
+        so. A
         light's `range` becomes its dim radius and half of it its bright
         radius, so a range over 100 squares, or under 0.5, answers 400. A
         file that is not JSON or lacks `resolution.map_size`, `image` or
@@ -9257,16 +9263,21 @@ paths:
 
 
         The embedded picture is checked by its bytes, not by what the file
-        claims: anything that is not one of the types a map upload accepts
-        (PNG, JPEG, WebP, PDF) is refused with 400, as is one over the
-        `MAX_MAP_SIZE_MB` limit. It is saved as a new campaign map asset
+        claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
+        drawn as a map) is refused with 400, as is one over the
+        `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
+        text before it is decoded. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
-        upload does.
+        upload does, and a user may run one import at a time: a second sent
+        while the first is still being read answers **429** with `Another
+        import is still running`. Imports sent one after another are never
+        held back.
 
 
         The map is named after `name`, or the file's name without its
-        extension when `name` is missing or blank. Its size in squares is the
+        extension when `name` is missing or blank. A name is at most 200
+        characters, and sending the field more than once answers 400. Its size in squares is the
         file's `map_size`, rounded, and must be from 1 to 500 on each side, as
         for any map: a larger one, or one without a numeric `x` and `y`,
         answers 400 before anything is asked or saved. Lighting is turned on only when the file
@@ -9275,11 +9286,14 @@ paths:
         `door-open` segments, as the file says.
 
 
-        Some bad requests answer 500 with the generic `An unexpected error
-        occurred`: a file whose name does not end in `.uvtt`, `.dd2vtt` or
-        `.df2vtt` (unless it is sent as `application/json`), one over 100 MB,
-        a file sent under a field other than `file`, or a body that is cut off
-        or malformed or breaks the field limits of `POST /api/assets/upload`.
+        A refused upload answers with its reason, as `POST /api/assets/upload`
+        does: **400** for a file whose name does not end in `.uvtt`, `.dd2vtt`
+        or `.df2vtt` (unless it is sent as `application/json`), a file sent
+        under a field other than `file`, more than one file, or a body that is
+        cut off or malformed or breaks the field limits; and **413** for a file
+        over the size limit, which is the map size limit plus a third for the
+        base64 text and 8 MB for the walls and lights (75 MB at the default
+        50 MB).
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -9384,6 +9398,17 @@ paths:
                 message: This file needs a decision before it can be imported.
                 outOfBounds: { walls: 79, doors: 20, lights: 0 }
                 objectWalls: 0
+        '413':
+          description: >-
+            The file is over the size limit (the map size limit plus a third
+            for the base64 text and 8 MB for the walls and lights).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: File Too Large
+                message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -9397,8 +9422,13 @@ paths:
         other than letters, digits, spaces, `_` and `-` removed) holding the
         map's picture as base64, its size in squares, its walls and windows as
         `line_of_sight`, its doors as `portals` (a locked door is written as
-        closed), and its enabled lights, each with its dim radius as `range`.
-        Tokens, fog and the spirit layer are not included.
+        closed), its windows as open portals (a window does not block sight, so
+        it is not written as a wall), and every light, switched off ones
+        included, each with its dim radius as `range`, `intensity` 0 when it is
+        off, and two keys of CozyVTT's own, `bright_range` and `enabled`, which
+        other tools skip and a re-import reads back. Walls are joined into
+        polylines in time proportional to their number. Tokens, fog and the
+        spirit layer are not included.
 
 
         Answers 422 when the picture cannot be put in the file: the map's
@@ -9439,7 +9469,7 @@ paths:
                         description: The picture's width in pixels divided by the map's width in squares, rounded; the map's `gridSize` when the width cannot be read.
                   line_of_sight:
                     type: array
-                    description: Walls and windows in grid units, joined into polylines where their ends meet.
+                    description: Walls in grid units, joined into polylines where their ends meet.
                     items:
                       type: array
                       items:

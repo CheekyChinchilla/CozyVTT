@@ -625,7 +625,7 @@ The server never parses a document; the defence is in how it is served. `GET /ap
 ### Serving Images
 
 Maps, tokens and avatars are served with an explicit `Content-Type` from a small
-whitelist of image types (and a PDF, for maps), keyed on the file's extension,
+whitelist of image types (and a PDF, kept for maps stored as one before PDF maps were refused), keyed on the file's extension,
 with `X-Content-Type-Options: nosniff`. Anything whose extension is not on that
 list goes out as `application/octet-stream`, which a browser downloads rather
 than renders. This matters because the extension is not trusted on its own: the
