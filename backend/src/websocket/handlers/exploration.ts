@@ -34,7 +34,7 @@ const MAP_SELECT = {
  * so two tabs of one player send under seven; a dropped report's cells are
  * never remembered, since the page does not send them again.
  */
-const REVEALS_PER_SECOND = 40;
+export const REVEALS_PER_SECOND = 40;
 
 /** At most one write of a player's memory of a map in this long. */
 const REVEAL_WRITE_MS = 1000;
