@@ -26,6 +26,7 @@ const h = vi.hoisted(() => {
   const handlers = new Map<string, Set<(data: never) => void>>();
   const emitted: Array<[string, unknown]> = [];
   const setPlayerSpiritVisible = vi.fn();
+  const deleteToken = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -44,6 +45,7 @@ const h = vi.hoisted(() => {
   return {
     state,
     setPlayerSpiritVisible,
+    deleteToken,
     handlers,
     emitted,
     raw,
@@ -114,11 +116,15 @@ vi.mock('@/services/map.service', () => ({
 }));
 
 vi.mock('@/services/api', () => {
-  const client = new Proxy({}, { get: () => vi.fn().mockResolvedValue({}) });
+  const client = new Proxy({}, {
+    get: (_target, prop: string) => (prop === 'deleteToken' ? h.deleteToken : vi.fn().mockResolvedValue({})),
+  });
   return { api: client, default: client };
 });
 
 import MapCanvas from '../MapCanvas';
+import { useGameStore } from '@/stores/gameStore';
+import type { Token } from '@/types';
 
 const wall = (id: string, x: number, type: WallSegment['type'] = 'wall'): WallSegment => ({ id, x1: x, y1: 100, x2: x + 100, y2: 100, type });
 
@@ -161,6 +167,8 @@ beforeAll(() => {
 beforeEach(() => {
   h.emitted.length = 0;
   h.setPlayerSpiritVisible.mockClear();
+  h.deleteToken.mockReset().mockResolvedValue({});
+  useGameStore.getState().setTokens([]);
   h.handlers.clear();
   h.set({ userRole: 'DM', joinedEpoch: 1, currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
 });
@@ -464,5 +472,53 @@ describe('map settings broadcast', () => {
     render(<MapCanvas />);
     fire('map:settings:updated', { mapId: 'map-b', lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: true });
     expect(h.state.currentMap).toMatchObject({ id: 'map-a', lightingEnabled: false, fogEnabled: false });
+  });
+});
+
+describe("the token menu's Remove from Map", () => {
+  const goblin = {
+    id: 'tok-1', name: 'Goblin Scout', imageUrl: '', position: { x: 0, y: 19 }, size: { width: 1, height: 1 },
+    layer: 'material', visible: true, type: 'npc', conditions: [],
+  } as unknown as Token;
+
+  function openTokenMenu() {
+    act(() => { useGameStore.getState().setTokens([goblin]); });
+    // The top canvas takes the pointer; the two beneath it ignore it.
+    const input = document.querySelector('canvas[class*="cursor-"]');
+    if (!input) throw new Error('no input canvas');
+    // The top-left square, where the token stands (grid y counts up from the bottom).
+    fireEvent.contextMenu(input, { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByText('Remove from Map'));
+  }
+
+  it('asks first, naming the token, and Cancel keeps it', () => {
+    render(<MapCanvas />);
+    openTokenMenu();
+
+    expect(screen.getByText(/Remove "Goblin Scout" from this map\?/)).toBeInTheDocument();
+    expect(h.deleteToken).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(h.deleteToken).not.toHaveBeenCalled();
+    expect(useGameStore.getState().tokens['tok-1']).toBeDefined();
+  });
+
+  it('removes the token once confirmed', async () => {
+    render(<MapCanvas />);
+    openTokenMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove' })); });
+
+    expect(h.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-1');
+    expect(useGameStore.getState().tokens['tok-1']).toBeUndefined();
+  });
+
+  it('says so when the removal fails', async () => {
+    h.deleteToken.mockRejectedValue(new Error('Network down'));
+    render(<MapCanvas />);
+    openTokenMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove' })); });
+
+    expect(await screen.findByText(/Network down|Failed to remove the token/)).toBeInTheDocument();
+    expect(useGameStore.getState().tokens['tok-1']).toBeDefined();
   });
 });

@@ -91,6 +91,7 @@ import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
+import RemoveTokenDialog from '@/components/campaign/RemoveTokenDialog';
 import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
@@ -201,6 +202,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isMovingTokenLayer, setIsMovingTokenLayer] = useState(false);
   const [contextMenuMoveToMapOpen, setContextMenuMoveToMapOpen] = useState(false);
+  // The token whose Remove from Map is waiting for confirmation.
+  const [removingToken, setRemovingToken] = useState<Token | null>(null);
   const [isMoveToMapLoading, setIsMoveToMapLoading] = useState(false);
 
   // Character sheet viewer state
@@ -4391,23 +4394,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
               <div className="h-px bg-moss-green/20 my-1" />
 
-              {/* TODO(ui): this removes the token on one click, as the Token
-                  Roster, Token Manager and quick editor did before they asked
-                  first. Ask through RemoveTokenDialog here too, and report a
-                  failure with a toast instead of the console. */}
+              {/* Asks first, through the same dialog as the Token Roster. */}
               <button
                 className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-                onClick={async () => {
-                  if (!campaign?.id || !currentMap?.id) return;
-                  const token = contextMenu.token;
+                onClick={() => {
+                  setRemovingToken(contextMenu.token);
                   setContextMenu(null);
-                  try {
-                    await api.deleteToken(campaign.id, currentMap.id, token.id);
-                    useGameStore.getState().removeToken(token.id);
-                    socket?.emitMapChange(currentMap.id);
-                  } catch (err) {
-                    console.error('Failed to remove token:', err);
-                  }
                 }}
               >
                 Remove from Map
@@ -4417,6 +4409,23 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           })()}
         </div>
       )}
+
+      <RemoveTokenDialog
+        token={removingToken}
+        onCancel={() => setRemovingToken(null)}
+        onConfirm={async () => {
+          const token = removingToken;
+          setRemovingToken(null);
+          if (!token || !campaign?.id || !currentMap?.id) return;
+          try {
+            await api.deleteToken(campaign.id, currentMap.id, token.id);
+            useGameStore.getState().removeToken(token.id);
+            socket?.emitMapChange(currentMap.id);
+          } catch (err) {
+            showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
+          }
+        }}
+      />
 
       {/* Character Sheet Viewer (opened from token context menu) */}
       {viewingSheet && campaign && (() => {
