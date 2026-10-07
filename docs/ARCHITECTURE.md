@@ -63,8 +63,12 @@ src/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
-│   │                  (the other HTTP limiters are declared beside their routes)
-│   └── upload.ts      Multer configuration, magic byte validation
+│   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
+│   │                  and exporting campaign archives, one archive at a time
+│   │                  (the other HTTP limiters are declared beside their routes,
+│   │                  and the general /api limiter in server.ts)
+│   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
+│   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
 │   ├── auth.ts        Login, logout, register, password reset
 │   ├── users.ts       User CRUD (admin only)
@@ -579,7 +583,7 @@ directory (`backend/src/utils/backupDir.ts`).
 ### Upload Pipeline
 
 1. **Multer** receives the multipart upload and streams to a temp file
-2. **Magic byte validation** (`file-type` library) — verifies the actual file type matches the declared MIME type. Anything `file-type` can identify must match; only a file it cannot identify falls through to a per-format check, and that check is positive rather than by extension: a PDF or MP3 must start with its header bytes, and a `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. An executable renamed `.md` fails here.
+2. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
 3. **Size limit check** — configurable per asset type via environment variables
 4. **Sharp** generates a WebP thumbnail (for maps and tokens)
 5. File is moved to its final location; the `Asset` record is created in the database

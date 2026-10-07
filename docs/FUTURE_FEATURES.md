@@ -40,6 +40,9 @@ _Nothing at present._
 - `1.5.3` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
 - `1.5.3` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.3` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
+- `1.5.2` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
+- `1.5.2` **D&D 5e: the editor's Alignment and Background labels are not tied to their boxes,** so a screen reader announces each box by its placeholder alone (`DnD5eCharacterEditor.tsx`).
+- `1.5.2` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
 
@@ -62,6 +65,11 @@ _Nothing at present._
 - `1.5.3` **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
 - `1.5.3` **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
 - `1.5.3` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
+- `1.5.2` **Deleting a creature from the Creature Library's Favorites leaves its row there** until the library is reopened. The delete removes it from the main list only (`CreatureLibrary.tsx`).
+- `1.5.2` **The Creature Library and Token Templates forms say only "Failed to update creature" (or template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
+- `1.5.2` **The campaign import window is not announced as a dialog.** It has no `role="dialog"`, `aria-modal` or label, so a screen reader is not told it opened and focus is not held inside it; the shared `Modal` does all three (`CampaignImportDialog.tsx`).
+- `1.5.2` **A time-of-day period's sound file is not counted when an asset is checked before deleting.** The in-use check reads only the track playing now, so deleting a period's track while it is not playing gives no warning, and switching to that period later changes the vibe without audio (`services/assetUsage.ts`).
+- `1.5.2` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
 
 ### Play and connection
 
@@ -78,6 +86,7 @@ _Nothing at present._
 - `1.5.3` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - `1.5.2` **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
 - `1.5.3` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
+- `1.5.2` **A player's door toggle made while the DM is dragging walls is undone for everyone.** The drag's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the drag is lost (`MapCanvas.tsx`).
 
 ### Accounts
 
@@ -90,11 +99,14 @@ _Nothing at present._
 - `1.5.2` **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
 - `1.5.2` **Two setup-wizard requests racing each other both change the instance's settings.** In `routes/setup.ts` only the first becomes the administrator, but the second still applies its own wizard settings (registration open, instance name), completes setup and is signed in. Only the request that created the administrator should apply settings.
 - `1.5.2` **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
+- `1.5.2` **Signing in with an email that has no account answers measurably faster than a wrong password for a real account.** The reply is the same, but the timing tells the two apart; `services/auth.ts` should check a fixed dummy hash when no account is found, so both take as long.
 
 ### Server and deployment
 
 - `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
 - `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
+- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open, and the restore reads the archive's whole directory before its file-count check can run (`utils/archive.ts`).
+- `1.5.2` **A crafted backup can make the command-line restore very slow.** One pattern in `backend/scripts/restore.sh` backtracks on a long line (12 seconds on two 100 KB lines with mawk). Only someone with shell access to the server runs that script, on a backup they chose.
 
 ---
 
@@ -162,7 +174,7 @@ _Nothing at present._
   `postgresql16-client` is still packaged there (the `keepInStep` test fails if
   the client falls behind the server). Run the full gates and an upgrade
   rehearsal on the new image, and add a check that fails when the places above
-  disagree. **Do** in 1.5.1 or 1.6.
+  disagree. **Do** in 1.5.2.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
