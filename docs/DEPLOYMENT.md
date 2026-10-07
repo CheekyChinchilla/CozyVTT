@@ -307,7 +307,7 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. It tells visitors apart by their *IP address*, the address their device connects from, so it has to see each visitor's own address and not your tunnel's or proxy's.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong two-factor code, or a password reset link that no longer works) counts. Signing in correctly never does, even when everyone in a household signs in at the same moment. It tells visitors apart by their *IP address*, the address their device connects from, so it has to see each visitor's own address and not your tunnel's or proxy's.
 
 **With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
 

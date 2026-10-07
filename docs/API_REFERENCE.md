@@ -1468,7 +1468,7 @@ when it sees it.
 
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
-| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
@@ -1478,9 +1478,10 @@ when it sees it.
 | Token drag frames (WebSocket) | 150 events | 1 second | Every event |
 | Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |
 
-The **Counts** column matters. Where only failures count, signing in correctly
-never uses up the allowance — otherwise a household sharing one address could
-lock itself out by logging in normally. Where every request counts, the success
+The **Counts** column matters. Where only wrong answers count, signing in
+correctly never uses up the allowance, and neither does being refused: a
+household sharing one address could otherwise lock itself out by logging in
+normally. Correct sign-ins arriving together from one address all succeed. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 

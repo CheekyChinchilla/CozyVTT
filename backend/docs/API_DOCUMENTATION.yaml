@@ -58,9 +58,16 @@ info:
     allowance. Uploads and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
-      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **failed**
-      requests per 15 minutes. Successful requests are not counted, so getting your
-      password right never moves you towards a lockout.
+      `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
+      answers** per 15 minutes per address: a wrong password, a wrong MFA code, or
+      a reset link that does not exist, has been used or has expired. Nothing else
+      counts: not a correct answer, not a malformed or refused request, and not the
+      429 itself. The limit is checked before the credential is, so correct
+      sign-ins arriving together from one address all succeed; wrong ones sent
+      together are checked five at most (the rest wait for those to be checked,
+      then get 429 if all five were wrong). An unknown email counts and answers
+      exactly as a wrong password does. The 429 carries `Retry-After`, the seconds
+      until the oldest counted failure leaves the window
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -497,7 +504,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited (5 failed requests per 15 minutes, shared with the other credential endpoints; a 403 counts as failed).
+        Authenticate user and create a session on a fresh session id. Rate limited: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints. Only a 401 counts; a 400, a 403, a correct sign-in and a 429 do not.
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
@@ -729,8 +736,10 @@ paths:
         and using it voids the account's other unused tokens. Clears
         `mustChangePassword`, and ends every login session and live WebSocket
         connection of the account; the request itself does not sign anyone
-        in. Rate limited (5 failed requests per 15 minutes, shared with the
-        other credential endpoints).
+        in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        with the other credential endpoints, where a link that does not exist,
+        has been used or has expired is a wrong answer and a password too weak
+        to take is not.
       operationId: resetPassword
       security: []
       requestBody:
@@ -859,7 +868,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -1072,7 +1081,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -1148,7 +1157,7 @@ paths:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 failures/15min, shared with the other credential endpoints).
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
