@@ -225,11 +225,53 @@ describe('mergeFeatureEntries', () => {
   });
 
   it('never lets a later list overwrite a description already present', () => {
+    // A same-named entry with other text is a second entry, so it is kept
+    // beside the first rather than folded into it and lost.
     const merged = mergeFeatureEntries(
       readFeatureEntries([{ name: 'Second Wind', description: 'Mine.' }]),
       readFeatureEntries([{ name: 'Second Wind', description: 'Theirs.' }])
     );
-    expect(merged).toEqual([{ name: 'Second Wind', description: 'Mine.' }]);
+    expect(merged).toEqual([
+      { name: 'Second Wind', description: 'Mine.' },
+      { name: 'Second Wind', description: 'Theirs.' },
+    ]);
+  });
+
+  it('folds in a later copy that adds nothing', () => {
+    const merged = mergeFeatureEntries(
+      readFeatureEntries([{ name: 'Second Wind', description: 'Regain 1d10.' }]),
+      readFeatureEntries([
+        { name: 'second wind', description: 'Regain 1d10.' },
+        { name: 'Second Wind', description: '' },
+      ])
+    );
+    expect(merged).toEqual([{ name: 'Second Wind', description: 'Regain 1d10.' }]);
+  });
+
+  it('never merges two entries of the first list, whatever their names', () => {
+    // Repeated names are normal: Ability Score Improvement at levels 4 and 8,
+    // a feat taken twice, a Fighting Style from two classes.
+    const player = readFeatureEntries([
+      { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+      { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+      { name: 'Ability Score Improvement', description: '' },
+      { name: 'Ability Score Improvement', description: '' },
+    ]);
+    expect(mergeFeatureEntries(player)).toEqual(player);
+  });
+
+  it('fills each of several same-named blank entries once', () => {
+    const merged = mergeFeatureEntries(
+      readFeatureEntries(['Fighting Style', 'Fighting Style']),
+      readFeatureEntries([
+        { name: 'Fighting Style', description: 'Defense.' },
+        { name: 'Fighting Style', description: 'Archery.' },
+      ])
+    );
+    expect(merged).toEqual([
+      { name: 'Fighting Style', description: 'Defense.' },
+      { name: 'Fighting Style', description: 'Archery.' },
+    ]);
   });
 });
 
@@ -268,6 +310,23 @@ describe('collectSheetFeatures', () => {
       'NakuDama-Frog Leap',
       'Second Wind',
     ]);
+  });
+
+  it('keeps two features with the same name and different descriptions', () => {
+    const sheet = {
+      featuresAndTraits: [
+        { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+        { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+      ],
+    };
+    expect(collectSheetFeatures(sheet)).toEqual([
+      { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+      { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+    ]);
+  });
+
+  it('keeps a name typed twice', () => {
+    expect(collectSheetFeatures({ featuresAndTraits: ['Feat: Tough', 'Feat: Tough'] })).toHaveLength(2);
   });
 
   it('is empty for a sheet with neither field', () => {

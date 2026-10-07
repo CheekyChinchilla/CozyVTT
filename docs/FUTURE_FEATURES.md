@@ -24,13 +24,11 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Fix first: these lose data
 
-- `1.5.1` **Pathfinder 2e: a sheet made from a built-in template loses its attribute modifiers when saved from the editor.** The templates in `pathfinder2e-templates.ts` store skill and lore attributes as `str`/`dex`/`int` and spellcasting as `Arcane`/`Prepared`/`int`, while `Pathfinder2eCharacterEditor.tsx` looks them up by full lowercase name, so skill totals are recomputed without the modifier and saved that way (the Level 1 Fighter's Athletics +6 becomes +3), spell totals ignore the key attribute, and spells added start unprepared.
 - `1.5.1` **Importing a campaign archive drops a whole map when one token has a name or notes over the limit.** `MapDataSchema` in `validators/campaignImport.ts` refuses the map with its walls and tokens, and the import result still reports the archive's map count; 1.4.0 stored token notes of any length, so an archive exported from 1.4.0 can lose maps.
 
 ### Character sheets
 
 - `1.5.3` **D&D 5e: naming the spellcasting ability after raising that score leaves the spell save DC and attack unchanged.** The backfill in `DnD5eCharacterEditor.tsx` reads the DC the editor itself wrote as a hand-typed value and records minus the ability modifier as the other bonus.
-- `1.5.1` **List boxes lose what is typed at the end.** The Pathfinder 2e comma-separated boxes (senses, speeds, resistances, immunities, weaknesses, conditions, strike traits, languages) and the Call of Cthulhu possessions and spells boxes re-parse on every keystroke, so a typed comma, new line, trailing space or first " - " vanishes; pasting works.
 - `1.5.3` **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.3` **The Call of Cthulhu read-only view's palette button changes nothing that lasts.** The colour picked there is never saved (`CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.3` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
@@ -39,7 +37,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `1.5.3` **D&D 5e: rows added with "+ Add" block saving until they are named.** Attack, item and spell rows start with an empty name and hit-dice rows with an empty class, which `dnd5e.schema.ts` refuses, and the in-campaign editor (`CharacterSheetEditorModal.tsx`) does not say which field.
 - `1.5.3` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.2` **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
-- `1.5.1` **D&D 5e: an old sheet's less common languages land under Weapons.** For sheets saved before the four proficiency boxes were stored, `utils/proficiencies.ts` sorts entries by a fixed list of language names, so "Druidic" or "Thieves' Cant" goes to Weapons even when the sheet's own languages list names it.
 - `1.5.3` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
 - `1.5.3` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.3` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".

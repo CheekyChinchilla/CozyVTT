@@ -28,6 +28,7 @@ import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
+import { cocDodgeBase } from './dodge';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
@@ -404,8 +405,9 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             </div>
           )}
 
-          {/* Dodge */}
-          {data.derivedStats?.dodge && (
+          {/* Dodge: the skill's value, which is what is rolled. Half DEX is
+              only its base, and the derived copy can hold an older number. */}
+          {(data.skills?.dodge || data.derivedStats?.dodge) && (
             <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
@@ -415,10 +417,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               </div>
               <div className="text-center">
                 <span className="text-3xl font-bold text-blue-700">
-                  {data.derivedStats.dodge.value}%
+                  {data.skills?.dodge?.currentValue ?? data.derivedStats?.dodge?.value}%
                 </span>
               </div>
-              <div className="text-xs text-blue-600 text-center mt-1">DEX / 2</div>
+              <div className="text-xs text-blue-600 text-center mt-1">
+                Base {cocDodgeBase(data.characteristics?.DEX?.regular || 0)} (half DEX)
+              </div>
             </div>
           )}
         </div>

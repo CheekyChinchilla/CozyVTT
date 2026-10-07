@@ -669,3 +669,102 @@ export function readCustomSkills(data: unknown): Dnd5eCustomSkill[] {
 
   return skills;
 }
+
+// ---------------------------------------------------------------------------
+// The eighteen skills and six saving throws of a character sheet
+// ---------------------------------------------------------------------------
+
+/**
+ * The ability a sheet's skill uses, as a `stats` key ("dexterity"), or null for
+ * a key that is not one of the eighteen.
+ */
+export function dnd5eSkillAbility(skillKey: string): Dnd5eAbilityName | null {
+  const skill = findSkill(skillKey);
+  if (!skill) return null;
+  return DND5E_ABILITY_NAMES[ABILITY_KEYS.indexOf(skill.ability)];
+}
+
+/** One entry of a sheet's `skills` or `savingThrows`, or undefined. */
+function sheetEntry(data: unknown, group: 'skills' | 'savingThrows', key: string): Record<string, unknown> | undefined {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const entries = sheet?.[group] as Record<string, unknown> | undefined;
+  const entry = entries?.[key];
+  return entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : undefined;
+}
+
+/** A whole number off the sheet, or null when there is none. */
+function wholeNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/**
+ * A skill's bonus from the ability modifier and proficiency alone: the
+ * proficiency bonus once when proficient and twice with expertise (Basic
+ * Rules, the rogue's Expertise: "your proficiency bonus is doubled").
+ */
+export function dnd5eDerivedSkillBonus(data: unknown, skillKey: string): number {
+  const ability = dnd5eSkillAbility(skillKey);
+  const abilityMod = ability ? sheetAbilityModifier(data, ability) : 0;
+  const entry = sheetEntry(data, 'skills', skillKey);
+  const level = entry?.expertise === true ? 'expertise' : entry?.proficient === true ? 'proficient' : 'none';
+  return derivedBonus(abilityMod, sheetProficiencyBonus(data), level);
+}
+
+/**
+ * A saving throw's bonus from the ability modifier and proficiency alone.
+ * Proficiency is never doubled for a save (Basic Rules: "you don't multiply
+ * your proficiency bonus for attack rolls or saving throws").
+ */
+export function dnd5eDerivedSaveBonus(data: unknown, ability: string): number {
+  const entry = sheetEntry(data, 'savingThrows', ability);
+  const proficient = entry?.proficient === true;
+  return derivedBonus(sheetAbilityModifier(data, ability), sheetProficiencyBonus(data), proficient ? 'proficient' : 'none');
+}
+
+/**
+ * A skill's total: the derived bonus plus its other bonus.
+ *
+ * A sheet saved before the other bonus existed has only a stored total, and
+ * that total is what it has always rolled, so it is used as it is until the
+ * sheet is next saved from the editor, which records the difference as the
+ * other bonus. The same arrangement as initiative.
+ */
+export function dnd5eSkillBonus(data: unknown, skillKey: string): number {
+  return otherOrStoredTotal(sheetEntry(data, 'skills', skillKey), dnd5eDerivedSkillBonus(data, skillKey));
+}
+
+/** A saving throw's total, read the same way as a skill's. */
+export function dnd5eSaveBonus(data: unknown, ability: string): number {
+  return otherOrStoredTotal(sheetEntry(data, 'savingThrows', ability), dnd5eDerivedSaveBonus(data, ability));
+}
+
+function otherOrStoredTotal(entry: Record<string, unknown> | undefined, derived: number): number {
+  const other = wholeNumber(entry?.otherBonus);
+  if (other !== null) return derived + other;
+  return wholeNumber(entry?.bonus) ?? derived;
+}
+
+/**
+ * The other bonus implied by a sheet saved before skills and saves had one, so
+ * its totals do not change under it: the stored total minus the derived one.
+ *
+ * Null when there is nothing to record: the entry already has an other bonus,
+ * it stores no whole-number total, or the total is what the maths gives. Called
+ * once, as the editor opens, on the sheet as it was stored; reading back a total
+ * the editor itself worked out would turn a change of score into a bonus.
+ */
+export function dnd5eBackfilledSkillOtherBonus(data: unknown, skillKey: string): number | null {
+  return backfilledOther(sheetEntry(data, 'skills', skillKey), dnd5eDerivedSkillBonus(data, skillKey));
+}
+
+/** The same for a saving throw. */
+export function dnd5eBackfilledSaveOtherBonus(data: unknown, ability: string): number | null {
+  return backfilledOther(sheetEntry(data, 'savingThrows', ability), dnd5eDerivedSaveBonus(data, ability));
+}
+
+function backfilledOther(entry: Record<string, unknown> | undefined, derived: number): number | null {
+  if (!entry || (entry.otherBonus !== undefined && entry.otherBonus !== null)) return null;
+  const stored = wholeNumber(entry.bonus);
+  if (stored === null || stored === derived) return null;
+  return stored - derived;
+}

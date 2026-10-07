@@ -109,36 +109,48 @@ export function readFeatureEntriesForEditing(value: unknown): FeatureEntry[] {
 }
 
 /**
- * Merge feature lists, keeping the first occurrence of each name.
+ * Merge feature lists without losing anything any of them says.
  *
- * Names are matched case-insensitively after trimming, so a player who typed
- * "second wind" does not end up with it twice once the template's copy is
- * folded in. Where the same feature appears with and without a description, the
- * description is kept — that is the whole point of the merge, and it never
- * overwrites a name the player chose.
+ * The first list is kept exactly as it is, in order, repeated names included.
+ * Names repeat on real sheets: Ability Score Improvement at levels 4, 8 and 12,
+ * a feat taken twice, a Fighting Style from two classes. Folding those together
+ * by name dropped every row after the first, with its description.
+ *
+ * An entry from a later list is folded into one already present only when that
+ * loses nothing: the same name, matched case-insensitively after trimming, and
+ * either the same description, no description of its own, or a description
+ * that fills one left empty. Otherwise it is added after them. So a player who
+ * typed "second wind" does not end up with it twice once the template's copy
+ * is folded in, and the template's description is taken; a template entry with
+ * other text under the same name is kept beside the player's. A description is
+ * never overwritten and a name the player chose is never changed.
  *
  * Order follows the arguments, so callers put what the player already sees
  * first and everything being restored after it.
  */
 export function mergeFeatureEntries(...lists: FeatureEntry[][]): FeatureEntry[] {
-  const merged: FeatureEntry[] = [];
-  const indexByName = new Map<string, number>();
+  const [first = [], ...later] = lists;
+  const merged: FeatureEntry[] = [...first];
+  const sameName = (a: FeatureEntry, b: FeatureEntry) =>
+    a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
+  const sameText = (a: FeatureEntry, b: FeatureEntry) =>
+    a.description.trim() === b.description.trim();
 
-  for (const list of lists) {
+  for (const list of later) {
     for (const entry of list) {
-      const key = entry.name.trim().toLowerCase();
-      const existing = indexByName.get(key);
-
-      if (existing === undefined) {
-        indexByName.set(key, merged.length);
-        merged.push(entry);
+      // Already here in full, or adds no text to an entry of that name.
+      if (merged.some((kept) => sameName(kept, entry) && (sameText(kept, entry) || !entry.description.trim()))) {
         continue;
       }
 
-      // Same feature seen again: take a description if we did not have one.
-      if (!merged[existing].description && entry.description) {
-        merged[existing] = { ...merged[existing], description: entry.description };
+      // Fills the empty description of an entry of that name.
+      const blank = merged.findIndex((kept) => sameName(kept, entry) && !kept.description.trim());
+      if (blank !== -1) {
+        merged[blank] = { ...merged[blank], description: entry.description };
+        continue;
       }
+
+      merged.push(entry);
     }
   }
 

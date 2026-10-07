@@ -1,15 +1,22 @@
 /**
  * Character Migration Script
- * Analyzes existing characters and infers game systems based on data structure
+ *
+ * For characters stored before game systems existed: guesses a game system
+ * from the shape of a sheet that has none. Not for a current instance, where a
+ * character with no game system is a Flexible one on purpose.
  *
  * Usage:
- *   npm run migrate:characters -- --dry-run  (preview changes)
- *   npm run migrate:characters -- --execute  (apply changes)
+ *   npm run migrate:characters                (preview, the default)
+ *   npm run migrate:characters -- --execute   (apply)
+ *
+ * Only a high-confidence guess is ever applied, and only to a character that is
+ * in no campaign or in a campaign of that same system: one in a Flexible
+ * campaign is left alone, since a typed character cannot stay in it. Medium and
+ * low guesses are listed and never applied. Every change is printed with the
+ * character's id, so it can be reversed. Exits 1 if the run fails.
  */
 
-import { PrismaClient, GameSystem } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaClient, GameSystem, type Prisma } from '@prisma/client';
 
 interface MigrationReport {
   totalCharacters: number;
@@ -25,6 +32,10 @@ interface MigrationReport {
     inferredSystem: GameSystem | null;
     confidence: 'high' | 'medium' | 'low';
     reason: string;
+    /** Whether the guess is applied (or would be, in a preview). */
+    applied: boolean;
+    /** Why a guess is not applied. */
+    heldBack?: string;
   }>;
 }
 
@@ -127,9 +138,28 @@ function inferGameSystem(rawData: unknown): {
 }
 
 /**
- * Main migration function
+ * Why a guess must not be applied to this character, or null when it may be.
  */
-async function migrateCharacters(dryRun: boolean = true): Promise<MigrationReport> {
+function holdBack(
+  confidence: 'high' | 'medium' | 'low',
+  inferred: GameSystem,
+  campaign: { gameSystem: GameSystem | null } | null
+): string | null {
+  if (confidence !== 'high') return `${confidence}-confidence guess, never applied`;
+  if (campaign && campaign.gameSystem === null) return 'in a Flexible campaign, which a typed character cannot stay in';
+  if (campaign && campaign.gameSystem !== inferred) return `in a ${campaign.gameSystem} campaign`;
+  return null;
+}
+
+/**
+ * Main migration function. Previews by default; writes only when `dryRun` is
+ * false. `where` narrows the characters looked at.
+ */
+async function migrateCharacters(
+  prisma: PrismaClient,
+  options: { dryRun: boolean; where?: Prisma.CharacterWhereInput }
+): Promise<MigrationReport> {
+  const { dryRun } = options;
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Character Migration Script`);
   console.log(`Mode: ${dryRun ? 'DRY RUN (no changes will be made)' : 'EXECUTE (changes will be applied)'}`);
@@ -144,71 +174,58 @@ async function migrateCharacters(dryRun: boolean = true): Promise<MigrationRepor
     changes: [],
   };
 
-  try {
-    // Fetch all characters
-    const characters = await prisma.character.findMany({
-      select: {
-        id: true,
-        name: true,
-        gameSystem: true,
-        data: true,
-      },
-    });
+  const characters = await prisma.character.findMany({
+    where: options.where,
+    select: {
+      id: true,
+      name: true,
+      gameSystem: true,
+      data: true,
+      campaign: { select: { gameSystem: true } },
+    },
+  });
 
-    report.totalCharacters = characters.length;
-    console.log(`Found ${characters.length} characters\n`);
+  report.totalCharacters = characters.length;
+  console.log(`Found ${characters.length} characters\n`);
 
-    // Analyze each character
-    for (const character of characters) {
-      report.charactersAnalyzed++;
+  for (const character of characters) {
+    report.charactersAnalyzed++;
 
-      // Skip if already has a game system assigned
-      if (character.gameSystem) {
-        report.alreadyAssigned++;
-        continue;
-      }
-
-      // Infer game system
-      const inference = inferGameSystem(character.data);
-
-      if (inference.system) {
-        // Track inferred system
-        if (!report.systemsInferred[inference.system]) {
-          report.systemsInferred[inference.system] = 0;
-        }
-        report.systemsInferred[inference.system]!++;
-
-        // Add to changes list
-        report.changes.push({
-          characterId: character.id,
-          characterName: character.name,
-          inferredSystem: inference.system,
-          confidence: inference.confidence,
-          reason: inference.reason,
-        });
-
-        // Apply change if not dry run
-        if (!dryRun) {
-          await prisma.character.update({
-            where: { id: character.id },
-            data: { gameSystem: inference.system },
-          });
-        }
-      } else {
-        report.unableToInfer++;
-      }
+    // Skip if already has a game system assigned
+    if (character.gameSystem) {
+      report.alreadyAssigned++;
+      continue;
     }
 
-    // Print report
-    printReport(report, dryRun);
+    const inference = inferGameSystem(character.data);
+    if (!inference.system) {
+      report.unableToInfer++;
+      continue;
+    }
 
-    return report;
-  } catch (error) {
-    console.error('Migration failed:', error);
-    throw error;
-  } finally {
-    await prisma.$disconnect();
+    report.systemsInferred[inference.system] = (report.systemsInferred[inference.system] ?? 0) + 1;
+    const heldBack = holdBack(inference.confidence, inference.system, character.campaign);
+    report.changes.push({
+      characterId: character.id,
+      characterName: character.name,
+      inferredSystem: inference.system,
+      confidence: inference.confidence,
+      reason: inference.reason,
+      applied: heldBack === null,
+      ...(heldBack ? { heldBack } : {}),
+    });
+
+    if (!dryRun && heldBack === null) {
+      // Only while it still has no game system, in case it was given one since.
+      await prisma.character.updateMany({
+        where: { id: character.id, gameSystem: null },
+        data: { gameSystem: inference.system },
+      });
+    }
   }
+
+  printReport(report, dryRun);
+  return report;
 }
 
 /**
@@ -223,7 +240,9 @@ function printReport(report: MigrationReport, dryRun: boolean) {
   console.log(`  Total characters: ${report.totalCharacters}`);
   console.log(`  Already assigned: ${report.alreadyAssigned}`);
   console.log(`  Unable to infer: ${report.unableToInfer}`);
-  console.log(`  Changes ${dryRun ? 'proposed' : 'applied'}: ${report.changes.length}\n`);
+  const appliedCount = report.changes.filter((c) => c.applied).length;
+  console.log(`  Changes ${dryRun ? 'proposed' : 'applied'}: ${appliedCount}`);
+  console.log(`  Guesses not applied: ${report.changes.length - appliedCount}\n`);
 
   if (Object.keys(report.systemsInferred).length > 0) {
     console.log('Systems inferred:');
@@ -234,36 +253,22 @@ function printReport(report: MigrationReport, dryRun: boolean) {
   }
 
   if (report.changes.length > 0) {
-    console.log(`Detailed changes ${dryRun ? '(would be applied)' : '(applied)'}:\n`);
+    const applied = report.changes.filter((c) => c.applied);
+    const held = report.changes.filter((c) => !c.applied);
 
-    // Group by confidence level
-    const highConfidence = report.changes.filter(c => c.confidence === 'high');
-    const mediumConfidence = report.changes.filter(c => c.confidence === 'medium');
-    const lowConfidence = report.changes.filter(c => c.confidence === 'low');
-
-    if (highConfidence.length > 0) {
-      console.log('  HIGH CONFIDENCE:');
-      highConfidence.forEach(change => {
-        console.log(`    ✓ "${change.characterName}" → ${change.inferredSystem}`);
+    if (applied.length > 0) {
+      console.log(`${dryRun ? 'Would be applied' : 'Applied'} (character id, name, system):\n`);
+      applied.forEach((change) => {
+        console.log(`  ${change.characterId}  "${change.characterName}" → ${change.inferredSystem}`);
         console.log(`      Reason: ${change.reason}`);
       });
       console.log('');
     }
 
-    if (mediumConfidence.length > 0) {
-      console.log('  MEDIUM CONFIDENCE:');
-      mediumConfidence.forEach(change => {
-        console.log(`    ~ "${change.characterName}" → ${change.inferredSystem}`);
-        console.log(`      Reason: ${change.reason}`);
-      });
-      console.log('');
-    }
-
-    if (lowConfidence.length > 0) {
-      console.log('  LOW CONFIDENCE:');
-      lowConfidence.forEach(change => {
-        console.log(`    ? "${change.characterName}" → ${change.inferredSystem}`);
-        console.log(`      Reason: ${change.reason}`);
+    if (held.length > 0) {
+      console.log('Not applied (character id, name, guess):\n');
+      held.forEach((change) => {
+        console.log(`  ${change.characterId}  "${change.characterName}" → ${change.inferredSystem}: ${change.heldBack}`);
       });
       console.log('');
     }
@@ -284,13 +289,16 @@ function printReport(report: MigrationReport, dryRun: boolean) {
 /**
  * CLI entry point
  */
-async function main() {
+async function main(prisma: PrismaClient) {
   const args = process.argv.slice(2);
   const dryRun = !args.includes('--execute');
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 Character Migration Script
+
+For characters stored before game systems existed. On a current instance a
+character with no game system is a Flexible one on purpose, so preview first.
 
 Usage:
   npm run migrate:characters              # Dry run (preview)
@@ -299,29 +307,36 @@ Usage:
   npm run migrate:characters -- --help    # Show help
 
 Description:
-  Analyzes existing characters and infers game systems based on data structure.
-  Uses heuristics to detect D&D 5e, Pathfinder 2e, Call of Cthulhu 7e, Shadowrun 6e.
+  Guesses a game system from the structure of a sheet that has none.
+  Only a high-confidence guess is applied, and never to a character in a
+  Flexible campaign or in a campaign of another system. Every change is listed
+  with the character's id.
 
 Detection Heuristics:
   - D&D 5e: stats.strength.score + proficiencyBonus
   - Pathfinder 2e: attributes.strength.score + proficiencyRank fields
   - Call of Cthulhu 7e: characteristics.STR.regular/half/fifth
-  - Shadowrun 6e: attributes.physical/mental structures
 
 Confidence Levels:
-  HIGH:   Strong signature match (recommended)
-  MEDIUM: Partial match (review recommended)
-  LOW:    Weak match (manual review required)
+  HIGH:   Strong signature match, applied with --execute
+  MEDIUM: Partial match, listed only
+  LOW:    Weak match, listed only
     `);
-    process.exit(0);
+    return;
   }
 
-  await migrateCharacters(dryRun);
+  await migrateCharacters(prisma, { dryRun });
 }
 
 // Run if called directly
 if (require.main === module) {
-  main().catch(console.error);
+  const prisma = new PrismaClient();
+  main(prisma)
+    .catch((error) => {
+      console.error('Migration failed:', error);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
 }
 
 export { migrateCharacters, inferGameSystem };

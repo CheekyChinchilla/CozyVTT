@@ -49,6 +49,8 @@ import {
   exhaustionLevel,
   exhaustionEffects,
   dnd5eCustomSkillBonus,
+  dnd5eBackfilledSkillOtherBonus,
+  dnd5eBackfilledSaveOtherBonus,
   DND5E_ABILITY_NAMES,
 } from '@/utils/rules/dnd5e';
 import {
@@ -179,6 +181,24 @@ function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
 }
 
 /**
+ * Skills or saving throws with the other bonus a sheet saved before it existed
+ * implies, so their totals do not change when the editor works them out.
+ *
+ * Run once, on the sheet as it was stored. Doing it in an effect would read a
+ * total the editor had just worked out from a changed score as one typed by
+ * hand, and record the change as a bonus.
+ */
+function withRecordedOtherBonuses<T extends object>(entries: T, backfill: (key: string) => number | null): T {
+  const next = { ...entries } as Record<string, unknown>;
+  for (const key of Object.keys(next)) {
+    const entry = next[key];
+    const other = backfill(key);
+    if (other !== null && entry && typeof entry === 'object') next[key] = { ...entry, otherBonus: other };
+  }
+  return next as T;
+}
+
+/**
  * All nine spell slot levels, from whatever the sheet stored.
  *
  * The schema requires every level once `slots` is present, so a sheet stored
@@ -246,8 +266,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // where a number is expected. Pre-existing; the casts keep the behaviour
       // exactly as it was rather than changing what a malformed sheet does.
       stats: (own.stats || {}) as DnD5eStats,
-      savingThrows: (own.savingThrows || {}) as DnD5eSavingThrows,
-      skills: (own.skills || {}) as DnD5eSkills,
+      // A stored total that differs from what the scores give keeps the
+      // difference as its other bonus, so the total survives the effects below.
+      savingThrows: withRecordedOtherBonuses(
+        (own.savingThrows || {}) as DnD5eSavingThrows,
+        (ability) => dnd5eBackfilledSaveOtherBonus(own, ability)
+      ),
+      skills: withRecordedOtherBonuses(
+        (own.skills || {}) as DnD5eSkills,
+        (skill) => dnd5eBackfilledSkillOtherBonus(own, skill)
+      ),
       hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
       deathSaves: own.deathSaves || { successes: 0, failures: 0 },
       // Same TODO(typing) as the containers above: this default omits `class`,
@@ -425,7 +453,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       (Object.keys(updatedSavingThrows) as (keyof DnD5eSavingThrows)[]).forEach(ability => {
         const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSavingThrows[ability].proficient;
-        const newBonus = abilityMod + (proficient ? prev.proficiencyBonus : 0);
+        const other = updatedSavingThrows[ability].otherBonus ?? 0;
+        const newBonus = abilityMod + (proficient ? prev.proficiencyBonus : 0) + other;
 
         if (updatedSavingThrows[ability].bonus !== newBonus) {
           updatedSavingThrows[ability] = { ...updatedSavingThrows[ability], bonus: newBonus };
@@ -449,6 +478,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.savingThrows?.intelligence?.proficient,
     formData.savingThrows?.wisdom?.proficient,
     formData.savingThrows?.charisma?.proficient,
+    formData.savingThrows?.strength?.otherBonus,
+    formData.savingThrows?.dexterity?.otherBonus,
+    formData.savingThrows?.constitution?.otherBonus,
+    formData.savingThrows?.intelligence?.otherBonus,
+    formData.savingThrows?.wisdom?.otherBonus,
+    formData.savingThrows?.charisma?.otherBonus,
   ]);
 
   // Skill-to-ability mapping
@@ -505,7 +540,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         const proficient = updatedSkills[skill].proficient;
         const expertise = updatedSkills[skill].expertise;
 
-        let newBonus = abilityMod;
+        let newBonus = abilityMod + (updatedSkills[skill].otherBonus ?? 0);
         if (expertise) {
           newBonus += prev.proficiencyBonus * 2; // Expertise = double proficiency
         } else if (proficient) {
@@ -558,10 +593,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.intelligence?.modifier,
     formData.stats?.wisdom?.modifier,
     formData.stats?.charisma?.modifier,
-    // Explicitly depend on each skill's proficient and expertise flags
+    // Explicitly depend on each skill's proficient and expertise flags, and
+    // its other bonus
     ...(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).flatMap(skill => [
       formData.skills?.[skill]?.proficient,
       formData.skills?.[skill]?.expertise,
+      formData.skills?.[skill]?.otherBonus,
     ]),
   ]);
 
@@ -1303,7 +1340,11 @@ min={1}
 
       {/* Saving Throws */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Saving Throws</h3>
+        <p className="text-xs text-stone-500 mb-3">
+          Worked out from your ability scores and proficiency. Use the box beside each one for
+          anything else that adds to it, such as Aura of Protection or a Ring of Protection.
+        </p>
         <div className="grid grid-cols-2 gap-2">
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
@@ -1323,9 +1364,19 @@ min={1}
                     {ability}
                   </label>
                 </div>
-                <span className={`text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
-                  {formatModifier(saveData.bonus)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    value={saveData.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`savingThrows.${ability}.otherBonus`, v)}
+                    aria-label={`Other bonus to ${ability.charAt(0).toUpperCase() + ability.slice(1)} saves`}
+                    title="Other bonus"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                  <span className={`w-8 text-right text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
+                    {formatModifier(saveData.bonus)}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -1334,7 +1385,11 @@ min={1}
 
       {/* Skills */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Skills</h3>
+        <p className="text-xs text-stone-500 mb-3">
+          Worked out from your ability scores, proficiency and expertise. Use the box beside each
+          one for anything else that adds to it, such as Jack of All Trades or a magic item.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
           {(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).map((skill) => {
             const skillData = formData.skills?.[skill] || { proficient: false, expertise: false, bonus: 0 };
@@ -1380,17 +1435,27 @@ min={1}
                     <span className="text-xs text-stone-500 ml-1">({abilityAbbr})</span>
                   </label>
                 </div>
-                <span
-                  className={`text-sm font-semibold ${
-                    skillData.expertise
-                      ? 'text-purple-700'
-                      : skillData.proficient
-                      ? 'text-red-700'
-                      : 'text-stone-600'
-                  }`}
-                >
-                  {formatModifier(skillData.bonus)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    value={skillData.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`skills.${skill}.otherBonus`, v)}
+                    aria-label={`Other bonus to ${skillLabel}`}
+                    title="Other bonus"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                  <span
+                    className={`w-8 text-right text-sm font-semibold ${
+                      skillData.expertise
+                        ? 'text-purple-700'
+                        : skillData.proficient
+                        ? 'text-red-700'
+                        : 'text-stone-600'
+                    }`}
+                  >
+                    {formatModifier(skillData.bonus)}
+                  </span>
+                </div>
               </div>
             );
           })}

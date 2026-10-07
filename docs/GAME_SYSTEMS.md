@@ -114,13 +114,42 @@ question, and getting it wrong invents numbers the designers never intended.
   dice-pool systems have neither ability modifiers nor a proficiency bonus, so
   there is nothing to derive and nothing sensible to offer from this data.
 
+  **A derived base is not a derived value.** Call of Cthulhu's Dodge is listed
+  as "Dodge (half DEX)": half DEX, rounded down, is its *base*, and occupation
+  points, personal-interest points and improvement checks raise it like any
+  other skill. The editor therefore derives only `skills.dodge.baseValue`. The
+  value, `skills.dodge.currentValue`, is the player's, editable with the base
+  as its floor, and when DEX changes in the editor the points above the old
+  base stay above the new one. `derivedStats.dodge.value` is a copy kept for
+  older readers and follows the skill on save; the sheet shows and rolls the
+  skill. The helpers are in
+  `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
+
 **Where a number is derived, give it a manual bonus alongside.** The 5e sheet
 derives initiative, passive Perception, spell save DC and spell attack, and each
 carries an "other bonus" box. Deriving without one is a trap: a feat or an item
 adjusts the total without changing either input, and the player is then left with
 no way to record a character they legitimately have. Spell save DC and spell
-attack get **separate** boxes rather than sharing one, because items exist that
-raise the attack roll and not the DC.
+attack get **separate** boxes, because items exist that raise the attack roll
+and not the DC.
+
+The eighteen skills and six saving throws follow the same rule. Each entry
+stores its total as `bonus` and an optional `otherBonus` for what the maths
+cannot know: Jack of All Trades, Aura of Protection, a Ring of Protection. The
+editor keeps `bonus` equal to ability modifier, plus proficiency (doubled for a
+skill with expertise, never for a save), plus `otherBonus`. The view and the
+roll picker work the total out the same way, through `dnd5eSkillBonus` and
+`dnd5eSaveBonus` in `rules/dnd5e.ts`.
+
+**Adding a derived field to existing sheets: read the old total back once.** A
+sheet saved before `otherBonus` existed holds only a total, and that total is
+what it has always rolled. Deriving over it would silently take away whatever it
+included. So the editor, once as it opens and on the sheet as stored, records
+`stored − derived` as the other bonus wherever the two differ
+(`dnd5eBackfilledSkillOtherBonus`, `dnd5eBackfilledSaveOtherBonus`), and until
+then the view and the dice use the stored total. Doing it once matters: reading
+back a total the editor had itself just worked out from a changed score would
+turn the change into a bonus. The initiative bonus was converted the same way.
 
 **Do not let the templates seed a derived number.** They shipped spell save DC 8
 and attack +0 — the base with nothing added, which no character can legitimately
@@ -456,6 +485,17 @@ function createBlankMySystemCharacter(): MySystemCharacterData {
 > `templateSchemaParity.test.ts` compares each template's top-level keys against
 > its schema and fails on any extra. Run the suite after editing a template.
 
+> **Spell a value the way the editor offers it.** A schema that takes any
+> string accepts "str" as readily as "strength", but the editor compares with
+> the values its own dropdowns hold. The Pathfinder 2e templates abbreviated
+> every attribute, so the editor found no modifier for them and the Level 1
+> Fighter's Athletics was saved as +3 where the sheet said +6. The same test
+> file now checks that each Pathfinder 2e template names attributes,
+> traditions and casting types as the editor does, and that its stored skill
+> totals are the ones its own components give. The editor also accepts the
+> short forms on load, through `pf2eAttributeName` in `rules/pathfinder2e.ts`,
+> so sheets made before the templates were corrected recover.
+
 The template layer powers the "start from a preset" picker and the template API. Create `backend/src/utils/character-templates/mySystem-templates.ts` exporting **named `CharacterTemplate`s** plus two getter functions:
 
 ```typescript
@@ -668,6 +708,7 @@ one shared function rather than one per component.
 **Styling.** Use the shared UI primitives and theme tokens so the sheet follows every theme:
 
 - Inputs: the `input-cozy` class (or the `<Input>` / `<Field>` components in `frontend/src/components/ui/`).
+- Numbers: `<NumberField>`, so a box can be cleared and retyped. Lists typed as text ("Common, Elven", or one per line): `<ListField>`, which keeps the text as typed while the box is in use. Splitting and joining the text on every keystroke throws away the comma, space or new line typed after a word.
 - Buttons: the `<Button>` component (`frontend/src/components/ui/Button.tsx`).
 - Text/surfaces: theme tokens — `text-ink`, `text-ink-muted`, `bg-surface`, `bg-paper`, `border-ink/10`, panels via `glass-panel`. **Do not** hardcode `gray-`/`slate-`/`stone-` colors or a fixed hex — those break the non-default themes. (The `sepia-*` scale is the one intentional exception, used only by the Call of Cthulhu sheet for its 1920s look.)
 

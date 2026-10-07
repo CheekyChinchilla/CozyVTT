@@ -502,6 +502,8 @@ There are two ways to create a template:
 1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block.
 2. **From the map** — Right-click any token on the map and select **Save as Template**. This captures the token's current image, type, disposition, display mode, size, HP, notes, and stat block.
 
+**Max HP** is the template's hit points. **Show HP Bar** only decides whether players see them, so a monster can have hit points with its bar hidden. Leave Max HP empty for something that has no hit points, such as a chest.
+
 ### Placing Templates on a Map
 
 Expand a template in the library and click **Place on Map** to create a new token from the template on the current map. The token inherits all of the template's properties.
@@ -509,6 +511,8 @@ Expand a template in the library and click **Place on Map** to create a new toke
 ### Editing and Deleting Templates
 
 Expand a template and click the **pencil** (Edit template) to modify its properties, or **Delete** to remove it permanently. Delete asks first, naming the template.
+
+**Save Changes** changes only what you edited. A template saved from a wounded token keeps its current hit points when you rename it, and changing Max HP keeps a full template full. Changing an NPC template to another type removes its stat block.
 
 For **NPC-type templates**, the edit form includes the full stat block editor — AC, ability scores, saves, skills, traits, actions, bonus actions, reactions, and legendary actions — so you can build a complete monster once and reuse it across maps and campaigns. Saves and skills work exactly as they do in the Creature Library: tick what the creature is proficient in and the bonus is derived from its ability scores and Challenge Rating (see [Saving Throws and Skills](#saving-throws-and-skills)). The right-click NPC roll picker (see [Rolling for NPC Tokens](#rolling-for-npc-tokens)) reads from the same stat block, so a template with a well-filled-in action list gets clickable attack and damage rolls automatically.
 
