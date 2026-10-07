@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- **One player can no longer flood the chat, hit points, hit dice or token moves.** Chat had no limit unless the DM turned the chat cooldown on, and changing hit points or spending hit dice had none at all, so a script could fill everyone's chat, or tie up the database until the whole instance stalled. Picking a token up and putting it down shared the allowance of the drag itself, so a script could rewrite the map 150 times a second. Each now has a limit per player, counted across all their open tabs, far above anything a real table sends: 50 chat messages a second and 300 a minute, 50 hit point changes a second, 50 hit dice spent a second, and 30 pick-ups and 30 drops a second. Anything past the limit changes nothing, and the sender is told once. The DM's chat cooldown still works as before, on top of this.
+
 - **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
 
 ---

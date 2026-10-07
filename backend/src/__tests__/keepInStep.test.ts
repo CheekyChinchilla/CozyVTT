@@ -25,12 +25,17 @@
  * package declares it; the first field added to it after the split already
  * disagreed (required on one side, optional on the other). The fields are
  * compared here, comments aside.
+ *
+ * The socket flood ceilings, applied by the server and listed in the
+ * WebSocket guide, which is what a self-hoster or the author of a scripted
+ * client reads to know what the server will take.
  */
 
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
+import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -183,5 +188,21 @@ describe('the combat state the server sends and the client reads', () => {
 
   it.each(['CombatantEntry', 'CombatState'])('%s has the same fields on both sides', (name) => {
     expect(interfaceFields(client, name)).toEqual(interfaceFields(server, name));
+  });
+});
+
+describe('the socket flood ceilings in the WebSocket guide', () => {
+  const guide = read('backend/docs/WEBSOCKET_DOCUMENTATION.md');
+  const per: Record<number, string> = { 1000: 'a second', 10000: 'every ten seconds', 60000: 'a minute' };
+  const inWords = (windows: readonly CeilingWindow[]) =>
+    windows.map(({ limit, windowMs }) => `${limit} ${per[windowMs] ?? `every ${windowMs} ms`}`).join(' and ');
+  /** The guide's ceiling for `event`: its table row's second cell, up to the first comma or semicolon. */
+  const stated = (event: string) => {
+    const row = guide.split('\n').find((line) => line.startsWith(`| \`${event}\` |`));
+    return row?.split('|')[2].split(/[;,]/)[0].trim();
+  };
+
+  it.each(Object.entries(SOCKET_CEILINGS))('%s is stated as the server applies it', (event, ceiling) => {
+    expect(stated(event)).toBe(inWords(ceiling.windows));
   });
 });

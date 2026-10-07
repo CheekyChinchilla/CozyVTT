@@ -54,6 +54,12 @@ export interface Token {
   obscured?: boolean;
 }
 
+/** One window of a flood ceiling: at most `limit` events in any `windowMs`. */
+export interface CeilingWindow {
+  limit: number;
+  windowMs: number;
+}
+
 /** Every limiter, so the housekeeping below reaches each one without a list to keep in step. */
 const everyLimiter = new Set<RateLimiter>();
 
@@ -79,23 +85,28 @@ export class RateLimiter {
    * @returns true if within limit, false if exceeded
    */
   check(userId: string, limit: number, windowMs: number): boolean {
+    return this.checkAll(userId, [{ limit, windowMs }]);
+  }
+
+  /**
+   * Whether one more event fits every window at once, counting it if so. A
+   * refused event is not counted, so a flood does not push the allowance
+   * further away.
+   */
+  checkAll(key: string, windows: readonly CeilingWindow[]): boolean {
     const now = Date.now();
-    if (windowMs > this.longestWindowMs) this.longestWindowMs = windowMs;
-    const userEvents = this.events.get(userId) || [];
+    const longest = Math.max(...windows.map((w) => w.windowMs));
+    if (longest > this.longestWindowMs) this.longestWindowMs = longest;
 
-    // Remove timestamps outside the time window
-    const recentEvents = userEvents.filter((timestamp) => now - timestamp < windowMs);
-
-    // Check if user has exceeded the limit
-    if (recentEvents.length >= limit) {
-      return false;
-    }
-
-    // Add current event timestamp
-    recentEvents.push(now);
-    this.events.set(userId, recentEvents);
-
-    return true;
+    // Remove timestamps outside the longest window
+    const recentEvents = (this.events.get(key) || []).filter((timestamp) => now - timestamp < longest);
+    const within = windows.every(
+      ({ limit, windowMs }) => recentEvents.filter((timestamp) => now - timestamp < windowMs).length < limit
+    );
+    if (within) recentEvents.push(now);
+    if (recentEvents.length > 0) this.events.set(key, recentEvents);
+    else this.events.delete(key);
+    return within;
   }
 
   /**
@@ -127,7 +138,7 @@ export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second p
 // token.move/s; human wall/light edits are a few per second) — these exist to
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
-export const tokenMoveLimiter = new RateLimiter(); // Max 150 token-move events (start, frames, end)/second per user
+export const tokenMoveLimiter = new RateLimiter(); // Max 150 drag frames (token.move)/second per user
 export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per user
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
@@ -158,6 +169,72 @@ const STATE_REQUESTS_PER_SECOND = 5;
 
 export function stateRequestAllowed(socket: { userId?: string; id: string }, event: string): boolean {
   return stateRequestLimiter.check(`${limiterKey(socket)}:${event}`, STATE_REQUESTS_PER_SECOND, 1000);
+}
+
+/** A per-user flood ceiling on one event, and what the sender is told when it is reached. */
+export interface SocketCeiling {
+  windows: readonly CeilingWindow[];
+  refusal: string;
+}
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const tokenMoves: SocketCeiling = {
+  windows: [{ limit: 30, windowMs: SECOND }],
+  refusal: 'Too many token moves at once. Wait a moment, then move it again.',
+};
+
+/**
+ * Abuse ceilings on the events a member sends by hand, each its own budget
+ * per user across all their sockets. Each is at least five times the busiest
+ * real use of that event, from the web client at a fast table or from the
+ * community MCP bridge, whichever is higher, so nobody playing reaches one;
+ * they exist to stop a script. busyTable.integration.test.ts plays that use
+ * and fails if a number here drops below five times it.
+ *
+ * The web client sends one pick-up and one drop per drag, one change per HP
+ * button, one message per send. The bridge sends one event per tool call
+ * and paces only dice.
+ */
+export const SOCKET_CEILINGS = {
+  'chat.message': {
+    windows: [{ limit: 50, windowMs: SECOND }, { limit: 300, windowMs: MINUTE }],
+    refusal: 'Too many chat messages at once. Wait a few seconds, then send yours again.',
+  },
+  'character.hp.update': {
+    windows: [{ limit: 50, windowMs: SECOND }],
+    refusal: 'Too many hit point changes at once. Wait a moment, then try again.',
+  },
+  'character.hitdice.spend': {
+    windows: [{ limit: 50, windowMs: SECOND }],
+    refusal: 'Too many hit dice spent at once. Wait a moment, then try again.',
+  },
+  // Their own budget, apart from the drag frames: each drop is a write under
+  // the map's lock, and on a lit map line of sight for every player.
+  'token.move.start': tokenMoves,
+  'token.move.end': tokenMoves,
+} satisfies Record<string, SocketCeiling>;
+
+export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
+
+const ceilingLimiter = new RateLimiter();
+/** One refusal notice per socket and event in this long; the rest are refused quietly. */
+const REFUSAL_NOTICE_MS = 10 * SECOND;
+const refusalNotices = new RateLimiter();
+
+/**
+ * Whether this socket's user may send one more `event` now, counting it if
+ * so. Checked before any work. A refused event changes nothing; its socket
+ * is told once in REFUSAL_NOTICE_MS, not once per event, and nothing is
+ * logged, so a flood fills neither the socket nor the log.
+ */
+export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent): boolean {
+  const ceiling: SocketCeiling = SOCKET_CEILINGS[event];
+  if (ceilingLimiter.checkAll(`${limiterKey(socket)}:${event}`, ceiling.windows)) return true;
+  if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
+    socket.emit('error', { message: ceiling.refusal });
+  }
+  return false;
 }
 
 // Cleanup old events every 5 minutes, in every limiter there is. unref() so

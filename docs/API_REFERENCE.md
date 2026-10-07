@@ -1474,7 +1474,9 @@ when it sees it.
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
 | General API | 300 requests | 1 minute | Every request |
 | Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
-| Token movement (WebSocket) | 60 events | 1 second | Every event |
+| Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
+| Token drag frames (WebSocket) | 150 events | 1 second | Every event |
+| Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |
 
 The **Counts** column matters. Where only failures count, signing in correctly
 never uses up the allowance — otherwise a household sharing one address could
@@ -1482,9 +1484,11 @@ lock itself out by logging in normally. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
-Chat messages are not on this list because they are limited per campaign rather
-than globally: a DM can switch on a cooldown of between 1 and 300 seconds
-between messages, and it is **off by default**.
+On top of the chat limit, a DM can switch on a cooldown of between 1 and 300
+seconds between messages for their campaign; it is **off by default**. The
+WebSocket limits are counted per user, across every connection they have open,
+and are set well above what a busy table sends. The other live table events have
+limits of their own, listed in the WebSocket guide.
 
 The upload and general-API limits are configurable with the
 `ASSET_UPLOAD_RATE_LIMIT` and `RATE_LIMIT_MAX_REQUESTS` environment variables;

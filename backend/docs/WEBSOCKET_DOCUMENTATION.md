@@ -345,6 +345,7 @@ push and would otherwise show everyone offline until somebody moved.
 - "You do not have permission to move this token" - Permission denied
 - "Token position out of bounds" - Invalid coordinates
 - "Map not found" - Invalid map ID
+- "Too many … at once. …" - A flood ceiling was reached; sent once, then further refusals are silent for ten seconds (see [Flood ceilings](#fog-lighting-and-explored-memory))
 
 ---
 
@@ -612,7 +613,24 @@ socket.on('token.moved', (data) => {
 
 Three things decide what a player's map shows, and each has one source of truth.
 
-**Flood ceilings.** The events below have a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. Dice rolls: 30 a minute, `error` when exceeded; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read. Chat: one message per short window. `token.move.start`, `token.move` and `token.move.end`: 150 a second between them, dropped silently. Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`): 40 a second between them, dropped silently. `fog:operation`: 10 a second, dropped silently. `exploration:reveal`: 10 a second, dropped silently. `map.ping`: 10 every ten seconds, dropped silently. The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) are each answered at most five times a second per user and otherwise dropped silently; a client sends each once per load. An `initiative.request_state` while nothing is in the order is answered from memory without any database work. Any other event has no ceiling of its own; apart from `authenticate`, `ping`, `character.hp.update` and `character.hitdice.spend`, those are the DM's alone, and `dm:editing` is passed on at most twice a second per socket.
+**Flood ceilings.** Every event below has a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. They are abuse ceilings: each is at least five times the busiest real use of that event, from the web client at a fast table or from the community MCP bridge, so nobody playing reaches one. An event past its ceiling changes nothing. Where the table says "`error` once", the socket that sent it gets one `error` saying so (the text starts "Too many" and ends "at once" with what to do), and any further refusals of that event on that socket in the next ten seconds are silent. Nothing is logged per refusal, so a flood fills neither the socket nor the log.
+
+| Event | Ceiling per user | Past it |
+| --- | --- | --- |
+| `chat.message` | 50 a second and 300 a minute; the campaign's chat cooldown, when the DM turns it on, applies as well | `error` once |
+| `character.hp.update` | 50 a second | `error` once |
+| `character.hitdice.spend` | 50 a second | `error` once |
+| `token.move.start` | 30 a second | `error` once |
+| `token.move.end` | 30 a second, a budget of its own | `error` once |
+| `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
+| `dice.roll` | 30 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` each time |
+| Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
+| `fog:operation` | 10 a second | dropped silently |
+| `exploration:reveal` | 10 a second | dropped silently |
+| `map.ping` | 10 every ten seconds | dropped silently |
+| The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
+
+An `initiative.request_state` while nothing is in the order is answered from memory without any database work. Any other event has no ceiling of its own; apart from `authenticate` and `ping`, those are the DM's alone, and `dm:editing` is passed on at most twice a second per socket.
 
 **A map a player may read is the campaign's current one.** `walls:request`, `lights:request`, `fog:request_state` and `exploration:request` answer a player or spectator only for the map the campaign is showing (`currentMapId`); for any other map of the campaign they answer nothing, exactly as for a map outside it. The DM is answered for any map of the campaign. Token moves follow the same rule: a drag or drop on any other map reaches the DM's sockets only. Writes do too: a player's `token.move.start`, `token.move.end`, `wall:update` door toggle and `initiative.roll` on a map other than the current one answer `error` ("Map not found"), and their `token.move` frames and `exploration:reveal` reports there are dropped without an answer, even for a token they control. So do a map's live edits: `wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`, `fog:cells`, `map:settings:updated`, `map.pinged`, `exploration:state` from a reset, and `dm:editing` reach every member for the current map and only the DM's sockets for any other. Some of them also come from the REST map routes, under the same rule: the wall routes send the `wall:*` events and `walls:replaced`, the light routes the `light:*` events and `lights:replaced`, the map update and lighting routes `map:settings:updated`, and the fog operation the fog events. Every path follows the rule, so a map the DM has prepared but not switched to is the DM's alone. `map.change` from the DM is likewise refused (with `error`) for any map but the current one, because `map.changed` puts every client onto the map it carries; moving tokens between maps (`POST .../tokens/move`) sends `map.changed` for whichever of the two maps is current, so no client has to ask.
 

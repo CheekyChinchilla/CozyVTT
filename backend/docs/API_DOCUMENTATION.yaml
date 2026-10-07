@@ -74,13 +74,16 @@ info:
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`)
-    - Chat messages (WebSocket): none unless the DM turns on the campaign's chat
-      cooldown (off by default), which allows each member one message per 1 to
-      300 seconds, as the DM sets it
+    - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
+      The DM can also turn on the campaign's chat cooldown (off by default),
+      which allows each member one message per 1 to 300 seconds
     - Dice rolls: 30 per minute (WebSocket)
-    - Token movement: 150 events per second per user (WebSocket), shared by
-      `token.move.start`, `token.move` and `token.move.end`; events over the limit
-      are dropped without an error
+    - Token movement (WebSocket), per user: drag frames (`token.move`) 150 a
+      second, dropped without an error; picking a token up (`token.move.start`)
+      and putting it down (`token.move.end`) 30 a second each, with one `error`
+      to the sender when reached
+    - Every other event a member can send over the WebSocket has a per-user
+      ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers.
     The body is JSON `{ error, message }` for the global limit, uploads and the
