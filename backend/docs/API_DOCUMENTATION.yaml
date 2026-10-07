@@ -7734,9 +7734,15 @@ paths:
         that is skipped. Everything unpacked together past the size setting
         fails the import.
 
+        Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
+        content, a format the upload route allows for its type, and is stored
+        under the detected MIME type and extension; its `originalName` is
+        kept unless that name's extension is not allowed for the type, when
+        the detected extension replaces it. Any other asset is skipped.
+
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Assets whose content does not match their declared type,
-        and maps, creatures or templates that fail validation, are skipped.
+        current map. Maps, creatures or templates that fail validation are
+        skipped.
         Imported tokens are linked to no character and controlled by no one.
 
         The import is not one transaction. A failure after the campaign has

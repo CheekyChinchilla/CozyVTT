@@ -11,7 +11,9 @@
  *   once everything unpacked passes the archive limit
  * - Resource exhaustion: the entry count is read from the archive's end and
  *   refused before its directory is read; manifest counts are capped
- * - Malicious files: magic byte validation for every asset
+ * - Malicious files: every asset must be a MAP, TOKEN or AUDIO file whose
+ *   bytes are a format the upload route allows for that type, and is stored
+ *   under the format and extension its bytes show
  * - JSON injection: size limits, Zod schema validation, depth checking
  * - Scope isolation: new IDs for everything, no references to existing data
  */
@@ -20,7 +22,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
-import { Prisma, type AssetType, type GameSystem } from '@prisma/client';
+import { Prisma, type GameSystem } from '@prisma/client';
 import { prisma } from '../config/database';
 import { fileTypeFromFile } from 'file-type';
 import {
@@ -31,8 +33,11 @@ import {
   TokenTemplateImportSchema,
   AssetManifestSchema,
   IMPORT_LIMITS,
+  IMPORTABLE_ASSET_TYPES,
 } from '../validators/campaignImport';
 import type { MapData, AssetManifestData } from '../validators/campaignImport';
+
+type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import {
@@ -43,7 +48,8 @@ import {
   ArchiveLimitError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit } from '../utils/fileUtils';
+import { getFileSizeLimit, isAllowedMimeType, isAllowedExtension } from '../utils/fileUtils';
+import { startsWithPdfHeader, startsWithMp3Header } from '../middleware/fileValidation';
 import logger from '../utils/logger';
 
 const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
@@ -121,17 +127,36 @@ async function checkArchiveSize(archivePath: string, maxSize: number): Promise<v
   }
 }
 
-/** Validate magic bytes for an asset file. */
-async function validateMagicBytes(filePath: string, declaredMime: string): Promise<boolean> {
+/**
+ * What an imported asset file is, by its bytes, when that is a format the
+ * upload route accepts for its type; null otherwise. The same rule as an
+ * upload (middleware/fileValidation.ts): the detected type must be on the
+ * type's allowlist, and a PDF map or an MP3 the detector does not know is
+ * accepted on its header when its name says it is one.
+ */
+async function identifyAsset(
+  filePath: string,
+  type: ImportableAssetType,
+  originalName: string
+): Promise<{ mime: string; ext: string } | null> {
   const detected = await fileTypeFromFile(filePath);
-  if (!detected) {
-    // If we can't detect, only allow if it's a type where detection may fail (e.g. SVG, text)
-    return false;
-  }
-  // Allow if the detected MIME matches or is a subtype
-  const mimeRoot = declaredMime.split('/')[0]; // 'image' or 'audio'
-  const detectedRoot = detected.mime.split('/')[0];
-  return mimeRoot === detectedRoot;
+  if (detected) return isAllowedMimeType(type, detected.mime) ? { mime: detected.mime, ext: detected.ext } : null;
+  const named = path.extname(originalName).toLowerCase();
+  if (type === 'MAP' && named === '.pdf' && (await startsWithPdfHeader(filePath))) return { mime: 'application/pdf', ext: 'pdf' };
+  if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };
+  return null;
+}
+
+/**
+ * The name an imported asset is shown and downloaded under: the archive's,
+ * unless its extension is not one its type allows, when the extension its
+ * bytes call for replaces it. A picture named `rules.exe` downloads as
+ * `rules.png`.
+ */
+function displayName(originalName: string, type: ImportableAssetType, ext: string): string {
+  if (isAllowedExtension(type, path.extname(originalName))) return originalName;
+  const base = originalName.replace(/\.[^.]*$/, '') || 'asset';
+  return `${base}.${ext}`;
 }
 
 /** Get max decompressed size from system settings. */
@@ -288,25 +313,29 @@ export async function importCampaign(
   const assetIdMap = new Map<string, string>(); // old UUID → new asset id
 
   for (const [oldId, assetInfo] of Object.entries(assetManifest)) {
+    if (!assetInfo) {
+      logger.warn('Skipping asset of a type a campaign archive does not carry', { oldId });
+      continue;
+    }
     // Find the file in the archive
     const assetEntry = directory.files.find((f) => f.path.startsWith(`assets/${oldId}`));
     if (!assetEntry) continue;
 
     // Determine upload subdirectory — match the upload system's path structure
     const typeDir = assetInfo.type === 'MAP' ? 'maps' : assetInfo.type === 'AUDIO' ? 'audio' : 'tokens';
-    const ext = path.extname(assetInfo.originalName) || '';
     const newId = randomUUID();
-    const newFilename = `${newId}${ext}`;
     // Store under uploads/{type}/campaigns/{campaignId}/ to match the upload system
-    const newFilePath = path.join(UPLOADS_BASE, typeDir, 'campaigns', newCampaignId, newFilename);
-    const fullNewPath = path.resolve(newFilePath);
-    fs.mkdirSync(path.dirname(fullNewPath), { recursive: true });
+    const dir = path.join(UPLOADS_BASE, typeDir, 'campaigns', newCampaignId);
+    fs.mkdirSync(path.resolve(dir), { recursive: true });
+    // Unpacked under a name with no extension a serving route knows, and
+    // named after its content once that is known.
+    const unpackedPath = path.resolve(dir, `${newId}.importing`);
 
     // A picture or track may be as large as an upload of its type, and no larger.
     let assetBytes: number;
     try {
-      assetBytes = await writeArchiveEntry(archivePath, assetEntry, fullNewPath, {
-        maxEntryBytes: getFileSizeLimit(assetInfo.type as AssetType),
+      assetBytes = await writeArchiveEntry(archivePath, assetEntry, unpackedPath, {
+        maxEntryBytes: getFileSizeLimit(assetInfo.type),
         total,
       });
     } catch (error) {
@@ -317,28 +346,31 @@ export async function importCampaign(
       throw describeLimit(error, assetEntry, total);
     }
 
-    // Validate magic bytes
-    const isValid = await validateMagicBytes(fullNewPath, assetInfo.mimeType);
-    if (!isValid) {
-      logger.warn('Skipping asset with invalid magic bytes', { oldId, declaredMime: assetInfo.mimeType });
-      fs.rmSync(fullNewPath, { force: true });
+    const content = await identifyAsset(unpackedPath, assetInfo.type, assetInfo.originalName);
+    if (!content) {
+      logger.warn('Skipping asset whose content is not a format its type allows', { oldId, type: assetInfo.type, declaredMime: assetInfo.mimeType });
+      fs.rmSync(unpackedPath, { force: true });
       continue;
     }
+    const newFilename = `${newId}.${content.ext}`;
+    const newFilePath = path.join(dir, newFilename);
+    fs.renameSync(unpackedPath, path.resolve(newFilePath));
+    const originalName = displayName(assetInfo.originalName, assetInfo.type, content.ext);
 
     // Create Asset record — filePath matches the format used by the upload system
     await prisma.asset.create({
       data: {
         id: newId,
-        type: assetInfo.type as AssetType,
+        type: assetInfo.type,
         scope: 'CAMPAIGN',
         uploadedById: importingUserId,
         campaignId: newCampaignId,
         filename: newFilename,
-        originalName: assetInfo.originalName,
-        mimeType: assetInfo.mimeType,
+        originalName,
+        mimeType: content.mime,
         fileSize: assetBytes,
         filePath: newFilePath.replace(/\\/g, '/'),
-        name: assetInfo.originalName.replace(/\.[^.]+$/, ''),
+        name: originalName.replace(/\.[^.]+$/, ''),
       },
     });
 

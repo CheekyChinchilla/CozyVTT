@@ -22,17 +22,18 @@ async function leadingBytes(filePath: string, count: number): Promise<Buffer> {
   }
 }
 
-/** Every PDF begins with the literal bytes %PDF-. */
-async function startsWithPdfHeader(filePath: string): Promise<boolean> {
+/** Every PDF begins with the literal bytes %PDF-. Also used by the campaign importer. */
+export async function startsWithPdfHeader(filePath: string): Promise<boolean> {
   const head = await leadingBytes(filePath, 5);
   return head.toString('latin1') === '%PDF-';
 }
 
 /**
  * An MP3 begins with an ID3v2 tag, or with an MPEG audio frame sync: eleven set
- * bits, 0xFF followed by a byte whose top three bits are set.
+ * bits, 0xFF followed by a byte whose top three bits are set. Also used by the
+ * campaign importer.
  */
-async function startsWithMp3Header(filePath: string): Promise<boolean> {
+export async function startsWithMp3Header(filePath: string): Promise<boolean> {
   const head = await leadingBytes(filePath, 3);
   if (head.length >= 3 && head.toString('latin1') === 'ID3') return true;
   return head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0;
