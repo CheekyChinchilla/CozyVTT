@@ -210,7 +210,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them, and a failed action now shows a message. Removing a token, here or in the Token Manager or the quick editor, asks first and names the token.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them, and a failed action now shows a message. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -959,6 +959,10 @@ a wall set that does not line up with its artwork.
 | Delete what is selected | **Delete** or **Backspace** |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
+These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
+are not typing. In the chat box, a note or any other text box they type as
+usual and leave the walls alone.
+
 Changing the wall type applies to everything selected, so a boxful of walls can
 become windows at once. **Ctrl+Z** undoes a move or a delete like any other wall
 edit, and players see the change straight away without reloading.
@@ -1031,7 +1035,9 @@ Wall edits support full undo/redo:
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
 - The undo/redo buttons are also in the Walls panel
 
-Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again.
+Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again. Nor is anything someone else changes: when a player opens a door, your map shows it at once, and undoing your own last edit leaves it open.
+
+The history belongs to the map it was made on. Switching to another map starts with nothing to undo, so an undo can never put one map's walls onto another.
 
 ### Enabling Dynamic Lighting
 

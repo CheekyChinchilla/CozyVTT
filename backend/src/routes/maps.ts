@@ -1746,6 +1746,23 @@ async function findMapInCampaign(
 }
 
 /**
+ * The wall, light and fog routes below each read the map's whole list (or fog
+ * grid), change it and write it back. They do so under the map's lock, the one
+ * the socket edits and the token writes take, and read the list again after
+ * taking it, so requests that overlap apply one after another instead of the
+ * later one writing the earlier one's change away. A refusal found under the
+ * lock comes back as its answer.
+ */
+type LockedEdit<T> = { status: number; error: string; message: string } | { done: T };
+
+const MAP_GONE = { status: 404, error: 'Not Found', message: 'Map not found' } as const;
+const GEOMETRY = { width: true, height: true, gridSize: true } as const;
+
+function sendRefusal(res: Response, refusal: { status: number; error: string; message: string }) {
+  return res.status(refusal.status).json({ error: refusal.error, message: refusal.message });
+}
+
+/**
  * GET /api/campaigns/:campaignId/maps/:id/walls
  * Return the map's wall segments array (all roles).
  */
@@ -1777,19 +1794,22 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segments' });
     }
-    if (wallOutsideMap(parsed.data, map, map.wallSegments)) {
-      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
-    }
-
-    const updated = await prisma.map.update({
-      where: { id },
-      data: { wallSegments: toJson(parsed.data) },
+    const next = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      if (wallOutsideMap(next, fresh, fresh.wallSegments)) {
+        return { status: 400, error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE };
+      }
+      await tx.map.update({ where: { id }, data: { wallSegments: toJson(next) } });
+      return { done: null };
     });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
     // The same events the socket wall edits send, to those who may read the map.
-    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: updated.wallSegments });
+    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: next });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ segments: updated.wallSegments });
+    return res.status(200).json({ segments: next });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segments' });
@@ -1816,22 +1836,25 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
     }
 
-    const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-    if (existing.length >= 5000) {
-      return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 5000 wall segments per map' });
-    }
-    if (existing.some((w) => w.id === parsed.data.id)) {
-      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_WALL_ID_MESSAGE });
-    }
-
-    const updated = await prisma.map.update({
-      where: { id },
-      data: { wallSegments: toJson([...existing, parsed.data]) },
+    const segment = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
+      if (existing.length >= 5000) {
+        return { status: 400, error: 'Limit Exceeded', message: 'Maximum 5000 wall segments per map' };
+      }
+      if (existing.some((w) => w.id === segment.id)) {
+        return { status: 400, error: 'Validation Error', message: DUPLICATE_WALL_ID_MESSAGE };
+      }
+      await tx.map.update({ where: { id }, data: { wallSegments: toJson([...existing, segment]) } });
+      return { done: existing.length + 1 };
     });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment: parsed.data });
+    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(201).json({ segment: parsed.data, total: (updated.wallSegments as unknown as WallSegment[]).length });
+    return res.status(201).json({ segment, total: outcome.done });
   } catch (error) {
     logger.error('Error adding wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add wall segment' });
@@ -1848,14 +1871,19 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-    const filtered = existing.filter((s) => s.id !== sid);
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
+      const filtered = existing.filter((s) => s.id !== sid);
+      if (filtered.length === existing.length) {
+        return { status: 404, error: 'Not Found', message: 'Wall segment not found' };
+      }
+      await tx.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
+      return { done: null };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    if (filtered.length === existing.length) {
-      return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
-    }
-
-    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(filtered) } });
     await tellMapReaders(campaignId, id, 'wall:removed', { mapId: id, segmentId: sid });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Wall segment deleted' });
@@ -1883,19 +1911,23 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: 'Validation Error', message: `type must be one of: ${validTypes.join(', ')}` });
     }
 
-    const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-    const segIndex = existing.findIndex((s) => s.id === sid);
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<WallSegment>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
+      const segIndex = existing.findIndex((s) => s.id === sid);
+      if (segIndex === -1) {
+        return { status: 404, error: 'Not Found', message: 'Wall segment not found' };
+      }
+      existing[segIndex] = { ...existing[segIndex], type: type.data };
+      await tx.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
+      return { done: existing[segIndex] };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    if (segIndex === -1) {
-      return res.status(404).json({ error: 'Not Found', message: 'Wall segment not found' });
-    }
-
-    existing[segIndex] = { ...existing[segIndex], type: type.data };
-    await prisma.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
-
-    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: existing[segIndex] });
+    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: outcome.done });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ segment: existing[segIndex] });
+    return res.status(200).json({ segment: outcome.done });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segment' });
@@ -1938,18 +1970,21 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid lights array' });
     }
-    if (lightOutsideMap(parsed.data, map, map.lights)) {
-      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
-    }
-
-    const updated = await prisma.map.update({
-      where: { id },
-      data: { lights: toJson(parsed.data) },
+    const next = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
+      if (!fresh) return MAP_GONE;
+      if (lightOutsideMap(next, fresh, fresh.lights)) {
+        return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
+      }
+      await tx.map.update({ where: { id }, data: { lights: toJson(next) } });
+      return { done: null };
     });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: updated.lights });
+    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: next });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ lights: updated.lights });
+    return res.status(200).json({ lights: next });
   } catch (error) {
     logger.error('Error replacing light sources:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update light sources' });
@@ -1976,22 +2011,25 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
     }
 
-    const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-    if (existing.length >= 200) {
-      return res.status(400).json({ error: 'Limit Exceeded', message: 'Maximum 200 light sources per map' });
-    }
-    if (existing.some((l) => l.id === parsed.data.id)) {
-      return res.status(400).json({ error: 'Validation Error', message: DUPLICATE_LIGHT_ID_MESSAGE });
-    }
-
-    const updated = await prisma.map.update({
-      where: { id },
-      data: { lights: toJson([...existing, parsed.data]) },
+    const added = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
+      if (existing.length >= 200) {
+        return { status: 400, error: 'Limit Exceeded', message: 'Maximum 200 light sources per map' };
+      }
+      if (existing.some((l) => l.id === added.id)) {
+        return { status: 400, error: 'Validation Error', message: DUPLICATE_LIGHT_ID_MESSAGE };
+      }
+      await tx.map.update({ where: { id }, data: { lights: toJson([...existing, added]) } });
+      return { done: existing.length + 1 };
     });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: parsed.data });
+    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: added });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(201).json({ light: parsed.data, total: (updated.lights as unknown as LightSource[]).length });
+    return res.status(201).json({ light: added, total: outcome.done });
   } catch (error) {
     logger.error('Error adding light source:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add light source' });
@@ -2014,31 +2052,38 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid update data' });
     }
 
-    const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-    const idx = existing.findIndex((l) => l.id === lightId);
-    if (idx === -1) {
-      return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
-    }
+    const patch = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<LightSource>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
+      const idx = existing.findIndex((l) => l.id === lightId);
+      if (idx === -1) {
+        return { status: 404, error: 'Not Found', message: 'Light source not found' };
+      }
 
-    const merged = { ...existing[idx], ...parsed.data };
-    // The radii are checked against each other as they will be stored, not
-    // as the patch sends them: a dim radius alone, under the stored bright
-    // one, used to be saved and then made every save of the whole list fail.
-    // Only when the patch changes a radius, so a light stored before this
-    // check can still be switched on and off.
-    const radiusChanged = parsed.data.brightRadius !== undefined || parsed.data.dimRadius !== undefined;
-    if (radiusChanged && !(merged.dimRadius >= merged.brightRadius)) {
-      return res.status(400).json({ error: 'Validation Error', message: 'dimRadius must be >= brightRadius' });
-    }
-    if (lightOutsideMap([merged], map, [existing[idx]])) {
-      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
-    }
-    existing[idx] = merged;
-    await prisma.map.update({ where: { id }, data: { lights: toJson(existing) } });
+      const merged = { ...existing[idx], ...patch };
+      // The radii are checked against each other as they will be stored, not
+      // as the patch sends them: a dim radius alone, under the stored bright
+      // one, used to be saved and then made every save of the whole list fail.
+      // Only when the patch changes a radius, so a light stored before this
+      // check can still be switched on and off.
+      const radiusChanged = patch.brightRadius !== undefined || patch.dimRadius !== undefined;
+      if (radiusChanged && !(merged.dimRadius >= merged.brightRadius)) {
+        return { status: 400, error: 'Validation Error', message: 'dimRadius must be >= brightRadius' };
+      }
+      if (lightOutsideMap([merged], fresh, [existing[idx]])) {
+        return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
+      }
+      existing[idx] = merged;
+      await tx.map.update({ where: { id }, data: { lights: toJson(existing) } });
+      return { done: merged };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: existing[idx] });
+    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: outcome.done });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ light: existing[idx] });
+    return res.status(200).json({ light: outcome.done });
   } catch (error) {
     logger.error('Error updating light source:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update light source' });
@@ -2055,14 +2100,18 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-    const filtered = existing.filter((l) => l.id !== lightId);
-
-    if (filtered.length === existing.length) {
-      return res.status(404).json({ error: 'Not Found', message: 'Light source not found' });
-    }
-
-    await prisma.map.update({ where: { id }, data: { lights: toJson(filtered) } });
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
+      if (!fresh) return MAP_GONE;
+      const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
+      const filtered = existing.filter((l) => l.id !== lightId);
+      if (filtered.length === existing.length) {
+        return { status: 404, error: 'Not Found', message: 'Light source not found' };
+      }
+      await tx.map.update({ where: { id }, data: { lights: toJson(filtered) } });
+      return { done: null };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
 
     await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
     resendSightAfterChange(getSocketInstance(), campaignId, id);
@@ -2109,23 +2158,26 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    // The map's flag is the single source of truth, here as on the socket.
-    if (!map.fogEnabled) {
-      return res.status(409).json({ error: 'Conflict', message: 'Fog of war is off for this map' });
-    }
-
     const parsed = FogOperationSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid fog operation' });
     }
 
-    const fog: FogState = loadFogState(map, map.fogData as FogState | null);
-    applyWsFogOperation(fog, parsed.data);
-
-    const updated = await prisma.map.update({
-      where: { id },
-      data: { fogData: toJson(fog) },
+    const op = parsed.data;
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<FogState>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, fogEnabled: true, fogData: true } });
+      if (!fresh) return MAP_GONE;
+      // The map's flag is the single source of truth, here as on the socket.
+      if (!fresh.fogEnabled) {
+        return { status: 409, error: 'Conflict', message: 'Fog of war is off for this map' };
+      }
+      const fog: FogState = loadFogState(fresh, fresh.fogData as FogState | null);
+      applyWsFogOperation(fog, op);
+      await tx.map.update({ where: { id }, data: { fogData: toJson(fog) } });
+      return { done: fog };
     });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
+    const fog = outcome.done;
 
     // Same broadcast as the socket path, so a reveal made here reaches the
     // table at once. No socket server (some tests) means nobody to tell.
@@ -2133,7 +2185,7 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
       await broadcastFogState(getSocketInstance(), campaignId, id, fog);
     } catch { /* non-fatal */ }
 
-    return res.status(200).json({ fogState: updated.fogData });
+    return res.status(200).json({ fogState: fog });
   } catch (error) {
     if (error instanceof FogTooLargeError) {
       return res.status(409).json({ error: 'Conflict', message: error.message });
