@@ -559,6 +559,7 @@ export interface CharacterSheetProps {
   onSave?: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;   // fired on first edit and after each save
+  onEditStart?: () => void;                   // call each time the editor opens
 }
 ```
 
@@ -570,7 +571,7 @@ export interface CharacterSheetProps {
 frontend/src/components/character-sheets/mySystem/
   MySystemCharacterSheet.tsx    ← the ONLY file the router imports; switches on mode
   MySystemCharacterView.tsx     ← read-only display; props: { character, onEdit }
-  MySystemCharacterEditor.tsx   ← the form; props: { character, onSave, onCancel }
+  MySystemCharacterEditor.tsx   ← the form; props: { character, onSave, onCancel, onDirtyChange, onDone }
   components/                   ← reusable sub-sections (stat block, skills, etc.)
 ```
 
@@ -578,18 +579,22 @@ The `…CharacterSheet.tsx` mode-switcher looks like this (copied from D&D 5e):
 
 ```tsx
 // MySystemCharacterSheet.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CharacterSheetProps } from '../types';
 import { MySystemCharacterView } from './MySystemCharacterView';
 import { MySystemCharacterEditor } from './MySystemCharacterEditor';
 
 export const MySystemCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
+
+  // The host takes the character passed now as the version the edit starts from.
+  useEffect(() => {
+    if (currentMode === 'edit') onEditStart?.();
+  }, [currentMode]);
 
   const handleSave = async (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => {
     if (onSave) await onSave(data, showToast, tokenImageUrl);
-    setCurrentMode('view');
   };
 
   if (currentMode === 'edit') {
@@ -597,7 +602,9 @@ export const MySystemCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
       <MySystemCharacterEditor
         character={character}
         onSave={handleSave}
-        onCancel={() => setCurrentMode('view')}
+        onCancel={() => { onDirtyChange?.(false); setCurrentMode('view'); }}
+        onDirtyChange={onDirtyChange}
+        onDone={() => setCurrentMode('view')}
       />
     );
   }
@@ -665,6 +672,10 @@ one shared function rather than one per component.
 - Text/surfaces: theme tokens — `text-ink`, `text-ink-muted`, `bg-surface`, `bg-paper`, `border-ink/10`, panels via `glass-panel`. **Do not** hardcode `gray-`/`slate-`/`stone-` colors or a fixed hex — those break the non-default themes. (The `sepia-*` scale is the one intentional exception, used only by the Call of Cthulhu sheet for its 1920s look.)
 
 The editor calls `onSave(data, showToast?, tokenImageUrl?)`; the generic save chain (CharacterEditorPage → API) handles persistence — you don't wire anything else.
+
+**Leave edit mode through `onDone`, not when `onSave` returns.** Every field stays editable while a save is in flight, so something may have been typed in the meantime. When the save resolves, the editor compares its form with what it sent: if they match it reports `onDirtyChange(false)` and calls `onDone`, and the sheet goes back to the view; if not, it reports `onDirtyChange(true)` and stays open with the newer text. A rejected `onSave` leaves the editor as it was, so throw from it whenever nothing was saved. The existing editors' `handleSubmit` shows the pattern.
+
+**Call `onEditStart` each time the editor opens.** A save the server refuses because the character changed since the editor opened (409) is handled by the host, which carries the user's changes onto the newest version and asks before saving. It measures those changes from the character it passed when the edit started, which is how it knows.
 
 ---
 

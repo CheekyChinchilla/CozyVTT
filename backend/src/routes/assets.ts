@@ -25,9 +25,11 @@ import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, spiritLayerA
 import { assetUsageFor } from '../services/assetUsage';
 import path from 'path';
 import fs from 'fs';
+import { pipeline } from 'stream';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
 import { readEnumQuery } from '../utils/queryEnum';
+import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 
 const router = Router();
@@ -887,8 +889,8 @@ const DOCUMENT_CONTENT_TYPES: Record<string, string> = {
 
 /**
  * The Content-Type a map or token image is served with, keyed on its stored
- * extension. Maps also allow a PDF, which every image type here does not; both
- * are safe to send with an explicit type. Anything not in this table is served
+ * extension. A PDF is listed so a map stored as one before PDF maps were
+ * refused is still served; both are safe to send with an explicit type. Anything not in this table is served
  * as bytes to download, so a file that reached disk under a name it should not
  * have is never handed to the browser as a page or a script.
  */
@@ -1130,9 +1132,10 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
       return res.status(404).json({ error: 'Not Found', message: 'Audio asset not found' });
     }
 
-    // Check if file exists (normalize path for cross-platform compatibility)
+    // Check the file exists (normalize path for cross-platform compatibility)
     const audioPath = normalizePath(asset.filePath);
-    if (!fs.existsSync(audioPath)) {
+    const stat = await fs.promises.stat(audioPath).catch(() => null);
+    if (!stat?.isFile()) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Asset file not found on server',
@@ -1147,39 +1150,50 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
       return res.status(404).json({ error: 'Not Found', message: 'Audio asset not found' });
     }
 
-    // Stream audio file
-    const stat = fs.statSync(audioPath);
+    // A browser plays a track by asking for byte ranges as it goes, and asks
+    // again from wherever someone seeks to.
     const fileSize = stat.size;
-    const range = req.headers.range;
-
-    if (range) {
-      // Handle range requests for streaming
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-      const file = fs.createReadStream(audioPath, { start, end });
-      const head = {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize,
-        'Content-Type': audioContentType,
-        'X-Content-Type-Options': 'nosniff',
-      };
-      res.writeHead(206, head);
-      return file.pipe(res);
-    } else {
-      // No range, send entire file
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': audioContentType,
-        'X-Content-Type-Options': 'nosniff',
-      };
-      res.writeHead(200, head);
-      return fs.createReadStream(audioPath).pipe(res);
+    const range = parseByteRange(req.headers.range, fileSize);
+    if (range.kind === 'unsatisfiable') {
+      res.set('Content-Range', `bytes */${fileSize}`);
+      return res.status(416).json({
+        error: 'Range Not Satisfiable',
+        message: 'The requested range is outside the file.',
+      });
     }
+
+    const partial = range.kind === 'partial';
+    const start = partial ? range.start : 0;
+    const end = partial ? range.end : fileSize - 1;
+    const head: Record<string, string | number> = {
+      'Accept-Ranges': 'bytes',
+      'Content-Length': end - start + 1,
+      'Content-Type': audioContentType,
+      'X-Content-Type-Options': 'nosniff',
+    };
+    if (partial) head['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+    res.writeHead(partial ? 206 : 200, head);
+    if (req.method === 'HEAD' || fileSize === 0) {
+      res.end();
+      return;
+    }
+
+    // pipeline closes the file when the listener goes away, as a browser does
+    // on every seek or change of track, and hands a read error to the
+    // callback. With .pipe() the file stayed open and the error was thrown.
+    pipeline(fs.createReadStream(audioPath, { start, end }), res, (error) => {
+      if (!error) return;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ERR_STREAM_PREMATURE_CLOSE' || code === 'ECONNRESET' || code === 'EPIPE') return;
+      logger.error('Error streaming audio', { err: error, assetId: id });
+    });
+    return;
   } catch (error) {
     logger.error('Error streaming audio', { err: error });
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to stream audio',

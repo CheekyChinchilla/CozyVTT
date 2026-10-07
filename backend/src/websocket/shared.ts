@@ -14,6 +14,7 @@ import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
 import logger from '../utils/logger';
+import { MAP_LIMITS, MAX_FOG_CELLS } from '../validators/maps';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -299,7 +300,36 @@ setInterval(() => {
 
 // ── Fog/Wall Helpers ─────────────────────────────────────────────────────────
 
+/**
+ * A map has more grid squares than fog can cover (MAX_FOG_CELLS). Only a map
+ * stored before the size limits existed can be this large; it still loads,
+ * and every fog and explored-area path answers with this message instead.
+ */
+export class FogTooLargeError extends Error {
+  constructor(width: number, height: number) {
+    super(
+      `This map is too big for fog of war and explored areas: it is ${width} by ${height} squares, ` +
+      `and they work on maps of up to ${MAX_FOG_CELLS.toLocaleString('en-US')} squares ` +
+      `(${MAP_LIMITS.maxSide} by ${MAP_LIMITS.maxSide}). ` +
+      `Make the map smaller in Edit Map to use them.`
+    );
+    this.name = 'FogTooLargeError';
+  }
+}
+
+/** Whether fog can be built for a map of this size. */
+export function fogFits(map: { width: number; height: number }): boolean {
+  return map.width * map.height <= MAX_FOG_CELLS;
+}
+
+/**
+ * A fresh, fully hidden fog grid for a map. Refuses a map with more squares
+ * than MAX_FOG_CELLS, before allocating anything: the grid is a dense array,
+ * and one for a map of tens of thousands of squares a side exhausted the
+ * heap, which no try/catch survives.
+ */
 export function buildWsFogState(map: { width: number; height: number; gridSize: number }): FogState {
+  if (!fogFits(map)) throw new FogTooLargeError(map.width, map.height);
   // One fog cell per grid square so fog perfectly aligns with the visible grid.
   const cellPx = map.gridSize;
   const fogCols = map.width;   // grid columns
@@ -315,6 +345,7 @@ export function buildWsFogState(map: { width: number; height: number; gridSize: 
 /**
  * Load fog state from DB, rebuilding from scratch if the stored cell size no longer
  * matches the map's current grid size (e.g. after a cellPx migration or grid resize).
+ * Throws FogTooLargeError for a map too large for fog, whatever is stored.
  */
 export function loadFogState(map: { width: number; height: number; gridSize: number }, stored: FogState | null): FogState {
   const expected = buildWsFogState(map);

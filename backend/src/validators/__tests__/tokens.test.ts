@@ -33,6 +33,10 @@ describe('validateTokenShapes', () => {
       [[1, 2]],
       ['1,2'],
       [null],
+      // Whole squares only: the client always sends them, and other clients
+      // draw a fractional one misaligned.
+      [{ x: 5.5, y: 3 }],
+      [{ x: 1, y: 0.25 }],
     ])('refuses %j', (position) => {
       expect(refused({ position })).toMatch(/position/);
     });

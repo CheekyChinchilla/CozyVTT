@@ -6,13 +6,17 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { LightSourceSchema, LightSourcesArraySchema } from '../../validators/walls';
+import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
+import { lightOutsideMap, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
+
+/** What a light edit reads of the map to check it: whose it is, and its extent. */
+const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -36,15 +40,23 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, lights: true } });
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      if (lightOutsideMap([parsed.data], map)) {
+        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
         return;
       }
 
       const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
       if (existing.length >= 200) {
         socket.emit('error', { message: 'Maximum 200 light sources per map' });
+        return;
+      }
+      if (existing.some((l) => l.id === parsed.data.id)) {
+        socket.emit('error', { message: DUPLICATE_LIGHT_ID_MESSAGE });
         return;
       }
 
@@ -113,7 +125,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, lights: true } });
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
         return;
@@ -123,6 +135,12 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       const idx = existing.findIndex((l) => l.id === parsed.data.id);
       if (idx === -1) {
         socket.emit('error', { message: 'Light source not found' });
+        return;
+      }
+      // Within the map's bounds; one stored outside them before they existed
+      // may stay where it is.
+      if (lightOutsideMap([parsed.data], map, [existing[idx]])) {
+        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
         return;
       }
 
@@ -158,9 +176,13 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true } });
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
       if (!map || map.campaignId !== socket.campaignId) {
         socket.emit('error', { message: 'Map not found' });
+        return;
+      }
+      if (lightOutsideMap(parsed.data, map, map.lights)) {
+        socket.emit('error', { message: LIGHT_OUTSIDE_MAP_MESSAGE });
         return;
       }
 

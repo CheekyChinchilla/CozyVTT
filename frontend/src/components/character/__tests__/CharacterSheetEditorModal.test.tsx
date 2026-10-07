@@ -3,7 +3,7 @@
  *
  * The save says which version of the character the editor opened, so one made
  * after the character changed at the table is refused and does not put back
- * the hit points the DM took. That has to be the version the editor opened
+ * the hit points the DM took (what happens then is in editorStaleSave.test). That has to be the version the editor opened
  * with, not whatever the modal was last handed: the sheet behind it refreshes,
  * and the editor's own copy does not.
  */
@@ -42,20 +42,5 @@ describe('CharacterSheetEditorModal', () => {
     await waitFor(() => expect(updateCharacter).toHaveBeenCalled());
 
     expect((updateCharacter.mock.calls[0][1] as { updatedAt?: string }).updatedAt).toBe('2026-01-01T00:00:00.000Z');
-  });
-
-  it('says so, reloads the sheet behind it and closes, when the character changed meanwhile', async () => {
-    updateCharacter.mockRejectedValue({
-      response: { status: 409, data: { error: 'Conflict', code: 'CHARACTER_CHANGED', message: 'changed' } },
-    });
-    const onClose = vi.fn();
-    const onSaved = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} onSaved={onSaved} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save', hidden: true }));
-
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(onSaved).toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/changed/i), 'error');
   });
 });

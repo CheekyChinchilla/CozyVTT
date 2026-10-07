@@ -19,12 +19,16 @@
  * command line brings back what the dashboard's restore removes.
  *
  * The password rule's special characters, checked in the browser as you type
- * and decided on the server.
+ * and decided on the server. The email address check, likewise.
  *
  * The combat state. The server sends it and the client reads it, and each
  * package declares it; the first field added to it after the split already
  * disagreed (required on one side, optional on the other). The fields are
  * compared here, comments aside.
+ *
+ * The map limits. The server enforces them and the map dialogs offer what
+ * they allow; a dialog offering more than the server takes is a map the DM
+ * fills in and cannot save. The file is kept identical in both packages.
  *
  * The socket flood ceilings, applied by the server and listed in the
  * WebSocket guide, which is what a self-hoster or the author of a scripted
@@ -171,6 +175,27 @@ describe('the special characters a password needs one of', () => {
   });
 });
 
+describe('the email address check', () => {
+  // Written in both packages. The browser's copy decides whether the sign-in
+  // page sends an address at all, so it must never refuse one the server
+  // would take.
+  const body = (rel: string, name: string) => {
+    const m = new RegExp(`export function ${name}\\(email: string\\): boolean \\{\\n([\\s\\S]*?)\\n\\}`).exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares ${name}; update this test with the file`);
+    return m[1];
+  };
+  const limit = (rel: string) => {
+    const m = /export const MAX_EMAIL_LENGTH = (\d+);/.exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares MAX_EMAIL_LENGTH; update this test with the file`);
+    return m[1];
+  };
+
+  it('is the same in the browser and on the server', () => {
+    expect(body('frontend/src/utils/validation.ts', 'isValidEmail')).toBe(body('backend/src/utils/validation.ts', 'validateEmail'));
+    expect(limit('frontend/src/utils/validation.ts')).toBe(limit('backend/src/utils/validation.ts'));
+  });
+});
+
 /** An interface's fields, one per line, with comments and spacing removed. */
 function interfaceFields(source: string, name: string): string[] {
   const m = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(source);
@@ -188,6 +213,12 @@ describe('the combat state the server sends and the client reads', () => {
 
   it.each(['CombatantEntry', 'CombatState'])('%s has the same fields on both sides', (name) => {
     expect(interfaceFields(client, name)).toEqual(interfaceFields(server, name));
+  });
+});
+
+describe('the map limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
   });
 });
 

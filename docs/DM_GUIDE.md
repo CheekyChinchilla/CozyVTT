@@ -148,6 +148,20 @@ Once your map is in the asset library:
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
+**Map size limits.** A map can be:
+
+| Setting | Smallest | Largest |
+|---|---|---|
+| Width and Height (grid squares) | 1 | 500 |
+| Grid Size (pixels per square) | 10 | 500 |
+| Feet per square (**Grid Scale**) | 1 | 100 |
+
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+
+A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
+
+A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
+
 *Screenshot pending — Map Library panel with multiple maps.*
 
 ### Switching Maps
@@ -277,7 +291,7 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
-> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back, and they are told. The editor then loads the new version, or closes so it can be opened again on it; one opened with **Edit Character Sheet** from the roster's right-click menu just closes, and the roster fetches the character again. The same goes the other way when you are editing a sheet the player changes.
+> **Changing a character someone has open.** Hit points you change from the roster, and hit dice you spend, reach a sheet that player has open to read straight away. If they have it open in the editor, their next save is refused rather than putting the old values back. Their editor stays open, puts their own changes onto the new version, which keeps the hit points you set, and asks them to confirm before saving; where you both changed the same thing, they choose which to keep. The same goes the other way when you are editing a sheet the player changes, including one opened with **Edit Character Sheet** from the roster's right-click menu.
 
 **What each system offers.** The rolls on the menu depend on your campaign's game system, because not every system has something meaningful to compute from a stat block:
 
@@ -386,6 +400,8 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Display Mode** — Pog, top-down, or full-art
 
 Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
+
+A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it, with a message saying it is too large.
 
 ### Saving Throws and Skills
 
@@ -860,6 +876,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Door (Locked) | Red | Yes | DM must unlock |
 | Window | Blue | No | Transparent to light |
 
+Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
+
 ### Polygon Drawing Mode
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:
@@ -966,6 +984,10 @@ straight after importing (it has the map's name), and under **Move to…** choos
 players can see it once you switch to that map. Until you move it, anyone
 browsing the library can see it.
 
+**Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
+
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
 map in CozyVTT. That is how the format works everywhere, not a CozyVTT limit.
@@ -986,6 +1008,10 @@ they cannot block sight, because sight stops at the edge of the map. If a whole
 section of your map is missing its artwork, check whether the tool you exported
 from can export that section on its own, or export the map as a PNG instead and
 [add it as an ordinary map](#adding-maps-to-your-campaign).
+
+### Exporting a Universal VTT file
+
+The app has no button for this yet. The server can produce a `.uvtt` file for a map, for a script or a tool built on the unsupported HTTP surface (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only), and importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
 ### Undo / Redo
 

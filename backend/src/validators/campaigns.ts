@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { CampaignStatus } from '@prisma/client';
 import { GameSystem } from '../game-systems';
-import { HEX_COLOR_PATTERN, VIBE_FILTER_PATTERN, SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
+import { HEX_COLOR_PATTERN, SPIRIT_STYLE_PATTERN, isSafeVibeFilter } from '../utils/styleAllowlists';
 
 /** POST /api/campaigns */
 export const CreateCampaignSchema = z.object({
@@ -49,7 +49,12 @@ export const CampaignInviteSchema = z.object({
 export const VibePeriodSchema = z.object({
   name: z.string().max(100),
   hue: z.string().regex(HEX_COLOR_PATTERN, 'A period hue must be a #RRGGBB colour'),
-  filter: z.string().max(200).regex(VIBE_FILTER_PATTERN, 'A period filter may only use brightness(), saturate(), contrast() and hue-rotate()'),
+  // `abort` stops the check after it on an over-long value. Without it, Zod
+  // runs every check in the chain whether or not an earlier one failed.
+  filter: z
+    .string()
+    .max(200, { abort: true })
+    .refine(isSafeVibeFilter, 'A period filter may only use brightness(), saturate(), contrast() and hue-rotate()'),
   audio: z.string().max(500).nullable().optional(),
 }).strip();
 
@@ -79,7 +84,7 @@ export const UpdateCampaignSchema = z.object({
   }).nullish(),
   vibeSettings: VibeSettingsSchema.optional(),
   spiritLayerEnabled: z.boolean({ error: 'spiritLayerEnabled must be true or false' }).optional(),
-  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100)
+  spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100, { abort: true })
     .regex(SPIRIT_STYLE_PATTERN, 'spiritLayerStyle must be wispy, ethereal, shadow, dream, or custom:#RRGGBB with an optional :<look>')
     .optional(),
   chatCooldownEnabled: z.boolean({ error: 'chatCooldownEnabled must be true or false' }).optional(),

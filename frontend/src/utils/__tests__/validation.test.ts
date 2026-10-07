@@ -32,6 +32,41 @@ describe('isValidEmail', () => {
   it('rejects an empty string', () => {
     expect(isValidEmail('')).toBe(false);
   });
+
+  it('accepts the addresses people actually use', () => {
+    expect(isValidEmail('first.last+campaign@mail.example.co.uk')).toBe(true);
+    expect(isValidEmail('o\'brien@example.ie')).toBe(true);
+    expect(isValidEmail('player@a.b.c.d.example.org')).toBe(true);
+    expect(isValidEmail('dm@example.photography')).toBe(true);
+    expect(isValidEmail('DM@EXAMPLE.COM')).toBe(true);
+  });
+
+  // The sign-in page refuses to send an address this rejects, so an address
+  // an account already holds has to keep passing.
+  it('still accepts unusual addresses an existing account may hold', () => {
+    expect(isValidEmail('a@b..c')).toBe(true);
+    expect(isValidEmail('a@b.c.')).toBe(true);
+  });
+
+  it('rejects more than one @, and a domain without a dot inside it', () => {
+    expect(isValidEmail('a@b@c.d')).toBe(false);
+    expect(isValidEmail('a@localhost')).toBe(false);
+    expect(isValidEmail('a@.com')).toBe(false);
+  });
+
+  it('accepts an address of 254 characters and refuses one of 255, as the server does', () => {
+    const address = (length: number) => 'a'.repeat(64) + '@' + 'b'.repeat(length - 69) + '.com';
+    expect(address(254)).toHaveLength(254);
+    expect(isValidEmail(address(254))).toBe(true);
+    expect(isValidEmail(address(255))).toBe(false);
+  });
+
+  it('answers a crafted 100,000-character address within 50 ms', () => {
+    const crafted = 'a@' + '.'.repeat(100_000) + '@';
+    const started = performance.now();
+    expect(isValidEmail(crafted)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });
 
 // ============================================

@@ -20,7 +20,7 @@ import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
+import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -81,9 +81,10 @@ async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal):
   queued.cells.clear();
   const { campaignId, mapId, userId } = queued;
   try {
-    // Read again: memory can be turned off, or the map moved, within the second.
+    // Read again: memory can be turned off, or the map moved or resized past
+    // what memory can hold, within the second.
     const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
-    if (!map || map.campaignId !== campaignId || !map.explorationEnabled) return;
+    if (!map || map.campaignId !== campaignId || !map.explorationEnabled || !fogFits(map)) return;
     // Cells already remembered, which is what the page reports most of the
     // time it moves about known ground, are not worth a lock or a write.
     const held = await prisma.mapExploration.findUnique({ where: { mapId_userId: { mapId, userId } }, select: { explored: true } });
@@ -170,6 +171,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
+      // A map stored before the size limits can be too large to remember.
+      // exploration:request says so; this one is sent by the page as vision
+      // moves, so it is dropped without a word.
+      if (!fogFits(map)) return;
 
       const isDM = socket.role === 'DM';
       let userId = socket.userId;
@@ -225,6 +230,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
       socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
     } catch (error) {
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('exploration:request failed', { err: error });
     }
   });

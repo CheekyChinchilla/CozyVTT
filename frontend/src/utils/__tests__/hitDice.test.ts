@@ -40,6 +40,27 @@ describe('hitDieSize', () => {
     expect(hitDieSize(undefined as unknown as string)).toBeNull();
     expect(hitDieSize(null as unknown as string)).toBeNull();
   });
+
+  it('reads spaces around the d, but not inside a number', () => {
+    expect(hitDieSize('5 d 8')).toBe(8);
+    expect(hitDieSize('\td 10\n')).toBe(10);
+    expect(hitDieSize('1 0d8')).toBeNull();
+    expect(hitDieSize('5d1 0')).toBeNull();
+  });
+
+  // Anyone who can edit a sheet can store any string here, and everyone who
+  // opens the sheet reads it.
+  it.each([
+    ['spaces then a stray character', ' '.repeat(100_000) + 'x'],
+    ['a count, spaces, then a stray character', '5' + ' '.repeat(100_000) + 'x'],
+    ['a long count then a stray character', '5'.repeat(100_000) + 'x'],
+    ['a die, spaces, then a stray character', 'd' + ' '.repeat(100_000) + 'x'],
+  ])('answers %s, 100,000 characters, within 50 ms', (_label, crafted) => {
+    const started = performance.now();
+    expect(hitDieSize(crafted)).toBeNull();
+    expect(hitDiceMaximum({ class: 'f', total: crafted, remaining: 1 })).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });
 
 describe('spendRoll', () => {
