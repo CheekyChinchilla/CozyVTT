@@ -64,6 +64,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [remark-gfm](https://github.com/remarkjs/remark-gfm) | Tables, strikethrough, task lists and autolinks in that Markdown | MIT |
 | [remark-breaks](https://github.com/remarkjs/remark-breaks) | A single newline as a line break in that Markdown | MIT |
 | [Express](https://expressjs.com/) | Backend HTTP framework | MIT |
+| [Multer](https://github.com/expressjs/multer) | Reads uploaded files and forms on the backend | MIT |
 | [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |

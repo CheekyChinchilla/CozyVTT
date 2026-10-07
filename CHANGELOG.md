@@ -12,7 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
 
+- **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
+
 - **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
+
+### Security
+
+- **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 characters, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
 
 ---
 
