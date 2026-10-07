@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Typing in a token's stat block no longer saves, and resends the whole map to every player, on every keystroke.** A sixty-letter trait was sixty saves and sixty full map updates at every player's screen, and a slow save could land after a later one and leave an earlier keystroke stored. The stat block in the token's quick editor is now saved once you pause typing, or straight away when you click out of it, switch it back to View or close the editor.
 
+- **Dragging the ambient sound's volume slider no longer sends every step to the whole table.** Each step was saved and sent to every player, whose sound restarted its fade each time, so one drag from silent to full was twenty saves and twenty fades. The new volume is now sent once, when you let go of the slider or a key moves it.
+
 - **A chat cooldown longer than a minute now lasts its full length.** With a cooldown of, say, five minutes, a player could sometimes post again after a little over one, whenever the server's routine tidy-up happened to land inside their wait.
 
 - **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
