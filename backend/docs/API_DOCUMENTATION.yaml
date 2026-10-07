@@ -7990,7 +7990,7 @@ paths:
         that still does not fit is left off its token or template; a
         creature without one is listed in `skipped`. A game system that is
         not a `GameSystem` value, on the campaign or a creature, imports as
-        none. A data file nested more than 20 levels deep leaves out its map,
+        none. A data file nested more than 32 levels deep leaves out its map,
         or its creatures or templates, and refuses the import when it is the
         manifest, campaign settings or asset manifest. Tokens are moved to
         whole squares with their

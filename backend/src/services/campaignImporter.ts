@@ -166,7 +166,7 @@ async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: Un
 }
 
 /** Why an item whose data nests too deeply is left out. */
-const NESTED_TOO_DEEP_REASON = `Its data nests deeper than the ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels CozyVTT ever writes.`;
+const NESTED_TOO_DEEP_REASON = `Its data nests more than ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels deep, far deeper than CozyVTT ever writes.`;
 
 /**
  * A data file nests deeper than an export ever writes. Refuses the archive,
@@ -176,7 +176,7 @@ const NESTED_TOO_DEEP_REASON = `Its data nests deeper than the ${IMPORT_LIMITS.M
 class NestedTooDeepError extends ArchiveRefusedError {
   constructor(file: string) {
     super(
-      `${file} in the archive nests deeper than the ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels CozyVTT ever writes. ` +
+      `${file} in the archive nests more than ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels deep, far deeper than CozyVTT ever writes. ` +
         'It may be damaged, or not a CozyVTT export.'
     );
     this.name = 'NestedTooDeepError';

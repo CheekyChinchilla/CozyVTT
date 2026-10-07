@@ -180,18 +180,18 @@ describe('data nested deeper than an export ever writes', () => {
 
   it('leaves out the map that holds it, with the reason', async () => {
     const result = await importCampaign(
-      await archive({ maps: [map({ name: 'Deep', annotations: [nested(30)] }), map({ name: 'Shallow' })] }),
+      await archive({ maps: [map({ name: 'Deep', annotations: [nested(40)] }), map({ name: 'Shallow' })] }),
       userId
     );
 
     expect(result.mapCount).toBe(1);
-    expect(result.skipped).toEqual([{ kind: 'map', name: 'Map 1', reason: 'Its data nests deeper than the 20 levels CozyVTT ever writes.' }]);
+    expect(result.skipped).toEqual([{ kind: 'map', name: 'Map 1', reason: 'Its data nests more than 32 levels deep, far deeper than CozyVTT ever writes.' }]);
   });
 
   it('refuses the archive when it is in the campaign settings', async () => {
     await expect(
-      importCampaign(await archive({ campaign: { vibeSettings: { periods: [], extra: nested(30) } } }), userId)
-    ).rejects.toThrow('campaign.json in the archive nests deeper than the 20 levels CozyVTT ever writes. It may be damaged, or not a CozyVTT export.');
+      importCampaign(await archive({ campaign: { vibeSettings: { periods: [], extra: nested(40) } } }), userId)
+    ).rejects.toThrow('campaign.json in the archive nests more than 32 levels deep, far deeper than CozyVTT ever writes. It may be damaged, or not a CozyVTT export.');
   });
 });
 

@@ -24,8 +24,8 @@ export const IMPORT_LIMITS = {
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
   // How deeply a data file may nest objects and lists. An export reaches
-  // about eight, at a token's stat block's proficiencies.
-  MAX_JSON_DEPTH: 20,
+  // six, at a map token's stat block's proficiencies; this is five times that.
+  MAX_JSON_DEPTH: 32,
   FORMAT_VERSION: 1,
 } as const;
 
