@@ -7978,8 +7978,15 @@ paths:
         Everything is held to what the app's own routes store, so anything
         imported can be edited and saved again. Text or a list over its limit
         is cut to it and reported in `warnings`: a map name over 200
-        characters, a token name over 200 or notes over 5,000. Tokens are
-        moved to whole squares with their
+        characters, a token name over 200 or notes over 5,000, and text or
+        lists in a stat block over the creature routes' limits. A stat block
+        that still does not fit is left off its token or template; a
+        creature without one is listed in `skipped`. A game system that is
+        not a `GameSystem` value, on the campaign or a creature, imports as
+        none. A data file nested more than 20 levels deep leaves out its map,
+        or its creatures or templates, and refuses the import when it is the
+        manifest, campaign settings or asset manifest. Tokens are moved to
+        whole squares with their
         footprint on the map. Walls and lights get new ids. Each item the app
         cannot store is left out on its own: a token is listed in `skipped`,
         and walls, doors and lights are counted in `warnings`, as are those

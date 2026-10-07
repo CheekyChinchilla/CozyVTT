@@ -14,7 +14,9 @@
  * - Malicious files: every asset must be a MAP, TOKEN or AUDIO file whose
  *   bytes are a format the upload route allows for that type, and is stored
  *   under the format and extension its bytes show
- * - JSON injection: size limits, Zod schema validation, depth checking
+ * - JSON injection: size limits, Zod schema validation, and a limit on how
+ *   deeply a data file nests (IMPORT_LIMITS.MAX_JSON_DEPTH), checked on its
+ *   text before it is parsed
  * - Scope isolation: new IDs for everything, no references to existing data
  *
  * All or nothing: the pictures and tracks are unpacked into a staging folder,
@@ -28,21 +30,28 @@ import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
-import { Prisma, type GameSystem } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { fileTypeFromFile } from 'file-type';
 import {
   ManifestSchema,
   CampaignSettingsSchema,
-  CreatureTemplateSchema,
-  TokenTemplateImportSchema,
   AssetManifestSchema,
   AssetEntrySchema,
   IMPORT_LIMITS,
   IMPORTABLE_ASSET_TYPES,
 } from '../validators/campaignImport';
 import type { AssetManifestData, AssetEntryData } from '../validators/campaignImport';
-import { ImportReport, prepareMap, describeIssue, label, type SkippedItem } from './campaignImportContent';
+import {
+  ImportReport,
+  prepareMap,
+  prepareCreature,
+  prepareTokenTemplate,
+  importedGameSystem,
+  label,
+  type SkippedItem,
+  type SkippedKind,
+} from './campaignImportContent';
 import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import {
@@ -144,10 +153,77 @@ async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: Un
   } catch (error) {
     throw describeLimit(error, entry, total);
   }
+  const text = bytes.toString('utf-8');
+  // Checked on the text, before parsing: nothing that walks the parsed data
+  // later, the validation or the database's own encoder, then meets more
+  // levels than an export ever writes.
+  if (jsonNestsDeeperThan(text, IMPORT_LIMITS.MAX_JSON_DEPTH)) throw new NestedTooDeepError(entry.path);
   try {
-    return JSON.parse(bytes.toString('utf-8'));
+    return JSON.parse(text);
   } catch {
     throw new ArchiveRefusedError(`${entry.path} in the archive is damaged: it is not readable data.`);
+  }
+}
+
+/** Why an item whose data nests too deeply is left out. */
+const NESTED_TOO_DEEP_REASON = `Its data nests deeper than the ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels CozyVTT ever writes.`;
+
+/**
+ * A data file nests deeper than an export ever writes. Refuses the archive,
+ * unless the file holds one map, or the creatures or templates, which are
+ * then left out.
+ */
+class NestedTooDeepError extends ArchiveRefusedError {
+  constructor(file: string) {
+    super(
+      `${file} in the archive nests deeper than the ${IMPORT_LIMITS.MAX_JSON_DEPTH} levels CozyVTT ever writes. ` +
+        'It may be damaged, or not a CozyVTT export.'
+    );
+    this.name = 'NestedTooDeepError';
+  }
+}
+
+/**
+ * Whether JSON text nests objects and lists more than `max` deep, read
+ * without parsing it: a bracket inside a string does not count.
+ */
+export function jsonNestsDeeperThan(text: string, max: number): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > max) return true;
+    } else if (c === 0x7d || c === 0x5d) {
+      depth--;
+    }
+  }
+  return false;
+}
+
+/**
+ * Read the archive's creatures or templates, or nothing, listed as left
+ * out, when the file nests deeper than an export ever writes.
+ */
+async function readListEntry(
+  archivePath: string,
+  entry: ArchiveEntry,
+  total: UnpackedTotal,
+  kind: SkippedKind,
+  what: string,
+  report: ImportReport
+): Promise<unknown> {
+  try {
+    return await readJsonEntry(archivePath, entry, total);
+  } catch (error) {
+    if (!(error instanceof NestedTooDeepError)) throw error;
+    report.skip(kind, `${what} in the archive`, NESTED_TOO_DEEP_REASON);
+    return [];
   }
 }
 
@@ -388,11 +464,6 @@ async function stageAssets(
   return staged;
 }
 
-/** The `name` an archive gives an item, whatever it is. */
-function nameOf(raw: unknown): unknown {
-  return raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).name : undefined;
-}
-
 /** Move a file, copying it when it has to cross from one disk to another. */
 async function moveFile(from: string, to: string): Promise<void> {
   try {
@@ -508,6 +579,7 @@ export async function importCampaign(
     const vibeSettings =
       remapVibePeriodAudio(campaignSettings.vibeSettings, assetIdMap) ?? campaignSettings.vibeSettings;
     const name = campaignName || campaignSettings.name;
+    const gameSystem = importedGameSystem(campaignSettings.gameSystem, "The campaign's", report);
 
     // 6. Every row in one transaction: a failure anywhere leaves none of them.
     let counts: Pick<ImportResult, 'mapCount' | 'tokenCount' | 'creatureCount' | 'tokenTemplateCount'>;
@@ -519,7 +591,7 @@ export async function importCampaign(
               id: newCampaignId,
               name,
               description: campaignSettings.description || null,
-              gameSystem: (campaignSettings.gameSystem as GameSystem) || null,
+              gameSystem,
               status: 'PREPARATION',
               ownerId: importingUserId,
               vibeSettings: (preserveAtmosphereAudio(vibeSettings) as Prisma.InputJsonValue) || defaultVibeSettings,
@@ -560,12 +632,15 @@ export async function importCampaign(
               report.skip('map', `Map ${i + 1}`, 'Its file is missing from the archive.');
               continue;
             }
-            const prepared = prepareMap(await readJsonEntry(archivePath, mapEntry, total), {
-              index: i,
-              importTokens,
-              remapAsset,
-              report,
-            });
+            let mapRaw: unknown;
+            try {
+              mapRaw = await readJsonEntry(archivePath, mapEntry, total);
+            } catch (error) {
+              if (!(error instanceof NestedTooDeepError)) throw error;
+              report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
+              continue;
+            }
+            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, report });
             if (!prepared) continue;
 
             const mapId = randomUUID();
@@ -583,7 +658,7 @@ export async function importCampaign(
           let creatureCount = 0;
           const creaturesEntry = directory.files.find((f) => f.path === 'creatures/creatures.json');
           if (creaturesEntry) {
-            const creaturesRaw = await readJsonEntry(archivePath, creaturesEntry, total);
+            const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report);
             if (Array.isArray(creaturesRaw)) {
               const creatures: Prisma.CreatureTemplateCreateManyInput[] = [];
               if (creaturesRaw.length > IMPORT_LIMITS.MAX_CREATURES) {
@@ -594,28 +669,8 @@ export async function importCampaign(
                 );
               }
               for (const raw of creaturesRaw.slice(0, IMPORT_LIMITS.MAX_CREATURES)) {
-                const parsed = CreatureTemplateSchema.safeParse(raw);
-                if (!parsed.success) {
-                  report.skip('creature', label(nameOf(raw), 'Unnamed creature'), describeIssue(parsed.error.issues[0]));
-                  continue;
-                }
-                const c = parsed.data;
-                creatures.push({
-                  id: randomUUID(),
-                  name: c.name,
-                  gameSystem: (c.gameSystem as GameSystem) || null,
-                  source: 'custom',
-                  challengeRating: c.challengeRating || null,
-                  creatureType: c.creatureType || null,
-                  alignment: c.alignment || null,
-                  imageUrl: remapAsset(c.imageAssetRef),
-                  statBlock: c.statBlock as Prisma.InputJsonValue,
-                  size: (c.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
-                  disposition: c.disposition || 'hostile',
-                  displayMode: c.displayMode || 'pog',
-                  createdById: importingUserId,
-                  campaignId: newCampaignId,
-                });
+                const row = prepareCreature(raw, { remapAsset, report });
+                if (row) creatures.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
               }
               if (creatures.length > 0) await tx.creatureTemplate.createMany({ data: creatures });
               creatureCount = creatures.length;
@@ -626,7 +681,7 @@ export async function importCampaign(
           let tokenTemplateCount = 0;
           const templatesEntry = directory.files.find((f) => f.path === 'token-templates/templates.json');
           if (templatesEntry) {
-            const templatesRaw = await readJsonEntry(archivePath, templatesEntry, total);
+            const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report);
             if (Array.isArray(templatesRaw)) {
               const templates: Prisma.TokenTemplateCreateManyInput[] = [];
               if (templatesRaw.length > IMPORT_LIMITS.MAX_TOKEN_TEMPLATES) {
@@ -637,28 +692,8 @@ export async function importCampaign(
                 );
               }
               for (const raw of templatesRaw.slice(0, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES)) {
-                const parsed = TokenTemplateImportSchema.safeParse(raw);
-                if (!parsed.success) {
-                  report.skip('tokenTemplate', label(nameOf(raw), 'Unnamed template'), describeIssue(parsed.error.issues[0]));
-                  continue;
-                }
-                const t = parsed.data;
-                templates.push({
-                  id: randomUUID(),
-                  name: t.name,
-                  imageUrl: remapAsset(t.imageAssetRef),
-                  type: t.type || 'object',
-                  disposition: t.disposition || null,
-                  displayMode: t.displayMode || 'pog',
-                  size: (t.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
-                  notes: t.notes || null,
-                  hp: t.hp ? (t.hp as Prisma.InputJsonValue) : Prisma.JsonNull,
-                  showHpBar: t.showHpBar ?? false,
-                  statBlock: t.statBlock ? (t.statBlock as Prisma.InputJsonValue) : Prisma.JsonNull,
-                  sightRadius: t.sightRadius ?? null,
-                  createdById: importingUserId,
-                  campaignId: newCampaignId,
-                });
+                const row = prepareTokenTemplate(raw, { remapAsset, report });
+                if (row) templates.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
               }
               if (templates.length > 0) await tx.tokenTemplate.createMany({ data: templates });
               tokenTemplateCount = templates.length;

@@ -1,6 +1,5 @@
 import {
   AUTHORING_STAT_BLOCK_LIMITS,
-  IMPORT_STAT_BLOCK_LIMITS,
   NpcStatBlockSchema,
   createNpcStatBlockSchema,
 } from '../statBlock';
@@ -190,15 +189,6 @@ describe('NpcStatBlockSchema', () => {
         actions: [{ name: longName, description: 'x' }],
       });
       expect(result.success).toBe(false);
-    });
-
-    it('import limits accept it, matching what archives always allowed', () => {
-      const schema = createNpcStatBlockSchema(IMPORT_STAT_BLOCK_LIMITS);
-      const result = schema.safeParse({
-        ...baseStatBlock,
-        actions: [{ name: longName, description: 'x' }],
-      });
-      expect(result.success).toBe(true);
     });
   });
 });

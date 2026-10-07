@@ -896,6 +896,10 @@ Enforced on every creature, token-template and campaign-import write:
 - Unknown top-level keys are preserved, so older stat blocks survive a round trip.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
+A campaign import applies the same limits but does not refuse: it cuts text and
+lists over them down to them, leaves a stat block it cannot store off a token or
+template, and leaves out a creature whose stat block it cannot store, saying so
+in its `warnings` and `skipped`.
 
 ---
 

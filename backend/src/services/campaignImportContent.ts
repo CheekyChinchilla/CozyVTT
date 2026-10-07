@@ -16,7 +16,16 @@
 import { randomUUID } from 'crypto';
 import type { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { ImportMapSchema, ImportTokenSchema, ImportFogSchema, ImportAnnotationsSchema, type ImportToken } from '../validators/campaignImport';
+import {
+  ImportMapSchema,
+  ImportTokenSchema,
+  ImportFogSchema,
+  ImportAnnotationsSchema,
+  ImportGameSystemSchema,
+  CreatureTemplateSchema,
+  TokenTemplateImportSchema,
+  type ImportToken,
+} from '../validators/campaignImport';
 import { MAP_LIMITS, GEOMETRY_MARGIN_SQUARES, wallWithinMap, lightWithinMap } from '../validators/maps';
 import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
 import { clampTokenPosition } from '../utils/mapTokens';
@@ -265,10 +274,15 @@ function prepareTokens(
     );
   }
 
-  const tally = { names: 0, notes: 0, statBlocks: 0, moved: 0 };
+  const tally = { names: 0, notes: 0, statBlocks: 0, statBlocksDropped: 0, moved: 0 };
   const tokens: PlacedToken[] = [];
   for (const entry of listed) {
-    const fitted = fitToSchema(ImportTokenSchema, entry);
+    let fitted = fitToSchema(ImportTokenSchema, entry);
+    // A stat block that cannot be made to fit costs the token only it.
+    if (!fitted.ok && fitted.issue.path[0] === 'statBlock' && entry !== null && typeof entry === 'object') {
+      fitted = fitToSchema(ImportTokenSchema, { ...entry, statBlock: null });
+      if (fitted.ok) tally.statBlocksDropped++;
+    }
     if (!fitted.ok) {
       const name = entry !== null && typeof entry === 'object' ? (entry as Record<string, unknown>).name : undefined;
       report.skip('token', `"${label(name, 'Unnamed token')}" on ${where}`, describeIssue(fitted.issue));
@@ -299,6 +313,9 @@ function prepareTokens(
   if (tally.names) say(`shortened the names of ${count(tally.names, 'token')} to 200 characters.`);
   if (tally.notes) say(`shortened the notes of ${count(tally.notes, 'token')} to 5,000 characters.`);
   if (tally.statBlocks) say(`shortened text or lists in the stat blocks of ${count(tally.statBlocks, 'token')} to what the app keeps.`);
+  if (tally.statBlocksDropped) {
+    say(`left the stat block off ${count(tally.statBlocksDropped, 'token')}, which the app cannot store; ${tally.statBlocksDropped === 1 ? 'the token was' : 'the tokens were'} kept.`);
+  }
   if (tally.moved) say(`moved ${count(tally.moved, 'token')} onto whole squares inside the map.`);
   return tokens;
 }
@@ -355,4 +372,114 @@ function prepareLights(raw: unknown, map: MapGeometry, say: (what: string) => vo
   if (outside) say(`left out ${count(outside, 'light')} more than ${GEOMETRY_MARGIN_SQUARES} squares outside the map.`);
   if (lights.length > kept.length) say(`left out the last ${count(lights.length - kept.length, 'light')}: a map can hold ${MAX_LIGHT_SOURCES}.`);
   return kept;
+}
+
+// ── Game systems ────────────────────────────────────────────────────────────
+
+/**
+ * The game system an archive names, or null with a word in the report when
+ * it is not one this server has. `whose` begins the report's sentence: "The
+ * campaign's", or `Creature "Wolf": its`.
+ */
+export function importedGameSystem(value: unknown, whose: string, report: ImportReport): z.infer<typeof ImportGameSystemSchema> | null {
+  const parsed = ImportGameSystemSchema.safeParse(value);
+  if (parsed.success) return parsed.data ?? null;
+  const named = typeof value === 'string' ? ` "${label(value, '')}"` : '';
+  report.warn(`${whose} game system${named} is not one this server knows, so it was imported with none.`);
+  return null;
+}
+
+// ── Creatures and token templates ───────────────────────────────────────────
+
+export interface LibraryContext {
+  remapAsset: (ref: string | null | undefined) => string | null;
+  report: ImportReport;
+}
+
+/** The fields of a creature or template, in words, for the report. */
+const FIELD_WORDS: Record<string, string> = {
+  name: 'name',
+  challengeRating: 'challenge rating',
+  creatureType: 'creature type',
+  alignment: 'alignment',
+  notes: 'notes',
+};
+
+/** Say which of an item's fields were cut, apart from its stat block. */
+function sayCut(cut: PropertyKey[][], say: (what: string) => void): void {
+  const fields = [...new Set(cut.map((path) => String(path[0])))].filter((field) => field !== 'statBlock');
+  if (fields.length > 0) say(`shortened its ${fields.map((f) => FIELD_WORDS[f] ?? f).join(', ')} to the length the app keeps.`);
+  if (cut.some((path) => path[0] === 'statBlock')) say('shortened text or lists in its stat block to what the creature editor keeps.');
+}
+
+type CreatureRow = Omit<Prisma.CreatureTemplateCreateManyInput, 'id' | 'createdById' | 'campaignId'>;
+
+/**
+ * A custom creature from the archive, held to what the creature editor
+ * saves, or null when it has no stat block the app can store; it is then
+ * listed with the reason.
+ */
+export function prepareCreature(raw: unknown, ctx: LibraryContext): CreatureRow | null {
+  const fallback = 'Unnamed creature';
+  const rawName = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).name : undefined;
+  const fitted = fitToSchema(CreatureTemplateSchema, raw);
+  if (!fitted.ok) {
+    ctx.report.skip('creature', label(rawName, fallback), describeIssue(fitted.issue));
+    return null;
+  }
+  const c = fitted.value;
+  const whose = `Creature "${label(c.name, fallback)}"`;
+  sayCut(fitted.cut, (what) => ctx.report.warn(`${whose}: ${what}`));
+  return {
+    name: c.name,
+    gameSystem: importedGameSystem(c.gameSystem, `${whose}: its`, ctx.report),
+    source: 'custom',
+    challengeRating: c.challengeRating || null,
+    creatureType: c.creatureType || null,
+    alignment: c.alignment || null,
+    imageUrl: ctx.remapAsset(c.imageAssetRef),
+    statBlock: c.statBlock as Prisma.InputJsonValue,
+    size: (c.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
+    disposition: c.disposition || 'hostile',
+    displayMode: c.displayMode || 'pog',
+  };
+}
+
+type TokenTemplateRow = Omit<Prisma.TokenTemplateCreateManyInput, 'id' | 'createdById' | 'campaignId'>;
+
+/**
+ * A token template from the archive, held to what the template routes
+ * save, or null when it cannot be stored; it is then listed with the
+ * reason. A stat block that cannot be made to fit is left off on its own.
+ */
+export function prepareTokenTemplate(raw: unknown, ctx: LibraryContext): TokenTemplateRow | null {
+  const fallback = 'Unnamed template';
+  const rawName = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).name : undefined;
+  let fitted = fitToSchema(TokenTemplateImportSchema, raw);
+  let droppedStatBlock = false;
+  if (!fitted.ok && fitted.issue.path[0] === 'statBlock' && raw !== null && typeof raw === 'object') {
+    fitted = fitToSchema(TokenTemplateImportSchema, { ...raw, statBlock: null });
+    droppedStatBlock = fitted.ok;
+  }
+  if (!fitted.ok) {
+    ctx.report.skip('tokenTemplate', label(rawName, fallback), describeIssue(fitted.issue));
+    return null;
+  }
+  const t = fitted.value;
+  const whose = `Token template "${label(t.name, fallback)}"`;
+  sayCut(fitted.cut, (what) => ctx.report.warn(`${whose}: ${what}`));
+  if (droppedStatBlock) ctx.report.warn(`${whose}: left off its stat block, which the app cannot store; the template was kept.`);
+  return {
+    name: t.name,
+    imageUrl: ctx.remapAsset(t.imageAssetRef),
+    type: t.type || 'object',
+    disposition: t.disposition || null,
+    displayMode: t.displayMode || 'pog',
+    size: (t.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
+    notes: t.notes || null,
+    hp: t.hp ? (t.hp as Prisma.InputJsonValue) : Prisma.JsonNull,
+    showHpBar: t.showHpBar ?? false,
+    statBlock: t.statBlock ? (t.statBlock as Prisma.InputJsonValue) : Prisma.JsonNull,
+    sightRadius: t.sightRadius ?? null,
+  };
 }

@@ -5,9 +5,10 @@
  */
 
 import { z } from 'zod';
+import { GameSystem } from '@prisma/client';
 import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
-import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
+import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 
@@ -22,6 +23,8 @@ export const IMPORT_LIMITS = {
   MAX_ASSETS: 500,
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
+  // How deeply a data file may nest objects and lists. An export reaches
+  // about eight, at a token's stat block's proficiencies.
   MAX_JSON_DEPTH: 20,
   FORMAT_VERSION: 1,
 } as const;
@@ -53,10 +56,17 @@ const ImportConditionsSchema = z
   .catch([])
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 
-// Stat blocks arriving in an archive validate against the same definition the
-// creature and token-template routes use, with the looser import limits this
-// file has always applied (see IMPORT_STAT_BLOCK_LIMITS).
-const StatBlockSchema = createNpcStatBlockSchema(IMPORT_STAT_BLOCK_LIMITS);
+// Stat blocks arriving in an archive are held to what the creature editor
+// and the token routes accept, so an imported creature can be placed and
+// saved. The importer cuts text and lists over those limits down to them.
+const StatBlockSchema = NpcStatBlockSchema;
+
+/**
+ * A game system, as the database stores one. The importer checks it on its
+ * own and imports the campaign or creature with none when it is not one, so
+ * an unknown name costs nothing else.
+ */
+export const ImportGameSystemSchema = z.nativeEnum(GameSystem).nullable().optional();
 
 // ── Manifest ────────────────────────────────────────────────────────────────
 
@@ -80,7 +90,7 @@ export const ManifestSchema = z.object({
 export const CampaignSettingsSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).nullable().optional(),
-  gameSystem: z.string().max(50).nullable().optional(),
+  gameSystem: z.unknown(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.
   vibeSettings: VibeSettingsSchema.optional().catch(undefined),
@@ -182,8 +192,8 @@ export const ImportAnnotationsSchema = z.array(z.record(z.string(), z.unknown())
 // ── Creature template ───────────────────────────────────────────────────────
 
 export const CreatureTemplateSchema = z.object({
-  name: z.string().min(1).max(200),
-  gameSystem: z.string().max(50).nullable().optional(),
+  name: z.string().trim().min(1).max(200),
+  gameSystem: z.unknown(),
   challengeRating: z.string().max(10).nullable().optional(),
   creatureType: z.string().max(200).nullable().optional(),
   alignment: z.string().max(100).nullable().optional(),
@@ -200,7 +210,7 @@ export const CreatureTemplateSchema = z.object({
 // ── Token template ──────────────────────────────────────────────────────────
 
 export const TokenTemplateImportSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
   imageAssetRef: z.string().max(200).nullable().optional(),
   // The importer applies the template defaults (object, pog, one square) to
   // whatever is dropped here.
