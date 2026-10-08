@@ -141,7 +141,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     The event reference is `backend/docs/WEBSOCKET_DOCUMENTATION.md`.
 
-  version: 1.5.0
+  version: 1.5.1
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
