@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

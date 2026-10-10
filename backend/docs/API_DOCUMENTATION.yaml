@@ -9344,7 +9344,9 @@ paths:
       tags: [Campaigns]
       summary: Roll history for a campaign
       description: >
-        Newest first. Secret rolls are filtered server-side before anything is
+        Newest first; rolls with the same timestamp (millisecond precision) are
+        ordered by id, so the order is the same on every request and page.
+        Secret rolls are filtered server-side before anything is
         sent: a player receives public rolls plus their own secret ones, a DM
         receives everything. Rolls older than the last history clear are
         omitted; the rows themselves are kept, so a DM can still audit them.

@@ -441,7 +441,7 @@ Matching is on `metadata.action` (`user.joined` / `user.left`), **not** on the m
 
 ### `GET /api/campaigns/:campaignId/dice-rolls`
 
-Roll history for a campaign, newest first. **Requires campaign membership.**
+Roll history for a campaign, newest first; rolls with the same timestamp are ordered by id, so paging never skips or repeats one. **Requires campaign membership.**
 
 **Query params:**
 - `limit` — rolls to return (default: 50, max: 100)
