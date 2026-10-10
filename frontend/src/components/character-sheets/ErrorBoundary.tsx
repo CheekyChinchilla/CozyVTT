@@ -8,6 +8,12 @@ import { AlertCircle } from 'lucide-react';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  /**
+   * While the error is showing, a new value tries the sheet again, such as a
+   * new version of the character. A sheet that is drawn is left alone, so it
+   * keeps its open tab.
+   */
+  resetKey?: string;
 }
 
 interface State {
@@ -27,6 +33,12 @@ export class CharacterSheetErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Character sheet error:', error, errorInfo);
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   render() {

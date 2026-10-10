@@ -269,10 +269,11 @@ export default function CharacterSheetViewerModal({
         </div>
 
         {/* Character Sheet Content. A sheet that cannot be drawn fails here,
-            inside the dialog, and not across the whole page; each new version
-            of the character gets a fresh attempt. */}
+            inside the dialog, and not across the whole page; a new version of
+            the character tries it again. Keyed on the character alone, so a
+            sheet that is drawn keeps its open tab through every update. */}
         <div className="flex-1 overflow-y-auto p-6">
-          <CharacterSheetErrorBoundary key={`${character.id}:${character.updatedAt}`}>
+          <CharacterSheetErrorBoundary key={character.id} resetKey={character.updatedAt}>
             {renderCharacterSheet()}
           </CharacterSheetErrorBoundary>
         </div>
