@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Every box on a character sheet now has a length limit.** Most text on a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet had none, so one box could hold up to the whole size of a save, and everyone in the campaign who opened the sheet received it. Notes, descriptions, backstories, personality and features hold up to 100,000 characters, the D&D 5e proficiency boxes up to 2,000 as before, and any other box up to 1,000. A sheet stored with more keeps loading; the longer box has to be shortened before the sheet can be saved again.
 
+- **The Import Campaign window works with a screen reader and the keyboard.** It was not marked as a dialog, so a screen reader was not told it had opened, Tab moved out of it onto the dashboard behind, and the drop area could not be reached from the keyboard. It now opens as a dialog named **Import Campaign**, keeps the keyboard inside it, closes with Escape, and its drop area opens the file picker with Enter or Space. It looks like the app's other windows.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

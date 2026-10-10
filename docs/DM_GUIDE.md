@@ -557,7 +557,7 @@ A large campaign takes as long to export as your connection needs; nothing gives
 ### Importing a Campaign
 
 1. From the **Dashboard**, click the **Import** button (next to Create Campaign)
-2. Drop or browse for a `.cozyvtt` archive
+2. Drop a `.cozyvtt` archive on the window, or click the drop area (or press Enter on it) to choose one
 3. Review the preview: map count, creature count, token templates, asset count, and total size
 4. Optionally rename the campaign and toggle whether to import tokens
 5. Click **Import Campaign**
