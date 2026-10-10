@@ -34,6 +34,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Saving a text or Markdown document can no longer leave it empty or cut off.** A save wrote the new text over the old file, so a save the server could not finish, for example during a restart, could leave the document empty or partly written. The new text is now written beside the old and swapped in once it is complete, so the document holds either the old text or the new. A document deleted while it was being saved no longer leaves its file behind on the server.
 
+- **An upload that cannot be saved no longer leaves files behind on the server.** When the database could not record a new upload, the preview image made from a map or token picture stayed in the uploads folder, and so did a document written in CozyVTT. Both are now removed with the rest of the failed upload.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

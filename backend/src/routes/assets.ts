@@ -405,6 +405,8 @@ router.post(
   validateFileType,
   validateFileSize,
   async (req: UploadRequest, res: Response) => {
+    // Outside the try, so a failed insert can remove the thumbnail as well.
+    let thumbnailPath: string | null = null;
     try {
       const userId = req.session.userId!;
 
@@ -433,7 +435,7 @@ router.post(
         : [];
 
       // Generate thumbnail for images (MAP and TOKEN types)
-      const thumbnailPath =
+      thumbnailPath =
         (req.assetType === 'MAP' || req.assetType === 'TOKEN') && mimeType.startsWith('image/')
           ? await generateThumbnail(file.path)
           : null;
@@ -467,10 +469,11 @@ router.post(
     } catch (error) {
       logger.error('Error creating asset record', { err: error });
 
-      // Clean up uploaded file if database insert fails
-      if (req.file?.path) {
+      // Clean up the uploaded file, and its thumbnail, if the insert fails
+      for (const leftover of [req.file?.path, thumbnailPath]) {
+        if (!leftover) continue;
         try {
-          await deleteFile(req.file.path);
+          await deleteFile(leftover);
         } catch (deleteError) {
           logger.error('Error deleting file after database failure', { err: deleteError });
         }
@@ -783,23 +786,31 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
     const filePath = path.join(dir, filename).replace(/\\/g, '/');
     await fs.promises.writeFile(filePath, bytes);
 
-    const asset = await prisma.asset.create({
-      data: {
-        type: 'DOCUMENT',
-        scope,
-        uploadedById: userId,
-        campaignId: decision.campaignId,
-        filename,
-        originalName: `${name}.${format}`,
-        mimeType: TYPED_DOCUMENT_MIME[format],
-        fileSize: bytes.length,
-        filePath,
-        name,
-        description: description || null,
-        tags: [],
-      },
-      select: ASSET_PUBLIC_SELECT,
-    });
+    const asset = await prisma.asset
+      .create({
+        data: {
+          type: 'DOCUMENT',
+          scope,
+          uploadedById: userId,
+          campaignId: decision.campaignId,
+          filename,
+          originalName: `${name}.${format}`,
+          mimeType: TYPED_DOCUMENT_MIME[format],
+          fileSize: bytes.length,
+          filePath,
+          name,
+          description: description || null,
+          tags: [],
+        },
+        select: ASSET_PUBLIC_SELECT,
+      })
+      .catch(async (error: unknown) => {
+        // No row names the file just written, so it goes too.
+        await deleteFile(filePath).catch((deleteError) =>
+          logger.error('Error deleting document after database failure', { err: deleteError })
+        );
+        throw error;
+      });
 
     return res.status(201).json({ asset });
   } catch (error) {

@@ -469,6 +469,11 @@ router.post(
       const uploadPath = getFilePath('MAP', 'CAMPAIGN', campaignId);
       await ensureDirectory(uploadPath);
       const filePath = path.join(uploadPath, filename).replace(/\\/g, '/');
+      // TODO(maps): if the asset insert below fails, the picture and its
+      // thumbnail stay on disk with no row naming them, and if the map insert
+      // fails, the asset row stays with no map using it. Remove the files when
+      // the asset insert fails, and the asset (row and files) when the map
+      // insert fails, as the upload route does for its own files.
       await fs.writeFile(filePath, parsed.imageBuffer);
       const thumbnailPath = await generateThumbnail(filePath);
 
