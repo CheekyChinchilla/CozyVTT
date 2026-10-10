@@ -316,16 +316,34 @@ See [docs/DEPLOYMENT.md](DEPLOYMENT.md) for full production deployment instructi
 
 ### Backend Tests (Jest)
 
+The integration tests need a PostgreSQL database of their own, which they fill
+and empty as they run. Start a throwaway one in Docker and load the schema into
+it:
+
 ```bash
+docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
+  -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-npm test                  # Run all tests
-npm run test:watch        # Watch mode
-npm run test:coverage     # Generate coverage report
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
+```
+
+Then run the suite, or one file, with the same `DATABASE_URL`:
+
+```bash
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest src/routes/__tests__/auth.e2e.test.ts
 ```
 
 Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration tests use Supertest against an in-process server.
 
-> **Note:** Integration tests require a running PostgreSQL database. Set `DATABASE_URL` in your test environment. Test data is cleaned up after each suite.
+> **The run refuses a database without `test` in its name.** The suites
+> write to the database freely: they add accounts and campaigns, one changes
+> the instance's settings, and two create and drop schemas of their own. So
+> jest stops before any suite starts unless the database `DATABASE_URL` names
+> has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
+> `cozyvtt` does not. With `DATABASE_URL` unset it checks the database
+> `backend/.env` names, which is your development database, and refuses it.
+> The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
 ### Frontend Tests (Vitest)
 
@@ -337,6 +355,26 @@ npm run test:coverage     # Generate coverage report
 ```
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
+
+### Checking sign-in by hand
+
+The automated suites cover sign-in from both ends: the backend's route tests
+(`backend/src/routes/__tests__/auth.e2e.test.ts`, the MFA and limiter suites)
+and the browser's session handling (`frontend/src/contexts/__tests__/`, such
+as `adoptSession.test.tsx` and `sessionKeepalive.test.tsx`). After a change to
+sign-in, also click through it once on a running instance, with the browser's
+developer tools open on the Network tab:
+
+| Do this | You should see |
+|---|---|
+| Open the app signed out | The sign-in page, and `GET /api/auth/me` answered 401 |
+| Sign in with a wrong password | "Invalid email or password", and you stay on the sign-in page |
+| Sign in correctly | The dashboard; `GET /api/auth/me` now answers 200 with your account |
+| Sign in with **Remember me** ticked, then reload the page | Still signed in, with no sign-in page in between |
+| Create an account on **Create Account** (registration must be open) | The dashboard, signed in, or **Registration Submitted** when an admin must approve new accounts |
+| Sign in to an account with two-factor sign-in on | The code page; **Verify Code** with a code from the authenticator app signs you in |
+| **Change Password** on the profile page, then sign out and back in | The new password works and the old one does not |
+| **Sign Out** on the profile page | The sign-in page; `GET /api/auth/me` answers 401 again |
 
 ### Type Checking
 
@@ -359,7 +397,8 @@ cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run bu
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.
-cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && npx jest
+cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && \
+  DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
 
 # Documentation, from the repository root (on Windows the command is usually
 # `python`)
@@ -386,6 +425,13 @@ Two of those deserve a note:
   `src/__tests__/helpers/serve-test-app.ts` starts the test app on a free
   port in a child process, and `malformedUpload.e2e.test.ts` uses it to send
   crafted upload bodies and check that the server answers and is still up.
+- **A test that needs a brand new instance gets a schema of its own.** The
+  suites share one database and run at once, so none can count on it being
+  empty. The setup wizard suite and the first-admin race test need exactly
+  that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
+  schema in the same test database from `schema.prisma`, and drops it at the
+  end. The file sets `DATABASE_URL` to that schema before it imports the app,
+  with a dynamic import, because the app's database client reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which
@@ -405,6 +451,26 @@ Two of those deserve a note:
   the two, and when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+- **Every route has a test, or is listed as not having one.**
+  `backend/src/routes/__tests__/routeInventory.test.ts` reads every method and
+  path from the routers the test app mounts (and checks the test app mounts
+  the same routers as `server.ts`, at the same paths). It fails when a route
+  is in neither of its two lists: `TESTED`, which names a test file that sends
+  a request to the route, and `UNTESTED`, the known gaps, which should only
+  shrink. Add a new route's test, then its line in `TESTED`.
+- **Every rate limiter is tested where it is attached.**
+  `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
+  limited route: it sends the limit's worth of failing requests to the real
+  route and expects the next to be answered 429. It also reads the routers
+  and fails when a route carries a limiter with no row, so a newly limited
+  route needs one line in its `ROWS`. The server-wide limit on every `/api`
+  request is applied in `server.ts`, outside the routers, and is not covered.
+- **A test file may not carry a `TODO(test)` marker.** A test known to be
+  flaky or wrong once sat behind one, assigned to nobody, until it failed a
+  release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
+  files of both packages and fails on the marker, so fix the test or open an
+  issue for it. Markers for other areas (`TODO(maps)`, `TODO(ui)`) are fine
+  in a test.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file

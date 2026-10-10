@@ -3,13 +3,16 @@
  *
  * These rows belong to connect-pg-simple, not to Prisma, so the table is
  * created here to exercise the real SQL. The production app creates it at
- * startup; the test app keeps sessions in memory and never makes it.
+ * startup; the test app keeps sessions in memory and never makes it. Other
+ * suites read the table at the same time, so this one touches only its own
+ * rows and leaves the table in place.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import { prisma } from '../config/database';
 import { destroyUserLoginSessions } from './sessionStore';
+import { ensureLoginSessionTable } from '../__tests__/helpers/db';
 
 const ALICE = 'user-alice';
 const BOB = 'user-bob';
@@ -28,18 +31,15 @@ const sidsFor = async (userId: string): Promise<string[]> => {
   return rows.map((r) => r.sid);
 };
 
+const removeOwnRows = () =>
+  prisma.$executeRaw`DELETE FROM session WHERE sess->>'userId' IN (${ALICE}, ${BOB})`;
+
 beforeAll(async () => {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS session (
-      sid varchar NOT NULL PRIMARY KEY,
-      sess json NOT NULL,
-      expire timestamp(6) NOT NULL
-    )
-  `);
+  await ensureLoginSessionTable();
 });
 
 beforeEach(async () => {
-  await prisma.$executeRawUnsafe('DELETE FROM session');
+  await removeOwnRows();
   await addSession('alice-laptop', ALICE);
   await addSession('alice-phone', ALICE);
   await addSession('alice-tablet', ALICE);
@@ -47,7 +47,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.$executeRawUnsafe('DROP TABLE IF EXISTS session');
+  await removeOwnRows();
   await prisma.$disconnect();
 });
 

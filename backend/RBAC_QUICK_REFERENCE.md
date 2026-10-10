@@ -33,6 +33,14 @@ router.get('/api/campaigns/:campaignId', campaignMember, handler);
 router.put('/api/campaigns/:campaignId', campaignDM, handler);
 ```
 
+`src/routes/__tests__/campaignRoleGuards.e2e.test.ts` lists every route that
+is the DM's alone and every route any member may use, and fails when a
+route's guard differs from its list, so a new campaign route, or a guard
+changed from `campaignDM` to `campaignMember`, needs that list changed too.
+It then checks each route refuses players, spectators, members of other
+campaigns (403) and callers who are not signed in (401). A campaign route
+with neither guard must decide in its handler and be named in that file.
+
 #### Characters in a campaign
 Any member may read a character assigned to the campaign, and the DM may edit
 it, only while its owner is still a member (`ownerStillIn` in

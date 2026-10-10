@@ -43,7 +43,7 @@ If you become a collaborator, here's what the codebase expects:
   packages, so a diff containing one will not lint. Reach for `unknown` and a
   narrowing helper instead — `frontend/src/utils/errors.ts` and
   `backend/src/utils/prisma-json.ts` cover the two common cases
-- **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix
+- **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix. A new HTTP route fails `backend/src/routes/__tests__/routeInventory.test.ts` until a test sends a request to it and the route is listed there with that test's file
 - **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
 - **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), and CI runs the same commands
 - **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit

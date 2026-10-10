@@ -5,6 +5,7 @@
  * everywhere it can. It deliberately differs in exactly three ways:
  *
  * - **No setup-wizard gate.** `requireSetupComplete` would block every route.
+ *   The setup routes themselves are mounted.
  * - **Memory session store**, so tests need no PostgreSQL session table.
  * - **No rate limiters.** A suite makes hundreds of requests from one address
  *   and would trip them; the limiters have their own tests in
@@ -25,6 +26,7 @@ import session from 'express-session';
 import { bodyParsers } from '../../middleware/bodyParsers';
 import { originCheck } from '../../middleware/originCheck';
 import { errorHandler } from '../../middleware/errorHandler';
+import setupRoutes from '../../routes/setup';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
 import campaignMacroRoutes from '../../routes/campaignMacros';
@@ -61,7 +63,9 @@ export function createTestApp(): express.Express {
     res.status(200).json({ status: 'healthy' });
   });
 
-  // Routes (no requireSetupComplete wrapping)
+  // Routes (no requireSetupComplete wrapping). The route inventory test holds
+  // this list to the server's.
+  app.use('/api/setup', setupRoutes);
   app.use('/api/config', configRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);

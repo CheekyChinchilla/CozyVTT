@@ -85,6 +85,15 @@ backend test suite rather than by these scripts:
 states for an event differs from the one the server applies (`SOCKET_CEILINGS`
 in `backend/src/websocket/shared.ts`). Change the two together.
 
+The events the table marks **DM only** are tested from it, too:
+`backend/src/websocket/__tests__/dmOnlyEvents.integration.test.ts` sends each
+of them as a player and as a spectator and expects a refusal, no broadcast
+and nothing stored. It then sends each payload as the DM and expects the
+table to hear it, so a refusal cannot be a payload the server would turn
+down from anyone. It fails when the table has a DM-only event it has no
+payload for, so an event the handlers make the DM's alone needs two lines
+there: its payload, and the event a player hears when the DM sends it.
+
 ### Validate
 
 ```bash
