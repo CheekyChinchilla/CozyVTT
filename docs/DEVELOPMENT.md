@@ -355,6 +355,26 @@ npm run test:coverage     # Generate coverage report
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
+### Checking sign-in by hand
+
+The automated suites cover sign-in from both ends: the backend's route tests
+(`backend/src/routes/__tests__/auth.e2e.test.ts`, the MFA and limiter suites)
+and the browser's session handling (`frontend/src/contexts/__tests__/`, such
+as `adoptSession.test.tsx` and `sessionKeepalive.test.tsx`). After a change to
+sign-in, also click through it once on a running instance, with the browser's
+developer tools open on the Network tab:
+
+| Do this | You should see |
+|---|---|
+| Open the app signed out | The sign-in page, and `GET /api/auth/me` answered 401 |
+| Sign in with a wrong password | "Invalid email or password", and you stay on the sign-in page |
+| Sign in correctly | The dashboard; `GET /api/auth/me` now answers 200 with your account |
+| Sign in with **Remember me** ticked, then reload the page | Still signed in, with no sign-in page in between |
+| Create an account on **Create Account** (registration must be open) | The dashboard, signed in, or **Registration Submitted** when an admin must approve new accounts |
+| Sign in to an account with two-factor sign-in on | The code page; **Verify Code** with a code from the authenticator app signs you in |
+| **Change Password** on the profile page, then sign out and back in | The new password works and the old one does not |
+| **Sign Out** on the profile page | The sign-in page; `GET /api/auth/me` answers 401 again |
+
 ### Type Checking
 
 ```bash
