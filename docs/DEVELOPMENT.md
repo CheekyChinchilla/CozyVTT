@@ -423,6 +423,13 @@ Two of those deserve a note:
   the two, and when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+- **Every route has a test, or is listed as not having one.**
+  `backend/src/routes/__tests__/routeInventory.test.ts` reads every method and
+  path from the routers the test app mounts (and checks the test app mounts
+  the same routers as `server.ts`, at the same paths). It fails when a route
+  is in neither of its two lists: `TESTED`, which names a test file that sends
+  a request to the route, and `UNTESTED`, the known gaps, which should only
+  shrink. Add a new route's test, then its line in `TESTED`.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
