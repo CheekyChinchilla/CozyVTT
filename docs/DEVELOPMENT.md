@@ -430,6 +430,13 @@ Two of those deserve a note:
   is in neither of its two lists: `TESTED`, which names a test file that sends
   a request to the route, and `UNTESTED`, the known gaps, which should only
   shrink. Add a new route's test, then its line in `TESTED`.
+- **Every rate limiter is tested where it is attached.**
+  `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
+  limited route: it sends the limit's worth of failing requests to the real
+  route and expects the next to be answered 429. It also reads the routers
+  and fails when a route carries a limiter with no row, so a newly limited
+  route needs one line in its `ROWS`. The server-wide limit on every `/api`
+  request is applied in `server.ts`, outside the routers, and is not covered.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file

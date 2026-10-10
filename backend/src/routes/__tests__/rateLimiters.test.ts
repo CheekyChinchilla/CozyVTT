@@ -15,6 +15,9 @@
  *
  * Each test uses its own distinct client IP, because the limiter keys on IP and
  * its store is shared for the lifetime of the module.
+ *
+ * Which routes each limiter is attached to is pinned in
+ * limiterWiring.e2e.test.ts, against the real routes.
  */
 
 import express, { Request, RequestHandler, Response } from 'express';
