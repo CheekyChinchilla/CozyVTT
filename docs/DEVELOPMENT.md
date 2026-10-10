@@ -357,12 +357,14 @@ assume you ran:
 # Frontend
 cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run build
 
-# Backend
-cd backend && npx tsc --noEmit && npm run lint && npx jest
+# Backend. The Prisma client is generated, not committed: without a fresh one,
+# every column added since the last generate is a type error.
+cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && npx jest
 
-# Documentation, from the repository root
-python scripts/spec-coverage.py
-python scripts/websocket-events.py --check
+# Documentation, from the repository root (on Windows the command is usually
+# `python`)
+python3 scripts/spec-coverage.py
+python3 scripts/websocket-events.py --check
 ```
 
 Two of those deserve a note:
@@ -412,10 +414,11 @@ Two of those deserve a note:
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
-  `python scripts/websocket-events.py --write`.
+  `python3 scripts/websocket-events.py --write`.
 
-`.github/workflows/ci.yml` runs the same commands on every push and pull
-request. Note that it **reports** failures rather than blocking a merge —
+`.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
+and on pull requests into them (a push to any other branch runs nothing), and
+applies the migrations to an empty database before the backend tests. Note that it **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
 

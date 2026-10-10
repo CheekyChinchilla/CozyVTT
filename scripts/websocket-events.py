@@ -6,8 +6,8 @@ half a protocol behind — whole subsystems (fog, walls, lights, pings) had no
 entry at all, while token movement had two hundred lines. An exhaustive list is
 machine work; this generates it.
 
-    python scripts/websocket-events.py            # print the markdown table
-    python scripts/websocket-events.py --check    # non-zero if the doc is behind
+    python3 scripts/websocket-events.py            # print the markdown table
+    python3 scripts/websocket-events.py --check    # non-zero if the doc is behind
 
 Run from the repository root. The `--check` form is what stops this drifting
 again: it regenerates the table and fails on any difference from the one in the
@@ -431,7 +431,7 @@ def main():
                     print('  +', line)
                 for line in sorted(set(stored) - set(wanted)):
                     print('  -', line)
-                print('\nRun: python scripts/websocket-events.py --write')
+                print('\nRun: python3 scripts/websocket-events.py --write')
                 return 1
             print(f'{len(inbound)} inbound + {len(outbound)} outbound events, all listed.')
             return 0
