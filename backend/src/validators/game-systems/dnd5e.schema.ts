@@ -7,6 +7,15 @@ import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
 import { featureEntrySchema } from './featureEntry.schema';
 import { SPELL_SLOTS_MAX } from './sheetLimits';
+import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
+
+/**
+ * A bonus the player types in by hand: initiative, passive Perception, the
+ * spellcasting adjustments. Held to the range a custom skill's other bonus
+ * has; nothing legitimate comes near it, and an initiative bonus past the dice
+ * roller's limit made the roll fall back to a flat d20.
+ */
+const manualBonusSchema = z.number().int().min(MIN_BONUS_OVERRIDE).max(MAX_BONUS_OVERRIDE);
 
 /**
  * Ability score with modifier
@@ -34,9 +43,9 @@ const statsSchema = z.object({
  * `bonus` is the total. The editor works it out from the ability modifier and
  * proficiency, plus `otherBonus` for what the sheet cannot derive: a Paladin's
  * Aura of Protection, a Ring of Protection. Optional, so every sheet stored
- * without it stays valid, and unbounded like `bonus` and `initiativeBonus`,
- * because a sheet saved before it existed has it worked out as its stored total
- * minus the derived one, which can be any whole number.
+ * without it stays valid, and unbounded like `bonus`, because a sheet saved
+ * before it existed has it worked out as its stored total minus the derived
+ * one, which can be any whole number.
  */
 const savingThrowSchema = z.object({
   proficient: z.boolean(),
@@ -283,8 +292,8 @@ const spellcastingSchema = z.object({
   // the War Mage adds to attack rolls alone. The two totals above are derived
   // from these and kept for exports, exactly as initiative and passive
   // Perception already are.
-  spellSaveDCOtherBonus: z.number().int().optional(),
-  spellAttackOtherBonus: z.number().int().optional(),
+  spellSaveDCOtherBonus: manualBonusSchema.optional(),
+  spellAttackOtherBonus: manualBonusSchema.optional(),
   cantrips: z.array(z.string()).optional(),
   slots: spellSlotsSchema.optional(),
   spells: z.array(spellSchema).optional(),
@@ -359,7 +368,7 @@ export const dnd5eCharacterDataSchema = z.object({
   // the Observant feat's +5, and items that raise passive scores. Mirrors
   // `initiativeBonus` below — the total above is derived from this plus the
   // skill, and kept for exports.
-  passivePerceptionBonus: z.number().int().optional(),
+  passivePerceptionBonus: manualBonusSchema.optional(),
   armorClass: z.number().int().min(1).optional(),
   initiative: z.number().int().optional(),
   // Bonuses to initiative that are not Dexterity: the Alert feat's flat +5,
@@ -367,7 +376,7 @@ export const dnd5eCharacterDataSchema = z.object({
   // ability. Too varied to derive, so the sheet keeps one manual number and
   // adds it to the Dexterity modifier. `initiative` above is the resulting
   // total, kept for exports and anything else reading the blob.
-  initiativeBonus: z.number().int().optional(),
+  initiativeBonus: manualBonusSchema.optional(),
   speed: z.number().int().min(0).optional(),
   hp: hitPointsSchema.optional(),
   conditions: z.array(z.string()).optional(),

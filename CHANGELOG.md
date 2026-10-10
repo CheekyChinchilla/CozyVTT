@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The D&D 5e Spells tab opens for every caster, and spell slots are held to 20 of each level.** A sheet naming a spellcasting ability with no spells or slots recorded broke the Spells tab. A slot total could be any number, and the tab drew one mark per slot, so a total in the millions froze the browser of anyone who opened it, and more slots used than the total showed a negative number left. The tab now opens for every sheet, writes a larger total stored before this release as a count, and never shows fewer than none left. Each slot level holds up to 20 slots, with no more used than the total; the editor's **Total** and **Used** boxes stop there, and a sheet stored with more is brought within them when it is next opened in the editor.
 
+- **The D&D 5e "other bonus" boxes for initiative, passive Perception, spell save DC and spell attack take -30 to +30.** They took any whole number, and an initiative bonus of about 10,000 or more made the initiative roll fall back to a plain d20. A sheet stored with a bonus outside the range, or an older sheet whose stored total reads back as one, is brought within it when it is next opened in the editor.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

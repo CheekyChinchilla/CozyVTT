@@ -52,6 +52,8 @@ import {
   dnd5eBackfilledSkillOtherBonus,
   dnd5eBackfilledSaveOtherBonus,
   DND5E_ABILITY_NAMES,
+  MIN_BONUS_OVERRIDE,
+  MAX_BONUS_OVERRIDE,
 } from '@/utils/rules/dnd5e';
 import {
   dnd5eInitiativeModifier,
@@ -222,6 +224,20 @@ function withAllSlotLevels(stored: unknown): DnD5eSpellSlots {
 }
 
 /**
+ * A manual bonus within the range the server stores (initiative, passive
+ * Perception, the spellcasting adjustments). An older sheet's stored total is
+ * read back into these as a bonus, and could be any number.
+ */
+function withinBonusRange(value: number): number {
+  return Math.min(MAX_BONUS_OVERRIDE, Math.max(MIN_BONUS_OVERRIDE, value));
+}
+
+/** The same, for a bonus that may be absent; absent stays absent. */
+function bonusWithinRange<T>(value: T): T | number {
+  return typeof value === 'number' && Number.isFinite(value) ? withinBonusRange(value) : value;
+}
+
+/**
  * Drop the separate `languages` list a sheet written before 1.3.0 carries.
  *
  * The form's proficiency boxes are read from the stored sheet, which puts
@@ -264,6 +280,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     const own = JSON.parse(JSON.stringify(data ?? {})) as DnD5eFormData;
     return {
       ...withoutOrphanLanguages(withoutOrphanFeatures(own)),
+      // Held to the range the server stores, so a sheet stored with more can
+      // still be saved. Left out when absent, which is what makes the effects
+      // below read an older sheet's totals back into them.
+      ...(own.initiativeBonus != null ? { initiativeBonus: bonusWithinRange(own.initiativeBonus) } : {}),
+      ...(own.passivePerceptionBonus != null
+        ? { passivePerceptionBonus: bonusWithinRange(own.passivePerceptionBonus) }
+        : {}),
       // Ensure nested objects exist.
       //
       // TODO(typing): `{}` is not a valid container — none of these has its keys,
@@ -287,7 +310,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Same TODO(typing) as the containers above: this default omits `class`,
       // which the type requires. Cast rather than corrected.
       spellcasting: (own.spellcasting
-        ? { ...own.spellcasting, slots: withAllSlotLevels(own.spellcasting.slots) }
+        ? {
+            ...own.spellcasting,
+            slots: withAllSlotLevels(own.spellcasting.slots),
+            ...(own.spellcasting.spellSaveDCOtherBonus != null
+              ? { spellSaveDCOtherBonus: bonusWithinRange(own.spellcasting.spellSaveDCOtherBonus) }
+              : {}),
+            ...(own.spellcasting.spellAttackOtherBonus != null
+              ? { spellAttackOtherBonus: bonusWithinRange(own.spellcasting.spellAttackOtherBonus) }
+              : {}),
+          }
         : {
             ability: '',
             spellSaveDC: 0,
@@ -574,7 +606,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const backfilledPassiveBonus =
         prev.passivePerceptionBonus === undefined || prev.passivePerceptionBonus === null
           ? (typeof storedTotal === 'number' && Number.isFinite(storedTotal)
-              ? storedTotal - passiveScore(perceptionBonus)
+              ? withinBonusRange(storedTotal - passiveScore(perceptionBonus))
               : 0)
           : null;
       const passiveBonus = backfilledPassiveBonus ?? prev.passivePerceptionBonus ?? 0;
@@ -652,7 +684,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    * somewhere less visible.
    */
   useEffect(() => {
-    const backfilled = dnd5eBackfilledInitiativeBonus(formData);
+    const read = dnd5eBackfilledInitiativeBonus(formData);
+    const backfilled = read === null ? null : withinBonusRange(read);
     const bonus = backfilled ?? formData.initiativeBonus ?? 0;
     const total = dnd5eInitiativeModifier({ ...formData, initiativeBonus: bonus });
 
@@ -691,8 +724,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     // hand-typed, so it records minus the ability's modifier as the other bonus
     // and the DC and attack do not move. The conversion should apply only to a
     // total the sheet was loaded with, never to one this effect wrote.
-    const dcBackfill = dnd5eBackfilledSpellSaveDCBonus(formData);
-    const attackBackfill = dnd5eBackfilledSpellAttackBonus(formData);
+    const dcRead = dnd5eBackfilledSpellSaveDCBonus(formData);
+    const attackRead = dnd5eBackfilledSpellAttackBonus(formData);
+    const dcBackfill = dcRead === null ? null : withinBonusRange(dcRead);
+    const attackBackfill = attackRead === null ? null : withinBonusRange(attackRead);
 
     const withBonuses = {
       ...formData,
@@ -1614,10 +1649,14 @@ min={1}
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">
+            <label htmlFor="passive-perception-other-bonus" className="block text-xs font-semibold text-stone-600 mb-1">
               Other bonus
             </label>
             <NumberField
+              id="passive-perception-other-bonus"
+              aria-label="Other bonus to passive Perception"
+              min={MIN_BONUS_OVERRIDE}
+              max={MAX_BONUS_OVERRIDE}
               value={formData.passivePerceptionBonus ?? 0}
               onChange={(v: number) => updateField('passivePerceptionBonus', v)}
               className="w-20 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -1689,10 +1728,13 @@ min={0}
           subclasses that swap in Wisdom or Intelligence. */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">
+          <label htmlFor="initiative-other-bonus" className="block text-sm font-semibold text-stone-700 mb-1">
             Initiative — other bonus
           </label>
           <NumberField
+            id="initiative-other-bonus"
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.initiativeBonus ?? 0}
             onChange={(v: number) => updateField('initiativeBonus', v)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -2259,6 +2301,8 @@ min={0}
           </div>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellSaveDCOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
             aria-label="Spell save DC other bonus"
@@ -2276,6 +2320,8 @@ min={0}
           </div>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellAttackOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
             aria-label="Spell attack other bonus"
