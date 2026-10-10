@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upgrading from 1.5.1
+
+#### What you will notice
+
+- **A production instance refuses to start on a weak `SESSION_SECRET`.** Until now it refused only the placeholder from `.env.example`. It now also refuses the example value the deployment guide used to show, `your-64-char-random-string`, and any value shorter than 32 characters. If yours is one of those, `docker compose logs backend` ends with a line starting `[FATAL] SESSION_SECRET`; put the output of `openssl rand -hex 32` in `.env` and run `docker compose up -d`. A new secret signs everyone out once. A secret made as the guide says is 64 characters and needs no change.
+
 ### Fixed
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
@@ -31,6 +37,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **The Import Campaign window works with a screen reader and the keyboard.** It was not marked as a dialog, so a screen reader was not told it had opened, Tab moved out of it onto the dashboard behind, and the drop area could not be reached from the keyboard. It now opens as a dialog named **Import Campaign**, keeps the keyboard inside it, closes with Escape, and its drop area opens the file picker with Enter or Space. It looks like the app's other windows.
 
 - **A screen reader names the D&D 5e editor's Alignment and Background boxes.** Their labels were not tied to the boxes, so each was announced by its example text alone. The same goes for the **Total** and **Used** spell slot boxes and the initiative and passive Perception **Other bonus** boxes.
+
+- **A session or rate-limit setting that is not a whole number no longer breaks sign-in or turns the limit off.** `SESSION_MAX_AGE`, `REMEMBER_ME_MAX_AGE` and `RATE_LIMIT_MAX_REQUESTS` were read without a check: a value with a unit, such as `8h`, was taken as 8 milliseconds, so everyone was signed out the moment they signed in, and a value with no digits turned the general request limit off. A value that is not a whole number of at least 1 now falls back to the default, and the backend log says which variable was wrong and what is being used instead.
+
+### Security
+
+- **A production instance refuses to start on a session secret that could be guessed.** `SESSION_SECRET` signs every session cookie. The instance accepted any value that was not the exact placeholder from `.env.example`, including the example value the deployment guide showed and secrets of a few characters. It now also refuses that example value and any secret shorter than 32 characters, with a log line saying how to generate one. The Upgrading section above says what to do if yours is refused.
 
 ## [1.5.1] - 2026-10-10
 

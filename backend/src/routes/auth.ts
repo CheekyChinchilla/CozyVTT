@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
-import { rememberMeMaxAge } from '../config/session';
+import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';

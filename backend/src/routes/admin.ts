@@ -29,6 +29,7 @@ import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail 
 import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
+import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
@@ -670,8 +671,8 @@ router.get('/activity', async (_req, res) => {
 router.get('/config', (_req, res) => {
   return res.json({
     uploadLimits: { ...UPLOAD_LIMITS },
-    sessionTimeoutMs: parseInt(process.env.SESSION_MAX_AGE || '3600000'),
-    rememberMeTimeoutMs: parseInt(process.env.REMEMBER_ME_MAX_AGE || '2592000000'),
+    sessionTimeoutMs: sessionMaxAge,
+    rememberMeTimeoutMs: rememberMeMaxAge,
     smtp: {
       configured: isSmtpConfigured(),
       host: process.env.SMTP_HOST || null,

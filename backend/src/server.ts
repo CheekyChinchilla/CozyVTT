@@ -37,6 +37,7 @@ import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals } from './utils/shutdown';
+import { positiveIntegerFromEnv } from './config/env';
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
@@ -99,7 +100,7 @@ app.use(originCheck);
 // Stricter per-endpoint limiters (auth, file uploads) are applied inside each router
 const generalApiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '300'),
+  max: positiveIntegerFromEnv('RATE_LIMIT_MAX_REQUESTS', 300),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too Many Requests', message: 'Rate limit exceeded. Please slow down.' },

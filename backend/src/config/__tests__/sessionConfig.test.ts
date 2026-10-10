@@ -84,6 +84,15 @@ describe('the session secret', () => {
     expect(logged.error).toHaveBeenCalledWith(expect.stringContaining('openssl rand -hex 32'));
   });
 
+  it.each([
+    ['the deployment guide\'s example value', 'your-64-char-random-string'],
+    ['shorter than 32 characters', 'cozyvtt-secret-1234567890123456'],
+  ])('stops a production server when it is %s', (_label, secret) => {
+    expect(() => loadWith({ NODE_ENV: 'production', SESSION_SECRET: secret })).toThrow(Exited);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(logged.error).toHaveBeenCalledWith(expect.stringContaining('openssl rand -hex 32'));
+  });
+
   it('starts a production server with a real secret, and signs with it', () => {
     const { sessionConfig } = loadWith({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-secret-of-some-length-0123456789' });
     expect(exit).not.toHaveBeenCalled();
@@ -108,6 +117,17 @@ describe('the session settings', () => {
     const custom = loadWith({ SESSION_MAX_AGE: '7200000', REMEMBER_ME_MAX_AGE: '86400000' });
     expect(custom.sessionConfig.cookie?.maxAge).toBe(7200000);
     expect(custom.rememberMeMaxAge).toBe(86400000);
+  });
+
+  it.each([
+    ['SESSION_MAX_AGE', '8h', 60 * 60 * 1000],
+    ['REMEMBER_ME_MAX_AGE', '30d', 30 * 24 * 60 * 60 * 1000],
+    ['SESSION_MAX_AGE', 'one hour', 60 * 60 * 1000],
+  ])('fall back to the default and warn, naming the variable, when %s is "%s"', (name, value, fallback) => {
+    const mod = loadWith({ [name]: value });
+    const read = name === 'SESSION_MAX_AGE' ? mod.sessionConfig.cookie?.maxAge : mod.rememberMeMaxAge;
+    expect(read).toBe(fallback);
+    expect(logged.warn).toHaveBeenCalledWith(expect.stringContaining(name));
   });
 
   it('save nothing for a visitor who has not signed in', () => {

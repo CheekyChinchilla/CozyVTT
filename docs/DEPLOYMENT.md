@@ -50,14 +50,14 @@ cd CozyVTT
 cp .env.example .env
 ```
 
-Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while either `DATABASE_PASSWORD` or `SESSION_SECRET` is still the placeholder from `.env.example`):
+Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
 
 ```env
 # Database
 DATABASE_PASSWORD=choose-a-strong-password-here
 
-# Security — generate with: openssl rand -hex 32
-SESSION_SECRET=your-64-char-random-string
+# Security — paste the output of: openssl rand -hex 32
+SESSION_SECRET=<paste the 64 characters that command prints>
 
 # Your public URL (used for CORS and email links)
 CORS_ORIGIN=https://your-domain.com
@@ -1279,7 +1279,7 @@ sudo -u postgres psql -d cozyvtt -c "ALTER SCHEMA public OWNER TO cozyvtt;"
 
 Before going live:
 
-- [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`
+- [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
