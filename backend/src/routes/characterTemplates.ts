@@ -102,9 +102,10 @@ async function resolveTemplateImage(
 
 /**
  * Validate sheet data against its game system, mirroring how characters are
- * checked, and return the sheet to store. A Flexible template (gameSystem
- * null) is checked against the Flexible layout, as a Flexible character is;
- * no sheet at all is an empty one.
+ * checked, and return the sheet to store: the schema's parsed output, so a key
+ * the sheet does not declare never reaches the database. A Flexible template
+ * (gameSystem null) is checked against the Flexible layout, as a Flexible
+ * character is; no sheet at all is an empty one.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
@@ -120,12 +121,8 @@ function validateSheet(
     };
   }
 
-  // TODO(sheets): the parsed sheet is thrown away, so the create and update
-  // routes store the template exactly as sent, fields the schema would strip
-  // included, while a character is stored as the schema's output. Return
-  // result.data and store that, as the character routes do.
   const result = validateCharacterData(gameSystem, (data as object) || {});
-  if (result.success) return { ok: true, data: data || {} };
+  if (result.success) return { ok: true, data: result.data };
 
   return {
     ok: false,

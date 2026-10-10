@@ -749,7 +749,8 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
-  is. A flexible template's `data` must be an object laid out as a Flexible
+  is, and stored as the schema returns it, so a field the sheet does not define
+  is dropped. A flexible template's `data` must be an object laid out as a Flexible
   sheet, as a Flexible character's must; anything else answers `400` with
   `validationErrors`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to

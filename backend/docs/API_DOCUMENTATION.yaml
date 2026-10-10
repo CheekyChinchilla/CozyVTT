@@ -9057,9 +9057,9 @@ paths:
         `name` is trimmed, 1 to 200 characters. `description` is trimmed, up
         to 2000 characters. When `gameSystem` is given, `data` must pass that
         system's sheet schema (an omitted `data` is checked as `{}` and so
-        fails), but `data` is stored exactly as sent, so fields the schema
-        does not declare are kept; the template is not stored as the schema's
-        parsed output. Without a `gameSystem`, `data` must be an object
+        fails), and is stored as the schema's parsed output, so a key the
+        schema does not declare is dropped, as it is for a character. Without
+        a `gameSystem`, `data` must be an object
         matching `FlexibleCharacterData` (message `Template data does not
         match the Flexible sheet layout`, with `validationErrors`, otherwise)
         and is stored as parsed; an omitted one is stored as `{}`, and null
@@ -9118,7 +9118,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet as stored. A typed sheet is stored exactly as sent, a Flexible one as `FlexibleCharacterData` parses it.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
@@ -9165,7 +9165,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet as stored. A typed sheet is stored exactly as sent, a Flexible one as `FlexibleCharacterData` parses it.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
@@ -9188,9 +9188,9 @@ paths:
         `description`, `data` and `tokenImageUrl` must be sent, or the answer
         is 400; other keys, `gameSystem` included, are ignored, since a
         template's game system is fixed at creation. `data` replaces the
-        whole sheet; it is checked against the template's game system, and
-        stored as sent, or against `FlexibleCharacterData` if it has none, and
-        stored as parsed; a refused sheet answers 400 with `validationErrors`.
+        whole sheet; it is checked against the template's game system, or
+        against `FlexibleCharacterData` if it has none, and stored as parsed;
+        a refused sheet answers 400 with `validationErrors`.
         `tokenImageUrl` follows the
         rule on create, and null or an empty string removes the image.
       operationId: updateCharacterTemplate
@@ -9242,7 +9242,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet as stored. A typed sheet is stored exactly as sent, a Flexible one as `FlexibleCharacterData` parses it.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
