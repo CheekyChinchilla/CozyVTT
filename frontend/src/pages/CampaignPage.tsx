@@ -515,7 +515,10 @@ function CampaignPageContent() {
           mapId={currentMap.id}
           onClose={() => setQuickEditToken(null)}
           onTokenUpdate={(updated) => {
-            setQuickEditToken(updated);
+            // A stat block saves when the editor closes, so its answer often
+            // arrives after the DM closed the editor or opened another token.
+            // Update the editor only while it still shows this token.
+            setQuickEditToken((open) => (open?.id === updated.id ? updated : open));
             useGameStore.getState().replaceToken(updated);
           }}
         />
