@@ -28,6 +28,7 @@ import type {
 import { TokenLayer, TokenType } from '@/types';
 import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
 import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';
+import { randomId } from '@/utils/uuid';
 import {
   drawMapImage,
   drawSpiritLayer,
@@ -542,7 +543,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const stubALen = tA.t * wallLen;
     if (stubALen >= MIN_STUB) {
       result.push({
-        id: crypto.randomUUID(),
+        id: randomId(),
         x1: wall.x1, y1: wall.y1,
         x2: Math.round(tA.x), y2: Math.round(tA.y),
         type: wall.type,
@@ -551,7 +552,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // The door/window segment itself
     result.push({
-      id: crypto.randomUUID(),
+      id: randomId(),
       x1: Math.round(tA.x), y1: Math.round(tA.y),
       x2: Math.round(tB.x), y2: Math.round(tB.y),
       type: newType,
@@ -561,7 +562,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const stubBLen = (1 - tB.t) * wallLen;
     if (stubBLen >= MIN_STUB) {
       result.push({
-        id: crypto.randomUUID(),
+        id: randomId(),
         x1: Math.round(tB.x), y1: Math.round(tB.y),
         x2: wall.x2, y2: wall.y2,
         type: wall.type,
@@ -1578,7 +1579,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const a = polygonPoints[i];
       const b = polygonPoints[(i + 1) % polygonPoints.length];
       newSegs.push({
-        id: crypto.randomUUID(),
+        id: randomId(),
         x1: a.x, y1: a.y,
         x2: b.x, y2: b.y,
         type: wallType,
@@ -2283,7 +2284,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       // Default: just add the segment normally
       const newSeg: WallSegment = {
-        id: crypto.randomUUID(),
+        id: randomId(),
         x1: prevPt.x, y1: prevPt.y,
         x2: snapped.x, y2: snapped.y,
         type: wallType,
@@ -2405,8 +2406,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const dA = Math.hypot(cp.x - hit.x1, cp.y - hit.y1);
         const dB = Math.hypot(cp.x - hit.x2, cp.y - hit.y2);
         if (dA < 10 || dB < 10) return;
-        const segA: WallSegment = { id: crypto.randomUUID(), x1: hit.x1, y1: hit.y1, x2: cp.x, y2: cp.y, type: hit.type };
-        const segB: WallSegment = { id: crypto.randomUUID(), x1: cp.x, y1: cp.y, x2: hit.x2, y2: hit.y2, type: hit.type };
+        const segA: WallSegment = { id: randomId(), x1: hit.x1, y1: hit.y1, x2: cp.x, y2: cp.y, type: hit.type };
+        const segB: WallSegment = { id: randomId(), x1: cp.x, y1: cp.y, x2: hit.x2, y2: hit.y2, type: hit.type };
         const newSegs = wallSegments.filter((s) => s.id !== hit.id).concat(segA, segB);
         pushWallHistory(newSegs);
         wallCacheValidRef.current = false;
@@ -2452,7 +2453,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const mapPx = screenToMapPx(screenX, screenY);
       if (lightMode === 'light-place') {
         const newLight: LightSource = {
-          id: crypto.randomUUID(),
+          id: randomId(),
           x: Math.round(mapPx.x),
           y: Math.round(mapPx.y),
           brightRadius: lightPlacementDefaults.brightRadius,
@@ -3011,7 +3012,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             const a = simplified[i]!;
             const b = simplified[i + 1]!;
             newSegs.push({
-              id: crypto.randomUUID(),
+              id: randomId(),
               x1: Math.round(a.x), y1: Math.round(a.y),
               x2: Math.round(b.x), y2: Math.round(b.y),
               type: wallType,
@@ -3674,7 +3675,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               const keepA = a!.end === 'start' ? { x: a!.seg.x2, y: a!.seg.y2 } : { x: a!.seg.x1, y: a!.seg.y1 };
               const keepB = b!.end === 'start' ? { x: b!.seg.x2, y: b!.seg.y2 } : { x: b!.seg.x1, y: b!.seg.y1 };
               const merged: WallSegment = {
-                id: crypto.randomUUID(),
+                id: randomId(),
                 x1: Math.round(keepA.x), y1: Math.round(keepA.y),
                 x2: Math.round(keepB.x), y2: Math.round(keepB.y),
                 type: a!.seg.type,

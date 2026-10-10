@@ -287,6 +287,22 @@ describe('wall shortcuts while typing', () => {
     expect(emittedOf('walls:replace')).toEqual([{ mapId: 'map-a', segments: [] }].map((p) => expect.objectContaining(p)));
   });
 
+  it('sends the edit on a page served over plain HTTP, where crypto.randomUUID is missing', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID');
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { value: undefined, configurable: true });
+    try {
+      render(<MapCanvas />);
+      openWallSelect();
+      press('a', { ctrlKey: true });
+      press('Delete');
+
+      expect(emittedOf('walls:replace')).toEqual([expect.objectContaining({ mapId: 'map-a', segments: [] })]);
+    } finally {
+      if (original) Object.defineProperty(globalThis.crypto, 'randomUUID', original);
+      else delete (globalThis.crypto as { randomUUID?: unknown }).randomUUID;
+    }
+  });
+
   it('still works with focus on a tool button', () => {
     render(<MapCanvas />);
     openWallSelect();

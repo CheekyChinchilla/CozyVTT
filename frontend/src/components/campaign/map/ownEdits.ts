@@ -15,6 +15,8 @@
 // walls:request, is never the page's own.
 // ============================================
 
+import { randomId } from '@/utils/uuid';
+
 export interface OwnEdits {
   /** The payload with a fresh operation id, remembered as this page's. */
   tag<T extends object>(payload: T): T & { opId: string };
@@ -28,7 +30,7 @@ export interface OwnEdits {
  */
 const REMEMBERED = 500;
 
-export function createOwnEdits(makeId: () => string = () => crypto.randomUUID()): OwnEdits {
+export function createOwnEdits(makeId: () => string = randomId): OwnEdits {
   const sent = new Set<string>();
   return {
     tag(payload) {
