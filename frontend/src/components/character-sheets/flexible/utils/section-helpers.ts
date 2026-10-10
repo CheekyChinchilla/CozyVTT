@@ -3,6 +3,7 @@
  */
 
 import type { FlexibleCharacterData } from '../../../../types/flexible-character-sheet';
+import { randomId } from '../../../../utils/uuid';
 
 /**
  * Calculate modifier from stat value (D&D-style)
@@ -13,21 +14,10 @@ export const calculateModifier = (value: number): number => {
 };
 
 /**
- * Generate unique ID using crypto.randomUUID or fallback
+ * Generate a unique id. The shared helper works on plain HTTP too, where
+ * crypto.randomUUID is missing.
  */
-export const generateId = (): string => {
-  // Use native crypto.randomUUID if available
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-
-  // Fallback: simple UUID v4 implementation
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
+export const generateId = (): string => randomId();
 
 /**
  * Initialize data for characters with empty/missing data
