@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A character sheet that cannot be shown no longer takes the whole page with it.** When a sheet opened from the campaign roster, a token or the Characters page held something the sheet could not draw, the app's error screen replaced everything, the DM's map and table included, every time it was opened. The sheet window now shows **Error Loading Character Sheet** inside itself and stays open, and the rest of the page carries on. The same goes for the sheet editor. A newer version of the character, once saved, is shown as usual.
 
+- **A Flexible sheet already stored in a shape its page could not read opens again, and can be put right.** Such a sheet, from before Flexible sheets were checked, could not be read or edited at all. The sheet now shows every section it can: a section of a kind the sheet does not have is left out, and an entry that is not text is shown as text or left empty. Saving it from the editor stores it in the checked shape.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

@@ -61,7 +61,7 @@ A character or template with no game system has a **Flexible** sheet: a list of 
 | `text` | `value` | up to 100,000 characters |
 | `table` | `columns`: `{ id, name, width? }`; `rows`: `{ id, cells }` | at most 50 columns and 1,000 rows; `cells` maps a column id to text of up to 1,000 characters |
 
-Every section also has an `id` (1 to 100 characters), a `title` (up to 200) and an optional `collapsed`; a sheet holds at most 100 sections. Keys beside `sections` are stored as sent, since an import or a program may keep its own there and the editor sends them back. A sheet stored before these checks still loads, and its next save is checked.
+Every section also has an `id` (1 to 100 characters), a `title` (up to 200) and an optional `collapsed`; a sheet holds at most 100 sections. Keys beside `sections` are stored as sent, since an import or a program may keep its own there and the editor sends them back. A sheet stored before these checks still loads, and its next save is checked. On the page, `initializeFlexibleData` (`frontend/src/components/character-sheets/flexible/utils/section-helpers.ts`) puts each stored section into the shape its type reads before the view or the editor sees it: a section of an unknown type is left out, a missing list is empty, and a value that is not text is shown as text or as nothing, so an old malformed sheet opens and can be saved in the checked shape.
 
 ---
 
