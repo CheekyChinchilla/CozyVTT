@@ -30,8 +30,8 @@ Both documents drift the moment something is added without a matching entry.
 Two checks, run from the repository root:
 
 ```bash
-python scripts/spec-coverage.py       # HTTP routes
-python scripts/websocket-events.py --check   # Socket.io events
+python3 scripts/spec-coverage.py       # HTTP routes
+python3 scripts/websocket-events.py --check   # Socket.io events
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both

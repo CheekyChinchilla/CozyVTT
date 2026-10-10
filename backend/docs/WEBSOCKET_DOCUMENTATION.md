@@ -1026,8 +1026,8 @@ Every event the server listens for or emits. **This table is generated** from
 the handlers in `backend/src/websocket/` — do not edit it by hand:
 
 ```bash
-python scripts/websocket-events.py --write     # refresh it
-python scripts/websocket-events.py --check     # fail if it is behind
+python3 scripts/websocket-events.py --write     # refresh it
+python3 scripts/websocket-events.py --check     # fail if it is behind
 ```
 
 It exists because the hand-written catalogue this replaced fell about half a
