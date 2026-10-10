@@ -260,7 +260,11 @@ router.get(
         const { FLEXIBLE_TEMPLATES } = await import(
           '../utils/character-templates/flexible-templates'
         );
-        const template = FLEXIBLE_TEMPLATES[templateName];
+        // Only the names defined there: the list is a plain object, so
+        // `constructor` or `__proto__` would otherwise find an inherited one.
+        const template = Object.hasOwn(FLEXIBLE_TEMPLATES, templateName)
+          ? FLEXIBLE_TEMPLATES[templateName]
+          : undefined;
 
         if (!template) {
           return res.status(404).json({
