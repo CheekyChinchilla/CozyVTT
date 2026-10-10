@@ -17,6 +17,7 @@ import Pathfinder2eCharacterView from '../character-sheets/pathfinder2e/Pathfind
 import Shadowrun6eCharacterSheet from '../character-sheets/shadowrun6e/Shadowrun6eCharacterSheet';
 import CallOfCthulhu7eCharacterView from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
 import { FlexibleCharacterSheetView } from '../character-sheets/flexible/FlexibleCharacterSheetView';
+import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 
 // Import editor modal
 import CharacterSheetEditorModal from './CharacterSheetEditorModal';
@@ -267,9 +268,13 @@ export default function CharacterSheetViewerModal({
           </div>
         </div>
 
-        {/* Character Sheet Content */}
+        {/* Character Sheet Content. A sheet that cannot be drawn fails here,
+            inside the dialog, and not across the whole page; each new version
+            of the character gets a fresh attempt. */}
         <div className="flex-1 overflow-y-auto p-6">
-          {renderCharacterSheet()}
+          <CharacterSheetErrorBoundary key={`${character.id}:${character.updatedAt}`}>
+            {renderCharacterSheet()}
+          </CharacterSheetErrorBoundary>
         </div>
 
         {/* Footer */}
