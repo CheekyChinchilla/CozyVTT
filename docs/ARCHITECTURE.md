@@ -412,7 +412,7 @@ erDiagram
 
 - **Token data is stored as JSON inside `Map.tokens`** — tokens are not a separate table. This simplifies real-time updates (the whole token list is atomically replaced on moves).
 - **Walls, lights and fog are JSON on the map row too** (`Map.wallSegments`, `Map.lights`, `Map.fogData`). A write to any of these columns, or to `Map.tokens`, reads the whole value, changes it and writes it back, so it runs inside `withMapsLocked` (`utils/mapTokens.ts`): a transaction holding a PostgreSQL advisory lock on the map, which reads the value through the transaction after taking the lock. Edits sent together, from the socket or the REST routes, then apply one after another instead of the later write dropping the earlier change.
-- **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas but stored untyped in Postgres. This allows flexible incremental saves.
+- **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas (a Flexible sheet, with no game system, by `flexible.schema.ts`) but stored untyped in Postgres. This allows flexible incremental saves. Every text field, list and count a sheet stores has a limit, from `validators/game-systems/sheetLimits.ts`, which the frontend keeps an identical copy of for its editors.
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
@@ -691,7 +691,8 @@ Character data round-trips as JSON:
 User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
 → CharacterEditorPage sends PUT /api/characters/:id { data, updatedAt }
 → Backend moves any pre-1.3.0 fields into the ones the sheet reads (utils/sheetFieldMigrations)
-→ Backend validates data against the game-system Zod schema (mostly optional fields)
+→ Backend validates data against the game-system Zod schema (mostly optional fields),
+  or the Flexible layout when the character has no game system
 → The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
   does not declare is dropped; a stale updatedAt (the character changed since the
   sheet was loaded) is refused with 409 and nothing is written
