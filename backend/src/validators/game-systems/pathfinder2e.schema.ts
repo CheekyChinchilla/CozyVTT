@@ -5,7 +5,11 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
-import { sheetCharacterNameSchema } from './sheetText';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 
 /**
@@ -58,14 +62,14 @@ const perceptionSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
   itemBonus: z.number().int(),
   bonus: z.number().int(),
-  senses: z.array(z.string()),
+  senses: z.array(shortText),
 });
 
 /**
  * Skill
  */
 const skillSchema = z.object({
-  attribute: z.string().min(1),
+  attribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
   armorPenalty: z.number().int(),
   itemBonus: z.number().int(),
@@ -107,16 +111,16 @@ const skillsSchema = z.object({
  * sheet written against the old declaration still loads.
  */
 const ritualSchema = z.union([
-  z.string().min(1),
+  shortText.min(1),
   z.object({
-    name: z.string().min(1),
+    name: shortText.min(1),
     rank: z.number().int().min(1).max(10),
   }),
 ]);
 
 const loreSkillSchema = z.object({
-  name: z.string().min(1),
-  attribute: z.string().min(1),
+  name: shortText.min(1),
+  attribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
   itemBonus: z.number().int(),
   bonus: z.number().int(),
@@ -143,7 +147,7 @@ const armorClassSchema = z.object({
  */
 const classDCSchema = z.object({
   total: z.number().int().min(10),
-  keyAttribute: z.string().min(1),
+  keyAttribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
 });
 
@@ -151,7 +155,7 @@ const classDCSchema = z.object({
  * Initiative
  */
 const initiativeSchema = z.object({
-  usedStat: z.string().min(1),
+  usedStat: shortText.min(1),
   bonus: z.number().int(),
 });
 
@@ -160,7 +164,7 @@ const initiativeSchema = z.object({
  */
 const speedSchema = z.object({
   land: z.number().int().min(0),
-  other: z.array(z.string()),
+  other: z.array(shortText),
 });
 
 /**
@@ -172,9 +176,9 @@ const hitPointsSchema = z.object({
   classHpPerLevel: z.number().int().min(0),
   current: z.number().int(),
   temporary: z.number().int().min(0),
-  resistances: z.array(z.string()),
-  immunities: z.array(z.string()),
-  weaknesses: z.array(z.string()),
+  resistances: z.array(shortText),
+  immunities: z.array(shortText),
+  weaknesses: z.array(shortText),
 });
 
 /**
@@ -219,18 +223,18 @@ const proficienciesSchema = z.object({
  * Most fields optional for quick weapon addition
  */
 const strikeSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   type: z.enum(['melee', 'ranged']).optional(),
   attackBonus: z.number().int().nullable().optional(),
-  damageRoll: z.string().optional(),
-  damageType: z.string().optional(),
-  attributeModifier: z.string().min(1).optional(),
+  damageRoll: shortText.optional(),
+  damageType: shortText.optional(),
+  attributeModifier: shortText.min(1).optional(),
   proficiencyRank: proficiencyRankSchema.optional(),
   itemBonus: z.number().int().optional(),
-  traits: z.array(z.string()).optional(),
+  traits: z.array(shortText).optional(),
   range: z.number().int().nullable().optional(),
-  savingThrow: z.string().optional(),
-  notes: z.string().optional(),
+  savingThrow: shortText.optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -248,16 +252,16 @@ const currencySchema = z.object({
  * Most fields optional for quick item addition
  */
 const inventoryItemSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   quantity: z.number().int().min(0).optional(),
-  bulk: z.union([z.number(), z.string()]).optional(),
+  bulk: z.union([z.number(), shortText]).optional(),
   equippable: z.boolean().optional(),
   equipped: z.boolean().optional(),
   requiresAttunement: z.boolean().optional(),
   attuned: z.boolean().optional(),
   invested: z.boolean().optional(),
   value: z.number().min(0).optional(),
-  notes: z.string().optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -276,9 +280,9 @@ const bulkSchema = z.object({
  */
 const featSchema = z.object({
   level: z.number().int().min(1).max(20).optional(),
-  name: z.string().min(1),
-  notes: z.string().optional(),
-  description: z.string().optional(),
+  name: shortText.min(1),
+  notes: longText.optional(),
+  description: longText.optional(),
 });
 
 /**
@@ -321,7 +325,7 @@ const spellSlotsSchema = z.object({
  */
 const cantripSchema = z.object({
   rank: z.number().int().min(1).max(10),
-  name: z.string().min(1),
+  name: shortText.min(1),
   prepared: z.boolean(),
 });
 
@@ -330,7 +334,7 @@ const cantripSchema = z.object({
  */
 const spellSchema = z.object({
   rank: z.number().int().min(1).max(10),
-  name: z.string().min(1),
+  name: shortText.min(1),
   prepared: z.boolean(),
   ritual: z.boolean(),
   heightened: z.boolean(),
@@ -371,11 +375,11 @@ const focusSpellsSchema = z.object({
  */
 const innateSpellSchema = z.object({
   rank: z.number().int().min(1).max(10).optional(),
-  name: z.string().min(1),
-  tradition: z.string().min(1).optional(),
+  name: shortText.min(1),
+  tradition: shortText.min(1).optional(),
   // A text box on the sheet; empty when cleared.
-  frequency: z.string().optional(),
-  notes: z.string().optional(),
+  frequency: shortText.optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -383,9 +387,9 @@ const innateSpellSchema = z.object({
  * Most fields optional for progressive spellcasting setup
  */
 const spellcastingSchema = z.object({
-  tradition: z.string().min(1).optional(),
-  type: z.string().min(1).optional(),
-  keyAttribute: z.string().min(1).optional(),
+  tradition: shortText.min(1).optional(),
+  type: shortText.min(1).optional(),
+  keyAttribute: shortText.min(1).optional(),
   spellAttackBonus: spellAttackBonusSchema.optional(),
   spellDC: spellDCSchema.optional(),
   cantrips: z.array(cantripSchema).optional(),
@@ -401,12 +405,12 @@ const spellcastingSchema = z.object({
  * All fields optional to allow partial character creation
  */
 const appearanceSchema = z.object({
-  age: z.union([z.string(), z.number()]).transform(v => String(v)).optional().nullable(),
-  height: z.string().optional(),
-  weight: z.string().optional(),
-  eyes: z.string().optional(),
-  skin: z.string().optional(),
-  hair: z.string().optional(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)).optional().nullable(),
+  height: shortText.optional(),
+  weight: shortText.optional(),
+  eyes: shortText.optional(),
+  skin: shortText.optional(),
+  hair: shortText.optional(),
 });
 
 /**
@@ -414,10 +418,10 @@ const appearanceSchema = z.object({
  * All fields optional to allow partial character creation
  */
 const personalitySchema = z.object({
-  traits: z.string().optional(),
-  ideals: z.string().optional(),
-  bonds: z.string().optional(),
-  flaws: z.string().optional(),
+  traits: longText.optional(),
+  ideals: longText.optional(),
+  bonds: longText.optional(),
+  flaws: longText.optional(),
 });
 
 /**
@@ -425,8 +429,8 @@ const personalitySchema = z.object({
  * All fields optional to allow quick entries
  */
 const alliesAndOrganizationsSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: shortText.optional(),
+  description: longText.optional(),
 });
 
 /**
@@ -443,19 +447,19 @@ export const pathfinder2eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
   characterName: sheetCharacterNameSchema,
-  class: z.string().min(1),
+  class: shortText.min(1),
   level: z.number().int().min(1).max(20),
-  ancestry: z.string().min(1),
-  heritage: z.string().min(1),
+  ancestry: shortText.min(1),
+  heritage: shortText.min(1),
   attributes: attributesSchema,
 
   // Optional: Additional details
-  playerName: z.string().min(1).optional(),
+  playerName: shortText.min(1).optional(),
   // Empty is allowed: these are text boxes on the sheet, and clearing one
   // writes an empty string, which `min(1)` refused along with the whole save.
-  background: z.string().optional(),
-  alignment: z.string().optional(),
-  deity: z.string().optional(),
+  background: shortText.optional(),
+  alignment: shortText.optional(),
+  deity: shortText.optional(),
   experiencePoints: z.number().int().min(0).optional(),
   heroPoints: z.number().int().min(0).max(3).optional(),
   savingThrows: savingThrowsSchema.optional(),
@@ -467,14 +471,14 @@ export const pathfinder2eCharacterDataSchema = z.object({
   initiative: initiativeSchema.optional(),
   speed: speedSchema.optional(),
   hp: hitPointsSchema.optional(),
-  conditions: z.array(z.string()).optional(),
+  conditions: z.array(shortText).optional(),
   deathAndDying: deathAndDyingSchema.optional(),
   proficiencies: proficienciesSchema.optional(),
   strikes: z.array(strikeSchema).optional(),
   currency: currencySchema.optional(),
   inventory: z.array(inventoryItemSchema).optional(),
   bulk: bulkSchema.optional(),
-  languages: z.array(z.string()).optional(),
+  languages: z.array(shortText).optional(),
   feats: featsSchema.optional(),
   // Named class features with optional rules text. Strings are still
   // accepted — that is what every sheet written so far holds, and what a
@@ -483,10 +487,10 @@ export const pathfinder2eCharacterDataSchema = z.object({
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),
-  backstory: z.string().optional(),
+  backstory: longText.optional(),
   alliesAndOrganizations: alliesAndOrganizationsSchema.optional(),
-  notes: z.string().optional(),
-  treasure: z.string().optional(),
+  notes: longText.optional(),
+  treasure: longText.optional(),
 });
 
 /**

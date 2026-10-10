@@ -5,7 +5,11 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
-import { sheetCharacterNameSchema } from './sheetText';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 
 /**
  * Karma
@@ -19,15 +23,15 @@ const karmaSchema = z.object({
  * Personal data
  */
 const personalDataSchema = z.object({
-  age: z.union([z.string(), z.number()]).transform(v => String(v)),
-  sex: z.string(),
-  height: z.string(),
-  weight: z.string(),
-  ethnicity: z.string(),
-  lifestyle: z.string(),
-  primaryArmor: z.string(),
-  primaryRangedWeapon: z.string(),
-  primaryMeleeWeapon: z.string(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)),
+  sex: shortText,
+  height: shortText,
+  weight: shortText,
+  ethnicity: shortText,
+  lifestyle: shortText,
+  primaryArmor: shortText,
+  primaryRangedWeapon: shortText,
+  primaryMeleeWeapon: shortText,
 });
 
 /**
@@ -90,8 +94,8 @@ const attributesSchema = z.object({
  */
 const initiativeSchema = z.object({
   base: z.number().int().nullable(),
-  dicePools: z.string(),
-  formula: z.string(),
+  dicePools: shortText,
+  formula: shortText,
 });
 
 /**
@@ -108,22 +112,22 @@ const initiativeStatsSchema = z.object({
  */
 const derivedStatSchema = z.object({
   dicePool: z.number().int().min(0),
-  formula: z.string(),
+  formula: shortText,
 });
 
 /**
  * Movement
  */
 const movementSchema = z.object({
-  walk: z.string(),
-  sprint: z.string(),
+  walk: shortText,
+  sprint: shortText,
 });
 
 /**
  * Unarmed DV
  */
 const unarmedDVSchema = z.object({
-  formula: z.string(),
+  formula: shortText,
   value: z.number().int().min(0),
 });
 
@@ -155,7 +159,7 @@ const edgePointsSchema = z.object({
 const conditionMonitorSchema = z.object({
   maximum: z.number().int().min(0),
   current: z.number().int().min(0),
-  formula: z.string(),
+  formula: shortText,
 });
 
 /**
@@ -172,9 +176,9 @@ const conditionMonitorsSchema = z.object({
  */
 const skillSchema = z.object({
   rank: z.number().int().min(0).max(12),
-  linkedAttribute: z.string().min(1),
-  specialization: z.string().nullable(),
-  expertise: z.string().nullable(),
+  linkedAttribute: shortText.min(1),
+  specialization: shortText.nullable(),
+  expertise: shortText.nullable(),
   canDefault: z.boolean(),
 });
 
@@ -207,7 +211,7 @@ const skillsSchema = z.object({
  * Knowledge skill
  */
 const knowledgeSkillSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   type: z.enum(['academic', 'professional', 'street']),
   rank: z.number().int().min(0).max(12),
 });
@@ -216,7 +220,7 @@ const knowledgeSkillSchema = z.object({
  * Language
  */
 const languageSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   proficiency: z.enum(['native', 'fluent', 'basic']),
 });
 
@@ -224,10 +228,10 @@ const languageSchema = z.object({
  * Quality
  */
 const qualitySchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   type: z.enum(['positive', 'negative']),
   cost: z.number().int(),
-  notes: z.string(),
+  notes: longText,
 });
 
 /**
@@ -244,28 +248,28 @@ const attackRatingsSchema = z.object({
  * Ranged weapon
  */
 const rangedWeaponSchema = z.object({
-  name: z.string().min(1),
-  type: z.string().min(1),
+  name: shortText.min(1),
+  type: shortText.min(1),
   dicePool: z.number().int().min(0),
-  dv: z.string(),
+  dv: shortText,
   attackRatings: attackRatingsSchema,
-  firingModes: z.array(z.string()),
+  firingModes: z.array(shortText),
   capacity: z.number().int().min(0),
   ammoLoaded: z.number().int().min(0),
-  ammoType: z.string(),
-  notes: z.string(),
+  ammoType: shortText,
+  notes: longText,
 });
 
 /**
  * Melee weapon
  */
 const meleeWeaponSchema = z.object({
-  name: z.string().min(1),
-  type: z.string().min(1),
+  name: shortText.min(1),
+  type: shortText.min(1),
   dicePool: z.number().int().min(0),
-  dv: z.string(),
+  dv: shortText,
   attackRatings: attackRatingsSchema,
-  notes: z.string(),
+  notes: longText,
 });
 
 /**
@@ -280,9 +284,9 @@ const weaponsSchema = z.object({
  * Armor
  */
 const armorSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   defenseRating: z.number().int().min(0),
-  notes: z.string(),
+  notes: longText,
   equipped: z.boolean(),
 });
 
@@ -290,11 +294,11 @@ const armorSchema = z.object({
  * Augmentation
  */
 const augmentationSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   rating: z.number().int().min(0),
   essenceCost: z.number().min(0),
   type: z.enum(['cyberware', 'bioware']),
-  notes: z.string(),
+  notes: longText,
 });
 
 /**
@@ -312,8 +316,8 @@ const matrixPersonaSchema = z.object({
  */
 const matrixInitiativeSchema = z.object({
   base: z.number().int().nullable(),
-  dicePools: z.string().nullable(),
-  notes: z.string(),
+  dicePools: shortText.nullable(),
+  notes: longText,
 });
 
 /**
@@ -321,13 +325,13 @@ const matrixInitiativeSchema = z.object({
  */
 const matrixStatsSchema = z.object({
   hasMatrixDevice: z.boolean(),
-  commlink: z.string(),
+  commlink: shortText,
   persona: matrixPersonaSchema,
   matrixConditionMonitor: z.object({
     maximum: z.number().int().min(0),
     current: z.number().int().min(0),
   }),
-  programs: z.array(z.string()),
+  programs: z.array(shortText),
   matrixInitiative: matrixInitiativeSchema,
 });
 
@@ -336,34 +340,34 @@ const matrixStatsSchema = z.object({
  */
 const magicSchema = z.object({
   isMagicallyActive: z.boolean(),
-  tradition: z.string().nullable(),
+  tradition: shortText.nullable(),
   magicRating: z.number().int().min(0).max(12).nullable(),
-  spells: z.array(z.string()),
-  rituals: z.array(z.string()),
-  preparations: z.array(z.string()),
-  complexForms: z.array(z.string()),
-  adeptPowers: z.array(z.string()),
+  spells: z.array(shortText),
+  rituals: z.array(shortText),
+  preparations: z.array(shortText),
+  complexForms: z.array(shortText),
+  adeptPowers: z.array(shortText),
   initiationGrade: z.number().int().min(0),
   submersionGrade: z.number().int().min(0),
-  focii: z.array(z.string()),
+  focii: z.array(shortText),
 });
 
 /**
  * Contact
  */
 const contactSchema = z.object({
-  name: z.string().min(1),
-  role: z.string().min(1),
+  name: shortText.min(1),
+  role: shortText.min(1),
   loyalty: z.number().int().min(1).max(6),
   connection: z.number().int().min(1).max(12),
-  notes: z.string(),
+  notes: longText,
 });
 
 /**
  * License
  */
 const licenseSchema = z.object({
-  type: z.string().min(1),
+  type: shortText.min(1),
   rating: z.number().int().min(1).max(6),
 });
 
@@ -371,8 +375,8 @@ const licenseSchema = z.object({
  * Fake ID
  */
 const fakeIDSchema = z.object({
-  name: z.string().min(1),
-  type: z.string().min(1),
+  name: shortText.min(1),
+  type: shortText.min(1),
   rating: z.number().int().min(1).max(6),
   licenses: z.array(licenseSchema),
 });
@@ -388,32 +392,32 @@ const currencySchema = z.object({
  * Gear item
  */
 const gearItemSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   rating: z.number().int().min(0).nullable(),
   quantity: z.number().int().min(0),
-  notes: z.string(),
+  notes: longText,
 });
 
 /**
  * Appearance
  */
 const appearanceSchema = z.object({
-  age: z.union([z.string(), z.number()]).transform(v => String(v)),
-  height: z.string(),
-  weight: z.string(),
-  eyes: z.string(),
-  skin: z.string(),
-  hair: z.string(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)),
+  height: shortText,
+  weight: shortText,
+  eyes: shortText,
+  skin: shortText,
+  hair: shortText,
 });
 
 /**
  * Personality
  */
 const personalitySchema = z.object({
-  traits: z.string(),
-  ideals: z.string(),
-  bonds: z.string(),
-  flaws: z.string(),
+  traits: longText,
+  ideals: longText,
+  bonds: longText,
+  flaws: longText,
 });
 
 /**
@@ -430,13 +434,13 @@ export const shadowrun6eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
   characterName: sheetCharacterNameSchema,
-  metatype: z.string().min(1),
-  archetype: z.string().min(1),
+  metatype: shortText.min(1),
+  archetype: shortText.min(1),
   attributes: attributesSchema,
 
   // Optional: Additional details
-  playerName: z.string().min(1).optional(),
-  primaryAlias: z.string().min(1).optional(),
+  playerName: shortText.min(1).optional(),
+  primaryAlias: shortText.min(1).optional(),
   karma: karmaSchema.optional(),
   reputation: z.number().int().min(0).optional(),
   heat: z.number().int().min(0).optional(),
@@ -445,7 +449,7 @@ export const shadowrun6eCharacterDataSchema = z.object({
   edgePoints: edgePointsSchema.optional(),
   conditionMonitors: conditionMonitorsSchema.optional(),
   woundModifier: z.number().int().optional(),
-  conditions: z.array(z.string()).optional(),
+  conditions: z.array(shortText).optional(),
   skills: skillsSchema.optional(),
   knowledgeSkills: z.array(knowledgeSkillSchema).optional(),
   languages: z.array(languageSchema).optional(),
@@ -459,11 +463,11 @@ export const shadowrun6eCharacterDataSchema = z.object({
   ids: z.array(fakeIDSchema).optional(),
   currency: currencySchema.optional(),
   gear: z.array(gearItemSchema).optional(),
-  vehicles: z.array(z.string()).optional(),
+  vehicles: z.array(shortText).optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),
-  backstory: z.string().optional(),
-  notes: z.string().optional(),
+  backstory: longText.optional(),
+  notes: longText.optional(),
 });
 
 /**

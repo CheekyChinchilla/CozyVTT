@@ -5,7 +5,11 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
-import { sheetCharacterNameSchema } from './sheetText';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 import { SPELL_SLOTS_MAX } from './sheetLimits';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
@@ -17,6 +21,12 @@ import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e'
  * roller's limit made the roll fall back to a flat d20.
  */
 const manualBonusSchema = z.number().int().min(MIN_BONUS_OVERRIDE).max(MAX_BONUS_OVERRIDE);
+
+/**
+ * One of the four proficiency boxes. The flattened list below is split from
+ * them at commas, so one of its entries can be a whole box.
+ */
+const proficiencyBoxSchema = z.string().max(2000);
 
 /**
  * Ability score with modifier
@@ -150,11 +160,11 @@ const hitDiceSchema = z.object({
   // this minimum and the three below refuse the whole save until each is filled
   // in. Have the buttons seed a name, or let a new row save with the field
   // empty.
-  class: z.string().min(1),
+  class: shortText.min(1),
   // The older field, packing count and die into one string ("5d10"). Optional
   // now that `die` and `maximum` carry those separately; still accepted so
   // sheets written before them keep saving.
-  total: z.string().optional(),
+  total: shortText.optional(),
   /** One hit die's roll — "d10", or "2d6" for a pool that is not a single die. */
   die: z.string().max(50).optional(),
   /** How many dice the pool holds at full. */
@@ -192,17 +202,17 @@ const additionalDamageSchema = z.object({
 });
 
 const attackSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   attackBonus: z.number().int(),
-  damageRoll: z.string().optional(),
-  damageType: z.string().optional(),
+  damageRoll: shortText.optional(),
+  damageType: shortText.optional(),
   range: z.number().min(0).optional(),
   // Free text, deliberately not an enum. The eleven the rules name are the
   // common case, not the limit — a homebrew game may name any number more, and
   // the sheet draws a badge for whatever is stored. Bounded only so the field
   // cannot be used as storage, the same reason token conditions are bounded.
   properties: z.array(z.string().max(60)).max(20).optional(),
-  notes: z.string().optional(),
+  notes: longText.optional(),
   additionalDamage: z.array(additionalDamageSchema).max(10).optional(),
 });
 
@@ -222,10 +232,10 @@ const currencySchema = z.object({
  * Most fields optional for quick item addition
  */
 const inventoryItemSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   quantity: z.number().int().min(0).optional(),
   weight: z.number().min(0).optional(),
-  notes: z.string().optional(),
+  notes: longText.optional(),
   equippable: z.boolean().optional(),
   equipped: z.boolean().optional(),
   requiresAttunement: z.boolean().optional(),
@@ -269,7 +279,7 @@ const spellSlotsSchema = z.object({
  */
 const spellSchema = z.object({
   level: z.number().int().min(0).max(9),
-  name: z.string().min(1),
+  name: shortText.min(1),
   prepared: z.boolean(),
   ritual: z.boolean(),
   concentration: z.boolean(),
@@ -283,8 +293,8 @@ const spellcastingSchema = z.object({
   // Empty is allowed, and means "does not cast". These are free-text boxes on
   // the sheet, so clearing one writes an empty string — which `min(1)` rejected,
   // meaning a player who emptied the field could not save their character at all.
-  class: z.string().optional(),
-  ability: z.string().optional(),
+  class: shortText.optional(),
+  ability: shortText.optional(),
   spellSaveDC: z.number().int().min(1).optional(),
   spellAttackBonus: z.number().int().optional(),
   // Adjustments that are neither the proficiency bonus nor the ability
@@ -295,7 +305,7 @@ const spellcastingSchema = z.object({
   // Perception already are.
   spellSaveDCOtherBonus: manualBonusSchema.optional(),
   spellAttackOtherBonus: manualBonusSchema.optional(),
-  cantrips: z.array(z.string()).optional(),
+  cantrips: z.array(shortText).optional(),
   slots: spellSlotsSchema.optional(),
   spells: z.array(spellSchema).optional(),
 });
@@ -305,12 +315,12 @@ const spellcastingSchema = z.object({
  * All fields optional to allow partial character creation
  */
 const appearanceSchema = z.object({
-  age: z.union([z.string(), z.number()]).transform(v => String(v)).optional().nullable(),
-  height: z.string().optional(),
-  weight: z.string().optional(),
-  eyes: z.string().optional(),
-  skin: z.string().optional(),
-  hair: z.string().optional(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)).optional().nullable(),
+  height: shortText.optional(),
+  weight: shortText.optional(),
+  eyes: shortText.optional(),
+  skin: shortText.optional(),
+  hair: shortText.optional(),
 });
 
 /**
@@ -318,10 +328,10 @@ const appearanceSchema = z.object({
  * All fields optional to allow partial character creation
  */
 const personalitySchema = z.object({
-  traits: z.string().optional(),
-  ideals: z.string().optional(),
-  bonds: z.string().optional(),
-  flaws: z.string().optional(),
+  traits: longText.optional(),
+  ideals: longText.optional(),
+  bonds: longText.optional(),
+  flaws: longText.optional(),
 });
 
 /**
@@ -329,8 +339,8 @@ const personalitySchema = z.object({
  * Description optional to allow quick entries
  */
 const alliesAndOrganizationsSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: shortText.optional(),
+  description: longText.optional(),
 });
 
 /**
@@ -347,18 +357,18 @@ export const dnd5eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
   characterName: sheetCharacterNameSchema,
-  class: z.string().min(1),
+  class: shortText.min(1),
   level: z.number().int().min(1).max(20),
-  race: z.string().min(1),
+  race: shortText.min(1),
   proficiencyBonus: z.number().int().min(2).max(6),
   stats: statsSchema,
 
   // Optional: Additional details
-  playerName: z.string().min(1).optional(),
+  playerName: shortText.min(1).optional(),
   // Empty is allowed: these are text boxes on the sheet, and clearing one
   // writes an empty string, which `min(1)` refused along with the whole save.
-  background: z.string().optional(),
-  alignment: z.string().optional(),
+  background: shortText.optional(),
+  alignment: shortText.optional(),
   experiencePoints: z.number().int().min(0).optional(),
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),
@@ -380,7 +390,7 @@ export const dnd5eCharacterDataSchema = z.object({
   initiativeBonus: manualBonusSchema.optional(),
   speed: z.number().int().min(0).optional(),
   hp: hitPointsSchema.optional(),
-  conditions: z.array(z.string()).optional(),
+  conditions: z.array(shortText).optional(),
   // Exhaustion is six cumulative levels, not a condition you either have or do
   // not (Basic Rules, Appendix A) — level 1 is disadvantage on ability checks,
   // level 6 is death. It used to be a checkbox in the list above, which could
@@ -412,15 +422,15 @@ export const dnd5eCharacterDataSchema = z.object({
   proficiencies: z
     .union([
       z.object({
-        armor: z.string().max(2000).optional(),
-        weapons: z.string().max(2000).optional(),
-        tools: z.string().max(2000).optional(),
-        languages: z.string().max(2000).optional(),
+        armor: proficiencyBoxSchema.optional(),
+        weapons: proficiencyBoxSchema.optional(),
+        tools: proficiencyBoxSchema.optional(),
+        languages: proficiencyBoxSchema.optional(),
       }),
-      z.array(z.string()),
+      z.array(longText),
     ])
     .optional(),
-  proficienciesAndLanguages: z.array(z.string()).optional(),
+  proficienciesAndLanguages: z.array(proficiencyBoxSchema).optional(),
   // Features carry a name and an optional description. The built-in templates
   // always had descriptions — Second Wind's full rules text, and so on — but
   // wrote them to an undeclared `features` field that nothing read, so no
@@ -435,10 +445,10 @@ export const dnd5eCharacterDataSchema = z.object({
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),
-  backstory: z.string().optional(),
+  backstory: longText.optional(),
   alliesAndOrganizations: alliesAndOrganizationsSchema.optional(),
-  treasure: z.string().optional(),
-  additionalFeaturesAndTraits: z.string().optional(),
+  treasure: longText.optional(),
+  additionalFeaturesAndTraits: longText.optional(),
 });
 
 /**

@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The name written on a character sheet is held to 200 characters, like the name a character is created with.** Saving a sheet copies that name into the character's name, which the roster, tokens, initiative and the dice log show, and the copy had no limit. The name box in the D&D 5e, Pathfinder 2e and Call of Cthulhu editors now stops at 200 characters, and a longer name is refused when the sheet is saved. A character stored with a longer name keeps loading.
 
+- **Every box on a character sheet now has a length limit.** Most text on a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet had none, so one box could hold up to the whole size of a save, and everyone in the campaign who opened the sheet received it. Notes, descriptions, backstories, personality and features hold up to 100,000 characters, the D&D 5e proficiency boxes up to 2,000 as before, and any other box up to 1,000. A sheet stored with more keeps loading; the longer box has to be shortened before the sheet can be saved again.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

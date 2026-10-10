@@ -291,6 +291,8 @@ Once assigned, that character becomes available as a token in the campaign, and 
 
 CozyVTT includes sheets for several popular game systems. Here's a quick overview of what each one covers:
 
+Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, and any other box up to 1,000.
+
 #### Dungeons & Dragons 5th Edition
 
 The classic. Covers all the D&D 5e essentials:

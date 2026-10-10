@@ -57,6 +57,8 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | Limit | Constant | Where |
 |---|---|---|
 | The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
+| Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
+| Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
 | D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 
@@ -412,17 +414,22 @@ Create `backend/src/validators/game-systems/mySystem.schema.ts`. This is the **r
 // backend/src/validators/game-systems/mySystem.schema.ts
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 
 const mySystemSkillSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   value: z.number().min(0).max(100).optional(),
   proficient: z.boolean().optional(),
 });
 
 export const mySystemCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
-  characterName: z.string().min(1).max(100),
-  playerName: z.string().max(100).optional(),
+  characterName: sheetCharacterNameSchema,
+  playerName: shortText.optional(),
 
   stats: z.object({
     strength: z.number().int().optional(),
@@ -436,12 +443,14 @@ export const mySystemCharacterDataSchema = z.object({
   }).optional(),
 
   skills: z.array(mySystemSkillSchema).optional(),
-  notes: z.string().max(5000).optional(),
+  notes: longText.optional(),
 });
 
 export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 ```
 
+> Every text field needs a length limit, from `sheetText.ts`: `sheetCharacterNameSchema` for the character's own name, `shortText` for a one-line box, `longText` for anything that holds paragraphs. `sheetTextLimits.test.ts` walks every system's schema and fails on a string without one, so add your schema to its list.
+>
 > Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
 >
 > Match the permissiveness of the existing schemas. Look at `shadowrun6e.schema.ts` before finalizing — the shipped schemas are intentionally lenient so partial and in-progress sheets save cleanly.
