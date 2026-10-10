@@ -1,25 +1,53 @@
 import { z } from 'zod';
+import { CoordinateSchema } from './maps';
+
+/** What an add answers when the id it names is already on the map. */
+export const DUPLICATE_WALL_ID_MESSAGE = 'A wall segment with that id is already on this map';
+export const DUPLICATE_LIGHT_ID_MESSAGE = 'A light source with that id is already on this map';
 
 export const WallSegmentSchema = z.object({
   id: z.string().uuid(),
-  x1: z.number(),
-  y1: z.number(),
-  x2: z.number(),
-  y2: z.number(),
+  // Bounded (validators/maps.ts); where on the map is the route's check.
+  x1: CoordinateSchema,
+  y1: CoordinateSchema,
+  x2: CoordinateSchema,
+  y2: CoordinateSchema,
   type: z.enum(['wall', 'door-closed', 'door-open', 'door-locked', 'window']),
 });
 
+/**
+ * Ids are unique within a map's list: an edit, a delete and sight all find a
+ * wall or light by id, and two sharing one were each handled as the other.
+ */
+function refuseRepeatedIds(what: 'wall segments' | 'light sources') {
+  return (items: Array<{ id: string }>, ctx: z.RefinementCtx) => {
+    const seen = new Set<string>();
+    items.forEach((item, i) => {
+      if (seen.has(item.id)) {
+        ctx.addIssue({ code: 'custom', message: `Two ${what} have the same id (${item.id})`, path: [i, 'id'] });
+      }
+      seen.add(item.id);
+    });
+  };
+}
+
+/** Most wall segments, doors included, one map holds. */
+export const MAX_WALL_SEGMENTS = 5000;
+/** Most light sources one map holds. */
+export const MAX_LIGHT_SOURCES = 200;
+
 export const WallSegmentsArraySchema = z
   .array(WallSegmentSchema)
-  .max(5000, 'Maximum 5000 wall segments per map');
+  .max(MAX_WALL_SEGMENTS, `Maximum ${MAX_WALL_SEGMENTS} wall segments per map`)
+  .superRefine(refuseRepeatedIds('wall segments'));
 
 // ── Light Sources ────────────────────────────────────────────────────────────
 
 /** Base shape for a light source (without cross-field refinement). */
 const LightSourceBaseShape = z.object({
   id: z.string().uuid(),
-  x: z.number().finite(),
-  y: z.number().finite(),
+  x: CoordinateSchema,
+  y: CoordinateSchema,
   brightRadius: z.number().min(0).max(100),
   dimRadius: z.number().min(0.5).max(100),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -33,7 +61,7 @@ export const LightSourceSchema = LightSourceBaseShape.refine(
 
 export const LightSourcesArraySchema = z
   .array(LightSourceBaseShape)
-  .max(200, 'Maximum 200 light sources per map')
+  .max(MAX_LIGHT_SOURCES, `Maximum ${MAX_LIGHT_SOURCES} light sources per map`)
   .superRefine((lights, ctx) => {
     for (let i = 0; i < lights.length; i++) {
       if (lights[i].dimRadius < lights[i].brightRadius) {
@@ -44,12 +72,13 @@ export const LightSourcesArraySchema = z
         });
       }
     }
-  });
+  })
+  .superRefine(refuseRepeatedIds('light sources'));
 
 /** Partial schema for PATCH updates — all fields optional except id. */
 export const LightSourceUpdateSchema = z.object({
-  x: z.number().finite().optional(),
-  y: z.number().finite().optional(),
+  x: CoordinateSchema.optional(),
+  y: CoordinateSchema.optional(),
   brightRadius: z.number().min(0).max(100).optional(),
   dimRadius: z.number().min(0.5).max(100).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),

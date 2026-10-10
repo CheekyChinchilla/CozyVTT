@@ -110,6 +110,10 @@ gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" -v trailer="$REST
     }
     if (line == "-- PostgreSQL database dump complete") complete = 1
     if (line ~ /^SET transaction_timeout = /) next
+    # TODO(restore): this pattern backtracks on a long crafted line (mawk took
+    # 12 s on two 100 KB lines). Match it in one pass, as isOwnershipStatement
+    # in backend/src/utils/pgRestore.ts now does; awk has no lookahead, so
+    # check the closing semicolon and find the first " OWNER TO " with index().
     if (line ~ /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/) next
     if (line ~ /^(GRANT|REVOKE) /) next
     if (line == "CREATE TABLE public.\"User\" (") has_user = 1

@@ -49,6 +49,19 @@ const MAX_BONUS_ENTRIES = 60;
 /** Max length of a save or skill key. */
 const MAX_KEY_LENGTH = 50;
 
+/**
+ * The most a stat block may hold, as stored (its JSON, in characters), and
+ * how many keys it may carry that the schema does not name. Unknown keys pass
+ * through so older stored blocks survive a round trip, and nothing bounded
+ * them: a token could carry a megabyte under one made-up key, a map's tokens
+ * are one JSON column, and every drag of any token on the map read it all.
+ *
+ * The largest SRD 5.1 creature the Creature Library seeds, the Vampire, is
+ * about 6,000 characters stored, so 64 KB is ten times it.
+ */
+export const MAX_STAT_BLOCK_LENGTH = 64 * 1024;
+export const MAX_EXTRA_STAT_BLOCK_KEYS = 20;
+
 export interface StatBlockSchemaOptions {
   /** Max entries in each of traits/actions/bonusActions/reactions/legendaryActions. */
   maxListEntries: number;
@@ -58,6 +71,10 @@ export interface StatBlockSchemaOptions {
   maxDescriptionLength: number;
   /** Max length of the speed string. */
   maxSpeedLength: number;
+  /** Max length of the whole stat block as stored, in JSON characters. Unbounded when absent. */
+  maxStoredLength?: number;
+  /** Max keys the schema does not name. Unbounded when absent. */
+  maxExtraKeys?: number;
 }
 
 /**
@@ -122,82 +139,92 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
 
   const listSchema = z.array(nameDescPairSchema).max(options.maxListEntries).optional();
 
+  const shape = {
+    ac: z.number().int().min(0).max(99),
+    // Optional: stat blocks created before HP tracking have neither field
+    hpMax: z.number().int().min(1).max(99999).optional(),
+    hitDice: z.string().max(50).optional(),
+    speed: z.string().max(options.maxSpeedLength),
+    abilities: z.object({
+      str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+      dex: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+      con: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+      int: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+      wis: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+      cha: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
+    }),
+    // Attribute modifiers, for systems that print modifiers rather than
+    // scores. Pathfinder 2e stat blocks give "Str +4" with no underlying
+    // score, so deriving one would be an invention.
+    attributeModifiers: z
+      .object({
+        str: z.number().int().min(-10).max(20),
+        dex: z.number().int().min(-10).max(20),
+        con: z.number().int().min(-10).max(20),
+        int: z.number().int().min(-10).max(20),
+        wis: z.number().int().min(-10).max(20),
+        cha: z.number().int().min(-10).max(20),
+      })
+      .optional(),
+    // Creature level, for systems that rate creatures by level rather than
+    // challenge rating. PF2e runs -1 to 25.
+    level: z.number().int().min(-1).max(30).optional(),
+    savingThrows: bonusRecordSchema.optional(),
+    skills: bonusRecordSchema.optional(),
+    proficiencies: proficienciesSchema.optional(),
+    damageVulnerabilities: z.string().max(500).optional(),
+    damageResistances: z.string().max(500).optional(),
+    damageImmunities: z.string().max(500).optional(),
+    conditionImmunities: z.string().max(500).optional(),
+    senses: z.string().max(500).optional(),
+    languages: z.string().max(500).optional(),
+    challengeRating: z.string().max(10).optional(),
+    xp: z.number().int().min(0).optional(),
+    traits: listSchema,
+    actions: listSchema,
+    bonusActions: listSchema,
+    reactions: listSchema,
+    legendaryActions: listSchema,
+    creatureType: z.string().max(200).optional(),
+    alignment: z.string().max(100).optional(),
+    gameSystem: z.string().max(50).optional(),
+    notes: z.string().max(5000).optional(),
+  };
+  const named = new Set(Object.keys(shape));
+
   return z
-    .object({
-      ac: z.number().int().min(0).max(99),
-      // Optional: stat blocks created before HP tracking have neither field
-      hpMax: z.number().int().min(1).max(99999).optional(),
-      hitDice: z.string().max(50).optional(),
-      speed: z.string().max(options.maxSpeedLength),
-      abilities: z.object({
-        str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-        dex: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-        con: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-        int: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-        wis: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-        cha: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      }),
-      // Attribute modifiers, for systems that print modifiers rather than
-      // scores. Pathfinder 2e stat blocks give "Str +4" with no underlying
-      // score, so deriving one would be an invention.
-      attributeModifiers: z
-        .object({
-          str: z.number().int().min(-10).max(20),
-          dex: z.number().int().min(-10).max(20),
-          con: z.number().int().min(-10).max(20),
-          int: z.number().int().min(-10).max(20),
-          wis: z.number().int().min(-10).max(20),
-          cha: z.number().int().min(-10).max(20),
-        })
-        .optional(),
-      // Creature level, for systems that rate creatures by level rather than
-      // challenge rating. PF2e runs -1 to 25.
-      level: z.number().int().min(-1).max(30).optional(),
-      savingThrows: bonusRecordSchema.optional(),
-      skills: bonusRecordSchema.optional(),
-      proficiencies: proficienciesSchema.optional(),
-      damageVulnerabilities: z.string().max(500).optional(),
-      damageResistances: z.string().max(500).optional(),
-      damageImmunities: z.string().max(500).optional(),
-      conditionImmunities: z.string().max(500).optional(),
-      senses: z.string().max(500).optional(),
-      languages: z.string().max(500).optional(),
-      challengeRating: z.string().max(10).optional(),
-      xp: z.number().int().min(0).optional(),
-      traits: listSchema,
-      actions: listSchema,
-      bonusActions: listSchema,
-      reactions: listSchema,
-      legendaryActions: listSchema,
-      creatureType: z.string().max(200).optional(),
-      alignment: z.string().max(100).optional(),
-      gameSystem: z.string().max(50).optional(),
-      notes: z.string().max(5000).optional(),
-    })
-    .passthrough();
+    .object(shape)
+    .passthrough()
+    .superRefine((block, ctx) => {
+      const extra = Object.keys(block).filter((key) => !named.has(key));
+      if (options.maxExtraKeys !== undefined && extra.length > options.maxExtraKeys) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Stat block has ${extra.length} fields it does not use (at most ${options.maxExtraKeys} are kept)`,
+        });
+      }
+      if (options.maxStoredLength !== undefined && JSON.stringify(block).length > options.maxStoredLength) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Stat block is too large (${Math.round(options.maxStoredLength / 1024)} KB maximum)`,
+        });
+      }
+    });
 }
 
 /**
  * Limits for stat blocks authored in the app (creature library, token
  * templates). Matches what tokenTemplates.ts enforced before consolidation.
+ * A campaign import holds stat blocks to these too, cutting text and lists
+ * down to them, so anything imported can be placed and saved.
  */
 export const AUTHORING_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
   maxListEntries: 50,
   maxNameLength: 200,
   maxDescriptionLength: 5000,
   maxSpeedLength: 200,
-};
-
-/**
- * Limits for stat blocks arriving in a campaign archive. Looser than the
- * authoring limits because archives may come from other instances; matches what
- * campaignImport.ts enforced before consolidation.
- */
-export const IMPORT_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
-  maxListEntries: 100,
-  maxNameLength: 500,
-  maxDescriptionLength: 10000,
-  maxSpeedLength: 500,
+  maxStoredLength: MAX_STAT_BLOCK_LENGTH,
+  maxExtraKeys: MAX_EXTRA_STAT_BLOCK_KEYS,
 };
 
 /** Stat block schema for content authored in the app. */

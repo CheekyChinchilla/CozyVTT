@@ -1,6 +1,8 @@
 /**
- * A Pathfinder 2e character for editor tests: the blank built-in template,
- * which the server accepts as it stands, with the parts under test overridden.
+ * A Pathfinder 2e character for editor tests: the blank built-in template as
+ * 1.5.0 stored it, which the server accepts as it stands, with the parts under
+ * test overridden. Its attributes are abbreviated ("str") and its spellcasting
+ * capitalised ("Arcane"), as on every sheet made from that template.
  */
 
 import type { Character } from '../../../../types';

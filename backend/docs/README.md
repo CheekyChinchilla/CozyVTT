@@ -30,8 +30,8 @@ Both documents drift the moment something is added without a matching entry.
 Two checks, run from the repository root:
 
 ```bash
-python scripts/spec-coverage.py       # HTTP routes
-python scripts/websocket-events.py --check   # Socket.io events
+python3 scripts/spec-coverage.py       # HTTP routes
+python3 scripts/websocket-events.py --check   # Socket.io events
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
@@ -78,6 +78,12 @@ authoritative.
 Comments are blanked before any of this is read, so a gate that is commented
 out changes the row just as deleting it would, and a handler or an emit that
 is commented out is not listed.
+
+The WebSocket guide's table of flood ceilings is checked as well, by the
+backend test suite rather than by these scripts:
+`backend/src/__tests__/keepInStep.test.ts` fails when the ceiling the guide
+states for an event differs from the one the server applies (`SOCKET_CEILINGS`
+in `backend/src/websocket/shared.ts`). Change the two together.
 
 ### Validate
 

@@ -124,9 +124,16 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
     });
   };
 
+  // The slider moves locally while it is dragged, and the table is told once
+  // it is let go (or a key has moved it). Each send rewrites the campaign's
+  // atmosphere settings and restarts every player's fade, so one per step of
+  // a drag was twenty of each.
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
+  };
+
+  const commitVolume = (newVolume: number) => {
     if (activeAtmosphereAudio) {
       socket?.emitAtmosphereAudioSet({
         assetId: activeAtmosphereAudio.assetId,
@@ -343,6 +350,8 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                         step={0.05}
                         value={isMuted ? 0 : volume}
                         onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                        onPointerUp={(e) => commitVolume(parseFloat(e.currentTarget.value))}
+                        onKeyUp={(e) => commitVolume(parseFloat(e.currentTarget.value))}
                         className="flex-1 accent-moss-green"
                         title="Volume"
                       />

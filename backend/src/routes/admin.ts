@@ -31,6 +31,7 @@ import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, t
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
+import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
@@ -62,7 +63,7 @@ const restoreStorage = multer.diskStorage({
 });
 const restoreUpload = multer({
   storage: restoreStorage,
-  limits: { fileSize: 4 * 1024 * 1024 * 1024 }, // 4 GB max
+  limits: { fileSize: 4 * 1024 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS }, // 4 GB max
   fileFilter: (_req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith('.zip')) {
       cb(null, true);
@@ -1041,10 +1042,10 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
   restoreUpload.single('backup')(req, res, (error?: unknown) => {
     if (!error) return next();
     const folderError = inBackupsFolder(error);
-    // TODO(restore): the file filter's refusal of a name not ending in .zip
-    // takes this path to the generic error handler, which answers 500 "An
-    // unexpected error occurred" in production. Answer 400 with the filter's
-    // own message.
+    // TODO(restore): the file filter's refusal of a name not ending in .zip,
+    // and the parser's refusal of a malformed or over-limit body, take this
+    // path to the generic error handler, which answers 500 "An unexpected
+    // error occurred" in production. Answer 400 with the refusal's own message.
     if (!(folderError instanceof BackupFolderUnusable)) return next(error);
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');

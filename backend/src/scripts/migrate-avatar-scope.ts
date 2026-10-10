@@ -1,8 +1,16 @@
+/**
+ * Move AVATAR assets from GLOBAL to USER scope, for instances that stored
+ * avatars before they were personal.
+ *
+ *   npm run migrate:avatar-scope
+ *
+ * Safe to run again: an avatar already at USER scope is not touched. Exits 1
+ * if the run fails.
+ */
+
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
-async function main() {
+export async function migrateAvatarScope(prisma: PrismaClient): Promise<number> {
   const result = await prisma.asset.updateMany({
     where: {
       type: 'AVATAR',
@@ -12,9 +20,17 @@ async function main() {
       scope: 'USER',
     },
   });
-  console.log(`Migrated ${result.count} AVATAR assets from GLOBAL to USER scope.`);
+  return result.count;
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+// Only run when invoked directly, so importing this does not change anything.
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  migrateAvatarScope(prisma)
+    .then((count) => console.log(`Migrated ${count} AVATAR assets from GLOBAL to USER scope.`))
+    .catch((error) => {
+      console.error('Migration failed:', error);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
+}

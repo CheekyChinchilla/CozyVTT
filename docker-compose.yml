@@ -27,10 +27,19 @@
 # nginx you need path-based ingress rules (specific paths first, catch-all last).
 # See docs/DEPLOYMENT.md → "Using an External Reverse Proxy" for all three setups.
 
+# Docker's own log of each container, which `docker compose logs` reads, is
+# kept to five files of 10 MB. Without a limit it grows until the disk is full.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   database:
     image: postgres:15-alpine
     container_name: cozyvtt-database
+    logging: *logging
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
@@ -55,6 +64,7 @@ services:
       dockerfile: Dockerfile.prod
     image: cozyvtt-backend:latest
     container_name: cozyvtt-backend
+    logging: *logging
     restart: unless-stopped
     depends_on:
       database:
@@ -85,6 +95,7 @@ services:
       # Rate limiting
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-300}
       ASSET_UPLOAD_RATE_LIMIT: ${ASSET_UPLOAD_RATE_LIMIT:-30}
+      CAMPAIGN_ARCHIVE_RATE_LIMIT: ${CAMPAIGN_ARCHIVE_RATE_LIMIT:-20}
       # Session timeouts (milliseconds) and logging. Every setting .env.example
       # offers is named here, or it never reaches the container: a test keeps
       # the two files in step.
@@ -130,6 +141,7 @@ services:
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest
     container_name: cozyvtt-frontend
+    logging: *logging
     restart: unless-stopped
     depends_on:
       - backend
@@ -145,6 +157,7 @@ services:
   nginx:
     image: nginx:alpine
     container_name: cozyvtt-nginx
+    logging: *logging
     restart: unless-stopped
     depends_on:
       - frontend
@@ -162,7 +175,7 @@ services:
       # `docker compose up -d --build` leaves a running container alone unless
       # its definition changed, so without a change here an upgrade keeps
       # serving the previous config.
-      NGINX_CONF_STAMP: "507e7aa210aa"
+      NGINX_CONF_STAMP: "0e74b6c0efb2"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080

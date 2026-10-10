@@ -3,17 +3,26 @@
  * Builds a .cozyvtt ZIP archive containing all campaign data:
  * maps, tokens, creatures (custom only), token templates, and asset files.
  *
+ * The archive is written to the response as it is made, never held whole:
+ * a campaign's pictures can be hundreds of megabytes, in a backend that has
+ * a few hundred for every table. Before anything is sent, the files it
+ * would hold are added up and an archive over the import limit is refused,
+ * since no server on the defaults could take it back.
+ *
  * Security: strips all user IDs, server-specific paths, and internal references.
  */
 
 import archiver from 'archiver';
-import { PassThrough } from 'stream';
+import type { Writable } from 'stream';
+import { pipeline } from 'stream/promises';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
-import { readTokens } from '../utils/prisma-json';
+import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
+import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 
 // ── Exported types ──────────────────────────────────────────────────────────
@@ -29,10 +38,27 @@ export interface ExportViewer {
   isAdmin: boolean;
 }
 
-export interface ExportResult {
-  buffer: Buffer;
+/** An export checked and ready to write. */
+export interface PreparedExport {
   filename: string;
+  /** Write the archive to `out`, resolving once all of it has been written. */
+  writeTo(out: Writable): Promise<void>;
 }
+
+/** The export would make an archive larger than this server takes. */
+export class ExportTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExportTooLargeError';
+  }
+}
+
+/**
+ * Bytes a ZIP spends on each entry besides its content: two headers and a
+ * data descriptor, with the name in both headers. Generous for any name this
+ * exporter writes.
+ */
+const ZIP_BYTES_PER_ENTRY = 256;
 
 // ── Asset reference extractor ───────────────────────────────────────────────
 
@@ -65,18 +91,20 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
 
 // ── Export service ───────────────────────────────────────────────────────────
 
-export async function exportCampaign(
+export async function prepareCampaignExport(
   campaignId: string,
   viewer: ExportViewer,
   options: ExportOptions = {}
-): Promise<ExportResult> {
+): Promise<PreparedExport> {
   const { includeAudio = false, includeTokens = true } = options;
 
   // 1. Fetch campaign with all related data
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: {
-      maps: true,
+      // Oldest first, so an import makes them in the order they were made
+      // and its Map Library lists them as this one does.
+      maps: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
       creatureTemplates: { where: { source: 'custom' } },
       tokenTemplates: true,
     },
@@ -88,13 +116,16 @@ export async function exportCampaign(
   const assetIds = new Set<string>();
   const assetMap: Map<string, { filePath: string; mimeType: string; originalName: string; type: string; fileSize: number }> = new Map();
 
-  /** Register an asset for inclusion. Returns the UUID reference key. */
-  async function registerAsset(url: string | null | undefined): Promise<string | null> {
+  /**
+   * Register an asset for inclusion. Returns the UUID reference key. With
+   * `onlyType`, an asset of any other type is left out.
+   */
+  async function registerAsset(url: string | null | undefined, onlyType?: 'AUDIO'): Promise<string | null> {
     const id = extractAssetId(url);
     if (!id) return null;
     if (!assetMap.has(id)) {
       const resolved = await resolveAssetFile(id, viewer);
-      if (resolved) {
+      if (resolved && (!onlyType || resolved.type === onlyType)) {
         // Skip audio files unless explicitly included
         if (resolved.type === 'AUDIO' && !includeAudio) return null;
         assetIds.add(id);
@@ -102,6 +133,13 @@ export async function exportCampaign(
       }
     }
     return assetIds.has(id) ? id : null;
+  }
+
+  // 2b. Sound is used only by the atmosphere: each period's track and the
+  // ambient one. Their ids stay in the campaign settings as they are, and
+  // the importer points them at its copies of the files.
+  if (includeAudio) {
+    for (const id of atmosphereTrackIds(campaign.vibeSettings)) await registerAsset(id, 'AUDIO');
   }
 
   // 3. Build map data and register map assets
@@ -205,7 +243,7 @@ export async function exportCampaign(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.0'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.1'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,
@@ -213,7 +251,8 @@ export async function exportCampaign(
     creatureCount: creaturesData.length,
     tokenTemplateCount: tokenTemplatesData.length,
     assetCount: assetMap.size,
-    includesAudio: includeAudio,
+    // Whether the archive holds any sound, which an import window shows.
+    includesAudio: [...assetMap.values()].some((a) => a.type === 'AUDIO'),
     totalSizeBytes,
   };
 
@@ -228,63 +267,94 @@ export async function exportCampaign(
     spiritLayerStyle: campaign.spiritLayerStyle,
   };
 
-  // 10. Create ZIP archive
-  const buffer = await new Promise<Buffer>((resolve, reject) => {
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    const buffers: Buffer[] = [];
-    const passthrough = new PassThrough();
+  // 10. The archive's data files, written before the pictures.
+  const dataFiles: Array<{ name: string; content: string }> = [
+    { name: 'manifest.json', content: JSON.stringify(manifest, null, 2) },
+    { name: 'campaign.json', content: JSON.stringify(campaignSettings, null, 2) },
+    ...mapDataArray.map((map, i) => ({ name: `maps/map-${i}.json`, content: JSON.stringify(map, null, 2) })),
+  ];
+  if (creaturesData.length > 0) {
+    dataFiles.push({ name: 'creatures/creatures.json', content: JSON.stringify(creaturesData, null, 2) });
+  }
+  if (tokenTemplatesData.length > 0) {
+    dataFiles.push({ name: 'token-templates/templates.json', content: JSON.stringify(tokenTemplatesData, null, 2) });
+  }
+  const assetManifestFile = { name: 'assets/asset-manifest.json', content: JSON.stringify(assetManifest, null, 2) };
 
-    passthrough.on('data', (chunk: Buffer) => buffers.push(chunk));
-    passthrough.on('end', () => resolve(Buffer.concat(buffers)));
-    passthrough.on('error', reject);
-    archive.on('error', reject);
-
-    archive.pipe(passthrough);
-
-    // Add JSON files
-    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
-    archive.append(JSON.stringify(campaignSettings, null, 2), { name: 'campaign.json' });
-
-    // Add map files
-    for (let i = 0; i < mapDataArray.length; i++) {
-      archive.append(JSON.stringify(mapDataArray[i], null, 2), { name: `maps/map-${i}.json` });
-    }
-
-    // Add creatures
-    if (creaturesData.length > 0) {
-      archive.append(JSON.stringify(creaturesData, null, 2), { name: 'creatures/creatures.json' });
-    }
-
-    // Add token templates
-    if (tokenTemplatesData.length > 0) {
-      archive.append(JSON.stringify(tokenTemplatesData, null, 2), { name: 'token-templates/templates.json' });
-    }
-
-    // Add asset files
-    for (const [id, info] of assetMap.entries()) {
-      const ext = path.extname(info.originalName) || mimeToExt(info.mimeType);
-      archive.file(info.filePath, { name: `assets/${id}${ext}` });
-    }
-
-    // Add asset manifest
-    archive.append(JSON.stringify(assetManifest, null, 2), { name: 'assets/asset-manifest.json' });
-
-    archive.finalize();
-  });
+  // 11. Refuse an archive larger than an import accepts, before sending any of it.
+  const dataBytes = [...dataFiles, assetManifestFile].reduce((sum, f) => sum + Buffer.byteLength(f.content), 0);
+  const entryCount = dataFiles.length + 1 + assetMap.size;
+  const archiveBytes = totalSizeBytes + dataBytes + entryCount * ZIP_BYTES_PER_ENTRY;
+  const limit = await getCampaignArchiveSizeLimit();
+  if (archiveBytes > limit) {
+    const audioBytes = [...assetMap.values()].filter((a) => a.type === 'AUDIO').reduce((sum, a) => sum + a.fileSize, 0);
+    const withoutAudio = archiveBytes - audioBytes;
+    const advice =
+      audioBytes > 0 && withoutAudio <= limit
+        ? `Without audio it is ${megabytes(withoutAudio)}: turn off Include audio assets and export again.`
+        : 'Remove maps or pictures the campaign no longer uses, then export again.';
+    throw new ExportTooLargeError(
+      `This campaign's files add up to ${megabytes(archiveBytes)}, more than the ${megabytes(limit)} a campaign archive can hold on this server. ${advice}`
+    );
+  }
 
   const safeName = campaign.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
   const filename = `${safeName}-export.cozyvtt`;
 
-  logger.info('Campaign exported', {
-    campaignId,
-    mapCount: mapDataArray.length,
-    creatureCount: creaturesData.length,
-    tokenTemplateCount: tokenTemplatesData.length,
-    assetCount: assetMap.size,
-    archiveSize: buffer.length,
-  });
+  return {
+    filename,
+    async writeTo(out: Writable): Promise<void> {
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      const written = pipeline(archive, out);
 
-  return { buffer, filename };
+      for (const file of dataFiles) archive.append(file.content, { name: file.name });
+      // Pictures and sound are compressed already; packing them again costs
+      // the server time and saves nothing, and stored they take exactly the
+      // space the size check above counted.
+      for (const [id, info] of assetMap.entries()) {
+        const ext = path.extname(info.originalName) || mimeToExt(info.mimeType);
+        const entry: archiver.ZipEntryData = { name: `assets/${id}${ext}`, store: true };
+        archive.file(info.filePath, entry);
+      }
+      archive.append(assetManifestFile.content, { name: assetManifestFile.name });
+      // An error here reaches `written` too, which is where it is handled.
+      archive.finalize().catch(() => undefined);
+
+      try {
+        await written;
+      } catch (error) {
+        // The caller hung up, or a file could not be read: stop reading the rest.
+        archive.abort();
+        throw error;
+      }
+
+      logger.info('Campaign exported', {
+        campaignId,
+        mapCount: mapDataArray.length,
+        creatureCount: creaturesData.length,
+        tokenTemplateCount: tokenTemplatesData.length,
+        assetCount: assetMap.size,
+        archiveSize: archive.pointer(),
+      });
+    },
+  };
+}
+
+/** The audio assets a campaign's atmosphere names: its periods' tracks, then its ambient track. */
+function atmosphereTrackIds(vibeSettings: Parameters<typeof readJsonObject>[0]): string[] {
+  const settings = readJsonObject(vibeSettings);
+  if (!settings) return [];
+  const ids: string[] = [];
+  if (Array.isArray(settings.periods)) {
+    for (const period of settings.periods) {
+      const id = period && typeof period === 'object' ? vibePeriodAudioAssetId((period as Record<string, unknown>).audio) : null;
+      if (id) ids.push(id);
+    }
+  }
+  const ambient = settings.atmosphereAudio;
+  const ambientId = ambient && typeof ambient === 'object' ? vibePeriodAudioAssetId((ambient as Record<string, unknown>).assetId) : null;
+  if (ambientId) ids.push(ambientId);
+  return ids;
 }
 
 /** Map MIME type to file extension. */

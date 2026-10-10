@@ -87,7 +87,12 @@ const rollableExpression = z
   .string()
   .trim()
   .min(1, 'A macro needs a dice expression')
-  .max(MAX_MACRO_EXPRESSION_LENGTH, `Expression too long. Maximum ${MAX_MACRO_EXPRESSION_LENGTH} characters.`)
+  .max(MAX_MACRO_EXPRESSION_LENGTH, {
+    error: `Expression too long. Maximum ${MAX_MACRO_EXPRESSION_LENGTH} characters.`,
+    // Zod runs every check in a chain whether or not an earlier one failed,
+    // so without this the parser below would read an over-long expression.
+    abort: true,
+  })
   .superRefine((expression, ctx) => {
     try {
       parseDiceExpression(expression);

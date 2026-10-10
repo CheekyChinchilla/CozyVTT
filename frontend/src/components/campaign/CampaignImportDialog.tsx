@@ -19,9 +19,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import api from '@/services/api';
-import type { CampaignImportPreview, CampaignImportResult } from '@/types';
+import type { CampaignImportPreview, CampaignImportResult, CampaignImportSkipped } from '@/types';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, errorMessage as thrownMessage } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -30,6 +30,31 @@ interface CampaignImportDialogProps {
 }
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'done' | 'error';
+
+/**
+ * A web proxy in front of CozyVTT refuses a body over its own size limit
+ * with 413 and a page of HTML, before the server has seen it, so there is no
+ * message of the server's to show.
+ */
+const TOO_LARGE_FOR_SERVER =
+  'This archive is larger than the server accepts. Whoever runs the server can raise the size limit for campaign imports on the web proxy in front of CozyVTT; the deployment guide explains how.';
+
+/** Each kind of thing an import can leave out, as the done screen names it. */
+const SKIPPED_KIND: Record<CampaignImportSkipped['kind'], string> = {
+  map: 'map',
+  token: 'token',
+  creature: 'creature',
+  tokenTemplate: 'token template',
+  asset: 'file',
+};
+
+/** What to tell the user about a refused preview or import. */
+function refusalMessage(err: unknown, fallback: string): string {
+  const message = apiErrorMessage(err);
+  if (message) return message;
+  if (apiErrorStatus(err) === 413) return TOO_LARGE_FOR_SERVER;
+  return thrownMessage(err) || fallback;
+}
 
 export default function CampaignImportDialog({
   isOpen,
@@ -79,8 +104,7 @@ export default function CampaignImportDialog({
       setCampaignName(previewData.campaignName);
       setStep('preview');
     } catch (err) {
-      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Failed to read archive.';
-      setErrorMessage(msg);
+      setErrorMessage(refusalMessage(err, 'Failed to read archive.'));
       setStep('error');
     } finally {
       setLoading(false);
@@ -112,8 +136,7 @@ export default function CampaignImportDialog({
       setStep('done');
       onSuccess?.();
     } catch (err) {
-      const msg = apiErrorMessage(err) || thrownMessage(err) || 'Import failed.';
-      setErrorMessage(msg);
+      setErrorMessage(refusalMessage(err, 'Import failed.'));
       setStep('error');
     }
   };
@@ -126,6 +149,10 @@ export default function CampaignImportDialog({
 
   if (!isOpen) return null;
 
+  // TODO(ui): this overlay is not marked as a dialog (no role="dialog",
+  // aria-modal or aria-labelledby), so a screen reader is not told one opened
+  // and focus is not held inside it. The shared Modal in components/ui does
+  // all three; this dialog should use it.
   return (
     <AnimatePresence>
       <motion.div
@@ -309,6 +336,8 @@ export default function CampaignImportDialog({
                   <div className="text-stone-gray font-medium text-left">{result.tokenTemplateCount}</div>
                 </div>
 
+                <ImportReport skipped={result.skipped ?? []} warnings={result.warnings ?? []} />
+
                 <div className="flex items-center gap-3 pt-2">
                   <Button onClick={handleClose} variant="secondary" className="flex-1">
                     Close
@@ -348,6 +377,38 @@ export default function CampaignImportDialog({
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ── What the import left out or changed ────────
+function ImportReport({ skipped, warnings }: { skipped: CampaignImportSkipped[]; warnings: string[] }) {
+  if (skipped.length === 0 && warnings.length === 0) return null;
+  return (
+    <div className="text-left max-h-56 overflow-y-auto rounded-lg border border-moss-green/20 bg-parchment/50 p-3 space-y-3">
+      <p className="text-sm text-stone-gray">Some of the archive could not be imported as it was.</p>
+      {skipped.length > 0 && (
+        <div>
+          <p id="import-left-out" className="text-sm font-semibold text-stone-gray">Left out</p>
+          <ul aria-labelledby="import-left-out" className="mt-1 space-y-1 text-xs text-stone-gray list-disc pl-4">
+            {skipped.map((item, i) => (
+              <li key={i}>
+                <span className="font-medium">{item.name}</span> ({SKIPPED_KIND[item.kind]}): {item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div>
+          <p id="import-changed" className="text-sm font-semibold text-stone-gray">Changed to fit</p>
+          <ul aria-labelledby="import-changed" className="mt-1 space-y-1 text-xs text-stone-gray list-disc pl-4">
+            {warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

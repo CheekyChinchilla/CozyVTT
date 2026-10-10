@@ -1,7 +1,7 @@
 /**
  * Auth rate limiters.
  *
- * The behaviour under test is `skipSuccessfulRequests`: a brute-force guard
+ * The behaviour under test is that only failures count: a brute-force guard
  * exists to stop repeated *wrong* answers, so counting the right ones as well
  * punished the legitimate user. Five correct logins inside fifteen minutes used
  * to lock the account out — and because the key is the client IP, on a
@@ -17,17 +17,20 @@
  * its store is shared for the lifetime of the module.
  */
 
-import express, { Request, Response } from 'express';
+import express, { Request, RequestHandler, Response } from 'express';
 import request from 'supertest';
 
 import { credentialLimiter, emailDispatchLimiter, accountCreationLimiter } from '../auth';
 import { mfaLoginLimiter, mfaSetupLimiter } from '../auth';
 
-type Limiter = typeof credentialLimiter;
+/** Any of the limiters; the credential limiter is also told of each failure. */
+type Limiter = RequestHandler & { recordFailure?: (req: Request) => void };
 
 /**
  * An app whose single route answers with whatever status the caller asks for,
- * so a test can drive the limiter with successes or failures on demand.
+ * so a test can drive the limiter with successes or failures on demand. A
+ * failure is reported to a limiter that counts only what its route reports,
+ * as the credential routes report a wrong answer.
  */
 function appWith(limiter: Limiter) {
   const app = express();
@@ -38,6 +41,7 @@ function appWith(limiter: Limiter) {
   app.set('trust proxy', 1);
   app.post('/probe', limiter, (req: Request, res: Response) => {
     const status = Number(req.query.status ?? 200);
+    if (status >= 400) limiter.recordFailure?.(req);
     return res.status(status).json({ ok: status < 400 });
   });
   return app;
@@ -55,8 +59,8 @@ describe('credentialLimiter', () => {
     const app = appWith(credentialLimiter);
     const ip = '10.0.0.1';
 
-    // Well past the max of 5. Before `skipSuccessfulRequests` the sixth of
-    // these was a 429 — the bug that prompted the change.
+    // Well past the max of 5. When every request counted, the sixth of
+    // these was a 429.
     for (let i = 0; i < 12; i++) {
       const res = await hit(app, ip, 200);
       expect(res.status).toBe(200);

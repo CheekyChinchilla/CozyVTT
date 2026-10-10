@@ -31,7 +31,10 @@ export interface DnD5eStats {
  */
 export interface DnD5eSavingThrow {
   proficient: boolean;
+  /** The total, kept in step by the editor: ability, proficiency and other bonus. */
   bonus: number;
+  /** What the maths cannot know: Aura of Protection, a Ring of Protection. */
+  otherBonus?: number;
 }
 
 /**
@@ -52,7 +55,10 @@ export interface DnD5eSavingThrows {
 export interface DnD5eSkill {
   proficient: boolean;
   expertise: boolean;
+  /** The total, kept in step by the editor: ability, proficiency and other bonus. */
   bonus: number;
+  /** What the maths cannot know: Jack of All Trades, a magic item. */
+  otherBonus?: number;
 }
 
 /**

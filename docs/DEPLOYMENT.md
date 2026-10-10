@@ -137,6 +137,8 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway, inside the 10 seconds Docker allows before it forces a container to stop. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+
 ---
 
 ## Port Configuration
@@ -307,7 +309,11 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. It tells visitors apart by their *IP address*, the address their device connects from, so it has to see each visitor's own address and not your tunnel's or proxy's.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
+
+The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. A right code does not count against it, but this limit has no allowance for people signing in together: if more than five people behind one address enter their codes at the very same moment, the ones past five are refused and have to enter their code again.
+
+Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's.
 
 **With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
 
@@ -339,11 +345,13 @@ Whatever proxy you use, it must:
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
 - Pass `X-Forwarded-Proto` to the backend, and `X-Forwarded-For` with the visitor's own address last (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits))
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
+- For importing campaigns: allow `/api/campaigns/import` (which also covers `/api/campaigns/import/preview`) a request body of at least **505 MB**, the 500 MB largest archive plus overhead, and give it about **300 seconds** to answer, since a large archive takes minutes to unpack. The bundled nginx allows 512 MB there whatever `NGINX_MAX_BODY_SIZE` says. Without this, importing an archive bigger than your body limit shows "This archive is larger than the server accepts", and a slow import shows an error while the backend carries on and finishes it. Where your proxy can, pass the upload straight through instead of saving it first (`proxy_request_buffering off` in nginx)
 - For the Admin Dashboard's backups: allow `/api/admin/backups/restore` a request body as large as your biggest backup (the bundled nginx allows 4 GB), and give both `/api/admin/backups` and `/api/admin/backups/restore` about **600 seconds** to answer (most proxies wait 60). Making or restoring a backup, uploaded files and all, happens inside that one request. Without this, restoring a backup bigger than your body limit fails with **413**, and making a backup that takes longer than your proxy waits shows **504**; the backend carries on, and the backup appears in the list when it is done. Where your proxy can, have it pass the restore upload straight through instead of saving it first (`proxy_request_buffering off` in nginx), so a stranger cannot fill its disk
+- Let a large campaign import or backup restore take its time to arrive on a slow connection. CozyVTT itself waits up to an hour for an upload, so it is your proxy's limits that count: give these paths a body timeout that drops a client that **stops** sending, not one that ends a slow but steady upload. nginx's `client_body_timeout` works that way (60 seconds between two pieces of the upload, by default), and the bundled nginx relies on it
 
 > ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
 
-> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the dashboard's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. To restore a large backup, copy it to the server and use the restore script steps under [Via Admin Dashboard](#via-admin-dashboard).
+> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the dashboard's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. They apply to campaign imports too: an archive over 100 MB cannot be imported through Cloudflare, and a large import may show an error although it finishes. Exports are not affected, because the server starts sending an export straight away. To restore a large backup, copy it to the server and use the restore script steps under [Via Admin Dashboard](#via-admin-dashboard).
 
 ### Updating after you've edited `docker-compose.yml`
 
@@ -354,6 +362,8 @@ error: Your local changes to the following files would be overwritten by merge:
         docker-compose.yml
 Please commit your changes or stash them before you merge.
 ```
+
+The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf` (to turn on HTTPS, for example, or to add a proxy's addresses); the message then names that file instead.
 
 Set your changes aside, update, then put them back:
 
@@ -603,6 +613,22 @@ server {
         proxy_send_timeout      600s;
     }
 
+    # Campaign import and its preview → backend: an archive is up to 500 MB,
+    # passed straight through (the backend refuses anyone not signed in before
+    # reading it), with time to unpack it
+    location /api/campaigns/import {
+        proxy_pass              http://127.0.0.1:4000;
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        client_max_body_size    512M;
+        proxy_request_buffering off;
+        proxy_read_timeout      300s;
+        proxy_send_timeout      300s;
+    }
+
     # Making a backup → backend: it answers only once the backup is written
     location /api/admin/backups {
         proxy_pass              http://127.0.0.1:4000;
@@ -713,13 +739,15 @@ MAX_AVATAR_SIZE_MB=2
 MAX_DOCUMENT_SIZE_MB=50
 
 # Request body cap for the bundled Nginx — must be >= the largest limit above
-# plus ~5 MB of multipart overhead
+# plus ~5 MB of multipart overhead (a Universal VTT import needs more: see below)
 NGINX_MAX_BODY_SIZE=55M
 ```
 
 These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
 
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
+
+**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself. CozyVTT accepts a `.uvtt` file of up to the map limit times 4/3, plus 8 MB for the walls and lights (about 75 MB with the default `MAX_MAP_SIZE_MB=50`), and answers a larger one with a message saying so. With the default `NGINX_MAX_BODY_SIZE=55M`, the proxy refuses any `.uvtt` file over 55 MB with a 413, which means a picture larger than about 40 MB, although a plain map upload of up to 50 MB works. To let through every file CozyVTT accepts, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 10: that covers the 8 MB for walls and lights and leaves a little over for the way the browser wraps the upload. With the default map limit, set `NGINX_MAX_BODY_SIZE=76M`.
 
 **If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
 
@@ -731,6 +759,8 @@ These take effect on `docker compose up -d` (no image rebuild needed): the backe
 | Caddy | `request_body { max_size ... }` |
 | Cloudflare proxy / Tunnel | Hard 100 MB cap on Free/Pro — not configurable |
 
+**Campaign archives have a limit of their own.** Importing a campaign accepts an archive of up to 500 MB, and the bundled nginx gives the import its own body limit of 512 MB, so `NGINX_MAX_BODY_SIZE` does not have to be that large. If you use your own proxy, give `/api/campaigns/import` that limit as described under [Minimum proxy requirements](#minimum-proxy-requirements).
+
 The backend logs its effective limits at startup and warns when they exceed the configured proxy cap:
 
 ```
@@ -739,6 +769,26 @@ NGINX_MAX_BODY_SIZE=55M is smaller than the largest upload limit AUDIO (250 MB).
 ```
 
 The admin panel shows the same numbers under **Settings → Upload Size Limits**, along with the body size your proxy needs.
+
+### Campaign Import and Export Limits
+
+A campaign archive (the `.cozyvtt` file made by **Export Campaign** and read by **Import**) can be up to 500 MB, and the server reads all of it. So each user may, in any hour:
+
+- preview 20 archives (the step where the import window shows what an archive holds),
+- import 20 campaigns,
+- export 20 campaigns,
+
+and run only one of these at a time. Moving a campaign to another server takes one preview and one import, so a real table never comes near these numbers; they are there to stop a script. Someone who reaches one is told how many minutes to wait.
+
+To change the number, set this in `.env` (it is the same number for all three):
+
+```env
+CAMPAIGN_ARCHIVE_RATE_LIMIT=20
+```
+
+Then apply it with `docker compose up -d`. Leave it out and the default of 20 applies. A value that is not a whole number above zero is ignored, with a warning in the backend log.
+
+Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
 
 ---
 
@@ -777,6 +827,8 @@ Beyond the platform role (Admin / User), two permissions are granted individuall
 
 Grant these sparingly: both write content visible to every user on the instance. Revoking either takes effect on the user's next request; they do not need to sign out.
 
+The **USER** / **ADMIN** pill beside a name changes that person's role, and it asks first: making someone an administrator spells out what that gives them, and taking it away says they lose the Admin Panel. Nothing changes until you confirm.
+
 An instance always keeps at least one admin. While you are the only one, you cannot remove your own admin role or delete your own account; promote another user to **Admin** first. Nothing else can make someone an admin once setup has run, so this is what stops an instance ending up with nobody able to manage it.
 
 ---
@@ -785,7 +837,7 @@ An instance always keeps at least one admin. While you are the only one, you can
 
 ### Via Admin Dashboard
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand.
+**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
 
 To keep them in another folder under Docker, name that folder in a small file of your own, `docker-compose.override.yml`, next to `docker-compose.yml`. Docker Compose reads it automatically on top of the shipped file, and `git pull` never touches it.
 
@@ -1022,12 +1074,36 @@ docker compose logs -f backend
 docker compose logs backend | grep -i error
 ```
 
+Docker keeps each container's log in up to five files of 10 MB and deletes the oldest as it goes, so these logs cannot fill the disk. The limit is set by the `logging:` lines in `docker-compose.yml`. If you send container logs elsewhere with a different Docker log driver, set `logging:` for each service in your `docker-compose.override.yml`.
+
 ### Persistent Log Files
 
 The backend writes structured JSON logs to `backend/logs/` on the host:
 
 - `backend/logs/combined.log` — all log levels
 - `backend/logs/error.log` — errors only
+
+The backend rotates these files itself. When one reaches 10 MB it becomes `combined1.log` (or `error1.log`), the older ones move up a number, and the fifth and oldest is deleted, so the two logs take about 100 MB at most. The newest lines are always in the file without a number. There is nothing to set up: do not add a `logrotate` rule for this folder. If you added one for an earlier version, remove it. The backend keeps its files open, so a rule that renames them leaves it writing to the renamed file, and the space is not freed.
+
+Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
+
+```json
+{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+```
+
+To see the most recent errors:
+
+```bash
+tail -n 20 backend/logs/error.log
+```
+
+**What the logs hold.** Email addresses are cut to their first letter and their domain, such as `a***@example.com`, which is enough to tell accounts apart. Accounts, campaigns and maps are mostly named by their internal ids, and a few lines include a campaign's name. A value longer than 8,000 characters keeps only its first and last 4,000, so one oversized request cannot produce a huge line. The database's own errors are logged the same way, as `Database error` lines whose `target` names the kind of record and the operation, such as `character.findUnique`. Log files written by older versions can still hold full email addresses. To remove them, stop the backend, delete the files, and start it again; it begins new ones:
+
+```bash
+docker compose stop backend
+sudo rm backend/logs/*.log
+docker compose start backend
+```
 
 ### Health Check Endpoint
 
@@ -1101,13 +1177,13 @@ If you removed the bundled `nginx` service, the usual culprit is a missing `port
 
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
-When `docker compose up -d` recreates only the backend (after you change `.env`, for example), the bundled nginx can keep using the old backend container's address, so everything sent to the backend answers **502 Bad Gateway**: the pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
+The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
 
 ```bash
 docker compose restart nginx
 ```
 
-It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again.
+It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, bring your copy up to date with the `git stash` steps in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml), which work the same for `nginx/nginx.conf`.
 
 ### Live features don't work (dice, token movement, chat)
 
@@ -1149,9 +1225,9 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**Neither 1.4.0 nor 1.5.0 needs a manual step here**: their database migrations run automatically and change no existing data. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
+**None of 1.4.0, 1.5.0 and 1.5.1 needs a manual step here**: their database migrations run automatically and change no existing data, and 1.5.1 has none. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
-Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place, so nothing is lost if someone saves a sheet before you run this. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
+Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 
 ```bash
 # See what would change, without writing anything
@@ -1163,7 +1239,14 @@ docker compose exec backend node dist/scripts/migrate-sheet-fields.js
 
 Without Docker, run the same two commands from the `backend` folder, without `docker compose exec backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
 
-Running it twice is harmless. Details in
+What to expect:
+
+- The dry run prints how many characters it looked at, then each character it would change, with its name, game system and id, and a line for each change, for example `moved 2 attack(s) to strikes`.
+- Nothing is deleted that has not been moved. Where a character already has its own text, the older text is added after it, and where there is no room for it, for example a second player name, the old field is left as it is and the character is listed under "keep something in an older field" so you can look at it.
+- You do not need to stop the stack. A player who saves, or a DM who changes hit points, while it runs keeps that change.
+- If it prints an error, or says a character changed while being written, it ends with an error status; run it again. Running it twice is harmless.
+
+Details in
 [backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).
 
 ### Without Docker
@@ -1207,7 +1290,7 @@ Before going live:
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
 - [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
-- [ ] **Log rotation** — `backend/logs/` directory is being rotated (consider `logrotate` for the host-mounted path)
+- [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
 - [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limit is 5 failed sign-ins per 15 minutes per visitor address, but a host-level ban catches scanners earlier
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)
@@ -1303,7 +1386,7 @@ There is no need to serve it from your instance. The bundled nginx only sees its
 The routes are the same whether the file is published or not, since the web client's own code shows them to anyone who loads the page. What protects an instance is:
 
 - every request is checked on the server: that the caller is signed in, their role in the campaign, and that they may touch what they ask for (`backend/src/middleware/` and `backend/src/services/permissions.ts`)
-- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, and 30 uploads a minute per user
+- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, 30 uploads a minute per user, 20 campaign imports, 20 import previews and 20 campaign exports an hour per user, one at a time, and a limit per account on every kind of event sent to the live table (chat, dice, token moves, the DM's controls), set far above what a game sends
 - uploads checked by what the file contains, not by its name or the type it claims
 - Argon2id password hashing and a strong `SESSION_SECRET`
 - security headers on every response: from helmet on the API, and from the bundled nginx on the app page

@@ -15,11 +15,11 @@
 // CampaignContext `useCampaign()` hook.
 // ============================================
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import campaignService from '@/services/campaign.service';
 import characterService from '@/services/character.service';
 import { api } from '@/services/api';
-import type { AssetScope, AssetType } from '@/types';
+import type { AssetScope, AssetType, Character } from '@/types';
 
 export const queryKeys = {
   campaigns: ['campaigns'] as const,
@@ -58,6 +58,27 @@ export function useCharactersQuery() {
     queryKey: queryKeys.characters,
     queryFn: () => characterService.getCharacters(),
   });
+}
+
+/**
+ * Put a character the server has just stored into the cached list that the
+ * Characters page and the dashboard read, then mark that list for a refetch.
+ *
+ * A page that saves or creates a character outside the Characters page has to
+ * do this. The list is otherwise served from cache when it was fetched less
+ * than 30 seconds ago, and a card clicked before a background refetch lands
+ * hands its viewer, its export and its editor the old copy. An edit made from
+ * that copy is refused as out of date, which reads as the earlier save having
+ * been lost. Writing the character first covers that window; the refetch then
+ * picks up anything else that changed.
+ */
+export function storeCharacterInList(client: QueryClient, stored: Character): void {
+  client.setQueryData<Character[]>(queryKeys.characters, (list) =>
+    list && (list.some((c) => c.id === stored.id)
+      ? list.map((c) => (c.id === stored.id ? stored : c))
+      : [stored, ...list])
+  );
+  void client.invalidateQueries({ queryKey: queryKeys.characters });
 }
 
 export function usePendingInvitationsQuery() {

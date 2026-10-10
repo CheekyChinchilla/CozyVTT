@@ -11,7 +11,15 @@
  * the whole thing off.
  */
 
+import { randomUUID } from 'crypto';
 import { parseUVTT } from './uvttParser';
+
+// Wrapped so a test can see whether the parser made an id for anything.
+jest.mock('crypto', () => {
+  const actual = jest.requireActual<typeof import('crypto')>('crypto');
+  return { ...actual, randomUUID: jest.fn(actual.randomUUID) };
+});
+const uuidMock = randomUUID as unknown as jest.Mock;
 
 /** A 1x1 PNG, enough for the parser to decode and sniff. */
 const PNG_BASE64 =
@@ -249,6 +257,108 @@ describe('parseUVTT', () => {
       ['no image', Buffer.from(JSON.stringify({ resolution: { map_size: { x: 1, y: 1 } }, line_of_sight: [] }))],
     ])('%s', (_label, buffer) => {
       expect(() => parseUVTT(buffer)).toThrow(/Invalid UVTT file/);
+    });
+  });
+  describe('files too big to build, refused before anything is built', () => {
+    beforeEach(() => uuidMock.mockClear());
+    afterEach(() => jest.restoreAllMocks());
+
+    /** A file whose single polyline has `points` points, all on one spot. */
+    const manyPoints = (points: number): Buffer => {
+      const body = '{"x":0,"y":0},'.repeat(points - 1) + '{"x":0,"y":0}';
+      return Buffer.from(
+        `{"format":0.3,"resolution":{"map_size":{"x":10,"y":10},"pixels_per_grid":140},` +
+          `"line_of_sight":[[${body}]],"portals":[],"lights":[],"image":"${PNG_BASE64}"}`
+      );
+    };
+
+    it('refuses a million tiny polyline points without making a segment of any', () => {
+      const started = Date.now();
+      expect(() => parseUVTT(manyPoints(1_000_000))).toThrow(/more than a map can hold/i);
+      expect(uuidMock).not.toHaveBeenCalled();
+      expect(Date.now() - started).toBeLessThan(5000);
+    }, 30000);
+
+    it('refuses a file with far more points than a map holds before reading it as JSON', () => {
+      // Reading 2.7 million points as JSON took the backend past its memory
+      // limit, so the count has to come before the parse.
+      const parse = jest.spyOn(JSON, 'parse');
+      expect(() => parseUVTT(manyPoints(400_000))).toThrow(/more than a map can hold/i);
+      expect(parse).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('still reads a file with a great many furniture points it leaves out', () => {
+      const furniture = Array.from({ length: 2_000 }, (_, i) =>
+        Array.from({ length: 50 }, (_, j) => ({ x: (i + j) % 10, y: j % 10 }))
+      );
+      const lineOfSight = [[{ x: 0, y: 0 }, { x: 1, y: 0 }]];
+      expect(parseUVTT(uvtt({ lineOfSight, objectsLineOfSight: furniture })).wallSegments).toHaveLength(1);
+    });
+
+    it('counts walls and doors together against the limit', () => {
+      const lineOfSight = [Array.from({ length: 4000 }, (_, i) => ({ x: i % 10, y: 0 }))];
+      const portals = Array.from({ length: 1100 }, () => ({
+        bounds: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+      }));
+      expect(() => parseUVTT(uvtt({ lineOfSight, portals }))).toThrow(/5000/);
+    });
+
+    it('accepts a file exactly at the wall limit', () => {
+      const lineOfSight = [Array.from({ length: 5001 }, (_, i) => ({ x: i % 10, y: 0 }))];
+      expect(parseUVTT(uvtt({ lineOfSight })).wallSegments).toHaveLength(5000);
+    });
+
+    it('suggests leaving the furniture out when that would bring it under', () => {
+      const big = [Array.from({ length: 3001 }, (_, i) => ({ x: i % 10, y: 0 }))];
+      const buffer = uvtt({ lineOfSight: big, objectsLineOfSight: big });
+      expect(() => parseUVTT(buffer, 70, { includeObjectWalls: true })).toThrow(/furniture/i);
+      expect(parseUVTT(buffer).wallSegments).toHaveLength(3000);
+    });
+
+    it('refuses more than 200 lights without making any', () => {
+      const lights = Array.from({ length: 201 }, () => ({ position: { x: 1, y: 1 }, range: 2 }));
+      expect(() => parseUVTT(uvtt({ lights }))).toThrow(/200 lights/);
+      expect(uuidMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a picture over the size limit before decoding it', () => {
+      const decode = jest.spyOn(Buffer, 'from');
+      expect(() => parseUVTT(uvtt({}), 70, { maxImageBytes: 10 })).toThrow(/picture.*too large/i);
+      expect(decode.mock.calls.some((args) => (args as unknown[])[1] === 'base64')).toBe(false);
+    });
+
+    it('measures a picture behind a data: prefix without the prefix', () => {
+      const prefixed = Buffer.from(
+        JSON.stringify({
+          resolution: { map_size: { x: 1, y: 1 } },
+          line_of_sight: [],
+          image: `data:image/png;base64,${PNG_BASE64}`,
+        })
+      );
+      const exact = Buffer.from(PNG_BASE64, 'base64').length;
+      expect(parseUVTT(prefixed, 70, { maxImageBytes: exact }).imageBuffer).toHaveLength(exact);
+      expect(() => parseUVTT(prefixed, 70, { maxImageBytes: exact - 1 })).toThrow(/too large/i);
+    });
+  });
+
+  describe('lights written by CozyVTT', () => {
+    it('reads back a bright radius and a switched-off light', () => {
+      const buffer = Buffer.from(
+        JSON.stringify({
+          resolution: { map_size: { x: 10, y: 10 } },
+          line_of_sight: [],
+          lights: [
+            { position: { x: 1, y: 1 }, range: 8, bright_range: 6, enabled: false },
+            { position: { x: 2, y: 2 }, range: 8, bright_range: 99 },
+            { position: { x: 3, y: 3 }, range: 8 },
+          ],
+          image: PNG_BASE64,
+        })
+      );
+      const [off, clamped, plain] = parseUVTT(buffer).lightSources;
+      expect(off).toMatchObject({ brightRadius: 6, dimRadius: 8, enabled: false });
+      expect(clamped).toMatchObject({ brightRadius: 8, enabled: true });
+      expect(plain).toMatchObject({ brightRadius: 4, enabled: true });
     });
   });
 });

@@ -20,6 +20,7 @@ import DocumentReader, { documentFormat, FORMAT_LABEL } from './DocumentReader';
 import NewDocumentDialog from './NewDocumentDialog';
 import AssetUploadModal from '@/components/assets/AssetUploadModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAssetDelete } from '@/hooks/useAssetDelete';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { AssetType, AssetScope, PlatformRole, type Asset, type CampaignDocument } from '@/types';
@@ -114,6 +115,12 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     }
   };
 
+  const documentDelete = useAssetDelete({
+    onDeleted: (deleted) => setShared((prev) => prev.filter((d) => d.id !== deleted.id)),
+    onError: setError,
+    failureMessage: 'Could not delete that document.',
+  });
+
   /**
    * Delete one of the campaign's own documents. The server lets the campaign's
    * DM delete its campaign assets, and this is where the DM sees them; it is
@@ -126,10 +133,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     setBusyId(doc.id);
     setError(null);
     try {
-      await api.deleteAsset(doc.id);
-      setShared((prev) => prev.filter((d) => d.id !== doc.id));
-    } catch (err) {
-      setError(apiErrorMessage(err) ?? 'Could not delete that document.');
+      await documentDelete.deleteAsset(doc);
     } finally {
       setBusyId(null);
     }
@@ -356,6 +360,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         onConfirm={handleDelete}
         onCancel={() => setToDelete(null)}
       />
+      {documentDelete.inUseDialog}
     </>
   );
 }

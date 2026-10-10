@@ -20,7 +20,7 @@ import { ExplorationRevealSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
-import { explorationRevealLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState } from '../shared';
+import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 
@@ -29,10 +29,122 @@ const MAP_SELECT = {
   campaign: { select: { currentMapId: true } },
 } as const;
 
+/**
+ * Reports a second, per user. The page reports at most every 300 ms per tab,
+ * so two tabs of one player send under seven; a dropped report's cells are
+ * never remembered, since the page does not send them again.
+ */
+export const REVEALS_PER_SECOND = 40;
+
+/** At most one write of a player's memory of a map in this long. */
+const REVEAL_WRITE_MS = 1000;
+
+/**
+ * Cells reported and not yet written, per map and user. Each report used to
+ * read and rewrite the whole memory, a boolean per grid cell; now the cells
+ * of the reports that arrive within a second are written together.
+ */
+interface QueuedReveal {
+  campaignId: string;
+  mapId: string;
+  userId: string;
+  cells: Set<number>;
+  lastWrite: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  writing: boolean;
+}
+const queuedReveals = new Map<string, QueuedReveal>();
+
+function queueReveal(io: Server, campaignId: string, mapId: string, userId: string, cells: number[]): void {
+  const key = `${mapId}:${userId}`;
+  let queued = queuedReveals.get(key);
+  if (!queued) {
+    queued = { campaignId, mapId, userId, cells: new Set(), lastWrite: 0, timer: null, writing: false };
+    queuedReveals.set(key, queued);
+  }
+  for (const cell of cells) queued.cells.add(cell);
+  scheduleRevealWrite(io, key, queued);
+}
+
+function scheduleRevealWrite(io: Server, key: string, queued: QueuedReveal): void {
+  if (queued.timer || queued.writing || queued.cells.size === 0) return;
+  const wait = Math.max(0, queued.lastWrite + REVEAL_WRITE_MS - Date.now());
+  queued.timer = setTimeout(() => void writeQueuedReveal(io, key, queued), wait);
+  queued.timer.unref?.();
+}
+
+async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal): Promise<void> {
+  queued.timer = null;
+  queued.writing = true;
+  queued.lastWrite = Date.now();
+  const cells = [...queued.cells];
+  queued.cells.clear();
+  const { campaignId, mapId, userId } = queued;
+  try {
+    // Read again: memory can be turned off, or the map moved or resized past
+    // what memory can hold, within the second.
+    const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
+    if (!map || map.campaignId !== campaignId || !map.explorationEnabled || !fogFits(map)) return;
+    // Cells already remembered, which is what the page reports most of the
+    // time it moves about known ground, are not worth a lock or a write.
+    const held = await prisma.mapExploration.findUnique({ where: { mapId_userId: { mapId, userId } }, select: { explored: true } });
+    const known = loadFogState(map, (held?.explored as FogState | null) ?? null);
+    if (cells.every((cell) => cell >= known.revealed.length || known.revealed[cell])) return;
+    // One writer per (map, user) at a time. Two tabs, or two reports in
+    // flight, would each read the row and write back only their own cells;
+    // the lock is released when the transaction ends.
+    const cellsNow = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}), hashtext(${userId}))`;
+      const row = await tx.mapExploration.findUnique({
+        where: { mapId_userId: { mapId, userId } },
+        select: { explored: true },
+      });
+      const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
+      const before = revealedCellIndices(explored).length;
+      applyWsFogOperation(explored, { op: 'reveal', cells });
+      const after = revealedCellIndices(explored);
+      // Nothing new: nothing to write, and nobody's memory to resend.
+      if (after.length === before) return null;
+      await tx.mapExploration.upsert({
+        where: { mapId_userId: { mapId, userId } },
+        create: { mapId, userId, explored: toJson(explored) },
+        update: { explored: toJson(explored) },
+      });
+      return after;
+    });
+    if (cellsNow) await broadcastExplorationState(io, campaignId, mapId, userId, cellsNow);
+  } catch (error) {
+    logger.error('exploration:reveal failed', { err: error });
+  } finally {
+    queued.writing = false;
+    if (queued.cells.size > 0) {
+      scheduleRevealWrite(io, key, queued);
+    } else {
+      // Kept a second after its write, so the next report still waits its turn.
+      setTimeout(() => {
+        const idle = queuedReveals.get(key) === queued && !queued.timer && !queued.writing && queued.cells.size === 0;
+        if (idle) queuedReveals.delete(key);
+      }, REVEAL_WRITE_MS).unref?.();
+    }
+  }
+}
+
+/** Drop what is waiting to be written for a map, when the DM forgets its memory. */
+function forgetQueuedReveals(mapId: string): void {
+  for (const [key, queued] of queuedReveals) {
+    if (queued.mapId !== mapId) continue;
+    if (queued.timer) clearTimeout(queued.timer);
+    queued.timer = null;
+    queued.cells.clear();
+    if (!queued.writing) queuedReveals.delete(key);
+  }
+}
+
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * exploration:reveal — a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs).
-   * Any member. Throttled to 10/s per socket; over-limit reveals are dropped.
+   * Any member. Throttled to 40/s per user; over-limit reveals are dropped.
+   * Written at most once a second per map and user (queueReveal).
    * A DM may name another member and write that player's memory: Player
    * Preview records what the previewed token has seen, so a table the DM
    * drives alone still accrues it. The user's whole memory is then sent to
@@ -42,7 +154,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:reveal', async (data: unknown) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
-      if (!explorationRevealLimiter.check(limiterKey(socket), 10, 1000)) return;
+      if (!explorationRevealLimiter.check(limiterKey(socket), REVEALS_PER_SECOND, 1000)) return;
 
       const parsed = ExplorationRevealSchema.safeParse(data);
       if (!parsed.success) {
@@ -59,6 +171,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
+      // A map stored before the size limits can be too large to remember.
+      // exploration:request says so; this one is sent by the page as vision
+      // moves, so it is dropped without a word.
+      if (!fogFits(map)) return;
 
       const isDM = socket.role === 'DM';
       let userId = socket.userId;
@@ -77,26 +193,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         }
         userId = named;
       }
-      // One writer per (map, user) at a time. Two tabs, or two reports in
-      // flight, would each read the row and write back only their own cells;
-      // the lock is released when the transaction ends.
-      const cellsNow = await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}), hashtext(${userId}))`;
-        const row = await tx.mapExploration.findUnique({
-          where: { mapId_userId: { mapId, userId } },
-          select: { explored: true },
-        });
-        const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
-        applyWsFogOperation(explored, { op: 'reveal', cells });
-        await tx.mapExploration.upsert({
-          where: { mapId_userId: { mapId, userId } },
-          create: { mapId, userId, explored: toJson(explored) },
-          update: { explored: toJson(explored) },
-        });
-        return revealedCellIndices(explored);
-      });
-
-      await broadcastExplorationState(io, socket.campaignId, mapId, userId, cellsNow);
+      queueReveal(io, socket.campaignId, mapId, userId, cells);
     } catch (error) {
       logger.error('exploration:reveal failed', { err: error });
     }
@@ -133,6 +230,10 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
       socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
     } catch (error) {
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('exploration:request failed', { err: error });
     }
   });
@@ -143,6 +244,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   socket.on('exploration:reset', async (data: { mapId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
+      if (!withinCeiling(socket, 'exploration:reset')) return;
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only DMs can reset explored areas' });
         return;
@@ -157,6 +259,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         socket.emit('error', { message: 'Map not found' });
         return;
       }
+      forgetQueuedReveals(mapId);
       await prisma.mapExploration.deleteMany({ where: { mapId } });
       await emitToMapReaders(io, socket.campaignId, mapId, 'exploration:state', { mapId, userId: null, cells: [] });
     } catch (error) {

@@ -10,6 +10,7 @@
  */
 
 import { UPLOAD_LIMITS, MAX_UPLOAD_BYTES } from './fileUtils';
+import { CAMPAIGN_ARCHIVE_MAX_BYTES } from './campaignArchiveSize';
 
 const MB = 1024 * 1024;
 
@@ -46,11 +47,24 @@ export function getRequiredProxyBodyBytes(): number {
   return MAX_UPLOAD_BYTES + UPLOAD_OVERHEAD_BYTES;
 }
 
+/**
+ * Body size a proxy must accept on /api/campaigns/import for the largest
+ * campaign archive. The bundled nginx gives that path a location of its own
+ * with more than this (a test compares the two), so NGINX_MAX_BODY_SIZE does
+ * not have to cover it.
+ */
+export function getRequiredImportProxyBodyBytes(): number {
+  return CAMPAIGN_ARCHIVE_MAX_BYTES + UPLOAD_OVERHEAD_BYTES;
+}
+
+/** How long a proxy should wait for an import to answer, in seconds, as the bundled nginx does. */
+export const IMPORT_PROXY_TIMEOUT_SECONDS = 300;
+
 const toMB = (bytes: number) => Math.ceil(bytes / MB);
 
 /**
- * Build startup warnings about proxy body-size caps that would block uploads.
- * Pure and env-injectable so it can be unit tested.
+ * Build startup warnings about proxy body-size caps that would block uploads
+ * and campaign imports. Pure and env-injectable so it can be unit tested.
  */
 export function getProxyLimitWarnings(env: NodeJS.ProcessEnv = process.env): string[] {
   const warnings: string[] = [];
@@ -78,6 +92,20 @@ export function getProxyLimitWarnings(env: NodeJS.ProcessEnv = process.env): str
     warnings.push(
       `Largest upload limit is ${largest}. Any reverse proxy in front of CozyVTT must allow request bodies ` +
         `of at least ${requiredMB} MB (Nginx: client_max_body_size ${requiredMB}M) or uploads will fail with HTTP 413.`
+    );
+  }
+
+  // With no NGINX_MAX_BODY_SIZE the bundled nginx is not in front, and
+  // whatever is has to be told about the import path by hand. Only in
+  // production: the development server's proxy has no limit to warn about.
+  if (configured === null && env.NODE_ENV === 'production') {
+    const importMB = toMB(getRequiredImportProxyBodyBytes());
+    warnings.push(
+      `Campaign imports accept archives up to ${toMB(CAMPAIGN_ARCHIVE_MAX_BYTES)} MB. Any reverse proxy in front of CozyVTT ` +
+        `must allow request bodies of at least ${importMB} MB on /api/campaigns/import, and wait ` +
+        `${IMPORT_PROXY_TIMEOUT_SECONDS} seconds there for an answer (Nginx: a location /api/campaigns/import with ` +
+        `client_max_body_size ${importMB}M and proxy_read_timeout ${IMPORT_PROXY_TIMEOUT_SECONDS}s), or larger imports fail ` +
+        `with HTTP 413 or 504. Behind Cloudflare, archives over 100 MB are refused at its edge whatever you set.`
     );
   }
 

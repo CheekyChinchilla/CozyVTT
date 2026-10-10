@@ -65,19 +65,26 @@ function box(source: Record<string, unknown>, key: keyof ProficiencyGroups): str
 /**
  * Sort a flat list into the four boxes by guessing.
  *
- * Only for sheets stored before the boxes were kept separately. The order of
- * the checks is the order the view has always used, so an old sheet reads
- * exactly as it did.
+ * Only for sheets stored before the boxes were kept separately. `sheetLanguages`
+ * is the sheet's own list of languages, where it has one: an entry named there
+ * is a language whatever it is called, so "Druidic" or "Thieves' Cant" is not
+ * left to the word list, which does not know them. After that the checks run in
+ * the order the view has always used, so an old sheet otherwise reads exactly
+ * as it did.
  */
-export function categorizeProficiencyList(items: readonly string[]): ProficiencyGroups {
+export function categorizeProficiencyList(
+  items: readonly string[],
+  sheetLanguages: readonly string[] = []
+): ProficiencyGroups {
   const armor: string[] = [];
   const weapons: string[] = [];
   const tools: string[] = [];
   const languages: string[] = [];
+  const listed = new Set(sheetLanguages.map((language) => language.trim().toLowerCase()));
 
   for (const item of items) {
     const lower = item.toLowerCase();
-    if (KNOWN_LANGUAGES.some((language) => item.includes(language))) {
+    if (listed.has(item.trim().toLowerCase()) || KNOWN_LANGUAGES.some((language) => item.includes(language))) {
       languages.push(item);
     } else if (lower.includes('armor') || lower.includes('shield')) {
       armor.push(item);
@@ -158,12 +165,7 @@ export function readProficiencyGroups(sheet: unknown): ProficiencyGroups {
     seen.add(key);
     return true;
   });
-  // TODO(sheets): an entry the language list does not know, such as "Druidic"
-  // or "Thieves' Cant", is guessed into Weapons here, and withLanguages then
-  // skips it as already present even when the sheet's own languages list names
-  // it. Take the entries of oldLanguages out of the flat list before guessing,
-  // so the languages the sheet recorded land under Languages.
-  return withLanguages(categorizeProficiencyList(unique), oldLanguages);
+  return withLanguages(categorizeProficiencyList(unique, oldLanguages), oldLanguages);
 }
 
 /**

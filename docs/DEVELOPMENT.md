@@ -230,7 +230,7 @@ The practical consequence: **a CSP violation cannot appear during development**.
 | Database port | **Not exposed to host** | Exposed on `localhost:5432` |
 | Backend port | **Not exposed to host** | Exposed on `localhost:4000` |
 | Public entry | Nginx reverse proxy on 80/443 | Direct ports per service |
-| Logging | JSON, written to disk | Pretty-printed, console |
+| Logging | JSON, written to disk and rotated at 10 MB | Pretty-printed, console |
 | Suitable for | Internet-facing instances | Local hacking only |
 
 ---
@@ -357,12 +357,14 @@ assume you ran:
 # Frontend
 cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run build
 
-# Backend
-cd backend && npx tsc --noEmit && npm run lint && npx jest
+# Backend. The Prisma client is generated, not committed: without a fresh one,
+# every column added since the last generate is a type error.
+cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && npx jest
 
-# Documentation, from the repository root
-python scripts/spec-coverage.py
-python scripts/websocket-events.py --check
+# Documentation, from the repository root (on Windows the command is usually
+# `python`)
+python3 scripts/spec-coverage.py
+python3 scripts/websocket-events.py --check
 ```
 
 Two of those deserve a note:
@@ -378,6 +380,12 @@ Two of those deserve a note:
   it ends; if you see that error again, look there first, not at the code.
   That disconnect runs before a file's own top-level `afterAll`, so a file
   that cleans up the database there ends it with `prisma.$disconnect()`.
+- **A test that needs the server to survive a request runs it as a process of
+  its own.** An uncaught exception inside Jest fails the test and nothing
+  else, so it cannot show that a request would end the real server.
+  `src/__tests__/helpers/serve-test-app.ts` starts the test app on a free
+  port in a child process, and `malformedUpload.e2e.test.ts` uses it to send
+  crafted upload bodies and check that the server answers and is still up.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which
@@ -387,9 +395,16 @@ Two of those deserve a note:
   unpinned `postgresql-client`, or when the stage that runs (the last one) does
   not install it. It also fails when `backend/scripts/restore.sh`
   stops ending its load with the statements the dashboard restore ends it with,
-  when the combat state's fields differ between the two packages, and when the
+  when the combat state's fields differ between the two packages, when the
   special characters a password needs differ between the browser and the
-  server.
+  server, when the email address check differs between them (the body of
+  `isValidEmail` in the browser against `validateEmail` on the server, and
+  `MAX_EMAIL_LENGTH` in each), when the map limits file
+  (`backend/src/validators/mapLimits.ts`, copied as
+  `frontend/src/constants/mapLimits.ts` for the map dialogs) differs between
+  the two, and when a flood ceiling in the WebSocket guide's table
+  (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
+  applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
@@ -399,10 +414,11 @@ Two of those deserve a note:
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
-  `python scripts/websocket-events.py --write`.
+  `python3 scripts/websocket-events.py --write`.
 
-`.github/workflows/ci.yml` runs the same commands on every push and pull
-request. Note that it **reports** failures rather than blocking a merge —
+`.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
+and on pull requests into them (a push to any other branch runs nothing), and
+applies the migrations to an empty database before the backend tests. Note that it **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
 

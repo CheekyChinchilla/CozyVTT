@@ -9,6 +9,7 @@ import { findVibePeriod, normalizeVibeSettings } from '../../utils/vibe-presets'
 import { vibePeriodAudioAssetId } from '../../utils/vibeAudio';
 import { lastAmbientVolume, setCampaignAmbientAudio } from '../../services/atmosphereAudio';
 import { sendSystemMessage } from '../utils';
+import { withinCeiling } from '../shared';
 import logger from '../../utils/logger';
 
 export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -23,6 +24,7 @@ export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+      if (!withinCeiling(socket, 'vibe.update')) return;
 
       // DM only
       if (socket.role !== 'DM') {

@@ -14,6 +14,12 @@ import {
   dnd5eCustomSkillBonus,
   readCustomSkills,
   type Dnd5eCustomSkill,
+  dnd5eDerivedSkillBonus,
+  dnd5eDerivedSaveBonus,
+  dnd5eSkillBonus,
+  dnd5eSaveBonus,
+  dnd5eBackfilledSkillOtherBonus,
+  dnd5eBackfilledSaveOtherBonus,
 } from '../dnd5e';
 
 describe('abilityModifier', () => {
@@ -282,5 +288,68 @@ describe('parity with the frontend copy', () => {
     );
 
     expect(backendCopy).toBe(frontendCopy);
+  });
+});
+
+describe('skill and saving throw totals on a character sheet', () => {
+  const sheet = (extra: Record<string, unknown>) => ({
+    level: 5,
+    proficiencyBonus: 3,
+    stats: {
+      strength: { score: 10, modifier: 0 },
+      dexterity: { score: 16, modifier: 3 },
+      constitution: { score: 10, modifier: 0 },
+      intelligence: { score: 10, modifier: 0 },
+      wisdom: { score: 12, modifier: 1 },
+      charisma: { score: 8, modifier: -1 },
+    },
+    ...extra,
+  });
+
+  it('derives a skill from its ability, doubling proficiency for expertise', () => {
+    const data = sheet({ skills: { stealth: { proficient: true, expertise: true, bonus: 0 } } });
+    expect(dnd5eDerivedSkillBonus(data, 'stealth')).toBe(9);
+    expect(dnd5eDerivedSkillBonus(data, 'animalHandling')).toBe(1);
+  });
+
+  it('never doubles proficiency for a saving throw', () => {
+    const data = sheet({ savingThrows: { dexterity: { proficient: true, bonus: 0 } } });
+    expect(dnd5eDerivedSaveBonus(data, 'dexterity')).toBe(6);
+  });
+
+  it('adds the other bonus to the derived total', () => {
+    const data = sheet({
+      skills: { stealth: { proficient: false, expertise: false, bonus: 99, otherBonus: 1 } },
+      savingThrows: { wisdom: { proficient: true, bonus: 99, otherBonus: -1 } },
+    });
+    expect(dnd5eSkillBonus(data, 'stealth')).toBe(4);
+    expect(dnd5eSaveBonus(data, 'wisdom')).toBe(3);
+  });
+
+  it('uses the stored total of an entry saved before the other bonus existed', () => {
+    const data = sheet({ skills: { stealth: { proficient: false, expertise: false, bonus: 5 } } });
+    expect(dnd5eSkillBonus(data, 'stealth')).toBe(5);
+  });
+
+  it('reads the difference back as the other bonus, once', () => {
+    const data = sheet({
+      skills: {
+        stealth: { proficient: false, expertise: false, bonus: 5 },
+        acrobatics: { proficient: false, expertise: false, bonus: 3 },
+        perception: { proficient: false, expertise: false, bonus: 7, otherBonus: 0 },
+      },
+      savingThrows: { charisma: { proficient: false, bonus: -1 }, wisdom: { proficient: true, bonus: 0 } },
+    });
+    expect(dnd5eBackfilledSkillOtherBonus(data, 'stealth')).toBe(2);
+    expect(dnd5eBackfilledSkillOtherBonus(data, 'acrobatics')).toBeNull();
+    expect(dnd5eBackfilledSkillOtherBonus(data, 'perception')).toBeNull();
+    expect(dnd5eBackfilledSaveOtherBonus(data, 'charisma')).toBeNull();
+    expect(dnd5eBackfilledSaveOtherBonus(data, 'wisdom')).toBe(-4);
+  });
+
+  it('records nothing for a total that is not a whole number', () => {
+    const data = sheet({ skills: { stealth: { proficient: false, expertise: false, bonus: 2.5 } } });
+    expect(dnd5eBackfilledSkillOtherBonus(data, 'stealth')).toBeNull();
+    expect(dnd5eSkillBonus(data, 'stealth')).toBe(3);
   });
 });

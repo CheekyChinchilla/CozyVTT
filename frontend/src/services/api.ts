@@ -807,8 +807,17 @@ class ApiClient {
     return response.data;
   }
 
-  async deleteAsset(id: string): Promise<{ message: string }> {
-    const response = await this.client.delete(`/api/assets/${id}`);
+  /**
+   * Delete an asset.
+   *
+   * Answers 409 with `ASSET_IN_USE` and where it is used while something
+   * still names it, having deleted nothing. Pass `force` only after the person
+   * has seen that list and chosen to delete anyway; see useAssetDelete.
+   */
+  async deleteAsset(id: string, options?: { force?: boolean }): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/assets/${id}`, {
+      params: options?.force ? { force: 'true' } : undefined,
+    });
     return response.data;
   }
 
@@ -1103,17 +1112,77 @@ class ApiClient {
   // Campaign Export/Import
   // ============================================
 
-  async exportCampaign(campaignId: string, params?: { includeAudio?: boolean; includeTokens?: boolean }): Promise<Blob> {
-    const response = await this.client.get(`/api/campaigns/${campaignId}/export`, {
-      params,
-      responseType: 'blob',
-    });
-    return response.data;
+  /**
+   * Download a campaign's export archive to a file.
+   *
+   * An archive can be hundreds of megabytes and takes as long to arrive as
+   * the connection needs, so it is not fetched through the shared client,
+   * whose thirty-second limit covers the whole download and which would hold
+   * all of it in the page. Where the browser lets a page write to a file the
+   * user picks (Chrome and Edge on a computer), the archive streams there as
+   * it arrives. Elsewhere it is handed to the browser's own download once it
+   * has arrived; those browsers keep a large download on disk, not in the
+   * page.
+   *
+   * The save dialog opens only once the server has agreed to the export, so
+   * a refusal never leaves an empty file behind. Rejects like any other
+   * request when the server refuses, with its message readable by
+   * `apiErrorMessage`.
+   */
+  async downloadCampaignExport(
+    campaignId: string,
+    params: { includeAudio: boolean },
+    fileName: string
+  ): Promise<'saved' | 'cancelled'> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/campaigns/${encodeURIComponent(campaignId)}/export?includeAudio=${params.includeAudio}`,
+      { credentials: 'include' }
+    );
+    if (!response.ok) throw await refusalFrom(response);
+
+    const pick = (window as SaveFilePickerWindow).showSaveFilePicker;
+    if (pick && response.body) {
+      let target: FileSystemFileHandle | null = null;
+      try {
+        target = await pick({
+          suggestedName: fileName,
+          types: [{ description: 'CozyVTT campaign archive', accept: { 'application/zip': ['.cozyvtt'] } }],
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          await response.body.cancel();
+          return 'cancelled';
+        }
+        // The browser would not open the dialog here, usually because the
+        // click that asked for it was too long ago. Its download still works.
+      }
+      if (target) {
+        await response.body.pipeTo(await target.createWritable());
+        return 'saved';
+      }
+    }
+
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    // Revoked a little later: some browsers start the download only after
+    // the click handler has returned.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return 'saved';
   }
 
+  // Both send the whole archive, up to 500 MB, which takes minutes on a slow
+  // connection. A limit of the page's own would count that upload and give up
+  // while the server carried on, so there is none: the bundled nginx still
+  // ends a request whose server goes silent for five minutes.
   async previewCampaignImport(formData: FormData): Promise<CampaignImportPreview> {
     const response = await this.client.post('/api/campaigns/import/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
     });
     return response.data.preview;
   }
@@ -1121,7 +1190,7 @@ class ApiClient {
   async importCampaign(formData: FormData): Promise<CampaignImportResult> {
     const response = await this.client.post('/api/campaigns/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000, // 5 min for large archives
+      timeout: 0,
     });
     return response.data;
   }
@@ -1166,6 +1235,36 @@ class ApiClient {
     );
     return response.data;
   }
+}
+
+/** The File System Access save dialog, where the browser has one. */
+interface SaveFilePickerWindow extends Window {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<FileSystemFileHandle>;
+}
+
+/**
+ * A refused fetch, shaped as an axios error is, so `apiErrorMessage` and
+ * `apiErrorStatus` read it the same way. A sign-in that has run out is
+ * handled as the shared client handles it.
+ */
+async function refusalFrom(response: Response): Promise<Error> {
+  let data: unknown = null;
+  try {
+    data = JSON.parse(await response.text());
+  } catch {
+    // Not JSON: a proxy's error page, which says nothing worth showing.
+  }
+  if (response.status === 401) {
+    handleUnauthorized(window.location.pathname, () => {
+      window.location.href = '/auth/login';
+    });
+  }
+  return Object.assign(new Error(`Request failed with status code ${response.status}`), {
+    response: { status: response.status, data },
+  });
 }
 
 // Export singleton instance

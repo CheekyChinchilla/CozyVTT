@@ -101,13 +101,19 @@ about; the list is not exhaustive.
 
 Some changes move data around inside the JSON columns rather than altering the
 schema. Prisma does not run these — they are scripts you run once, by hand, and
-they are safe to run again.
+they are safe to run again. Each ends with exit status 0 when it succeeds and 1
+when it fails, so a wrapper can tell the two apart.
 
 | Script | What it does |
 |---|---|
 | `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. |
-| `npm run migrate:characters` | Earlier character data migration. |
+| `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. |
 | `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. |
+| `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. |
+
+The `npm run` forms need a development checkout. In the production image run
+the compiled file instead, as shown for `migrate:sheet-fields` below:
+`node dist/scripts/<name>.js` with the same options.
 
 ### `migrate:sheet-fields`
 
@@ -141,11 +147,81 @@ migrate:sheet-fields` (which runs the TypeScript source) works only in a
 development checkout. Outside Docker, run the compiled file from `backend/`
 after `npm run build`.
 
-Safe to run more than once — a sheet already converted is skipped. Each
-character is written in its own transaction, so an interruption cannot leave one
-half-converted, and nothing is removed until its content has been merged into
-the field that replaces it. Text a player typed is moved verbatim and never
-parsed. Take a backup first anyway, as with any data change.
+What it does with each older field:
+
+- **D&D 5e.** The template's `features` are added to Features & Traits; a
+  feature already there by name is filled in or skipped, and one whose text
+  differs is added beside it. The flat `proficiencies` list and `languages`
+  are added to the proficiency list (and the languages to the Languages box).
+  The loose `personalityTraits`, `ideals`, `bonds` and `flaws` fill empty
+  personality boxes; where a box already holds other text, the older text is
+  added after it as a new paragraph. `allies` fills an empty Allies name, or is
+  added after the description.
+- **Pathfinder 2e.** `attacks` are added after the character's own strikes,
+  skipping any with the name of one already there. `specialAbilities` are
+  added to the class features. Top-level `senses`, `resistances` and
+  `immunities` are added to the lists inside `perception` and `hp`.
+- **Call of Cthulhu 7e.** `player` becomes `playerName` when that is empty.
+
+An older field is removed only once everything in it is in the new place,
+whether it was there already or has just been added. A field holding
+something with nowhere to go, such as a second player name when `playerName`
+already holds a different one, or an entry with no name or that is not text,
+is left where it is, and the report lists that character under "keep something in an older
+field". Text a player typed is moved verbatim and never parsed. The report
+gives each changed character's name, game system and id, with a line for each
+change.
+
+It is safe to run while people are playing, and safe to run more than once.
+Each character is written in its own transaction: the row is locked, read
+again and migrated from that fresh copy, so a save or a hit point change made
+since the run started is kept, and an interruption cannot leave a sheet
+half-converted. A character already converted is skipped. The command ends
+with exit status 1 if it fails part-way, or if a character changed while it
+was being written and was left for the next run; run it again. Take a backup
+first anyway, as with any data change.
+
+Saving a character in the app applies the same moves, so a sheet saved before
+the script runs is moved already. The one difference is a field with nowhere
+to go: the script keeps it, but a save cannot, because the server stores only
+the fields the sheet declares.
+
+### `migrate:characters`
+
+Written for characters stored before CozyVTT recorded a game system. On any
+current instance a character with no game system is a **Flexible** character
+on purpose, and giving it one would stop it fitting its Flexible campaign, so
+the script previews by default and is careful when told to apply:
+
+```bash
+npm run migrate:characters               # preview: lists every guess, changes nothing
+npm run migrate:characters -- --execute  # apply the guesses marked as applied
+```
+
+It guesses from the shape of the sheet, with high, medium or low confidence.
+Only a **high-confidence** guess is applied, and only to a character in no
+campaign or in a campaign of that same game system. A character in a Flexible
+campaign, or in a campaign of another system, is listed and left alone, and
+medium and low guesses are only ever listed. Each change is printed with the
+character's id, so it can be undone by hand.
+
+### `validate:characters`
+
+Checks every character against its game system's rules the way a save does,
+after moving older fields as a save does, and lists each one the server would
+refuse, with its id and the fields at fault. Nothing is written.
+
+```bash
+npm run validate:characters                          # every character
+npm run validate:characters -- --system DND_5E       # one game system; dnd5e works too
+npm run validate:characters -- --verbose             # every error for every character
+npm run validate:characters -- --export              # also write validation-report.json
+```
+
+It ends with exit status 0 when every character passes, and 1 when one does
+not, when an option is not understood, or when it cannot run. To fix a listed
+character, open it in the Character Editor and save it: the message names the
+field.
 
 ## Troubleshooting
 

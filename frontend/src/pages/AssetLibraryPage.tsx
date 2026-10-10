@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAssetDelete } from '@/hooks/useAssetDelete';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,7 +19,6 @@ import {
   Tag,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
 import { useAssetsQuery, type AssetListParams } from '@/hooks/queries';
 import { Asset, AssetType, AssetScope, PlatformRole } from '../types';
 import AssetCard from '../components/assets/AssetCard';
@@ -137,16 +137,17 @@ export default function AssetLibraryPage() {
     setToast({ message: 'Asset uploaded successfully!', type: 'success' });
   };
 
-  const handleDeleteAsset = async (assetId: string) => {
-    try {
-      await api.deleteAsset(assetId);
+  // The card and the detail panel each ask "delete this?" first. If the server
+  // then says something still uses the asset, this shows where and asks again.
+  const assetDelete = useAssetDelete({
+    onDeleted: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       setSelectedAsset(null);
       setToast({ message: 'Asset deleted successfully', type: 'success' });
-    } catch (error) {
-      setToast({ message: 'Failed to delete asset', type: 'error' });
-    }
-  };
+    },
+    onError: (message) => setToast({ message, type: 'error' }),
+  });
+  const handleDeleteAsset = assetDelete.deleteAsset;
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -442,6 +443,8 @@ export default function AssetLibraryPage() {
           onDelete={handleDeleteAsset}
         />
       )}
+
+      {assetDelete.inUseDialog}
 
       {/* Toast Notifications */}
       <Toast

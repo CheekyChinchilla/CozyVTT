@@ -126,6 +126,10 @@ export async function authenticateUser(input: LoginInput): Promise<User | null> 
     where: { email },
   });
 
+  // TODO(accounts): an email with no account returns here without a password
+  // check, so it answers measurably faster than a wrong password for a real
+  // account, and the timing tells the two apart even though the response is
+  // the same. Verify against a fixed dummy hash here so both take as long.
   if (!user) {
     return null;
   }

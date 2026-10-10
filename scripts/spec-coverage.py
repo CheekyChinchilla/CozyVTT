@@ -17,7 +17,7 @@ Two documents describe the HTTP surface, and they promise different things:
                                         removed features, quietly sending
                                         readers to a 404.
 
-    python scripts/spec-coverage.py
+    python3 scripts/spec-coverage.py
 
 Run from the repository root. Exits non-zero on any mismatch that matters.
 """

@@ -46,6 +46,7 @@ import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
+import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
@@ -58,6 +59,7 @@ import {
   newPf2eFocusSpell,
   newPf2eSpellcasting,
 } from './spellcastingEntries';
+import { withFullSkillAttributes, fullAttributeName, editorTradition, editorCastingType } from './attributeNames';
 
 /**
  * The sheet as this editor holds it.
@@ -88,6 +90,12 @@ interface PF2eEditorSpellcasting extends Omit<PF2eSpellcasting, 'rituals'> {
 
 interface Pathfinder2eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Called once a save has gone through and nothing was typed while it was in
+   * flight, so the editor holds nothing unsaved and its host can close it.
+   * With something typed meanwhile, the editor stays open with it instead.
+   */
+  onDone?: () => void;
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
@@ -153,6 +161,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   onSave,
   onCancel,
   onDirtyChange,
+  onDone,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -178,7 +187,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       will: { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0 },
     },
     perception: data.perception || { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, senses: [] },
-    skills: data.skills || {
+    // Attributes and spellcasting are read in the editor's spelling, so a sheet
+    // a template wrote with "str" or "Arcane" keeps its numbers.
+    skills: data.skills ? withFullSkillAttributes(data.skills) : {
       acrobatics: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'intelligence', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       athletics: { attribute: 'strength', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
@@ -196,9 +207,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       survival: { attribute: 'wisdom', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       thievery: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
     },
-    loreSkills: data.loreSkills || [],
+    loreSkills: (data.loreSkills || []).map((lore) => ({ ...lore, attribute: fullAttributeName(lore.attribute) })),
     armorClass: data.armorClass || { total: 10, proficiencyRank: 'untrained', capDex: null, itemBonus: 0, armorPenalty: 0 },
-    classDC: data.classDC || { total: 10, keyAttribute: 'intelligence', proficiencyRank: 'untrained' },
+    classDC: data.classDC
+      ? { ...data.classDC, keyAttribute: fullAttributeName(data.classDC.keyAttribute) }
+      : { total: 10, keyAttribute: 'intelligence', proficiencyRank: 'untrained' },
     initiative: data.initiative || { usedStat: 'perception', bonus: 0 },
     speed: data.speed || { land: 30, other: [] },
     hp: data.hp || { maximum: 0, ancestryHp: 6, classHpPerLevel: 6, current: 0, temporary: 0, resistances: [], immunities: [], weaknesses: [] },
@@ -223,6 +236,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
       ...data.spellcasting,
+      tradition: editorTradition(data.spellcasting.tradition),
+      type: editorCastingType(data.spellcasting.type),
+      keyAttribute: fullAttributeName(data.spellcasting.keyAttribute),
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
@@ -292,13 +308,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
 
   // The header colour and a newly chosen token picture are kept outside the
   // form, and are unsaved changes too.
-  const sheetSnapshot = JSON.stringify({
-    formData,
-    themeColor: isCustomColor ? customColorHex : selectedColor.name,
-    tokenImage: tokenImageFile
-      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
-      : null,
+  const snapshotOf = (form: typeof formData, theme: string, picture: File | null) => JSON.stringify({
+    formData: form,
+    themeColor: theme,
+    tokenImage: picture ? `${picture.name}:${picture.size}:${picture.lastModified}` : null,
   });
+  const themeChoice = isCustomColor ? customColorHex : selectedColor.name;
+  const sheetSnapshot = snapshotOf(formData, themeChoice, tokenImageFile);
   if (cleanSnapshotRef.current === null) {
     cleanSnapshotRef.current = sheetSnapshot;
   }
@@ -318,6 +334,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     }
   }, [sheetSnapshot, onDirtyChange]);
 
+  // The sheet's saved colour, read once as the editor opens. The character
+  // handed in is refreshed while the editor is open, and following it put a
+  // colour saved elsewhere over the one the user had picked.
   useEffect(() => {
     if (data.themeColor) {
       const savedColor = COLOR_PRESETS.find(c => c.name === data.themeColor);
@@ -334,7 +353,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         }
       }
     }
-  }, [data.themeColor]);
+  }, []);
 
   const handleCustomColorChange = (hex: string) => {
     setCustomColorHex(hex);
@@ -409,15 +428,6 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
-      // TODO(sheets): the built-in templates store skill and lore attributes
-      // abbreviated ("str", "int") and spellcasting as "Arcane", "Prepared" and
-      // "int", but this effect, the lore and spellcasting effects below and the
-      // spell list compare them with full lowercase names. A template-made
-      // sheet opened here has every skill and lore total recomputed without
-      // its attribute modifier, which the next save stores (the Level 1
-      // Fighter's Athletics +6 becomes +3); spell totals ignore the key
-      // attribute, and spells added start unprepared. Resolve an abbreviated
-      // or capitalised value the way pf2eClassDC does.
       const attribute = updatedSkills[skill].attribute;
       const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
       const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
@@ -699,11 +709,23 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     // Unless the sheet was edited again while the save was in flight, which the
     // recheck preserves.
     const savedSnapshot = sheetSnapshot;
+    const savedForm = formData;
+    const savedTheme = themeChoice;
+    const uploadedPicture = tokenImageFile;
     const markClean = () => {
-      cleanSnapshotRef.current = savedSnapshot;
       const stillDirty = latestSnapshotRef.current !== savedSnapshot;
+      // A picture that went up with this save is on the character now, so the
+      // next save must not upload it again. One chosen while saving stays.
+      if (uploadedPicture) {
+        setTokenImageFile((current) => (current === uploadedPicture ? null : current));
+        cleanSnapshotRef.current = snapshotOf(savedForm, savedTheme, null);
+      } else {
+        cleanSnapshotRef.current = savedSnapshot;
+      }
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
+      // Typed while the save was in flight: the editor keeps it, unsaved.
+      if (!stillDirty) onDone?.();
     };
     if (!validateForm()) return;
     setIsSaving(true);
@@ -975,13 +997,7 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
-          {/* TODO(sheets): this box, and the speeds, resistances,
-             immunities, weaknesses, conditions, strike traits and languages
-             boxes, splits, trims and re-joins the text on every keystroke,
-             so a comma or a trailing space typed at the end vanishes before
-             the next word; pasting a whole list works. Keep the raw text
-             while the box has focus and split it on blur. */}
-          <input type="text" value={(formData.perception?.senses || []).join(', ')} onChange={(e) => updateField('perception.senses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <ListField value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
 
@@ -1115,7 +1131,7 @@ min={0} value={formData.speed?.land} onChange={(v: number) => updateField('speed
             </div>
             <div>
               <label className="text-sm text-stone-700 mb-1 block">Other (comma-separated):</label>
-              <input type="text" value={(formData.speed?.other || []).join(', ')} onChange={(e) => updateField('speed.other', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -1153,15 +1169,15 @@ min={0} value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Resistances (comma-sep)</label>
-            <input type="text" value={(formData.hp?.resistances || []).join(', ')} onChange={(e) => updateField('hp.resistances', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Immunities (comma-sep)</label>
-            <input type="text" value={(formData.hp?.immunities || []).join(', ')} onChange={(e) => updateField('hp.immunities', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Weaknesses (comma-sep)</label>
-            <input type="text" value={(formData.hp?.weaknesses || []).join(', ')} onChange={(e) => updateField('hp.weaknesses', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
       </div>
@@ -1191,7 +1207,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
       {/* Conditions */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Conditions (comma-separated)</h3>
-        <input type="text" value={(formData.conditions || []).join(', ')} onChange={(e) => updateField('conditions', e.target.value.split(',').map(s => s.trim()).filter(s => s))} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Proficiencies */}
@@ -1251,7 +1267,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
                 <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <input type="text" value={(strike.traits || []).join(', ')} onChange={(e) => updateField(`strikes.${index}.traits`, e.target.value.split(',').map(t => t.trim()).filter(t => t))} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <input type="text" value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
@@ -1719,7 +1735,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       {/* Languages */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Languages (comma-separated)</h3>
-        <input type="text" value={(formData.languages || []).join(', ')} onChange={(e) => updateField('languages', e.target.value.split(',').map(l => l.trim()).filter(l => l))} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Backstory */}

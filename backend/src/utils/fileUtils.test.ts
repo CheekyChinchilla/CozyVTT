@@ -5,7 +5,7 @@
  * FILE_SIZE_LIMITS, and the proxy body-size warnings derived from them.
  */
 
-import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension } from './fileUtils';
+import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType } from './fileUtils';
 import { parseProxyBodySize } from './proxyLimits';
 
 const MB = 1024 * 1024;
@@ -150,6 +150,25 @@ describe('getProxyLimitWarnings', () => {
 
     expect(warnings.some((w) => w.includes('client_max_body_size 85M'))).toBe(true);
   });
+
+  // Without the bundled nginx, nothing tells a self-hoster that their own
+  // proxy must let a 500 MB campaign archive through to the import, and its
+  // usual limit and timeout turn a large import into a 413 or a 504.
+  it('names the import path, its size and its time when no bundled proxy is configured', () => {
+    const warnings = loadWith({ NODE_ENV: 'production', NGINX_MAX_BODY_SIZE: '' });
+
+    const imports = warnings.filter((w) => w.includes('/api/campaigns/import'));
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toContain('500 MB');
+    expect(imports[0]).toContain('client_max_body_size 505M');
+    expect(imports[0]).toContain('300 seconds');
+    expect(imports[0]).toContain('Cloudflare');
+  });
+
+  it('leaves imports to the bundled nginx, whose import location allows the largest archive', () => {
+    const warnings = loadWith({ NODE_ENV: 'production', NGINX_MAX_BODY_SIZE: '55M' });
+    expect(warnings.filter((w) => w.includes('/api/campaigns/import'))).toEqual([]);
+  });
 });
 
 /**
@@ -174,6 +193,12 @@ describe('isAllowedExtension', () => {
     expect(isAllowedExtension('AUDIO', '.png')).toBe(false);
     expect(isAllowedExtension('DOCUMENT', '.exe')).toBe(false);
     expect(isAllowedExtension('DOCUMENT', '.html')).toBe(false);
+  });
+
+  it('refuses a PDF as a map, which nothing can draw', () => {
+    expect(isAllowedExtension('MAP', '.pdf')).toBe(false);
+    expect(isAllowedMimeType('MAP', 'application/pdf')).toBe(false);
+    expect(isAllowedMimeType('DOCUMENT', 'application/pdf')).toBe(true);
   });
 
   it('refuses everything for OTHER, which has no upload path', () => {

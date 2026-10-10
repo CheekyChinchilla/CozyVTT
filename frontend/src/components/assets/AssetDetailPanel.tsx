@@ -31,7 +31,8 @@ import { assetScopeLabel } from '@/utils/assetUrl';
 interface AssetDetailPanelProps {
   asset: Asset;
   onClose: () => void;
-  onDelete: (id: string) => void;
+  /** The page closes this panel once the asset is gone; see useAssetDelete. */
+  onDelete: (asset: Asset) => void | Promise<void>;
   onUpdate?: (asset: Asset) => void;
 }
 
@@ -158,9 +159,8 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const handleDelete = () => setConfirmOpen(true);
 
   const handleConfirmDelete = () => {
-    onDelete(currentAsset.id);
     setConfirmOpen(false);
-    onClose();
+    onDelete(currentAsset);
   };
 
   const handleMove = async () => {

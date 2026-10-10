@@ -141,13 +141,13 @@ describe('initiative.roll', () => {
 
     const refusals: string[] = [];
     player.on('error', (e: { message: string }) => { refusals.push(e.message); });
-    for (let i = 0; i < 31; i += 1) {
-      const rolled = waitForEvent(player, 'initiative.state', 3000).catch(() => undefined);
-      player.emit('initiative.roll', { tokenId: HERO, mapId });
-      await rolled;
-      if (refusals.length > 0) break;
-    }
-    expect(refusals.some((m) => /rate limit/i.test(m))).toBe(true);
+    // A second's worth of dice rolls spends the budget; the initiative roll
+    // after them is refused from the same one.
+    for (let i = 0; i < 50; i += 1) player.emit('dice.roll', { expression: '1d20' });
+    const refused = waitForEvent<{ message: string }>(player, 'error', 3000);
+    player.emit('initiative.roll', { tokenId: HERO, mapId });
+    expect((await refused).message).toMatch(/rate limit/i);
+    expect(refusals.every((m) => /rate limit/i.test(m))).toBe(true);
     dm.disconnect();
     player.disconnect();
   });

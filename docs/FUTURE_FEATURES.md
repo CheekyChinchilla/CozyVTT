@@ -18,98 +18,95 @@ _Nothing in progress._
 
 ---
 
-## Known issues for 1.5.1
+## Known issues
 
-Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `TODO(<area>)` comment at the spot. "Suspected" means read from the code and not yet reproduced. Delete an entry when its fix ships, as with the rest of this file.
+Bugs confirmed in a released version and not fixed yet. Each entry starts with the release it is planned for, which can move as work is scheduled. Most are marked in the code with a `TODO(<area>)` comment at the spot. "Suspected" means read from the code and not yet reproduced. Delete an entry when its fix ships, as with the rest of this file.
 
 ### Fix first: these lose data
 
-- **Pathfinder 2e: a sheet made from a built-in template loses its attribute modifiers when saved from the editor.** The templates in `pathfinder2e-templates.ts` store skill and lore attributes as `str`/`dex`/`int` and spellcasting as `Arcane`/`Prepared`/`int`, while `Pathfinder2eCharacterEditor.tsx` looks them up by full lowercase name, so skill totals are recomputed without the modifier and saved that way (the Level 1 Fighter's Athletics +6 becomes +3), spell totals ignore the key attribute, and spells added start unprepared.
-- **Importing a campaign archive drops a whole map when one token has a name or notes over the limit.** `MapDataSchema` in `validators/campaignImport.ts` refuses the map with its walls and tokens, and the import result still reports the archive's map count; 1.4.0 stored token notes of any length, so an archive exported from 1.4.0 can lose maps.
+_Nothing at present._
 
 ### Character sheets
 
-- **D&D 5e: naming the spellcasting ability after raising that score leaves the spell save DC and attack unchanged.** The backfill in `DnD5eCharacterEditor.tsx` reads the DC the editor itself wrote as a hand-typed value and records minus the ability modifier as the other bonus.
-- **List boxes lose what is typed at the end.** The Pathfinder 2e comma-separated boxes (senses, speeds, resistances, immunities, weaknesses, conditions, strike traits, languages) and the Call of Cthulhu possessions and spells boxes re-parse on every keystroke, so a typed comma, new line, trailing space or first " - " vanishes; pasting works.
-- **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
-- **The Call of Cthulhu read-only view's palette button changes nothing that lasts.** The colour picked there is never saved (`CallOfCthulhu7eCharacterView.tsx`).
-- **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
-- **Call of Cthulhu: Firearms, Other Language and Science rows do not roll from the sheet,** and the last two print their language or specialization twice (`components/SkillsList.tsx`).
-- **Pathfinder 2e: a sheet whose AC, Class DC or Spell DC works out under 10 cannot be saved.** `pathfinder2e.schema.ts` requires at least 10 for all three, and an untrained rank with a negative modifier goes below it.
-- **D&D 5e: rows added with "+ Add" block saving until they are named.** Attack, item and spell rows start with an empty name and hit-dice rows with an empty class, which `dnd5e.schema.ts` refuses, and the in-campaign editor (`CharacterSheetEditorModal.tsx`) does not say which field.
-- **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
-- **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
-- **D&D 5e: an old sheet's less common languages land under Weapons.** For sheets saved before the four proficiency boxes were stored, `utils/proficiencies.ts` sorts entries by a fixed list of language names, so "Druidic" or "Thieves' Cant" goes to Weapons even when the sheet's own languages list names it.
-- **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
-- **The full-page character editor discards edits after a stale save.** It has no live connection, so hit points changed at the table make its save stale, and the refused save (409) reloads the sheet over what was typed (`CharacterEditorPage.tsx`); it should offer to keep the edits.
-- **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
-- **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
+- `1.5.4` **D&D 5e: naming the spellcasting ability after raising that score leaves the spell save DC and attack unchanged.** The backfill in `DnD5eCharacterEditor.tsx` reads the DC the editor itself wrote as a hand-typed value and records minus the ability modifier as the other bonus.
+- `1.5.4` **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
+- `1.5.4` **The Call of Cthulhu read-only view's palette button changes nothing that lasts.** The colour picked there is never saved (`CallOfCthulhu7eCharacterView.tsx`).
+- `1.5.4` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
+- `1.5.4` **Call of Cthulhu: Firearms, Other Language and Science rows do not roll from the sheet,** and the last two print their language or specialization twice (`components/SkillsList.tsx`).
+- `1.5.4` **Pathfinder 2e: a sheet whose AC, Class DC or Spell DC works out under 10 cannot be saved.** `pathfinder2e.schema.ts` requires at least 10 for all three, and an untrained rank with a negative modifier goes below it.
+- `1.5.4` **D&D 5e: rows added with "+ Add" block saving until they are named.** Attack, item and spell rows start with an empty name and hit-dice rows with an empty class, which `dnd5e.schema.ts` refuses, and the in-campaign editor (`CharacterSheetEditorModal.tsx`) does not say which field.
+- `1.5.4` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
+- `1.5.2` **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
+- `1.5.4` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
+- `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
+- `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
+- `1.5.2` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
+- `1.5.2` **D&D 5e: the editor's Alignment and Background labels are not tied to their boxes,** so a screen reader announces each box by its placeholder alone (`DnD5eCharacterEditor.tsx`).
+- `1.5.2` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
 
-- **The Token Manager offers Send to Spirit Realm for objects,** which the map's right-click menu keeps on the material plane (`TokenManager.tsx`).
-- **The Token Manager shows a "Player" chip on a token whose controller is no longer a player** (`TokenManager.tsx`).
-- **Edit Token's Controlled By list has no entry for a spectator or former member still named on a token,** yet its hint still says "This player can move the token on the map." (`NpcQuickEditor.tsx`).
-- **Copying a token template to another campaign shows nothing on success and only "Failed to copy template" on refusal** (`TokenTemplateLibrary.tsx`).
-- **A refused Place on Map in the Token Manager says only "Failed to add token to map",** without the server's reason (`TokenManager.tsx`).
-- **Right-click Hide, Obscure and Spirit Realm moves fail silently.** Their errors go only to the browser console (`MapCanvas.tsx`).
-- **The DM's spirit-token toggle reads "Hiding spirit tokens (click to show)" while they are shown** (`MapCanvas.tsx`).
-- **The REST token routes do not broadcast their changes.** Creating, updating or deleting a token through `routes/maps.ts` tells no open page, only a move between maps does, so a change made by an API client stays unseen until the next broadcast or a reload.
+- `1.5.4` **The Token Manager offers Send to Spirit Realm for objects,** which the map's right-click menu keeps on the material plane (`TokenManager.tsx`).
+- `1.5.4` **The Token Manager shows a "Player" chip on a token whose controller is no longer a player** (`TokenManager.tsx`).
+- `1.5.4` **Edit Token's Controlled By list has no entry for a spectator or former member still named on a token,** yet its hint still says "This player can move the token on the map." (`NpcQuickEditor.tsx`).
+- `1.5.4` **Copying a token template to another campaign shows nothing on success and only "Failed to copy template" on refusal** (`TokenTemplateLibrary.tsx`).
+- `1.5.4` **A refused Place on Map in the Token Manager says only "Failed to add token to map",** without the server's reason (`TokenManager.tsx`).
+- `1.5.4` **Right-click Hide, Obscure and Spirit Realm moves fail silently.** Their errors go only to the browser console (`MapCanvas.tsx`).
+- `1.5.4` **The DM's spirit-token toggle reads "Hiding spirit tokens (click to show)" while they are shown** (`MapCanvas.tsx`).
+- `1.5.4` **The REST token routes do not broadcast their changes.** Creating, updating or deleting a token through `routes/maps.ts` tells no open page, only a move between maps does, so a change made by an API client stays unseen until the next broadcast or a reload.
 
 ### Campaigns and assets
 
-- **Clearing a campaign's description does not save.** The settings panel sends `undefined` for an empty box, so the server keeps the old text (`CampaignSettingsModal.tsx`).
-- **A DM who is neither the owner nor an admin is offered Delete Campaign,** which the server refuses (`CampaignSettingsModal.tsx`).
-- **A refused asset move shows only "Forbidden".** `AssetDetailPanel.tsx` reads the reply's short `error` label instead of its `message`.
-- **Vibe settings are validated two ways, and the campaign name and description boxes stop short of the server's limits.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree; the settings panel caps the name and description at 100 and 1000 characters against the server's 200 and 5000.
-- **The dashboard shows a new invitation only after Refresh.** The page has no socket to hear `invitation.received`, and its query does not refetch on focus (`DashboardPage.tsx`).
-- **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
-- **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
-- **Suspected: the map-change listener keeps the role from MapCanvas's first render,** so after a role change without a reload a former DM may see a stale "Spirit Realm" badge and a new DM may hear the crossing sound (`MapCanvas.tsx`).
-- **A campaign import that fails part-way leaves a partial campaign behind.** `services/campaignImporter.ts` creates the campaign before its maps, tokens and pictures and does not undo them when a later step fails, so a refused archive still leaves an incomplete campaign and its files.
-- **An audio request for the last bytes of a file, or starting past its end, answers 500.** `routes/assets.ts` passes a `Range` of `bytes=-N` or a start beyond the file straight to the file stream, which throws; it should answer 416, and an end past the file should be cut to the file's length. Browsers do not send these during normal playback.
-- **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
+- `1.5.4` **Clearing a campaign's description does not save.** The settings panel sends `undefined` for an empty box, so the server keeps the old text (`CampaignSettingsModal.tsx`).
+- `1.5.4` **A DM who is neither the owner nor an admin is offered Delete Campaign,** which the server refuses (`CampaignSettingsModal.tsx`).
+- `1.5.4` **A refused asset move shows only "Forbidden".** `AssetDetailPanel.tsx` reads the reply's short `error` label instead of its `message`.
+- `1.5.4` **Vibe settings are validated two ways, and the campaign name and description boxes stop short of the server's limits.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree; the settings panel caps the name and description at 100 and 1000 characters against the server's 200 and 5000.
+- `1.5.4` **The dashboard shows a new invitation only after Refresh.** The page has no socket to hear `invitation.received`, and its query does not refetch on focus (`DashboardPage.tsx`).
+- `1.5.4` **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
+- `1.5.4` **The asset library offers a campaign asset's Delete and Move only to its uploader or an admin,** though the server also lets the campaign's DM do both (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The Campaign documents panel already offers the DM Delete for the campaign's own documents.
+- `1.5.4` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
+- `1.5.2` **Deleting a creature from the Creature Library's Favorites leaves its row there** until the library is reopened. The delete removes it from the main list only (`CreatureLibrary.tsx`).
+- `1.5.2` **The Creature Library and Token Templates forms say only "Failed to update creature" (or template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
+- `1.5.2` **The campaign import window is not announced as a dialog.** It has no `role="dialog"`, `aria-modal` or label, so a screen reader is not told it opened and focus is not held inside it; the shared `Modal` does all three (`CampaignImportDialog.tsx`).
+- `1.5.2` **A time-of-day period's sound file is not counted when an asset is checked before deleting.** The in-use check reads only the track playing now, so deleting a period's track while it is not playing gives no warning, and switching to that period later changes the vibe without audio (`services/assetUsage.ts`).
+- `1.5.2` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
 
 ### Play and connection
 
-- **A chat message sent while the connection is dropping is lost and stays "sending…".** It is emitted with no acknowledgement, and the server refuses one that arrives before the socket rejoins (`ChatPanel.tsx`).
-- **Suspected: after a failed connect, the badge stays on Connection Error once socket.io reconnects by itself.** `WebSocketContext.tsx` attaches its lifecycle listeners only after a successful connect, so the session listeners in `CampaignPage.tsx` miss pause, end and resume until Retry.
-- **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
-- **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
-- **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
-- **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
-- **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
+- `1.5.4` **A chat message sent while the connection is dropping is lost and stays "sending…".** It is emitted with no acknowledgement, and the server refuses one that arrives before the socket rejoins (`ChatPanel.tsx`).
+- `1.5.2` **Suspected: after a failed connect, the badge stays on Connection Error once socket.io reconnects by itself.** `WebSocketContext.tsx` attaches its lifecycle listeners only after a successful connect, so the session listeners in `CampaignPage.tsx` miss pause, end and resume until Retry.
+- `1.5.4` **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
+- `1.5.4` **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
+- `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
+- `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
+- `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
 
 ### Maps
 
-- **The DM's page ignores wall, door and light events.** `MapCanvas.tsx` skips them as echoes of its own edits, so a player's door toggle or an API change does not reach the DM's canvas until reload, and the DM's next bulk wall edit sends the stale list and undoes the other change for everyone.
-- **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
-- **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
-- **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
-- **A Universal VTT upload the server refuses answers 500.** A file with the wrong extension, over 100 MB, or sent under the wrong form field gets "An unexpected error occurred", and a file whose `map_size` has no numeric `y` fails after its picture has been saved (`routes/maps.ts`, `services/uvttParser.ts`). The asset upload route answers the same mistakes with 400.
-- **Editing a single light can store a dim radius smaller than its bright one.** `LightSourceUpdateSchema` in `validators/walls.ts` lacks the check that creating a light and saving the whole list make, so a later save of the full list is refused.
-- **Editing a single wall refuses the locked-door type,** which creating walls, saving the whole list and the DM's live wall edit all accept (`routes/maps.ts`).
-- **Suspected: two edits to a map's walls or lights at the same moment can lose one.** The wall and light routes read, change and write the stored list without the map lock the token routes take (`routes/maps.ts`).
+- `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
+- `1.5.2` **Door clicks ignore sight.** A player can open a door none of their tokens can see, a click in darkness reveals a locked door through its toast, and a spectator gets a toggle the server refuses, leaving their page out of step; `MapCanvas.tsx` and `handlers/walls.ts` both need the check.
+- `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
+- `1.5.2` **A player's door toggle made while the DM is dragging walls is undone for everyone.** The drag's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the drag is lost (`MapCanvas.tsx`).
 
 ### Accounts
 
-- **Sign-up shows "Registration Failed" instead of the reason,** such as a missing display name or an email already registered. The same bug as "Sign-in errors show a status label instead of the helpful sentence" under Polish / tech debt, in `RegisterPage.tsx`.
-- **The Admin Panel's Create User and Invite User skip the display-name check.** `routes/admin.ts` stores a sanitised, shortened name, so one typed as `<>` is saved empty.
-- **Password checks made from a signed-in session have no attempt limit of their own.** Change password and delete account (`routes/auth.ts`) and the current-password check on an email change (`routes/users.ts`) count only against the general 300 requests a minute.
-- **The reason a table's sign-in ended is only logged.** The server sends it on the socket before closing it, and `socket.ts` writes it to the browser console; only an open Dice tab shows it.
-- **The sign-in and MFA pages show the reply's short error label** ("Authentication Failed", "Invalid Code", "Rate Limited") instead of its sentence. Described under Polish / tech debt as "Sign-in errors show a status label instead of the helpful sentence" (`LoginPage.tsx`, `MFAVerifyPage.tsx`).
-- **"Back to login" on the MFA code page loops back to the code page,** because the pending sign-in is still set (`MFAVerifyPage.tsx`).
-- **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
-- **Two setup-wizard requests racing each other both change the instance's settings.** In `routes/setup.ts` only the first becomes the administrator, but the second still applies its own wizard settings (registration open, instance name), completes setup and is signed in. Only the request that created the administrator should apply settings.
-- **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
+- `1.5.2` **Sign-up shows "Registration Failed" instead of the reason,** such as a missing display name or an email already registered. The same bug as "Sign-in errors show a status label instead of the helpful sentence" under Polish / tech debt, in `RegisterPage.tsx`.
+- `1.5.2` **The Admin Panel's Create User and Invite User skip the display-name check.** `routes/admin.ts` stores a sanitised, shortened name, so one typed as `<>` is saved empty.
+- `1.5.2` **Password checks made from a signed-in session have no attempt limit of their own.** Change password and delete account (`routes/auth.ts`) and the current-password check on an email change (`routes/users.ts`) count only against the general 300 requests a minute.
+- `1.5.2` **The reason a table's sign-in ended is only logged.** The server sends it on the socket before closing it, and `socket.ts` writes it to the browser console; only an open Dice tab shows it.
+- `1.5.2` **The sign-in and MFA pages show the reply's short error label** ("Authentication Failed", "Invalid Code", "Rate Limited") instead of its sentence. Described under Polish / tech debt as "Sign-in errors show a status label instead of the helpful sentence" (`LoginPage.tsx`, `MFAVerifyPage.tsx`).
+- `1.5.2` **"Back to login" on the MFA code page loops back to the code page,** because the pending sign-in is still set (`MFAVerifyPage.tsx`).
+- `1.5.2` **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
+- `1.5.2` **Two setup-wizard requests racing each other both change the instance's settings.** In `routes/setup.ts` only the first becomes the administrator, but the second still applies its own wizard settings (registration open, instance name), completes setup and is signed in. Only the request that created the administrator should apply settings.
+- `1.5.2` **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
+- `1.5.2` **Signing in with an email that has no account answers measurably faster than a wrong password for a real account.** The reply is the same, but the timing tells the two apart; `services/auth.ts` should check a fixed dummy hash when no account is found, so both take as long.
 
 ### Server and deployment
 
-- **Stopping Postgres can crash the backend.** The session store's pool in `config/session.ts` has no `'error'` listener, so an idle client's dropped connection becomes an unhandled error.
-- **The Backups list's bin icon deletes a backup without asking** (`AdminPage.tsx`).
-- **The bundled nginx keeps the backend's address from its own start,** so recreating only the backend container can leave `/api` answering 502 until nginx is restarted. A `resolver` with a variable upstream in `nginx/nginx.conf` would fix it; the file carries no TODO because any change to it needs a new `NGINX_CONF_STAMP` in `docker-compose.yml`.
-- **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
-- **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
+- `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
+- `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
+- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open, and the restore reads the archive's whole directory before its file-count check can run (`utils/archive.ts`).
+- `1.5.2` **A crafted backup can make the command-line restore very slow.** One pattern in `backend/scripts/restore.sh` backtracks on a long line (12 seconds on two 100 KB lines with mawk). Only someone with shell access to the server runs that script, on a backup they chose.
 
 ---
 
@@ -164,9 +161,11 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   supported server range has to be checked for the target major first.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move to Node.js 24.** Everything runs on Node 20, which reached the end of
+- **Move to Node.js 26.** Everything runs on Node 20, which reached the end of
   its upstream support on 30 April 2026, so it no longer gets security fixes.
-  Node 24 is the current long-term release. The version is written in several
+  Node 26 becomes the long-term release on 28 October 2026 and is supported
+  until April 2029; Node 24 drops to maintenance on 20 October 2026 and ends in
+  April 2028, so 26 is the target. The version is written in several
   places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
   in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
   `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the two
@@ -177,7 +176,20 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   `postgresql16-client` is still packaged there (the `keepInStep` test fails if
   the client falls behind the server). Run the full gates and an upgrade
   rehearsal on the new image, and add a check that fails when the places above
-  disagree. **Do** in 1.5.1 or 1.6.
+  disagree. **Do** in 1.5.2.
+
+- **Bring the dependencies up to date, and keep them there.** Several
+  libraries are a major version or more behind, and some are out of support:
+  ESLint 8 since October 2024, and Prisma 5.8 (January 2024), which gets no
+  more fixes. Neither production advisory open today can be reached in
+  CozyVTT, but an internet-facing app should not run on unsupported code.
+  **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
+  inside the current major versions, nginx pinned to its stable line,
+  Dependabot opening grouped weekly pull requests against `dev`, and a CI check
+  that fails on a high or critical advisory in production dependencies. 1.5.3,
+  a release of its own: Prisma to its newest stable major first, with a full
+  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
+  React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
@@ -224,19 +236,6 @@ Bugs confirmed in 1.5.0 and left for 1.5.1. Most are marked in the code with a `
   transfer deliberately leaves alone. **Revisit if** people actually ask to
   co-run games — the handover added for #33 covers the cases reported so far
   (handing off, stepping back, an agent DM narrating while the owner plays).
-
-- **Saving a flexible character discards every top-level field except
-  `sections`.** `FlexibleCharacterSheetEdit.tsx:99` calls
-  `onSave({ sections }, ...)`, rebuilding the blob from scratch rather than
-  spreading what was loaded — so anything else stored alongside is dropped on
-  the next save, silently. Reproduced on a test character: two top-level keys
-  before saving, one after. Untouched since v1.1.2, so it predates the 1.2.2
-  work; found by round-tripping every system's sheet through save while
-  verifying the typing changes. `FlexibleCharacterData` declares only
-  `sections`, so nothing the sheet *renders* is lost, which is why it has gone
-  unnoticed — but a character imported from elsewhere, or one that gains a
-  field later, loses it. The fix is `onSave({ ...data, sections }, ...)`, which
-  needs a moment's thought about whether any field is meant to be dropped.
 
 - **Sign-in errors show a status label instead of the helpful sentence.** The
   API answers a failed login with

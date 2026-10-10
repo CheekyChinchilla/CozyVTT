@@ -124,7 +124,7 @@ export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(UPLOAD_LIMITS)
  * Allowed MIME types for each asset type
  */
 export const ALLOWED_MIME_TYPES = {
-  MAP: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'],
+  MAP: ['image/png', 'image/jpeg', 'image/webp'],
   TOKEN: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
   AUDIO: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
   AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
@@ -136,7 +136,7 @@ export const ALLOWED_MIME_TYPES = {
  * Allowed file extensions for each asset type
  */
 export const ALLOWED_EXTENSIONS = {
-  MAP: ['.png', '.jpg', '.jpeg', '.webp', '.pdf'],
+  MAP: ['.png', '.jpg', '.jpeg', '.webp'],
   TOKEN: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
   AUDIO: ['.mp3', '.ogg', '.wav'],
   AVATAR: ['.png', '.jpg', '.jpeg', '.webp'],
