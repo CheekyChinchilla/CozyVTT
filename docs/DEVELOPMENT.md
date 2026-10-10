@@ -316,16 +316,33 @@ See [docs/DEPLOYMENT.md](DEPLOYMENT.md) for full production deployment instructi
 
 ### Backend Tests (Jest)
 
+The integration tests need a PostgreSQL database of their own, which they fill
+and empty as they run. Start a throwaway one in Docker and load the schema into
+it:
+
 ```bash
+docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
+  -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-npm test                  # Run all tests
-npm run test:watch        # Watch mode
-npm run test:coverage     # Generate coverage report
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
+```
+
+Then run the suite, or one file, with the same `DATABASE_URL`:
+
+```bash
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest src/routes/__tests__/auth.e2e.test.ts
 ```
 
 Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration tests use Supertest against an in-process server.
 
-> **Note:** Integration tests require a running PostgreSQL database. Set `DATABASE_URL` in your test environment. Test data is cleaned up after each suite.
+> **The run refuses a database without `test` in its name.** Some suites
+> delete rows they did not create, and one clears the session table. So jest
+> stops before any suite starts unless the database `DATABASE_URL` names has
+> `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
+> `cozyvtt` does not. With `DATABASE_URL` unset it checks the database
+> `backend/.env` names, which is your development database, and refuses it.
+> The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
 ### Frontend Tests (Vitest)
 
@@ -359,7 +376,8 @@ cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run bu
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.
-cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && npx jest
+cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && \
+  DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
 
 # Documentation, from the repository root (on Windows the command is usually
 # `python`)

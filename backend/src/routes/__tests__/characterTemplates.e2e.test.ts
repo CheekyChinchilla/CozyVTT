@@ -125,12 +125,15 @@ describe('Character template routes', () => {
     adminAgent = await login(`tpl_admin_${stamp}@test.invalid`);
   });
 
+  // Only this file's templates: other suites share the database.
+  const ownTemplates = () => ({ createdById: { in: [authorId, otherId, editorId, adminId] } });
+
   afterEach(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
   });
 
   afterAll(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
     await prisma.asset.deleteMany({ where: { id: { in: [globalAssetId, personalAssetId] } } });
     await cleanupUsers([authorId, otherId, editorId, adminId]);
     await prisma.$disconnect();
