@@ -69,7 +69,7 @@ import {
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
-import { SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
+import { SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 
 /**
  * The sheet as this editor holds it.
@@ -1189,6 +1189,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               type="text"
               value={formData.characterName || ''}
               onChange={(e) => updateField('characterName', e.target.value)}
+              maxLength={SHEET_NAME_MAX}
               placeholder="Character Name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'

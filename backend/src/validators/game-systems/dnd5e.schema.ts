@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import { sheetCharacterNameSchema } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 import { SPELL_SLOTS_MAX } from './sheetLimits';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
@@ -345,7 +346,7 @@ const alliesAndOrganizationsSchema = z.object({
 export const dnd5eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
-  characterName: z.string().min(1),
+  characterName: sheetCharacterNameSchema,
   class: z.string().min(1),
   level: z.number().int().min(1).max(20),
   race: z.string().min(1),

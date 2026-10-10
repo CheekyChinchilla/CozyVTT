@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import { sheetCharacterNameSchema } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 
 /**
@@ -441,7 +442,7 @@ const alliesAndOrganizationsSchema = z.object({
 export const pathfinder2eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
-  characterName: z.string().min(1),
+  characterName: sheetCharacterNameSchema,
   class: z.string().min(1),
   level: z.number().int().min(1).max(20),
   ancestry: z.string().min(1),

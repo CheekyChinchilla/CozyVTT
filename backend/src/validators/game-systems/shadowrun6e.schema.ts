@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import { sheetCharacterNameSchema } from './sheetText';
 
 /**
  * Karma
@@ -428,7 +429,7 @@ const personalitySchema = z.object({
 export const shadowrun6eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
-  characterName: z.string().min(1),
+  characterName: sheetCharacterNameSchema,
   metatype: z.string().min(1),
   archetype: z.string().min(1),
   attributes: attributesSchema,

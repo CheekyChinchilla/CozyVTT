@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The D&D 5e "other bonus" boxes for initiative, passive Perception, spell save DC and spell attack take -30 to +30.** They took any whole number, and an initiative bonus of about 10,000 or more made the initiative roll fall back to a plain d20. A sheet stored with a bonus outside the range, or an older sheet whose stored total reads back as one, is brought within it when it is next opened in the editor.
 
+- **The name written on a character sheet is held to 200 characters, like the name a character is created with.** Saving a sheet copies that name into the character's name, which the roster, tokens, initiative and the dice log show, and the copy had no limit. The name box in the D&D 5e, Pathfinder 2e and Call of Cthulhu editors now stops at 200 characters, and a longer name is refused when the sheet is saved. A character stored with a longer name keeps loading.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

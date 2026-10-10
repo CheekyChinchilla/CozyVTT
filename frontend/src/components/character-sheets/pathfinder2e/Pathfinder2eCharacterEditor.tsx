@@ -60,6 +60,7 @@ import {
   newPf2eSpellcasting,
 } from './spellcastingEntries';
 import { withFullSkillAttributes, fullAttributeName, editorTradition, editorCastingType } from './attributeNames';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 
 /**
  * The sheet as this editor holds it.
@@ -882,7 +883,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
             </div>
 
             <div className="space-y-2 min-w-0">
-              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
+              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
               <div className="flex items-center flex-wrap gap-2 opacity-90">
                 {/* Read-only: the player name is whoever owns the character,
                     filled from their display name at creation. */}
