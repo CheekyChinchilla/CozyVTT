@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
 
-- **Running the backend's tests can no longer delete data from a real database.** With no test database set, the tests used the database named in the development settings, and some of them delete rows they did not create, every published character template among them. The test run now stops before any test starts unless the database's name contains the word `test`, and says how to set one. This matters only to people who run the tests; the app itself is unchanged.
+- **Running the backend's tests can no longer delete data from a real database.** With no test database set, the tests used the database named in the development settings, and some of them deleted rows they did not create, every published character template among them. The test run now stops before any test starts unless the database's name contains the word `test`, and says how to set one. This matters only to people who run the tests; the app itself is unchanged.
 
 ## [1.5.1] - 2026-10-10
 

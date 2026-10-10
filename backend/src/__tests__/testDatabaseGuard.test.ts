@@ -1,12 +1,13 @@
 /**
  * The test suite refuses a database that is not a test database.
  *
- * Several suites delete rows they did not create, or drop the session table,
- * on the assumption that the database is a throwaway one. With DATABASE_URL
- * unset, Prisma and dotenv read backend/.env, which DEVELOPMENT.md points at
- * the development database; a run there would delete real data. So the run
- * stops before any suite starts unless the database's name has `test` in it
- * as a word, as `cozyvtt_test` and `cozyvtt_test_b10` do.
+ * The suites write to the database freely (accounts, campaigns, the
+ * instance's settings, schemas of their own), on the assumption that it is a
+ * throwaway one. With DATABASE_URL unset, Prisma and dotenv read backend/.env,
+ * which DEVELOPMENT.md points at the development database; a run there would
+ * change real data. So the run stops before any suite starts unless the
+ * database's name has `test` in it as a word, as `cozyvtt_test` and
+ * `cozyvtt_test_b10` do.
  */
 
 import fs from 'fs';

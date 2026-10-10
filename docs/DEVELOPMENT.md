@@ -336,10 +336,11 @@ DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest 
 
 Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration tests use Supertest against an in-process server.
 
-> **The run refuses a database without `test` in its name.** Some suites
-> delete rows they did not create, and one clears the session table. So jest
-> stops before any suite starts unless the database `DATABASE_URL` names has
-> `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
+> **The run refuses a database without `test` in its name.** The suites
+> write to the database freely: they add accounts and campaigns, one changes
+> the instance's settings, and two create and drop schemas of their own. So
+> jest stops before any suite starts unless the database `DATABASE_URL` names
+> has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
 > `cozyvtt` does not. With `DATABASE_URL` unset it checks the database
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.

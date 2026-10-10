@@ -1,13 +1,13 @@
 /**
  * Whether a database is one the test suite may write to.
  *
- * The suites create and delete rows freely, and a few clear whole tables (the
- * session table among them), on the understanding that the database is a
- * throwaway one. With DATABASE_URL unset, Prisma and dotenv fall back to
- * backend/.env, which the development guide points at the development
- * database. So the run is refused unless the database's name has `test` in it
- * as a word: `cozyvtt_test`, `cozyvtt_test_b10` and `test_cozyvtt` pass,
- * `cozyvtt` and `contest` do not.
+ * The suites write to the database freely, on the understanding that it is a
+ * throwaway one: they add accounts and campaigns, one changes the instance's
+ * settings, and two create and drop schemas of their own. With DATABASE_URL
+ * unset, Prisma and dotenv fall back to backend/.env, which the development
+ * guide points at the development database. So the run is refused unless the
+ * database's name has `test` in it as a word: `cozyvtt_test`,
+ * `cozyvtt_test_b10` and `test_cozyvtt` pass, `cozyvtt` and `contest` do not.
  */
 
 import fs from 'fs';

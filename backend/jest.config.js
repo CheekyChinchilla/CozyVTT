@@ -4,11 +4,11 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
   testPathIgnorePatterns: ['/node_modules/', '/__tests__/helpers/'],
+  // Refuses to start against a database whose name has no "test" in it; the
+  // suites write to it freely. See the file.
+  globalSetup: '<rootDir>/src/__tests__/helpers/jest.globalSetup.ts',
   // Caps each Prisma pool, and disconnects every file's clients when it ends,
   // so a full run stays under PostgreSQL's connection ceiling; see the files.
-  // Refuses to start against a database whose name has no "test" in it; the
-  // suites delete rows. See the file.
-  globalSetup: '<rootDir>/src/__tests__/helpers/jest.globalSetup.ts',
   setupFiles: ['<rootDir>/src/__tests__/helpers/jest.setup.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/helpers/jest.afterEnv.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
