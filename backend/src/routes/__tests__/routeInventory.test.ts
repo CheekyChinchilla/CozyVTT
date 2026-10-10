@@ -139,6 +139,11 @@ const TESTED: Record<string, string> = {
   'GET /api/assets/audio/:id': 'routes/__tests__/atmosphereAudioAccess.e2e.test.ts',
   'PATCH /api/assets/:id/scope': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'POST /api/invitations/:id/accept': 'routes/__tests__/invitationAccept.e2e.test.ts',
+  'GET /api/users': 'routes/__tests__/userRoutes.e2e.test.ts',
+  'GET /api/users/:id': 'routes/__tests__/userRoutes.e2e.test.ts',
+  'GET /api/users/:id/preferences': 'routes/__tests__/userRoutes.e2e.test.ts',
+  'PUT /api/users/:id/preferences': 'routes/__tests__/userRoutes.e2e.test.ts',
+  'POST /api/users/:id/send-reset-link': 'routes/__tests__/userRoutes.e2e.test.ts',
 };
 
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
@@ -171,11 +176,6 @@ const UNTESTED: string[] = [
   'DELETE /api/characters/:id',
   'POST /api/characters/:id/copy',
   'GET /api/character-templates/:id',
-  'GET /api/users',
-  'GET /api/users/:id',
-  'GET /api/users/:id/preferences',
-  'PUT /api/users/:id/preferences',
-  'POST /api/users/:id/send-reset-link',
   'GET /api/assets/avatars/:userId',
   'GET /api/invitations',
   'POST /api/invitations/:id/decline',
