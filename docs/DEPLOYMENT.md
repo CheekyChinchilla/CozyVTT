@@ -798,6 +798,8 @@ Uploaded files are stored at `backend/uploads/`. In the Docker setup this direct
 
 Back up `backend/uploads/` alongside your database dumps. See [Database Backups](#database-backups) below.
 
+A file can be left in `backend/uploads/` with no asset naming it, for example when a restored backup brings back files its database does not know. The **Assets** tab of the Admin Panel lists these under **Leftover Files** and can delete them after asking; see [Files with no owner, and leftover files](USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins) in the user guide.
+
 Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`, run through `sh -c` so that the `*` is read by an account that can see into the folder, and the `chmod` makes the moved backups readable by that user alone, as new ones are:
 
 ```bash

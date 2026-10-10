@@ -566,15 +566,18 @@ Uploaded files are stored on the local filesystem under `backend/uploads/`:
 
 ```
 uploads/
-  maps/         {id}.{ext}           Original map image
-                {id}_thumb.webp      300px thumbnail
-  tokens/       {id}.{ext}
-                {id}_thumb.webp
-  audio/        {id}.{ext}
-  avatars/       {userId}_avatar.{ext}
-  documents/    global/{id}.{ext}             Global and personal documents
-                campaigns/{campaignId}/{id}.{ext}
+  maps/         global/{uuid}.{ext}                  Global and personal maps
+                global/thumb_{uuid}.{ext}            Thumbnail, longest edge 512 px
+                campaigns/{campaignId}/{uuid}.{ext}  A campaign's own, thumbnails beside them
+  tokens/       global/…, campaigns/{campaignId}/…   As maps
+  audio/        global/…, campaigns/{campaignId}/…   No thumbnails
+  avatars/      {uuid}.{ext}
+  documents/    global/…, campaigns/{campaignId}/…   No thumbnails
+  temp/         Campaign imports still in progress
 ```
+
+`Asset.filePath` and `Asset.thumbnailPath` record where each file is. Nothing
+else refers to a file on disk.
 
 Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
 `backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
@@ -593,6 +596,23 @@ goes to a temporary file in the same folder, which is flushed to disk and then
 renamed over the original (`writeFileAtomically` in
 `backend/src/utils/fileUtils.ts`), so a crash leaves the old text or the new.
 A save that finds the row deleted once it has written removes its file.
+
+### Leftover files
+
+A file can still end up with no row: an asset delete removes the row first and
+the file second, so a file that cannot be removed is left; a restore copies the
+backup's files over the uploads folder whatever the restored database names;
+a crash can fall between a file being written and its row. `services/orphanedFiles.ts`
+finds them for the Admin Panel (`GET /api/admin/orphaned-files`). It walks the
+five asset folders (not `temp/`, nor anything else in the uploads folder) and
+lists each regular file whose name is not the file name of any row's
+`filePath` or `thumbnailPath`. Stored names are generated UUIDs, and matching on
+the name alone keeps a file whose row was written under another uploads path,
+as a restored backup's rows can be. Files changed in the last hour are left
+out: an upload lands in `maps/global/` before its type is known and is moved
+and recorded after, and an import writes its files before its rows commit. Listing changes
+nothing; `DELETE /api/admin/orphaned-files` takes the paths the admin saw and
+deletes each one only if a fresh scan still lists it.
 
 ### Security Headers
 

@@ -156,6 +156,7 @@ function handleAssetCaching(
  *   - type: Filter by AssetType; an unknown value answers 400
  *   - scope: Filter by AssetScope (GLOBAL, USER, CAMPAIGN); an unknown value answers 400
  *   - campaignId: Filter by campaign (requires CAMPAIGN scope or returns campaign-specific assets)
+ *   - uploadedBy: admin only; a user id, or `none` for assets with no uploader
  *   - usable: 'true' applies the member scope rules to an admin too (the pickers)
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
@@ -205,9 +206,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     // Campaign filter
     const isAdmin = req.session.platformRole === 'ADMIN';
 
-    // Admin-only: filter by uploader
+    // Admin-only: filter by uploader. `none` lists the assets whose uploader's
+    // account was deleted, which with no campaign are readable by admins alone.
     if (uploadedBy && isAdmin) {
-      where.uploadedById = uploadedBy as string;
+      where.uploadedById = uploadedBy === 'none' ? null : (uploadedBy as string);
     }
 
     if (campaignId) {

@@ -392,6 +392,19 @@ Click any asset card to open its **detail panel** on the right. From there you c
 
 *Screenshot pending — Asset detail panel.*
 
+### Files with no owner, and leftover files (admins)
+
+Two kinds of file can end up reachable by administrators alone. Both are found on the **Assets** tab of the Admin Panel.
+
+**Files with no owner.** When an account is deleted, the files it uploaded that a campaign still uses stay, with no owner. A campaign's own files that outlive their uploader and then their campaign end up the same way. To list them, set the **Uploader** filter to **No Uploader (account deleted)**. Documents are listed only when the **Type** filter is set to **Document**. From there each one can be moved to Global or into a campaign, so people can use it again, or deleted.
+
+**Leftover files.** These are files in the uploads folder that no asset names at all: for example a file that could not be removed when its asset was deleted, or one that a restored backup brought back although the restored database does not know it. Nothing in CozyVTT shows or uses them; they only take up disk space.
+
+1. Under **Leftover Files**, press **Check for Leftover Files**. You see the list, each file's size and when it last changed, and the total. Checking deletes nothing.
+2. If you want them gone, press **Delete *N* Files** and confirm. Each file is checked again first and kept if an asset names it by then. You are told how many were deleted and how many were kept.
+
+A file changed in the last hour is not listed, since an upload may still be finishing; the check tells you how many it left out, and checking again later lists them. A deleted file cannot be brought back without a backup of the uploads folder. Only the folders CozyVTT writes uploads to are looked at; anything else you keep in the uploads folder is left alone. Do not run the check while a backup is being restored.
+
 ---
 
 ## Documents

@@ -82,7 +82,7 @@ router.use(requireAuth, requireAdmin);
 // Helpers
 // ============================================
 
-async function writeAdminLog(
+export async function writeAdminLog(
   adminUserId: string,
   message: string,
   level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO',

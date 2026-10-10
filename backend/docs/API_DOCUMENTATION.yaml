@@ -4554,10 +4554,12 @@ paths:
             type: string
         - name: uploadedBy
           in: query
-          description: Filter by uploader. Platform admins only; ignored for anyone else.
+          description: >-
+            Filter by uploader: a user id, or `none` for assets with no
+            uploader, whose uploader's account was deleted. Platform admins
+            only; ignored for anyone else.
           schema:
             type: string
-            format: uuid
         - name: page
           in: query
           schema:
@@ -8944,6 +8946,119 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /api/admin/orphaned-files:
+    get:
+      tags: [Admin]
+      summary: List files in the uploads folder that no asset names
+      operationId: adminListOrphanedFiles
+      description: >-
+        Looks in the folders uploads are written to (maps, tokens, audio,
+        avatars, documents) for files that no asset row names as its file or
+        thumbnail, matched by file name. Changes nothing. A file changed in the
+        last hour is not listed, since an upload writes its file before its
+        row; `recent` counts those. At most 5,000 files are listed, sorted by
+        path; `total` and `totalBytes` count them all.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The leftover files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [files, total, totalBytes, recent, minimumAgeMinutes]
+                properties:
+                  files:
+                    type: array
+                    maxItems: 5000
+                    items:
+                      type: object
+                      required: [path, size, modifiedAt]
+                      properties:
+                        path:
+                          type: string
+                          description: Relative to the uploads folder, with forward slashes.
+                          example: documents/global/3f2a9c1e-0b7d-4e55-9a51-2f0c8d7e6b11.md
+                        size:
+                          type: integer
+                          description: Bytes
+                        modifiedAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  totalBytes:
+                    type: integer
+                  recent:
+                    type: integer
+                    description: Files no asset names that changed too recently to judge.
+                  minimumAgeMinutes:
+                    type: integer
+                    example: 60
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Admin]
+      summary: Delete leftover files
+      operationId: adminDeleteOrphanedFiles
+      description: >-
+        Deletes each named file that is a leftover file at the moment of the
+        request, as the list above would show it: in an asset folder, named by
+        no asset row, and unchanged for an hour. Every other name is skipped,
+        including one outside the asset folders. Logged to SystemLog when
+        anything was deleted or failed.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  items:
+                    type: string
+                    minLength: 1
+                    maxLength: 1024
+                  description: Paths as the list gave them.
+      responses:
+        '200':
+          description: What was done with each named file
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, skipped, failed]
+                properties:
+                  deleted:
+                    type: array
+                    items:
+                      type: string
+                  skipped:
+                    type: array
+                    description: Named, but not a leftover file at the time of the request.
+                    items:
+                      type: string
+                  failed:
+                    type: array
+                    description: Leftover files that could not be removed; the server log says why.
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
 # WebSocket events are not described here. Their reference is
 # backend/docs/WEBSOCKET_DOCUMENTATION.md, whose event table is generated from

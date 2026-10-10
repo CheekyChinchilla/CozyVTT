@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
+
 ### Fixed
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.

@@ -82,6 +82,7 @@ import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiDeletionBlockers } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
+import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -298,6 +299,8 @@ export default function AdminPage() {
   const [adminAssetsPage, setAdminAssetsPage] = useState(1);
   const [adminAssetsScope, setAdminAssetsScope] = useState('');
   const [adminAssetsType, setAdminAssetsType] = useState('');
+  // 'none': only assets whose uploader's account was deleted.
+  const [adminAssetsOwner, setAdminAssetsOwner] = useState('');
   const [adminAssetsSearch, setAdminAssetsSearch] = useState('');
   const debouncedAdminAssetsSearch = useDebounce(adminAssetsSearch, 300);
   const [adminCampaigns, setAdminCampaigns] = useState<Campaign[]>([]);
@@ -396,6 +399,7 @@ export default function AdminPage() {
     scope: string,
     type: string,
     search: string,
+    owner: string,
   ) => {
     setAdminAssetsLoading(true);
     setAdminAssetsError('');
@@ -406,6 +410,7 @@ export default function AdminPage() {
         scope: scope || undefined,
         type: type || undefined,
         search: search || undefined,
+        uploadedBy: owner || undefined,
       });
       setAdminAssets(resp.assets);
       setAdminAssetsTotal(resp.pagination.total);
@@ -461,7 +466,7 @@ export default function AdminPage() {
     if (activeTab === 'activity' && !activity && !activityLoading) loadActivity();
     if (activeTab === 'backups' && backups.length === 0 && !backupsLoading) loadBackups();
     if (activeTab === 'assets') {
-      loadAdminAssets(1, '', '', '');
+      loadAdminAssets(1, '', '', '', '');
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
   }, [activeTab]);  
@@ -469,13 +474,13 @@ export default function AdminPage() {
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
-    loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]);  
+    loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);  
 
   // Reset page when filters change
   useEffect(() => {
     setAdminAssetsPage(1);
-  }, [adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]);
+  }, [adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);
 
   // ============================================
   // User management actions
@@ -1587,7 +1592,7 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-brand-ink">Asset Management</h2>
               <Button
-                onClick={() => loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch)}
+                onClick={() => loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner)}
                 disabled={adminAssetsLoading}
                 variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
               >
@@ -1635,12 +1640,26 @@ export default function AdminPage() {
                 value={adminAssetsType}
                 onChange={e => setAdminAssetsType(e.target.value)}
                 className="input-cozy text-sm"
+                aria-label="Type"
               >
                 <option value="">All Types</option>
                 <option value="MAP">Map</option>
                 <option value="TOKEN">Token</option>
                 <option value="AUDIO">Audio</option>
                 <option value="AVATAR">Avatar</option>
+                <option value="DOCUMENT">Document</option>
+              </select>
+
+              {/* Uploader filter: an asset whose uploader was deleted, in no
+                  campaign, is readable by admins alone */}
+              <select
+                value={adminAssetsOwner}
+                onChange={e => setAdminAssetsOwner(e.target.value)}
+                className="input-cozy text-sm"
+                aria-label="Uploader"
+              >
+                <option value="">Any Uploader</option>
+                <option value="none">No Uploader (account deleted)</option>
               </select>
             </div>
 
@@ -1698,6 +1717,8 @@ export default function AdminPage() {
                                     <img src={thumbUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                   ) : asset.type === AssetType.AUDIO ? (
                                     <FileAudio className="w-5 h-5 text-spirit-purple" />
+                                  ) : asset.type === AssetType.DOCUMENT ? (
+                                    <FileText className="w-5 h-5 text-stone-gray/60" />
                                   ) : (
                                     <ImageIcon className="w-5 h-5 text-stone-gray/40" />
                                   )}
@@ -1719,6 +1740,7 @@ export default function AdminPage() {
                                   {asset.type === AssetType.TOKEN && <UserIcon className="w-3 h-3 text-brand-ink" />}
                                   {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-purple" />}
                                   {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-sunset-orange" />}
+                                  {asset.type === AssetType.DOCUMENT && <FileText className="w-3 h-3 text-stone-gray" />}
                                   {asset.type}
                                 </span>
                               </td>
@@ -1739,7 +1761,7 @@ export default function AdminPage() {
                               </td>
                               {/* Uploader */}
                               <td className="px-3 py-2 text-warm-gray text-xs">
-                                {asset.uploadedBy?.displayName ?? '—'}
+                                {asset.uploadedBy?.displayName ?? 'No one'}
                               </td>
                               {/* Campaign */}
                               <td className="px-3 py-2 text-warm-gray text-xs">
@@ -1849,7 +1871,7 @@ export default function AdminPage() {
                 <div className="px-4 py-3 border-t border-warm-gray/10 flex items-center justify-between text-xs text-warm-gray">
                   <span>
                     {adminAssetsTotal} asset{adminAssetsTotal !== 1 ? 's' : ''} total
-                    {(adminAssetsScope || adminAssetsType || adminAssetsSearch) ? ' (filtered)' : ''}
+                    {(adminAssetsScope || adminAssetsType || adminAssetsSearch || adminAssetsOwner) ? ' (filtered)' : ''}
                   </span>
                   {adminAssetsTotalPages > 1 && (
                     <div className="flex items-center gap-2">
@@ -1873,6 +1895,8 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+
+            <OrphanedFilesPanel />
           </div>
         )}
 

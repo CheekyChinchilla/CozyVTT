@@ -47,6 +47,8 @@ import type {
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  OrphanedFilesReport,
+  OrphanedFilesDeletion,
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
@@ -415,6 +417,16 @@ class ApiClient {
 
   async deleteAdminBackup(filename: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/admin/backups/${encodeURIComponent(filename)}`);
+    return response.data;
+  }
+
+  async listOrphanedFiles(): Promise<OrphanedFilesReport> {
+    const response = await this.client.get<OrphanedFilesReport>('/api/admin/orphaned-files');
+    return response.data;
+  }
+
+  async deleteOrphanedFiles(paths: string[]): Promise<OrphanedFilesDeletion> {
+    const response = await this.client.delete<OrphanedFilesDeletion>('/api/admin/orphaned-files', { data: { paths } });
     return response.data;
   }
 

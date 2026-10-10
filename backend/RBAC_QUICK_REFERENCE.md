@@ -424,6 +424,23 @@ Two things to get right when adding a check of this kind:
   a machine-readable `code`; clients route on that, and changing the wording must
   not change behaviour.
 
+### What only an admin can reach
+
+- **Assets with no uploader.** `uploadedById` is set to null when the uploader's
+  account is deleted, and a null uploader grants no one anything through
+  `assetUsedInUserCampaign`. A `USER` asset in that state is readable, movable
+  and deletable by platform admins alone. `GET /api/assets?uploadedBy=none`
+  lists them; like any `uploadedBy` value it is honoured for admins only and
+  ignored for everyone else.
+- **Leftover files.** `GET /api/admin/orphaned-files` lists files in the
+  uploads folder's asset folders that no asset row names, and
+  `DELETE /api/admin/orphaned-files` deletes the ones named in its body that
+  still are, at that moment (`services/orphanedFiles.ts`). Both sit in
+  `routes/adminStorage.ts`, mounted under `/api/admin` and guarded by
+  `requireAuth` and `requireAdmin`, as every `/api/admin` route is. A player
+  gets `403`, someone signed out `401`. The delete looks each name up in a
+  fresh scan, so a name outside the asset folders reaches nothing.
+
 ### Platform role is the one thing the session carries
 
 `requireAdmin` reads `req.session.platformRole`, which is written at login and

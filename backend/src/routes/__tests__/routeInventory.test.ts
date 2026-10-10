@@ -155,6 +155,8 @@ const TESTED: Record<string, string> = {
   'POST /api/admin/smtp/test': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'GET /api/admin/backups/:filename/download': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'DELETE /api/admin/backups/:filename': 'routes/__tests__/adminRoutes.e2e.test.ts',
+  'GET /api/admin/orphaned-files': 'routes/__tests__/orphanedFiles.e2e.test.ts',
+  'DELETE /api/admin/orphaned-files': 'routes/__tests__/orphanedFiles.e2e.test.ts',
   'GET /api/campaigns/admin/all': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'GET /api/campaigns': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',
   'POST /api/campaigns': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',

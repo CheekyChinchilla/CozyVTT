@@ -420,6 +420,31 @@ export interface AdminBackup {
   createdAt: string;
 }
 
+/** A file in the uploads folder that no asset names (GET /api/admin/orphaned-files). */
+export interface OrphanedFile {
+  /** Relative to the uploads folder. */
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface OrphanedFilesReport {
+  /** At most 5,000, sorted by path; `total` counts them all. */
+  files: OrphanedFile[];
+  total: number;
+  totalBytes: number;
+  /** Files no asset names that changed too recently to judge, and are not listed. */
+  recent: number;
+  minimumAgeMinutes: number;
+}
+
+export interface OrphanedFilesDeletion {
+  deleted: string[];
+  /** Named, but not a leftover file by the time of the delete. */
+  skipped: string[];
+  failed: string[];
+}
+
 export interface AuthResponse {
   message: string;
   user: User;
