@@ -37,6 +37,7 @@ const TESTED: Record<string, string> = {
   'POST /api/auth/mfa/disable': 'routes/__tests__/mfaCodeReplay.e2e.test.ts',
   'POST /api/auth/mfa/backup-codes': 'routes/__tests__/signInLimiter.e2e.test.ts',
   'GET /api/auth/ping': 'routes/__tests__/auth.e2e.test.ts',
+  'GET /api/auth/appearance': 'routes/__tests__/passwordChangeGate.e2e.test.ts',
   'GET /api/admin/settings': 'routes/__tests__/adminBranding.e2e.test.ts',
   'PUT /api/admin/settings': 'routes/__tests__/adminBranding.e2e.test.ts',
   'GET /api/admin/config': 'routes/__tests__/uploadLimitsConfig.e2e.test.ts',
@@ -167,7 +168,6 @@ const TESTED: Record<string, string> = {
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
-  'GET /api/auth/appearance',
   'GET /api/campaigns/:campaignId/invitable-users',
   'PUT /api/campaigns/:campaignId/sessions/:sessionId/end',
   'POST /api/campaigns/:campaignId/creatures/seed',
