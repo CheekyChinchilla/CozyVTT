@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, X, Plus } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -595,20 +595,40 @@ export default function DiceRoller() {
 
   /**
    * Follow new rolls to the bottom, unless the reader has scrolled up to look
-   * at something. Scrolls the container rather than using scrollIntoView, which
-   * would drag the whole sidebar with it — same reason the chat panel does.
+   * at something; a roll of their own brings them down anyway, as the chat
+   * panel does for a message they send. Keyed on the newest roll, not the
+   * count: the list keeps 50, so once full its length no longer changes.
+   *
+   * The jump is instant and made before the browser paints. A smooth scroll
+   * passes through positions short of the bottom, and while the oldest roll
+   * drops off the top the browser shifts the view to hold the reader's place;
+   * either looked like the reader scrolling up, so two rolls arriving together
+   * left the list one roll short. Scrolls the container rather than using
+   * scrollIntoView, which would drag the whole sidebar with it — same reason
+   * the chat panel does.
    */
-  useEffect(() => {
+  const newestRoll = shownRolls[0];
+  const newestRollKey = newestRoll ? rollKey(newestRoll) : null;
+  const newestIsMine = newestRoll !== undefined && newestRoll.userId === user?.id;
+  useLayoutEffect(() => {
     const container = rollsContainerRef.current;
-    if (!container || !wasAtBottomRef.current) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-  }, [shownRolls.length]);
+    if (!container || (!wasAtBottomRef.current && !newestIsMine)) return;
+    container.scrollTo({ top: container.scrollHeight });
+    wasAtBottomRef.current = true;
+  }, [newestRollKey, newestIsMine]);
 
+  /**
+   * Only scrolling up leaves the bottom, so a position short of it that the
+   * reader did not scroll up to (the list growing under them) keeps them there.
+   */
+  const lastScrollTopRef = useRef(0);
   const handleRollsScroll = () => {
     const container = rollsContainerRef.current;
     if (!container) return;
-    wasAtBottomRef.current =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    if (atBottom) wasAtBottomRef.current = true;
+    else if (container.scrollTop < lastScrollTopRef.current) wasAtBottomRef.current = false;
+    lastScrollTopRef.current = container.scrollTop;
   };
 
   const handleClearHistory = () => {

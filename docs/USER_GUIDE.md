@@ -475,9 +475,10 @@ edit or delete them. See the
 - `2d6-1` — Roll 2d6 and subtract 1
 
 Dice results go to the **Dice** panel, where everyone can see them. It keeps a
-running list of the rolls, oldest at the top and newest at the bottom, and it
-follows along as they come in unless you have scrolled up to read something
-earlier. The list survives a refresh.
+running list of the latest 50 rolls, oldest at the top and newest at the
+bottom, and it follows along as they come in unless you have scrolled up to read
+something earlier. A roll of your own always brings you down to it. The list
+survives a refresh.
 
 **Secret rolls.** Tick **Secret Roll** before rolling and the other players
 never see it. Your DM does — deliberately, so they can settle an argument about
