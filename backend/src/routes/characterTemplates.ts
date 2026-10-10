@@ -18,6 +18,7 @@ import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
 import { validateCharacterData, validateFlexibleSheet, sheetIssues } from '../validators/game-systems';
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import {
   CreateCharacterTemplateSchema,
   UpdateCharacterTemplateSchema,
@@ -106,6 +107,11 @@ async function resolveTemplateImage(
  * the sheet does not declare never reaches the database. A Flexible template
  * (gameSystem null) is checked against the Flexible layout, as a Flexible
  * character is; no sheet at all is an empty one.
+ *
+ * Templates were published before 1.3.0, and `migrate:sheet-fields` moves only
+ * characters, so a sheet still carrying that version's fields has them moved
+ * where the sheet reads them first, as a character's are. Validation would
+ * otherwise drop their content.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
@@ -121,7 +127,7 @@ function validateSheet(
     };
   }
 
-  const result = validateCharacterData(gameSystem, (data as object) || {});
+  const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, data || {}));
   if (result.success) return { ok: true, data: result.data };
 
   return {

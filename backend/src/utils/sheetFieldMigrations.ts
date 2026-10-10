@@ -5,9 +5,10 @@
  * The built-in templates of versions before 1.3.0 were written against an
  * older shape, so sheets made from them carry content in fields that were
  * later renamed or folded into others. `npm run migrate:sheet-fields` applies
- * these to every stored sheet; the character routes apply them to every sheet
- * they are sent, before validation, because the schema drops a field it does
- * not declare and the content would otherwise be lost on the first save.
+ * these to every stored character; the character and character template routes
+ * apply them to every sheet they are sent, before validation, because the
+ * schema drops a field it does not declare and the content would otherwise be
+ * lost on the first save.
  *
  * Safe to apply more than once: a sheet already on the new fields comes back
  * unchanged. An old field is dropped only once everything in it is in the

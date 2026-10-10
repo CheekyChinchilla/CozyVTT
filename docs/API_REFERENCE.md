@@ -750,9 +750,10 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
   is, and stored as the schema returns it, so a field the sheet does not define
-  is dropped. A flexible template's `data` must be an object laid out as a Flexible
-  sheet, as a Flexible character's must; anything else answers `400` with
-  `validationErrors`.
+  is dropped. Fields from a sheet written before 1.3.0 are moved to where the
+  sheet reads them first, as they are for a character. A flexible template's
+  `data` must be an object laid out as a Flexible sheet, as a Flexible
+  character's must; anything else answers `400` with `validationErrors`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
