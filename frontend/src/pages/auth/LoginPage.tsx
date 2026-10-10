@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
-import { apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
@@ -95,12 +95,13 @@ export default function LoginPage() {
       // and the branches below never run when the server sends one. Show
       // apiErrorMessage(err) first.
       const serverError = apiErrorText(err);
-      if (serverError) {
+      if (apiErrorStatus(err) === 429) {
+        // The limiter's answer says what happened and when to come back.
+        setError(apiErrorMessage(err) || 'Too many login attempts. Please try again later.');
+      } else if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
         setError('Invalid email or password');
-      } else if (apiErrorStatus(err) === 429) {
-        setError('Too many login attempts. Please try again later.');
       } else {
         setError('An error occurred during login. Please try again.');
       }

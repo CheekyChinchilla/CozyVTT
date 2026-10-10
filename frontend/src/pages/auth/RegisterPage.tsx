@@ -124,12 +124,12 @@ export default function RegisterPage() {
       const serverError = apiErrorText(err);
       if (apiErrorStatus(err) === 403) {
         setError(apiErrorMessage(err) || 'Registration is currently disabled.');
+      } else if (apiErrorStatus(err) === 429) {
+        setError(apiErrorMessage(err) || 'Too many registration attempts. Please try again later.');
       } else if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 409) {
         setError('An account with this email already exists');
-      } else if (apiErrorStatus(err) === 429) {
-        setError('Too many registration attempts. Please try again later.');
       } else {
         setError('An error occurred during registration. Please try again.');
       }

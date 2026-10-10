@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
-import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
+import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
 import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
@@ -21,6 +21,21 @@ import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import {
+  parseBody,
+  LoginBodySchema,
+  RegisterBodySchema,
+  ForgotPasswordBodySchema,
+  ResetPasswordBodySchema,
+  ChangePasswordBodySchema,
+  PasswordBodySchema,
+  MfaVerifyBodySchema,
+  MfaDisableBodySchema,
+  MfaVerifyLoginBodySchema,
+} from '../validators/auth';
+
+/** 400 for a body `parseBody` refused. */
+const invalid = (res: Response, message: string) => res.status(400).json({ error: 'Validation Error', message });
 
 // ============================================
 // MFA Helpers
@@ -60,7 +75,7 @@ export const credentialLimiter = failureLimiter({
 export const emailDispatchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 requests per window, successful or not
-  message: 'Too many authentication attempts, please try again later',
+  message: { error: 'Rate Limited', message: 'Too many password reset requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -82,7 +97,7 @@ export const emailDispatchLimiter = rateLimit({
 export const accountCreationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // 10 accounts per hour per address, successful or not
-  message: 'Too many accounts created from this address, please try again later',
+  message: { error: 'Rate Limited', message: 'Too many accounts created from this address, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -139,16 +154,11 @@ export const mfaAccountLimiter = rateLimit({
  * First user automatically becomes ADMIN
  */
 router.post('/register', accountCreationLimiter, async (req: Request, res: Response) => {
-  try {
-    const { email, password, displayName } = req.body;
+  const body = parseBody(RegisterBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email, password, displayName } = body.data;
 
-    // Validate required fields
-    if (!email || !password || !displayName) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email, password, and display name are required',
-      });
-    }
+  try {
 
     // Check if this is the very first user (first admin setup bypasses all restrictions)
     const userCount = await prisma.user.count();
@@ -208,17 +218,19 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       user: sanitizeUser(user),
     });
   } catch (error) {
-    if (error instanceof Error) {
+    // Only a refusal of what was sent is explained; anything else is the
+    // server's, and its text stays in the log.
+    if (error instanceof RegistrationError) {
       return res.status(400).json({
         error: 'Registration Failed',
         message: error.message,
       });
-    } else {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
     }
+    logger.error('Error in register', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred',
+    });
   }
 });
 
@@ -227,17 +239,11 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
  * Authenticate user and create session
  */
 router.post('/login', credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(LoginBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email, password, rememberMe } = body.data;
+
   try {
-    const { email, password, rememberMe } = req.body;
-
-    // Validate required fields
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email and password are required',
-      });
-    }
-
     // Authenticate user
     const user = await authenticateUser({
       email,
@@ -298,17 +304,11 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       mustChangePassword: user.mustChangePassword,
     });
   } catch (error) {
-    if (error instanceof Error) {
-      return res.status(400).json({
-        error: 'Login Failed',
-        message: error.message,
-      });
-    } else {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
-    }
+    logger.error('Error in login', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred',
+    });
   }
 });
 
@@ -380,16 +380,11 @@ router.get('/me', async (req: Request, res: Response) => {
  * Always returns 200 to prevent email enumeration
  */
 router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(ForgotPasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email } = body.data;
+
   try {
-    const { email } = req.body;
-
-    if (typeof email !== 'string' || !email) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email is required',
-      });
-    }
-
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -441,16 +436,11 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
  * Reset password using a valid token
  */
 router.post('/reset-password', credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(ResetPasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { token, newPassword } = body.data;
+
   try {
-    const { token, newPassword } = req.body;
-
-    if (typeof token !== 'string' || !token || typeof newPassword !== 'string' || !newPassword) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Token and new password are required',
-      });
-    }
-
     // Find valid token
     const resetToken = await prisma.passwordResetToken.findUnique({
       where: { token },
@@ -533,16 +523,11 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
 // session could guess the password through them. Limit failed password checks
 // on all three, as credentialLimiter does for /mfa/disable.
 router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+  const body = parseBody(ChangePasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { currentPassword, newPassword } = body.data;
+
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Current password and new password are required',
-      });
-    }
-
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: req.session.userId },
@@ -615,16 +600,12 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
 // Same TODO(accounts) as POST /change-password above: failed password checks
 // here have no attempt limit of their own.
 router.delete('/account', requireAuth, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Password is required to delete your account',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -684,16 +665,12 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
  * with turning MFA off.
  */
 router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (typeof password !== 'string' || password === '') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Enter your current password to set up MFA',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -751,13 +728,12 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
  * Requires: Authentication + mfaSecret stored on user
  */
 router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(MfaVerifyBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { token } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ error: 'Validation Error', message: 'Verification code is required' });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -776,7 +752,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
     }
 
     // Verify TOTP token (once: see utils/totp)
-    const isValid = verifyTotpOnce(userId, user.mfaSecret, String(token));
+    const isValid = verifyTotpOnce(userId, user.mfaSecret, token);
 
     if (!isValid) {
       return res.status(401).json({
@@ -828,20 +804,9 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       });
     }
 
-    const { token, backupCode } = req.body;
-
-    if (!token && !backupCode) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Either a TOTP token or backup code is required',
-      });
-    }
-    if ((token !== undefined && typeof token !== 'string') || (backupCode !== undefined && typeof backupCode !== 'string')) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'The TOTP token and backup code must be strings',
-      });
-    }
+    const body = parseBody(MfaVerifyLoginBodySchema, req.body);
+    if (!body.ok) return invalid(res, body.message);
+    const { token, backupCode } = body.data;
 
     const user = await prisma.user.findUnique({
       where: { id: req.session.mfaPendingUserId },
@@ -867,7 +832,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       }
     } else {
       // Verify backup code against the Argon2 hashes on record.
-      const matchIndex = await verifyBackupCode(backupCode, user.mfaBackupCodes);
+      const matchIndex = await verifyBackupCode(backupCode ?? '', user.mfaBackupCodes);
       if (matchIndex === -1) {
         return res.status(401).json({
           error: 'Invalid Code',
@@ -953,16 +918,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
  * Requires: Authentication
  */
 router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(MfaDisableBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password, token } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password, token } = req.body;
-
-    if (!password || !token) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Password and authentication code are required',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -989,7 +950,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
     }
 
     // Verify TOTP token (once: see utils/totp)
-    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, String(token));
+    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
     if (!tokenValid) {
       credentialLimiter.recordFailure(req);
@@ -1026,13 +987,12 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
  * Requires: Authentication + MFA enabled
  */
 router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({ error: 'Validation Error', message: 'Password is required' });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {

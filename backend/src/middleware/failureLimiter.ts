@@ -16,6 +16,9 @@
  * costs little, since the password check is the slow part and the server runs
  * only a few of those at a time anyway.
  *
+ * A refusal is JSON, `{ error: 'Rate Limited', message }`, like every other
+ * answer the API gives, so the pages can show the message.
+ *
  * Kept in memory, like the other limiters: a restart forgets it.
  */
 
@@ -84,7 +87,7 @@ export function failureLimiter(options: { windowMs: number; max: number; message
       if (state.failures.length >= max) {
         setHeaders(res, state, now);
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((state.failures[0] + windowMs - now) / 1000))));
-        res.status(429).send(message);
+        res.status(429).json({ error: 'Rate Limited', message });
         return;
       }
       if (state.failures.length + state.checking >= max) {

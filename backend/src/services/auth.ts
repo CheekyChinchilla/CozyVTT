@@ -24,6 +24,20 @@ const ARGON2_OPTIONS = {
   parallelism: 4,
 };
 
+/**
+ * A registration refused for what was sent: an invalid address, a weak
+ * password, a bad display name or an address already in use. The register
+ * and setup routes answer these with 400 and the message; any other error is
+ * the server's and is answered with a fixed message, so database text never
+ * reaches someone who is not signed in.
+ */
+export class RegistrationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegistrationError';
+  }
+}
+
 export interface RegisterInput {
   email: string;
   password: string;
@@ -69,18 +83,18 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
 export async function registerUser(input: RegisterInput): Promise<User> {
   // Validate email format
   if (!validateEmail(input.email)) {
-    throw new Error('Invalid email format');
+    throw new RegistrationError('Invalid email format');
   }
 
   // Validate password strength
   const passwordValidation = validatePasswordStrength(input.password);
   if (!passwordValidation.valid) {
-    throw new Error(passwordValidation.errors.join(', '));
+    throw new RegistrationError(passwordValidation.errors.join(', '));
   }
 
   const parsedName = parseDisplayName(input.displayName);
   if (!parsedName.ok) {
-    throw new Error(parsedName.message);
+    throw new RegistrationError(parsedName.message);
   }
   const displayName = parsedName.name;
 
@@ -103,7 +117,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
 
     const existingUser = await tx.user.findUnique({ where: { email } });
     if (existingUser) {
-      throw new Error('Email already registered');
+      throw new RegistrationError('Email already registered');
     }
 
     const userCount = await tx.user.count();

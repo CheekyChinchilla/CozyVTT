@@ -100,7 +100,8 @@ describe('wrong passwords from one address', () => {
 
     expect(locked.status).toBe(429);
     expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
-    expect(locked.text).toBe('Too many authentication attempts, please try again later');
+    // JSON, as every other refusal: a plain-text body gave the pages nothing to show.
+    expect(locked.body).toEqual({ error: 'Rate Limited', message: 'Too many authentication attempts, please try again later' });
     // Another address is not affected.
     expect((await signIn(freshAddress(), account.email, TEST_PASSWORD)).status).toBe(200);
   });

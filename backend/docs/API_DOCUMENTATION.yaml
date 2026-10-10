@@ -106,12 +106,11 @@ info:
       ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers
-    and `Retry-After`. The body is JSON `{ error, message }` for the global
-    limit, uploads, the campaign archive limits and the MFA limits. The
-    credential, registration and forgot-password limits answer with a
-    plain-text message instead. The one-at-a-time refusals (a second Universal
-    VTT import, or a second campaign archive operation, while one is running)
-    answer 429 with JSON `{ error, message }` and neither header.
+    and `Retry-After`. The body is always JSON `{ error, message }`; the
+    limiters on the sign-in routes answer `{ error: "Rate Limited", message }`.
+    The one-at-a-time refusals (a second Universal VTT import, or a second
+    campaign archive operation, while one is running) answer 429 with JSON
+    `{ error, message }` and neither header.
 
     ## Responses every route can give
     These are not repeated on each operation:
@@ -491,12 +490,16 @@ paths:
                         example: true
         '400':
           description: >-
-            `Validation Error` when a field is missing. Otherwise
-            `Registration Failed`, with the reason as `message`: an invalid
-            email, a password that does not meet the strength rule (the unmet
-            rules joined with ", ", with no `errors` array), a refused display
-            name, or `Email already registered`. The missing-field check runs
-            before the 403; the others after it.
+            `Validation Error` when a field is missing or is not text, or
+            the email is over 254 or the password over 1,024 characters
+            (`message` names the field: `Email is required`, `Password must
+            be text`). Otherwise `Registration Failed`, with the reason as
+            `message`: an invalid email, a password that does not meet the
+            strength rule (the unmet rules joined with ", ", with no `errors`
+            array), a refused display name, or `Email already registered`.
+            The `Validation Error` check runs before the 403; the others
+            after it. A failure inside the server answers 500 with a fixed
+            message, never the error's own text.
           content:
             application/json:
               schema:
@@ -515,6 +518,15 @@ paths:
                 message: Registration is currently disabled. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: A failure inside the server. The body never carries the error's own text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/login:
     post:
@@ -540,9 +552,11 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 password:
                   type: string
                   format: password
+                  maxLength: 1024
                 rememberMe:
                   type: boolean
                   default: false
@@ -550,6 +564,7 @@ paths:
                     Keeps the session for `REMEMBER_ME_MAX_AGE` of inactivity
                     (30 days by default) instead of `SESSION_MAX_AGE`. With MFA,
                     it takes effect when `/api/auth/mfa/verify-login` succeeds.
+                    Must be a boolean when sent.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -578,16 +593,19 @@ paths:
                         type: string
         '400':
           description: >-
-            `Validation Error` when the email or password is missing. An email
-            that is not a string answers `Login Failed`, with the internal
-            error text as `message`.
+            `Validation Error` when the email or password is missing, empty or
+            not text, the email is over 254 or the password over 1,024
+            characters, or `rememberMe` is not a boolean. `message` names the
+            field (`Email is required`, `Password must be text`). Checked
+            before the limiter counts anything, so a refused body is never a
+            failed attempt.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Email and password are required
+                message: Email is required
         '401':
           description: >-
             No account has that email, or the password is wrong. The answer is
@@ -612,6 +630,15 @@ paths:
                 message: Your account is pending admin approval. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: A failure inside the server. The body never carries the error's own text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/logout:
     post:
@@ -722,7 +749,7 @@ paths:
                   value:
                     message: Password reset is not available. Contact your administrator.
         '400':
-          description: The email is missing or is not text.
+          description: The email is missing, empty, not text, or over 254 characters.
           content:
             application/json:
               schema:
@@ -772,10 +799,12 @@ paths:
               properties:
                 token:
                   type: string
-                  format: uuid
+                  maxLength: 256
+                  description: The token from the emailed link.
                 newPassword:
                   type: string
                   minLength: 12
+                  maxLength: 1024
       responses:
         '200':
           description: Password reset successfully
@@ -788,9 +817,11 @@ paths:
                     type: string
         '400':
           description: >-
-            `Validation Error` when the token or new password is missing or
-            is not text, or the password does not meet the strength rule (the unmet rules
-            joined with ", " as `message`); `Invalid Token` when the token is
+            `Validation Error` when the token or new password is missing,
+            empty, not text or over its ceiling (`Token is required`, `New
+            password must be text`), or the password does not meet the
+            strength rule (the unmet rules joined with ", " as `message`);
+            `Invalid Token` when the token is
             unknown, used or expired, including when another request used it
             first. The token is checked before the password.
           content:
@@ -833,9 +864,11 @@ paths:
               properties:
                 currentPassword:
                   type: string
+                  maxLength: 1024
                 newPassword:
                   type: string
                   minLength: 12
+                  maxLength: 1024
       responses:
         '200':
           description: Password changed successfully
@@ -848,9 +881,11 @@ paths:
                     type: string
         '400':
           description: >-
-            A field is missing, or the new password does not meet the strength
-            rule (the unmet rules joined with ", " as `message`). The current
-            password is checked before the strength rule.
+            A field is missing, empty, not text or over 1,024 characters
+            (`Current password is required`, `New password must be text`), or
+            the new password does not meet the strength rule (the unmet rules
+            joined with ", " as `message`). The current password is checked
+            before the strength rule.
           content:
             application/json:
               schema:
@@ -1289,14 +1324,14 @@ paths:
                 properties:
                   message: { type: string, example: Account deleted successfully }
         '400':
-          description: The password is missing.
+          description: The password is missing, empty, not text or over 1,024 characters.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Password is required to delete your account
+                message: Password is required
         '401':
           description: |
             Either not authenticated, or password did not match
@@ -11464,8 +11499,8 @@ components:
       description: |
         Too Many Requests - Rate limit exceeded. Response includes
         `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
-        The sign-in, registration and password-reset limiters answer with a
-        plain-text body; the others answer with JSON.
+        Every limiter answers with JSON, `{ error: "Rate Limited", message }`,
+        where `message` says what was limited and to try again later.
       headers:
         RateLimit-Limit:
           schema: { type: integer }
