@@ -1536,7 +1536,10 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
       prisma.diceRoll.findMany({
         where,
         include: { user: { select: { id: true, displayName: true } } },
-        orderBy: { rolledAt: 'desc' },
+        // rolledAt has millisecond precision, so a table rolling at once can
+        // produce ties; the id keeps their order the same on every request
+        // and across pages.
+        orderBy: [{ rolledAt: 'desc' }, { id: 'desc' }],
         take: limitNum,
         skip: offsetNum,
       }),
