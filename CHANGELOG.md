@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A screen reader names the D&D 5e editor's Alignment and Background boxes.** Their labels were not tied to the boxes, so each was announced by its example text alone. The same goes for the **Total** and **Used** spell slot boxes and the initiative and passive Perception **Other bonus** boxes.
 
+- **Saving a text or Markdown document can no longer leave it empty or cut off.** A save wrote the new text over the old file, so a save the server could not finish, for example during a restart, could leave the document empty or partly written. The new text is now written beside the old and swapped in once it is complete, so the document holds either the old text or the new. A document deleted while it was being saved no longer leaves its file behind on the server.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

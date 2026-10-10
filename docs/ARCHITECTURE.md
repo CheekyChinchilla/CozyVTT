@@ -588,6 +588,12 @@ directory (`backend/src/utils/backupDir.ts`).
 4. **Sharp** generates a WebP thumbnail (for maps and tokens)
 5. File is moved to its final location; the `Asset` record is created in the database
 
+Editing a text or Markdown document never writes over the file. The new text
+goes to a temporary file in the same folder, which is flushed to disk and then
+renamed over the original (`writeFileAtomically` in
+`backend/src/utils/fileUtils.ts`), so a crash leaves the old text or the new.
+A save that finds the row deleted once it has written removes its file.
+
 ### Security Headers
 
 Two policies, because two different servers answer. `backend/src/server.ts`

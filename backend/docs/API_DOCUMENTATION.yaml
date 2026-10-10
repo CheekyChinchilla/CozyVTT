@@ -5163,7 +5163,10 @@ paths:
         The uploader or an admin. A document the caller may not edit answers
         404, so the reply does not confirm a private id exists. A PDF answers
         400: it is a file, and is replaced by uploading a new one. The recorded
-        size is updated. Not counted against the upload rate limit.
+        size is updated. Not counted against the upload rate limit. The new
+        text replaces the old whole: a save that fails partway leaves the
+        previous text, and of two saves at once the later one wins. A document
+        deleted while it is being saved answers 404, and nothing of it is kept.
       operationId: updateDocumentContent
       security:
         - cookieAuth: []

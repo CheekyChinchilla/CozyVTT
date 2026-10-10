@@ -15,6 +15,7 @@ import {
   getFilePath,
   ensureDirectory,
   generateUniqueFilename,
+  writeFileAtomically,
 } from '../utils/fileUtils';
 import {
   CreateDocumentSchema,
@@ -28,6 +29,7 @@ import fs from 'fs';
 import { pipeline } from 'stream';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
+import { errorCode } from '../utils/errors';
 import { readEnumQuery } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
@@ -846,13 +848,26 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 
     const documentPath = normalizePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
-    await fs.promises.writeFile(documentPath, bytes);
+    await writeFileAtomically(documentPath, bytes);
 
-    const updated = await prisma.asset.update({
-      where: { id: asset.id },
-      data: { fileSize: bytes.length },
-      select: ASSET_PUBLIC_SELECT,
-    });
+    let updated: Prisma.AssetGetPayload<{ select: typeof ASSET_PUBLIC_SELECT }>;
+    try {
+      updated = await prisma.asset.update({
+        where: { id: asset.id },
+        data: { fileSize: bytes.length },
+        select: ASSET_PUBLIC_SELECT,
+      });
+    } catch (error) {
+      // Deleted while this save was writing: the delete has already removed
+      // the file, so the one written here is named by no row and is removed too.
+      if (errorCode(error) === 'P2025') {
+        await deleteFile(documentPath).catch((unlinkError) =>
+          logger.error('Error removing a document saved after it was deleted', { err: unlinkError })
+        );
+        return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
+      }
+      throw error;
+    }
 
     return res.status(200).json({ asset: updated });
   } catch (error) {

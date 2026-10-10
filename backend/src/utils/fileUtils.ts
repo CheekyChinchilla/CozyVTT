@@ -258,6 +258,34 @@ export async function deleteFile(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Replace a file's contents so that a reader, or the server after a crash,
+ * finds either the old contents or the new, never part of either.
+ *
+ * Writing over a file empties it before the new bytes go in. Here they go to
+ * a new file beside it, which is flushed to disk and then renamed over the
+ * original; a rename within one directory takes effect all at once. Two saves
+ * at the same moment each rename a complete file, so the later one wins whole.
+ * If anything fails, the new file is removed and the original is untouched.
+ */
+export async function writeFileAtomically(filePath: string, data: Buffer): Promise<void> {
+  const temporary = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`);
+  try {
+    // `wx`: a new file, never one that is already there.
+    await fs.writeFile(temporary, data, { flag: 'wx' });
+    const handle = await fs.open(temporary, 'r+');
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(temporary, filePath);
+  } catch (error) {
+    await fs.rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * Ensure a directory exists, creating it if necessary
  * @param dirPath Directory path
  */
