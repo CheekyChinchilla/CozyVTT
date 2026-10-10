@@ -86,6 +86,15 @@ describe('opening a sheet and saving it without edits', () => {
     expect(saved.additionalFeaturesAndTraits).toBe('Some longer notes.');
   });
 
+  it('keeps every feature that shares a name with another', () => {
+    const features = [
+      { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+      { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+    ];
+
+    expect(saveRoundTrip({ featuresAndTraits: features }).featuresAndTraits).toEqual(features);
+  });
+
   it('does not invent a feature on a sheet that has none', () => {
     expect(saveRoundTrip({ characterName: 'Nakudama' }).featuresAndTraits).toEqual([]);
   });

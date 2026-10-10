@@ -101,6 +101,21 @@ describe('readProficiencyGroups', () => {
       );
     });
 
+    it('files the languages the sheet lists under Languages, even ones no word list knows', () => {
+      const sheet = {
+        proficienciesAndLanguages: ['Leather armor', "Thieves' Cant", 'Druidic', 'Shortswords'],
+        languages: ["Thieves' Cant", 'druidic'],
+      };
+      expect(readProficiencyGroups(sheet)).toEqual(
+        groups({ armor: 'Leather armor', weapons: 'Shortswords', languages: "Thieves' Cant, Druidic" })
+      );
+    });
+
+    it('still guesses the languages the sheet does not list', () => {
+      const sheet = { proficiencies: ['Common', 'Sylvan', 'Longbow'], languages: ['Sylvan'] };
+      expect(readProficiencyGroups(sheet)).toEqual(groups({ weapons: 'Longbow', languages: 'Common, Sylvan' }));
+    });
+
     it('adds old languages missing from the boxes to Languages', () => {
       const sheet = {
         proficiencies: { armor: '', weapons: '', tools: '', languages: 'Elvish' },

@@ -29,10 +29,18 @@ const statsSchema = z.object({
 
 /**
  * Saving throw
+ *
+ * `bonus` is the total. The editor works it out from the ability modifier and
+ * proficiency, plus `otherBonus` for what the sheet cannot derive: a Paladin's
+ * Aura of Protection, a Ring of Protection. Optional, so every sheet stored
+ * without it stays valid, and unbounded like `bonus` and `initiativeBonus`,
+ * because a sheet saved before it existed has it worked out as its stored total
+ * minus the derived one, which can be any whole number.
  */
 const savingThrowSchema = z.object({
   proficient: z.boolean(),
   bonus: z.number().int(),
+  otherBonus: z.number().int().optional(),
 });
 
 /**
@@ -49,11 +57,15 @@ const savingThrowsSchema = z.object({
 
 /**
  * Skill
+ *
+ * As a saving throw: `bonus` is the total, and `otherBonus` holds what the
+ * sheet cannot derive, such as Jack of All Trades or a magic item.
  */
 const skillSchema = z.object({
   proficient: z.boolean(),
   expertise: z.boolean(),
   bonus: z.number().int(),
+  otherBonus: z.number().int().optional(),
 });
 
 /**

@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-09-27
+**Last Updated:** 2026-10-07
 
 > **This is not a public API.** These events are the ones CozyVTT's own web
 > client sends and receives. They are not versioned, carry no compatibility
@@ -188,7 +188,10 @@ socket.on('error', (data) => {
 4. Server joins socket to campaign room
 5. Server attaches campaignId and role to socket
 6. Server emits 'authenticated' to client
-7. Server broadcasts 'user.joined' to other campaign members, then 'presence.state'
+7. If the socket was already in this campaign with the same role (a re-join),
+   the server sends 'presence.state' to that socket alone and stops; nobody
+   else is told. Otherwise it broadcasts 'user.joined' to the other campaign
+   members, then 'presence.state' to the whole campaign
 ```
 
 ### Permission Checks
@@ -242,7 +245,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, or ended by a password change); sign in again.
+**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, or ended by a password change); sign in again. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
 
 #### `authenticated`
 **Direction:** Server → Client
@@ -345,6 +348,11 @@ push and would otherwise show everyone offline until somebody moved.
 - "You do not have permission to move this token" - Permission denied
 - "Token position out of bounds" - Invalid coordinates
 - "Map not found" - Invalid map ID
+- "Too many … at once. …" - A flood ceiling was reached; sent once, then further refusals are silent for ten seconds (see [Flood ceilings](#fog-lighting-and-explored-memory))
+- "Rate limit exceeded: too many dice rolls at once. Wait a few seconds, then roll again." - The `dice.roll` ceiling was reached; sent once in the same way
+- "Too many CozyVTT tabs or devices are open on this account at once (the most is 40). Close one, then reload this page." - The user already holds 40 open sockets; the server then closes this connection
+
+`error` only goes from the server to the client. Socket.io does not reserve the name, so a client can emit an event called `error`; the server ignores it, answers nothing, and writes none of its payload to the log.
 
 ---
 
@@ -449,8 +457,8 @@ socket.on('token.move.start', (data) => {
 {
   tokenId: string;
   mapId: string;
-  x: number;        // New X coordinate
-  y: number;        // New Y coordinate
+  x: number;        // Grid column, in squares (the web client sends whole numbers)
+  y: number;        // Grid row, in squares (the web client sends whole numbers)
 }
 ```
 
@@ -466,10 +474,10 @@ this fires up to 60 times a second and one error per frame would be its own
 problem. `token.move.end` answers properly.
 
 **Validation:**
-- Coordinates must be numbers
-- X must be >= 0 and < map.width
-- Y must be >= 0 and < map.height
-- Invalid data silently ignored during rapid updates
+- Coordinates must be numbers, counted in grid squares
+- X must be >= 0 and < map.width (the map's width in squares)
+- Y must be >= 0 and < map.height (the map's height in squares)
+- A position off the map is answered with `error` "Token position out of bounds"; other invalid data is silently ignored during rapid updates
 
 **Broadcast:** `token.moved` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to the DM and the players who could see the token when the drag began. The recipients are those decided for the drag's `token.move.start`, not worked out again per frame
 **Broadcast Payload:**
@@ -503,10 +511,16 @@ socket.on('token.move', (data) => {
 > A cancelled drag must send one more `token.move` back to the square the token was picked up from. The server writes nothing for a cancel, and without that frame every other client keeps showing the last position it received.
 
 ```javascript
+// Positions are grid squares, not pixels. pointerToMapPixels stands for
+// whatever undoes the canvas's pan and zoom; gridSize is pixels per square.
+function toSquare(event) {
+  const { px, py } = pointerToMapPixels(event);
+  return { x: Math.floor(px / currentMap.gridSize), y: Math.floor(py / currentMap.gridSize) };
+}
+
 // Send updates on every mouse move
 function onMouseMove(event) {
-  const x = event.clientX;
-  const y = event.clientY;
+  const { x, y } = toSquare(event);
 
   socket.emit('token.move', {
     tokenId: currentToken.id,
@@ -538,8 +552,8 @@ socket.on('token.moved', (data) => {
 {
   tokenId: string;
   mapId: string;
-  x: number;        // Final X coordinate
-  y: number;        // Final Y coordinate
+  x: number;        // Final grid column, a whole number of squares
+  y: number;        // Final grid row, a whole number of squares
 }
 ```
 
@@ -549,10 +563,11 @@ socket.on('token.moved', (data) => {
 - Player can only move assigned tokens
 
 **Validation:**
-- Coordinates must be numbers
+- Coordinates must be whole numbers of grid squares (`error` "Invalid token move data" otherwise)
 - Position must be within map bounds
 - Token must exist
 - User must have permission
+- A drop whose footprint (the token's `size`) would hang off the far edge is moved back until it fits, as the client does before sending; the stored position and every `token.moved` carry the corrected `x` and `y`
 
 **Database Update:**
 - Updates `Map.tokens` JSON array
@@ -580,8 +595,7 @@ Provides confirmation that database update succeeded. Client can use this to:
 ```javascript
 // Client finishes drag
 function onMouseUp(event) {
-  const finalX = event.clientX;
-  const finalY = event.clientY;
+  const { x: finalX, y: finalY } = toSquare(event);  // whole squares, as above
 
   socket.emit('token.move.end', {
     tokenId: currentToken.id,
@@ -612,17 +626,44 @@ socket.on('token.moved', (data) => {
 
 Three things decide what a player's map shows, and each has one source of truth.
 
-**Flood ceilings.** The events below have a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. Dice rolls: 30 a minute, `error` when exceeded; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read. Chat: one message per short window. `token.move.start`, `token.move` and `token.move.end`: 150 a second between them, dropped silently. Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`): 40 a second between them, dropped silently. `fog:operation`: 10 a second, dropped silently. `exploration:reveal`: 10 a second, dropped silently. `map.ping`: 10 every ten seconds, dropped silently. The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) are each answered at most five times a second per user and otherwise dropped silently; a client sends each once per load. An `initiative.request_state` while nothing is in the order is answered from memory without any database work. Any other event has no ceiling of its own; apart from `authenticate`, `ping`, `character.hp.update` and `character.hitdice.spend`, those are the DM's alone, and `dm:editing` is passed on at most twice a second per socket.
+**Flood ceilings.** Every event below has a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. They are abuse ceilings. Every event whose row says "`error` once", and `exploration:reveal`, has a ceiling at least five times the busiest real use of that event, from the web client at a fast table or from the community MCP bridge, so nobody playing reaches one; a test plays that use and fails if one drops below five times it. The silent ceilings are not all held to that: `token.move` allows 150 frames a second against about 60 a second from one drag, and `map.ping` is kept low on purpose, since a ping is a deliberate gesture. An event past its ceiling changes nothing. Where the table says "`error` once", the socket that sent it gets one `error` saying so (the text says what was refused and what to do: most start "Too many", and the dice refusal starts "Rate limit exceeded"), and any further refusals of that event on that socket in the next ten seconds are silent. Nothing is logged per refusal, so a flood fills neither the socket nor the log.
+
+| Event | Ceiling per user | Past it |
+| --- | --- | --- |
+| `authenticate` | 50 every ten seconds; a page joins once per socket and again after each reconnect | `error` once |
+| `chat.message` | 50 a second and 300 a minute; the campaign's chat cooldown, when the DM turns it on, applies as well | `error` once |
+| `character.hp.update` | 50 a second | `error` once |
+| `character.hitdice.spend` | 50 a second | `error` once |
+| `token.move.start` | 30 a second | `error` once |
+| `token.move.end` | 30 a second, a budget of its own | `error` once |
+| The DM's events: `map.change`, `atmosphere.effect.set`, `atmosphere.audio.set`, `vibe.update`, `spirit_layer.toggle`, `spirit_layer.style_change`, `spirit_layer.token.toggle`, `initiative.add`, `initiative.remove`, `initiative.set`, `initiative.reorder`, `initiative.start`, `initiative.next`, `initiative.end`, the DM's own `initiative.roll`, `dice.clearHistory`, `exploration:reset` | 50 a second, each | `error` once |
+| `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
+| `dice.roll` | 50 a second and 200 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` once, starting "Rate limit exceeded", which the web client's dice panel waits out |
+| Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
+| `fog:operation` | 10 a second | dropped silently |
+| `exploration:reveal` | 40 a second; what they report is written at most once a second per map and user | dropped silently |
+| `map.ping` | 10 every ten seconds | dropped silently |
+| The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
+
+An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only events with no ceiling of their own are `ping`, answered to its own socket alone, and `dm:editing`, which the DM sends and which is passed on at most twice a second per socket.
+
+**Connections per user.** One user may hold at most 40 sockets open at once, in every campaign together; each campaign page is one, and a connection that dropped without closing counts until its heartbeat times out, up to 85 seconds later. The next one is answered with `error` ("Too many CozyVTT tabs or devices are open on this account at once …") and closed before it can join anything. Every fan-out to a campaign is worked out per socket, so this bounds how far one account can multiply what everyone else's events cost.
+
+**What a dice roll may carry.** `dice.roll` takes `expression` (text; the dice parser allows up to 200 characters), `characterName` (up to 200 characters), `purpose` (up to 300, since the sheets build it from a name, as in "<attack name> Damage (Versatile)") and `secret` (true or false); the three after the expression may be left out. One of these fields of the wrong type or over its length is answered with `error` naming it, and nothing is stored or sent; any other field is ignored. `initiative.roll` refuses an `expression` that is not text the same way.
 
 **A map a player may read is the campaign's current one.** `walls:request`, `lights:request`, `fog:request_state` and `exploration:request` answer a player or spectator only for the map the campaign is showing (`currentMapId`); for any other map of the campaign they answer nothing, exactly as for a map outside it. The DM is answered for any map of the campaign. Token moves follow the same rule: a drag or drop on any other map reaches the DM's sockets only. Writes do too: a player's `token.move.start`, `token.move.end`, `wall:update` door toggle and `initiative.roll` on a map other than the current one answer `error` ("Map not found"), and their `token.move` frames and `exploration:reveal` reports there are dropped without an answer, even for a token they control. So do a map's live edits: `wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`, `fog:cells`, `map:settings:updated`, `map.pinged`, `exploration:state` from a reset, and `dm:editing` reach every member for the current map and only the DM's sockets for any other. Some of them also come from the REST map routes, under the same rule: the wall routes send the `wall:*` events and `walls:replaced`, the light routes the `light:*` events and `lights:replaced`, the map update and lighting routes `map:settings:updated`, and the fog operation the fog events. Every path follows the rule, so a map the DM has prepared but not switched to is the DM's alone. `map.change` from the DM is likewise refused (with `error`) for any map but the current one, because `map.changed` puts every client onto the map it carries; moving tokens between maps (`POST .../tokens/move`) sends `map.changed` for whichever of the two maps is current, so no client has to ask.
 
-**Manual fog of war** is per map, switched by `Map.fogEnabled`. While it is on, `fog:request_state` answers a DM with `fog:updated` (the full grid) and everyone else with `fog:cells` (their revealed cell indices plus the grid dimensions). A `fog:cells` payload with an empty `revealedCells` means fog is on and nothing is revealed. While fog is off the handlers answer nothing and refuse `fog:operation`; a client that gets no reply draws no fog. A request from a socket that has not yet authenticated is dropped the same silent way, so a client sends `fog:request_state` only after `authenticated`, and again after a reconnect; the web client waits for that. Switching fog on for a map (`PUT /api/campaigns/:campaignId/maps/:id` with `fogEnabled: true`) pushes the map's fog to every member at once, `fog:updated` or `fog:cells` by role, so no client has to ask. The REST fog operation broadcasts through the same code as the socket one, so a reveal reaches the table the same way whichever path made it.
+**Manual fog of war** is per map, switched by `Map.fogEnabled`. While it is on, `fog:request_state` answers a DM with `fog:updated` (the full grid) and everyone else with `fog:cells` (their revealed cell indices plus the grid dimensions). A `fog:cells` payload with an empty `revealedCells` means fog is on and nothing is revealed. While fog is off the handlers answer nothing and refuse `fog:operation`; a client that gets no reply draws no fog. A request from a socket that has not yet authenticated is dropped the same silent way, so a client sends `fog:request_state` only after `authenticated`, and again after a reconnect; the web client waits for that. Switching fog on for a map (`PUT /api/campaigns/:campaignId/maps/:id` with `fogEnabled: true`) pushes the map's fog to every member at once, `fog:updated` or `fog:cells` by role, so no client has to ask. The REST fog operation broadcasts through the same code as the socket one, so a reveal reaches the table the same way whichever path made it. Fog is one cell per grid square, and a map with more than 250,000 squares (500 by 500, the largest a map can now be made) is too large for it; only a map stored before that limit can be. For such a map `fog:request_state` and `fog:operation` answer `error` with a message saying to make the map smaller, and nothing is sent or stored.
 
 **Dynamic lighting** decides which tokens a player is *sent*. The rule lives in `utils/visibilityRule.ts`, shared byte for byte with the client: walls first (nothing outside a controlled token's line of sight is sent, lit or not), then the map's `globalIllumination` flag, then darkvision, the token's own square and light. Token moves apply the same plane and hidden-token rules as the map fetch before line of sight, so a player never receives on a move what opening the map would not have given them. The frames of a drag (`token.moved` from `token.move`) go to the recipients decided once per drag: on a lit map, the DM's sockets and the players whose tokens could see the token where the drag began; `token.move.end` then decides, per player, who is sent where it stopped. Any per-map flag change is broadcast as one `map:settings:updated` event carrying every flag. A change to `lightingEnabled` or `globalIllumination` also re-sends `map.changed` to every member with the map as they can now see it, the same event a map switch or a spirit-realm crossing sends, since those two flags decide which tokens a player is sent. So does a light, wall or door change on a lit map the campaign is showing, over the socket or the REST routes, to players only (the DM is sent every token already): one `map.changed` per map, 150 ms after the last change of a burst. Revealing or hiding one token with `spirit_layer.token.toggle` works the same way: `spirit_layer.token.toggled`, which carries the token, goes to the DM's own sockets only, and every member then receives `map.changed` with the map as they may see it.
 
+**Walls and lights stay near their map.** `wall:add`, the DM's `wall:update`, `walls:replace`, `light:add`, `light:update` and `lights:replace` answer `error` and store nothing for a wall end or light more than 250,000 pixels from the map's corner either way, or more than 500 of the map's grid squares outside its edges. A wall or light already stored outside the second bound, before it existed, is kept when sent back with the same id and position (both ends, for a wall), whatever its other fields say, so a list holding one still saves. The REST wall and light routes apply the same bounds. Ids are unique within a map's list: `wall:add` and `light:add` answer `error` for an id already on the map, and `walls:replace` and `lights:replace` for a list that repeats one.
+
+**Wall and light edits carry an operation id.** `wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update` and `lights:replace` take an optional `opId`, a string of 1 to 64 letters, digits, dashes and underscores (the web client sends a random UUID). The broadcast that follows (`wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`) carries the same `opId`, to every recipient. The sending page has already drawn its own change, so it skips an event carrying an id it sent and applies every other one; that is how the DM's page sees a player's door toggle without undoing its own newer edits. An edit sent without an `opId`, or with anything else in that field, is stored and broadcast without one, so a client that never sends ids sees no difference. The REST wall and light routes and the answers to `walls:request` and `lights:request` carry no `opId`, so they are never anyone's own echo. Each of these edits, and `fog:operation`, reads and writes the map's stored list (or fog grid) under the map's lock, so edits sent together, such as the remove and adds of a door placed on a wall, apply one after another and none is lost.
+
 **Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants the role filter keeps for them (a hidden token, one on the other plane, or one on a map the campaign is not showing, is absent, and the turn pointer with it; the lighting rule is not applied, so a combatant out of their sight on a lit or fogged map is still listed), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on or they control the token. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later send to the campaign overtakes is dropped, whether the later one was started by a change to the order or by a change to a combatant's token (its hit points, or hiding it), so the newest state always arrives last. The `dice.rolled` entry an `initiative.roll` makes goes to the same people who are sent the token (every DM, and a player when the token is visible, on their plane and on the map the campaign is showing), named by the server: an obscured token as "Unknown creature", and the `characterName` a client sends along is not used. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
 
-**Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and sends the user's whole memory as `exploration:state` to that user's sockets in the campaign and to the DM sockets previewing that user, so a DM's Player Preview follows a player's memory as it grows. A DM socket is previewing the user its last `exploration:request` named; one that has named nobody is sent no one else's memory, and the web client asks once more naming nobody when a preview closes. A DM may name another member in `exploration:reveal` and write that player's memory on their behalf, which is what Player Preview does as the previewed token moves; anyone else may only write their own. A report for a map the sender may not write to, or one whose memory is off, is dropped without an `error`: the client sends reports on its own, and one can cross a map switch or the DM turning memory off. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview, and from then on follows that user's), and `exploration:reset` lets the DM forget everyone's memory of a map. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
+**Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and sends the user's whole memory as `exploration:state` to that user's sockets in the campaign and to the DM sockets previewing that user, so a DM's Player Preview follows a player's memory as it grows. The reports that arrive within a second are written together, at most once a second per map and user, so the memory a client is sent can trail its reports by up to a second; reports that add no cell the server does not already hold are neither written nor answered. A DM socket is previewing the user its last `exploration:request` named; one that has named nobody is sent no one else's memory, and the web client asks once more naming nobody when a preview closes. A DM may name another member in `exploration:reveal` and write that player's memory on their behalf, which is what Player Preview does as the previewed token moves; anyone else may only write their own. A report for a map the sender may not write to, or one whose memory is off, is dropped without an `error`: the client sends reports on its own, and one can cross a map switch or the DM turning memory off. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview, and from then on follows that user's), and `exploration:reset` lets the DM forget everyone's memory of a map. On a map too large for fog (see above), `exploration:request` answers `error` with the same message and `exploration:reveal` is dropped without one. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
 
 ## Error Handling
 
@@ -985,8 +1026,8 @@ Every event the server listens for or emits. **This table is generated** from
 the handlers in `backend/src/websocket/` — do not edit it by hand:
 
 ```bash
-python scripts/websocket-events.py --write     # refresh it
-python scripts/websocket-events.py --check     # fail if it is behind
+python3 scripts/websocket-events.py --write     # refresh it
+python3 scripts/websocket-events.py --check     # fail if it is behind
 ```
 
 It exists because the hand-written catalogue this replaced fell about half a

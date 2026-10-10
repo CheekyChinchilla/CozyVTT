@@ -62,8 +62,13 @@ src/
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
-│   ├── rateLimit.ts   Per-route rate limiters (auth, dice, chat, file upload)
-│   └── upload.ts      Multer configuration, magic byte validation
+│   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
+│   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
+│   │                  and exporting campaign archives, one archive at a time
+│   │                  (the other HTTP limiters are declared beside their routes,
+│   │                  and the general /api limiter in server.ts)
+│   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
+│   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
 │   ├── auth.ts        Login, logout, register, password reset
 │   ├── users.ts       User CRUD (admin only)
@@ -83,7 +88,8 @@ src/
 ├── websocket/
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
-│   ├── shared.ts      Rate limiters, the Token shape, fog helpers
+│   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
+│   │                  Token shape, fog helpers
 │   ├── auth.ts        Socket session + campaign-membership authentication
 │   ├── utils.ts       System-message / broadcast helpers
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
@@ -99,6 +105,8 @@ src/
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
+│   ├── byteRange.ts      HTTP Range header reading for audio streaming
+│   ├── shutdown.ts       SIGTERM/SIGINT: close sockets, database and session store, then exit
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```
@@ -175,6 +183,8 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 | **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
 | **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, hover cross-highlight (walls, fog and lights are still MapCanvas-local; walls additionally keep their own undo/redo history) |
 | **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
+
+A page that changes a server resource away from the page that lists it updates that list's cache itself. The characters list, for instance, is served from cache for 30 seconds, so the full-page character editor and the templates page write what they saved or created into it with `storeCharacterInList` (`hooks/queries`); otherwise the Characters page would hand out the version from before the change.
 
 The split exists for performance. Live token movement is written to the Zustand store from **outside** React, so a `token.moved` event re-renders only the components subscribed to that token (the map canvas) — the roster, initiative tracker, and side panels don't re-render per movement frame. All three context provider values are memoized so unrelated socket traffic doesn't cascade re-renders through the campaign subtree.
 
@@ -401,6 +411,7 @@ erDiagram
 ### Key Schema Notes
 
 - **Token data is stored as JSON inside `Map.tokens`** — tokens are not a separate table. This simplifies real-time updates (the whole token list is atomically replaced on moves).
+- **Walls, lights and fog are JSON on the map row too** (`Map.wallSegments`, `Map.lights`, `Map.fogData`). A write to any of these columns, or to `Map.tokens`, reads the whole value, changes it and writes it back, so it runs inside `withMapsLocked` (`utils/mapTokens.ts`): a transaction holding a PostgreSQL advisory lock on the map, which reads the value through the transaction after taking the lock. Edits sent together, from the socket or the REST routes, then apply one after another instead of the later write dropping the earlier change.
 - **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas but stored untyped in Postgres. This allows flexible incremental saves.
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
@@ -572,7 +583,7 @@ directory (`backend/src/utils/backupDir.ts`).
 ### Upload Pipeline
 
 1. **Multer** receives the multipart upload and streams to a temp file
-2. **Magic byte validation** (`file-type` library) — verifies the actual file type matches the declared MIME type. Anything `file-type` can identify must match; only a file it cannot identify falls through to a per-format check, and that check is positive rather than by extension: a PDF or MP3 must start with its header bytes, and a `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. An executable renamed `.md` fails here.
+2. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
 3. **Size limit check** — configurable per asset type via environment variables
 4. **Sharp** generates a WebP thumbnail (for maps and tokens)
 5. File is moved to its final location; the `Asset` record is created in the database
@@ -608,9 +619,12 @@ readable by every member while it plays. `canReadAsset` grants exactly that: the
 asset id recorded in the campaign's `vibeSettings.atmosphereAudio` is readable by
 that campaign's members for as long as it is recorded. Because setting a track is
 therefore an act of sharing, the socket handler checks the DM can read it first,
-and never as an admin. It is also the only writer of that setting: the campaign
-settings routes and campaign import carry the stored value through untouched,
-because neither can make that check. The route sends the `Content-Type` from the file's
+and never as an admin. It is also the only writer of that setting that takes an
+id from a client: the campaign settings routes carry the stored value through
+untouched, because they cannot make that check. A campaign import never keeps
+the archive's id either. It names only the copy of the track it has just
+imported into the new campaign, an asset of that campaign uploaded by the
+importer, or no track. The route sends the `Content-Type` from the file's
 validated extension, never the uploader-supplied `mimeType`, with `nosniff` on
 both whole-file and range responses.
 
@@ -621,7 +635,7 @@ The server never parses a document; the defence is in how it is served. `GET /ap
 ### Serving Images
 
 Maps, tokens and avatars are served with an explicit `Content-Type` from a small
-whitelist of image types (and a PDF, for maps), keyed on the file's extension,
+whitelist of image types (and a PDF, kept for maps stored as one before PDF maps were refused), keyed on the file's extension,
 with `X-Content-Type-Options: nosniff`. Anything whose extension is not on that
 list goes out as `application/octet-stream`, which a browser downloads rather
 than renders. This matters because the extension is not trusted on its own: the
@@ -681,6 +695,10 @@ User edits sheet → editor calls onSave(data, showToast?, tokenImageUrl?)
 → The parsed sheet is stored as character.data in PostgreSQL, so a key the schema
   does not declare is dropped; a stale updatedAt (the character changed since the
   sheet was loaded) is refused with 409 and nothing is written
+→ On a 409 the editor stays open: the host fetches the newest version, carries the
+  user's changes onto it (utils/reapplyEdits, the difference between the version
+  the editor opened and what it sent), shows them, and saves only on confirmation
+  (components/character/StaleSaveDialog)
 → On load: GET /api/characters/:id returns character.data
 → CharacterSheetRouter picks the sheet by character.gameSystem and hydrates it
 ```

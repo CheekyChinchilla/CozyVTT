@@ -104,6 +104,51 @@ describe('validateEmail', () => {
   it('rejects an empty string', () => {
     expect(validateEmail('')).toBe(false);
   });
+
+  it('accepts the addresses people actually use', () => {
+    expect(validateEmail('first.last+campaign@mail.example.co.uk')).toBe(true);
+    expect(validateEmail('o\'brien@example.ie')).toBe(true);
+    expect(validateEmail('player@a.b.c.d.example.org')).toBe(true);
+    expect(validateEmail('dm@example.photography')).toBe(true);
+    expect(validateEmail('dm@xn--bcher-kva.example')).toBe(true);
+    expect(validateEmail('DM@EXAMPLE.COM')).toBe(true);
+  });
+
+  // The sign-in page checks an address with the same rule before sending it,
+  // so an address an account already holds has to keep passing.
+  it('still accepts unusual addresses an existing account may hold', () => {
+    expect(validateEmail('a@b..c')).toBe(true);
+    expect(validateEmail('a@.b.c')).toBe(true);
+    expect(validateEmail('a@b.c.')).toBe(true);
+  });
+
+  it('rejects more than one @, and a domain without a dot inside it', () => {
+    expect(validateEmail('a@b@c.d')).toBe(false);
+    expect(validateEmail('a@localhost')).toBe(false);
+    expect(validateEmail('a@.com')).toBe(false);
+    expect(validateEmail('a@com.')).toBe(false);
+  });
+
+  it('rejects any kind of whitespace', () => {
+    expect(validateEmail('user@example.com\n')).toBe(false);
+    expect(validateEmail('user\t@example.com')).toBe(false);
+    expect(validateEmail('user@exam\u00a0ple.com')).toBe(false);
+  });
+
+  // 254 characters is the longest address the email standards allow.
+  it('accepts an address of 254 characters and refuses one of 255', () => {
+    const address = (length: number) => 'a'.repeat(64) + '@' + 'b'.repeat(length - 69) + '.com';
+    expect(address(254)).toHaveLength(254);
+    expect(validateEmail(address(254))).toBe(true);
+    expect(validateEmail(address(255))).toBe(false);
+  });
+
+  it('answers a crafted 100,000-character address within 50 ms', () => {
+    const crafted = 'a@' + '.'.repeat(100_000) + '@';
+    const started = performance.now();
+    expect(validateEmail(crafted)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });
 
 // ============================================

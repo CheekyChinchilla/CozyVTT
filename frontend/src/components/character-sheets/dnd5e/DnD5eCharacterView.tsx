@@ -40,6 +40,8 @@ import {
   exhaustionEffects,
   readCustomSkills,
   dnd5eCustomSkillBonus,
+  dnd5eSkillBonus,
+  dnd5eSaveBonus,
 } from '../../../utils/rules/dnd5e';
 import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
@@ -292,7 +294,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-stone-50 border border-stone-200 rounded-lg p-4">
             {(Object.entries(data.savingThrows ?? {}) as [string, DnD5eSavingThrow][]).map(([key, save]) => {
-              const expr = save.bonus >= 0 ? `1d20+${save.bonus}` : `1d20${save.bonus}`;
+              // Worked out from the scores plus the other bonus, as the dice
+              // roll it, so a stored total that has gone stale is not shown.
+              const bonus = dnd5eSaveBonus(data, key);
+              const expr = bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`;
               const purpose = `${key.charAt(0).toUpperCase() + key.slice(1)} Save`;
               return (
                 <div
@@ -307,7 +312,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                     <span className="text-sm capitalize">{key}</span>
                   </div>
                   <span className={`text-sm font-semibold ${save.proficient ? 'text-red-700' : 'text-stone-600'}`}>
-                    {formatModifier(save.bonus)}
+                    {formatModifier(bonus)}
                     {save.proficient && ' •'}
                   </span>
                 </div>
@@ -323,7 +328,11 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
           <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
             <SkillsList
-              skills={data.skills}
+              // Each total worked out as the dice roll it: from the scores,
+              // plus the skill's other bonus.
+              skills={Object.fromEntries(
+                Object.entries(data.skills).map(([key, skill]) => [key, { ...skill, bonus: dnd5eSkillBonus(data, key) }])
+              ) as typeof data.skills}
               // Derived from the Perception bonus shown right above it rather
               // than read from the stored `passivePerception` field. Nothing
               // ever recalculated that field, so it kept whatever it was first
@@ -333,7 +342,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               // characters saved before this release read correctly without
               // needing to be re-saved.
               passivePerception={passiveScore(
-                (data.skills.perception?.bonus ?? 0) + (data.passivePerceptionBonus ?? 0)
+                dnd5eSkillBonus(data, 'perception') + (data.passivePerceptionBonus ?? 0)
               )}
               // Derived here for the same reason: the bonus follows the
               // character's ability scores and level rather than being stored

@@ -823,6 +823,30 @@ export interface Asset {
   campaign?: { id: string; name: string } | null;
 }
 
+/** What kind of record uses an asset. */
+export type AssetUseKind =
+  | 'map'
+  | 'token'
+  | 'character'
+  | 'characterTemplate'
+  | 'creature'
+  | 'tokenTemplate'
+  | 'campaignSetting';
+
+/**
+ * One place an asset is used, from the server's refusal to delete it. `name`
+ * and the campaign are null where the viewer may not see the record, and then
+ * `count` is how many of that kind are folded into the entry. For a map's
+ * tokens `count` is how many tokens carry the picture.
+ */
+export interface AssetUse {
+  kind: AssetUseKind;
+  name: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+  count: number;
+}
+
 export interface AssetListResponse {
   assets: Asset[];
   pagination: Pagination;
@@ -914,13 +938,25 @@ export interface CampaignImportPreview {
   totalSizeBytes: number;
 }
 
+/** Something a campaign import left out, and why. */
+export interface CampaignImportSkipped {
+  kind: 'map' | 'token' | 'creature' | 'tokenTemplate' | 'asset';
+  name: string;
+  reason: string;
+}
+
 export interface CampaignImportResult {
   campaignId: string;
   campaignName: string;
+  /** What was created, which may be fewer than the archive held. */
   mapCount: number;
   tokenCount: number;
   creatureCount: number;
   tokenTemplateCount: number;
+  /** What was imported in a changed form, in words. */
+  warnings: string[];
+  /** What was left out, and why. */
+  skipped: CampaignImportSkipped[];
 }
 
 // ============================================

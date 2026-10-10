@@ -2,9 +2,26 @@
 // Validation Utilities
 // ============================================
 
+/** The longest address the email standards allow. */
+export const MAX_EMAIL_LENGTH = 254;
+
+/**
+ * Whether `email` is shaped like an address: no whitespace, one `@` with
+ * something before it, and a dot inside the domain, not at either end of it.
+ *
+ * The same check as validateEmail in backend/src/utils/validation.ts, written
+ * the same way, and keepInStep.test.ts there fails if the two differ. It has
+ * to accept every address an account already holds, since the sign-in page
+ * will not send one it refuses.
+ */
 export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  if (typeof email !== 'string' || email.length > MAX_EMAIL_LENGTH) return false;
+  if (/\s/.test(email)) return false;
+  const at = email.indexOf('@');
+  if (at < 1 || email.indexOf('@', at + 1) !== -1) return false;
+  const domain = email.slice(at + 1);
+  const dot = domain.indexOf('.', 1);
+  return dot !== -1 && dot < domain.length - 1;
 }
 
 /**

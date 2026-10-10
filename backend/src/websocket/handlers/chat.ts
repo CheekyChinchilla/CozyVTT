@@ -6,14 +6,15 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
-import { chatMessageLimiter } from '../shared';
+import { chatMessageLimiter, withinCeiling } from '../shared';
 
 export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * CHAT.MESSAGE - User sends chat message.
    * Validates content, saves to database, and broadcasts to campaign.
    * The message type comes from the sender's role, never from the payload.
-   * Rate limited per the campaign's chatCooldown settings.
+   * Always under the per-user flood ceiling; the campaign's chat cooldown,
+   * when the DM turns it on, is the stricter rule on top.
    * SECURITY: Uses server-authenticated socket.campaignId and socket.role only.
    */
   socket.on('chat.message', async (data: { content: string; type?: 'PLAYER' | 'DM' }) => {
@@ -22,6 +23,8 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+
+      if (!withinCeiling(socket, 'chat.message')) return;
 
       const { content } = data;
 

@@ -5,22 +5,27 @@
  */
 
 import { z } from 'zod';
+import { GameSystem } from '@prisma/client';
 import { VibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
-import { createNpcStatBlockSchema, IMPORT_STAT_BLOCK_LIMITS } from './statBlock';
+import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
+// Tokens on a map, walls and lights are held to the app's own limits
+// (MAP_LIMITS, validators/walls.ts), so anything the app stores imports.
 export const IMPORT_LIMITS = {
   MAX_MAPS: 50,
-  MAX_TOKENS_PER_MAP: 500,
   MAX_CREATURES: 200,
   MAX_TOKEN_TEMPLATES: 500,
   MAX_ASSETS: 500,
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
-  MAX_JSON_DEPTH: 20,
+  // How deeply a data file may nest objects and lists. An export reaches
+  // six, at a map token's stat block's proficiencies; this is five times that.
+  MAX_JSON_DEPTH: 32,
   FORMAT_VERSION: 1,
 } as const;
 
@@ -51,10 +56,17 @@ const ImportConditionsSchema = z
   .catch([])
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 
-// Stat blocks arriving in an archive validate against the same definition the
-// creature and token-template routes use, with the looser import limits this
-// file has always applied (see IMPORT_STAT_BLOCK_LIMITS).
-const StatBlockSchema = createNpcStatBlockSchema(IMPORT_STAT_BLOCK_LIMITS);
+// Stat blocks arriving in an archive are held to what the creature editor
+// and the token routes accept, so an imported creature can be placed and
+// saved. The importer cuts text and lists over those limits down to them.
+const StatBlockSchema = NpcStatBlockSchema;
+
+/**
+ * A game system, as the database stores one. The importer checks it on its
+ * own and imports the campaign or creature with none when it is not one, so
+ * an unknown name costs nothing else.
+ */
+export const ImportGameSystemSchema = z.nativeEnum(GameSystem).nullable().optional();
 
 // ── Manifest ────────────────────────────────────────────────────────────────
 
@@ -78,104 +90,110 @@ export const ManifestSchema = z.object({
 export const CampaignSettingsSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).nullable().optional(),
-  gameSystem: z.string().max(50).nullable().optional(),
+  gameSystem: z.unknown(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.
   vibeSettings: VibeSettingsSchema.optional().catch(undefined),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
-  spiritLayerStyle: z.string().max(100).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
-}).strip();
-
-// ── Wall segment ────────────────────────────────────────────────────────────
-
-const WallSegmentSchema = z.object({
-  id: z.string().max(100),
-  x1: z.number().finite(),
-  y1: z.number().finite(),
-  x2: z.number().finite(),
-  y2: z.number().finite(),
-  type: z.string().max(50),
-}).strip();
-
-// ── Light source ────────────────────────────────────────────────────────────
-
-const LightSourceSchema = z.object({
-  id: z.string().max(100),
-  x: z.number().finite(),
-  y: z.number().finite(),
-  brightRadius: z.number().min(0).max(200),
-  dimRadius: z.number().min(0).max(200),
-  color: z.string().max(20),
-  enabled: z.boolean(),
+  spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
 }).strip();
 
 // ── Token (within a map) ────────────────────────────────────────────────────
 
-const TokenSchema = z.object({
-  id: z.string().max(100).optional(),
+// Each token is checked on its own (services/campaignImportContent.ts), so
+// one the app cannot store costs only itself. Text over its limit is cut to
+// it by the importer and the import says so; that is why name and notes
+// have a limit here and no fallback. The importer gives every token a new
+// id, rounds its position to whole squares and keeps it on the map.
+export const ImportTokenSchema = z.object({
   // The token routes refuse a blank name; Duplicate and Edit Token send
   // an imported token through them.
-  name: z.string().max(200).transform((name) => name.trim() || 'Unnamed token'),
-  imageUrl: z.string().max(500).optional().default(''),
+  name: z.string().trim().max(200).transform((name) => name || 'Unnamed token'),
+  imageUrl: z.string().max(500).optional().default('').catch(''),
   position: PositionSchema,
   size: TokenSizeSchema.catch({ width: 1, height: 1 }),
   layer: TokenLayerSchema,
-  visible: z.boolean().optional().default(true),
-  controlledBy: z.string().max(100).nullable().optional(),
-  rotation: z.number().min(0).max(360).optional(),
+  // A flag that is not one hides the token: the DM can show it again, and a
+  // token they meant to keep hidden is not shown to the table.
+  visible: z.boolean().optional().default(true).catch(false),
+  rotation: z.number().min(0).max(360).optional().catch(undefined),
   conditions: ImportConditionsSchema.optional(),
   type: TokenTypeSchema.default('npc').catch('npc'),
   disposition: TokenDispositionSchema,
   hp: ImportHpSchema,
-  showHpBar: z.boolean().optional(),
-  notes: z.string().max(5000).optional(),
-  initiative: z.number().nullable().optional(),
-  sightRadius: TokenSightRadiusSchema.optional(),
+  showHpBar: z.boolean().optional().catch(undefined),
+  notes: z.string().max(5000).nullable().optional(),
+  initiative: z.number().nullable().optional().catch(null),
+  sightRadius: TokenSightRadiusSchema.nullable().optional().catch(null),
   displayMode: TokenDisplayModeSchema.default('pog').catch('pog'),
   statBlock: StatBlockSchema.nullable().optional(),
   // A UUID, as the token routes require; anything else links to nothing.
   creatureTemplateId: z.uuid().nullable().optional().catch(null),
-  obscured: z.boolean().optional().default(false),
+  obscured: z.boolean().optional().default(false).catch(false),
 }).strip();
+
+// ── Fog ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A map's fog as the server keeps it (types/walls.ts FogState): one flag a
+ * grid square. Fog whose grid is not the map's is rebuilt fully hidden the
+ * first time it is used, so the importer keeps only fog that matches.
+ */
+export const ImportFogSchema = z
+  .object({
+    fogCols: z.number().int().min(1).max(MAP_LIMITS.maxSide),
+    fogRows: z.number().int().min(1).max(MAP_LIMITS.maxSide),
+    cellPx: z.number().int().min(MAP_LIMITS.minGridSize).max(MAP_LIMITS.maxGridSize),
+    revealed: z.array(z.boolean()).max(MAX_FOG_CELLS),
+  })
+  .strip()
+  .refine((fog) => fog.revealed.length === fog.fogCols * fog.fogRows, { message: 'Fog has a flag for each square' });
 
 // ── Map data ────────────────────────────────────────────────────────────────
 
-// TODO(import): one field over its limit refuses the whole map, walls and
-// tokens included, and the import result still reports the archive's map
-// count. An archive written by 1.4.0 can hit this: that release stored token
-// notes and names of any length. The same limits were in 1.4.0's importer, so
-// this is not new. A token over a limit should be imported with that field
-// cut back or dropped, and the result should count the maps actually created.
-//
-// imageAssetRef is null when the export left the picture out (deleted, or one
-// the person exporting could not open): the map imports without a picture,
-// its walls, tokens and fog intact, and the DM gives it one in Edit Map.
-export const MapDataSchema = z.object({
-  name: z.string().min(1).max(200),
-  imageAssetRef: z.string().max(200).nullable().optional(),
-  spiritLayerAssetRef: z.string().max(200).nullable().optional(),
-  width: z.number().int().min(1).max(500),
-  height: z.number().int().min(1).max(500),
-  gridSize: z.number().int().min(10).max(200),
-  feetPerSquare: z.number().int().min(1).max(100),
-  diagonalRule: z.enum(['flat', 'alternating']).optional(),
-  tokens: z.array(TokenSchema).max(IMPORT_LIMITS.MAX_TOKENS_PER_MAP),
-  annotations: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
-  wallSegments: z.array(WallSegmentSchema).max(5000).optional(),
-  fogData: z.record(z.string(), z.unknown()).nullable().optional(),
-  lightingEnabled: z.boolean().optional(),
-  fogEnabled: z.boolean().optional(),
-  globalIllumination: z.boolean().optional(),
-  explorationEnabled: z.boolean().optional(),
-  lights: z.array(LightSourceSchema).max(200).optional(),
+/**
+ * A map's own fields. Only its size can refuse it: a map the app could not
+ * hold, such as one wider than 500 squares, is left out with that reason.
+ * Its name, tokens, walls, lights and fog are each checked on their own by
+ * the importer, which cuts or leaves out what does not fit and says so.
+ *
+ * imageAssetRef is null when the export left the picture out (deleted, or one
+ * the person exporting could not open): the map imports without a picture,
+ * its walls, tokens and fog intact, and the DM gives it one in Edit Map.
+ */
+export const ImportMapSchema = z.object({
+  name: z.unknown(),
+  imageAssetRef: z.string().max(200).nullable().optional().catch(null),
+  spiritLayerAssetRef: z.string().max(200).nullable().optional().catch(null),
+  // The limits every other path that stores a map applies (validators/maps.ts)
+  width: MapSideSchema('Map width'),
+  height: MapSideSchema('Map height'),
+  gridSize: GridSizeSchema,
+  feetPerSquare: FeetPerSquareSchema,
+  diagonalRule: z.enum(['flat', 'alternating']).optional().catch(undefined),
+  tokens: z.unknown(),
+  annotations: z.unknown(),
+  wallSegments: z.unknown(),
+  fogData: z.unknown(),
+  lightingEnabled: z.boolean().optional().catch(undefined),
+  fogEnabled: z.boolean().optional().catch(undefined),
+  globalIllumination: z.boolean().optional().catch(undefined),
+  explorationEnabled: z.boolean().optional().catch(undefined),
+  lights: z.unknown(),
 }).strip();
+
+/**
+ * A map's annotations. Nothing draws them yet, and the drawing tool will
+ * define their shape, so each is kept as it is, within a bound.
+ */
+export const ImportAnnotationsSchema = z.array(z.record(z.string(), z.unknown())).max(500);
 
 // ── Creature template ───────────────────────────────────────────────────────
 
 export const CreatureTemplateSchema = z.object({
-  name: z.string().min(1).max(200),
-  gameSystem: z.string().max(50).nullable().optional(),
+  name: z.string().trim().min(1).max(200),
+  gameSystem: z.unknown(),
   challengeRating: z.string().max(10).nullable().optional(),
   creatureType: z.string().max(200).nullable().optional(),
   alignment: z.string().max(100).nullable().optional(),
@@ -192,7 +210,7 @@ export const CreatureTemplateSchema = z.object({
 // ── Token template ──────────────────────────────────────────────────────────
 
 export const TokenTemplateImportSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
   imageAssetRef: z.string().max(200).nullable().optional(),
   // The importer applies the template defaults (object, pog, one square) to
   // whatever is dropped here.
@@ -209,14 +227,26 @@ export const TokenTemplateImportSchema = z.object({
 
 // ── Asset manifest ──────────────────────────────────────────────────────────
 
-const AssetEntrySchema = z.object({
+/**
+ * The asset types an export writes, and so the only ones an import takes. A
+ * campaign's documents, and anyone's avatar, are not part of a campaign
+ * archive.
+ */
+export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
+
+// The declared MIME type is kept for the log only: the stored type and file
+// extension come from the file's own bytes, as on upload.
+export const AssetEntrySchema = z.object({
   originalName: z.string().max(500),
   mimeType: z.string().max(100),
-  type: z.string().max(20), // MAP, TOKEN, AUDIO
+  type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
 }).strip();
 
-export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchema)
+// Each entry is checked on its own by the importer: one that is not an
+// asset an archive carries (another asset type, say) is left out of the
+// import and listed, as an asset whose content does not match is.
+export const AssetManifestSchema = z.record(z.string().max(200), z.unknown())
   .refine(
     (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_ASSETS,
     { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_ASSETS} assets` }
@@ -226,7 +256,9 @@ export const AssetManifestSchema = z.record(z.string().max(200), AssetEntrySchem
 
 export type ManifestData = z.infer<typeof ManifestSchema>;
 export type CampaignSettingsData = z.infer<typeof CampaignSettingsSchema>;
-export type MapData = z.infer<typeof MapDataSchema>;
+export type ImportMapData = z.infer<typeof ImportMapSchema>;
+export type ImportToken = z.infer<typeof ImportTokenSchema>;
+export type AssetEntryData = z.infer<typeof AssetEntrySchema>;
 export type CreatureTemplateData = z.infer<typeof CreatureTemplateSchema>;
 export type TokenTemplateImportData = z.infer<typeof TokenTemplateImportSchema>;
 export type AssetManifestData = z.infer<typeof AssetManifestSchema>;

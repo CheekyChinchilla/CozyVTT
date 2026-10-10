@@ -105,7 +105,7 @@ export function computeVisibility(
   // For large maps (>200 segments) use the spatial grid to pre-filter candidates
   // to only those within the viewer's sight range, skipping distant walls entirely.
   const candidateWalls = walls.length > 200
-    ? new WallGrid(walls, 256).query(ox, oy, maxDist)
+    ? new WallGrid(walls, 256, mapWidth, mapHeight).query(ox, oy, maxDist)
     : walls;
   for (const w of candidateWalls) {
     if (w.type === 'wall' || w.type === 'door-closed' || w.type === 'door-locked') {

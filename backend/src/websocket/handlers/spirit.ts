@@ -9,7 +9,7 @@ import { prisma } from '../../config/database';
 import { sendSystemMessage } from '../utils';
 import logger from '../../utils/logger';
 import { isValidSpiritStyle } from '../../utils/styleAllowlists';
-import { Token, broadcastMapData } from '../shared';
+import { Token, broadcastMapData, withinCeiling } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { getState as getCombatState } from '../initiativeState';
@@ -26,6 +26,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+      if (!withinCeiling(socket, 'spirit_layer.toggle')) return;
 
       // DM only
       if (socket.role !== 'DM') {
@@ -93,6 +94,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
    */
   socket.on('spirit_layer.style_change', (data: { style: string }) => {
     if (!socket.campaignId) return;
+    if (!withinCeiling(socket, 'spirit_layer.style_change')) return;
     if (socket.role !== 'DM') {
       socket.emit('error', { message: 'Only DMs can change spirit layer style' });
       return;
@@ -116,6 +118,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         socket.emit('error', { message: 'Not authenticated to a campaign' });
         return;
       }
+      if (!withinCeiling(socket, 'spirit_layer.token.toggle')) return;
 
       // DM only
       if (socket.role !== 'DM') {

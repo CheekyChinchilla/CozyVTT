@@ -22,17 +22,12 @@ async function leadingBytes(filePath: string, count: number): Promise<Buffer> {
   }
 }
 
-/** Every PDF begins with the literal bytes %PDF-. */
-async function startsWithPdfHeader(filePath: string): Promise<boolean> {
-  const head = await leadingBytes(filePath, 5);
-  return head.toString('latin1') === '%PDF-';
-}
-
 /**
  * An MP3 begins with an ID3v2 tag, or with an MPEG audio frame sync: eleven set
- * bits, 0xFF followed by a byte whose top three bits are set.
+ * bits, 0xFF followed by a byte whose top three bits are set. Also used by the
+ * campaign importer.
  */
-async function startsWithMp3Header(filePath: string): Promise<boolean> {
+export async function startsWithMp3Header(filePath: string): Promise<boolean> {
   const head = await leadingBytes(filePath, 3);
   if (head.length >= 3 && head.toString('latin1') === 'ID3') return true;
   return head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0;
@@ -102,25 +97,22 @@ export async function validateFileType(
     // Get MIME type from file content (magic bytes)
     const fileType = await fileTypeFromFile(filePath);
 
-    // Special case: PDFs and some audio files may not be detected by file-type
+    // Special case: some audio files and plain text may not be detected by file-type
     // Verify by extension for these cases
     const ext = path.extname(req.file.originalname).toLowerCase();
-    const isPDF = ext === '.pdf';
     const isMP3 = ext === '.mp3';
     const isTextDocument = assetType === 'DOCUMENT' && (ext === '.txt' || ext === '.md');
 
     // If file-type couldn't detect type, check if it's a known exception.
     //
     // These exceptions used to accept on extension alone. file-type does
-    // identify real PDFs and MP3s, so the only files that reach here under
-    // those names are ones it could not identify at all, and a filename is not
-    // evidence. The leading bytes are checked instead: a PDF starts with %PDF-
-    // and an MP3 with an ID3 tag or an MPEG frame sync.
+    // identify real MP3s, so the only files that reach here under that name
+    // are ones it could not identify at all, and a filename is not evidence.
+    // The leading bytes are checked instead: an MP3 starts with an ID3 tag or
+    // an MPEG frame sync.
     if (!fileType) {
-      if (isPDF && assetType === 'MAP' && (await startsWithPdfHeader(filePath))) {
-        next();
-        return;
-      } else if (isMP3 && assetType === 'AUDIO' && (await startsWithMp3Header(filePath))) {
+      if (isMP3 && assetType === 'AUDIO' && (await startsWithMp3Header(filePath))) {
+        req.detectedMimeType = 'audio/mpeg';
         next();
         return;
       } else if (isTextDocument && (await isPlainTextFile(filePath))) {
@@ -129,6 +121,7 @@ export async function validateFileType(
         // trusted on its own: the bytes have to prove they are text. A PDF
         // document does not need this branch, because file-type identifies a
         // real PDF and it passes the MIME check below like any other file.
+        req.detectedMimeType = ext === '.md' ? 'text/markdown' : 'text/plain';
         next();
         return;
       } else {
@@ -157,6 +150,7 @@ export async function validateFileType(
     // The content is known and allowed. Force the stored extension to match it,
     // so the serving route cannot be told the file is a page or a script.
     await normalizeStoredExtension(req.file, fileType.ext);
+    req.detectedMimeType = fileType.mime;
 
     // File is valid, proceed
     next();

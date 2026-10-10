@@ -12,6 +12,7 @@ import {
   ensureDirectory,
   getTempDirectory,
 } from '../utils/fileUtils';
+import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 
 /**
  * Extended request interface to include asset metadata
@@ -20,6 +21,12 @@ export interface UploadRequest extends Request {
   assetType?: AssetType;
   assetScope?: AssetScope;
   campaignId?: string;
+  /**
+   * The upload's format as its bytes show it, set by validateFileType. The
+   * file's own `mimetype` is whatever the browser declared, which can be
+   * anything.
+   */
+  detectedMimeType?: string;
 }
 
 /**
@@ -77,6 +84,7 @@ export const uploadGeneric = multer({
   limits: {
     fileSize: MAX_UPLOAD_BYTES, // Largest MAX_<TYPE>_SIZE_MB configured
     files: 1, // Only allow one file per request
+    ...MULTIPART_FIELD_LIMITS,
   },
   // No fileFilter - accept all files, validate in middleware
 });

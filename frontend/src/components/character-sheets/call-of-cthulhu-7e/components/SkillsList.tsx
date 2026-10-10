@@ -204,8 +204,12 @@ const SkillRow: React.FC<{
       </div>
 
       {/* Current Value */}
+      {/* TODO(sheets): `parseInt(...) || 0` commits 0 the moment the box is
+         cleared, so selecting a value and typing a new one starts from 0, the
+         problem NumberField exists to solve. Use NumberField here with min at
+         the base value. */}
       <div className="w-14">
-        {editable && name !== 'cthulhuMythos' && name !== 'dodge' ? (
+        {editable && name !== 'cthulhuMythos' ? (
           <input
             type="number"
             value={skill.currentValue}
@@ -419,7 +423,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
             <ul className="list-disc pl-5 mt-1 space-y-0.5">
               <li><strong>Credit Rating:</strong> Determines wealth tier and spending level.</li>
               <li><strong>Cthulhu Mythos:</strong> Cannot be improved normally; reduces maximum Sanity by equal amount.</li>
-              <li><strong>Dodge:</strong> Derived from DEX/2; can be improved with successful use.</li>
+              <li><strong>Dodge:</strong> Starts at half DEX. Add skill points and improvements to it like any other skill.</li>
             </ul>
           </div>
         </div>

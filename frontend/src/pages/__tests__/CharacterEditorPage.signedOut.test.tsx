@@ -8,13 +8,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
 import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
 
 const showToast = vi.fn();
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
 
-vi.mock('@/hooks/queries', () => ({
+vi.mock('@/hooks/queries', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/queries')>()),
   useServerConfigQuery: () => ({ data: undefined }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
@@ -36,12 +38,14 @@ const signedOut = { response: { status: 401, data: { error: 'Unauthorized', mess
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/characters/char-1/edit']}>
-      <Routes>
-        <Route path="/characters/:id/edit" element={<CharacterEditorPage />} />
-        <Route path="/characters" element={<p>Character list</p>} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={['/characters/char-1/edit']}>
+        <Routes>
+          <Route path="/characters/:id/edit" element={<CharacterEditorPage />} />
+          <Route path="/characters" element={<p>Character list</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

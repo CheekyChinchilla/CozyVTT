@@ -280,3 +280,44 @@ describe('an unknown or absent system', () => {
     });
   });
 });
+
+describe('D&D 5e skills and saves with an other bonus', () => {
+  const ability = { score: 10, modifier: 0 };
+  const base = {
+    characterName: 'Lark',
+    class: 'Bard',
+    level: 1,
+    race: 'Human',
+    proficiencyBonus: 2,
+    stats: {
+      strength: ability, dexterity: { score: 14, modifier: 2 }, constitution: ability,
+      intelligence: ability, wisdom: ability, charisma: ability,
+    },
+  };
+
+  it('rolls the ability, proficiency and other bonus together', () => {
+    const data = {
+      ...base,
+      skills: { stealth: { proficient: true, expertise: false, bonus: 0, otherBonus: 1 } },
+      savingThrows: { dexterity: { proficient: true, bonus: 0, otherBonus: 2 } },
+    } as unknown as CharacterData;
+
+    const rolls = getCharacterRolls('DND_5E', data);
+
+    expect(rolls.skills.find((s) => s.label.startsWith('Stealth'))?.expression).toBe('1d20+5');
+    expect(rolls.savingThrows.find((s) => s.label.startsWith('Dexterity'))?.expression).toBe('1d20+6');
+  });
+
+  it('rolls a sheet saved before the other bonus existed at the total it stores', () => {
+    const data = {
+      ...base,
+      skills: { stealth: { proficient: false, expertise: false, bonus: 3 } },
+      savingThrows: { dexterity: { proficient: false, bonus: 5 } },
+    } as unknown as CharacterData;
+
+    const rolls = getCharacterRolls('DND_5E', data);
+
+    expect(rolls.skills.find((s) => s.label.startsWith('Stealth'))?.expression).toBe('1d20+3');
+    expect(rolls.savingThrows.find((s) => s.label.startsWith('Dexterity'))?.expression).toBe('1d20+5');
+  });
+});

@@ -45,3 +45,18 @@ describe('the backup requests', () => {
     expect(post.mock.calls[0][2]?.timeout).toBe(proxyTimeoutMs('/api/admin/backups'));
   });
 });
+
+describe('the campaign import requests', () => {
+  // Both send the whole archive, up to 500 MB. The preview had the shared 30
+  // seconds and the import five minutes, each counting the upload, so a
+  // large archive on a slow connection failed while it was still being sent.
+  it.each([
+    ['preview', () => api.previewCampaignImport(new FormData())],
+    ['import', () => api.importCampaign(new FormData())],
+  ])('leave the %s to the proxy, which gives the import location time of its own', async (_name, call) => {
+    const post = vi.spyOn(client, 'post').mockResolvedValue({ data: { preview: {} } });
+    await call();
+    expect(proxyTimeoutMs('/api/campaigns/import')).toBeGreaterThanOrEqual(300_000);
+    expect(post.mock.calls[0][2]?.timeout).toBe(0);
+  });
+});

@@ -27,6 +27,7 @@ import type { Token } from '@/types';
 import { TokenType } from '@/types';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage } from '@/utils/errors';
+import RemoveTokenDialog from './RemoveTokenDialog';
 
 // ============================================
 // Props
@@ -69,6 +70,8 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  // Set while the Remove confirmation is open.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
 
   const handleDuplicate = useCallback(async () => {
@@ -106,30 +109,31 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     try {
       await setTokenFlag(campaignId, mapId, token, 'visible', !token.visible, socket);
     } catch (err) {
-      console.error('TokenRoster: failed to toggle visibility', err);
+      showToast(apiErrorMessage(err) || 'Failed to change whether players can see the token', 'error');
     }
-  }, [token, campaignId, mapId, socket]);
+  }, [token, campaignId, mapId, socket, showToast]);
 
   const handleToggleObscured = useCallback(async () => {
     try {
       await setTokenFlag(campaignId, mapId, token, 'obscured', !token.obscured, socket);
     } catch (err) {
-      console.error('TokenRoster: failed to toggle identity', err);
+      showToast(apiErrorMessage(err) || 'Failed to change whether the token\'s identity is hidden', 'error');
     }
-  }, [token, campaignId, mapId, socket]);
+  }, [token, campaignId, mapId, socket, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (isDeleting) return;
+    setConfirmingRemove(false);
     setIsDeleting(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
       useGameStore.getState().removeToken(token.id);
       socket?.emitMapChange(mapId);
     } catch (err) {
-      console.error('TokenRoster: failed to remove token', err);
+      showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsDeleting(false);
     }
-  }, [token, campaignId, mapId, socket, isDeleting]);
+  }, [token, campaignId, mapId, socket, isDeleting, showToast]);
 
   const hp = hpLabel(token);
 
@@ -150,7 +154,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
       {/* Name + HP */}
       <div className="flex-1 min-w-0">
-        <p className={`text-xs font-medium truncate ${!token.visible ? 'text-stone-gray/50' : 'text-charcoal'}`}>
+        <p title={token.name} className={`text-xs font-medium truncate ${!token.visible ? 'text-stone-gray/50' : 'text-charcoal'}`}>
           {token.name}
           {!token.visible && <span className="ml-1 text-[10px] text-stone-gray/40">(hidden)</span>}
           {token.obscured && <span className="ml-1 text-[10px] text-stone-gray/40">(obscured)</span>}
@@ -160,16 +164,19 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         )}
       </div>
 
-      {/* Actions — shown on hover */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+      {/* Actions — shown on hover, while one has keyboard focus, and always on a
+          screen with no hover (touch), where they would otherwise be tappable
+          before they could be seen. */}
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex-shrink-0">
         {/* Edit — every token type */}
         {onEditToken && (
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"
-            className="p-1 rounded hover:bg-moss-green/10 text-brand-ink transition-colors"
+            aria-label={`Edit ${token.name}`}
+            className="p-1.5 rounded hover:bg-moss-green/10 text-brand-ink transition-colors"
           >
-            <Edit2 className="w-3 h-3" />
+            <Edit2 className="w-3.5 h-3.5" />
           </button>
         )}
 
@@ -177,18 +184,20 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         <button
           onClick={handleToggleVisible}
           title={token.visible ? 'Hide from players' : 'Show to players'}
-          className="p-1 rounded hover:bg-moss-green/10 text-stone-gray transition-colors"
+          aria-label={token.visible ? `Hide ${token.name} from players` : `Show ${token.name} to players`}
+          className="p-1.5 rounded hover:bg-moss-green/10 text-stone-gray transition-colors"
         >
-          {token.visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+          {token.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
 
         {/* Obscure / reveal identity */}
         <button
           onClick={handleToggleObscured}
           title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
-          className={`p-1 rounded hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
+          aria-label={token.obscured ? `Reveal identity of ${token.name}` : `Obscure identity of ${token.name}`}
+          className={`p-1.5 rounded hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
         >
-          <HelpCircle className="w-3 h-3" />
+          <HelpCircle className="w-3.5 h-3.5" />
         </button>
 
         {/* Duplicate */}
@@ -196,29 +205,37 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleDuplicate}
           disabled={isDuplicating}
           title="Duplicate token"
-          className="p-1 rounded hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
+          aria-label={`Duplicate ${token.name}`}
+          className="p-1.5 rounded hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
         >
           {isDuplicating ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
-            <Copy className="w-3 h-3" />
+            <Copy className="w-3.5 h-3.5" />
           )}
         </button>
 
         {/* Remove */}
         <button
-          onClick={handleDelete}
+          onClick={() => setConfirmingRemove(true)}
           disabled={isDeleting}
           title="Remove from map"
-          className="p-1 rounded hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
+          aria-label={`Remove ${token.name} from map`}
+          className="p-1.5 rounded hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
         >
           {isDeleting ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
-            <Trash2 className="w-3 h-3" />
+            <Trash2 className="w-3.5 h-3.5" />
           )}
         </button>
       </div>
+
+      <RemoveTokenDialog
+        token={confirmingRemove ? token : null}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmingRemove(false)}
+      />
     </div>
   );
 }

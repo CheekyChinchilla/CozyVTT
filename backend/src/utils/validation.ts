@@ -56,12 +56,28 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
   };
 }
 
+/** The longest address the email standards allow. */
+export const MAX_EMAIL_LENGTH = 254;
+
 /**
- * Validates email format
+ * Whether `email` is shaped like an address: no whitespace, one `@` with
+ * something before it, and a dot inside the domain, not at either end of it.
+ * That is all it checks; whether the mailbox exists is for the mail server.
+ *
+ * The length is refused first, and the rest is plain string searching, so a
+ * long crafted value costs no more than reading it once. The pattern this
+ * replaces took minutes on one. The browser checks with the same function
+ * (isValidEmail in frontend/src/utils/validation.ts), and keepInStep.test.ts
+ * fails if the two differ.
  */
 export function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  if (typeof email !== 'string' || email.length > MAX_EMAIL_LENGTH) return false;
+  if (/\s/.test(email)) return false;
+  const at = email.indexOf('@');
+  if (at < 1 || email.indexOf('@', at + 1) !== -1) return false;
+  const domain = email.slice(at + 1);
+  const dot = domain.indexOf('.', 1);
+  return dot !== -1 && dot < domain.length - 1;
 }
 
 /**

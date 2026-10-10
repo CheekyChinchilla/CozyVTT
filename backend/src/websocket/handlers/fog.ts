@@ -8,10 +8,11 @@ import { prisma } from '../../config/database';
 import { FogOperationSchema } from '../../validators/walls';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
-import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState } from '../shared';
+import { fogOperationLimiter, limiterKey, stateRequestAllowed, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastFogState, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { bestEffort } from '../utils';
+import { withMapsLocked } from '../../utils/mapTokens';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -41,29 +42,38 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         return;
       }
 
-      const map = await prisma.map.findUnique({
-        where: { id: mapId },
-        select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
+      // The whole grid is read, changed and written back, so this runs under
+      // the map's lock and reads the grid after taking it: two operations
+      // that overlap apply one after the other instead of the later one
+      // writing the earlier one's cells away.
+      const campaignId = socket.campaignId;
+      const op = parsed.data;
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { fog: FogState }> => {
+        const map = await tx.map.findUnique({
+          where: { id: mapId },
+          select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true },
+        });
+        if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
+        // The map's flag is the single source of truth for whether fog applies.
+        if (!map.fogEnabled) return { refused: 'Fog of war is off for this map' };
+
+        const fog: FogState = loadFogState(map, map.fogData as FogState | null);
+        applyWsFogOperation(fog, op);
+        await tx.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
+        return { fog };
       });
-      if (!map || map.campaignId !== socket.campaignId) {
-        socket.emit('error', { message: 'Map not found' });
+      if ('refused' in outcome) {
+        socket.emit('error', { message: outcome.refused });
         return;
       }
-      // The map's flag is the single source of truth for whether fog applies.
-      if (!map.fogEnabled) {
-        socket.emit('error', { message: 'Fog of war is off for this map' });
-        return;
-      }
-
-      const fog: FogState = loadFogState(map, map.fogData as FogState | null);
-      applyWsFogOperation(fog, parsed.data);
-
-      await prisma.map.update({ where: { id: mapId }, data: { fogData: toJson(fog) } });
 
       // Saved: failing to tell the table is logged, not reported as failed.
-      const campaignId = socket.campaignId;
-      await bestEffort('fog:cells', () => broadcastFogState(io, campaignId, mapId, fog));
+      await bestEffort('fog:cells', () => broadcastFogState(io, campaignId, mapId, outcome.fog));
     } catch (error) {
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('fog:operation failed', { err: error });
       socket.emit('error', { message: 'Failed to apply fog operation' });
     }
@@ -105,6 +115,13 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         });
       }
     } catch (error) {
+      // A map stored before the size limits can be too large for fog. Say
+      // so, once per request, rather than leaving the page without fog and
+      // without a reason.
+      if (error instanceof FogTooLargeError) {
+        socket.emit('error', { message: error.message });
+        return;
+      }
       logger.error('fog:request_state failed', { err: error });
     }
   });

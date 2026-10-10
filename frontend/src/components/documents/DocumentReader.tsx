@@ -24,8 +24,10 @@ import { useEffect, useState } from 'react';
 import { ExternalLink, FileText, Loader2, Pencil, Save, X } from 'lucide-react';
 import Markdown from '@/components/common/Markdown';
 import { Modal, Button, Textarea } from '@/components/ui';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { apiErrorMessage } from '@/utils/errors';
 import api from '@/services/api';
+import '@/styles/note-markdown.css';
 
 export type DocumentFormat = 'pdf' | 'markdown' | 'text';
 
@@ -84,6 +86,9 @@ export default function DocumentReader({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  // Which way out the person asked for while the draft has unsaved changes:
+  // closing the reader, or only leaving edit mode.
+  const [confirmingDiscard, setConfirmingDiscard] = useState<'close' | 'cancel' | null>(null);
 
   const format = documentFormat(originalName);
   const url = documentId ? api.getDocumentUrl(documentId) : '';
@@ -91,6 +96,7 @@ export default function DocumentReader({
   // Text formats are fetched and rendered here. A PDF is left to the iframe.
   useEffect(() => {
     setEditing(false);
+    setConfirmingDiscard(null);
     if (!isOpen || !documentId || format === 'pdf') {
       setText(null);
       return;
@@ -133,6 +139,24 @@ export default function DocumentReader({
     setError(null);
   };
 
+  // Closing, or cancelling the edit, drops the draft. Ask first once it differs
+  // from what is saved.
+  const hasChanges = editing && draft !== (text ?? '');
+  const requestClose = () => {
+    if (hasChanges) setConfirmingDiscard('close');
+    else onClose();
+  };
+  const requestCancelEdit = () => {
+    if (hasChanges) setConfirmingDiscard('cancel');
+    else setEditing(false);
+  };
+  const discardChanges = () => {
+    const wanted = confirmingDiscard;
+    setConfirmingDiscard(null);
+    if (wanted === 'close') onClose();
+    else setEditing(false);
+  };
+
   const handleSave = async () => {
     if (!documentId) return;
     setSaving(true);
@@ -151,9 +175,10 @@ export default function DocumentReader({
   };
 
   return (
+    <>
     <Modal
       open={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={name}
       icon={FileText}
       size="xl"
@@ -173,7 +198,7 @@ export default function DocumentReader({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setEditing(false)}
+                onClick={requestCancelEdit}
                 disabled={saving}
                 className="flex items-center gap-2"
               >
@@ -285,5 +310,16 @@ export default function DocumentReader({
         )}
       </div>
     </Modal>
+    <ConfirmDialog
+      isOpen={confirmingDiscard !== null}
+      title="Discard your changes?"
+      message={`Your changes to "${name}" have not been saved. If you ${confirmingDiscard === 'cancel' ? 'cancel' : 'close it'} now, they are lost.`}
+      confirmLabel="Discard changes"
+      cancelLabel="Keep editing"
+      variant="danger"
+      onConfirm={discardChanges}
+      onCancel={() => setConfirmingDiscard(null)}
+    />
+    </>
   );
 }

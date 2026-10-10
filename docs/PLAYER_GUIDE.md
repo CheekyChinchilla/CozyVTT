@@ -381,6 +381,12 @@ Roll before the DM clicks **Start Combat**. Once combat has started, the dice ic
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
 
+### Bonuses the sheet can't work out (D&D 5e)
+
+Every skill and saving throw is worked out for you from your ability scores, your proficiency bonus and the Prof and Exp boxes, so it keeps up as your character grows. Some things add to them that the sheet can't know about: a Bard's **Jack of All Trades**, a Paladin's **Aura of Protection**, a **Ring of Protection**, a feat. In **Edit**, under **Stats & Skills**, each skill and saving throw has a small box beside its total. Type the extra there, `1` for +1 or `-1` for a penalty, and the total, the sheet and the dice all include it.
+
+A character from an earlier version may have totals that already include something like this. The first time you open such a character in the editor, the difference is put in the box for you, so every total stays exactly as it was. If one of those boxes holds a number you don't recognise, the total was out of step with your ability scores; change the box to `0` to use the worked-out total.
+
 ### Skills the sheet doesn't have (D&D 5e)
 
 Thieves' tools, a musical instrument, a vehicle, or whatever your table invented — none of these are among the eighteen printed skills, but they roll the same way. Under **Stats & Skills** there's a **Your Own Skills** section: **+ Add Skill**, type the name, choose the ability it uses, and tick **Prof** (or **Exp** for expertise).
@@ -491,11 +497,11 @@ The card's menu (**⋮**) holds the rest:
 
 Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
 
-If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. Simply opening a sheet and reading it never counts as a change.
+If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
 
 Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
 
-**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. A message tells you so, and the new version is loaded; make your changes again on it. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
 
 > **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 

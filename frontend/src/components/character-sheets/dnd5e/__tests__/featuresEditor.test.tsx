@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DnD5eCharacterEditor } from '../DnD5eCharacterEditor';
 import type { Character } from '../../../../types';
 
@@ -183,5 +183,35 @@ describe('what the editor starts with', () => {
     expect((screen.getByLabelText('Feature 1 description') as HTMLTextAreaElement).value).toBe(
       'Regain 1d10 + fighter level.'
     );
+  });
+});
+
+describe('saving', () => {
+  it('keeps two features that share a name', async () => {
+    // Ability Score Improvement is taken at levels 4 and 8; both rows must be saved.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <DnD5eCharacterEditor
+        character={characterWith({
+          featuresAndTraits: [
+            { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+            { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+          ],
+        })}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Features' }));
+    expect(featureNames()).toEqual(['Ability Score Improvement', 'Ability Score Improvement']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const saved = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(saved.featuresAndTraits).toEqual([
+      { name: 'Ability Score Improvement', description: '+2 STR (level 4)' },
+      { name: 'Ability Score Improvement', description: '+1 DEX, +1 CON (level 8)' },
+    ]);
   });
 });

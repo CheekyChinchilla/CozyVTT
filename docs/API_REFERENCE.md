@@ -536,21 +536,21 @@ Copy a token template to another campaign. Requires DM role in both the source a
 
 ### `GET /api/campaigns/:campaignId/export`
 
-Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Rate limited to 1 per 5 minutes per user.
+Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
 
 **Query params:**
-- `includeAudio` — `true` to include audio assets (default: `false`)
+- `includeAudio` — `true` to include audio assets (default: `false`): the tracks of the campaign's atmosphere periods and its ambient track. An import plays the imported copies.
 - `includeTokens` — `false` to exclude tokens on maps (default: `true`)
 
-**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`.
+**Response:** Binary ZIP file with `Content-Type: application/zip` and `Content-Disposition: attachment`, sent as it is made (no `Content-Length`). A campaign whose files would make an archive over 500 MB, the most an import accepts, answers `422` with `error: "Export Too Large"` and a `message` giving the size.
 
 ---
 
 ### `POST /api/campaigns/import/preview`
 
-Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication.
+Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
 
-**Request:** `multipart/form-data` with field `file` containing the archive.
+**Request:** `multipart/form-data` with field `file` containing the archive, at most 500 MB; a larger one answers `413`. The bundled nginx gives this route and the import 512 MB, apart from `NGINX_MAX_BODY_SIZE`, and five minutes to answer.
 
 **Response:**
 ```json
@@ -558,7 +558,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.5.0",
+    "exportedFrom": "CozyVTT v1.5.1",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,
@@ -576,7 +576,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
 
 ### `POST /api/campaigns/import`
 
-Import a `.cozyvtt` archive and create a new campaign. Requires authentication. Rate limited to 1 per 5 minutes per user.
+Import a `.cozyvtt` archive and create a new campaign. Requires authentication; any signed-in user may import, and becomes the new campaign's DM. Each user may import 20 campaigns an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with fields:
 - `file` — the `.cozyvtt` archive (required)
@@ -589,12 +589,16 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication. 
   "message": "Campaign imported successfully",
   "campaignId": "uuid",
   "campaignName": "The Lost Mines",
-  "mapCount": 5,
+  "mapCount": 4,
   "tokenCount": 42,
   "creatureCount": 12,
-  "tokenTemplateCount": 8
+  "tokenTemplateCount": 8,
+  "warnings": ["Map \"Cellar\": shortened the notes of 1 token to 5,000 characters."],
+  "skipped": [{ "kind": "map", "name": "Vast", "reason": "Map width must be a whole number from 1 to 500 squares" }]
 }
 ```
+
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own and listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). A map is left out whole only when its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -685,9 +689,14 @@ Create a new map (DM only).
 ```json
 {
   "name": "Goblin Cave Level 1",
-  "assetId": "cuid-of-map-asset"
+  "imageUrl": "uuid-of-map-asset",
+  "width": 30,
+  "height": 20,
+  "gridSize": 70
 }
 ```
+
+`width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
 ---
 
@@ -884,9 +893,16 @@ Enforced on every creature, token-template and campaign-import write:
   Pathfinder 2e modifiers legitimately exceed +30 at high level, so a bound
   fitted to D&D 5e would reject real creatures.
 - Ability scores: integers 0–30. Attribute modifiers: −10 to +20.
-- Unknown top-level keys are preserved, so older stat blocks survive a round trip.
+- Up to 20 unknown top-level keys are preserved, so older stat blocks survive a
+  round trip; more than 20 answers `400`.
+- The whole stat block, as stored, may be at most 64 KB (65,536 characters of
+  JSON); a larger one answers `400`.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
+A campaign import applies the same limits but does not refuse: it cuts text and
+lists over them down to them, leaves a stat block it cannot store off a token or
+template, and leaves out a creature whose stat block it cannot store, saying so
+in its `warnings` and `skipped`.
 
 ---
 
@@ -993,6 +1009,8 @@ Upload a new asset. Uses `multipart/form-data`.
 - `campaignId` — required when `scope` is `CAMPAIGN`
 - `tags` — comma-separated list of tags (optional)
 
+A request may carry at most 100 text fields. A field name is at most 100 bytes, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+
 ---
 
 ### `GET /api/assets/:id`
@@ -1016,6 +1034,12 @@ not `403`.
 The `Content-Type` comes from the file's validated extension, never from the
 type declared at upload, and the response carries `X-Content-Type-Options:
 nosniff`.
+
+One byte range is served: `bytes=0-`, `bytes=1000-1999` or `bytes=-500` (the
+last 500 bytes) answer `206` with `Content-Range`, and an end past the file is
+cut to it. A range starting past the end answers `416` with
+`Content-Range: bytes */<size>`. Several ranges, or a malformed header, are
+ignored and the whole file is sent with `200`.
 
 ---
 
@@ -1094,6 +1118,14 @@ Who may delete depends on the asset's scope:
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
+
+While a map, a token, a character, a character template, a creature, a token
+template or a campaign's atmosphere track still uses the asset, the route
+answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
+nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
+what the caller may see: an admin sees everything, anyone else sees only the
+campaigns they are the DM of, their own characters and shared character
+templates, and the rest is counted without names.
 
 ---
 
@@ -1458,26 +1490,41 @@ when it sees it.
 
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
-| Login, password reset, MFA | 5 requests | 15 minutes | Failures only |
+| Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
+| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
 | General API | 300 requests | 1 minute | Every request |
-| Dice rolls (WebSocket) | 30 rolls | 1 minute | Every roll |
-| Token movement (WebSocket) | 60 events | 1 second | Every event |
+| Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
+| Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
+| Token drag frames (WebSocket) | 150 events | 1 second | Every event |
+| Picking a token up, putting it down (WebSocket) | 30 events each | 1 second | Every event |
 
-The **Counts** column matters. Where only failures count, signing in correctly
-never uses up the allowance — otherwise a household sharing one address could
-lock itself out by logging in normally. Where every request counts, the success
+The **Counts** column matters. Where only wrong answers count, signing in
+correctly never uses up the allowance, and neither does being refused: a
+household sharing one address could otherwise lock itself out by logging in
+normally. Correct passwords arriving together from one address all pass this
+limit. That covers the password step of a sign-in only: the two-factor code step
+(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 failed codes per 15
+minutes per address, and 5 per 15 minutes per account from any address. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
-Chat messages are not on this list because they are limited per campaign rather
-than globally: a DM can switch on a cooldown of between 1 and 300 seconds
-between messages, and it is **off by default**.
+On top of the chat limit, a DM can switch on a cooldown of between 1 and 300
+seconds between messages for their campaign; it is **off by default**. The
+WebSocket limits are counted per user, across every connection they have open,
+and are set well above what a busy table sends. The other live table events have
+limits of their own, listed in the WebSocket guide.
 
-The upload and general-API limits are configurable with the
-`ASSET_UPLOAD_RATE_LIMIT` and `RATE_LIMIT_MAX_REQUESTS` environment variables;
-the rest are fixed.
+The upload, campaign-archive and general-API limits are configurable with the
+`ASSET_UPLOAD_RATE_LIMIT`, `CAMPAIGN_ARCHIVE_RATE_LIMIT` and
+`RATE_LIMIT_MAX_REQUESTS` environment variables; the rest are fixed.
 
-Rate limit responses return HTTP `429` with a `Retry-After` header indicating when the limit resets.
+Rate limit responses return HTTP `429` with a `Retry-After` header giving the
+seconds until the limit resets. The one-at-a-time refusals (a second campaign
+import, preview or export while one of yours is running, and a second Universal
+VTT map import while one is running) also answer `429`, with no `Retry-After`:
+send the request again once the first has finished. The WebSocket limits are not
+HTTP responses: an event past its limit is dropped, or answered with one `error`
+event, as the WebSocket guide lists.

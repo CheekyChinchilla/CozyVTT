@@ -60,7 +60,13 @@ interface CampaignContextState {
    * state, members' roles, the map the table is on) and reload that map.
    */
   catchUpAfterReconnect: () => Promise<void>;
-  setCurrentMap: (map: Map | null) => void;
+  /**
+   * Switch to a map, or clear it. Given a function, changes the map already
+   * showing from its latest value, as a listener registered once must: a
+   * map it captured earlier may have been edited since. The function form
+   * never switches maps.
+   */
+  setCurrentMap: (map: Map | null | ((current: Map | null) => Map | null)) => void;
   /**
    * Keep `campaign.maps` in step with the Map Library: insert a created or
    * imported map, or replace a renamed one by id. The Move to Map… submenu
@@ -330,7 +336,11 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // switch goes through here, so the id follows the map. The Map Library
   // re-reads campaign.currentMapId each time it opens for its Active badge,
   // which pointed at the map the page loaded with until this kept it current.
-  const setCurrentMap = useCallback((map: Map | null) => {
+  const setCurrentMap = useCallback((map: Map | null | ((current: Map | null) => Map | null)) => {
+    if (typeof map === 'function') {
+      setCurrentMapState(map);
+      return;
+    }
     setCurrentMapState(map);
     if (map) {
       setCampaign((prev) =>

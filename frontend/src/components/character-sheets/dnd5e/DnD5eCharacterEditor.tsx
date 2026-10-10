@@ -49,6 +49,8 @@ import {
   exhaustionLevel,
   exhaustionEffects,
   dnd5eCustomSkillBonus,
+  dnd5eBackfilledSkillOtherBonus,
+  dnd5eBackfilledSaveOtherBonus,
   DND5E_ABILITY_NAMES,
 } from '@/utils/rules/dnd5e';
 import {
@@ -79,6 +81,12 @@ type DnD5eFormData = DnD5eCharacterData & SheetChrome;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Called once a save has gone through and nothing was typed while it was in
+   * flight, so the editor holds nothing unsaved and its host can close it.
+   * With something typed meanwhile, the editor stays open with it instead.
+   */
+  onDone?: () => void;
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
@@ -173,6 +181,24 @@ function withoutOrphanFeatures(sheet: DnD5eFormData): DnD5eFormData {
 }
 
 /**
+ * Skills or saving throws with the other bonus a sheet saved before it existed
+ * implies, so their totals do not change when the editor works them out.
+ *
+ * Run once, on the sheet as it was stored. Doing it in an effect would read a
+ * total the editor had just worked out from a changed score as one typed by
+ * hand, and record the change as a bonus.
+ */
+function withRecordedOtherBonuses<T extends object>(entries: T, backfill: (key: string) => number | null): T {
+  const next = { ...entries } as Record<string, unknown>;
+  for (const key of Object.keys(next)) {
+    const entry = next[key];
+    const other = backfill(key);
+    if (other !== null && entry && typeof entry === 'object') next[key] = { ...entry, otherBonus: other };
+  }
+  return next as T;
+}
+
+/**
  * All nine spell slot levels, from whatever the sheet stored.
  *
  * The schema requires every level once `slots` is present, so a sheet stored
@@ -211,6 +237,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   onSave,
   onCancel,
   onDirtyChange,
+  onDone,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -222,52 +249,67 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const data = character.data as DnD5eFormData;
 
 
-  // Form state - initialize with character data
-  const [formData, setFormData] = useState<DnD5eFormData>(() => ({
-    ...withoutOrphanLanguages(withoutOrphanFeatures(data)),
-    // Ensure nested objects exist.
-    //
-    // TODO(typing): `{}` is not a valid container — none of these has its keys,
-    // and the effects below read `.score` / `.proficient` off each entry. A
-    // sheet stored without one of these blocks therefore reads `undefined`
-    // where a number is expected. Pre-existing; the casts keep the behaviour
-    // exactly as it was rather than changing what a malformed sheet does.
-    stats: (data.stats || {}) as DnD5eStats,
-    savingThrows: (data.savingThrows || {}) as DnD5eSavingThrows,
-    skills: (data.skills || {}) as DnD5eSkills,
-    hp: data.hp || { maximum: 0, current: 0, temporary: 0 },
-    deathSaves: data.deathSaves || { successes: 0, failures: 0 },
-    // Same TODO(typing) as the containers above: this default omits `class`,
-    // which the type requires. Cast rather than corrected.
-    spellcasting: (data.spellcasting
-      ? { ...data.spellcasting, slots: withAllSlotLevels(data.spellcasting.slots) }
-      : {
-          ability: '',
-          spellSaveDC: 0,
-          spellAttackBonus: 0,
-          cantrips: [],
-          slots: withAllSlotLevels(undefined),
-          spells: [],
-        }) as DnD5eSpellcasting,
-    currency: data.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
-    inventory: data.inventory || [],
-    attacks: data.attacks || [],
-    hitDice: data.hitDice || [],
-    conditions: data.conditions || [],
-    proficienciesAndLanguages: data.proficienciesAndLanguages || [],
-    // Always four strings, so the textareas are controlled from the first
-    // render. The shared reader settles where they come from: the stored boxes
-    // when the sheet has them, otherwise a one-time guess from the flat list a
-    // sheet written before the boxes existed carries.
-    proficiencies: readProficiencyGroups(data),
-    // featuresAndTraits is not defaulted here: the spread above has already
-    // settled it, folding in the template-era `features` field. Re-reading
-    // `data` would throw that away.
-    // Same TODO(typing) as the containers above.
-    appearance: (data.appearance || {}) as DnD5eAppearance,
-    personality: (data.personality || {}) as DnD5ePersonality,
-    alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
-  }));
+  // Form state, initialised from the editor's own copy of the sheet. The
+  // effects below write derived numbers into the form, and with the stored
+  // sheet's inner objects shared they wrote them into the character the host,
+  // the sheet behind and the Characters page's list are holding, before
+  // anything was saved.
+  const [formData, setFormData] = useState<DnD5eFormData>(() => {
+    const own = JSON.parse(JSON.stringify(data ?? {})) as DnD5eFormData;
+    return {
+      ...withoutOrphanLanguages(withoutOrphanFeatures(own)),
+      // Ensure nested objects exist.
+      //
+      // TODO(typing): `{}` is not a valid container — none of these has its keys,
+      // and the effects below read `.score` / `.proficient` off each entry. A
+      // sheet stored without one of these blocks therefore reads `undefined`
+      // where a number is expected. Pre-existing; the casts keep the behaviour
+      // exactly as it was rather than changing what a malformed sheet does.
+      stats: (own.stats || {}) as DnD5eStats,
+      // A stored total that differs from what the scores give keeps the
+      // difference as its other bonus, so the total survives the effects below.
+      savingThrows: withRecordedOtherBonuses(
+        (own.savingThrows || {}) as DnD5eSavingThrows,
+        (ability) => dnd5eBackfilledSaveOtherBonus(own, ability)
+      ),
+      skills: withRecordedOtherBonuses(
+        (own.skills || {}) as DnD5eSkills,
+        (skill) => dnd5eBackfilledSkillOtherBonus(own, skill)
+      ),
+      hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
+      deathSaves: own.deathSaves || { successes: 0, failures: 0 },
+      // Same TODO(typing) as the containers above: this default omits `class`,
+      // which the type requires. Cast rather than corrected.
+      spellcasting: (own.spellcasting
+        ? { ...own.spellcasting, slots: withAllSlotLevels(own.spellcasting.slots) }
+        : {
+            ability: '',
+            spellSaveDC: 0,
+            spellAttackBonus: 0,
+            cantrips: [],
+            slots: withAllSlotLevels(undefined),
+            spells: [],
+          }) as DnD5eSpellcasting,
+      currency: own.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+      inventory: own.inventory || [],
+      attacks: own.attacks || [],
+      hitDice: own.hitDice || [],
+      conditions: own.conditions || [],
+      proficienciesAndLanguages: own.proficienciesAndLanguages || [],
+      // Always four strings, so the textareas are controlled from the first
+      // render. The shared reader settles where they come from: the stored boxes
+      // when the sheet has them, otherwise a one-time guess from the flat list a
+      // sheet written before the boxes existed carries.
+      proficiencies: readProficiencyGroups(own),
+      // featuresAndTraits is not defaulted here: the spread above has already
+      // settled it, folding in the template-era `features` field. Re-reading
+      // `data` would throw that away.
+      // Same TODO(typing) as the containers above.
+      appearance: (own.appearance || {}) as DnD5eAppearance,
+      personality: (own.personality || {}) as DnD5ePersonality,
+      alliesAndOrganizations: own.alliesAndOrganizations || { name: '', description: '' },
+    };
+  });
 
   // Report unsaved work up to whoever is hosting this sheet, so leaving with
   // pending edits can be caught. One effect over the whole form rather than a
@@ -309,13 +351,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // The header colour and a newly chosen token picture are kept outside the
   // form, and are unsaved changes too.
-  const sheetSnapshot = JSON.stringify({
-    formData,
-    themeColor: isCustomColor ? customColorHex : selectedColor.name,
-    tokenImage: tokenImageFile
-      ? `${tokenImageFile.name}:${tokenImageFile.size}:${tokenImageFile.lastModified}`
-      : null,
+  const snapshotOf = (form: typeof formData, theme: string, picture: File | null) => JSON.stringify({
+    formData: form,
+    themeColor: theme,
+    tokenImage: picture ? `${picture.name}:${picture.size}:${picture.lastModified}` : null,
   });
+  const themeChoice = isCustomColor ? customColorHex : selectedColor.name;
+  const sheetSnapshot = snapshotOf(formData, themeChoice, tokenImageFile);
   if (cleanSnapshotRef.current === null) {
     cleanSnapshotRef.current = sheetSnapshot;
   }
@@ -335,7 +377,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     }
   }, [sheetSnapshot, onDirtyChange]);
 
-  // Load saved color preference from character metadata
+  // The sheet's saved colour, read once as the editor opens. The character
+  // handed in is refreshed while the editor is open, and following it put a
+  // colour saved elsewhere over the one the user had picked.
   useEffect(() => {
     if (data.themeColor) {
       const savedColor = COLOR_PRESETS.find(c => c.name === data.themeColor);
@@ -352,7 +396,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         }
       }
     }
-  }, [data.themeColor]);
+  }, []);
 
   // Handle custom color change
   const handleCustomColorChange = (hex: string) => {
@@ -368,25 +412,28 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     setShowColorPicker(false);
   };
 
+  // The derived-number effects below each build their update from `prev`,
+  // replacing every entry they change rather than writing into it. Running in
+  // order within one commit, each sees what the one before it settled: the
+  // saving throws are worked out from the modifiers just corrected.
+
   // Auto-calculate modifiers when ability scores change
   useEffect(() => {
-    if (formData.stats) {
-      const updatedStats = { ...formData.stats };
+    setFormData((prev) => {
+      if (!prev.stats) return prev;
+      const updatedStats = { ...prev.stats };
       let hasChanges = false;
 
       (Object.keys(updatedStats) as (keyof DnD5eStats)[]).forEach(ability => {
-        const score = updatedStats[ability].score;
-        const newModifier = calculateModifier(score);
+        const newModifier = calculateModifier(updatedStats[ability].score);
         if (updatedStats[ability].modifier !== newModifier) {
-          updatedStats[ability].modifier = newModifier;
+          updatedStats[ability] = { ...updatedStats[ability], modifier: newModifier };
           hasChanges = true;
         }
       });
 
-      if (hasChanges) {
-        setFormData((prev) => ({ ...prev, stats: updatedStats }));
-      }
-    }
+      return hasChanges ? { ...prev, stats: updatedStats } : prev;
+    });
   }, [
     formData.stats?.strength?.score,
     formData.stats?.dexterity?.score,
@@ -398,25 +445,25 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Auto-calculate saving throws when proficiency or stats change
   useEffect(() => {
-    if (formData.stats && formData.savingThrows && formData.proficiencyBonus !== undefined) {
-      const updatedSavingThrows = { ...formData.savingThrows };
+    setFormData((prev) => {
+      if (!prev.stats || !prev.savingThrows || prev.proficiencyBonus === undefined) return prev;
+      const updatedSavingThrows = { ...prev.savingThrows };
       let hasChanges = false;
 
       (Object.keys(updatedSavingThrows) as (keyof DnD5eSavingThrows)[]).forEach(ability => {
-        const abilityMod = formData.stats[ability]?.modifier || 0;
+        const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSavingThrows[ability].proficient;
-        const newBonus = abilityMod + (proficient ? formData.proficiencyBonus : 0);
+        const other = updatedSavingThrows[ability].otherBonus ?? 0;
+        const newBonus = abilityMod + (proficient ? prev.proficiencyBonus : 0) + other;
 
         if (updatedSavingThrows[ability].bonus !== newBonus) {
-          updatedSavingThrows[ability].bonus = newBonus;
+          updatedSavingThrows[ability] = { ...updatedSavingThrows[ability], bonus: newBonus };
           hasChanges = true;
         }
       });
 
-      if (hasChanges) {
-        setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
-      }
-    }
+      return hasChanges ? { ...prev, savingThrows: updatedSavingThrows } : prev;
+    });
   }, [
     formData.proficiencyBonus,
     formData.stats?.strength?.modifier,
@@ -431,6 +478,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.savingThrows?.intelligence?.proficient,
     formData.savingThrows?.wisdom?.proficient,
     formData.savingThrows?.charisma?.proficient,
+    formData.savingThrows?.strength?.otherBonus,
+    formData.savingThrows?.dexterity?.otherBonus,
+    formData.savingThrows?.constitution?.otherBonus,
+    formData.savingThrows?.intelligence?.otherBonus,
+    formData.savingThrows?.wisdom?.otherBonus,
+    formData.savingThrows?.charisma?.otherBonus,
   ]);
 
   // Skill-to-ability mapping
@@ -476,25 +529,26 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Auto-calculate skill bonuses when ability scores, proficiency, or expertise change
   useEffect(() => {
-    if (formData.stats && formData.skills && formData.proficiencyBonus !== undefined) {
-      const updatedSkills = { ...formData.skills };
+    setFormData((prev) => {
+      if (!prev.stats || !prev.skills || prev.proficiencyBonus === undefined) return prev;
+      const updatedSkills = { ...prev.skills };
       let hasChanges = false;
 
       (Object.keys(updatedSkills) as (keyof DnD5eSkills)[]).forEach(skill => {
         const ability = skillAbilities[skill];
-        const abilityMod = formData.stats[ability]?.modifier || 0;
+        const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSkills[skill].proficient;
         const expertise = updatedSkills[skill].expertise;
 
-        let newBonus = abilityMod;
+        let newBonus = abilityMod + (updatedSkills[skill].otherBonus ?? 0);
         if (expertise) {
-          newBonus += formData.proficiencyBonus * 2; // Expertise = double proficiency
+          newBonus += prev.proficiencyBonus * 2; // Expertise = double proficiency
         } else if (proficient) {
-          newBonus += formData.proficiencyBonus;
+          newBonus += prev.proficiencyBonus;
         }
 
         if (updatedSkills[skill].bonus !== newBonus) {
-          updatedSkills[skill].bonus = newBonus;
+          updatedSkills[skill] = { ...updatedSkills[skill], bonus: newBonus };
           hasChanges = true;
         }
       });
@@ -510,28 +564,27 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // character imported with the Observant feat would silently lose its +5
       // the first time the sheet was saved.
       const perceptionBonus = updatedSkills.perception?.bonus ?? 0;
-      const storedTotal = formData.passivePerception;
+      const storedTotal = prev.passivePerception;
       const backfilledPassiveBonus =
-        formData.passivePerceptionBonus === undefined || formData.passivePerceptionBonus === null
+        prev.passivePerceptionBonus === undefined || prev.passivePerceptionBonus === null
           ? (typeof storedTotal === 'number' && Number.isFinite(storedTotal)
               ? storedTotal - passiveScore(perceptionBonus)
               : 0)
           : null;
-      const passiveBonus = backfilledPassiveBonus ?? formData.passivePerceptionBonus ?? 0;
+      const passiveBonus = backfilledPassiveBonus ?? prev.passivePerceptionBonus ?? 0;
       const newPassivePerception = passiveScore(perceptionBonus + passiveBonus);
 
       const passiveChanged =
-        formData.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
+        prev.passivePerception !== newPassivePerception || backfilledPassiveBonus !== null;
 
-      if (hasChanges || passiveChanged) {
-        setFormData((prev) => ({
-          ...prev,
-          skills: updatedSkills,
-          passivePerceptionBonus: passiveBonus,
-          passivePerception: newPassivePerception,
-        }));
-      }
-    }
+      if (!hasChanges && !passiveChanged) return prev;
+      return {
+        ...prev,
+        skills: updatedSkills,
+        passivePerceptionBonus: passiveBonus,
+        passivePerception: newPassivePerception,
+      };
+    });
   }, [
     formData.proficiencyBonus,
     formData.stats?.strength?.modifier,
@@ -540,10 +593,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.intelligence?.modifier,
     formData.stats?.wisdom?.modifier,
     formData.stats?.charisma?.modifier,
-    // Explicitly depend on each skill's proficient and expertise flags
+    // Explicitly depend on each skill's proficient and expertise flags, and
+    // its other bonus
     ...(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).flatMap(skill => [
       formData.skills?.[skill]?.proficient,
       formData.skills?.[skill]?.expertise,
+      formData.skills?.[skill]?.otherBonus,
     ]),
   ]);
 
@@ -744,11 +799,23 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     // A completed save means nothing is pending any more — unless the sheet was
     // edited again while the save was in flight, which the recheck preserves.
     const savedSnapshot = sheetSnapshot;
+    const savedForm = formData;
+    const savedTheme = themeChoice;
+    const uploadedPicture = tokenImageFile;
     const markClean = () => {
-      cleanSnapshotRef.current = savedSnapshot;
       const stillDirty = latestSnapshotRef.current !== savedSnapshot;
+      // A picture that went up with this save is on the character now, so the
+      // next save must not upload it again. One chosen while saving stays.
+      if (uploadedPicture) {
+        setTokenImageFile((current) => (current === uploadedPicture ? null : current));
+        cleanSnapshotRef.current = snapshotOf(savedForm, savedTheme, null);
+      } else {
+        cleanSnapshotRef.current = savedSnapshot;
+      }
       dirtyRef.current = stillDirty;
       onDirtyChange?.(stillDirty);
+      // Typed while the save was in flight: the editor keeps it, unsaved.
+      if (!stillDirty) onDone?.();
     };
     if (!validateForm()) {
       return;
@@ -787,9 +854,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       updatedData.featuresAndTraits = collectSheetFeatures(updatedData);
       delete (updatedData as Record<string, unknown>).features;
 
-      // Cantrips
+      // Cantrips, parsed into a new spellcasting block. Written into the one
+      // the form holds, the array showed up in the form while the save was in
+      // flight, so the sheet still counted as changed once it had gone through.
       if (updatedData.spellcasting) {
-        updatedData.spellcasting.cantrips = parseCommaSeparated(updatedData.spellcasting.cantrips);
+        updatedData.spellcasting = {
+          ...updatedData.spellcasting,
+          cantrips: parseCommaSeparated(updatedData.spellcasting.cantrips),
+        };
       }
 
       // Upload token image if a new one was selected
@@ -1163,6 +1235,9 @@ min={0}
   const renderStatsTab = () => (
     <div className="space-y-6">
       {/* Character Details */}
+      {/* TODO(ui): these labels are not tied to their inputs (no htmlFor and id),
+          so a screen reader announces each box by its placeholder alone. Give
+          each input an id and its label a matching htmlFor. */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
@@ -1268,7 +1343,11 @@ min={1}
 
       {/* Saving Throws */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Saving Throws</h3>
+        <p className="text-xs text-stone-500 mb-3">
+          Worked out from your ability scores and proficiency. Use the box beside each one for
+          anything else that adds to it, such as Aura of Protection or a Ring of Protection.
+        </p>
         <div className="grid grid-cols-2 gap-2">
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
@@ -1288,9 +1367,19 @@ min={1}
                     {ability}
                   </label>
                 </div>
-                <span className={`text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
-                  {formatModifier(saveData.bonus)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    value={saveData.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`savingThrows.${ability}.otherBonus`, v)}
+                    aria-label={`Other bonus to ${ability.charAt(0).toUpperCase() + ability.slice(1)} saves`}
+                    title="Other bonus"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                  <span className={`w-8 text-right text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
+                    {formatModifier(saveData.bonus)}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -1299,7 +1388,11 @@ min={1}
 
       {/* Skills */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-1">Skills</h3>
+        <p className="text-xs text-stone-500 mb-3">
+          Worked out from your ability scores, proficiency and expertise. Use the box beside each
+          one for anything else that adds to it, such as Jack of All Trades or a magic item.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
           {(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).map((skill) => {
             const skillData = formData.skills?.[skill] || { proficient: false, expertise: false, bonus: 0 };
@@ -1345,17 +1438,27 @@ min={1}
                     <span className="text-xs text-stone-500 ml-1">({abilityAbbr})</span>
                   </label>
                 </div>
-                <span
-                  className={`text-sm font-semibold ${
-                    skillData.expertise
-                      ? 'text-purple-700'
-                      : skillData.proficient
-                      ? 'text-red-700'
-                      : 'text-stone-600'
-                  }`}
-                >
-                  {formatModifier(skillData.bonus)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    value={skillData.otherBonus ?? 0}
+                    onChange={(v: number) => updateField(`skills.${skill}.otherBonus`, v)}
+                    aria-label={`Other bonus to ${skillLabel}`}
+                    title="Other bonus"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    fallback={0}
+                  />
+                  <span
+                    className={`w-8 text-right text-sm font-semibold ${
+                      skillData.expertise
+                        ? 'text-purple-700'
+                        : skillData.proficient
+                        ? 'text-red-700'
+                        : 'text-stone-600'
+                    }`}
+                  >
+                    {formatModifier(skillData.bonus)}
+                  </span>
+                </div>
               </div>
             );
           })}

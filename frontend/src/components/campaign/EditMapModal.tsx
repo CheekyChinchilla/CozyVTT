@@ -11,6 +11,8 @@ import type { Asset, Map, UpdateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
+import { MAP_LIMITS } from '@/constants/mapLimits';
+import { withinMapLimits, feetPerSquareWithinLimits } from '@/utils/mapSize';
 import { Button, Modal } from '@/components/ui';
 import { extractAssetId } from '@/utils/assetUrl';
 
@@ -175,6 +177,47 @@ function DimensionField({
 // EditMapModal
 // ============================================
 
+/** The fields the form edits, as it shows them. */
+interface OpenedValues {
+  name: string;
+  imageUrl: string | null;
+  width: number;
+  height: number;
+  gridSize: number;
+  feetPerSquare: number;
+  diagonalRule: 'flat' | 'alternating';
+  lightingEnabled: boolean;
+  fogEnabled: boolean;
+  globalIllumination: boolean;
+  explorationEnabled: boolean;
+}
+
+/** The form's values for a map, with the same defaults the form fills in. */
+function openedValues(map: Map): OpenedValues {
+  return {
+    name: map.name.trim(),
+    imageUrl: extractAssetId(map.imageUrl),
+    width: map.width,
+    height: map.height,
+    gridSize: map.gridSize,
+    feetPerSquare: map.feetPerSquare ?? 5,
+    diagonalRule: (map.diagonalRule as 'flat' | 'alternating') ?? 'flat',
+    lightingEnabled: map.lightingEnabled ?? false,
+    fogEnabled: map.fogEnabled ?? true,
+    globalIllumination: map.globalIllumination ?? true,
+    explorationEnabled: map.explorationEnabled ?? true,
+  };
+}
+
+/** The fields whose value differs from what the form opened with; all of them if that is unknown. */
+function changedFields(opened: OpenedValues | null, current: OpenedValues): UpdateMapRequest {
+  const changed: UpdateMapRequest = {};
+  for (const key of Object.keys(current) as (keyof OpenedValues)[]) {
+    if (!opened || opened[key] !== current[key]) Object.assign(changed, { [key]: current[key] });
+  }
+  return changed;
+}
+
 export default function EditMapModal({
   isOpen,
   map,
@@ -207,9 +250,18 @@ export default function EditMapModal({
 
   const feetPerSquare = feetPreset === 'custom' ? feetCustom : parseInt(feetPreset);
 
+  // What the form opened with, so a save sends only what the DM changed: a
+  // field sent unchanged from a list entry that lacks it, or from an older
+  // copy of the map, would overwrite the stored value.
+  const opened = useRef<OpenedValues | null>(null);
+  // The spirit layer picture is sent only once the DM has touched its picker.
+  const spiritTouched = useRef(false);
+
   // Pre-fill fields from map prop whenever the modal opens
   useEffect(() => {
     if (isOpen && map) {
+      opened.current = openedValues(map);
+      spiritTouched.current = false;
       setName(map.name);
       setWidth(map.width);
       setHeight(map.height);
@@ -231,6 +283,20 @@ export default function EditMapModal({
       setError(null);
     }
   }, [isOpen, map]);
+
+  // The Map Library's list leaves out the spirit layer picture, so the
+  // picker would show none. Read the whole map for it, unless the DM has
+  // already picked one.
+  useEffect(() => {
+    if (!isOpen || !map) return;
+    let cancelled = false;
+    mapService.getMap(campaignId, map.id)
+      .then((whole) => {
+        if (!cancelled && !spiritTouched.current) setSpiritAssetId(extractAssetId(whole.spiritLayerUrl));
+      })
+      .catch(() => { /* the picker shows none; a save leaves the picture alone */ });
+    return () => { cancelled = true; };
+  }, [isOpen, map, campaignId]);
 
   // When the map image is swapped to a different one, attempt auto-detection
   // (Don't run on initial open — the existing settings are already correct)
@@ -262,13 +328,15 @@ export default function EditMapModal({
 
   const applyDetectedGrid = () => {
     if (!detectedGrid) return;
-    setWidth(detectedGrid.width);
-    setHeight(detectedGrid.height);
-    setGridSize(detectedGrid.gridSize);
+    const fitted = withinMapLimits(detectedGrid);
+    setWidth(fitted.width);
+    setHeight(fitted.height);
+    setGridSize(fitted.gridSize);
     setDetectedGrid(null);
   };
 
   const handleSpiritAssetSelect = (asset: Asset | null) => {
+    spiritTouched.current = true;
     setSpiritAssetId(asset?.id ?? null);
   };
 
@@ -282,7 +350,7 @@ export default function EditMapModal({
     setError(null);
 
     try {
-      const data: UpdateMapRequest = {
+      const current: OpenedValues = {
         name: name.trim(),
         imageUrl: mapAssetId,
         width,
@@ -290,12 +358,13 @@ export default function EditMapModal({
         gridSize,
         feetPerSquare,
         diagonalRule,
-        spiritLayerUrl: spiritAssetId ?? null,
         lightingEnabled,
         fogEnabled,
         globalIllumination,
         explorationEnabled,
       };
+      const data: UpdateMapRequest = changedFields(opened.current, current);
+      if (spiritTouched.current) data.spiritLayerUrl = spiritAssetId ?? null;
       const updatedMap = await mapService.updateMap(campaignId, map.id, data);
       onUpdated(updatedMap);
       onClose();
@@ -376,22 +445,22 @@ export default function EditMapModal({
                         label="Width (grid squares)"
                         value={width}
                         onChange={setWidth}
-                        min={1}
-                        max={500}
+                        min={MAP_LIMITS.minSide}
+                        max={MAP_LIMITS.maxSide}
                       />
                       <DimensionField
                         label="Height (grid squares)"
                         value={height}
                         onChange={setHeight}
-                        min={1}
-                        max={500}
+                        min={MAP_LIMITS.minSide}
+                        max={MAP_LIMITS.maxSide}
                       />
                       <DimensionField
                         label="Grid Size (px/square)"
                         value={gridSize}
                         onChange={setGridSize}
-                        min={10}
-                        max={500}
+                        min={MAP_LIMITS.minGridSize}
+                        max={MAP_LIMITS.maxGridSize}
                       />
                     </div>
                     <p className="text-xs text-stone-gray/50 mt-2">
@@ -436,9 +505,9 @@ export default function EditMapModal({
                           <input
                             type="number"
                             value={feetCustom}
-                            onChange={(e) => setFeetCustom(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-                            min={1}
-                            max={100}
+                            onChange={(e) => setFeetCustom(feetPerSquareWithinLimits(e.target.value))}
+                            min={MAP_LIMITS.minFeetPerSquare}
+                            max={MAP_LIMITS.maxFeetPerSquare}
                             className="input-cozy w-20"
                             placeholder="ft"
                           />

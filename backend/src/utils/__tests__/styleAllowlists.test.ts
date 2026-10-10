@@ -6,6 +6,7 @@ import {
   isValidSpiritStyle,
   parseSpiritStyle,
   THEME_COLOR_PATTERN,
+  VIBE_FILTER_PATTERN,
 } from '../styleAllowlists';
 
 describe('isHexColor', () => {
@@ -32,6 +33,18 @@ describe('isSafeVibeFilter', () => {
     'hue-rotate(10)',
     'brightness(1) ' + 'saturate(1) '.repeat(30),
   ])('refuses %j', (v) => expect(isSafeVibeFilter(v)).toBe(false));
+
+  // Whitespace runs and repeated functions are where a pattern can backtrack.
+  it.each([
+    ['spaces then a stray character', ' '.repeat(100_000) + '!'],
+    ['a function, spaces, then a stray character', 'brightness(1)' + ' '.repeat(100_000) + '!'],
+    ['many functions then a stray character', 'brightness(1) '.repeat(7_000) + '!'],
+    ['a function holding a very long number', 'brightness(' + '1'.repeat(100_000) + 'x'],
+  ])('VIBE_FILTER_PATTERN answers %s, 100,000 characters, within 50 ms', (_label, crafted) => {
+    const started = performance.now();
+    expect(VIBE_FILTER_PATTERN.test(crafted)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });
 
 describe('spirit style', () => {

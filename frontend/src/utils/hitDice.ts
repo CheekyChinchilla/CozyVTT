@@ -22,10 +22,15 @@ import { isValidDiceExpression } from './diceExpression';
  * The size of a single die in an older pool string, or null if it does not
  * describe one. `total` has no format constraint in the schema, and a sheet has
  * already crashed reading an empty one, so this refuses rather than guesses.
+ *
+ * Spaces at either end are trimmed before matching. Matched inside the
+ * pattern, next to an optional count, a long run of them took minutes to
+ * refuse, and anyone who can edit a sheet can store one for everyone who
+ * opens it.
  */
 export function hitDieSize(total: string): number | null {
   if (typeof total !== 'string') return null;
-  const match = /^\s*\d*\s*d\s*(\d+)\s*$/i.exec(total);
+  const match = /^(?:\d+\s*)?d\s*(\d+)$/i.exec(total.trim());
   if (!match) return null;
   const size = Number(match[1]);
   return Number.isInteger(size) && size > 0 ? size : null;
