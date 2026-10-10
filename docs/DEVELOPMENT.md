@@ -464,6 +464,12 @@ Two of those deserve a note:
   and fails when a route carries a limiter with no row, so a newly limited
   route needs one line in its `ROWS`. The server-wide limit on every `/api`
   request is applied in `server.ts`, outside the routers, and is not covered.
+- **A test file may not carry a `TODO(test)` marker.** A test known to be
+  flaky or wrong once sat behind one, assigned to nobody, until it failed a
+  release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
+  files of both packages and fails on the marker, so fix the test or open an
+  issue for it. Markers for other areas (`TODO(maps)`, `TODO(ui)`) are fine
+  in a test.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
