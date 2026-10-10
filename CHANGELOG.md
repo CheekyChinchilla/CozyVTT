@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A Flexible sheet already stored in a shape its page could not read opens again, and can be put right.** Such a sheet, from before Flexible sheets were checked, could not be read or edited at all. The sheet now shows every section it can: a section of a kind the sheet does not have is left out, and an entry that is not text is shown as text or left empty. Saving it from the editor stores it in the checked shape.
 
+- **The D&D 5e Spells tab opens for every caster, and spell slots are held to 20 of each level.** A sheet naming a spellcasting ability with no spells or slots recorded broke the Spells tab. A slot total could be any number, and the tab drew one mark per slot, so a total in the millions froze the browser of anyone who opened it, and more slots used than the total showed a negative number left. The tab now opens for every sheet, writes a larger total stored before this release as a count, and never shows fewer than none left. Each slot level holds up to 20 slots, with no more used than the total; the editor's **Total** and **Used** boxes stop there, and a sheet stored with more is brought within them when it is next opened in the editor.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

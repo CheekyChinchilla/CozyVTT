@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
 import { featureEntrySchema } from './featureEntry.schema';
+import { SPELL_SLOTS_MAX } from './sheetLimits';
 
 /**
  * Ability score with modifier
@@ -224,11 +225,19 @@ const inventoryItemSchema = z.object({
 
 /**
  * Spell slot
+ *
+ * Bounded because the sheet draws one mark per slot: an unbounded total let a
+ * player freeze the browser of anyone who opened their Spells tab.
  */
-const spellSlotSchema = z.object({
-  total: z.number().int().min(0),
-  expended: z.number().int().min(0),
-});
+const spellSlotSchema = z
+  .object({
+    total: z.number().int().min(0).max(SPELL_SLOTS_MAX),
+    expended: z.number().int().min(0).max(SPELL_SLOTS_MAX),
+  })
+  .refine((slot) => slot.expended <= slot.total, {
+    message: 'Used slots cannot be more than the total',
+    path: ['expended'],
+  });
 
 /**
  * Spell slots for all levels

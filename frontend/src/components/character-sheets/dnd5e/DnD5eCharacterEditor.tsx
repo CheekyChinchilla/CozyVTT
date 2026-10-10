@@ -67,6 +67,7 @@ import {
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 
 /**
  * The sheet as this editor holds it.
@@ -199,18 +200,23 @@ function withRecordedOtherBonuses<T extends object>(entries: T, backfill: (key: 
 }
 
 /**
- * All nine spell slot levels, from whatever the sheet stored.
+ * All nine spell slot levels, from whatever the sheet stored, each within
+ * what the server stores: a total of at most SPELL_SLOTS_MAX, and no more used
+ * than the total.
  *
  * The schema requires every level once `slots` is present, so a sheet stored
  * with none, or a block the editor makes up for a sheet with no spellcasting,
- * would have its first slot edit, or its first save, refused.
+ * would have its first slot edit, or its first save, refused. A sheet stored
+ * before the limits would have every save refused.
  */
 function withAllSlotLevels(stored: unknown): DnD5eSpellSlots {
   const source = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
-  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const count = (value: unknown, most: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.min(most, Math.max(0, Math.trunc(value))) : 0;
   const levels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((level) => {
     const slot = (typeof source[level] === 'object' && source[level] !== null ? source[level] : {}) as Record<string, unknown>;
-    return [level, { total: count(slot.total), expended: count(slot.expended) }] as const;
+    const total = count(slot.total, SPELL_SLOTS_MAX);
+    return [level, { total, expended: count(slot.expended, total) }] as const;
   });
   return Object.fromEntries(levels) as unknown as DnD5eSpellSlots;
 }
@@ -857,10 +863,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Cantrips, parsed into a new spellcasting block. Written into the one
       // the form holds, the array showed up in the form while the save was in
       // flight, so the sheet still counted as changed once it had gone through.
+      // Slots too: a total lowered below the slots used leaves the used count
+      // as it was while the player types, and it is brought down here.
       if (updatedData.spellcasting) {
         updatedData.spellcasting = {
           ...updatedData.spellcasting,
           cantrips: parseCommaSeparated(updatedData.spellcasting.cantrips),
+          slots: withAllSlotLevels(updatedData.spellcasting.slots),
         };
       }
 
@@ -2306,23 +2315,30 @@ min={0}
                 <div className="text-sm font-semibold text-stone-700 mb-2 text-center">Level {level}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-stone-600 mb-1">Total</label>
+                    <label htmlFor={`spell-slots-${level}-total`} className="block text-xs text-stone-600 mb-1">Total</label>
                     <NumberField
-min={0}
+                      id={`spell-slots-${level}-total`}
+                      min={0}
+                      max={SPELL_SLOTS_MAX}
                       value={slotData.total}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.total`, v)}
                       className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-                    fallback={0}
+                      fallback={0}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-stone-600 mb-1">Used</label>
+                    <label htmlFor={`spell-slots-${level}-used`} className="block text-xs text-stone-600 mb-1">Used</label>
+                    {/* Shown no higher than the total. The stored count is
+                        brought down on save, so typing a new total digit by
+                        digit does not lose it. */}
                     <NumberField
-min={0}
-                      value={slotData.expended}
+                      id={`spell-slots-${level}-used`}
+                      min={0}
+                      max={slotData.total}
+                      value={Math.min(slotData.expended, slotData.total)}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.expended`, v)}
                       className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-                    fallback={0}
+                      fallback={0}
                     />
                   </div>
                 </div>

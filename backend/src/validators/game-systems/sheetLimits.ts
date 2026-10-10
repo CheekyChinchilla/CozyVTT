@@ -41,3 +41,9 @@ export const FLEXIBLE_MAX_ROWS = 1000;
 
 /** Flexible sheets: columns in one table. */
 export const FLEXIBLE_MAX_COLUMNS = 50;
+
+/**
+ * D&D 5e: spell slots of one level, in total. A 20th-level caster has at most
+ * four of a level; the sheet draws one mark per slot.
+ */
+export const SPELL_SLOTS_MAX = 20;

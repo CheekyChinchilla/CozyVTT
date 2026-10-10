@@ -50,6 +50,16 @@ Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch`
 
 Players fill out sheets incrementally — someone may save a character with just a name. **Make the vast majority of fields optional in your Zod schema.** Require only what genuinely identifies the character (usually just the name). This is why the existing schemas are permissive; match that.
 
+### Limits on every sheet
+
+A sheet is shown to the whole table, so the schemas hold it to sizes a page can draw. The numbers live in `backend/src/validators/game-systems/sheetLimits.ts`, copied byte for byte as `frontend/src/constants/sheetLimits.ts` so the editors stop each box at the same place (`keepInStep.test.ts` fails when the two differ). Use them in a new system's schema and editor; do not write the numbers again.
+
+| Limit | Constant | Where |
+|---|---|---|
+| D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
+
+A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`.
+
 ### Flexible sheets
 
 A character or template with no game system has a **Flexible** sheet: a list of sections the player lays out. It has no enum value and no per-system files, but it is checked like the others, by `backend/src/validators/game-systems/flexible.schema.ts`, on create, update, template publish and template update (character import goes through create). The sheet must be an object, and each section's `type` decides the list its page reads:
