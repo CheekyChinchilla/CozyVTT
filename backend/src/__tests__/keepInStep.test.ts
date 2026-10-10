@@ -33,6 +33,10 @@
  * The socket flood ceilings, applied by the server and listed in the
  * WebSocket guide, which is what a self-hoster or the author of a scripted
  * client reads to know what the server will take.
+ *
+ * The character sheet limits. The server refuses a sheet over them and the
+ * sheet editors stop each box at them; an editor allowing more is a sheet the
+ * player fills in and cannot save. The file is kept identical in both packages.
  */
 
 import crypto from 'crypto';
@@ -219,6 +223,12 @@ describe('the combat state the server sends and the client reads', () => {
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the character sheet limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/sheetLimits.ts')).toBe(read('backend/src/validators/game-systems/sheetLimits.ts'));
   });
 });
 

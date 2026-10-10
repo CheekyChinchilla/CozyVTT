@@ -36,12 +36,10 @@ _Nothing at present._
 - `1.5.4` **Pathfinder 2e: a sheet whose AC, Class DC or Spell DC works out under 10 cannot be saved.** `pathfinder2e.schema.ts` requires at least 10 for all three, and an untrained rank with a negative modifier goes below it.
 - `1.5.4` **D&D 5e: rows added with "+ Add" block saving until they are named.** Attack, item and spell rows start with an empty name and hit-dice rows with an empty class, which `dnd5e.schema.ts` refuses, and the in-campaign editor (`CharacterSheetEditorModal.tsx`) does not say which field.
 - `1.5.4` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
-- `1.5.2` **Character templates are stored as sent.** `routes/characterTemplates.ts` validates a template but stores the request body rather than the schema's output, so fields the schema would strip are kept; characters made from a template are cleaned on creation.
 - `1.5.4` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
 - `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 - `1.5.2` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
-- `1.5.2` **D&D 5e: the editor's Alignment and Background labels are not tied to their boxes,** so a screen reader announces each box by its placeholder alone (`DnD5eCharacterEditor.tsx`).
 - `1.5.2` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
@@ -67,7 +65,6 @@ _Nothing at present._
 - `1.5.4` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 - `1.5.2` **Deleting a creature from the Creature Library's Favorites leaves its row there** until the library is reopened. The delete removes it from the main list only (`CreatureLibrary.tsx`).
 - `1.5.2` **The Creature Library and Token Templates forms say only "Failed to update creature" (or template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
-- `1.5.2` **The campaign import window is not announced as a dialog.** It has no `role="dialog"`, `aria-modal` or label, so a screen reader is not told it opened and focus is not held inside it; the shared `Modal` does all three (`CampaignImportDialog.tsx`).
 - `1.5.2` **A time-of-day period's sound file is not counted when an asset is checked before deleting.** The in-use check reads only the track playing now, so deleting a period's track while it is not playing gives no warning, and switching to that period later changes the vibe without audio (`services/assetUsage.ts`).
 - `1.5.2` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
 

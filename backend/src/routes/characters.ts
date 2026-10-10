@@ -6,7 +6,13 @@ import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import { GameSystem } from '../game-systems';
-import { validateCharacterData, applyIdentityToSheet, sheetNameFor } from '../validators/game-systems';
+import {
+  validateCharacterData,
+  validateFlexibleSheet,
+  sheetIssues,
+  applyIdentityToSheet,
+  sheetNameFor,
+} from '../validators/game-systems';
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
 import { broadcastToCampaign } from '../websocket/utils';
 import { resendInitiative } from '../websocket/handlers/initiative';
@@ -18,6 +24,9 @@ import { withMapsLocked } from '../utils/mapTokens';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
 
 const router = Router();
+
+/** What a refused Flexible sheet answers, beside the list of its problems. */
+const FLEXIBLE_SHEET_REFUSED = 'Character data does not match the Flexible sheet layout';
 
 /**
  * Whether a character's owner is still a member of the campaign it names. A
@@ -158,6 +167,18 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
       sheetData = validationResult.data;
+    } else if (data !== undefined) {
+      // A Flexible sheet, checked as sent: the identity step above would turn
+      // a string or a list into an object before it could be refused.
+      const flexible = validateFlexibleSheet(data);
+      if (!flexible.success) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: FLEXIBLE_SHEET_REFUSED,
+          validationErrors: sheetIssues(flexible.errors),
+        });
+      }
+      sheetData = flexible.data;
     }
 
     // Normalize tokenImageUrl to full path if provided
@@ -260,7 +281,11 @@ router.get(
         const { FLEXIBLE_TEMPLATES } = await import(
           '../utils/character-templates/flexible-templates'
         );
-        const template = FLEXIBLE_TEMPLATES[templateName];
+        // Only the names defined there: the list is a plain object, so
+        // `constructor` or `__proto__` would otherwise find an inherited one.
+        const template = Object.hasOwn(FLEXIBLE_TEMPLATES, templateName)
+          ? FLEXIBLE_TEMPLATES[templateName]
+          : undefined;
 
         if (!template) {
           return res.status(404).json({
@@ -518,11 +543,12 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Validate data update if character has gameSystem. What gets stored is
-    // the schema's parsed output, so a key the sheet does not declare never
-    // reaches the database. A sheet still carrying fields from before 1.3.0
-    // has them moved where the sheet reads them first, or that would drop
-    // their content before `migrate:sheet-fields` could move it.
+    // Validate the sheet against its game system's schema, or the Flexible
+    // layout when it has none. What gets stored is the schema's parsed output,
+    // so a key the sheet does not declare never reaches the database. A sheet
+    // still carrying fields from before 1.3.0 has them moved where the sheet
+    // reads them first, or that would drop their content before
+    // `migrate:sheet-fields` could move it.
     let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
       const validationResult = validateCharacterData(
@@ -541,6 +567,16 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         });
       }
       sheetData = validationResult.data;
+    } else if (data !== undefined) {
+      const flexible = validateFlexibleSheet(data);
+      if (!flexible.success) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: FLEXIBLE_SHEET_REFUSED,
+          validationErrors: sheetIssues(flexible.errors),
+        });
+      }
+      sheetData = flexible.data;
     }
 
     // Build update data

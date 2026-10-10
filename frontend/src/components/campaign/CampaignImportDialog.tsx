@@ -5,9 +5,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X,
   Upload,
   FileArchive,
   Map as MapIcon,
@@ -21,6 +19,7 @@ import {
 import api from '@/services/api';
 import type { CampaignImportPreview, CampaignImportResult, CampaignImportSkipped } from '@/types';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
 import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
 
 interface CampaignImportDialogProps {
@@ -147,236 +146,210 @@ export default function CampaignImportDialog({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  if (!isOpen) return null;
-
-  // TODO(ui): this overlay is not marked as a dialog (no role="dialog",
-  // aria-modal or aria-labelledby), so a screen reader is not told one opened
-  // and focus is not held inside it. The shared Modal in components/ui does
-  // all three; this dialog should use it.
+  // The shared dialog: announced to a screen reader by its title, keeping
+  // keyboard focus inside it, and closed by Escape, the backdrop or its X.
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
-        onClick={handleClose}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-paper-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="bg-moss-green/10 border-b border-moss-green/20 px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <FileArchive className="w-5 h-5 text-brand-ink" />
-              <h2 className="text-lg font-bold text-brand-ink">Import Campaign</h2>
-            </div>
-            <button
-              onClick={handleClose}
-              className="p-1.5 hover:bg-moss-green/10 rounded-lg transition-colors"
-              aria-label="Close"
+    <Modal open={isOpen} onClose={handleClose} title="Import Campaign" icon={FileArchive} size="md">
+      <div>
+        {/* ── UPLOAD STEP ── */}
+        {step === 'upload' && (
+          <div>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Choose a campaign archive"
+              className="border-2 border-dashed border-moss-green/30 rounded-xl p-8 text-center
+                         hover:border-moss-green/50 hover:bg-moss-green/5 transition-colors cursor-pointer
+                         focus:outline-none focus:ring-2 focus:ring-brand"
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
             >
-              <X className="w-5 h-5 text-stone-gray" />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-6">
-            {/* ── UPLOAD STEP ── */}
-            {step === 'upload' && (
-              <div>
-                <div
-                  className="border-2 border-dashed border-moss-green/30 rounded-xl p-8 text-center
-                             hover:border-moss-green/50 hover:bg-moss-green/5 transition-colors cursor-pointer"
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                >
-                  {loading ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
-                      <p className="text-sm text-stone-gray">Reading archive...</p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-10 h-10 text-brand-ink/50 mx-auto mb-3" />
-                      <p className="text-sm font-medium text-stone-gray mb-1">
-                        Drop a <span className="font-mono text-brand-ink">.cozyvtt</span> file here
-                      </p>
-                      <p className="text-xs text-warm-gray">or click to browse</p>
-                    </>
-                  )}
+              {loading ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
+                  <p className="text-sm text-stone-gray">Reading archive...</p>
                 </div>
+              ) : (
+                <>
+                  <Upload className="w-10 h-10 text-brand-ink/50 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-stone-gray mb-1">
+                    Drop a <span className="font-mono text-brand-ink">.cozyvtt</span> file here
+                  </p>
+                  <p className="text-xs text-warm-gray">or click to browse</p>
+                </>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".cozyvtt,.zip"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFileSelect(f);
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── PREVIEW STEP ── */}
+        {step === 'preview' && preview && (
+          <div className="space-y-5">
+            {/* Archive summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard icon={<MapIcon className="w-4 h-4" />} label="Maps" value={preview.mapCount} />
+              <StatCard icon={<Skull className="w-4 h-4" />} label="Creatures" value={preview.creatureCount} />
+              <StatCard icon={<Stamp className="w-4 h-4" />} label="Token Templates" value={preview.tokenTemplateCount} />
+              <StatCard icon={<Music className="w-4 h-4" />} label="Audio" value={preview.includesAudio ? 'Yes' : 'No'} />
+            </div>
+
+            <div className="text-xs text-warm-gray flex items-center justify-between">
+              <span>Total tokens: {preview.tokenCount} | Assets: {preview.assetCount}</span>
+              <span>{formatBytes(preview.totalSizeBytes)}</span>
+            </div>
+
+            <div className="text-xs text-warm-gray">
+              Exported from {preview.exportedFrom} on{' '}
+              {new Date(preview.exportedAt).toLocaleDateString()}
+            </div>
+
+            {/* Options */}
+            <div className="space-y-3 pt-2 border-t border-moss-green/10">
+              <div>
+                <label htmlFor="import-name" className="block text-sm font-semibold text-stone-gray mb-1">
+                  Campaign Name
+                </label>
                 <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".cozyvtt,.zip"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFileSelect(f);
-                  }}
+                  id="import-name"
+                  type="text"
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  maxLength={200}
+                  className="input-cozy w-full"
+                  placeholder={preview.campaignName}
                 />
               </div>
-            )}
 
-            {/* ── PREVIEW STEP ── */}
-            {step === 'preview' && preview && (
-              <div className="space-y-5">
-                {/* Archive summary */}
-                <div className="grid grid-cols-2 gap-3">
-                  <StatCard icon={<MapIcon className="w-4 h-4" />} label="Maps" value={preview.mapCount} />
-                  <StatCard icon={<Skull className="w-4 h-4" />} label="Creatures" value={preview.creatureCount} />
-                  <StatCard icon={<Stamp className="w-4 h-4" />} label="Token Templates" value={preview.tokenTemplateCount} />
-                  <StatCard icon={<Music className="w-4 h-4" />} label="Audio" value={preview.includesAudio ? 'Yes' : 'No'} />
-                </div>
-
-                <div className="text-xs text-warm-gray flex items-center justify-between">
-                  <span>Total tokens: {preview.tokenCount} | Assets: {preview.assetCount}</span>
-                  <span>{formatBytes(preview.totalSizeBytes)}</span>
-                </div>
-
-                <div className="text-xs text-warm-gray">
-                  Exported from {preview.exportedFrom} on{' '}
-                  {new Date(preview.exportedAt).toLocaleDateString()}
-                </div>
-
-                {/* Options */}
-                <div className="space-y-3 pt-2 border-t border-moss-green/10">
-                  <div>
-                    <label htmlFor="import-name" className="block text-sm font-semibold text-stone-gray mb-1">
-                      Campaign Name
-                    </label>
-                    <input
-                      id="import-name"
-                      type="text"
-                      value={campaignName}
-                      onChange={(e) => setCampaignName(e.target.value)}
-                      maxLength={200}
-                      className="input-cozy w-full"
-                      placeholder={preview.campaignName}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-stone-gray">Import tokens</p>
-                      <p className="text-xs text-warm-gray">Include tokens placed on maps</p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={importTokens}
-                      onClick={() => setImportTokens((v) => !v)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
-                        importTokens ? 'bg-moss-green' : 'bg-warm-gray/30'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                          importTokens ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-3 pt-2">
-                  <Button
-                    onClick={handleClose}
-                    variant="secondary" className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleImport}
-                    disabled={!campaignName.trim()}
-                    className="flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Import Campaign
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* ── IMPORTING STEP ── */}
-            {step === 'importing' && (
-              <div className="text-center py-8">
-                <Loader2 className="w-12 h-12 text-brand-ink animate-spin mx-auto mb-4" />
-                <p className="text-sm font-medium text-stone-gray mb-1">Importing campaign...</p>
-                <p className="text-xs text-warm-gray">This may take a moment for large archives.</p>
-              </div>
-            )}
-
-            {/* ── DONE STEP ── */}
-            {step === 'done' && result && (
-              <div className="text-center py-6 space-y-4">
-                <CheckCircle2 className="w-12 h-12 text-brand-ink mx-auto" />
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-lg font-bold text-brand-ink mb-1">Import Complete!</p>
-                  <p className="text-sm text-stone-gray">
-                    <span className="font-semibold">{result.campaignName}</span> is ready.
-                  </p>
+                  <p className="text-sm font-semibold text-stone-gray">Import tokens</p>
+                  <p className="text-xs text-warm-gray">Include tokens placed on maps</p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm max-w-xs mx-auto">
-                  <div className="text-warm-gray text-right">Maps:</div>
-                  <div className="text-stone-gray font-medium text-left">{result.mapCount}</div>
-                  <div className="text-warm-gray text-right">Tokens:</div>
-                  <div className="text-stone-gray font-medium text-left">{result.tokenCount}</div>
-                  <div className="text-warm-gray text-right">Creatures:</div>
-                  <div className="text-stone-gray font-medium text-left">{result.creatureCount}</div>
-                  <div className="text-warm-gray text-right">Templates:</div>
-                  <div className="text-stone-gray font-medium text-left">{result.tokenTemplateCount}</div>
-                </div>
-
-                <ImportReport skipped={result.skipped ?? []} warnings={result.warnings ?? []} />
-
-                <div className="flex items-center gap-3 pt-2">
-                  <Button onClick={handleClose} variant="secondary" className="flex-1">
-                    Close
-                  </Button>
-                  <Button
-                    onClick={() => {
-                    handleClose();
-                    navigate(`/campaign/${result.campaignId}`);
-                    }}
-                    className="flex-1"
-                  >
-                    Open Campaign
-                  </Button>
-                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={importTokens}
+                  onClick={() => setImportTokens((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
+                    importTokens ? 'bg-moss-green' : 'bg-warm-gray/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      importTokens ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* ── ERROR STEP ── */}
-            {step === 'error' && (
-              <div className="text-center py-6 space-y-4">
-                <AlertCircle className="w-12 h-12 text-danger-ink mx-auto" />
-                <div>
-                  <p className="text-lg font-bold text-danger-ink mb-1">Import Failed</p>
-                  <p className="text-sm text-stone-gray">{errorMessage}</p>
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <Button onClick={handleClose} variant="secondary" className="flex-1">
-                    Close
-                  </Button>
-                  <Button onClick={resetState} className="flex-1">
-                    Try Again
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                onClick={handleClose}
+                variant="secondary" className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleImport}
+                disabled={!campaignName.trim()}
+                className="flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Upload className="w-4 h-4" />
+                Import Campaign
+              </Button>
+            </div>
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        )}
+
+        {/* ── IMPORTING STEP ── */}
+        {step === 'importing' && (
+          <div className="text-center py-8">
+            <Loader2 className="w-12 h-12 text-brand-ink animate-spin mx-auto mb-4" />
+            <p className="text-sm font-medium text-stone-gray mb-1">Importing campaign...</p>
+            <p className="text-xs text-warm-gray">This may take a moment for large archives.</p>
+          </div>
+        )}
+
+        {/* ── DONE STEP ── */}
+        {step === 'done' && result && (
+          <div className="text-center py-6 space-y-4">
+            <CheckCircle2 className="w-12 h-12 text-brand-ink mx-auto" />
+            <div>
+              <p className="text-lg font-bold text-brand-ink mb-1">Import Complete!</p>
+              <p className="text-sm text-stone-gray">
+                <span className="font-semibold">{result.campaignName}</span> is ready.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-sm max-w-xs mx-auto">
+              <div className="text-warm-gray text-right">Maps:</div>
+              <div className="text-stone-gray font-medium text-left">{result.mapCount}</div>
+              <div className="text-warm-gray text-right">Tokens:</div>
+              <div className="text-stone-gray font-medium text-left">{result.tokenCount}</div>
+              <div className="text-warm-gray text-right">Creatures:</div>
+              <div className="text-stone-gray font-medium text-left">{result.creatureCount}</div>
+              <div className="text-warm-gray text-right">Templates:</div>
+              <div className="text-stone-gray font-medium text-left">{result.tokenTemplateCount}</div>
+            </div>
+
+            <ImportReport skipped={result.skipped ?? []} warnings={result.warnings ?? []} />
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleClose} variant="secondary" className="flex-1">
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                handleClose();
+                navigate(`/campaign/${result.campaignId}`);
+                }}
+                className="flex-1"
+              >
+                Open Campaign
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── ERROR STEP ── */}
+        {step === 'error' && (
+          <div className="text-center py-6 space-y-4">
+            <AlertCircle className="w-12 h-12 text-danger-ink mx-auto" />
+            <div>
+              <p className="text-lg font-bold text-danger-ink mb-1">Import Failed</p>
+              <p className="text-sm text-stone-gray">{errorMessage}</p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleClose} variant="secondary" className="flex-1">
+                Close
+              </Button>
+              <Button onClick={resetState} className="flex-1">
+                Try Again
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

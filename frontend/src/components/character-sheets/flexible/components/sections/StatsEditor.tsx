@@ -6,6 +6,7 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { StatsSection } from '../../../../../types/flexible-character-sheet';
 import { calculateModifier, formatModifier, generateId } from '../../utils/section-helpers';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 
 interface StatsEditorProps {
   section: StatsSection;
@@ -65,6 +66,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                 type="text"
                 value={field.name}
                 onChange={(e) => updateField(field.id, { name: e.target.value })}
+                maxLength={SHEET_NAME_MAX}
                 className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
                 placeholder="Stat name"
               />

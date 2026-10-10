@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const { previewCampaignImport, importCampaign } = vi.hoisted(() => ({ previewCampaignImport: vi.fn(), importCampaign: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { previewCampaignImport, importCampaign } }));
@@ -113,5 +114,57 @@ describe('CampaignImportDialog done screen', () => {
     expect(screen.getByText('Maps:').nextElementSibling?.textContent).toBe('2');
     expect(screen.queryByText('Left out')).toBeNull();
     expect(screen.queryByText('Changed to fit')).toBeNull();
+  });
+});
+
+/**
+ * The import window is a dialog to assistive technology: announced with its
+ * name when it opens, keeping keyboard focus inside it, and closed by Escape.
+ * It was a plain overlay, so a screen reader was not told it had opened and
+ * Tab walked out of it onto the dashboard behind.
+ */
+describe('CampaignImportDialog as a dialog', () => {
+  it('is announced as a dialog named Import Campaign', () => {
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    const dialog = screen.getByRole('dialog', { name: 'Import Campaign' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('keeps keyboard focus inside it', async () => {
+    render(
+      <>
+        <button type="button">Behind the dialog</button>
+        <CampaignImportDialog isOpen onClose={() => undefined} />
+      </>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Import Campaign' });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    for (let i = 0; i < 4; i++) {
+      await userEvent.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    await userEvent.tab({ shift: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('lets the keyboard open the file picker', async () => {
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    const picker = screen.getByRole('button', { name: 'Choose a campaign archive' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = vi.spyOn(input, 'click');
+    // The dialog puts focus on its first control as it opens; wait for that.
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+
+    picker.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn();
+    render(<CampaignImportDialog isOpen onClose={onClose} />);
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalled();
   });
 });

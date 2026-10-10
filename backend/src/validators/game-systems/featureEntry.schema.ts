@@ -11,6 +11,7 @@
  */
 
 import { z } from 'zod';
+import { sheetLongTextSchema } from './sheetText';
 
 /**
  * Accepts either shape.
@@ -22,9 +23,11 @@ import { z } from 'zod';
  * enough to find a description in the second would wreck the first.
  */
 export const featureEntrySchema = z.union([
-  z.string().transform((name) => ({ name: name.trim(), description: '' })),
+  sheetLongTextSchema.transform((name) => ({ name: name.trim(), description: '' })),
   z.object({
-    name: z.string().min(1),
-    description: z.string().default(''),
+    // The long limit, not a one-line one: an older sheet's whole line,
+    // description and all, becomes the name.
+    name: sheetLongTextSchema.min(1),
+    description: sheetLongTextSchema.default(''),
   }),
 ]);

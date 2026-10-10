@@ -291,6 +291,8 @@ Once assigned, that character becomes available as a token in the campaign, and 
 
 CozyVTT includes sheets for several popular game systems. Here's a quick overview of what each one covers:
 
+Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, and any other box up to 1,000.
+
 #### Dungeons & Dragons 5th Edition
 
 The classic. Covers all the D&D 5e essentials:
@@ -299,7 +301,7 @@ The classic. Covers all the D&D 5e essentials:
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
 - Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
-- Spells, spell slots, and spellcasting stats
+- Spells, spell slots (up to 20 of each level), and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info
 
@@ -341,6 +343,8 @@ Street magic meets corporate dystopia:
 #### Flexible System
 
 Running a homebrew game or a system that doesn't have a dedicated sheet? The **Flexible** sheet is a customizable, free-form character sheet where you define your own fields and sections. Perfect for rules-light games, narrative systems, or anything in between.
+
+A Flexible sheet can hold up to 100 sections. A stats section holds up to 200 stats, a list or a table up to 1,000 rows, a table up to 50 columns, and a text section up to 100,000 characters.
 
 *Screenshot pending — Flexible character sheet.*
 

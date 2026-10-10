@@ -50,6 +50,33 @@ Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch`
 
 Players fill out sheets incrementally — someone may save a character with just a name. **Make the vast majority of fields optional in your Zod schema.** Require only what genuinely identifies the character (usually just the name). This is why the existing schemas are permissive; match that.
 
+### Limits on every sheet
+
+A sheet is shown to the whole table, so the schemas hold it to sizes a page can draw. The numbers live in `backend/src/validators/game-systems/sheetLimits.ts`, copied byte for byte as `frontend/src/constants/sheetLimits.ts` so the editors stop each box at the same place (`keepInStep.test.ts` fails when the two differ). Use them in a new system's schema and editor; do not write the numbers again.
+
+| Limit | Constant | Where |
+|---|---|---|
+| The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
+| Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
+| Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
+| D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
+| D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
+
+A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`.
+
+### Flexible sheets
+
+A character or template with no game system has a **Flexible** sheet: a list of sections the player lays out. It has no enum value and no per-system files, but it is checked like the others, by `backend/src/validators/game-systems/flexible.schema.ts`, on create, update, template publish and template update (character import goes through create). The sheet must be an object, and each section's `type` decides the list its page reads:
+
+| `type` | Holds | Limits |
+|---|---|---|
+| `stats` | `fields`: `{ id, name, value, modifier? }` | at most 200; `name` up to 200 characters; `value` and `modifier` numbers |
+| `list` | `items`: `{ id, text, checked? }` | at most 1,000; `text` up to 1,000 characters |
+| `text` | `value` | up to 100,000 characters |
+| `table` | `columns`: `{ id, name, width? }`; `rows`: `{ id, cells }` | at most 50 columns and 1,000 rows; `cells` maps a column id to text of up to 1,000 characters |
+
+Every section also has an `id` (1 to 100 characters), a `title` (up to 200) and an optional `collapsed`; a sheet holds at most 100 sections. Keys beside `sections` are stored as sent, since an import or a program may keep its own there and the editor sends them back. A sheet stored before these checks still loads, and its next save is checked. On the page, `initializeFlexibleData` (`frontend/src/components/character-sheets/flexible/utils/section-helpers.ts`) puts each stored section into the shape its type reads before the view or the editor sees it: a section of an unknown type is left out, a missing list is empty, and a value that is not text is shown as text or as nothing, so an old malformed sheet opens and can be saved in the checked shape.
+
 ---
 
 ## Creature and NPC stat blocks
@@ -387,17 +414,22 @@ Create `backend/src/validators/game-systems/mySystem.schema.ts`. This is the **r
 // backend/src/validators/game-systems/mySystem.schema.ts
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 
 const mySystemSkillSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   value: z.number().min(0).max(100).optional(),
   proficient: z.boolean().optional(),
 });
 
 export const mySystemCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
-  characterName: z.string().min(1).max(100),
-  playerName: z.string().max(100).optional(),
+  characterName: sheetCharacterNameSchema,
+  playerName: shortText.optional(),
 
   stats: z.object({
     strength: z.number().int().optional(),
@@ -411,12 +443,14 @@ export const mySystemCharacterDataSchema = z.object({
   }).optional(),
 
   skills: z.array(mySystemSkillSchema).optional(),
-  notes: z.string().max(5000).optional(),
+  notes: longText.optional(),
 });
 
 export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 ```
 
+> Every text field needs a length limit, from `sheetText.ts`: `sheetCharacterNameSchema` for the character's own name, `shortText` for a one-line box, `longText` for anything that holds paragraphs. `sheetTextLimits.test.ts` walks every system's schema and fails on a string without one, so add your schema to its list.
+>
 > Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
 >
 > Match the permissiveness of the existing schemas. Look at `shadowrun6e.schema.ts` before finalizing — the shipped schemas are intentionally lenient so partial and in-progress sheets save cleanly.

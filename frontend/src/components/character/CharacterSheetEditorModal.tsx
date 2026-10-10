@@ -11,6 +11,7 @@ import { api } from '@/services/api';
 import type { Character } from '@/types';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
+import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 
 // Import editor components
 import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
@@ -251,9 +252,11 @@ export default function CharacterSheetEditorModal({
           Edit Character Sheet: {character.name}
         </h2>
 
-        {/* Editor Content */}
+        {/* Editor Content. A sheet the editor cannot draw fails here, inside
+            the dialog, and not across the whole page. Not reset when the
+            character is refreshed: that would throw away the edits. */}
         <div className="flex-1 overflow-y-auto">
-          {renderCharacterEditor()}
+          <CharacterSheetErrorBoundary>{renderCharacterEditor()}</CharacterSheetErrorBoundary>
         </div>
       </div>
     </div>

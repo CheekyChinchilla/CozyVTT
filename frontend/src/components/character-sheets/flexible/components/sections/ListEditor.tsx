@@ -7,6 +7,7 @@ import { Plus, Trash2, GripVertical, CheckSquare, Square } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import type { ListSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
+import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 
 interface ListEditorProps {
   section: ListSection;
@@ -65,6 +66,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                   type="text"
                   value={item.text}
                   onChange={(e) => updateItem(item.id, { text: e.target.value })}
+                  maxLength={SHEET_SHORT_TEXT_MAX}
                   className="flex-1 bg-transparent border-none focus:outline-none text-warm-gray"
                   placeholder="Enter item text..."
                 />

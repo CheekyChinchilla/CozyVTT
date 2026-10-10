@@ -70,6 +70,7 @@ import {
   cocHalfAndFifth,
 } from './derivedStats';
 import { parsePossessions, formatPossessions } from './possessions';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -657,6 +658,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             type="text"
             value={formData.investigatorName || ''}
             onChange={(e) => setFormData({ ...formData, investigatorName: e.target.value })}
+            maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
             className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />

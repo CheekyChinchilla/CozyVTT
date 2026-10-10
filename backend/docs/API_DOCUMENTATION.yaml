@@ -3970,7 +3970,7 @@ paths:
           field (`characterName`, or `investigatorName` for
           `CALL_OF_CTHULHU_7E`) and the caller's display name into
           `playerName`, overwriting whatever `data` held there, before the
-          sheet is validated. A flexible sheet is stored as sent.
+          sheet is validated. A Flexible sheet's fields are not filled in.
         - With a game system (sent or inherited), `data` is validated against
           that system's sheet schema and stored as the schema's parsed output,
           so a key the schema does not declare is dropped. Sheet fields from
@@ -3983,7 +3983,9 @@ paths:
           name field is filled in from `name`). `GET
           /api/characters/templates/{gameSystem}/blank` returns a sheet that
           passes.
-        - With no game system, `data` is not validated (flexible character).
+        - With no game system (a Flexible character), `data` must be an
+          object matching `FlexibleCharacterData`; null, a string, a number or
+          an array answers 400. An omitted `data` is stored as `{}`.
         - If `campaignId` is provided, the campaign must exist (404) and the
           caller must already be a member of it (403); otherwise nothing is
           created. The character is added to the caller's membership as well
@@ -4024,7 +4026,7 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields and features at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -4046,7 +4048,9 @@ paths:
             The body fails its shape check (`name` missing, empty or over 200
             characters, an unknown `gameSystem`, a non-string `campaignId` or
             `tokenImageUrl`), answered with `message` alone; or `data` does not
-            match the game system's sheet schema, answered with
+            match the game system's sheet schema, or for a Flexible character
+            the `FlexibleCharacterData` layout (message `Character data does
+            not match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem.
           content:
             application/json:
@@ -4132,7 +4136,9 @@ paths:
           that system's sheet schema (after moving sheet fields from before
           version 1.3.0 to their current names) and stored as the schema's
           parsed output. `data` replaces the whole sheet; it is not merged.
-        - If the character has no `gameSystem`, `data` is stored unvalidated.
+        - If the character has no `gameSystem` (a Flexible character), `data`
+          must be an object matching `FlexibleCharacterData`, and is stored as
+          parsed; null, a string, a number or an array answers 400.
         - If `name` is omitted, `data` is sent, the character has a game
           system, and the sheet's own name field (`characterName`, or
           `investigatorName` for `CALL_OF_CTHULHU_7E`) holds a non-blank value
@@ -4184,7 +4190,7 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields and features at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -4219,7 +4225,9 @@ paths:
             UTC ISO timestamp ending in `Z`), answered with `message` alone;
             `gameSystem` differs from the character's, answered with `error:
             Bad Request`; or `data` does not match the game system's sheet
-            schema, answered with `validationErrors`.
+            schema, or for a Flexible character the `FlexibleCharacterData`
+            layout (message `Character data does not match the Flexible sheet
+            layout`), answered with `validationErrors`. Nothing is saved.
           content:
             application/json:
               schema:
@@ -9049,10 +9057,15 @@ paths:
         `name` is trimmed, 1 to 200 characters. `description` is trimmed, up
         to 2000 characters. When `gameSystem` is given, `data` must pass that
         system's sheet schema (an omitted `data` is checked as `{}` and so
-        fails), but `data` is stored exactly as sent, so fields the schema
-        does not declare are kept; the template is not stored as the schema's
-        parsed output. Without a `gameSystem`, `data` is free-form and an
-        omitted one is stored as `{}`. A `tokenImageUrl`, when given, must be
+        fails), and is stored as the schema's parsed output, so a key the
+        schema does not declare is dropped, as it is for a character. Sheet
+        fields from before version 1.3.0 are moved to their current names
+        first, as they are for a character. Without
+        a `gameSystem`, `data` must be an object
+        matching `FlexibleCharacterData` (message `Template data does not
+        match the Flexible sheet layout`, with `validationErrors`, otherwise)
+        and is stored as parsed; an omitted one is stored as `{}`, and null
+        answers 400. A `tokenImageUrl`, when given, must be
         an existing GLOBAL-scoped asset, named by its bare id (stored as
         `/api/assets/tokens/<id>`) or by its exact address
         (`/api/assets/<kind>/<id>`, with nothing after the id); anything else
@@ -9084,7 +9097,7 @@ paths:
                   nullable: true
                 data:
                   type: object
-                  description: The sheet. Free-form when gameSystem is null.
+                  description: The sheet. A Flexible sheet (`FlexibleCharacterData`) when gameSystem is null.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -9107,7 +9120,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet, stored exactly as sent.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
@@ -9154,7 +9167,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet, stored exactly as sent.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
@@ -9177,8 +9190,11 @@ paths:
         `description`, `data` and `tokenImageUrl` must be sent, or the answer
         is 400; other keys, `gameSystem` included, are ignored, since a
         template's game system is fixed at creation. `data` replaces the
-        whole sheet; it is checked against the template's game system (free
-        form if it has none) and stored as sent. `tokenImageUrl` follows the
+        whole sheet; it is checked against the template's game system (after
+        moving sheet fields from before version 1.3.0 to their current names),
+        or against `FlexibleCharacterData` if it has none, and stored as
+        parsed; a refused sheet answers 400 with `validationErrors`.
+        `tokenImageUrl` follows the
         rule on create, and null or an empty string removes the image.
       operationId: updateCharacterTemplate
       security:
@@ -9229,7 +9245,7 @@ paths:
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
-                    description: The sheet, stored exactly as sent.
+                    description: The sheet as stored, which is the sheet as its game system's schema (or `FlexibleCharacterData`) parsed it.
                   createdById: { type: string, format: uuid, nullable: true }
                   createdBy:
                     type: object
@@ -10347,6 +10363,38 @@ components:
             avatarUrl:
               type: string
               nullable: true
+
+    FlexibleCharacterData:
+      type: object
+      description: >-
+        The sheet of a character or template with no game system. Keys other
+        than `sections` are stored as sent. A sheet stored before these limits
+        existed still loads; a save over one is refused with 400.
+      additionalProperties: true
+      properties:
+        sections:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [id, title, type]
+            description: >-
+              `id` is 1 to 100 characters and `title` up to 200. The other
+              fields depend on `type`: `stats` has `fields` (at most 200, each
+              `{ id, name, value, modifier? }`, `name` up to 200 characters,
+              `value` and `modifier` numbers); `list` has `items` (at most
+              1,000, each `{ id, text, checked? }`, `text` up to 1,000
+              characters); `text` has `value` (up to 100,000 characters);
+              `table` has `columns` (at most 50, each `{ id, name, width? }`,
+              `name` up to 200 characters, `width` up to 40) and `rows` (at
+              most 1,000, each `{ id, cells }`, where `cells` maps a column id
+              to text of up to 1,000 characters, at most 100 cells). Any
+              other `type` is refused.
+            properties:
+              id: { type: string, minLength: 1, maxLength: 100 }
+              title: { type: string, maxLength: 200 }
+              type: { type: string, enum: [stats, list, text, table] }
+              collapsed: { type: boolean }
 
     Asset:
       type: object

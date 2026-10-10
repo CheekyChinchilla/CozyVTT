@@ -179,6 +179,35 @@ describe('Character template routes', () => {
     });
   });
 
+  // A template is stored as its game system's schema returns it, as a
+  // character is: a key the sheet does not declare is dropped on the way in.
+  describe('what is stored', () => {
+    it('drops a key the schema does not declare when a template is published', async () => {
+      const res = await createTemplate(authorAgent, { data: { ...dnd5eSheet, injected: 'nope' } });
+      expect(res.status).toBe(201);
+      expect(res.body.data).not.toHaveProperty('injected');
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } });
+      expect(stored.data).not.toHaveProperty('injected');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero', class: 'Fighter' });
+    });
+
+    it('drops a key the schema does not declare when a template is saved', async () => {
+      const created = await createTemplate(authorAgent);
+      expect(created.status).toBe(201);
+
+      const res = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ data: { ...dnd5eSheet, injected: 'nope', nested: { deeper: 1 } } });
+      expect(res.status).toBe(200);
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(stored.data).not.toHaveProperty('injected');
+      expect(stored.data).not.toHaveProperty('nested');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero' });
+    });
+  });
+
   // A template is visible to everyone, so its image has to be too. A personal
   // asset would 403 for every reader but its owner.
   describe('the global-image rule', () => {
@@ -396,6 +425,8 @@ describe('Character template routes', () => {
       const still = await prisma.characterTemplate.findUnique({ where: { id: created.body.id } });
       expect(still).not.toBeNull();
       expect(still?.createdById).toBeNull();
+
+      await prisma.characterTemplate.delete({ where: { id: created.body.id } });
     });
   });
 
