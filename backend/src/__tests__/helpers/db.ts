@@ -82,3 +82,25 @@ export async function cleanupUsers(ids: string[]): Promise<void> {
 export async function cleanupCampaigns(ids: string[]): Promise<void> {
   await prisma.campaign.deleteMany({ where: { id: { in: ids } } });
 }
+
+/**
+ * Make the login-session table connect-pg-simple keeps, if it is not there.
+ * The server creates it at start; the test app keeps sessions in memory, so
+ * a suite that reads or writes the table makes it first. Files running at
+ * once can both try, and PostgreSQL can refuse the second create even with
+ * IF NOT EXISTS, so that refusal is ignored once the table is there.
+ */
+export async function ensureLoginSessionTable(): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS session (
+        sid varchar NOT NULL PRIMARY KEY,
+        sess json NOT NULL,
+        expire timestamp(6) NOT NULL
+      )
+    `);
+  } catch (error) {
+    const rows = await prisma.$queryRaw<{ present: boolean }[]>`SELECT to_regclass('session') IS NOT NULL AS present`;
+    if (!rows[0]?.present) throw error;
+  }
+}
