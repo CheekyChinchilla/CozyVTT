@@ -1280,13 +1280,11 @@ min={0}
   const renderStatsTab = () => (
     <div className="space-y-6">
       {/* Character Details */}
-      {/* TODO(ui): these labels are not tied to their inputs (no htmlFor and id),
-          so a screen reader announces each box by its placeholder alone. Give
-          each input an id and its label a matching htmlFor. */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
+          <label htmlFor="dnd5e-alignment" className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
           <input
+            id="dnd5e-alignment"
             type="text"
             value={formData.alignment || ''}
             onChange={(e) => updateField('alignment', e.target.value)}
@@ -1295,8 +1293,9 @@ min={0}
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
+          <label htmlFor="dnd5e-background" className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
           <input
+            id="dnd5e-background"
             type="text"
             value={formData.background || ''}
             onChange={(e) => updateField('background', e.target.value)}

@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The Import Campaign window works with a screen reader and the keyboard.** It was not marked as a dialog, so a screen reader was not told it had opened, Tab moved out of it onto the dashboard behind, and the drop area could not be reached from the keyboard. It now opens as a dialog named **Import Campaign**, keeps the keyboard inside it, closes with Escape, and its drop area opens the file picker with Enter or Space. It looks like the app's other windows.
 
+- **A screen reader names the D&D 5e editor's Alignment and Background boxes.** Their labels were not tied to the boxes, so each was announced by its example text alone. The same goes for the **Total** and **Used** spell slot boxes and the initiative and passive Perception **Other bonus** boxes.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
