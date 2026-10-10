@@ -404,6 +404,13 @@ Two of those deserve a note:
   `src/__tests__/helpers/serve-test-app.ts` starts the test app on a free
   port in a child process, and `malformedUpload.e2e.test.ts` uses it to send
   crafted upload bodies and check that the server answers and is still up.
+- **A test that needs a brand new instance gets a schema of its own.** The
+  suites share one database and run at once, so none can count on it being
+  empty. The setup wizard suite and the first-admin race test need exactly
+  that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
+  schema in the same test database from `schema.prisma`, and drops it at the
+  end. The file sets `DATABASE_URL` to that schema before it imports the app,
+  with a dynamic import, because the app's database client reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
   `docker-compose.yml` being set to the value it prints (the file's hash, which

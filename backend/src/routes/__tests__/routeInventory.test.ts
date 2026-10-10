@@ -160,12 +160,12 @@ const TESTED: Record<string, string> = {
   'GET /api/characters': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',
   'DELETE /api/characters/:id': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',
   'POST /api/characters/:id/copy': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',
+  'GET /api/setup/status': 'routes/__tests__/setupWizard.e2e.test.ts',
+  'POST /api/setup/init': 'routes/__tests__/setupWizard.e2e.test.ts',
 };
 
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
-  'GET /api/setup/status',
-  'POST /api/setup/init',
   'GET /api/auth/registration-status',
   'GET /api/auth/appearance',
   'GET /api/campaigns/:campaignId/invitable-users',
