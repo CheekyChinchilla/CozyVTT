@@ -125,12 +125,16 @@ describe('Character template routes', () => {
     adminAgent = await login(`tpl_admin_${stamp}@test.invalid`);
   });
 
+  // Only this file's templates: test files run at the same time against one
+  // database, and another file's templates are not this one's to remove.
+  const ownTemplates = () => ({ createdById: { in: [authorId, otherId, editorId, adminId] } });
+
   afterEach(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
   });
 
   afterAll(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
     await prisma.asset.deleteMany({ where: { id: { in: [globalAssetId, personalAssetId] } } });
     await cleanupUsers([authorId, otherId, editorId, adminId]);
     await prisma.$disconnect();
@@ -393,6 +397,8 @@ describe('Character template routes', () => {
       const still = await prisma.characterTemplate.findUnique({ where: { id: created.body.id } });
       expect(still).not.toBeNull();
       expect(still?.createdById).toBeNull();
+
+      await prisma.characterTemplate.delete({ where: { id: created.body.id } });
     });
   });
 
