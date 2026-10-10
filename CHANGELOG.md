@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
 
+- **A Flexible character sheet or template laid out wrongly is no longer saved.** A Flexible sheet was stored exactly as it was sent, so one saved by a program using the API with a section missing its entries, or a table cell holding something other than text, was kept, and opening it broke the page of everyone who viewed it, the DM's campaign page included. A save whose sheet was a bare value, such as a piece of text, was stored as the sheet too. Both are now refused. A Flexible sheet holds up to 100 sections: up to 200 stats in a stats section, 1,000 rows in a list or table, 50 columns in a table and 100,000 characters in a text section, and the editor's boxes stop at the lengths the server keeps. Sheets already stored keep loading.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

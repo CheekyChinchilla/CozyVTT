@@ -637,7 +637,7 @@ Get a single character. Returns full character data including the JSON sheet dat
 
 ### `PUT /api/characters/:id`
 
-Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved.
 
 Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
@@ -749,7 +749,9 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
-  is. A flexible template accepts free-form JSON, matching `Character`.
+  is. A flexible template's `data` must be an object laid out as a Flexible
+  sheet, as a Flexible character's must; anything else answers `400` with
+  `validationErrors`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.

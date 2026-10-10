@@ -50,6 +50,19 @@ Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch`
 
 Players fill out sheets incrementally — someone may save a character with just a name. **Make the vast majority of fields optional in your Zod schema.** Require only what genuinely identifies the character (usually just the name). This is why the existing schemas are permissive; match that.
 
+### Flexible sheets
+
+A character or template with no game system has a **Flexible** sheet: a list of sections the player lays out. It has no enum value and no per-system files, but it is checked like the others, by `backend/src/validators/game-systems/flexible.schema.ts`, on create, update, template publish and template update (character import goes through create). The sheet must be an object, and each section's `type` decides the list its page reads:
+
+| `type` | Holds | Limits |
+|---|---|---|
+| `stats` | `fields`: `{ id, name, value, modifier? }` | at most 200; `name` up to 200 characters; `value` and `modifier` numbers |
+| `list` | `items`: `{ id, text, checked? }` | at most 1,000; `text` up to 1,000 characters |
+| `text` | `value` | up to 100,000 characters |
+| `table` | `columns`: `{ id, name, width? }`; `rows`: `{ id, cells }` | at most 50 columns and 1,000 rows; `cells` maps a column id to text of up to 1,000 characters |
+
+Every section also has an `id` (1 to 100 characters), a `title` (up to 200) and an optional `collapsed`; a sheet holds at most 100 sections. Keys beside `sections` are stored as sent, since an import or a program may keep its own there and the editor sends them back. A sheet stored before these checks still loads, and its next save is checked.
+
 ---
 
 ## Creature and NPC stat blocks

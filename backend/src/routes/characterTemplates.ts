@@ -17,7 +17,7 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
-import { validateCharacterData } from '../validators/game-systems';
+import { validateCharacterData, validateFlexibleSheet, sheetIssues } from '../validators/game-systems';
 import {
   CreateCharacterTemplateSchema,
   UpdateCharacterTemplateSchema,
@@ -102,21 +102,30 @@ async function resolveTemplateImage(
 
 /**
  * Validate sheet data against its game system, mirroring how characters are
- * checked. Flexible templates (gameSystem null) hold free-form JSON, which is
- * the same latitude Character already allows.
+ * checked, and return the sheet to store. A Flexible template (gameSystem
+ * null) is checked against the Flexible layout, as a Flexible character is;
+ * no sheet at all is an empty one.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
   data: unknown
-): { ok: true } | { ok: false; message: string; issues?: unknown[] } {
-  if (gameSystem === null || gameSystem === undefined) return { ok: true };
+): { ok: true; data: unknown } | { ok: false; message: string; issues?: unknown[] } {
+  if (gameSystem === null || gameSystem === undefined) {
+    const flexible = validateFlexibleSheet(data === undefined ? {} : data);
+    if (flexible.success) return { ok: true, data: flexible.data };
+    return {
+      ok: false,
+      message: 'Template data does not match the Flexible sheet layout',
+      issues: sheetIssues(flexible.errors),
+    };
+  }
 
   // TODO(sheets): the parsed sheet is thrown away, so the create and update
   // routes store the template exactly as sent, fields the schema would strip
   // included, while a character is stored as the schema's output. Return
   // result.data and store that, as the character routes do.
   const result = validateCharacterData(gameSystem, (data as object) || {});
-  if (result.success) return { ok: true };
+  if (result.success) return { ok: true, data: data || {} };
 
   return {
     ok: false,
@@ -241,7 +250,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         description: description ?? null,
         gameSystem: gameSystem ?? null,
         tokenImageUrl: image.url,
-        data: toJson(data || {}),
+        data: toJson(sheet.data),
         createdById: userId,
       },
       include: { createdBy: { select: AUTHOR_SELECT } },
@@ -286,6 +295,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     // The game system is fixed at creation, exactly as it is for a character —
     // the sheet data is only meaningful against the system it was built for.
+    let sheetData: unknown;
     if (data.data !== undefined) {
       const sheet = validateSheet(existing.gameSystem as GameSystem | null, data.data);
       if (!sheet.ok) {
@@ -295,6 +305,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           validationErrors: sheet.issues,
         });
       }
+      sheetData = sheet.data;
     }
 
     let imageUrl: string | null | undefined;
@@ -311,7 +322,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description ?? null }),
-        ...(data.data !== undefined && { data: toJson(data.data) }),
+        ...(sheetData !== undefined && { data: toJson(sheetData) }),
         ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
       },
       include: { createdBy: { select: AUTHOR_SELECT } },

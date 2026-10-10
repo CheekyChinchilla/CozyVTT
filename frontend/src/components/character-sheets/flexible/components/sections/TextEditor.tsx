@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { TextSection } from '../../../../../types/flexible-character-sheet';
+import { SHEET_LONG_TEXT_MAX } from '@/constants/sheetLimits';
 
 interface TextEditorProps {
   section: TextSection;
@@ -32,6 +33,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ section, onUpdate }) => 
         ref={textareaRef}
         value={section.value}
         onChange={handleChange}
+        maxLength={SHEET_LONG_TEXT_MAX}
         className="w-full min-h-[150px] p-4 bg-parchment/20 border border-moss-green/20 rounded-lg focus:border-moss-green focus:outline-none text-warm-gray resize-none"
         placeholder="Enter text content..."
       />

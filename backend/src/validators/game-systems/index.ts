@@ -21,6 +21,10 @@ import {
   callOfCthulhu7eCharacterDataSchema,
   type CoC7eCharacterData,
 } from './callOfCthulhu7e.schema';
+import {
+  flexibleCharacterDataSchema,
+  type FlexibleCharacterData,
+} from './flexible.schema';
 
 // Re-export schemas
 export {
@@ -28,6 +32,7 @@ export {
   pathfinder2eCharacterDataSchema,
   shadowrun6eCharacterDataSchema,
   callOfCthulhu7eCharacterDataSchema,
+  flexibleCharacterDataSchema,
 };
 
 // Re-export types
@@ -36,6 +41,7 @@ export type {
   PF2eCharacterData,
   SR6CharacterData,
   CoC7eCharacterData,
+  FlexibleCharacterData,
 };
 
 /**
@@ -97,6 +103,31 @@ export function validateCharacterData(
     // Re-throw unexpected errors
     throw error;
   }
+}
+
+/**
+ * Validate a Flexible sheet: the sheet of a character or template with no
+ * game system. Anything that is not an object, null included, is refused.
+ */
+export function validateFlexibleSheet(data: unknown): ValidationResult<FlexibleCharacterData> {
+  const result = flexibleCharacterDataSchema.safeParse(data);
+  return result.success ? { success: true, data: result.data } : { success: false, errors: result.error };
+}
+
+/** One problem with a sheet, as a refused save lists it. */
+export interface SheetIssue {
+  path: string;
+  message: string;
+  code: string;
+}
+
+/** The problems a refused sheet has, each with the dotted path of its field. */
+export function sheetIssues(errors: z.ZodError): SheetIssue[] {
+  return errors.issues.map((issue) => ({
+    path: issue.path.map(String).join('.'),
+    message: issue.message,
+    code: issue.code,
+  }));
 }
 
 /**

@@ -342,6 +342,8 @@ Street magic meets corporate dystopia:
 
 Running a homebrew game or a system that doesn't have a dedicated sheet? The **Flexible** sheet is a customizable, free-form character sheet where you define your own fields and sections. Perfect for rules-light games, narrative systems, or anything in between.
 
+A Flexible sheet can hold up to 100 sections. A stats section holds up to 200 stats, a list or a table up to 1,000 rows, a table up to 50 columns, and a text section up to 100,000 characters.
+
 *Screenshot pending — Flexible character sheet.*
 
 ---
