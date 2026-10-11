@@ -49,10 +49,10 @@ reads `backend/src/websocket/`, `backend/src/routes/` and
 `backend/src/services/` (a service can emit too: the ambient-audio setter
 broadcasts for both the panel and the vibe switch), and matches
 `socket.emit` alongside the `broadcastToCampaign` / `broadcastToUser` helpers,
-the token move handlers' `emitMoveToVisibleSockets` /
-`emitMoveToDragRecipients`, which take the event name as their first argument,
-and `emitToMapReaders` and the map routes' `tellMapReaders`, whose event name is
-their first quoted argument —
+the token move handlers' `emitMoveToVisibleSockets`, which takes the event
+name as its first argument, and `emitToMapReaders` and the map routes'
+`tellMapReaders`, with their per-role forms `emitToMapReadersAs` and
+`tellMapReadersAs`, whose event name is their first quoted argument —
 a route pushing an event through a helper reaches a client just as surely as a
 handler emitting one, and while the scan covered only handlers the table called
 itself complete while omitting seven such events.

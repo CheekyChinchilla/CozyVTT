@@ -6689,7 +6689,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List wall segments
-      description: Returns all wall segments for the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise).
+      description: Returns all wall segments for the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the DM is sent a `door-locked` door as `door-closed`.
       operationId: listWalls
       security:
         - cookieAuth: []
@@ -6910,7 +6910,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List light sources
-      description: Returns all placed lights on the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise).
+      description: Returns all placed lights on the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the DM is sent only the lights whose `enabled` is true.
       operationId: listLights
       security:
         - cookieAuth: []
@@ -11220,10 +11220,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Wall'
+          description: Every wall of the map. For anyone but the DM, a `door-locked` door is sent as `door-closed`.
         lights:
           type: array
           items:
             $ref: '#/components/schemas/LightSource'
+          description: Every light for the DM; for anyone else, only those with `enabled` true.
         fogData:
           allOf:
             - $ref: '#/components/schemas/FogState'

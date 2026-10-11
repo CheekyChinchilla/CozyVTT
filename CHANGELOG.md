@@ -189,6 +189,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Call of Cthulhu Keeper's Notes are now the Keeper's alone.** The **Keeper's Notes** box on an investigator's sheet was an ordinary field: the investigator's player and everyone else in the campaign could read it, and the player could change or delete it. Only the DM of the investigator's campaign can now see or change the notes, and a save by anyone else leaves them as they are. They stay with the campaign: an investigator moved into another campaign, brought into one through an invitation, or copied, leaves them behind. Notes written before this upgrade, including any a player typed into the box, are now shown to the Keeper only.
 
+- **Players' browsers are no longer told which doors are locked or where the lights that are off are.** Every member was sent each door's real state and every light on the map, including locked doors and lights the DM had switched off. A player is now sent a locked door as a closed door, and no light that is off until it is switched on; a player who tries a locked door is still told it is locked. The [DM Guide](docs/DM_GUIDE.md#what-players-browsers-receive) now lists exactly what a player's browser receives for the map on screen, and corrects what it said about fog: fog hides things on the screen, but the map picture, the walls and the tokens under it still reach the browser.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

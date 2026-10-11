@@ -439,6 +439,53 @@ export function playerSightOnLitMap(
 }
 
 /**
+ * A wall as a member is sent it. Every wall reaches every member who may read
+ * the map, since their browser works out its own sight from them, but a
+ * door's lock is the DM's to reveal: anyone else is sent a locked door as a
+ * closed one, which blocks sight the same way.
+ */
+export function wallSentTo(role: string | undefined, wall: WallSegment): WallSegment {
+  return role !== 'DM' && wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
+}
+
+/** A map's walls as a member is sent them (wallSentTo). */
+export function wallsSentTo(role: string | undefined, walls: unknown): WallSegment[] {
+  const list = (Array.isArray(walls) ? walls : []) as unknown as WallSegment[];
+  return role === 'DM' ? list : list.map((w) => wallSentTo(role, w));
+}
+
+/**
+ * A map's lights as a member is sent them: the DM every one, anyone else only
+ * those that are on. A light that is off lights nothing anyone can see, the
+ * rule `filterTokensByLighting` applies, so nobody but the DM needs to know
+ * where it is.
+ */
+export function lightsSentTo(role: string | undefined, lights: unknown): LightSource[] {
+  const list = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
+  return role === 'DM' ? list : list.filter((l) => l.enabled);
+}
+
+/**
+ * What a member is told of one light changing from `before` to `after`: the
+ * DM `light:updated`; anyone else, who has only the lights that are on, the
+ * light appearing (`light:added`) when it comes on, going (`light:removed`)
+ * when it goes off, `light:updated` while it stays on, and nothing while it
+ * stays off. `extra` (an operation id) rides on every event.
+ */
+export function lightChangeSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: LightSource,
+  after: LightSource,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role === 'DM' || (before.enabled && after.enabled)) return { event: 'light:updated', data: { mapId, light: after, ...extra } };
+  if (after.enabled) return { event: 'light:added', data: { mapId, light: after, ...extra } };
+  if (before.enabled) return { event: 'light:removed', data: { mapId, lightId: after.id, ...extra } };
+  return null;
+}
+
+/**
  * Filter entire map data based on user role and spirit layer visibility.
  *
  * This filters:
@@ -492,10 +539,12 @@ export function filterMapData(
     tokens: filteredTokens,
     // Remove spirit layer URL if user shouldn't see it
     spiritLayerUrl: (userRole === 'DM' || spiritVisible) ? mapData.spiritLayerUrl : null,
-    // Wall segments are sent to all roles (players need them for visibility rendering)
-    wallSegments: mapData.wallSegments ?? [],
-    // Light sources are sent to all roles (players need them for visibility rendering)
-    lights: mapData.lights ?? [],
+    // Wall segments are sent to all roles (players need them for visibility
+    // rendering), a locked door to anyone but the DM as a closed one
+    wallSegments: wallsSentTo(userRole, mapData.wallSegments),
+    // Light sources that are on are sent to all roles (players need them for
+    // visibility rendering); the DM also gets those that are off
+    lights: lightsSentTo(userRole, mapData.lights),
     // Fog data is DM-only (full state); players receive derived revealed-cells via WebSocket
     fogData: userRole === 'DM' ? mapData.fogData : null,
     lightingEnabled: mapData.lightingEnabled,

@@ -9,7 +9,8 @@ import { prisma } from '../../config/database';
 import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
-import { emitToMapReaders } from '../utils';
+import { emitToMapReaders, emitToMapReadersAs } from '../utils';
+import { lightChangeSentTo, lightsSentTo } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
@@ -69,7 +70,10 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'light:added', { mapId, light: added, ...echoedOpId(data) });
+      // A light that is off goes to the DM alone.
+      await emitToMapReadersAs(io, campaignId, mapId, 'light:added', (role) =>
+        role === 'DM' || added.enabled ? { event: 'light:added', data: { mapId, light: added, ...echoedOpId(data) } } : null
+      );
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:add failed', { err: error });
@@ -138,7 +142,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       const campaignId = socket.campaignId;
       const updated = parsed.data;
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { done: LightSource }> => {
         const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
         if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
 
@@ -149,16 +153,22 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         // may stay where it is.
         if (lightOutsideMap([updated], map, [existing[idx]])) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
 
+        const before = existing[idx];
         existing[idx] = updated;
         await tx.map.update({ where: { id: mapId }, data: { lights: toJson(existing) } });
-        return { done: true };
+        return { done: before };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'light:updated', { mapId, light: updated, ...echoedOpId(data) });
+      // Anyone but the DM has only the lights that are on: one turned on
+      // appears for them, one turned off goes.
+      const before = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'light:updated', (role) =>
+        lightChangeSentTo(role, mapId, before, updated, echoedOpId(data))
+      );
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:update failed', { err: error });
@@ -202,7 +212,9 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'lights:replaced', { mapId, lights: next, ...echoedOpId(data) });
+      await emitToMapReadersAs(io, campaignId, mapId, 'lights:replaced', (role) => ({
+        event: 'lights:replaced', data: { mapId, lights: lightsSentTo(role, next), ...echoedOpId(data) },
+      }));
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('lights:replace failed', { err: error });
@@ -229,8 +241,8 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
-      const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-      socket.emit('lights:replaced', { mapId, lights });
+      // A light that is off goes to the DM alone.
+      socket.emit('lights:replaced', { mapId, lights: lightsSentTo(socket.role, map.lights) });
     } catch (error) {
       logger.error('lights:request failed', { err: error });
     }

@@ -6,8 +6,11 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
-import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
+import {
+  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeSentTo, lightsSentTo, wallSentTo,
+  wallsSentTo,
+} from '../utils/spirit-layer';
+import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
@@ -118,6 +121,23 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
     await emitToMapReaders(getSocketInstance(), campaignId, mapId, event, data);
   } catch (err) {
     logger.warn('Map change not broadcast', { err, event, mapId });
+  }
+}
+
+/**
+ * tellMapReaders, with what each reader is told decided from their role
+ * (emitToMapReadersAs): a locked door and a light that is off are the DM's.
+ */
+async function tellMapReadersAs(
+  campaignId: string,
+  mapId: string,
+  what: string,
+  sendFor: (role: string | undefined) => { event: string; data: unknown } | null
+): Promise<void> {
+  try {
+    await emitToMapReadersAs(getSocketInstance(), campaignId, mapId, what, sendFor);
+  } catch (err) {
+    logger.warn('Map change not broadcast', { err, event: what, mapId });
   }
 }
 
@@ -1775,8 +1795,8 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-    return res.status(200).json({ segments });
+    // A locked door goes to anyone but the DM as a closed one.
+    return res.status(200).json({ segments: wallsSentTo(req.campaignMembership!.role, map.wallSegments) });
   } catch (error) {
     logger.error('Error fetching wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch wall segments' });
@@ -1811,7 +1831,9 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
     // The same events the socket wall edits send, to those who may read the map.
-    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: next });
+    await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => ({
+      event: 'walls:replaced', data: { mapId: id, segments: wallsSentTo(role, next) },
+    }));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segments: next });
   } catch (error) {
@@ -1856,7 +1878,9 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment });
+    await tellMapReadersAs(campaignId, id, 'wall:added', (role) => ({
+      event: 'wall:added', data: { mapId: id, segment: wallSentTo(role, segment) },
+    }));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ segment, total: outcome.done });
   } catch (error) {
@@ -1929,7 +1953,10 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: outcome.done });
+    const stored = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'wall:updated', (role) => ({
+      event: 'wall:updated', data: { mapId: id, segment: wallSentTo(role, stored) },
+    }));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segment: outcome.done });
   } catch (error) {
@@ -1951,8 +1978,8 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-    return res.status(200).json({ lights });
+    // A light that is off goes to the DM alone.
+    return res.status(200).json({ lights: lightsSentTo(req.campaignMembership!.role, map.lights) });
   } catch (error) {
     logger.error('Error fetching light sources:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch light sources' });
@@ -1986,7 +2013,9 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: next });
+    await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => ({
+      event: 'lights:replaced', data: { mapId: id, lights: lightsSentTo(role, next) },
+    }));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ lights: next });
   } catch (error) {
@@ -2031,7 +2060,9 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: added });
+    await tellMapReadersAs(campaignId, id, 'light:added', (role) =>
+      role === 'DM' || added.enabled ? { event: 'light:added', data: { mapId: id, light: added } } : null
+    );
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: added, total: outcome.done });
   } catch (error) {
@@ -2057,11 +2088,13 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     }
 
     const patch = parsed.data;
+    let before: LightSource | undefined;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<LightSource>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
       const idx = existing.findIndex((l) => l.id === lightId);
+      before = existing[idx];
       if (idx === -1) {
         return { status: 404, error: 'Not Found', message: 'Light source not found' };
       }
@@ -2085,7 +2118,10 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: outcome.done });
+    // Anyone but the DM has only the lights that are on.
+    const after = outcome.done;
+    const was = before ?? after;
+    await tellMapReadersAs(campaignId, id, 'light:updated', (role) => lightChangeSentTo(role, id, was, after));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ light: outcome.done });
   } catch (error) {

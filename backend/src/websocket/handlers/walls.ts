@@ -10,7 +10,8 @@ import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { emitToMapReaders } from '../utils';
+import { emitToMapReaders, emitToMapReadersAs } from '../utils';
+import { wallSentTo, wallsSentTo } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
@@ -28,7 +29,7 @@ const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } a
  * adds in one tick) apply one after another instead of each overwriting the
  * last. A refusal is returned as its message.
  */
-type Locked<T> = { refused: string } | { done: T };
+type Locked<T> = { refused: string; current?: WallSegment } | { done: T };
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -71,7 +72,9 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:added', { mapId, segment: added, ...echoedOpId(data) });
+      await emitToMapReadersAs(io, campaignId, mapId, 'wall:added', (role) => ({
+        event: 'wall:added', data: { mapId, segment: wallSentTo(role, added), ...echoedOpId(data) },
+      }));
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:add failed', { err: error });
@@ -169,11 +172,13 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         if (role !== 'DM') {
           const targetType = sent.type;
           const currentType = existing[idx].type;
-          // Locked doors cannot be opened by players
-          if (currentType === 'door-locked') return { refused: 'That door is locked' };
+          // Locked doors cannot be opened by players. The refusal carries the
+          // segment, so the player's page, which drew the door open as it
+          // asked, is put back.
+          if (currentType === 'door-locked') return { refused: 'That door is locked', current: existing[idx] };
           const isDoorToggle = targetType === 'door-open' || targetType === 'door-closed';
           const currentIsDoor = currentType === 'door-open' || currentType === 'door-closed';
-          if (!isDoorToggle || !currentIsDoor) return { refused: 'Players may only toggle doors' };
+          if (!isDoorToggle || !currentIsDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
           updated = { ...existing[idx], type: targetType };
         } else {
           // The DM may move a wall, within the map's bounds. One stored outside
@@ -188,10 +193,17 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
+        // The wall as this socket may see it, with no operation id, so its page
+        // takes it in place of what it drew; a locked door stays closed to
+        // anyone but the DM.
+        if (outcome.current) socket.emit('wall:updated', { mapId, segment: wallSentTo(role, outcome.current) });
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:updated', { mapId, segment: outcome.done, ...echoedOpId(data) });
+      const stored = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'wall:updated', (role) => ({
+        event: 'wall:updated', data: { mapId, segment: wallSentTo(role, stored), ...echoedOpId(data) },
+      }));
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:update failed', { err: error });
@@ -235,7 +247,9 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'walls:replaced', { mapId, segments: next, ...echoedOpId(data) });
+      await emitToMapReadersAs(io, campaignId, mapId, 'walls:replaced', (role) => ({
+        event: 'walls:replaced', data: { mapId, segments: wallsSentTo(role, next), ...echoedOpId(data) },
+      }));
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
@@ -262,8 +276,8 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
-      const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-      socket.emit('walls:replaced', { mapId, segments });
+      // A locked door goes to anyone but the DM as a closed one.
+      socket.emit('walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) });
     } catch (error) {
       logger.error('walls:request failed', { err: error });
     }

@@ -845,7 +845,7 @@ Click **End combat** (the circled ✕ beside **Next Turn**) and confirm with **E
 
 Fog of war covers your map and lets you reveal it a piece at a time, so players discover a dungeon room by room instead of seeing the whole floor plan at once. You control it by hand — nothing is revealed until you say so.
 
-**Under fog, players see nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it.
+**Under fog, players' screens show nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it. Fog hides things on the screen; it does not keep them from the player's browser. [What players' browsers receive](#what-players-browsers-receive) below says exactly what does reach it.
 
 > 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
 
@@ -886,6 +886,24 @@ A token standing in an unrevealed area is hidden from players entirely, even if 
 **Entirely** means the details panel too. Pointing at an unrevealed square tells a player nothing — no name, no picture, no hit points, no conditions. A player's own token is the one exception, and is always shown to them wherever it stands.
 
 Worth knowing what fog does *not* do: it hides tokens from view, but the map still sends them to the player's browser, because revealing a square has to be instant. A token you want kept secret from a determined player should be set **hidden** rather than merely left in the dark — a hidden token is never sent at all.
+
+### What players' browsers receive
+
+Fog is drawn over the map in each player's browser, so everything under it has already arrived there. A determined player can read what their browser was sent, with the browser's developer tools, even where their screen shows nothing. For the map you are showing, each player and spectator receives:
+
+| What | What they receive |
+|---|---|
+| **The map picture** | The whole picture, fogged areas included. |
+| **Tokens** | Every token on the plane they are on that is not **hidden**, fog or no fog. With dynamic lighting on, only the tokens their own characters can see. Never your token notes or stat blocks, a creature's hit points only when its HP bar is on, and an obscured token only as a shape. |
+| **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away; a player who tries it is told it is locked. |
+| **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on. |
+| **Fog** | Only which squares are revealed to them. |
+
+A map you have prepared but not switched to sends them nothing at all. So, for anything that must stay secret:
+
+- a creature or object: set its token **hidden**;
+- a whole area: keep it on a separate map until the party gets there, since a map's picture arrives whole;
+- a lit room: switch its lights off until it matters.
 
 ---
 
