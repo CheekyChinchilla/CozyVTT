@@ -84,7 +84,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **16 built-in color themes** — warm, cool, dark, neutral, and vibrant palettes
 - **Per-user themes** — each account picks its own theme and font from the profile page; preferences persist across logout/login
 - **Custom theme** — pick primary, accent, background, and text colors to create a unique look
-- **8 font families** — open-source Google Fonts including medieval, elegant, modern, handwritten, and scholarly options
+- **8 font families** — open-source typefaces including medieval, elegant, modern, handwritten, and scholarly options, served by your own instance: visitors' browsers never fetch them from another site, and they work on a network with no internet access
 - **Live preview** — theme and font changes preview instantly before saving
 - **Default theme** — admin selects the theme shown on the login page and applied to brand-new users
 - **Custom branding** — the instance logo, mascot, and favicon can be replaced (swap the images in `frontend/public/` before building; an admin upload UI is [planned](docs/FUTURE_FEATURES.md))

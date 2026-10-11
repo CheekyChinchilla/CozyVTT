@@ -13,6 +13,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Vitest hands a test an empty string for any stylesheet it imports,
+    // `?raw` included. The bundled font stylesheet is read as text by
+    // src/__tests__/fonts.test.ts, which checks every file it names.
+    css: { include: [/src\/assets\/fonts\/fonts\.css/] },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

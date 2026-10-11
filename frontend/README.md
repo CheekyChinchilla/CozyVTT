@@ -26,6 +26,7 @@ npx tsc --noEmit         # type-check
 - [`src/utils/errors.ts`](src/utils/errors.ts) — `errorSummary` for console lines. Never log a caught API error whole: it carries the request body, a password or a code among them, and error lines are kept in production builds
 - [`src/types/index.ts`](src/types/index.ts) — TypeScript types mirroring the backend
 - [`src/themes.ts`](src/themes.ts) — built-in color themes and font families
+- [`src/assets/fonts/`](src/assets/fonts/) — the typefaces those font families name, served by the instance itself, with one `@font-face` per family and character range in `fonts.css` and the licences in `OFL.txt`. A new font family needs its files and rules here; `src/__tests__/fonts.test.ts` fails until each family a font choice names first has them
 - [`src/components/character-sheets/`](src/components/character-sheets/) — per-game-system character sheet implementations
 - [`src/components/common/Markdown.tsx`](src/components/common/Markdown.tsx) — the one Markdown renderer (notes, documents). Import it; do not use `react-markdown` directly, so raw HTML stays off and the plugin set stays the same everywhere
 - [`security-headers.conf`](security-headers.conf) — the Content-Security-Policy and other headers the production image serves the app page with. Included by [`nginx.conf`](nginx.conf) in every location, because nginx does not inherit them. Anything loading from a new host has to be allowed here, and the dev server has no policy, so a violation only shows up in a production build

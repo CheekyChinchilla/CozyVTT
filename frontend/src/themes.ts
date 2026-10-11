@@ -49,7 +49,6 @@ export interface FontOption {
   heading: string;
   body: string;
   mono: string;
-  googleImport: string;
 }
 
 // ────────────────────────────────────────────────────
@@ -437,7 +436,8 @@ export const PRESET_THEMES: ThemeDefinition[] = [
 ];
 
 // ────────────────────────────────────────────────────
-// Font Options (all open-source / Google Fonts)
+// Font Options (open-source, served by this instance:
+// src/assets/fonts/fonts.css declares every family named first below)
 // ────────────────────────────────────────────────────
 
 export const FONT_OPTIONS: FontOption[] = [
@@ -447,7 +447,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Quicksand', 'Comfortaa', sans-serif",
     body: "'Inter', 'Open Sans', sans-serif",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap',
   },
   {
     id: 'medieval',
@@ -455,7 +454,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'MedievalSharp', cursive",
     body: "'Merriweather', serif",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=MedievalSharp&family=Merriweather:wght@300;400;700&family=JetBrains+Mono:wght@400;500&display=swap',
   },
   {
     id: 'elegant',
@@ -463,7 +461,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Playfair Display', serif",
     body: "'Lora', serif",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap',
   },
   {
     id: 'modern',
@@ -471,7 +468,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Poppins', sans-serif",
     body: "'Nunito', sans-serif",
     mono: "'Fira Code', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Nunito:wght@300;400;600&family=Fira+Code:wght@400;500&display=swap',
   },
   {
     id: 'handwritten',
@@ -479,7 +475,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Caveat', cursive",
     body: "'Patrick Hand', cursive",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Patrick+Hand&family=JetBrains+Mono:wght@400;500&display=swap',
   },
   {
     id: 'clean',
@@ -487,7 +482,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Raleway', sans-serif",
     body: "'Source Sans 3', sans-serif",
     mono: "'Source Code Pro', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;600&family=Source+Code+Pro:wght@400;500&display=swap',
   },
   {
     id: 'scholarly',
@@ -495,7 +489,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'Cinzel', serif",
     body: "'EB Garamond', serif",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap',
   },
   {
     id: 'gothic',
@@ -503,7 +496,6 @@ export const FONT_OPTIONS: FontOption[] = [
     heading: "'UnifrakturMaguntia', cursive",
     body: "'Crimson Text', serif",
     mono: "'JetBrains Mono', monospace",
-    googleImport: 'https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Crimson+Text:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap',
   },
 ];
 
@@ -605,20 +597,16 @@ export function applyThemeColors(colors: ThemeColors): void {
   }
 }
 
+/**
+ * Every family is declared in the bundled font stylesheet, and the browser
+ * downloads a family's files only once the page uses it, so switching fonts
+ * is only a matter of the three variables.
+ */
 export function applyFont(font: FontOption): void {
   const root = document.documentElement;
   root.style.setProperty('--font-heading', font.heading);
   root.style.setProperty('--font-body', font.body);
   root.style.setProperty('--font-mono', font.mono);
-
-  const existingLink = document.getElementById('theme-font-link');
-  if (existingLink) existingLink.remove();
-
-  const link = document.createElement('link');
-  link.id = 'theme-font-link';
-  link.rel = 'stylesheet';
-  link.href = font.googleImport;
-  document.head.appendChild(link);
 }
 
 export function buildCustomThemeColors(customColors: {

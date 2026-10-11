@@ -55,10 +55,10 @@ describe('the app page policy', () => {
   });
 
   it('allows what the app genuinely loads', () => {
-    // Themes swap a Google Fonts stylesheet at runtime; the font files follow
-    // from gstatic. Without both, every theme loses its typeface.
-    expect(directive('style-src')).toContain('https://fonts.googleapis.com');
-    expect(directive('font-src')).toContain('https://fonts.gstatic.com');
+    // The typefaces are part of the app and come from this instance; small
+    // ones are inlined into the stylesheet as data: addresses by the build.
+    expect(directive('font-src').split(/\s+/).sort()).toEqual(["'self'", 'data:']);
+    expect(directive('style-src')).not.toMatch(/https?:/);
     // Canvas exports and the avatar crop preview.
     expect(directive('img-src')).toContain('data:');
     expect(directive('img-src')).toContain('blob:');

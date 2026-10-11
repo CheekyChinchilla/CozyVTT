@@ -673,9 +673,12 @@ when a self-hoster removes the bundled proxy and points their own at that
 container. A Content-Security-Policy on a JSON response governs nothing, which
 is why the page had no protection until the second file existed.
 
-The page's policy is the wider of the two: themes load a stylesheet from
-`fonts.googleapis.com` and its fonts from `fonts.gstatic.com`, which the API
-never does. It is strict where it counts, `script-src 'self'` with no
+The page's policy is the wider of the two, since it also covers the page's
+stylesheets, fonts and the document reader's frame. Nothing it allows is on
+another site: the typefaces are part of the app (`frontend/src/assets/fonts`,
+one `@font-face` per family and character range, so a browser fetches only
+what the page uses), and the build inlines the smallest as `data:` addresses.
+It is strict where it counts, `script-src 'self'` with no
 `unsafe-inline`, which the built page allows because Vite emits no inline
 script. It deliberately omits `upgrade-insecure-requests`, since CozyVTT is
 commonly served over plain HTTP on a home network and that directive would
