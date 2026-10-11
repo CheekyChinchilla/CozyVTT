@@ -786,7 +786,11 @@ class ApiClient {
    * answer can be large; the Download button is the only caller.
    */
   async getLeftCampaignNotes(campaignId: string): Promise<{ notes: PersonalNote[] }> {
-    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes`);
+    // No limit of the page's own: the shared 30 seconds count the download,
+    // and at the cap the answer is 20 to 40 MB before compression. The server
+    // writes it out as it reads, and the proxy drops a connection that goes
+    // silent for 60 seconds.
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes`, { timeout: 0 });
     return response.data;
   }
 

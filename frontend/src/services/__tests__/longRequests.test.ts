@@ -87,3 +87,17 @@ describe('the asset upload', () => {
     expect(post.mock.calls[0][2]?.timeout).toBe(0);
   });
 });
+
+describe('the download of a left campaign\'s notes', () => {
+  // A campaign holds up to 200 notes of 100,000 characters, so the one answer
+  // is 20 to 40 MB before compression. The shared 30 seconds count the
+  // download itself and ended it on a slow connection every time. The server
+  // writes the answer out as it reads, and the proxy drops a connection that
+  // goes silent for 60 seconds, so those are the limits.
+  it('has no limit of the page\'s own, which would count the download', async () => {
+    const get = vi.spyOn(client, 'get').mockResolvedValue({ data: { notes: [] } });
+    await api.getLeftCampaignNotes('campaign-1');
+    expect(get.mock.calls[0][0]).toBe('/api/campaigns/left/campaign-1/notes');
+    expect(get.mock.calls[0][1]?.timeout).toBe(0);
+  });
+});
