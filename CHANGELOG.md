@@ -90,6 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The password strength meter no longer calls a password Strong that the page then refuses.** On sign-up and in the setup wizard, the meter scored length and each kind of character on its own, so a 16-character password with no special character showed a green **Strong**, then was refused, and the bar never filled past 70%. A password that fails any rule now shows **Weak** or **Fair**; one that meets them all shows **Good**, or **Strong** from 16 characters, which fills the bar.
 
+- **When a sign-in reaches its 30-day limit, the sign-in page says so.** The app took you to the sign-in page with no reason given. It now shows "Your sign-in has reached its 30-day limit. Sign in again." there, once.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.

@@ -11,6 +11,7 @@ import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { readSignInNotice, forgetSignInNotice } from '@/services/signInNotice';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
@@ -23,6 +24,13 @@ export default function LoginPage() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Why this page was opened, when the server said, such as a sign-in that
+  // reached its 30-day limit. Shown once: read as the page first renders,
+  // and forgotten after.
+  const [notice] = useState<string | null>(readSignInNotice);
+  useEffect(() => {
+    forgetSignInNotice();
+  }, []);
   const [fieldErrors, setFieldErrors] = useState<{
     email?: string;
     password?: string;
@@ -119,6 +127,13 @@ export default function LoginPage() {
             Sign in to your CozyVTT account
           </p>
         </div>
+
+        {/* Why the sign-in page was opened */}
+        {notice && !error && (
+          <div role="status" className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
+            <p className="text-sm text-brand-ink">{notice}</p>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (

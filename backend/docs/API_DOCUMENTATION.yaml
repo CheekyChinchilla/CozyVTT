@@ -643,8 +643,9 @@ paths:
                     it takes effect when `/api/auth/mfa/verify-login` succeeds.
                     Must be a boolean when sent. Either way the session ends
                     `REMEMBER_ME_MAX_AGE` after it was made, however active, with
-                    401 "Your sign-in has reached its 30-day limit. Sign in
-                    again.", and each sign-in removes the account's oldest
+                    401 `{ error: 'Unauthorized', code: 'SIGN_IN_EXPIRED',
+                    message: 'Your sign-in has reached its 30-day limit. Sign in
+                    again.' }`, and each sign-in removes the account's oldest
                     sessions beyond 20.
             example:
               email: dm@example.com

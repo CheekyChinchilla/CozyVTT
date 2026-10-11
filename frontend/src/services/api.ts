@@ -1,5 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { handleUnauthorized } from '@/services/unsavedWork';
+import { loadPage } from '@/services/pageLoad';
+import { rememberSignInNotice } from '@/services/signInNotice';
 import type {
   User,
   AuthResponse,
@@ -134,9 +136,16 @@ class ApiClient {
           //
           // A call that checks the current password or a code answers 401 for
           // a wrong one; that request is marked, and its form says so.
+          //
+          // A sign-in that has reached its 30-day limit says so, and the
+          // sign-in page shows that sentence.
           if (status === 401 && !error.config?.skipAuthRedirect) {
             handleUnauthorized(window.location.pathname, () => {
-              window.location.href = '/auth/login';
+              const reply = data as { code?: unknown; message?: unknown } | undefined;
+              if (reply?.code === 'SIGN_IN_EXPIRED' && typeof reply.message === 'string') {
+                rememberSignInNotice(reply.message);
+              }
+              loadPage('/auth/login');
             });
           }
 
@@ -147,13 +156,13 @@ class ApiClient {
             const code = (data as { code?: string })?.code;
             if (code === 'PASSWORD_CHANGE_REQUIRED') {
               if (window.location.pathname !== '/auth/change-password') {
-                window.location.href = '/auth/change-password';
+                loadPage('/auth/change-password');
               }
             } else if (code === 'MFA_ENROLMENT_REQUIRED') {
               // An administrator past the two-factor deadline may do nothing
               // else until it is set up.
               if (window.location.pathname !== '/auth/mfa-setup') {
-                window.location.href = '/auth/mfa-setup';
+                loadPage('/auth/mfa-setup');
               }
             } else {
               console.error('Permission denied:', data.message);
