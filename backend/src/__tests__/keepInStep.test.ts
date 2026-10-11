@@ -76,6 +76,11 @@
  * token two squares or taller in different places, so the server answered
  * for a point the player's token was not at. The file is kept identical in
  * both packages.
+ *
+ * The env files kept out of the images. Both Dockerfiles copy the whole of
+ * their folder (`COPY . .`), so only the folder's .dockerignore stands between
+ * a stray .env.local or .env.production and the image's layers. The two files
+ * are copies of one rule.
  */
 
 import crypto from 'crypto';
@@ -426,5 +431,51 @@ describe('the kinds of thing that can use an asset', () => {
     const m = /enum: \[(map, token, character[^\]]*)\]/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
     if (!m) throw new Error('the API document no longer lists the asset use kinds; update this test with the file');
     expect(m[1].split(',').map((k) => k.trim()).sort()).toEqual(server);
+  });
+});
+
+describe('the .dockerignore of each image', () => {
+  /** A .dockerignore pattern as a regular expression: * stays inside a name, **\/ crosses folders. */
+  function patternToRegExp(pattern: string): RegExp {
+    let out = '';
+    for (let i = 0; i < pattern.length; i++) {
+      if (pattern.startsWith('**/', i)) {
+        out += '(?:.*/)?';
+        i += 2;
+      } else if (pattern[i] === '*') out += '[^/]*';
+      else if (pattern[i] === '?') out += '[^/]';
+      else out += pattern[i].replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    }
+    return new RegExp(`^${out}/?$`);
+  }
+
+  /** Whether Docker leaves `file` out of the build context: the last pattern that matches decides, and ! puts a file back. */
+  function ignored(rel: string, file: string): boolean {
+    let result = false;
+    for (const line of read(rel).split(/\r?\n/)) {
+      const pattern = line.trim();
+      if (!pattern || pattern.startsWith('#')) continue;
+      const negated = pattern.startsWith('!');
+      if (patternToRegExp(negated ? pattern.slice(1) : pattern).test(file)) result = !negated;
+    }
+    return result;
+  }
+
+  // Each image's Dockerfile copies its whole folder. The lists named four env
+  // files, so a .env.staging or .env.test, or whatever a tool writes next,
+  // went into the build context and the image.
+  it.each(['backend/.dockerignore', 'frontend/.dockerignore'])('%s keeps every env file out of the build context except .env.example', (rel) => {
+    const strays = ['.env', '.env.local', '.env.development', '.env.production', '.env.staging', '.env.test', '.env.production.local'];
+    expect(strays.filter((file) => !ignored(rel, file))).toEqual([]);
+    expect(ignored(rel, '.env.example')).toBe(false);
+  });
+
+  it('is the same rule in the two images', () => {
+    const envLines = (rel: string) =>
+      read(rel)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('.env') || line.startsWith('!.env'));
+    expect(envLines('frontend/.dockerignore')).toEqual(envLines('backend/.dockerignore'));
   });
 });

@@ -320,6 +320,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The Nginx example for an install without Docker now gives the app page its Content-Security-Policy and Permissions-Policy.** The Docker setup sends them from the frontend container, which a manual install does not have, and the guide's example did not send them, so such an instance had no Content-Security-Policy at all. The example's live-connection block also now passes on the visitor's address and whether they used HTTPS, as its other blocks did. The guide now also says that the dashboard's backups need `pg_dump` on the machine the backend runs on.
 
+- **Any environment file in the `backend` or `frontend` folder is now kept out of the Docker images.** The build left out `.env` and a few other named files, so a file with another name, such as `.env.staging`, went into the image with the code. Every file whose name starts with `.env.` is now left out, except `.env.example`. A standard install is unchanged: its settings are in the `.env` beside `docker-compose.yml`, which these builds never copied.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
