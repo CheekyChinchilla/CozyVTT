@@ -31,6 +31,7 @@ import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
 import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
+import { escapeLikePattern } from '../utils/likePattern';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -733,7 +734,8 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       where: {
         id: { notIn: excludedIds },
         isApproved: true,
-        displayName: { contains: search, mode: 'insensitive' },
+        // Escaped, or a search of `%%` would match every name.
+        displayName: { contains: escapeLikePattern(search), mode: 'insensitive' },
       },
       orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
       take: INVITE_SEARCH_MAX_RESULTS + 1,

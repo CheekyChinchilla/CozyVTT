@@ -207,6 +207,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     // Name search
     if (search) {
+      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
       where.name = { contains: search as string, mode: 'insensitive' };
     }
 

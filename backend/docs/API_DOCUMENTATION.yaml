@@ -2455,7 +2455,8 @@ paths:
         A `search` shorter than 2 characters (after trimming), or none,
         answers 200 with no users: the route never lists the whole
         directory. At most 20 users are returned, ordered by display name;
-        `hasMore` says there were more matches.
+        `hasMore` says there were more matches. A `%`, `_` or `\` in the
+        search matches only itself.
       operationId: listInvitableUsers
       security:
         - cookieAuth: []

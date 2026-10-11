@@ -50,6 +50,9 @@ let memberId: string;
 let invitedId: string;
 let pendingApprovalId: string;
 let aliceId: string;
+let percentId: string;
+let underscoreId: string;
+let backslashId: string;
 
 beforeAll(async () => {
   const owner = await createTestUser({ email: `invitable-dm-${stamp}@test.invalid`, displayName: `DM ${tag}` });
@@ -62,6 +65,9 @@ beforeAll(async () => {
   invitedId = await account(`Invited ${tag}`);
   pendingApprovalId = await account(`Waiting ${tag}`, false);
   for (let i = 0; i < 25; i += 1) await account(`Crowd ${tag} ${String(i).padStart(2, '0')}`);
+  percentId = await account(`Rate 50%% ${tag}`);
+  underscoreId = await account(`Under__score ${tag}`);
+  backslashId = await account(`Back\\slash ${tag}`);
 
   await prisma.campaignMembership.create({ data: { campaignId, userId: memberId, role: 'PLAYER', characterIds: [] } });
   await prisma.campaignInvitation.create({ data: { campaignId, userId: invitedId, status: 'PENDING' } });
@@ -116,6 +122,19 @@ describe('GET /api/campaigns/:campaignId/invitable-users', () => {
     expect(ids).not.toContain(pendingApprovalId);
     expect(ids).not.toContain(dmId);
     expect(ids).toContain(aliceId);
+  });
+
+  it('matches %, _ and \\ as themselves, so a search of symbols cannot list everyone', async () => {
+    const containing = async (term: string): Promise<string[]> => {
+      const res = await search(term);
+      expect(res.status).toBe(200);
+      const found = res.body.users as Array<{ id: string; displayName: string }>;
+      for (const user of found) expect(user.displayName.toLowerCase()).toContain(term.toLowerCase());
+      return found.map((u) => u.id);
+    };
+    expect(await containing('%%')).toContain(percentId);
+    expect(await containing('__')).toContain(underscoreId);
+    expect(await containing('k\\s')).toContain(backslashId);
   });
 
   it('never sends an email address', async () => {
