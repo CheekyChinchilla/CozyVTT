@@ -329,7 +329,37 @@ export function filterTokensByLighting(
   globalIllumination = false
 ): Token[] {
   if (!lightingEnabled) return tokens;
+  const sight = playerSightOnLitMap(tokens, playerUserId, walls, mapWidth, mapHeight, gridSize, lights, globalIllumination);
+  return tokens.filter((t) => sight.seesToken(t));
+}
 
+/** What a player's tokens make out on a lit map, built once and asked many times. */
+export interface PlayerSight {
+  /**
+   * Whether a token is seen where it stands: always one the player controls,
+   * otherwise when the visibility rule says its centre is seen. A drag asks
+   * it of the carried token at each frame's position.
+   */
+  seesToken(token: Pick<Token, 'position' | 'size' | 'controlledBy'>): boolean;
+}
+
+/**
+ * The sight `filterTokensByLighting` applies, kept so it can be asked again:
+ * the line-of-sight polygons are the expensive part, and a drag tests sixty
+ * positions a second against the same ones. `tokens` are the tokens the
+ * player may have at all (`filterTokensByRole`); the ones they control are
+ * the viewers.
+ */
+export function playerSightOnLitMap(
+  tokens: Token[],
+  playerUserId: string | undefined,
+  walls: unknown,
+  mapWidth: number,
+  mapHeight: number,
+  gridSize: number,
+  lights: unknown,
+  globalIllumination: boolean
+): PlayerSight {
   const wallSegs = (Array.isArray(walls) ? walls : []) as unknown as WallSegment[];
   const lightSources = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
   const enabledLights = lightSources.filter((l) => l.enabled);
@@ -342,7 +372,7 @@ export function filterTokensByLighting(
   // Lights deliberately do not help here — a light is not a viewer, and a
   // token-less player receiving every visible token was a position leak.
   if (myTokens.length === 0) {
-    return [];
+    return { seesToken: () => false };
   }
 
   const startMs = Date.now();
@@ -401,12 +431,11 @@ export function filterTokensByLighting(
   // always: a light reveals what you could already have seen; it never sees on
   // your behalf. Then Global Illumination, darkvision, the token's own square,
   // and light.
-  return tokens.filter((t) => {
-    // Always include the player's own tokens
-    if (t.controlledBy === playerUserId) return true;
-
-    return isSeen(tokenCentre(t, gridSize, mapHeight), viewers, lits, globalIllumination, inside);
-  });
+  return {
+    seesToken: (t) =>
+      t.controlledBy === playerUserId
+      || isSeen(tokenCentre(t, gridSize, mapHeight), viewers, lits, globalIllumination, inside),
+  };
 }
 
 /**

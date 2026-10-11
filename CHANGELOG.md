@@ -181,6 +181,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A failed two-factor code or setup no longer leaves the code or the new password in the browser's console.** When the code step or the setup wizard was refused, the page wrote the whole failed request to the browser's developer console, including the code, or the administrator's email, password and setup token, where anyone with the console open or a screenshot of it could read them. Only the status and the server's message are written now.
 
+- **On a lit map, a token carried out of a player's sight leaves their map at that point.** While a token was dragged, every step of the drag went to each player who could see it where it was picked up, so their browser was told where it went even after it passed out of their sight, up to the square where it was put down. Each player is now sent the token only while it is somewhere they can see: it leaves their map where it goes out of sight, and appears where it comes into sight.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

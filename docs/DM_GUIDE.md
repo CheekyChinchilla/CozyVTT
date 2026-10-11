@@ -1074,6 +1074,8 @@ Dynamic lighting is off on a new map, unless the map was imported from a Univers
 
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
+The same goes for a token while you carry it. A player sees it move only while it is somewhere they can see: carry it out of their sight and it leaves their map at that point, carry it into their sight and it appears there.
+
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
 
 ### Global Illumination
