@@ -211,8 +211,9 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
       echo "    It brings an older backup up to this version and ends the game connections"
       echo "    still open, which keep the identity and role they had before the restore"
       echo "    until the backend restarts."
-      echo "  - Verify the app:           curl http://localhost:PORT/health"
-      echo "    where PORT is HTTP_PORT from your .env (80 if it is not set)."
+      echo "  - Verify the app:           curl http://localhost/health"
+      echo "    If HTTP_PORT is set in .env, put its port number after localhost:"
+      echo "    curl http://localhost:8080/health for HTTP_PORT=8080 or HTTP_PORT=127.0.0.1:8080."
       exit 0
     else
       report_failure
