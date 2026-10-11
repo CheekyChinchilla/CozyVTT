@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **On a fresh install only, the setup wizard asks for a setup token.** The backend prints it in its log when it starts and setup is not yet complete: `docker compose logs backend | grep "setup token"`. Paste it into the **Setup token** box on the wizard's account step. An optional `SETUP_TOKEN` setting in `.env` lets you choose the value yourself. An instance that has already run the wizard notices nothing.
 
+- **The browser tab shows your instance's name, and Admin → Settings no longer has a Timezone box.** The name set in the setup wizard or in **Admin Panel → Settings** is now the tab's title on every page and appears in the emails the instance sends; if you never changed it, it is still CozyVTT. The Timezone setting is gone because nothing used it.
+
 ### Added
 
 - **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
