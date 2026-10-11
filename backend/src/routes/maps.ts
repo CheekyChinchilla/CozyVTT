@@ -34,7 +34,7 @@ import { oneAtATime } from '../utils/oneAtATime';
 import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../utils/serialQueue';
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
-import sharp from 'sharp';
+import { openPicture, NotAPictureError } from '../utils/sharpInput';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
@@ -51,6 +51,11 @@ import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAM
  */
 const UVTT_GEOMETRY_ALLOWANCE_BYTES = 8 * 1024 * 1024;
 const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_GEOMETRY_ALLOWANCE_BYTES;
+
+/** What the UVTT export answers for a map whose picture is not one the image library may read. */
+const UVTT_EXPORT_NOT_A_PICTURE_MESSAGE =
+  "This map's picture is not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a Universal VTT file. " +
+  'Choose a map picture for it in Edit Map, then export it again.';
 
 /** What a map picture inside a UVTT may be. A PDF cannot be drawn as a map. */
 const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
@@ -758,14 +763,16 @@ router.get(
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
       }
 
-      // Get image dimensions for pixels_per_grid calculation
-      // TODO(maps): these bytes reach sharp unidentified, and a map stored
-      // before its picture had to be a map picture may name a file that is
-      // not one, such as a typed document holding SVG text, which sharp then
-      // parses with librsvg. Identify the bytes as PNG, JPEG, WebP or GIF
-      // before sharp.
-      const meta = await sharp(imageBuffer).metadata();
-      const imageWidthPx = meta.width;
+      // Get image dimensions for pixels_per_grid calculation. A map stored
+      // before its picture had to be a map picture can name any file, so the
+      // bytes are identified first, and only a picture is read.
+      let imageWidthPx: number | undefined;
+      try {
+        imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+      } catch (error) {
+        if (!(error instanceof NotAPictureError)) throw error;
+        return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+      }
 
       const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
       const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];

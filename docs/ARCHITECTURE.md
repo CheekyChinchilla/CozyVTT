@@ -759,7 +759,7 @@ start.
 1. **Multer** receives the multipart upload and streams to a temp file
 2. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
 3. **Size limit check** — configurable per asset type via environment variables
-4. **Sharp** generates a WebP thumbnail (for maps and tokens)
+4. **Sharp** makes a thumbnail in the picture's own format (for maps and tokens), through `openPicture` (see [Decoding pictures](#decoding-pictures))
 5. File is moved to its final location; the `Asset` record is created in the database
 
 Editing a text or Markdown document never writes over the file. The new text
@@ -830,7 +830,7 @@ both whole-file and range responses.
 
 ### Serving Documents
 
-The server never parses a document; the defence is in how it is served. `GET /api/assets/documents/:id` chooses the `Content-Type` from the validated extension, never from the stored `mimeType` the uploader supplied, and sends Markdown and text as `text/plain` so a browser never renders a document as HTML. The response carries `X-Content-Type-Options: nosniff` and a `default-src 'none'; sandbox` Content-Security-Policy. The reader renders Markdown with `react-markdown` (raw HTML disabled, `javascript:` and `data:` links stripped, images from any origin but this instance replaced by their alt text so a shared document cannot make readers' browsers call out to another host) and shows PDFs in an `<iframe sandbox="allow-scripts">`, which gives the frame a null origin: it cannot reach the session cookie or call the API. "Open in a new tab" shows a PDF in the browser's own viewer at the app's origin, with the isolation that viewer provides and nothing more; that is the same trust every site with a PDF link extends, and the reason the in-app reader uses a sandboxed frame instead. A read the caller is not allowed answers 404, not 403, so the response cannot confirm the document exists. Text documents are served `Cache-Control: private, no-cache` with an ETag taken from the file, because they can be edited in place; the immutable caching the other asset routes use would hand a reader the old text.
+The server never parses a document, and the image library is never handed one (see [Decoding pictures](#decoding-pictures)); the defence is in how it is served. `GET /api/assets/documents/:id` chooses the `Content-Type` from the validated extension, never from the stored `mimeType` the uploader supplied, and sends Markdown and text as `text/plain` so a browser never renders a document as HTML. The response carries `X-Content-Type-Options: nosniff` and a `default-src 'none'; sandbox` Content-Security-Policy. The reader renders Markdown with `react-markdown` (raw HTML disabled, `javascript:` and `data:` links stripped, images from any origin but this instance replaced by their alt text so a shared document cannot make readers' browsers call out to another host) and shows PDFs in an `<iframe sandbox="allow-scripts">`, which gives the frame a null origin: it cannot reach the session cookie or call the API. "Open in a new tab" shows a PDF in the browser's own viewer at the app's origin, with the isolation that viewer provides and nothing more; that is the same trust every site with a PDF link extends, and the reason the in-app reader uses a sandboxed frame instead. A read the caller is not allowed answers 404, not 403, so the response cannot confirm the document exists. Text documents are served `Cache-Control: private, no-cache` with an ETag taken from the file, because they can be edited in place; the immutable caching the other asset routes use would hand a reader the old text.
 
 ### Serving Images
 
@@ -859,6 +859,20 @@ so an address cannot say what it points at. The address already stored on the
 map passes unchanged, so a map stored before the rule keeps its picture. A
 campaign import drops a map's picture or spirit layer that names an asset it
 did not import as MAP, and says so in the import's warnings.
+
+### Decoding pictures
+
+sharp, over libvips, is what the backend decodes pictures with: a thumbnail
+at upload and at Universal VTT import, and the picture's width for the
+Universal VTT export. libvips has readers for far more than a
+CozyVTT picture can be, SVG through librsvg, TIFF and HEIF among them, and
+picks one by the bytes it is handed. Every call therefore goes through
+`openPicture` in `backend/src/utils/sharpInput.ts`, which identifies the
+bytes with `file-type` and refuses anything but PNG, JPEG, WebP or GIF before
+sharp sees it; a test fails if any other module imports sharp. The check sits
+where the bytes are read because a stored row can name any file, a map stored
+before the rule above included. The export answers such a map 422; a
+thumbnail that cannot be made is left out, as before.
 
 ### Asset Scoping
 

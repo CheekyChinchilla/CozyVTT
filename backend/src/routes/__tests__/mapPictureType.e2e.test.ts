@@ -1,5 +1,7 @@
 /**
- * A map's picture and its spirit layer picture are map pictures.
+ * A map's picture and its spirit layer picture are map pictures, and the
+ * server hands a picture's bytes to the image library only once it knows
+ * they are a picture.
  *
  * The reference check asked only whether the DM could read the asset an
  * address named, never what kind of asset it was, and an address names an
@@ -11,8 +13,9 @@
  * reads far more formats than a map picture can be, SVG among them.
  *
  * A map's picture and spirit layer must now be assets uploaded as map
- * pictures. A map stored before with another asset as its picture keeps it,
- * and an edit that sends that picture back unchanged still saves.
+ * pictures, and the export reads a picture only when its bytes are PNG,
+ * JPEG, WebP or GIF. A map stored before with another asset as its picture
+ * keeps it, and an edit that sends that picture back unchanged still saves.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -35,6 +38,9 @@ const app = createTestApp();
 
 const NOT_A_MAP_IMAGE = 'The map image must be a map picture from the asset library.';
 const NOT_A_MAP_SPIRIT_LAYER = 'The spirit layer image must be a map picture from the asset library.';
+const EXPORT_NOT_A_PICTURE =
+  "This map's picture is not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a Universal VTT file. " +
+  'Choose a map picture for it in Edit Map, then export it again.';
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="red"/></svg>';
 
@@ -42,6 +48,7 @@ let dmId: string;
 let campaignId: string;
 let dm: ReturnType<typeof request.agent>;
 let png: Buffer;
+let gif: Buffer;
 let mapPictureId: string;
 let otherMapPictureId: string;
 const assetIds: string[] = [];
@@ -71,6 +78,7 @@ beforeAll(async () => {
   campaignId = (await createTestCampaign(dmId, { name: 'Map picture types' })).id;
   await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
   png = await sharp({ create: { width: 40, height: 30, channels: 3, background: '#336699' } }).png().toBuffer();
+  gif = await sharp({ create: { width: 40, height: 30, channels: 3, background: '#336699' } }).gif().toBuffer();
   mapPictureId = await makeAsset('MAP', png, 'png');
   otherMapPictureId = await makeAsset('MAP', png, 'png');
   dm = request.agent(app);
@@ -167,5 +175,47 @@ describe('a map stored before with another kind of asset as its picture', () => 
     expect(res.status).toBe(200);
     expect(res.body.map.imageUrl).toBe(`/api/assets/tokens/${tokenId}`);
     expect(res.body.map.spiritLayerUrl).toBe(`/api/assets/documents/${documentId}`);
+  });
+});
+
+describe('a Universal VTT export', () => {
+  const exportOf = (mapId: string) =>
+    dm.get(at(`/maps/${mapId}/export-uvtt`)).buffer(true).parse((r, done) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => done(null, Buffer.concat(chunks)));
+    });
+
+  it('refuses a picture whose bytes are SVG, and never embeds them', async () => {
+    const documentId = await makeAsset('DOCUMENT', Buffer.from(SVG), 'txt');
+    const map = await storedMap('Drawn', `/api/assets/maps/${documentId}`);
+    const res = await exportOf(map.id);
+    const body = (res.body as Buffer).toString('utf8');
+    expect(body).not.toContain(Buffer.from(SVG).toString('base64').slice(0, 40));
+    expect(res.status).toBe(422);
+    expect(JSON.parse(body).message).toBe(EXPORT_NOT_A_PICTURE);
+  });
+
+  it('refuses a picture whose bytes are plain text', async () => {
+    const documentId = await makeAsset('DOCUMENT', Buffer.from('Session notes, nothing more.'), 'txt');
+    const map = await storedMap('Notes', `/api/assets/documents/${documentId}`);
+    const res = await exportOf(map.id);
+    expect(res.status).toBe(422);
+    expect(JSON.parse((res.body as Buffer).toString('utf8')).message).toBe(EXPORT_NOT_A_PICTURE);
+  });
+
+  it.each([
+    ['a PNG map picture', () => makeAsset('MAP', png, 'png')],
+    ['a GIF token picture an older release stored as a map picture', () => makeAsset('TOKEN', gif, 'gif')],
+  ])('embeds %s', async (_label, make) => {
+    const id = await make();
+    const bytes = fs.readFileSync((await prisma.asset.findUniqueOrThrow({ where: { id } })).filePath);
+    const map = await storedMap('Exported', `/api/assets/maps/${id}`);
+    const res = await exportOf(map.id);
+    expect(res.status).toBe(200);
+    const uvtt = JSON.parse((res.body as Buffer).toString('utf8'));
+    expect(uvtt.image).toBe(bytes.toString('base64'));
+    // 40 pixels across a map 10 squares wide.
+    expect(uvtt.resolution.pixels_per_grid).toBe(4);
   });
 });

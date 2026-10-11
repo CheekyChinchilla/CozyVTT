@@ -1095,6 +1095,8 @@ from can export that section on its own, or export the map as a PNG instead and
 
 Open the **Map Library** and click the **download** button (**Export as .uvtt file**) on the map's card, between the pencil and the bin. Your browser saves the map as a `.uvtt` file named after it. A script or a tool built on the unsupported HTTP surface can fetch the same file (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only). Importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
+A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the server refuses the download. Choose a map picture for it in **Edit Map**, then export it again.
+
 ### Undo / Redo
 
 Wall edits support full undo/redo:

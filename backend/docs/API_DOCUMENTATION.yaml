@@ -10633,8 +10633,13 @@ paths:
 
         Answers 422 when the picture cannot be put in the file: the map's
         image address names no asset, an asset that no longer exists, or one
-        the caller may not read (`Map image asset not found`), or the file is
-        missing from disk (`Map image file not found on disk`).
+        the caller may not read (`Map image asset not found`), the file is
+        missing from disk (`Map image file not found on disk`), or its
+        content is not a PNG, JPEG, WebP or GIF image (`This map's picture is
+        not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a
+        Universal VTT file. Choose a map picture for it in Edit Map, then
+        export it again.`). The picture's bytes are identified before the
+        image library reads them.
       operationId: exportUvttMap
       security:
         - cookieAuth: []
