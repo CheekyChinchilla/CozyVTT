@@ -1,5 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { PlatformRole } from '@prisma/client';
+import { sessionIsSignedIn, notSignedInMessage } from '../services/signedIn';
+
+/**
+ * The three guards share one idea of "signed in" (services/signedIn): a user
+ * id with no two-factor step left to finish. requireAdmin and requireRole used
+ * to check the user id alone, so they rested on always being paired with
+ * requireAuth; each now refuses a pending session by itself.
+ */
+
+/** 401 unless the session is signed in; true when the guard may go on. */
+function signedInOr401(req: Request, res: Response): boolean {
+  if (sessionIsSignedIn(req.session)) return true;
+  res.status(401).json({ error: 'Unauthorized', message: notSignedInMessage(req.session) });
+  return false;
+}
 
 /**
  * Require user to be authenticated.
@@ -7,20 +22,7 @@ import { PlatformRole } from '@prisma/client';
  * Returns 401 if not logged in.
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (req.session.mfaPending) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'MFA verification required. Please complete MFA login.',
-    });
-  }
-
-  if (!req.session.userId) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'You must be logged in to access this resource',
-    });
-  }
-
+  if (!signedInOr401(req, res)) return;
   return next();
 }
 
@@ -29,12 +31,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
  * Returns 401 if not logged in, 403 if not admin.
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'You must be logged in to access this resource',
-    });
-  }
+  if (!signedInOr401(req, res)) return;
 
   if (req.session.platformRole !== 'ADMIN') {
     return res.status(403).json({
@@ -51,12 +48,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
  */
 export function requireRole(role: PlatformRole) {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'You must be logged in to access this resource',
-      });
-    }
+    if (!signedInOr401(req, res)) return;
 
     if (req.session.platformRole !== role) {
       return res.status(403).json({

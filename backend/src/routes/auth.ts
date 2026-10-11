@@ -37,6 +37,15 @@ import {
 /** 400 for a body `parseBody` refused. */
 const invalid = (res: Response, message: string) => res.status(400).json({ error: 'Validation Error', message });
 
+/**
+ * How long the code step may follow the password step. A pending sign-in sat
+ * on the ordinary rolling cookie, so any request carrying it kept it alive and
+ * a password proved once could be turned into a sign-in whenever a code came
+ * to hand. Five minutes is many times what typing a code takes; after it the
+ * person starts again with their password.
+ */
+export const MFA_PENDING_MAX_AGE_MS = 5 * 60 * 1000;
+
 // ============================================
 // MFA Helpers
 // ============================================
@@ -276,6 +285,7 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       req.session.mfaPending = true;
       req.session.mfaPendingUserId = user.id;
       req.session.mfaRememberMe = !!rememberMe;
+      req.session.mfaPendingAt = Date.now();
 
       return res.status(200).json({
         mfaRequired: true,
@@ -804,6 +814,21 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       });
     }
 
+    // Too long since the password step: the pending sign-in ends here, and
+    // the person proves the password again. A pending session from before
+    // this check existed has no time and counts as expired.
+    const since = req.session.mfaPendingAt;
+    if (since === undefined || Date.now() - since > MFA_PENDING_MAX_AGE_MS) {
+      req.session.mfaPending = undefined;
+      req.session.mfaPendingUserId = undefined;
+      req.session.mfaRememberMe = undefined;
+      req.session.mfaPendingAt = undefined;
+      return res.status(401).json({
+        error: 'Sign-In Expired',
+        message: 'Your sign-in timed out at the code step. Sign in again with your password.',
+      });
+    }
+
     const body = parseBody(MfaVerifyLoginBodySchema, req.body);
     if (!body.ok) return invalid(res, body.message);
     const { token, backupCode } = body.data;
@@ -875,6 +900,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
     req.session.mfaPending = undefined;
     req.session.mfaPendingUserId = undefined;
     req.session.mfaRememberMe = undefined;
+    req.session.mfaPendingAt = undefined;
 
     if (rememberMe && req.session.cookie) {
       req.session.cookie.maxAge = rememberMeMaxAge;

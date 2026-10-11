@@ -569,7 +569,7 @@ paths:
       summary: Login
       description: |
         Authenticate user and create a session on a fresh session id. Rate limited: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints. Only a 401 counts; a 400, a 403, a correct sign-in and a 429 do not.
-        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
+        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login` within 5 minutes; the session is not signed in until then, and after 5 minutes the pending sign-in ends and the password step starts again. A pending sign-in also ends when the account's password is changed or reset, or its sessions are ended for any other reason.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
       security: []
@@ -1149,10 +1149,12 @@ paths:
                 message: Either a TOTP token or backup code is required
         '401':
           description: >-
-            No MFA sign-in is pending in this session (`Unauthorized`), the
-            account no longer has MFA on (`Unauthorized`, `Invalid MFA state`),
-            or the token or backup code is invalid or already used
-            (`Invalid Code`).
+            No MFA sign-in is pending in this session (`Unauthorized`); more
+            than 5 minutes have passed since the password step, which ends the
+            pending sign-in (`Sign-In Expired`, "Your sign-in timed out at the
+            code step. Sign in again with your password."); the account no
+            longer has MFA on (`Unauthorized`, `Invalid MFA state`); or the
+            token or backup code is invalid or already used (`Invalid Code`).
           content:
             application/json:
               schema:

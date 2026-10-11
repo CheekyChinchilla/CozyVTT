@@ -15,6 +15,10 @@ declare module 'express-session' {
     mfaPending?: boolean;
     mfaPendingUserId?: string;
     mfaRememberMe?: boolean;
+    // When the password step passed (ms since the epoch). The code step must
+    // follow within MFA_PENDING_MAX_AGE_MS (routes/auth.ts); a pending session
+    // from before this field existed counts as expired.
+    mfaPendingAt?: number;
   }
 }
 

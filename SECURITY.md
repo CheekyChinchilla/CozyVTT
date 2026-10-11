@@ -22,4 +22,6 @@ Decisions a self-hoster or a reviewer may want to know about. The deployment gui
 
 - **First administrator.** Until the setup wizard has run, the instance refuses everything except the wizard, and the wizard asks for a one-time setup token that the backend prints in its log at start (or `SETUP_TOKEN` from `.env`). A stranger who reaches a fresh instance first therefore cannot make themselves its administrator. Finish setup before you share the address all the same.
 
+- **Two-factor sign-ins.** A sign-in that has passed the password step but not the code is not signed in anywhere: the HTTP guards, the admin guards and the live-table handshake all read one definition. It expires 5 minutes after the password step, and it ends whenever the account's password is changed or reset or its sessions are ended for another reason.
+
 Known issues and deliberately deferred work are tracked in [docs/FUTURE_FEATURES.md](docs/FUTURE_FEATURES.md).

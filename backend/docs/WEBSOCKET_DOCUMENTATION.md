@@ -149,6 +149,14 @@ A handshake a browser marks as made from another site (`Sec-Fetch-Site` of
 `CORS_ORIGIN`, as the HTTP API refuses such a request. A program that is not
 a browser sends no such header and connects as above.
 
+The handshake accepts exactly the sessions the HTTP guards accept: a sign-in
+with no two-factor step left to finish, and no password change due. A session
+that has passed the password step but not the code is refused with
+`error { message: 'Unauthorized' }` and disconnected, as is one whose account
+must set a new password. The same check runs again on every `authenticate`,
+so a sign-in that ends later (signing out, expiry, a password change elsewhere)
+cannot join a campaign.
+
 ---
 
 ## Authentication

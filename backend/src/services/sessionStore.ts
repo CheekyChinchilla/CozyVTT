@@ -11,12 +11,17 @@ import logger from '../utils/logger';
  */
 
 /**
- * End every login session belonging to a user.
+ * End every login session belonging to a user, the sign-ins waiting at the
+ * two-factor step included.
  *
  * Used when an admin resets someone's password, when their role or permissions
  * change, and when their account is deleted: the guards read the role from the
  * session and nothing re-reads it, so without this the person keeps whatever
  * they had until they happen to sign out.
+ *
+ * A session that has passed the password step but not the code holds only
+ * `mfaPendingUserId`. It goes too: the password it proved is the one being
+ * replaced, so it must not be turned into a sign-in afterwards.
  *
  * `exceptSessionId` keeps one session alive, which is what a self-service
  * password change wants: the other devices are signed out and the person who
@@ -32,10 +37,12 @@ export async function destroyUserLoginSessions(
     const removed = exceptSessionId
       ? await prisma.$executeRaw`
           DELETE FROM session
-          WHERE sess->>'userId' = ${userId} AND sid <> ${exceptSessionId}
+          WHERE (sess->>'userId' = ${userId} OR sess->>'mfaPendingUserId' = ${userId})
+            AND sid <> ${exceptSessionId}
         `
       : await prisma.$executeRaw`
-          DELETE FROM session WHERE sess->>'userId' = ${userId}
+          DELETE FROM session
+          WHERE sess->>'userId' = ${userId} OR sess->>'mfaPendingUserId' = ${userId}
         `;
     return removed;
   } catch (error) {
