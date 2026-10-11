@@ -570,6 +570,8 @@ This is certbot's "webroot" method. It leaves nginx running, which matters at re
    mkdir -p nginx/conf.d/acme
    ```
 
+   `apt-get` prints a long list of what it installs and ends without an error; `mkdir` prints nothing. `ls nginx/conf.d` should now list `acme`.
+
 2. Create `nginx/conf.d/acme.conf`, putting your domain in place of `your-domain.com`. It answers Let's Encrypt's check on port 80 and carries on serving CozyVTT over HTTP as before:
 
    ```nginx
