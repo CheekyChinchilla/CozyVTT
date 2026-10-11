@@ -58,6 +58,35 @@ describe("the Let's Encrypt steps in the deployment guide", () => {
   });
 });
 
+describe("the Let's Encrypt comments in nginx/nginx.conf", () => {
+  const conf = read('nginx/nginx.conf');
+  const compose = read('docker-compose.yml');
+  /** The folder the guide's certbot command writes the check file into. */
+  const folder = /certbot certonly --webroot -w "\$PWD\/(nginx\/conf\.d\/[\w-]+)"/.exec(read('docs/DEPLOYMENT.md'))?.[1];
+
+  // The header said the guide describes certbot --standalone. The guide's
+  // steps use --webroot, because --standalone needs port 80 to itself.
+  it('do not say the guide describes the standalone method', () => {
+    expect(conf).not.toMatch(/certbot --standalone/);
+  });
+
+  it('name the folder the guide has certbot write into, which the files in nginx/conf.d/ serve', () => {
+    expect(folder).toBeDefined();
+    expect(conf).toContain(folder);
+  });
+
+  // The location below answers from /var/www/certbot, which the compose file
+  // does not mount, so it finds no file; the guide's own port-80 server
+  // answers the check for the domain.
+  it('say the port-80 check location is unused, since nothing mounts its folder', () => {
+    const location = /((?:^[ \t]*#.*\n)+)[ \t]*location \/\.well-known\/acme-challenge\/ \{\s*root ([^;]+);/m.exec(conf);
+    if (!location) throw new Error('nginx.conf no longer has a port-80 location for the Let’s Encrypt check');
+    expect(compose).not.toContain(`:${location[2].trim()}`);
+    expect(location[1]).toMatch(/\bunused\b/i);
+    expect(location[1]).toContain(folder);
+  });
+});
+
 describe('the manual-install nginx example in the deployment guide', () => {
   const example = section('docs/DEPLOYMENT.md', '### 5. Serve with Nginx', '## Environment Configuration');
 
