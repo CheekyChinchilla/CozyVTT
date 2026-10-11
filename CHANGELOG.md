@@ -199,6 +199,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Pictures in a document or note load only from the asset library, and links open in a new tab.** A picture in a Markdown document or note could point at any address on your CozyVTT, and every reader's browser asked for it as that reader, so a document could make its readers' browsers ask the server for things in their name each time it was read. Only a map, token or avatar picture's own address is shown now; any other picture shows its description, as one from another website already did. Links in documents and notes opened in the same tab, replacing the campaign page during play; they now open in a new tab. See [Documents](docs/USER_GUIDE.md#safety) for how to show a picture.
 
+- **A map picture uploaded from Create Map goes to your personal library.** **Upload New** in the **Create Map** window put the map picture, and the spirit layer picture, in the campaign's library, where everyone in the campaign can browse it, so a map you were preparing could be seen in the **Asset Library** before you switched to it. Both now go to your **Personal** library, which players see only through the map once you switch to it. Pictures already in the campaign's library stay there; to hide one, move it to **Personal** in the Asset Library.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

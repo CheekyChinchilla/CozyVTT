@@ -319,7 +319,11 @@ export default function CreateMapModal({
                 </div>
               )}
 
-              {/* Map Image */}
+              {/* Map Image. Upload New puts the picture in the DM's personal
+                  library, not the campaign's: every member can browse the
+                  campaign's library, and a prepared map's picture is
+                  the DM's until they switch to it, which a personal picture
+                  is (players read it only through the map on screen). */}
               <AssetPicker
                 label="Map Image"
                 required
@@ -328,10 +332,9 @@ export default function CreateMapModal({
                 emptyMessage="No map assets found. Upload a map image to get started."
                 selectedAssetId={mapAssetId}
                 onSelect={handleMapAssetSelect}
-                campaignId={campaignId}
               />
 
-              {/* Spirit Layer */}
+              {/* Spirit Layer, uploaded the same way */}
               <AssetPicker
                 label="Spirit Layer Image (optional)"
                 type={AssetType.MAP}
@@ -339,7 +342,6 @@ export default function CreateMapModal({
                 emptyMessage="No map assets found. Upload a map image to get started."
                 selectedAssetId={spiritAssetId}
                 onSelect={handleSpiritAssetSelect}
-                campaignId={campaignId}
               />
 
               {/* Map Name */}
