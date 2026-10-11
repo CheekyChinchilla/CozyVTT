@@ -948,7 +948,14 @@ server {
     location / {
         root  /path/to/cozyvtt/frontend/dist;
         index index.html;
-        try_files $uri $uri/ /index.html;
+        # A folder in the build, such as assets/, is also the address of an app
+        # page (/assets is the Asset Library), so a path that names a folder
+        # serves the app too; without this line, reloading that page gives
+        # "403 Forbidden".
+        if (-d $request_filename) {
+            rewrite ^ /index.html last;
+        }
+        try_files $uri /index.html;
 
         # The app page's own security headers: the same ones the Docker setup
         # sends from frontend/security-headers.conf. HSTS is repeated here

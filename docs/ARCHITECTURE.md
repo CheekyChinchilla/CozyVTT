@@ -815,6 +815,13 @@ and `try_files` routes `/` through the `= /index.html` block, so the headers
 are included per location rather than declared once at server level. A test
 asserts that per block.
 
+The app page's fallback is `try_files $uri /index.html` with no `$uri/`, and a
+request that names a folder of the build is rewritten to `/index.html` first.
+The build keeps its scripts and styles in a folder called `assets/`, which is
+also the address of the Asset Library page: `$uri/` matched that folder and
+nginx refused to list it, so reloading `/assets` gave `403 Forbidden`.
+`frontend/src/__tests__/spaFallback.test.ts` walks the config for such paths.
+
 ### Serving Audio
 
 Ambient audio is not relayed through the server. The DM's choice is broadcast as
