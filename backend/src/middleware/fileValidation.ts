@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { fileTypeFromFile } from 'file-type';
 import fs from 'fs/promises';
 import path from 'path';
-import { AssetType, isAllowedMimeType, deleteFile, getFileSizeLimit, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { AssetType, isAllowedMimeType, deleteFile, getFileSizeLimit, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
 import { UploadRequest } from './upload';
 import logger from '../utils/logger';
 import { isPlainTextFile } from '../utils/textFile';
@@ -95,7 +95,8 @@ export async function validateFileType(
     }
 
     // Get MIME type from file content (magic bytes)
-    const fileType = await fileTypeFromFile(filePath);
+    const detected = await fileTypeFromFile(filePath);
+    const fileType = detected ? storedFileType(detected) : undefined;
 
     // Special case: some audio files and plain text may not be detected by file-type
     // Verify by extension for these cases

@@ -126,18 +126,23 @@ export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(UPLOAD_LIMITS)
 export const ALLOWED_MIME_TYPES = {
   MAP: ['image/png', 'image/jpeg', 'image/webp'],
   TOKEN: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-  // TODO(assets): file-type reports an Ogg file carrying Opus sound as
-  // 'audio/ogg; codecs=opus' (extension .opus), which is not on this list, so
-  // an .ogg track recorded in Opus is refused as an upload and left out of a
-  // campaign import, though the upload window offers .ogg and browsers play
-  // Opus. Accept it as an Ogg track, stored with a name and content type the
-  // audio route serves, or say in the upload window that only Ogg Vorbis is
-  // taken.
   AUDIO: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
   AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
   DOCUMENT: ['application/pdf', 'text/plain', 'text/markdown'],
   OTHER: [],
 } as const satisfies Record<AssetType, readonly string[]>;
+
+/**
+ * The type a file is stored and served as, from what file-type found in its
+ * bytes. file-type names an Ogg file by the codec inside it: Vorbis as
+ * `audio/ogg` with the extension ogg, but Opus as `audio/ogg; codecs=opus`
+ * with opus, FLAC as oga and Speex as spx. Each is an Ogg track, which the
+ * audio route serves from an .ogg file, so each is stored as one.
+ */
+export function storedFileType(detected: { mime: string; ext: string }): { mime: string; ext: string } {
+  if (detected.mime === 'audio/ogg' || detected.mime.startsWith('audio/ogg;')) return { mime: 'audio/ogg', ext: 'ogg' };
+  return { mime: detected.mime, ext: detected.ext };
+}
 
 /**
  * Allowed file extensions for each asset type
