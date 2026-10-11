@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
-import type { Prisma, User } from '@prisma/client';
+import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
 import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
@@ -373,6 +373,10 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
+    // Another account took the new address after the check above.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Email already in use' });
+    }
     logger.error('Error updating user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',

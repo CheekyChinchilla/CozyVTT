@@ -15,6 +15,7 @@ import multer from 'multer';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
 import { Router, type RequestHandler } from 'express';
+import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { errorCode, errorMessage, errorStderr } from '../utils/errors';
@@ -24,6 +25,7 @@ import {
 } from '../services/systemSettings';
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
+import { parseDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
@@ -91,6 +93,35 @@ router.use(requireAuth, requireAdmin);
  * email over a weekend.
  */
 const INVITE_EXPIRY_DAYS = 7;
+
+/**
+ * The address and display name a new account is made with, as Create User
+ * and Invite User take them. The address is trimmed and lowercased, and one
+ * holding `<` or `>` is refused rather than stripped, so the address checked
+ * for a duplicate is the one stored and the one the email goes to. The name
+ * is checked as sign-up checks it (parseDisplayName); with none given, it is
+ * the part of the address before the @.
+ */
+function newAccountFields(
+  email: unknown,
+  displayName: unknown
+): { ok: true; email: string; displayName: string } | { ok: false; message: string } {
+  if (!email || typeof email !== 'string') return { ok: false, message: 'Email is required' };
+  const address = email.trim().toLowerCase();
+  if (!validateEmail(address) || /[<>]/.test(address)) return { ok: false, message: 'Invalid email address' };
+
+  const given = displayName !== undefined && displayName !== null && !(typeof displayName === 'string' && displayName.trim() === '');
+  const name = parseDisplayName(given ? displayName : address.split('@')[0].slice(0, MAX_DISPLAY_NAME_LENGTH));
+  if (!name.ok) return { ok: false, message: name.message };
+  return { ok: true, email: address, displayName: name.name };
+}
+
+/** A write refused because another account already has the address. */
+function isAddressTaken(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+const ADDRESS_TAKEN = { error: 'Conflict', message: 'Email is already in use' } as const;
 
 function generateTemporaryPassword(): string {
   const bytes = crypto.randomBytes(16);
@@ -252,41 +283,37 @@ router.put('/settings', async (req, res) => {
 // ============================================
 router.post('/users', async (req, res) => {
   try {
-    const { email, displayName, platformRole } = req.body;
-
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Bad Request', message: 'Email is required' });
-    }
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address' });
+    const { platformRole } = req.body;
+    const fields = newAccountFields(req.body.email, req.body.displayName);
+    if (!fields.ok) {
+      return res.status(400).json({ error: 'Bad Request', message: fields.message });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const existing = await prisma.user.findUnique({ where: { email: fields.email } });
     if (existing) {
-      return res.status(409).json({ error: 'Conflict', message: 'Email is already in use' });
+      return res.status(409).json(ADDRESS_TAKEN);
     }
 
     const role = platformRole === 'ADMIN' ? 'ADMIN' : 'USER';
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
-    // TODO(accounts): this name skips parseDisplayName, the check sign-up and
-    // profile edits use, and is stored sanitised and cut to 50 characters, so a
-    // name typed as "<>" is saved empty. Validate it with parseDisplayName and
-    // answer 400 when it fails, here and in the invite route below.
-    const rawName = typeof displayName === 'string' && displayName.trim()
-      ? displayName
-      : email.split('@')[0];
-
-    const user = await prisma.user.create({
-      data: {
-        email: sanitizeInput(email).toLowerCase(),
-        displayName: sanitizeInput(rawName).slice(0, 50),
-        passwordHash,
-        platformRole: role,
-        mustChangePassword: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: fields.email,
+          displayName: fields.displayName,
+          passwordHash,
+          platformRole: role,
+          mustChangePassword: true,
+        },
+      });
+    } catch (error) {
+      // Another request made an account with this address since the check.
+      if (isAddressTaken(error)) return res.status(409).json(ADDRESS_TAKEN);
+      throw error;
+    }
 
     await writeAdminLog(
       req.session.userId!,
@@ -340,24 +367,18 @@ router.post('/users/invite', async (req, res) => {
       });
     }
 
-    const { email, displayName, platformRole } = req.body;
-
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Bad Request', message: 'Email is required' });
-    }
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address' });
+    const { platformRole } = req.body;
+    const fields = newAccountFields(req.body.email, req.body.displayName);
+    if (!fields.ok) {
+      return res.status(400).json({ error: 'Bad Request', message: fields.message });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const existing = await prisma.user.findUnique({ where: { email: fields.email } });
     if (existing) {
-      return res.status(409).json({ error: 'Conflict', message: 'Email is already in use' });
+      return res.status(409).json(ADDRESS_TAKEN);
     }
 
     const role = platformRole === 'ADMIN' ? 'ADMIN' : 'USER';
-    const rawName = typeof displayName === 'string' && displayName.trim()
-      ? displayName
-      : email.split('@')[0];
 
     // The account is created with an unusable password: a hash of random bytes
     // that are discarded immediately. Nobody — including this admin — holds a
@@ -365,17 +386,24 @@ router.post('/users/invite', async (req, res) => {
     const unusablePassword = crypto.randomBytes(32).toString('hex');
     const passwordHash = await hashPassword(unusablePassword);
 
-    const user = await prisma.user.create({
-      data: {
-        email: sanitizeInput(email).toLowerCase(),
-        displayName: sanitizeInput(rawName).slice(0, 50),
-        passwordHash,
-        platformRole: role,
-        // The invitation link sets the password, so there is nothing to force
-        // a change of afterwards
-        mustChangePassword: false,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: fields.email,
+          displayName: fields.displayName,
+          passwordHash,
+          platformRole: role,
+          // The invitation link sets the password, so there is nothing to force
+          // a change of afterwards
+          mustChangePassword: false,
+        },
+      });
+    } catch (error) {
+      // Another request made an account with this address since the check.
+      if (isAddressTaken(error)) return res.status(409).json(ADDRESS_TAKEN);
+      throw error;
+    }
 
     // Stored as its hash; the token itself goes only into the email.
     const token = await issueResetToken(user.id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -441,6 +469,16 @@ router.post('/users/:id/resend-invite', async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+
+    // An invitation is for an account nobody has signed in to yet, as the
+    // Admin Panel offers it. Anyone else has a password of their own, and a
+    // reset link (POST /api/users/:id/send-reset-link) lasts an hour, not 7 days.
+    if (user.lastLoginAt !== null) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.',
+      });
     }
 
     // Invalidate outstanding links so only the newest one works

@@ -1198,6 +1198,11 @@ List all users on the platform.
 Create a new user account with a generated temporary password. The account is flagged
 `mustChangePassword`, so that password can only be used to set a real one.
 
+The address is trimmed and lowercased, and one holding `<` or `>` is refused with `400`.
+`displayName` is checked as sign-up checks it (1 to 50 characters once angle brackets and
+surrounding spaces are removed, or `400` with the reason) and defaults to the part of the
+address before `@`. An address already in use answers `409`.
+
 **Request:**
 ```json
 {
@@ -1226,6 +1231,8 @@ Invite a user by email. The account is created **without a usable password**; th
 
 Requires SMTP — returns `503` when it isn't configured. If the email fails to send, the account is rolled back rather than left unreachable (`502`).
 
+The address and display name are checked as for `POST /api/admin/users`: an address holding `<` or `>`, or a display name sign-up would refuse, answers `400`, and an address already in use answers `409`.
+
 **Request:**
 ```json
 {
@@ -1250,7 +1257,7 @@ The recipient opens `/accept-invite?token=…` and sets a password, which is com
 
 ### `POST /api/admin/users/:id/resend-invite` *(Admin only)*
 
-Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (`503` otherwise).
+Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (`503` otherwise). Only for an account nobody has signed in to yet; one that has signed in is refused with `409`, and `POST /api/users/:id/send-reset-link` sends it a reset link instead.
 
 **Response:**
 ```json

@@ -8904,11 +8904,13 @@ paths:
         sent, so the admin never holds a working credential unnecessarily. To create an
         account without any password at all, use `/api/admin/users/invite`.
 
-        `displayName` defaults to the part of the email before `@` when omitted, is
-        trimmed and stripped of `<` and `>`, then cut to 50 characters rather than
-        rejected for being too long. `platformRole` is not validated against the enum:
-        any value other than exactly `"ADMIN"`, including an unrecognised string,
-        becomes `USER`.
+        `email` is trimmed and lowercased; an address holding `<` or `>` is refused
+        with 400, so the address checked for a duplicate is the one stored and
+        emailed. `displayName` is checked as sign-up checks it: text, stripped of `<`
+        and `>` and trimmed, then 1 to 50 characters, or 400 with the reason. Omitted,
+        null or blank, it defaults to the part of the email before `@` (its first 50
+        characters). `platformRole` is not validated against the enum: any value
+        other than exactly `"ADMIN"`, including an unrecognised string, becomes `USER`.
       operationId: adminCreateUser
       security:
         - cookieAuth: []
@@ -8952,13 +8954,22 @@ paths:
                       One-time temporary password. Present ONLY when emailSent is false —
                       share it securely; it is not retrievable afterwards.
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `Email is required`, `Invalid email address` (including one with `<`
+            or `>`), or the display name's reason, such as `Display name is
+            required` or `Display name must be 50 characters or fewer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email already in use
+          description: >-
+            `Email is already in use`, including when another request created an
+            account with the address after the check (this answered 500 before 1.5.2).
 
   /api/admin/users/invite:
     post:
@@ -8977,9 +8988,10 @@ paths:
         `POST /api/auth/reset-password` — invitations and password resets share the same
         token machinery.
 
-        `displayName` and `platformRole` are handled exactly as in `POST /api/admin/users`:
-        the name is cut to 50 characters rather than rejected, and any `platformRole`
-        other than exactly `"ADMIN"` becomes `USER`.
+        `email`, `displayName` and `platformRole` are handled exactly as in
+        `POST /api/admin/users`: an address with `<` or `>` and a display name sign-up
+        would refuse answer 400, and any `platformRole` other than exactly `"ADMIN"`
+        becomes `USER`.
       operationId: adminInviteUser
       security:
         - cookieAuth: []
@@ -9018,13 +9030,19 @@ paths:
                     type: integer
                     example: 7
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: As for `POST /api/admin/users`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email already in use
+          description: >-
+            `Email is already in use`, including when another request created an
+            account with the address after the check.
         '502':
           description: The invitation email could not be delivered; no account was created
         '503':
@@ -9035,10 +9053,12 @@ paths:
       tags: [Admin]
       summary: Resend an invitation
       description: |
-        Issues a fresh invitation link and invalidates any outstanding one. Useful when the
-        original expired or never arrived. Requires SMTP. Works for any existing account,
-        not only one that was originally created through `/api/admin/users/invite` — it
-        sets a usable password-reset token regardless of how the account was created.
+        Issues a fresh invitation link, valid for 7 days, and invalidates any outstanding
+        one. Useful when the original expired or never arrived. Requires SMTP. Only for an
+        account nobody has signed in to yet (`lastLoginAt` is null), whether it was
+        invited or created with a temporary password; an account that has signed in is
+        refused with 409, and `POST /api/users/{id}/send-reset-link` (a 1-hour link) is
+        the way to help it.
       operationId: adminResendInvite
       security:
         - cookieAuth: []
@@ -9067,6 +9087,15 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The account has already signed in, so there is no invitation to resend.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.
         '500':
           description: The invitation email could not be sent
         '503':
