@@ -251,6 +251,8 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
+If a change cannot be saved, for example while the connection is down, a message says why and the control goes back to what it was. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
+
 *Screenshot pending — NPC quick editor popup with image picker.*
 
 #### Changing a Token's Image
