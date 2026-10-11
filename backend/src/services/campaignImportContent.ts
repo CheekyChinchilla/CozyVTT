@@ -29,6 +29,7 @@ import {
 import { MAP_LIMITS, GEOMETRY_MARGIN_SQUARES, wallWithinMap, lightWithinMap } from '../validators/maps';
 import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
 import { clampTokenPosition } from '../utils/mapTokens';
+import { cutText } from '../utils/cutText';
 
 // ── The report ──────────────────────────────────────────────────────────────
 
@@ -73,17 +74,6 @@ export class ImportReport {
 }
 
 // ── Cutting values down to their limits ─────────────────────────────────────
-
-/**
- * The first `max` characters of `text`, never splitting a character that
- * takes two: half of one cannot be stored.
- */
-export function cutText(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const last = cut.charCodeAt(cut.length - 1);
-  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
-}
 
 /** A name to show in the report: trimmed, and cut short when it is long. */
 export function label(value: unknown, fallback: string): string {

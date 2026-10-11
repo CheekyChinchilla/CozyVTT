@@ -55,7 +55,7 @@ From here you can update:
 To invite a player to your campaign:
 
 1. Click **Invite Player** in the left sidebar, or open **Campaign Settings**
-2. Pick them from the list — it shows everyone on your instance who isn't already a member or already invited. They must have an account first
+2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. If their whole name is one letter, type that letter: a single letter finds only people whose name is exactly that letter. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
 4. The player sees a **Pending Invitation** on their dashboard
 
@@ -63,7 +63,9 @@ To invite a player to your campaign:
 
 **About that checkbox.** It's off by default, and the invitation reaches them either way — the dashboard is what they actually accept from. Tick it only when a nudge in their inbox is genuinely useful; if they're sitting across the table from you, it isn't. If your instance has no mail server set up the option is greyed out and says so, rather than pretending to send something.
 
-The list deliberately shows display names and not email addresses, so running a campaign doesn't become a way to collect everyone's address.
+The email's subject line names your instance and nothing else ("You have a new campaign invitation on CozyVTT"); the campaign's name, its description and your display name are in the body. Each DM can have the instance send 20 invitation emails an hour. Past that, **Send Invitation** with the box ticked says so and how many minutes to wait; untick the box and the invitation goes through at once, without the email.
+
+The search deliberately shows display names and profile pictures and not email addresses, and lists nobody until you type, so running a campaign doesn't become a way to collect everyone's address or a list of everyone on the instance. Two people can have the same display name; their profile pictures are how to tell them apart, and if neither has one, ask your player which they are.
 
 When a player accepts, they'll choose which of their characters to bring. Once they've joined, their character appears in the **Campaign Roster** on the left sidebar.
 
@@ -355,10 +357,12 @@ Click **Creature Library** (the skull icon) in the campaign header's DM toolbar 
 
 ### SRD Creature Seeding
 
-The first time you open the Creature Library in a new campaign, it may be empty. Click **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures.
+The first time you open the Creature Library on a new server, it may be empty. An administrator clicks **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures, for every campaign on the server.
+
+**Only an administrator can run the import**, because every campaign on the server shares what it adds. If you are a DM but not an administrator, the empty library says so instead of offering the button: ask your server's administrator to open the Creature Library in any campaign of theirs and import the creatures, and they appear in yours too.
 
 - The button names the system it imports because it always seeds **D&D 5e** content, whatever system your campaign uses. It stays available in any campaign — a D&D stat block is a reasonable starting point for homebrew — but you'll be importing D&D monsters
-- Seeding takes a few seconds — a progress indicator shows while it runs
+- Seeding takes a few seconds — a progress indicator shows while it runs. If Open5e cannot be reached, or takes more than 15 seconds over a page, the import stops, says why, and adds nothing; try again later
 - SRD creatures are **global** (shared across all campaigns on the instance) and **read-only**
 - You can duplicate any SRD creature to create an editable custom version
 - Running it again is safe: existing creatures are not duplicated. If your library was seeded before CozyVTT 1.1.1, re-running it fills in each SRD creature's hit points; custom creatures are never modified
@@ -1059,7 +1063,14 @@ browsing the library can see it.
 
 **Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. A file holding more than a million points, doors, lights and settings in all, far more than any map uses even with its furniture walls left in the file, is refused straight away. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
 
-**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down. If another DM on the same server is importing a map at the same moment, yours waits until theirs has been read and then goes ahead; with very large files that can add a few seconds. While yours uploads, waits and runs, the **Import UVTT** button shows a spinning circle. Two limits keep one import from holding up everyone else's, and either way the answer comes within a minute of your file finishing its upload, in red at the top of the Map Library:
+
+| What happens | What the Map Library shows | What to do |
+|---|---|---|
+| Your import would have to wait more than 20 seconds for other DMs' imports | "Another map import is running on the server. Try again in a minute." | Import the file again a minute later. Nothing was saved. |
+| Your import takes longer than 30 seconds once it has started | "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." | Import the file again a minute later. If it happens every time, the server may be too busy or too slow for a picture that large: export it smaller from your mapping tool. |
+
+If you close the page or lose your connection while your import is waiting its turn, it is dropped and nothing is imported.
 
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own

@@ -110,11 +110,12 @@ describe('reading a sheet', () => {
     expect(asKeeper.body.character.data.notes).toBe(SECRET);
   });
 
-  it('leaves them out of the owner\'s character list', async () => {
+  it('leaves them out of the owner\'s character list, which carries no sheets', async () => {
     const id = await investigator();
     const list = await player.agent.get('/api/characters');
-    const mine = (list.body.characters as Array<{ id: string; data: Record<string, unknown> }>).find((c) => c.id === id);
-    expect(mine?.data).not.toHaveProperty('notes');
+    const mine = (list.body.characters as Array<{ id: string }>).find((c) => c.id === id);
+    expect(mine).toBeDefined();
+    expect(mine).not.toHaveProperty('data');
   });
 
   it('gives the Keeper an empty box on a sheet with no notes yet, so there is somewhere to write them', async () => {

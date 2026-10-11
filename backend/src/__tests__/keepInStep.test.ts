@@ -34,6 +34,15 @@
  * WebSocket guide, which is what a self-hoster or the author of a scripted
  * client reads to know what the server will take.
  *
+ * The limits on an upload's name, description and tags. The server refuses
+ * an upload over them and the upload dialog stops each box at them. The file
+ * is kept identical in both packages.
+ *
+ * The Invite Player search limits: the shortest search that matches part of
+ * a name and the most matches one search returns. The server applies them and
+ * the Invite Player dialog tells the DM what they are. The file is kept
+ * identical in both packages.
+ *
  * The character sheet limits. The server refuses a sheet over them and the
  * sheet editors stop each box at them; an editor allowing more is a sheet the
  * player fills in and cannot save. The file is kept identical in both packages.
@@ -271,6 +280,24 @@ describe('the map limits', () => {
 describe('the token centre', () => {
   it('is the same file in the browser and on the server', () => {
     expect(read('frontend/src/utils/tokenCentre.ts')).toBe(read('backend/src/utils/tokenCentre.ts'));
+  });
+});
+
+describe('the limits on an upload\'s name, description and tags', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/assetLimits.ts')).toBe(read('backend/src/validators/assetLimits.ts'));
+  });
+});
+
+describe('the Invite Player search limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/inviteSearchLimits.ts')).toBe(read('backend/src/validators/inviteSearchLimits.ts'));
+  });
+
+  it('are what the Invite Player dialog uses, with no number of its own', () => {
+    const dialog = read('frontend/src/components/campaign/InvitePlayerModal.tsx');
+    expect(dialog).toContain("from '@/constants/inviteSearchLimits'");
+    expect(dialog).not.toMatch(/first \d+ matches|Type \d+ or more/);
   });
 });
 

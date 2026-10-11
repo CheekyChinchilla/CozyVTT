@@ -154,6 +154,19 @@ describe('GET /api/admin/stats', () => {
     }
     expect(Array.isArray(res.body.assetBreakdown)).toBe(true);
   });
+
+  // No per-user quota is enforced; the dashboard warns once the disk is over 80% full.
+  it('says how full the disk holding the uploads is', async () => {
+    const res = await admin.get('/api/admin/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.uploadsDisk).toEqual({
+      totalBytes: expect.any(Number),
+      freeBytes: expect.any(Number),
+      usedPercent: expect.any(Number),
+      warning: expect.any(Boolean),
+    });
+    expect(res.body.uploadsDisk.warning).toBe(res.body.uploadsDisk.usedPercent > 80);
+  });
 });
 
 describe('GET /api/admin/activity', () => {

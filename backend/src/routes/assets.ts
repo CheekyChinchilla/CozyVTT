@@ -28,6 +28,7 @@ import {
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
 import { UpdateAssetScopeSchema } from '../validators/assetScope';
+import { removeAvatars, clearAvatarIfNoneLeft } from '../services/avatars';
 import path from 'path';
 import fs from 'fs';
 import { pipeline } from 'stream';
@@ -37,6 +38,12 @@ import { errorCode } from '../utils/errors';
 import { readEnumQuery } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
+import {
+  parseUploadMetadata,
+  shortenFileName,
+  MAX_ASSET_NAME_LENGTH,
+  MAX_ORIGINAL_NAME_LENGTH,
+} from '../validators/assets';
 
 const router = Router();
 
@@ -204,6 +211,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     // Name search
     if (search) {
+      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
       where.name = { contains: search as string, mode: 'insensitive' };
     }
 
@@ -392,6 +400,16 @@ router.post(
         });
       }
 
+      // Its name, description and tags, checked before anything is stored.
+      const metadata = parseUploadMetadata(req.body);
+      if (!metadata.ok) {
+        if (req.file?.path) {
+          await deleteFile(req.file.path);
+        }
+        return res.status(400).json({ error: 'Validation Error', message: metadata.message });
+      }
+      req.uploadMetadata = metadata.value;
+
       // Set asset metadata on request for file validation. The campaign comes
       // from the decision, not the request: a personal upload naming a campaign
       // would otherwise be filed in that campaign's library.
@@ -437,16 +455,12 @@ router.post(
           req.campaignId
         );
       }
-      const { name, description, tags } = req.body;
+      const { name, description, tags } = req.uploadMetadata ?? { name: '', description: null, tags: [] };
       const file = req.file!;
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
-
-      // Parse tags if provided
-      const tagArray = tags
-        ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean)
-        : [];
+      const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
       thumbnailPath =
@@ -464,17 +478,27 @@ router.post(
           uploadedById: userId,
           campaignId: req.campaignId || null,
           filename: file.filename,
-          originalName: file.originalname,
+          originalName,
           mimeType,
           fileSize: file.size,
           filePath: file.path.replace(/\\/g, '/'),
           thumbnailPath,
-          name: name || file.originalname,
-          description: description || null,
-          tags: tagArray,
+          name: name || shortenFileName(originalName, MAX_ASSET_NAME_LENGTH),
+          description,
+          tags,
         },
         select: ASSET_PUBLIC_SELECT,
       });
+
+      // A new avatar replaces the ones before it: the avatar route serves the
+      // newest, and an older one left behind would come back if this one were
+      // deleted. The upload has succeeded by now; a picture that cannot be
+      // removed is logged.
+      if (req.assetType === 'AVATAR') {
+        await removeAvatars(userId, asset.id).catch((err) =>
+          logger.error('New avatar saved, but the earlier ones were not all removed', { err, userId })
+        );
+      }
 
       return res.status(201).json({
         message: 'Asset uploaded successfully',
@@ -657,6 +681,14 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       } catch (thumbError) {
         logger.error('Error deleting thumbnail', { err: thumbError });
       }
+    }
+
+    // The last avatar picture gone leaves the profile with no avatar, so
+    // nothing shows a broken picture for it.
+    if (asset.type === 'AVATAR' && asset.uploadedById) {
+      await clearAvatarIfNoneLeft(asset.uploadedById).catch((err) =>
+        logger.error('Avatar picture deleted, but the profile still names it', { err, assetId: asset.id })
+      );
     }
 
     return res.json({
@@ -1219,6 +1251,16 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
 router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { userId } = req.params;
+
+    // A profile with no avatar has none to serve, whatever pictures are
+    // stored: clearing the avatar is what the person asked for.
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+    if (!owner?.avatarUrl) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User avatar not found',
+      });
+    }
 
     // Find the user's avatar asset
     const asset = await prisma.asset.findFirst({

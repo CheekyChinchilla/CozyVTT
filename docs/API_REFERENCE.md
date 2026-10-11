@@ -438,6 +438,8 @@ Invite a user to the campaign. **Requires DM role.**
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
+Each DM may have 20 invitation emails sent an hour. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
+
 ### `PUT /api/campaigns/:campaignId/dm`
 
 Hand the Dungeon Master role to another member of the campaign. **Requires the
@@ -642,13 +644,17 @@ The counts are of what was created. Everything is held to what the app's own rou
 
 ### `GET /api/characters`
 
-List all characters owned by the authenticated user.
+List all characters owned by the authenticated user, newest first, each with
+its `campaign` (`{ id, name }` or null) and without its sheet: `data` is left
+out. `GET /api/characters/:id` returns one character with its sheet.
 
 ---
 
 ### `POST /api/characters`
 
-Create a new character.
+Create a new character. One account may own at most 1,000 characters, copies
+included; past that this answers `400` with "You already have 1000 characters,
+the most one account can. Delete one you no longer need to make room."
 
 **Request:**
 ```json
@@ -767,9 +773,13 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 (`true` to return only your own), `limit` (max 100, default 50), `offset`.
 
 **Response:** `{ templates, total, limit, offset }`. Each template includes
-`createdBy: { id, displayName }` — never the author's email.
+`createdBy: { id, displayName }` — never the author's email. Each leaves out
+its sheet (`data`), which a page of 100 would otherwise carry 100 times.
 
 ### `GET /api/character-templates/:id`
+
+One template, with its sheet in `data`. Fetch this before copying a template
+into a character or editing it.
 
 ### `POST /api/character-templates`
 
@@ -793,6 +803,9 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
+- One account may author at most 500 templates. Past that the request answers
+  `400`: "You have already published 500 character templates, the most one
+  account can. Delete one you no longer need to make room."
 
 ### `PUT /api/character-templates/:id`
 
@@ -1049,12 +1062,15 @@ Upload a new asset. Uses `multipart/form-data`.
 **Form fields:**
 - `file` — the file (required)
 - `type` — `MAP`, `TOKEN`, `AUDIO`, `AVATAR` or `DOCUMENT` (required)
-- `scope` — `GLOBAL`, `USER`, or `CAMPAIGN` (required)
-- `name` — display name (required)
+- `scope` — `GLOBAL`, `USER`, or `CAMPAIGN` (optional; `USER` when left out)
+- `name` — display name, at most 200 characters (optional; the file's own name, cut to 200 characters, when left out)
+- `description` — at most 1,000 characters (optional)
 - `campaignId` — required when `scope` is `CAMPAIGN`
-- `tags` — comma-separated list of tags (optional)
+- `tags` — comma-separated list of tags, at most 50 of at most 50 characters each (optional)
 
-A request may carry at most 100 text fields. A field name is at most 100 bytes, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+A `name`, `description` or `tags` over its limit, or sent more than once, is refused with `400` and a message naming the field, and the file is not kept.
+
+A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
 
 ---
 
@@ -1216,9 +1232,10 @@ Create a new user account with a generated temporary password. The account is fl
 `mustChangePassword`, so that password can only be used to set a real one.
 
 The address is trimmed and lowercased, and one holding `<` or `>` is refused with `400`.
-`displayName` is checked as sign-up checks it (1 to 50 characters once angle brackets and
-surrounding spaces are removed, or `400` with the reason) and defaults to the part of the
-address before `@`. An address already in use answers `409`.
+`displayName` is checked as sign-up checks it (1 to 50 characters once invisible characters,
+angle brackets and surrounding spaces are removed and it is put in Unicode NFC, or `400` with
+the reason; the joiners and flag tags emoji and some scripts need are kept) and defaults to the
+part of the address before `@`. An address already in use answers `409`.
 
 **Request:**
 ```json

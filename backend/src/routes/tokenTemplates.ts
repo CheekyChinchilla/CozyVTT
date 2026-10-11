@@ -40,6 +40,7 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     const where: Prisma.TokenTemplateWhereInput = { campaignId };
 
     if (search && typeof search === 'string') {
+      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
       where.name = { contains: search, mode: 'insensitive' };
     }
     if (type && typeof type === 'string' && (TOKEN_TYPES as readonly string[]).includes(type)) {

@@ -448,6 +448,15 @@ Two things to get right when adding a check of this kind:
   `requireAuth` and `requireAdmin`, as every `/api/admin` route is. A player
   gets `403`, someone signed out `401`. The delete looks each name up in a
   fresh scan, so a name outside the asset folders reaches nothing.
+- **The SRD creature import.** `POST /api/campaigns/:campaignId/creatures/seed`
+  fills the creature library every campaign shares and fetches from Open5e on
+  every run, so it is guarded by `requireAuth` and a platform admin check in
+  `routes/creatures.ts`, not by `campaignDM`: any user can be the DM of a
+  campaign of their own. The campaign in the address plays no part, and an
+  admin need not be a member of it. Anyone else gets `403` ("Only an
+  administrator can import the SRD creatures…"). `GET …/creatures/seed/status`
+  stays open to campaign members and says in `canSeed` whether the caller may
+  run it. The command-line seed script needs shell access to the server.
 
 ### Platform role is the one thing the session carries
 

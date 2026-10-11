@@ -111,6 +111,15 @@ describe.each([
     }
   });
 
+  it('stores a display name without bidirectional overrides, as sign-up does', async () => {
+    const email = testEmail('bidiname');
+    const res = await admin.post(route).send({ email, displayName: 'Bree\u202E Hollow\u200B' });
+    await forget(email);
+
+    expect(res.status).toBe(201);
+    expect((await prisma.user.findUniqueOrThrow({ where: { email } })).displayName).toBe('Bree Hollow');
+  });
+
   it('stores a display name as sign-up does, trimmed', async () => {
     const email = testEmail('goodname');
     const res = await admin.post(route).send({ email, displayName: '  Bree Hollow  ' });

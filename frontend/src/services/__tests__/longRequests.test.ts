@@ -60,3 +60,16 @@ describe('the campaign import requests', () => {
     expect(post.mock.calls[0][2]?.timeout).toBe(0);
   });
 });
+
+describe('the Universal VTT import', () => {
+  // The server answers an import up to 50 seconds after its upload has
+  // arrived (20 seconds' wait for its turn and 30 seconds' run), and says why
+  // when it reaches either limit. The shared 30 seconds, upload included, cut
+  // the request before that answer could come.
+  it('is left to the proxy and the server, which answer within the proxy\'s time', async () => {
+    const post = vi.spyOn(client, 'post').mockResolvedValue({ data: {} });
+    await api.importUVTT('campaign-1', new File(['{}'], 'cave.uvtt'));
+    expect(proxyTimeoutMs('/api/')).toBeGreaterThan(50_000);
+    expect(post.mock.calls[0][2]?.timeout).toBe(0);
+  });
+});

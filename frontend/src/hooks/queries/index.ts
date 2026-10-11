@@ -19,7 +19,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import campaignService from '@/services/campaign.service';
 import characterService from '@/services/character.service';
 import { api } from '@/services/api';
-import type { AssetScope, AssetType, Character, PersonalNoteSummary } from '@/types';
+import type { AssetScope, AssetType, Character, CharacterSummary, PersonalNoteSummary } from '@/types';
 
 export const queryKeys = {
   campaigns: ['campaigns'] as const,
@@ -86,23 +86,30 @@ export function useCharactersQuery() {
   });
 }
 
+/** A character as the cached list holds it: without its sheet, as the server lists it. */
+export function toCharacterSummary(character: Character): CharacterSummary {
+  const { data: _sheet, ...summary } = character;
+  return summary;
+}
+
 /**
  * Put a character the server has just stored into the cached list that the
  * Characters page and the dashboard read, then mark that list for a refetch.
  *
  * A page that saves or creates a character outside the Characters page has to
  * do this. The list is otherwise served from cache when it was fetched less
- * than 30 seconds ago, and a card clicked before a background refetch lands
- * hands its viewer, its export and its editor the old copy. An edit made from
- * that copy is refused as out of date, which reads as the earlier save having
- * been lost. Writing the character first covers that window; the refetch then
- * picks up anything else that changed.
+ * than 30 seconds ago, so a new character would be missing from it and a
+ * renamed one would show its old name. Writing the character first covers
+ * that window; the refetch then picks up anything else that changed. The list
+ * holds no sheets: the Characters page fetches a character's sheet by id each
+ * time it opens or exports one.
  */
 export function storeCharacterInList(client: QueryClient, stored: Character): void {
-  client.setQueryData<Character[]>(queryKeys.characters, (list) =>
+  const listed = toCharacterSummary(stored);
+  client.setQueryData<CharacterSummary[]>(queryKeys.characters, (list) =>
     list && (list.some((c) => c.id === stored.id)
-      ? list.map((c) => (c.id === stored.id ? stored : c))
-      : [stored, ...list])
+      ? list.map((c) => (c.id === stored.id ? listed : c))
+      : [listed, ...list])
   );
   void client.invalidateQueries({ queryKey: queryKeys.characters });
 }

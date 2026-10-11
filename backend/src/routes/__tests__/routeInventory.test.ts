@@ -50,6 +50,10 @@ const TESTED: Record<string, string> = {
   'PUT /api/campaigns/:campaignId/vibe': 'routes/__tests__/atmosphereTrackWrite.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId': 'routes/__tests__/campaignDeleteAssets.e2e.test.ts',
   'POST /api/campaigns/:campaignId/invite': 'routes/__tests__/campaignInvite.e2e.test.ts',
+  'GET /api/campaigns/:campaignId/invitable-users': 'routes/__tests__/invitableUsers.e2e.test.ts',
+  'GET /api/character-templates/:id': 'routes/__tests__/characterTemplates.e2e.test.ts',
+  'GET /api/assets/avatars/:userId': 'routes/__tests__/avatarReplace.e2e.test.ts',
+  'POST /api/campaigns/:campaignId/creatures/seed': 'routes/__tests__/srdSeedRoute.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/members/:userId': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/members/:userId/role': 'websocket/__tests__/initiativeResend.integration.test.ts',
   'PUT /api/campaigns/:campaignId/dm': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
@@ -174,15 +178,11 @@ const TESTED: Record<string, string> = {
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
-  'GET /api/campaigns/:campaignId/invitable-users',
   'PUT /api/campaigns/:campaignId/sessions/:sessionId/end',
-  'POST /api/campaigns/:campaignId/creatures/seed',
   'PUT /api/campaigns/:campaignId/token-templates/:id',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
   'POST /api/campaigns/:campaignId/token-templates/from-token',
   'GET /api/characters/templates/:gameSystem/:templateName',
-  'GET /api/character-templates/:id',
-  'GET /api/assets/avatars/:userId',
   'GET /api/invitations',
   'POST /api/invitations/:id/decline',
 ];

@@ -318,6 +318,49 @@ describe('Character template routes', () => {
       const res = await otherAgent.get('/api/character-templates?search=grizzled&limit=100');
       expect(res.body.templates).toHaveLength(1);
     });
+
+    // A page of 100 used to carry 100 full sheets, each up to the body limit.
+    it('lists templates without their sheets, and serves the sheet by id', async () => {
+      const created = await createTemplate(authorAgent, { name: 'Summary Only' });
+
+      const list = await otherAgent.get('/api/character-templates?search=summary only&limit=100');
+      expect(list.status).toBe(200);
+      expect(list.body.templates).toHaveLength(1);
+      expect(list.body.templates[0]).not.toHaveProperty('data');
+      expect(list.body.templates[0]).toMatchObject({
+        id: created.body.id,
+        name: 'Summary Only',
+        gameSystem: GameSystem.DND_5E,
+        createdBy: { id: authorId },
+      });
+
+      const one = await otherAgent.get(`/api/character-templates/${created.body.id}`);
+      expect(one.status).toBe(200);
+      expect(one.body.data.characterName).toBe('Template Hero');
+    });
+  });
+
+  describe('how many one account may publish', () => {
+    it('refuses a template past 500, and takes one again after a delete', async () => {
+      await prisma.characterTemplate.createMany({
+        data: Array.from({ length: 500 }, (_, i) => ({
+          id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+          name: `Bulk ${i}`,
+          gameSystem: null,
+          data: {},
+          createdById: otherId,
+        })),
+      });
+
+      const refused = await createTemplate(otherAgent, { name: 'One Too Many' });
+      expect(refused.status).toBe(400);
+      expect(refused.body.message).toBe(
+        'You have already published 500 character templates, the most one account can. Delete one you no longer need to make room.'
+      );
+
+      await prisma.characterTemplate.delete({ where: { id: '00000000-0000-4000-8000-000000000000' } });
+      expect((await createTemplate(otherAgent, { name: 'Room Again' })).status).toBe(201);
+    });
   });
 
   // The heart of the feature.

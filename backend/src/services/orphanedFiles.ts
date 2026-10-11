@@ -25,7 +25,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import type { Dirent } from 'fs';
 import { prisma } from '../config/database';
-import { deleteFile } from '../utils/fileUtils';
+import { deleteFile, getUploadsDirectory } from '../utils/fileUtils';
 import logger from '../utils/logger';
 import { errorCode } from '../utils/errors';
 
@@ -70,13 +70,9 @@ interface FoundFile {
   modifiedMs: number;
 }
 
-function uploadsRoot(): string {
-  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
-}
-
 /** Every regular file under the asset folders. Links are not followed or listed. */
 async function filesInAssetFolders(): Promise<FoundFile[]> {
-  const root = uploadsRoot();
+  const root = getUploadsDirectory();
   const found: FoundFile[] = [];
   const walk = async (dir: string): Promise<void> => {
     let entries: Dirent[];

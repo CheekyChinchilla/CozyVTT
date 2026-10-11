@@ -20,6 +20,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import type { CharacterData } from '@/types';
+import { assetNameFrom } from '@/utils/assetName';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -129,7 +130,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${character.name} Token`);
+          assetFormData.append('name', assetNameFrom(`${character.name} Token`));
           assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);

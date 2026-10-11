@@ -15,8 +15,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
 import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
-import { queryKeys } from '@/hooks/queries';
-import type { Character } from '@/types';
+import { queryKeys, toCharacterSummary } from '@/hooks/queries';
+import type { Character, CharacterSummary } from '@/types';
 
 const showToast = vi.fn();
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
@@ -76,7 +76,7 @@ beforeEach(() => {
 describe('a stale save on the full-page editor', () => {
   it('keeps the edits, carries them onto the newest version and saves that when told to', async () => {
     const client = new QueryClient();
-    client.setQueryData<Character[]>(queryKeys.characters, [dnd5eCharacter()]);
+    client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(dnd5eCharacter())]);
     renderPage(client);
 
     fireEvent.change(await screen.findByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
@@ -85,8 +85,8 @@ describe('a stale save on the full-page editor', () => {
     const dialog = await screen.findByRole('dialog', { name: 'This character has changed' });
     expect(within(dialog).getByText(/Aldra the Bold/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Character Name')).toHaveValue('Aldra the Bold');
-    // The Characters page already has the newer version.
-    expect(client.getQueryData<Character[]>(queryKeys.characters)?.[0]).toEqual(latest);
+    // The Characters page already has the newer version (its list holds no sheets).
+    expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(latest));
 
     updateCharacter.mockResolvedValueOnce(saved);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save my changes' }));
@@ -99,7 +99,7 @@ describe('a stale save on the full-page editor', () => {
 
     // Saved: back to the sheet, nothing left to ask about on the way out.
     await waitFor(() => expect(screen.queryByPlaceholderText('Character Name')).toBeNull());
-    expect(client.getQueryData<Character[]>(queryKeys.characters)?.[0]).toEqual(saved);
+    expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(saved));
     fireEvent.click(screen.getByRole('button', { name: 'Back to characters' }));
     expect(await screen.findByText('Character list')).toBeInTheDocument();
   });

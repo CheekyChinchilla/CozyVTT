@@ -5,7 +5,7 @@
  * of `<img src=x onerror=…>` went into the invitation email as markup, so
  * whoever could set a name or a campaign description could put their own
  * HTML in front of the recipient. Subjects are plain-text headers, so they
- * are left as typed.
+ * are left as typed; the campaign invitation's carries no text its sender chose.
  */
 
 jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
@@ -36,9 +36,9 @@ const IMG = '<img src=x onerror=alert(1)>';
 const SCRIPT = '<script>alert(1)</script>';
 
 describe('email HTML escaping', () => {
-  it('campaign invitation: name, DM, campaign and description are escaped; the subject is not', async () => {
+  it('campaign invitation: name, DM, campaign and description are escaped', async () => {
     await sendCampaignInvitationEmail('p@x.test', IMG, '<i>Tilted</i> "Campaign"', `Bob & <DM>`, SCRIPT);
-    const { html, subject } = sent();
+    const { html } = sent();
     expect(html).not.toContain(IMG);
     expect(html).not.toContain(SCRIPT);
     expect(html).not.toContain('<i>Tilted</i>');
@@ -46,7 +46,16 @@ describe('email HTML escaping', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).toContain('&lt;i&gt;Tilted&lt;/i&gt; &quot;Campaign&quot;');
     expect(html).toContain('Bob &amp; &lt;DM&gt;');
-    expect(subject).toContain('<i>Tilted</i> "Campaign"');
+  });
+
+  it('campaign invitation: the subject and inbox preview carry no text the DM chose', async () => {
+    await sendCampaignInvitationEmail('p@x.test', 'Player', 'Verify your account at evil.example', 'Support Team', null);
+    const { html, subject } = sent();
+    expect(subject).not.toMatch(/evil\.example|Support Team/);
+    expect(subject).toMatch(/campaign invitation/i);
+    // The hidden preview line is what an inbox shows beside the subject.
+    const preview = /<div style="display:none[^>]*>([^<]*)</.exec(html)?.[1] ?? '';
+    expect(preview).not.toMatch(/evil\.example|Support Team/);
   });
 
   it('account invitation: the inviter and the recipient names are escaped', async () => {

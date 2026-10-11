@@ -199,7 +199,7 @@ Players join your campaign by accepting an invitation. Once they're in, they app
 
 To invite someone:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
-2. Pick them from the list of people on your instance (they need an account first)
+2. Type at least 2 letters of their display name in **Search by display name**, or the whole name if it is one letter long, and pick them from the people who match (they need an account first). See [Inviting Players](DM_GUIDE.md#inviting-players)
 3. They'll see a pending invitation on their dashboard
 
 **Handing the campaign to someone else.** A campaign has one DM, and that seat
@@ -255,6 +255,8 @@ From here you can:
 - From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign**, or unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
 - **Import** a character from a JSON file
 
+One account can have up to 1,000 characters, copies included. Past that, creating, copying or importing another says so; deleting one you no longer need makes room. A copy's name is the original's with " (Copy)" added, shortened if needed so the whole name stays within 200 characters.
+
 ### Creating a Character
 
 Click **Create Character** to open the character creation dialog. Choose your **Game System** first — this determines which character sheet you'll fill out.
@@ -292,7 +294,7 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 
-Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you.
+Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you. One account can publish up to 500 templates; past that, publishing another says so, and deleting one you no longer need makes room.
 
 **Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. A token picture chosen on the sheet is not used for a template, because a template's picture has to be a global asset (see the note below).
 
@@ -402,12 +404,13 @@ Rulebooks and handouts are not here. They have their own **Documents** section, 
 
 Click **Upload Asset** to add a new asset. You'll choose:
 - The file to upload
-- A name for the asset
+- A name for the asset, up to 200 characters (the file's own name is filled in for you)
+- An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
   - **Campaign** — Shared with everyone in a specific campaign
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
-- Optional tags for easy filtering later
+- Optional tags for easy filtering later: up to 50, each up to 50 characters
 
 *GIF pending — Uploading a new map asset.*
 
@@ -686,8 +689,12 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 Click **Edit** next to your display name or bio to change them. Click **Save Changes** when you're done.
 
+A display name is 1 to 50 characters. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
+
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
+
+A new avatar replaces the old one: the old picture is deleted from the server. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again. Deleting your avatar picture from the **Asset Library** does the same. A picture you have also used somewhere else, such as a token's picture, is kept until nothing uses it, but it is no longer your avatar.
 
 *GIF pending — Avatar crop and upload flow.*
 

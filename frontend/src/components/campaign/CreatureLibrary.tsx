@@ -114,6 +114,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // ── SRD seed state ──
   const [srdCount, setSrdCount] = useState<number | null>(null);
+  // Only an administrator may import the SRD creatures; the server says who.
+  const [canSeed, setCanSeed] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
 
@@ -158,7 +160,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     fetchCreatures(true);
     // Also check seed status and load favorites
     api.getSeedStatus(campaign.id)
-      .then((s) => setSrdCount(s.srdCount))
+      .then((s) => { setSrdCount(s.srdCount); setCanSeed(s.canSeed === true); })
       .catch(() => {}); // non-critical
     setIsLoadingFavorites(true);
     api.listCreatureFavorites(campaign.id)
@@ -200,8 +202,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       setSrdCount((result.alreadyExisted || 0) + result.created);
       // Refresh the list
       fetchCreatures(true);
-    } catch {
-      setError('Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
     } finally {
       setIsSeeding(false);
     }
@@ -459,7 +461,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 {/* The label names the system it imports: this seeds the D&D 5e
                     bestiary whatever the campaign's system, which was not
                     obvious from a bare "Import SRD Creatures". */}
-                {srdCount === 0 && (
+                {srdCount === 0 && canSeed && (
                   <button
                     onClick={handleSeedSrd}
                     disabled={isSeeding}
@@ -569,10 +571,16 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       to browse creatures from other systems.
                     </p>
                   )}
-                  {!searchQuery && srdCount === 0 && (
+                  {!searchQuery && srdCount === 0 && !canSeed && (
+                    <p className="mt-4 text-xs text-stone-gray/60">
+                      The ~320 official D&amp;D 5e SRD creatures have not been imported on this server.
+                      Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
+                    </p>
+                  )}
+                  {!searchQuery && srdCount === 0 && canSeed && (
                     <div className="mt-4 space-y-2">
                       <p className="text-xs text-stone-gray/60">
-                        Import ~320 official D&D 5e SRD creatures with full stat blocks.
+                        Import ~320 official D&D 5e SRD creatures with full stat blocks, for every campaign on this server.
                       </p>
                       <Button
                         onClick={handleSeedSrd}

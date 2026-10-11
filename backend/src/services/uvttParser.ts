@@ -187,27 +187,123 @@ function isOutside(p: { x: number; y: number }, mapWidth: number, mapHeight: num
  */
 export const MAX_UVTT_JSON_VALUES = 1_000_000;
 
+/** Where a top-level string value sits in the file: the bytes between its quotes. */
+interface ByteRange {
+  start: number;
+  end: number;
+}
+
+interface ScanResult {
+  /** More values than MAX_UVTT_JSON_VALUES; nothing else is meaningful then. */
+  tooMany: boolean;
+  /** Every string value of a top-level "image" key, in file order. */
+  images: ByteRange[];
+}
+
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+const IMAGE_KEY = Buffer.from('image');
+
 /**
- * Whether the JSON in `bytes` holds more than `max` values, counted without
- * parsing it: one for each object or list opened and one for each comma,
- * outside strings. JSON's structural characters are ASCII, and no byte of a
- * multi-byte UTF-8 character is, so the bytes are read as they are.
+ * One pass over the JSON in `bytes`, without parsing it: whether it holds
+ * more than `max` values (one for each object or list opened and one for
+ * each comma, outside strings), and where the picture is, the string value
+ * of each `"image"` key of the top-level object. JSON's structural characters
+ * are ASCII, and no byte of a multi-byte UTF-8 character is, so the bytes are
+ * read as they are.
  */
-function holdsMoreValuesThan(bytes: Buffer, max: number): boolean {
+function scanUvtt(bytes: Buffer, max: number): ScanResult {
+  const images: ByteRange[] = [];
   let count = 0;
-  let inString = false;
+  let depth = 0;
+  // Inside the top-level object: the next string is a key, the last key read
+  // was "image", and the value after the colon is the one to record.
+  let expectKey = false;
+  let keyIsImage = false;
+  let valueOfImage = false;
+
   for (let i = 0; i < bytes.length; i++) {
     const c = bytes[i];
-    if (inString) {
-      if (c === 0x5c) i++; // a backslash escapes the next character
-      else if (c === 0x22) inString = false;
-    } else if (c === 0x22) {
-      inString = true;
-    } else if (c === 0x7b || c === 0x5b || c === 0x2c) {
-      if (++count > max) return true;
+    if (c === QUOTE) {
+      const start = i + 1;
+      let j = start;
+      while (j < bytes.length && bytes[j] !== QUOTE) j += bytes[j] === BACKSLASH ? 2 : 1;
+      if (depth === 1) {
+        if (expectKey) {
+          keyIsImage = j - start === IMAGE_KEY.length && bytes.subarray(start, j).equals(IMAGE_KEY);
+          expectKey = false;
+        } else if (valueOfImage) {
+          images.push({ start, end: Math.min(j, bytes.length) });
+        }
+      }
+      valueOfImage = false;
+      i = j;
+      continue;
+    }
+    if (c === 0x7b || c === 0x5b) {
+      if (++count > max) return { tooMany: true, images };
+      depth++;
+      expectKey = depth === 1 && c === 0x7b;
+      valueOfImage = false;
+    } else if (c === 0x7d || c === 0x5d) {
+      depth--;
+      valueOfImage = false;
+    } else if (c === 0x2c) {
+      if (++count > max) return { tooMany: true, images };
+      if (depth === 1) expectKey = true;
+      valueOfImage = false;
+    } else if (c === 0x3a) {
+      valueOfImage = depth === 1 && keyIsImage;
+      keyIsImage = false;
     }
   }
-  return false;
+  return { tooMany: false, images };
+}
+
+/** Base64's characters, the URL-safe two included, as Node's decoder takes them. */
+const BASE64_DIGIT = new Uint8Array(256);
+for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_') BASE64_DIGIT[c.charCodeAt(0)] = 1;
+const PADDING = 0x3d;
+
+/**
+ * The most of the picture turned into a string at once: a multiple of four,
+ * so pieces decode alone, and small enough that each short-lived string is
+ * collected at once, so decoding needs little more memory than the picture.
+ */
+const DECODE_PIECE = 64 * 1024;
+
+/**
+ * The picture decoded from where it sits in the file, a piece at a time,
+ * never held as one string. Answers null when the text is not plain base64
+ * (an escaped slash, say), for the caller to read it the ordinary way.
+ * Refuses a picture over `maxImageBytes` from its length, before decoding.
+ */
+function decodePicture(bytes: Buffer, range: ByteRange, maxImageBytes: number | undefined): Buffer | null {
+  let { start } = range;
+  const { end } = range;
+  // An optional data: URI prefix, up to its comma.
+  if (end - start > 5 && bytes.toString('latin1', start, start + 5) === 'data:') {
+    const comma = bytes.indexOf(0x2c, start);
+    if (comma === -1 || comma >= end) return null;
+    start = comma + 1;
+  }
+  let digits = end;
+  while (digits > start && bytes[digits - 1] === PADDING) digits--;
+  if (end - digits > 2) return null;
+  for (let i = start; i < digits; i++) {
+    if (BASE64_DIGIT[bytes[i]] !== 1) return null;
+  }
+  const size = Math.floor(((digits - start) * 3) / 4);
+  if (maxImageBytes !== undefined && size > maxImageBytes) {
+    const limitMB = Math.round(maxImageBytes / (1024 * 1024));
+    throw new Error(`The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`);
+  }
+  const picture = Buffer.allocUnsafe(size);
+  let written = 0;
+  for (let at = start; at < end; at += DECODE_PIECE) {
+    written += picture.write(bytes.toString('latin1', at, Math.min(end, at + DECODE_PIECE)), written, 'base64');
+  }
+  return picture.subarray(0, written);
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────────────
@@ -224,18 +320,36 @@ export function parseUVTT(
   options: UVTTParseOptions = {}
 ): UVTTParseResult {
   // Counted from the bytes, because parsing a file with millions of points
-  // is itself what runs out of memory.
-  if (holdsMoreValuesThan(fileBuffer, MAX_UVTT_JSON_VALUES)) {
+  // is itself what runs out of memory. The same pass finds the picture.
+  const scan = scanUvtt(fileBuffer, MAX_UVTT_JSON_VALUES);
+  if (scan.tooMany) {
     throw new Error(
       `This file holds more than ${MAX_UVTT_JSON_VALUES.toLocaleString('en-US')} points, doors, lights and settings, ` +
         'far more than a map can hold. Split it into smaller maps in the tool that made it.'
     );
   }
 
+  // The picture is most of the file. It is decoded from where it sits, and
+  // only the rest is read as JSON, with the picture's text left out; a
+  // picture that is not plain base64 is read the ordinary way instead.
+  const pictureRange = scan.images[scan.images.length - 1];
+  const picture = pictureRange ? decodePicture(fileBuffer, pictureRange, options.maxImageBytes) : null;
+  let json = fileBuffer;
+  if (picture) {
+    const parts: Buffer[] = [];
+    let at = 0;
+    for (const range of scan.images) {
+      parts.push(fileBuffer.subarray(at, range.start));
+      at = range.end;
+    }
+    parts.push(fileBuffer.subarray(at));
+    json = Buffer.concat(parts);
+  }
+
   // Parse the JSON
   let data: UVTTFile;
   try {
-    data = JSON.parse(fileBuffer.toString('utf-8'));
+    data = JSON.parse(json.toString('utf-8'));
   } catch {
     throw new Error('Invalid UVTT file: not valid JSON');
   }
@@ -247,7 +361,7 @@ export function parseUVTT(
   if (!data.resolution.map_size || typeof data.resolution.map_size.x !== 'number') {
     throw new Error('Invalid UVTT file: missing or invalid "resolution.map_size"');
   }
-  if (!data.image || typeof data.image !== 'string') {
+  if (!picture && (!data.image || typeof data.image !== 'string')) {
     throw new Error('Invalid UVTT file: missing "image" field');
   }
   if (!Array.isArray(data.line_of_sight)) {
@@ -313,25 +427,31 @@ export function parseUVTT(
   );
 
   // ── Decode image ───────────────────────────────────────────────────────────
-  // The image field may or may not include a data URI prefix
-  // The prefix is cut with indexOf and slice: split would copy the whole
-  // picture again as a separate string. The length is checked before decoding,
-  // so a picture over the limit never becomes a second full-size buffer.
-  let imageBase64 = data.image;
-  if (imageBase64.startsWith('data:')) {
-    const comma = imageBase64.indexOf(',');
-    if (comma !== -1 && comma < imageBase64.length - 1) imageBase64 = imageBase64.slice(comma + 1);
-  }
-  if (options.maxImageBytes !== undefined) {
-    // Three bytes per four characters, less the padding.
-    let digits = imageBase64.length;
-    while (digits > 0 && imageBase64.charCodeAt(digits - 1) === 61) digits--;
-    if (Math.floor((digits * 3) / 4) > options.maxImageBytes) {
-      const limitMB = Math.round(options.maxImageBytes / (1024 * 1024));
-      throw new Error(`The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`);
+  // Decoded above from its place in the file, unless its text needed reading
+  // as JSON. Then: the image field may or may not include a data URI prefix,
+  // cut with indexOf and slice (split would copy the whole picture again as a
+  // separate string), and the length is checked before decoding, so a picture
+  // over the limit never becomes a second full-size buffer.
+  let imageBuffer: Buffer;
+  if (picture) {
+    imageBuffer = picture;
+  } else {
+    let imageBase64 = data.image;
+    if (imageBase64.startsWith('data:')) {
+      const comma = imageBase64.indexOf(',');
+      if (comma !== -1 && comma < imageBase64.length - 1) imageBase64 = imageBase64.slice(comma + 1);
     }
+    if (options.maxImageBytes !== undefined) {
+      // Three bytes per four characters, less the padding.
+      let digits = imageBase64.length;
+      while (digits > 0 && imageBase64.charCodeAt(digits - 1) === 61) digits--;
+      if (Math.floor((digits * 3) / 4) > options.maxImageBytes) {
+        const limitMB = Math.round(options.maxImageBytes / (1024 * 1024));
+        throw new Error(`The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`);
+      }
+    }
+    imageBuffer = Buffer.from(imageBase64, 'base64');
   }
-  const imageBuffer = Buffer.from(imageBase64, 'base64');
 
   // ── Convert line_of_sight polylines → WallSegments ─────────────────────────
   const wallSegments: WallSegment[] = [];

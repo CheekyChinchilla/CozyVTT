@@ -33,6 +33,7 @@ import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 function defaultStatBlockForNpc(): NpcStatBlock {
   return {
@@ -637,7 +638,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       formData.append('type', AssetType.TOKEN);
       formData.append('scope', AssetScope.CAMPAIGN);
       formData.append('campaignId', campaignId);
-      formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+      formData.append('name', assetNameFrom(file.name.replace(/\.[^.]+$/, '')));
       formData.append('file', file);
       const { asset } = await api.uploadAsset(formData);
       setImageUrl(asset.id);

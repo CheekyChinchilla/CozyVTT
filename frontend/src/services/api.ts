@@ -5,6 +5,7 @@ import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
 import type {
   User,
+  InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
   MFASetupResponse,
@@ -21,6 +22,7 @@ import type {
   CreateCampaignRequest,
   UpdateCampaignRequest,
   Character,
+  CharacterSummary,
   CreateCharacterRequest,
   UpdateCharacterRequest,
   Asset,
@@ -33,6 +35,7 @@ import type {
   Token,
   CreatureTemplate,
   CharacterTemplate,
+  CharacterTemplateSummary,
   TokenTemplate,
   CampaignImportPreview,
   CampaignImportResult,
@@ -536,8 +539,18 @@ class ApiClient {
     return response.data;
   }
 
-  async listInvitableUsers(campaignId: string): Promise<{ users: User[] }> {
-    const response = await this.client.get<{ users: User[] }>(`/api/campaigns/${campaignId}/invitable-users`);
+  /**
+   * Search the people who can be invited to a campaign by display name. A
+   * search of INVITE_SEARCH_MIN_LENGTH (in constants/inviteSearchLimits.ts)
+   * or more characters finds names that contain it, and a shorter one finds
+   * only names that are exactly it. The server answers nobody for an empty
+   * search, and at most INVITE_SEARCH_MAX_RESULTS matches, with `hasMore`
+   * when there were more.
+   */
+  async listInvitableUsers(campaignId: string, search: string): Promise<InvitableUserSearch> {
+    const response = await this.client.get<InvitableUserSearch>(`/api/campaigns/${campaignId}/invitable-users`, {
+      params: { search },
+    });
     return response.data;
   }
 
@@ -818,8 +831,9 @@ class ApiClient {
   // Characters
   // ============================================
 
-  async listCharacters(): Promise<{ characters: Character[] }> {
-    const response = await this.client.get<{ characters: Character[] }>('/api/characters');
+  /** The user's characters without their sheets; getCharacter fetches one with its sheet. */
+  async listCharacters(): Promise<{ characters: CharacterSummary[] }> {
+    const response = await this.client.get<{ characters: CharacterSummary[] }>('/api/characters');
     return response.data;
   }
 
@@ -877,6 +891,11 @@ class ApiClient {
     return response.data;
   }
 
+  // TODO(assets): this upload has the shared 30-second timeout, which counts
+  // the upload itself, so a 50 MB map picture or PDF on a connection slower
+  // than about 14 Mbit/s is cut off with "Failed to upload asset". Nothing
+  // queues on the server here; it should have no limit of its own, like the
+  // UVTT and campaign imports, leaving the proxy to bound it.
   async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
@@ -977,10 +996,16 @@ class ApiClient {
     if (gridSize) formData.append('gridSize', String(gridSize));
     if (options?.confirm) formData.append('confirm', 'true');
     if (options?.includeObjectWalls) formData.append('includeObjectWalls', 'true');
+    // Once the upload has arrived, the server answers within 50 seconds: an
+    // import waits up to 20 for its turn behind other DMs' imports and runs
+    // for up to 30, and reaching either limit answers 503 saying which. A
+    // limit of the page's own would count the upload too and give up before
+    // that answer, so there is none; the bundled nginx allows the answer 60
+    // seconds.
     const response = await this.client.post(
       `/api/campaigns/${campaignId}/maps/import-uvtt`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 },
     );
     return response.data;
   }
@@ -1058,7 +1083,8 @@ class ApiClient {
     mine?: boolean;
     limit?: number;
     offset?: number;
-  }): Promise<{ templates: CharacterTemplate[]; total: number; limit: number; offset: number }> {
+  }): Promise<{ templates: CharacterTemplateSummary[]; total: number; limit: number; offset: number }> {
+    // The list carries no sheets; getCharacterTemplate fetches one with its sheet.
     const response = await this.client.get('/api/character-templates', { params });
     return response.data;
   }
@@ -1125,12 +1151,13 @@ class ApiClient {
     return response.data;
   }
 
-  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean }> {
+  /** `canSeed`: whether the caller may run the SRD import, which only an administrator may. */
+  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean; canSeed: boolean }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/seed/status`);
     return response.data;
   }
 
-  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number }> {
+  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number; rejected: number }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/seed`);
     return response.data;
   }

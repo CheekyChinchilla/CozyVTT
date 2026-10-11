@@ -5,13 +5,13 @@
 
 import { useState } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
-import type { Character, Campaign } from '@/types';
+import type { CharacterSummary, Campaign } from '@/types';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
 
 interface DeleteCharacterModalProps {
   isOpen: boolean;
-  character: Character | null;
+  character: CharacterSummary | null;
   campaign?: Campaign | null;
   onClose: () => void;
   onConfirm: (characterId: string) => Promise<void>;

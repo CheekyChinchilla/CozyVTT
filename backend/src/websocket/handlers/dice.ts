@@ -27,6 +27,11 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
+      // Counted before anything else is checked, so a flood of rolls that
+      // would be refused (malformed, or from a spectator) is held to the
+      // same ceiling and does not draw an error apiece.
+      if (!withinCeiling(socket, 'dice.roll')) return;
+
       // Spectators watch: they may talk in chat, and they may not roll.
       if (!canRollDice(socket.role)) {
         socket.emit('error', { message: 'Spectators cannot roll dice' });
@@ -41,8 +46,6 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
       const { expression, characterName, purpose, secret } = parsed.data;
-
-      if (!withinCeiling(socket, 'dice.roll')) return;
 
       // Validate expression syntax (without rolling)
       try {

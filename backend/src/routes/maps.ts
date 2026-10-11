@@ -25,10 +25,14 @@ import {
   getFilePath,
   ensureDirectory,
   getFileSizeLimit,
+  getTempDirectory,
+  deleteFile,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { oneAtATime } from '../utils/oneAtATime';
+import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../utils/serialQueue';
+import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
@@ -52,9 +56,50 @@ const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_
 const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
 const UVTT_IMAGE_EXTENSIONS = '.png, .jpg, .jpeg, .webp';
 
-/** Multer configured for UVTT file uploads, held in memory while it is parsed. */
+/**
+ * Where an uploaded UVTT file waits to be read: a folder of its own in the
+ * uploads folder's temporary area, made the first time it is needed. The
+ * file is removed when its request ends, whether the import worked or not.
+ */
+const UVTT_TEMP_DIR = path.join(getTempDirectory(), 'uvtt');
+/** A waiting file older than this was left by a backend that stopped mid-import. */
+const STALE_UVTT_MS = 24 * 60 * 60 * 1000;
+let staleUvttSwept = false;
+
+/** Remove waiting files a stopped backend left behind. Best effort, once per process. */
+async function sweepStaleUvttUploads(): Promise<void> {
+  try {
+    const now = Date.now();
+    for (const name of await fs.readdir(UVTT_TEMP_DIR)) {
+      const file = path.join(UVTT_TEMP_DIR, name);
+      const stats = await fs.stat(file).catch(() => null);
+      if (stats && now - stats.mtimeMs > STALE_UVTT_MS) await fs.rm(file, { force: true });
+    }
+  } catch (err) {
+    logger.warn('[uvtt-import] Could not tidy the temporary folder', { err });
+  }
+}
+
+/**
+ * Multer configured for UVTT file uploads, written to disk. A file can be
+ * over 50 MB, almost all of it the picture, and held in memory it waited
+ * there for its turn; on disk it costs nothing until it is read.
+ */
 const uvttUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureDirectory(UVTT_TEMP_DIR)
+        .then(() => {
+          if (!staleUvttSwept) {
+            staleUvttSwept = true;
+            void sweepStaleUvttUploads();
+          }
+          cb(null, UVTT_TEMP_DIR);
+        })
+        .catch((err: Error) => cb(err, UVTT_TEMP_DIR));
+    },
+    filename: (_req, _file, cb) => cb(null, `${randomUUID()}.uvtt`),
+  }),
   limits: { fileSize: UVTT_MAX_FILE_BYTES, files: 1, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -97,11 +142,19 @@ function receiveUvtt(req: AuthenticatedRequest, res: Response, next: NextFunctio
   });
 }
 
-/** One import per user at a time; each holds the whole file in memory. */
+/** One import per user at a time, so one person cannot queue up many files. */
 const oneUvttImportAtATime = oneAtATime(
   (req) => (req as AuthenticatedRequest).session?.userId,
   'Another import is still running. Wait for it to finish, then import this file.'
 );
+
+/** An import that could not start soon enough, because others were ahead of it. */
+const UVTT_IMPORT_BUSY_MESSAGE =
+  'Another map import is running on the server. Try again in a minute.';
+/** An import stopped at its time limit, having saved nothing. */
+const UVTT_IMPORT_TOO_SLOW_MESSAGE =
+  `This map import took longer than ${UVTT_IMPORT_TIME_LIMIT_MS / 1000} seconds and was stopped, ` +
+  'so nothing was saved. Try again in a minute.';
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
@@ -354,25 +407,71 @@ router.post(
   oneUvttImportAtATime,
   receiveUvtt,
   async (req: AuthenticatedRequest, res: Response) => {
+    const uploaded = req.file?.path;
+    // A client that gave up while its import waited is dropped from the
+    // queue, and its upload removed, without being read.
+    const left = new AbortController();
+    res.once('close', () => left.abort());
+    try {
+      await uvttImportQueue((signal) => importUvttFile(req, res, signal), { signal: left.signal });
+    } catch (err) {
+      if (err instanceof QueueWaitExpired && !res.headersSent) {
+        res.setHeader('Retry-After', '60');
+        res.status(503).json({ error: 'Service Unavailable', message: UVTT_IMPORT_BUSY_MESSAGE });
+      } else if (err instanceof QueueTimeLimitReached && !res.headersSent) {
+        logger.warn('[uvtt-import] Stopped an import that ran past its time limit', { campaignId: req.params.campaignId });
+        res.setHeader('Retry-After', '60');
+        res.status(503).json({ error: 'Service Unavailable', message: UVTT_IMPORT_TOO_SLOW_MESSAGE });
+      } else if (!(err instanceof QueueCallerLeft)) {
+        logger.error('Error importing UVTT file:', err);
+        if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error', message: 'Failed to import UVTT file' });
+      }
+    } finally {
+      if (uploaded) {
+        await fs.rm(uploaded, { force: true }).catch((err) =>
+          logger.warn('[uvtt-import] Could not remove an uploaded file', { err })
+        );
+      }
+    }
+  }
+);
+
+/**
+ * The import itself, run in its turn: read, check, store, answer.
+ *
+ * `signal` aborts when the import runs past its time limit, by which time
+ * the route has answered for it. It is checked before each step that saves
+ * something, and a step that finds it aborted removes what the steps before
+ * it saved, so a stopped import leaves nothing behind.
+ */
+async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: AbortSignal): Promise<unknown> {
+    /** Answer, unless the route already has. */
+    const answer = (status: number, body: unknown) =>
+      signal.aborted || res.headersSent ? undefined : res.status(status).json(body);
     try {
       const { campaignId } = req.params;
       const userId = req.session?.userId;
-      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      if (!userId) return answer(401, { error: 'Unauthorized' });
 
-      if (!req.file?.buffer) {
-        return res.status(400).json({ error: 'Validation Error', message: 'No UVTT file uploaded' });
+      if (!req.file?.path) {
+        return answer(400, { error: 'Validation Error', message: 'No UVTT file uploaded' });
       }
+      // Read in its turn, and removed from disk at once: from here on only
+      // this copy is used, and it is let go of once parsed.
+      let fileBuffer: Buffer | null = await fs.readFile(req.file.path);
+      await fs.rm(req.file.path, { force: true });
+      signal.throwIfAborted();
 
       // A field sent twice arrives as a list, which is not a name.
       const rawName: unknown = req.body.name;
       if (rawName !== undefined && typeof rawName !== 'string') {
-        return res.status(400).json({ error: 'Validation Error', message: 'Send the map name once, as text.' });
+        return answer(400, { error: 'Validation Error', message: 'Send the map name once, as text.' });
       }
       const mapName =
         rawName?.trim() ||
         path.basename(req.file.originalname, path.extname(req.file.originalname)).slice(0, MAP_LIMITS.maxNameLength);
       if (mapName.length > MAP_LIMITS.maxNameLength) {
-        return res.status(400).json({ error: 'Validation Error', message: MAP_NAME_TOO_LONG_MESSAGE });
+        return answer(400, { error: 'Validation Error', message: MAP_NAME_TOO_LONG_MESSAGE });
       }
       // Optional; anything that is not a usable grid size gets the default
       const gridSizePx = usable(GridSizeSchema, Number(req.body.gridSize)) ?? 70;
@@ -382,12 +481,15 @@ router.post(
       const includeObjectWalls =
         req.body.includeObjectWalls === 'true' || req.body.includeObjectWalls === true;
 
+      // Only the picture and the geometry are kept once the file is parsed.
       let parsed;
       try {
-        parsed = parseUVTT(req.file.buffer, gridSizePx, { includeObjectWalls, maxImageBytes: getFileSizeLimit('MAP') });
+        parsed = parseUVTT(fileBuffer, gridSizePx, { includeObjectWalls, maxImageBytes: getFileSizeLimit('MAP') });
       } catch (parseErr) {
         const msg = parseErr instanceof Error ? parseErr.message : 'Failed to parse UVTT file';
-        return res.status(400).json({ error: 'Parse Error', message: msg });
+        return answer(400, { error: 'Parse Error', message: msg });
+      } finally {
+        fileBuffer = null;
       }
 
       // ── A map the app can hold ───────────────────────────────────────────
@@ -395,7 +497,7 @@ router.post(
       // saved, so a file that cannot become a map leaves nothing behind.
       if (dimensionProblem(MapSideSchema('Map width'), parsed.mapWidth) || dimensionProblem(MapSideSchema('Map height'), parsed.mapHeight)) {
         const limit = `A map can be from ${MAP_LIMITS.minSide} to ${MAP_LIMITS.maxSide} squares on each side.`;
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message: Number.isFinite(parsed.mapWidth) && Number.isFinite(parsed.mapHeight)
             ? `This file's map is ${parsed.mapWidth} by ${parsed.mapHeight} squares. ${limit}`
@@ -407,7 +509,7 @@ router.post(
       // asking, since no answer would make it importable.
       const extent = { width: parsed.mapWidth, height: parsed.mapHeight, gridSize: gridSizePx };
       if (wallOutsideMap(parsed.wallSegments, extent) || lightOutsideMap(parsed.lightSources, extent)) {
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message:
             `This file has walls or lights more than ${GEOMETRY_MARGIN_SQUARES} squares outside its map, ` +
@@ -427,7 +529,7 @@ router.post(
       const hasOutOfBounds = walls > 0 || doors > 0 || lights > 0;
       const offersObjectWalls = !includeObjectWalls && parsed.objectWallCount > 0;
       if (!confirmed && (hasOutOfBounds || offersObjectWalls)) {
-        return res.status(409).json({
+        return answer(409, {
           error: 'Confirmation Required',
           // Clients branch on the code, never the wording.
           code: 'UVTT_IMPORT_NEEDS_CONFIRMATION',
@@ -443,7 +545,7 @@ router.post(
       // wall edit. Say it here, where it can still be acted on.
       const wallCheck = WallSegmentsArraySchema.safeParse(parsed.wallSegments);
       if (!wallCheck.success) {
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message:
             `This file has ${parsed.wallSegments.length} wall segments, more than a map can hold. ` +
@@ -454,7 +556,7 @@ router.post(
       }
       const lightCheck = LightSourcesArraySchema.safeParse(parsed.lightSources);
       if (!lightCheck.success) {
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message: `This file's lights cannot be imported: ${lightCheck.error.issues[0]?.message ?? 'they are outside the limits a map allows'}.`,
         });
@@ -467,7 +569,7 @@ router.post(
       // JSON, and the base64 inside it can be anything.
       const imageType = await fileTypeFromBuffer(parsed.imageBuffer);
       if (!imageType || !UVTT_IMAGE_TYPES.includes(imageType.mime)) {
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message:
             'The picture inside this file is not an image CozyVTT can use. ' +
@@ -478,77 +580,107 @@ router.post(
       const mapSizeLimit = getFileSizeLimit('MAP');
       if (parsed.imageBuffer.length > mapSizeLimit) {
         const limitMB = Math.round(mapSizeLimit / (1024 * 1024));
-        return res.status(400).json({
+        return answer(400, {
           error: 'Validation Error',
           message: `The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`,
         });
       }
 
       // ── Save the embedded image as an asset ──────────────────────────────
+      signal.throwIfAborted();
       const ext = `.${imageType.ext}`;
       const filename = `${randomUUID()}${ext}`;
       const uploadPath = getFilePath('MAP', 'CAMPAIGN', campaignId);
       await ensureDirectory(uploadPath);
       const filePath = path.join(uploadPath, filename).replace(/\\/g, '/');
-      // TODO(maps): if the asset insert below fails, the picture and its
-      // thumbnail stay on disk with no row naming them, and if the map insert
-      // fails, the asset row stays with no map using it. Remove the files when
-      // the asset insert fails, and the asset (row and files) when the map
-      // insert fails, as the upload route does for its own files.
-      await fs.writeFile(filePath, parsed.imageBuffer);
-      const thumbnailPath = await generateThumbnail(filePath);
+      // Files first, then the asset row, then the map. When a step fails, what
+      // the steps before it made is removed: the files when the asset row
+      // cannot be written, the row and the files when the map cannot be.
+      let thumbnailPath: string | null = null;
+      const removeFiles = async () => {
+        for (const file of [filePath, thumbnailPath]) {
+          if (!file) continue;
+          await deleteFile(file).catch((err) => logger.error('[uvtt-import] Could not remove a file after a failed import', { err }));
+        }
+      };
 
-      // Create asset record
-      const asset = await prisma.asset.create({
-        data: {
-          type: 'MAP',
-          scope: 'CAMPAIGN',
-          uploadedById: userId,
-          campaignId,
-          filename,
-          originalName: `${mapName}${ext}`,
-          mimeType: imageType.mime,
-          fileSize: parsed.imageBuffer.length,
-          filePath,
-          thumbnailPath,
-          name: mapName,
-          tags: ['uvtt-import'],
-        },
-      });
+      let asset;
+      try {
+        await fs.writeFile(filePath, parsed.imageBuffer);
+        thumbnailPath = await generateThumbnail(filePath);
+        signal.throwIfAborted();
+
+        // Create asset record
+        asset = await prisma.asset.create({
+          data: {
+            type: 'MAP',
+            scope: 'CAMPAIGN',
+            uploadedById: userId,
+            campaignId,
+            filename,
+            originalName: `${mapName}${ext}`,
+            mimeType: imageType.mime,
+            fileSize: parsed.imageBuffer.length,
+            filePath,
+            thumbnailPath,
+            name: mapName,
+            tags: ['uvtt-import'],
+          },
+        });
+      } catch (error) {
+        await removeFiles();
+        throw error;
+      }
 
       const imageUrl = normalizeAssetUrl(asset.id, 'maps');
 
       // ── Create the map with walls and lights ─────────────────────────────
-      const map = await prisma.map.create({
-        data: {
-          campaignId,
-          name: mapName,
-          imageUrl: imageUrl!,
-          baseLayerUrl: imageUrl!,
-          width: parsed.mapWidth,
-          height: parsed.mapHeight,
-          gridSize: gridSizePx,
-          tokens: [],
-          annotations: [],
-          wallSegments: toJson(parsed.wallSegments),
-          lights: toJson(parsed.lightSources),
-          // Only when the file brings lights of its own. Walls alone used to
-          // turn this on, which handed the DM a map that was black for every
-          // player until they found the setting: walls block sight, and with
-          // nothing lighting the room there is nothing to see.
-          lightingEnabled: parsed.lightSources.length > 0,
-          fogEnabled: false,
-          globalIllumination: false,
-          explorationEnabled: false,
-        },
-      });
+      let map;
+      try {
+        signal.throwIfAborted();
+        map = await prisma.map.create({
+          data: {
+            campaignId,
+            name: mapName,
+            imageUrl: imageUrl!,
+            baseLayerUrl: imageUrl!,
+            width: parsed.mapWidth,
+            height: parsed.mapHeight,
+            gridSize: gridSizePx,
+            tokens: [],
+            annotations: [],
+            wallSegments: toJson(parsed.wallSegments),
+            lights: toJson(parsed.lightSources),
+            // Only when the file brings lights of its own. Walls alone used to
+            // turn this on, which handed the DM a map that was black for every
+            // player until they found the setting: walls block sight, and with
+            // nothing lighting the room there is nothing to see.
+            lightingEnabled: parsed.lightSources.length > 0,
+            fogEnabled: false,
+            globalIllumination: false,
+            explorationEnabled: false,
+          },
+        });
+        signal.throwIfAborted();
+      } catch (error) {
+        // The rows first: a row that cannot be removed keeps its files, which
+        // it still names.
+        try {
+          if (map) await prisma.map.delete({ where: { id: map.id } });
+          await prisma.asset.delete({ where: { id: asset.id } });
+          await removeFiles();
+        } catch (err) {
+          logger.error('[uvtt-import] Could not remove the asset of a failed import', { err, assetId: asset.id });
+        }
+        throw error;
+      }
 
       logger.info(
         `[uvtt-import] Created map "${mapName}" (${parsed.mapWidth}×${parsed.mapHeight}) ` +
         `with ${parsed.wallCount} walls + ${parsed.portalCount} doors + ${parsed.lightCount} lights`
       );
 
-      return res.status(201).json({
+      return answer(201, {
         map,
         wallCount: parsed.wallCount,
         portalCount: parsed.portalCount,
@@ -556,11 +688,14 @@ router.post(
         totalSegments: parsed.wallSegments.length,
       });
     } catch (error) {
+      if (signal.aborted) {
+        logger.warn('[uvtt-import] An import that ran past its time limit has stopped');
+        return undefined;
+      }
       logger.error('Error importing UVTT file:', error);
-      return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to import UVTT file' });
+      return answer(500, { error: 'Internal Server Error', message: 'Failed to import UVTT file' });
     }
-  }
-);
+}
 
 /**
  * GET /api/campaigns/:campaignId/maps/:id/export-uvtt

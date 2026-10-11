@@ -5,7 +5,8 @@
  * FILE_SIZE_LIMITS, and the proxy body-size warnings derived from them.
  */
 
-import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType } from './fileUtils';
+import path from 'path';
+import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType, getUploadsDirectory } from './fileUtils';
 import { parseProxyBodySize } from './proxyLimits';
 
 const MB = 1024 * 1024;
@@ -229,5 +230,29 @@ describe('size limits cover every asset type', () => {
     // A setting that did nothing would be worse than no setting.
     const limits = resolveFileSizeLimits({ MAX_OTHER_SIZE_MB: '99' });
     expect(limits.OTHER).toBe(0);
+  });
+});
+
+// ============================================
+// getUploadsDirectory
+// ============================================
+
+describe('getUploadsDirectory', () => {
+  const saved = process.env.UPLOAD_DIR;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = saved;
+  });
+
+  it('is UPLOAD_DIR as an absolute path, read when asked', () => {
+    process.env.UPLOAD_DIR = 'some/where';
+    expect(getUploadsDirectory()).toBe(path.resolve('some/where'));
+    process.env.UPLOAD_DIR = '/srv/cozy/uploads';
+    expect(getUploadsDirectory()).toBe('/srv/cozy/uploads');
+  });
+
+  it('is the uploads folder in the working directory when UPLOAD_DIR is not set', () => {
+    delete process.env.UPLOAD_DIR;
+    expect(getUploadsDirectory()).toBe(path.resolve('uploads'));
   });
 });

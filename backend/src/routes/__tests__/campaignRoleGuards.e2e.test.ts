@@ -38,7 +38,6 @@ const DM_ONLY = [
   'GET /api/campaigns/:campaignId/export',
   'POST /api/campaigns/:campaignId/documents',
   'DELETE /api/campaigns/:campaignId/documents/:assetId',
-  'POST /api/campaigns/:campaignId/creatures/seed',
   'GET /api/campaigns/:campaignId/creatures',
   'GET /api/campaigns/:campaignId/creatures/:creatureId',
   'POST /api/campaigns/:campaignId/creatures',
@@ -189,6 +188,9 @@ it('has every campaign route guarded, or listed as deciding in its own handler',
     // are not a member of.
     'GET /api/campaigns/left/:campaignId': 'leftCampaignNotes.e2e.test.ts',
     'GET /api/campaigns/left/:campaignId/notes/:noteId': 'leftCampaignNotes.e2e.test.ts',
+    // The SRD import is a platform admin's: it fills the library every
+    // campaign shares, so the campaign in the address plays no part.
+    'POST /api/campaigns/:campaignId/creatures/seed': 'srdSeedRoute.e2e.test.ts',
   };
   const unguarded = routes
     .filter((r) => r.path.includes(':campaignId') && !runs(r, requireDM) && !runs(r, requireCampaignMember))

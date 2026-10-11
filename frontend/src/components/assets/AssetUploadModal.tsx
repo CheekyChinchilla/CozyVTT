@@ -10,6 +10,8 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
+import { ASSET_LIMITS } from '@/constants/assetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -190,7 +192,7 @@ export default function AssetUploadModal({
     setError(null);
 
     if (!name) {
-      setName(file.name.replace(/\.[^/.]+$/, ''));
+      setName(assetNameFrom(file.name.replace(/\.[^/.]+$/, '')));
     }
   };
 
@@ -214,10 +216,12 @@ export default function AssetUploadModal({
     }
   };
 
+  const atTagLimit = tags.length >= ASSET_LIMITS.maxTags;
+
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      if (!tags.includes(tagInput.trim())) {
+      if (!tags.includes(tagInput.trim()) && !atTagLimit) {
         setTags([...tags, tagInput.trim()]);
       }
       setTagInput('');
@@ -559,6 +563,7 @@ export default function AssetUploadModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxNameLength}
                 placeholder="Enter asset name..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
@@ -573,6 +578,7 @@ export default function AssetUploadModal({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxDescriptionLength}
                 placeholder="Enter asset description..."
                 rows={3}
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray resize-none disabled:opacity-50"
@@ -590,9 +596,15 @@ export default function AssetUploadModal({
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleAddTag}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxTagLength}
                 placeholder="Type a tag and press Enter..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
+              {atTagLimit && (
+                <p className="text-xs text-warm-gray mt-1">
+                  An asset can have at most {ASSET_LIMITS.maxTags} tags.
+                </p>
+              )}
               {tags.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap mt-3">
                   {tags.map((tag) => (

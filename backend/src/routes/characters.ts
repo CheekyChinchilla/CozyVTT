@@ -20,16 +20,65 @@ import {
 } from '../utils/keeperNotes';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
+import { cutText } from '../utils/cutText';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import { withMapsLocked } from '../utils/mapTokens';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
+import { holdOwnerCreates } from '../utils/ownerLimit';
 
 const router = Router();
 
 /** What a refused Flexible sheet answers, beside the list of its problems. */
 const FLEXIBLE_SHEET_REFUSED = 'Character data does not match the Flexible sheet layout';
+
+/**
+ * The most characters one account may own, copies included. Each one can be
+ * up to the 1 MB body limit. A player keeps a handful and a DM who builds
+ * sheets for a table in advance a few dozen; 1,000 is far above either.
+ */
+export const MAX_CHARACTERS_PER_USER = 1000;
+const CHARACTER_LIMIT_REACHED =
+  `You already have ${MAX_CHARACTERS_PER_USER} characters, the most one account can. ` +
+  'Delete one you no longer need to make room.';
+
+/** Refused inside a create's transaction when the owner is at the ceiling. */
+class CharacterLimitReached extends Error {}
+
+/** Inside a create's transaction: refuse when the owner already has the most characters allowed. */
+async function roomForCharacter(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  await holdOwnerCreates(tx, 'characters', userId);
+  if ((await tx.character.count({ where: { userId } })) >= MAX_CHARACTERS_PER_USER) {
+    throw new CharacterLimitReached();
+  }
+}
+
+/** The longest a character name may be, as the create and update schemas hold it. */
+const MAX_CHARACTER_NAME_LENGTH = 200;
+const COPY_SUFFIX = ' (Copy)';
+
+/** A copy's name: the original's with " (Copy)", cut so the whole stays a name the editor can save. */
+export function copyName(original: string): string {
+  return `${cutText(original, MAX_CHARACTER_NAME_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
+}
+
+/**
+ * What the list returns for each character: everything but the sheet, which
+ * GET /:id serves. The list is unpaged, and every sheet can be up to the 1 MB
+ * body limit.
+ */
+const CHARACTER_SUMMARY_SELECT = {
+  id: true,
+  userId: true,
+  campaignId: true,
+  gameSystem: true,
+  name: true,
+  tokenImageUrl: true,
+  createdAt: true,
+  updatedAt: true,
+  campaign: { select: { id: true, name: true } },
+} as const;
 
 /**
  * Whether a character's owner is still a member of the campaign it names. A
@@ -203,6 +252,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // them would produce exactly the state this fixes: a character carrying a
     // campaignId that the campaign itself does not know about.
     const character = await prisma.$transaction(async (tx) => {
+      await roomForCharacter(tx, userId);
       const created = await tx.character.create({
         data: {
           userId,
@@ -229,6 +279,9 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       character: characterForReader(character, keeper),
     });
   } catch (error) {
+    if (error instanceof CharacterLimitReached) {
+      return res.status(400).json({ error: 'Validation Error', message: CHARACTER_LIMIT_REACHED });
+    }
     logger.error('Error creating character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -239,7 +292,8 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
 
 /**
  * GET /api/characters
- * List all characters owned by the authenticated user
+ * List all characters owned by the authenticated user, without their sheets
+ * (GET /:id returns one with its sheet).
  * Requires: Authentication
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
@@ -248,30 +302,13 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     const characters = await prisma.character.findMany({
       where: { userId },
-      include: {
-        campaign: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      select: CHARACTER_SUMMARY_SELECT,
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Keeper's Notes only on the characters in a campaign this user runs.
-    const runs = new Set(
-      (await prisma.campaignMembership.findMany({
-        where: { userId, role: 'DM', campaignId: { in: characters.flatMap((c) => (c.campaignId ? [c.campaignId] : [])) } },
-        select: { campaignId: true },
-      })).map((m) => m.campaignId)
-    );
-
-    return res.status(200).json({
-      characters: characters.map((c) => characterForReader(c, c.campaignId !== null && runs.has(c.campaignId))),
-    });
+    return res.status(200).json({ characters });
   } catch (error) {
     logger.error('Error fetching characters', { err: error });
     return res.status(500).json({
@@ -1187,15 +1224,18 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
 
     // Create a copy with modified name. Not the Keeper's Notes: they are the
     // Keeper's, and the copy is in no campaign.
-    const copiedCharacter = await prisma.character.create({
-      data: {
-        userId,
-        name: `${originalCharacter.name} (Copy)`,
-        data: toJson(sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data)),
-        tokenImageUrl: originalCharacter.tokenImageUrl,
-        gameSystem: originalCharacter.gameSystem,
-        campaignId: null, // Copies are unassigned by default
-      },
+    const copiedCharacter = await prisma.$transaction(async (tx) => {
+      await roomForCharacter(tx, userId);
+      return tx.character.create({
+        data: {
+          userId,
+          name: copyName(originalCharacter.name),
+          data: toJson(sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data)),
+          tokenImageUrl: originalCharacter.tokenImageUrl,
+          gameSystem: originalCharacter.gameSystem,
+          campaignId: null, // Copies are unassigned by default
+        },
+      });
     });
 
     return res.status(201).json({
@@ -1203,6 +1243,9 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       character: copiedCharacter,
     });
   } catch (error) {
+    if (error instanceof CharacterLimitReached) {
+      return res.status(400).json({ error: 'Validation Error', message: CHARACTER_LIMIT_REACHED });
+    }
     logger.error('Error copying character', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',

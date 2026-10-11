@@ -17,6 +17,7 @@ import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { removeAvatars } from '../services/avatars';
 import { writeSystemLog, writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
@@ -310,6 +311,13 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
       });
     }
     const updatedUser = written;
+
+    // Clearing the avatar removes the pictures too, so none is left to be
+    // served or brought back. The profile is already changed; a picture that
+    // cannot be removed is logged and leaves the request answered.
+    if (updateData.avatarUrl === null) {
+      await removeAvatars(id).catch((err) => logger.error('Avatar cleared, but its pictures were not all removed', { err, userId: id }));
+    }
 
     // Tell the old address, which is the one the owner still reads if the
     // change was not theirs. Best-effort: the change is made either way.

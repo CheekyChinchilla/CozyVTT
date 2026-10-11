@@ -29,6 +29,10 @@ import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
+import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
+import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
+import { escapeLikePattern } from '../utils/likePattern';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -673,14 +677,39 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
 });
 
 /**
- * GET /api/campaigns/:campaignId/invitable-users
- * List all platform users who can be invited to this campaign.
- * Excludes: existing members and users with a pending invitation.
+ * GET /api/campaigns/:campaignId/invitable-users?search=<part of a name>
+ * Search the accounts that can be invited to this campaign by display name.
+ * A search of INVITE_SEARCH_MIN_LENGTH or more characters finds names that
+ * contain it; a shorter one finds only names that are exactly it, so a
+ * one-character name can still be invited without listing everyone. Answers
+ * nobody for an empty search, and at most INVITE_SEARCH_MAX_RESULTS, with
+ * `hasMore` when there were more.
+ * Excludes: existing members, users with a pending invitation, and accounts
+ * still waiting for an administrator's approval.
  * Requires: Campaign DM role
+ *
+ * Any user can create a campaign and so become a DM, so this must never hand
+ * out the whole user directory: it used to, unpaged.
  */
 router.get('/:campaignId/invitable-users', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
+    const raw: unknown = req.query.search;
+    if (raw !== undefined && typeof raw !== 'string') {
+      return res.status(400).json({ error: 'Validation Error', message: 'Send the search once, as text.' });
+    }
+    // Display names are stored in NFC, so an accent typed as its own mark
+    // still finds the name.
+    const search = (raw ?? '').normalize('NFC').trim();
+    if (search.length > MAX_DISPLAY_NAME_LENGTH) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `A display name is at most ${MAX_DISPLAY_NAME_LENGTH} characters, so search for that many or fewer.`,
+      });
+    }
+    if (search.length === 0) {
+      return res.status(200).json({ users: [], hasMore: false });
+    }
 
     // Find existing member user IDs
     const memberships = await prisma.campaignMembership.findMany({
@@ -703,9 +732,17 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
     // DM can call this endpoint, and `sanitizeUser` only strips password/MFA
     // — it does NOT strip email. Returning emails here would let any DM
     // harvest every account's email address via the invite picker.
-    const users = await prisma.user.findMany({
-      where: { id: { notIn: excludedIds } },
-      orderBy: { displayName: 'asc' },
+    const found = await prisma.user.findMany({
+      where: {
+        id: { notIn: excludedIds },
+        isApproved: true,
+        // Escaped both ways, or a search of `%%`, or `%` alone, would match every name.
+        displayName: search.length < INVITE_SEARCH_MIN_LENGTH
+          ? { equals: escapeLikePattern(search), mode: 'insensitive' }
+          : { contains: escapeLikePattern(search), mode: 'insensitive' },
+      },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      take: INVITE_SEARCH_MAX_RESULTS + 1,
       select: {
         id: true,
         displayName: true,
@@ -713,7 +750,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       },
     });
 
-    return res.status(200).json({ users });
+    return res.status(200).json({
+      users: found.slice(0, INVITE_SEARCH_MAX_RESULTS),
+      hasMore: found.length > INVITE_SEARCH_MAX_RESULTS,
+    });
   } catch (error) {
     logger.error('Error fetching invitable users', { err: error });
     return res.status(500).json({
@@ -728,9 +768,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
  * Invite a user to join the campaign.
  * Creates a pending invitation that the user must accept.
  * Requires: Campaign DM role
- * Campaign membership management
+ * An invitation that asks for an email counts against the DM's hourly
+ * ceiling on invitation emails (middleware/invitationEmailLimiter).
  */
-router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const parsed = CampaignInviteSchema.safeParse(req.body);
@@ -750,12 +791,14 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
     // no email.
     const wantsEmail = sendEmail === true;
 
-    // Check if user exists
+    // Check if user exists. An account still waiting for an administrator's
+    // approval cannot sign in to accept, and is answered as no account, so
+    // the invite route does not tell a DM which accounts are waiting.
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
 
-    if (!user) {
+    if (!user || !user.isApproved) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'User not found',

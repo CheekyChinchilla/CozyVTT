@@ -428,8 +428,16 @@ paths:
                   minLength: 1
                   maxLength: 50
                   description: >-
-                    Trimmed, and angle brackets removed, before the length is
-                    checked.
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`.
                 instanceName:
                   type: string
                   default: CozyVTT
@@ -543,7 +551,18 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 50
-                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
+                  description: >-
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`. Anything else, including a value that is not a
+                    string, is refused with 400.
       responses:
         '201':
           description: Registered, or submitted pending admin approval.
@@ -1652,7 +1671,18 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 50
-                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
+                  description: >-
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`. Anything else, including a value that is not a
+                    string, is refused with 400.
                 email:
                   type: string
                   format: email
@@ -1667,6 +1697,9 @@ paths:
                     Either `/api/assets/avatars/{id}` for the user being
                     updated (the address the web client sets after an avatar
                     upload) or `null` to clear it. Anything else answers 400.
+                    `null` also deletes the user's AVATAR assets, rows and
+                    files, apart from any that a map, token, character,
+                    template, creature or campaign setting still names.
                 bio:
                   type: string
                   nullable: true
@@ -2442,19 +2475,39 @@ paths:
     get:
       tags:
         - Campaigns
-      summary: List users eligible to invite
+      summary: Search users eligible to invite
       description: |
-        Returns all users on the instance who are *not* already a member of
-        the campaign and have no pending invitation to it. Used by the
-        DM-side invite picker. DM only.
+        Searches, by part of the display name and ignoring case, the users who
+        are *not* already a member of the campaign, have no pending
+        invitation to it, and are not waiting for an administrator's
+        approval. Used by the DM-side invite picker. DM only.
+
+        A `search` of 2 or more characters (after trimming) finds display
+        names that contain it. A 1-character `search` finds only display
+        names that are exactly that character, ignoring case, so a
+        one-character name can still be invited. An empty `search`, or
+        none, answers 200 with no users: the route never lists the whole
+        directory. The search is put in Unicode NFC first, the form display
+        names are saved in. A `%`, `_` or `\` in it matches only itself. At
+        most 20 users are returned, ordered by display name; `hasMore` says
+        there were more matches.
       operationId: listInvitableUsers
       security:
         - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/CampaignId'
+        - name: search
+          in: query
+          required: false
+          description: >-
+            Part of the display name, at most 50 characters after trimming;
+            a single character matches only a whole display name.
+          schema:
+            type: string
+            maxLength: 50
       responses:
         '200':
-          description: Users available to invite.
+          description: Up to 20 users available to invite whose display name contains the search, or, for a 1-character search, is exactly it.
           content:
             application/json:
               schema:
@@ -2462,6 +2515,7 @@ paths:
                 properties:
                   users:
                     type: array
+                    maxItems: 20
                     items:
                       type: object
                       description: Never includes `email`, so a DM cannot collect addresses through the invite picker. Ordered by display name.
@@ -2469,6 +2523,18 @@ paths:
                         id: { type: string, format: uuid }
                         displayName: { type: string }
                         avatarUrl: { type: string, nullable: true }
+                  hasMore:
+                    type: boolean
+                    description: True when more than 20 users matched; a longer search narrows them down.
+        '400':
+          description: >-
+            `search` was sent more than once ("Send the search once, as
+            text.") or is longer than 50 characters ("A display name is at
+            most 50 characters, so search for that many or fewer.").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -2482,7 +2548,8 @@ paths:
       description: >-
         Create a PENDING invitation for a user (DM only). This route does not
         create a membership; the user joins as PLAYER once they accept it with
-        `POST /api/invitations/{id}/accept`. 400 when `userId` is missing or
+        `POST /api/invitations/{id}/accept`. An account still waiting for an
+        administrator's approval is answered 404, as for no account. 400 when `userId` is missing or
         not text, `expiresInDays` is not a whole number up to 365, the user is
         already a member, or they already have a pending invitation.
         A user whose earlier invitation was accepted or declined (and who is
@@ -2520,7 +2587,12 @@ paths:
                 sendEmail:
                   type: boolean
                   default: false
-                  description: Email the invitation if the instance has SMTP configured. Anything other than exactly `true` is treated as no email.
+                  description: >-
+                    Email the invitation if the instance has SMTP configured.
+                    Anything other than exactly `true` is treated as no email.
+                    Each DM may have 20 invitation emails sent an hour; see the
+                    429 response. The email's subject and inbox preview name
+                    the instance only, never the campaign or the DM.
       responses:
         '201':
           description: >-
@@ -2557,11 +2629,25 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: The invited user does not exist
+          description: The invited user does not exist, or is waiting for an administrator's approval ("User not found")
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            `sendEmail` was `true`, SMTP is configured, and this DM has already
+            had 20 invitation emails sent in the last hour. No invitation is
+            created. Requests without `sendEmail`, on an instance without
+            SMTP, or refused with a 400 or 404 are not counted. Counted per
+            signed-in user, with the standard `RateLimit-*` headers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: You have sent 20 invitation emails in the last hour, the most this server allows. Send this invitation without the email, or try again in 42 minutes.
 
   /api/campaigns/{campaignId}/members/{userId}:
     delete:
@@ -4262,16 +4348,16 @@ paths:
       summary: List user characters
       description: >-
         Every character the caller owns, newest first, each with its
-        `campaign` as `{ id, name }` (null when unassigned). Characters owned
-        by other members of the caller's campaigns are not included. A Call
-        of Cthulhu sheet carries its Keeper's Notes only when the caller is
-        the DM of its campaign (see `Character.data`).
+        `campaign` as `{ id, name }` (null when unassigned) and without its
+        sheet: `data` is left out, and `GET /api/characters/{id}` returns one
+        character with it. Characters owned by other members of the caller's
+        campaigns are not included.
       operationId: listCharacters
       security:
         - cookieAuth: []
       responses:
         '200':
-          description: List of characters
+          description: List of characters, without their sheets
           content:
             application/json:
               schema:
@@ -4280,7 +4366,25 @@ paths:
                   characters:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Character'
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        userId: { type: string, format: uuid }
+                        campaignId: { type: string, format: uuid, nullable: true }
+                        gameSystem:
+                          type: string
+                          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                          nullable: true
+                        name: { type: string }
+                        tokenImageUrl: { type: string, nullable: true }
+                        createdAt: { type: string, format: date-time }
+                        updatedAt: { type: string, format: date-time }
+                        campaign:
+                          type: object
+                          nullable: true
+                          properties:
+                            id: { type: string, format: uuid }
+                            name: { type: string }
 
     post:
       tags:
@@ -4326,6 +4430,10 @@ paths:
           `/api/assets/<maps|tokens|avatars|audio|documents>/<id>` with nothing
           after the id. The asset must be one the caller can read, or one that
           does not exist; otherwise the answer is 403 and nothing is created.
+        - One account may own at most 1,000 characters, copies included. Past
+          that the request answers 400 with the message `You already have 1000
+          characters, the most one account can. Delete one you no longer need
+          to make room.`
       operationId: createCharacter
       security:
         - cookieAuth: []
@@ -4380,7 +4488,8 @@ paths:
             match the game system's sheet schema, or for a Flexible character
             the `FlexibleCharacterData` layout (message `Character data does
             not match the Flexible sheet layout`), answered with
-            `validationErrors` listing each problem.
+            `validationErrors` listing each problem; or the caller already
+            owns 1,000 characters.
           content:
             application/json:
               schema:
@@ -4808,8 +4917,11 @@ paths:
         `gameSystem`, sheet (less a Call of Cthulhu sheet's Keeper's Notes)
         and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
-        and `(Copy)`, and the response carries no `campaign` object. Only the
-        character's owner may copy it.
+        and `(Copy)`, the original cut short first so the whole is at most 200
+        characters, and the response carries no `campaign` object. Only the
+        character's owner may copy it. A copy counts towards the 1,000
+        characters one account may own; past that it answers 400 with the same
+        message as `POST /api/characters`.
       operationId: copyCharacter
       security:
         - cookieAuth: []
@@ -4826,6 +4938,12 @@ paths:
                   message: { type: string, example: Character copied successfully }
                   character:
                     $ref: '#/components/schemas/Character'
+        '400':
+          description: The owner already has 1,000 characters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -5001,7 +5119,10 @@ paths:
         | CAMPAIGN | That campaign's DM; a player may upload only TOKEN art (their own character's); a spectator never |
 
         `type: AVATAR` is always placed at USER scope, whatever `scope` is
-        sent: an avatar is always personal. A `campaignId` sent with a USER
+        sent: an avatar is always personal. A new avatar deletes the
+        uploader's earlier AVATAR assets, rows and files, apart from any that
+        a map, token, character, template, creature or campaign setting
+        still names. A `campaignId` sent with a USER
         or GLOBAL upload is ignored.
 
         **Accepted content per asset type**, decided by what the bytes are,
@@ -5085,12 +5206,23 @@ paths:
                   description: Required if scope is CAMPAIGN
                 name:
                   type: string
-                  description: Defaults to the uploaded file's original name when omitted.
+                  maxLength: 200
+                  description: >-
+                    Trimmed, at most 200 characters. Defaults to the uploaded
+                    file's original name when omitted or empty, cut to 200
+                    characters with its extension kept. The original name is
+                    stored as `originalName`, cut the same way to 255
+                    characters.
                 description:
                   type: string
+                  maxLength: 1000
+                  description: Trimmed, at most 1,000 characters. Empty is stored as null.
                 tags:
                   type: string
-                  description: Comma-separated tags; each is trimmed and empty ones are dropped.
+                  description: >-
+                    Comma-separated tags; each is trimmed, empty ones are
+                    dropped and a repeated one is kept once. At most 50 tags of
+                    at most 50 characters each.
       responses:
         '201':
           description: Asset uploaded.
@@ -5111,10 +5243,18 @@ paths:
             `campaignId` missing for a CAMPAIGN upload; no file; a file in a
             part not named `file`; content that cannot be identified ("Could
             not determine file type...") or is not accepted for the declared
-            `type` ("Invalid file type..."). `error` is `File Too Large` when
+            `type` ("Invalid file type..."); a `name` over 200 characters
+            ("The asset name must be 200 characters or fewer"), a
+            `description` over 1,000 ("The asset description must be 1000
+            characters or fewer"), more than 50 tags ("An asset can have at
+            most 50 tags") or a tag over 50 characters ("Each tag must be 50
+            characters or fewer"); or `name`, `description` or `tags` sent
+            more than once ("Send the name once, as text.", and so on; this
+            answered 500 before). `error` is `File Too Large` when
             the file exceeds its type's limit. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
-            than 100 text fields, a field name longer than 100 bytes, or
+            than 100 text fields, a field name longer than 100 bytes, a field
+            value longer than 16 KB, or
             a name such as `a[b][c]` nested more than five levels deep or
             with a number above 1000 between the brackets, answer with
             `Upload Error` or `Validation Error`. A refused file is deleted,
@@ -5191,7 +5331,8 @@ paths:
 
         Removes the database row, the file and its thumbnail (if any), and
         for a document every share of it with a campaign. Deleting a user's
-        newest avatar makes their previous one current.
+        last AVATAR asset also sets their `avatarUrl` to null; an upload of a
+        new avatar already deleted the ones before it.
 
         While a map (its image, base layer or spirit layer), a token on a map,
         a character's token picture, a character template, a creature, a token
@@ -5837,7 +5978,8 @@ paths:
       summary: Serve user avatar
       description: >-
         Any signed-in user may fetch anyone's avatar. Serves the newest
-        AVATAR asset that user uploaded, with the content type chosen from
+        AVATAR asset that user uploaded, while their `avatarUrl` is set (404
+        once it is null, whatever pictures are stored), with the content type chosen from
         its stored extension and `X-Content-Type-Options: nosniff`. Because
         the address names the user, not the asset, it is cached as
         `private, max-age=300` with the ETag `"<asset id>"`, which changes
@@ -5863,7 +6005,7 @@ paths:
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
         '404':
-          description: The user has no avatar, or its file is missing from disk.
+          description: The user has no avatar (their `avatarUrl` is null, or no AVATAR asset is stored), or its file is missing from disk.
           content:
             application/json:
               schema:
@@ -7816,9 +7958,10 @@ paths:
       summary: Check SRD seed status
       description: >-
         Returns how many SRD and custom creatures are stored, from which a
-        client tells whether SRD creatures have been seeded, and whether a
-        seed is running on this server. Any campaign member can check (not
-        DM-only, unlike the rest of this library).
+        client tells whether SRD creatures have been seeded, whether a
+        seed is running on this server, and whether the caller may run one.
+        Any campaign member can check (not DM-only, unlike the rest of this
+        library).
       operationId: getSrdSeedStatus
       security:
         - cookieAuth: []
@@ -7843,6 +7986,9 @@ paths:
                       this campaign's own.
                   seedInProgress:
                     type: boolean
+                  canSeed:
+                    type: boolean
+                    description: Whether the caller may run `POST …/creatures/seed`, which only a platform admin may.
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -7851,19 +7997,32 @@ paths:
       tags: [Creatures]
       summary: Seed SRD creatures
       description: |
-        Fetch SRD creatures from Open5e and populate the library (DM only).
+        Fetch SRD creatures from Open5e and populate the library. **Platform
+        admins only** (it was any campaign DM, which is any user): anyone else
+        gets 403 with the message `Only an administrator can import the SRD
+        creatures, because every campaign on this server shares them. Ask an
+        administrator to import them.` The admin need not be a member of the
+        campaign in the address; it plays no part.
         Safe to call multiple times — existing SRD creatures, matched by name,
-        are not duplicated. SRD creatures belong to no campaign, so seeding
-        from one campaign fills the library of every campaign on the
-        instance. They are stored with `gameSystem: DND_5E`. The request
-        waits until seeding finishes.
+        are not duplicated, even when the command-line seed script or another
+        backend process seeds at the same moment. SRD creatures belong to no
+        campaign, so seeding from one campaign fills the library of every
+        campaign on the instance. They are stored with `gameSystem: DND_5E`.
+        The request waits until seeding finishes.
+
+        Pages are fetched from `https://api.open5e.com` only, with 15 seconds
+        allowed for each and at most 40 pages; a next page on any other host,
+        a page that does not answer in time, an error answer or a body that
+        is not a list of creatures stops the run before anything is written,
+        with 502. Each creature's stat block is checked as the Creature
+        Library checks one sent to it, and one that fails is left out and
+        counted in `rejected`.
 
         Existing SRD creatures stored before hit points were tracked are updated
         in place with `hpMax` / `hitDice`; only those missing keys are added, and
         custom creatures are never modified.
 
-        Returns 409 if seeding is already in progress on this server. A
-        creature that fails to insert is logged and left out of every count.
+        Returns 409 if seeding is already in progress on this server.
       operationId: seedSrdCreatures
       security:
         - cookieAuth: []
@@ -7894,8 +8053,18 @@ paths:
                   alreadyExisted:
                     type: integer
                     description: SRD creatures already stored before this run
+                  rejected:
+                    type: integer
+                    description: Creatures left out because their stat block failed the Creature Library's check, or could not be read
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller is not a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them.
         '409':
           description: Seeding already in progress
           content:
@@ -7906,7 +8075,7 @@ paths:
                 error: Conflict
                 message: SRD seeding is already in progress. Please wait.
         '500':
-          description: The fetch from Open5e failed, or another error stopped the run.
+          description: Another error stopped the run.
           content:
             application/json:
               schema:
@@ -7914,6 +8083,20 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to seed SRD creatures. Check that the server can reach api.open5e.com.
+        '502':
+          description: >-
+            Open5e could not be read, did not answer a page within 15 seconds,
+            answered an error, sent something that is not a list of creatures,
+            pointed the next page at another host, or listed more than 40
+            pages. Nothing was written. The message says which. Before 1.5.2
+            a failed fetch answered 500, and a stalled one did not answer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Gateway
+                message: api.open5e.com did not answer within 15 seconds. Nothing was imported; check that this server can reach it, then try again.
 
   # ============================================
   # TOKEN TEMPLATE ENDPOINTS
@@ -8656,6 +8839,26 @@ paths:
                           type: integer
                         sizeBytes:
                           type: integer
+                  uploadsDisk:
+                    type: object
+                    nullable: true
+                    description: >-
+                      How full the disk holding the uploads folder is (the
+                      nearest folder that exists, before the first upload), or
+                      null when the server cannot read it. No per-user storage
+                      quota is enforced; the dashboard warns from this instead.
+                    properties:
+                      totalBytes:
+                        type: integer
+                      freeBytes:
+                        type: integer
+                        description: What the backend can still write; space the file system keeps back is not counted.
+                      usedPercent:
+                        type: integer
+                        description: Whole percent used, counted as `df` counts it.
+                      warning:
+                        type: boolean
+                        description: '`usedPercent` is over 80.'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -9040,9 +9243,11 @@ paths:
 
         `email` is trimmed and lowercased; an address holding `<` or `>` is refused
         with 400, so the address checked for a duplicate is the one stored and
-        emailed. `displayName` is checked as sign-up checks it: text, stripped of `<`
-        and `>` and trimmed, then 1 to 50 characters, or 400 with the reason. Omitted,
-        null or blank, it defaults to the part of the email before `@` (its first 50
+        emailed. `displayName` is checked as sign-up checks it: text, cleaned of
+        control and invisible formatting characters (bar the joiners and flag tags
+        described under `POST /api/auth/register`), put in Unicode NFC, stripped of
+        `<` and `>` and trimmed, then 1 to 50 characters, or 400 with the reason.
+        Omitted, null or only whitespace, it defaults to the part of the email before `@` (its first 50
         characters). `platformRole` is not validated against the enum: any value
         other than exactly `"ADMIN"`, including an unrecognised string, becomes `USER`.
       operationId: adminCreateUser
@@ -9063,6 +9268,13 @@ paths:
                 displayName:
                   type: string
                   maxLength: 50
+                  description: >-
+                    Cleaned as in `POST /api/auth/register`: invisible
+                    characters removed (bar the joiners and flag tags real
+                    names and emoji need), put in Unicode NFC, angle brackets
+                    removed and trimmed, then 1 to 50 characters, or 400 with
+                    the reason. Omitted, null or only whitespace, it is the
+                    part of the email before `@`.
                 platformRole:
                   type: string
                   enum: [USER, ADMIN]
@@ -9144,6 +9356,13 @@ paths:
                 displayName:
                   type: string
                   maxLength: 50
+                  description: >-
+                    Cleaned as in `POST /api/auth/register`: invisible
+                    characters removed (bar the joiners and flag tags real
+                    names and emoji need), put in Unicode NFC, angle brackets
+                    removed and trimmed, then 1 to 50 characters, or 400 with
+                    the reason. Omitted, null or only whitespace, it is the
+                    part of the email before `@`.
                 platformRole:
                   type: string
                   enum: [USER, ADMIN]
@@ -9622,7 +9841,8 @@ paths:
         Every template is visible to every signed-in user. Sorted by name,
         A to Z, and paged with `limit` and `offset`; `total` counts every
         match. A `gameSystem` value that is neither `flexible` nor a known
-        game system answers 400.
+        game system answers 400. Each template is listed without its sheet
+        (`data`); `GET /api/character-templates/{id}` returns one with it.
       operationId: listCharacterTemplates
       security:
         - cookieAuth: []
@@ -9680,9 +9900,6 @@ paths:
                           enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
                           nullable: true
                         tokenImageUrl: { type: string, nullable: true }
-                        data:
-                          type: object
-                          description: The sheet.
                         createdById: { type: string, format: uuid, nullable: true }
                         createdBy:
                           type: object
@@ -9730,7 +9947,10 @@ paths:
         `/api/assets/tokens/<id>`) or by its exact address
         (`/api/assets/<kind>/<id>`, with nothing after the id); anything else
         answers 400. An empty string or null leaves the template without an
-        image.
+        image. One account may author at most 500 templates; past that the
+        request answers 400 with the message `You have already published 500
+        character templates, the most one account can. Delete one you no
+        longer need to make room.`
       operationId: createCharacterTemplate
       security:
         - cookieAuth: []
@@ -10189,7 +10409,22 @@ paths:
         upload does, and a user may run one import at a time: a second sent
         while the first is still being read answers **429** with `Another
         import is still running`. Imports sent one after another are never
-        held back.
+        held back. The upload waits on disk, in the uploads folder's
+        `temp/uvtt`, and is removed as soon as it is read; imports from
+        different users are read one at a time across the server, in the
+        order they arrived, so an import sent while another user's is being
+        read answers when its turn has run. An import still waiting after 20
+        seconds answers **503** with `Retry-After: 60` and `Another map
+        import is running on the server. Try again in a minute.`, having
+        read and saved nothing, and one whose client disconnects while it
+        waits is dropped unread. An import that runs longer than 30 seconds
+        answers **503** with `Retry-After: 60` and `This map import took
+        longer than 30 seconds and was stopped, so nothing was saved. Try
+        again in a minute.`; it stops at its next step and removes what it
+        had saved, and the next import starts at once. Waiting and running
+        together stay under the bundled nginx's 60-second
+        `proxy_read_timeout`. A failure while saving removes the picture,
+        thumbnail, asset row and map it had saved.
 
 
         The map is named after `name`, or the file's name without its
@@ -10328,6 +10563,30 @@ paths:
                 message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            The import could not start within 20 seconds because other
+            imports were ahead of it, or it ran longer than 30 seconds and
+            was stopped. Either way nothing was saved; send it again after
+            the `Retry-After` seconds.
+          headers:
+            Retry-After:
+              description: Seconds to wait before trying again (60).
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                waitedTooLong:
+                  value:
+                    error: Service Unavailable
+                    message: Another map import is running on the server. Try again in a minute.
+                ranTooLong:
+                  value:
+                    error: Service Unavailable
+                    message: This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute.
 
   /api/campaigns/{campaignId}/maps/{id}/export-uvtt:
     get:

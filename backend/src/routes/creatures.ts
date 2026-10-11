@@ -4,13 +4,14 @@
  * Mounted under /api/campaigns/:campaignId/creatures
  */
 
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
+import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
-import { seedSrdCreatures, getSrdSeedStatus } from '../services/creatureSeed';
+import { seedSrdCreatures, getSrdSeedStatus, SeedSourceError } from '../services/creatureSeed';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
@@ -21,13 +22,18 @@ import logger from '../utils/logger';
 
 const router = Router({ mergeParams: true });
 
-/** Track whether a seed is currently in progress to prevent duplicate runs. */
+/**
+ * Whether this process is running a seed, so a second request answers 409
+ * at once instead of fetching from Open5e again. Two seeds in different
+ * processes (the command-line script, or a second backend) are kept from
+ * writing a creature twice by the lock inside seedSrdCreatures.
+ */
 let seedInProgress = false;
 
 // ============================================
 // SEED STATUS — GET /seed/status
-// Returns whether SRD creatures have been seeded.
-// Any campaign member can check.
+// Returns whether SRD creatures have been seeded, and whether the caller may
+// run the import. Any campaign member can check.
 // ============================================
 
 router.get('/seed/status', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
@@ -36,6 +42,8 @@ router.get('/seed/status', campaignMember, async (req: AuthenticatedRequest, res
     return res.json({
       ...status,
       seedInProgress,
+      // Whether the caller may run the import: platform admins only.
+      canSeed: req.session.platformRole === 'ADMIN',
     });
   } catch (error) {
     logger.error('Error checking seed status:', error);
@@ -46,10 +54,28 @@ router.get('/seed/status', campaignMember, async (req: AuthenticatedRequest, res
 // ============================================
 // SEED SRD — POST /seed
 // Fetches SRD creatures from Open5e and populates the library.
-// DM only. Safe to call multiple times.
+// Platform admins only. Safe to call multiple times.
 // ============================================
 
-router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Response) => {
+export const SEED_ADMIN_ONLY =
+  'Only an administrator can import the SRD creatures, because every campaign on this server shares them. ' +
+  'Ask an administrator to import them.';
+
+/**
+ * The import writes creatures every campaign shares and fetches from Open5e
+ * each time, so it is the instance's administrators' to run, not any DM's:
+ * any user can be the DM of a campaign of their own. The campaign in the
+ * address plays no part.
+ */
+function adminToSeed(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  if (req.session.platformRole !== 'ADMIN') {
+    res.status(403).json({ error: 'Forbidden', message: SEED_ADMIN_ONLY });
+    return;
+  }
+  next();
+}
+
+router.post('/seed', requireAuth, adminToSeed, async (_req: AuthenticatedRequest, res: Response) => {
   if (seedInProgress) {
     return res.status(409).json({
       error: 'Conflict',
@@ -65,6 +91,10 @@ router.post('/seed', campaignDM, async (_req: AuthenticatedRequest, res: Respons
       ...result,
     });
   } catch (error) {
+    if (error instanceof SeedSourceError) {
+      logger.warn('SRD creature import stopped', { reason: error.message });
+      return res.status(502).json({ error: 'Bad Gateway', message: error.message });
+    }
     logger.error('Error seeding SRD creatures:', error);
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -111,6 +141,7 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };
 
     if (search) {
+      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
       where.name = { contains: search as string, mode: 'insensitive' };
     }
     if (source) {

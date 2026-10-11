@@ -70,6 +70,7 @@ import {
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 /**
  * The sheet as this editor holds it.
@@ -922,7 +923,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.characterName || 'Character'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
           assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);

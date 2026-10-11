@@ -267,6 +267,15 @@ export interface User {
   isApproved?: boolean;
 }
 
+/** One match from the invite picker's search: never an email address. */
+export type InvitableUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
+
+/** GET /api/campaigns/:campaignId/invitable-users: at most 20 matches, and whether there were more. */
+export interface InvitableUserSearch {
+  users: InvitableUser[];
+  hasMore: boolean;
+}
+
 /**
  * A shareable starter sheet. Visible to everyone; editable by its author, an
  * admin, or a user with `templateEditor`.
@@ -289,6 +298,12 @@ export interface CharacterTemplate {
   updatedAt: string;
 }
 
+/**
+ * A template as the list sends it: everything but the sheet, which
+ * GET /api/character-templates/:id serves.
+ */
+export type CharacterTemplateSummary = Omit<CharacterTemplate, 'data'>;
+
 // ============================================
 // Admin Types
 // ============================================
@@ -307,6 +322,17 @@ export interface AdminHealth {
   connections: number;
 }
 
+/** How full the disk holding the uploads folder is (GET /api/admin/stats). */
+export interface UploadsDisk {
+  totalBytes: number;
+  /** What the server can still write. */
+  freeBytes: number;
+  /** Whole percent used, as `df` counts it. */
+  usedPercent: number;
+  /** More than 80% full. */
+  warning: boolean;
+}
+
 export interface SystemStats {
   userCount: number;
   campaignCount: number;
@@ -317,6 +343,8 @@ export interface SystemStats {
   characterCount: number;
   mapCount: number;
   assetBreakdown: AssetTypeStat[];
+  /** Null when the server could not read the disk. */
+  uploadsDisk?: UploadsDisk | null;
 }
 
 export interface AdminSystemSettings {
@@ -727,6 +755,14 @@ export interface Character {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * A character as GET /api/characters lists it: everything but the sheet,
+ * which GET /api/characters/:id serves, plus the campaign it is in.
+ */
+export type CharacterSummary = Omit<Character, 'data'> & {
+  campaign?: { id: string; name: string } | null;
+};
 
 /**
  * Character data union type - supports all game systems

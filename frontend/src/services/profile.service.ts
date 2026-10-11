@@ -29,6 +29,14 @@ class ProfileService {
     await api.updateUser(userId, { avatarUrl: `/api/assets/avatars/${userId}` });
   }
 
+  /**
+   * Clear the user's avatar. The server deletes the picture too, so no
+   * earlier one is left to be served.
+   */
+  async removeAvatar(userId: string): Promise<void> {
+    await api.updateUser(userId, { avatarUrl: null });
+  }
+
   /** Change the current user's password */
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await api.changePassword({ currentPassword, newPassword });
