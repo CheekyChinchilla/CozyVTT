@@ -19,45 +19,17 @@ import {
   shadowrun6eCharacterDataSchema,
   flexibleCharacterDataSchema,
 } from '../index';
+import { walkSheetSchema } from '../../../__tests__/helpers/sheetSchemaWalk';
 import { migrateLegacySheetFields } from '../../../utils/sheetFieldMigrations';
 import { SHEET_LONG_TEXT_MAX, SHEET_SHORT_TEXT_MAX } from '../sheetLimits';
 
 /** The path of every string in `schema` that has no maximum length. */
 function unboundedStrings(schema: z.ZodType, path: string): string[] {
-  if (schema instanceof z.ZodString) return schema.maxLength === null ? [path] : [];
-  if (schema instanceof z.ZodObject) {
-    return Object.entries(schema.shape as Record<string, z.ZodType>).flatMap(([key, field]) =>
-      unboundedStrings(field, path ? `${path}.${key}` : key)
-    );
-  }
-  if (schema instanceof z.ZodArray) return unboundedStrings(schema.element as z.ZodType, `${path}[]`);
-  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable || schema instanceof z.ZodDefault) {
-    return unboundedStrings(schema.unwrap() as z.ZodType, path);
-  }
-  if (schema instanceof z.ZodUnion) {
-    return (schema.options as readonly z.ZodType[]).flatMap((option, i) => unboundedStrings(option, `${path}|${i}`));
-  }
-  if (schema instanceof z.ZodPipe) {
-    return [...unboundedStrings(schema.in as z.ZodType, path), ...unboundedStrings(schema.out as z.ZodType, path)];
-  }
-  if (schema instanceof z.ZodRecord) {
-    return [
-      ...unboundedStrings(schema.keyType as z.ZodType, `${path}{key}`),
-      ...unboundedStrings(schema.valueType as z.ZodType, `${path}{}`),
-    ];
-  }
-  if (
-    schema instanceof z.ZodNumber ||
-    schema instanceof z.ZodBoolean ||
-    schema instanceof z.ZodEnum ||
-    schema instanceof z.ZodLiteral ||
-    schema instanceof z.ZodTransform ||
-    schema instanceof z.ZodNull ||
-    schema instanceof z.ZodUnknown
-  ) {
-    return [];
-  }
-  throw new Error(`${path}: a kind of schema this walk does not know; teach it before trusting it`);
+  const found: string[] = [];
+  walkSheetSchema(schema, path, (node, at) => {
+    if (node instanceof z.ZodString && node.maxLength === null) found.push(at);
+  });
+  return found;
 }
 
 describe('every text field on a sheet', () => {

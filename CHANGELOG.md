@@ -66,6 +66,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **A DM can have the instance send 20 invitation emails an hour.** Past that, **Send Invitation** with **Also email them an invitation** ticked says how many minutes to wait; the same invitation without the email goes through at once.
 
+- **A list on a D&D 5e character sheet holds up to 500 entries.** Inventory, attacks, spells, features and the other lists stop there, and **+ Add** buttons turn off at the limit. Sheets already saved with more keep every entry; the first save after the upgrade is refused with a message naming the list until it is shortened.
+
 - **An upload's name is at most 200 characters and its description at most 1,000, with at most 50 tags of up to 50 characters each.** The **Upload Asset** dialog stops each box at those lengths. Files already uploaded keep their names, descriptions and tags.
 
 - **The Profile page has a new Remove Avatar button.** **Remove Avatar**, under your avatar, clears it and deletes the picture, unless something else such as a token uses it. Uploading a new avatar now deletes the old picture the same way.
@@ -256,6 +258,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 - **The Import Campaign window can no longer be closed while an import is running.** Escape, a click outside the window and the X all closed it, but the import carried on without it, so there was no sign of whether a campaign had been made, and opening the window again showed the earlier result. While **Importing campaign...** is on screen those three do nothing and the X is greyed out. The window can be closed again once the import finishes or fails.
 
 - **A refused character sheet save names the boxes to fix, in the editor at the table as well.** The sheet editor that opens over a character at the table or on the Characters page said only "Validation Error: Character data does not match game system schema", so a player whose sheet was over a limit could not tell which box to shorten. It now says "Not saved." and lists the first five boxes the server named, each with its reason, and how many more there are, as the Character Editor page does. The editor stays open with everything you typed.
+
+- **Every list on a D&D 5e sheet holds up to 500 entries.** Inventory, attacks, spells, cantrips, conditions, hit dice, features and proficiencies had no limit except the size of a whole save, so one sheet could hold tens of thousands of rows, and everyone who opened it drew them all. The editor turns **+ Add Item**, **+ Add Attack**, **+ Add Spell**, **+ Add Hit Die** and **+ Add Feature** off at 500 and says why, and the Cantrips box stops taking entries at 500. No real sheet comes near it: even a wizard's spellbook rarely passes a hundred. A sheet already stored with more keeps loading with every entry, and its next save is refused with a message naming the list until it is shortened.
 
 ### Security
 

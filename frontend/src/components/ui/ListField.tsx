@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ListLimitNote, { listChangeAllowed } from '../character-sheets/ListLimitNote';
 
 /**
  * A text box that holds a list: "Common, Elven", or one item per line.
@@ -29,6 +30,11 @@ interface ListFieldProps<T> {
   placeholder?: string;
   id?: string;
   'aria-label'?: string;
+  /**
+   * The most entries the list may hold. A change that adds one past it is not
+   * taken, and a note says why. A list already past it may still be shortened.
+   */
+  max?: number;
 }
 
 /** Whether a text still says exactly this list. */
@@ -47,14 +53,24 @@ export default function ListField<T>({
   placeholder,
   id,
   'aria-label': ariaLabel,
+  max,
 }: ListFieldProps<T>) {
   // What was typed, while the box is in use. Null shows the list as written.
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft !== null && says(draft, value, parse) ? draft : format(value);
 
+  // Set when the last change was turned away for being one entry too many.
+  const [turnedAway, setTurnedAway] = useState(false);
+
   const handleChange = (text: string) => {
+    const items = parse(text);
+    if (max !== undefined && !listChangeAllowed(items.length, value.length, max)) {
+      setTurnedAway(true);
+      return;
+    }
+    setTurnedAway(false);
     setDraft(text);
-    onChange(parse(text));
+    onChange(items);
   };
 
   const common = {
@@ -66,10 +82,17 @@ export default function ListField<T>({
     onBlur: () => setDraft(null),
   };
 
-  return multiline ? (
+  const box = multiline ? (
     <textarea {...common} rows={rows} onChange={(e) => handleChange(e.target.value)} />
   ) : (
     <input {...common} type="text" onChange={(e) => handleChange(e.target.value)} />
+  );
+  if (max === undefined) return box;
+  return (
+    <>
+      {box}
+      <ListLimitNote full={turnedAway || value.length >= max} max={max} />
+    </>
   );
 }
 

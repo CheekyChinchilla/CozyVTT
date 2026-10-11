@@ -47,3 +47,13 @@ export const FLEXIBLE_MAX_COLUMNS = 50;
  * four of a level; the sheet draws one mark per slot.
  */
 export const SPELL_SLOTS_MAX = 20;
+
+/**
+ * Typed sheets: entries in one list. Inventory, attacks, spells, features,
+ * conditions, languages and the rest of the lists on a D&D 5e, Pathfinder 2e
+ * or Call of Cthulhu sheet all stop here, unless a list has a lower limit of
+ * its own. Even a wizard's spellbook or a party's pooled inventory seldom
+ * passes a hundred entries, so this is five times what the longest real list
+ * holds, and a sheet drawing this many rows is slow but never frozen.
+ */
+export const SHEET_LIST_MAX = 500;

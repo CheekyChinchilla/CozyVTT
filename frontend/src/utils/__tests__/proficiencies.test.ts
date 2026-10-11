@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { SHEET_LIST_MAX } from '@/constants/sheetLimits';
 import {
   readProficiencyGroups,
   categorizeProficiencyList,
@@ -172,5 +173,14 @@ describe('flattenProficiencyGroups', () => {
 
   it('produces nothing for four empty boxes', () => {
     expect(flattenProficiencyGroups(groups())).toEqual([]);
+  });
+
+  it('stops at the most entries a sheet keeps in a list, and leaves the boxes whole', () => {
+    const box = Array.from({ length: SHEET_LIST_MAX + 40 }, (_unused, i) => `Entry ${i}`).join(', ');
+    const flat = flattenProficiencyGroups(groups({ tools: box }));
+
+    expect(flat).toHaveLength(SHEET_LIST_MAX);
+    expect(flat[0]).toBe('Entry 0');
+    expect(groups({ tools: box }).tools).toBe(box);
   });
 });

@@ -20,6 +20,8 @@
  * survives in one place only, for sheets written before the object was stored.
  */
 
+import { SHEET_LIST_MAX } from '@/constants/sheetLimits';
+
 /** The four boxes, each holding whatever the player typed, verbatim. */
 export interface ProficiencyGroups {
   armor: string;
@@ -179,10 +181,13 @@ export function flattenProficiencyGroups(groups: ProficiencyGroups): string[] {
   const split = (value: string) =>
     value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 
+  // A box of 2,000 characters can hold a thousand entries, so four of them
+  // can pass what the server keeps in a list. The boxes keep all of it, and
+  // this copy is for older readers, so it stops at the limit.
   return [
     ...split(groups.armor),
     ...split(groups.weapons),
     ...split(groups.tools),
     ...split(groups.languages),
-  ];
+  ].slice(0, SHEET_LIST_MAX);
 }
