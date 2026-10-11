@@ -46,6 +46,8 @@ import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
+import { forgetSetupComplete } from '../middleware/setup';
+import { backupsInProgress } from '../services/backupsInProgress';
 import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
@@ -920,12 +922,7 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
   }
 }
 
-/**
- * Backups being written now, by name. Each is written to its name plus
- * PARTIAL, which the list never shows, and renamed once it is complete, so a
- * backup the backend is stopped partway through never appears as a backup.
- */
-const backupsInProgress = new Set<string>();
+/** What a backup is written to until it is complete; see services/backupsInProgress.ts. */
 const PARTIAL = '.partial';
 
 const exists = (file: string) => fs.access(file).then(() => true, () => false);
@@ -1343,6 +1340,8 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // old data.
     await endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
     clearAllCombatState();
+    // The restored database may be one that was never set up.
+    forgetSetupComplete();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup
     // without any is fine; a copy that fails is not, and is reported after the

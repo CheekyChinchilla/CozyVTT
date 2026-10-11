@@ -933,6 +933,11 @@ class ApiClient {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
   }
 
+  /** The address that downloads an asset under its original file name. */
+  getAssetDownloadUrl(id: string): string {
+    return `${API_BASE_URL}/api/assets/${encodeURIComponent(id)}/download`;
+  }
+
   /**
    * The address to load a stored picture reference from. Token templates keep
    * the reference as sent, which from their editor's upload is the asset's bare
@@ -1379,7 +1384,7 @@ async function refusalFrom(response: Response): Promise<Error> {
 }
 
 // Export singleton instance
-/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/nginx.conf). */
+/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/locations.conf). */
 const LONG_ADMIN_REQUEST_MS = 600_000;
 
 export const api = new ApiClient();

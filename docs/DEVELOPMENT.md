@@ -120,11 +120,10 @@ CORS_ORIGIN="http://localhost:3000"
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `VITE_API_URL` | No | (relative) | Backend API URL (leave empty to use Vite proxy in dev) |
-| `VITE_SOCKET_URL` | No | (relative) | WebSocket server URL (leave empty to use Vite proxy in dev) |
 | `VITE_ALLOWED_HOSTS` | No | — | Comma-separated allowed hostnames for the Vite server |
+| `VITE_PROXY_TARGET` | No | `http://localhost:4000` | Where the Vite dev server sends `/api` and `/socket.io` |
 
-In development, leave both `VITE_API_URL` and `VITE_SOCKET_URL` **empty** — the Vite dev server proxies `/api` and socket connections to `http://localhost:4000` automatically.
+The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
 
 ---
 
@@ -179,7 +178,7 @@ This creates a sample admin account and some test data. Check `prisma/seed.ts` f
 
 ## Local Setup (With Docker)
 
-> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which intentionally exposes the database to localhost, runs the backend under nodemon with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under nodemon in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ```bash
 # Copy the root .env template
@@ -195,10 +194,28 @@ docker compose -f docker-compose.dev.yml up
 > the first `up`: `mkdir -p backend/uploads backend/backups`. Docker would otherwise
 > create a missing one as root and the backend could not write to it.
 
-Services (all exposed on localhost for easy debugging):
+Services, each published on `127.0.0.1` so that only this computer can reach them:
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:4000`
 - PostgreSQL: `localhost:5432`
+
+The backend always runs with `NODE_ENV=development` here, whatever `.env` says (`.env.example` sets `production`, for the production stack), so the example secrets only draw a warning and errors show their details. The browser reaches the backend through Vite's proxy on `localhost:3000`, the page's own address, as it reaches it through nginx in production.
+
+To open the dev stack from another device, such as a phone on your network, publish the frontend on a second port open to every interface, with a compose file of your own that git ignores (`*.local.yml`):
+
+```yaml
+# docker-compose.dev.local.yml
+services:
+  frontend:
+    ports:
+      - "3001:3000"
+```
+
+```bash
+docker compose -f docker-compose.dev.yml -f docker-compose.dev.local.yml up
+```
+
+Then open `http://<this computer's address>:3001` on the other device; a name rather than an address also needs adding to `VITE_ALLOWED_HOSTS` in `.env`. Anyone on that network can reach it too, so do this only on a network you trust.
 
 The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. Migrations run automatically on first start via Prisma.
 
@@ -250,6 +267,23 @@ npx prisma migrate dev --name describe_your_change
 # Apply migrations in CI / production (no prompts)
 npx prisma migrate deploy
 ```
+
+> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+>
+> ```bash
+> # Once, with the dev stack running:
+> docker compose -f docker-compose.dev.yml exec database createdb -U cozyvtt cozyvtt_shadow
+>
+> # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
+> mkdir -p prisma/migrations/20261011120000_describe_your_change
+> npx prisma migrate diff --from-migrations prisma/migrations \
+>   --to-schema-datamodel prisma/schema.prisma \
+>   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
+> npx prisma migrate deploy
+> ```
+>
+> A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
 
 ### Exploring the Database
 
@@ -433,8 +467,10 @@ Two of those deserve a note:
   end. The file sets `DATABASE_URL` to that schema before it imports the app,
   with a dynamic import, because the app's database client reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
-  fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
-  `docker-compose.yml` being set to the value it prints (the file's hash, which
+  fails when a file the nginx service mounts on its own (`nginx/nginx.conf`,
+  `nginx/locations.conf`, `nginx/trusted-proxies.envsh`, read from the
+  service's volumes) changes without `NGINX_CONF_STAMP` in
+  `docker-compose.yml` being set to the value it prints (their hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
   files and CI pin, when any line in either Dockerfile that installs it names the

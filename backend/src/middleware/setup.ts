@@ -3,28 +3,39 @@ import { setupState } from '../services/systemSettings';
 import logger from '../utils/logger';
 
 /**
- * Setup Wizard Middleware
- * Setup must run BEFORE any other routes
- * CRITICAL: Ensures system is properly initialized before use
+ * The setup gate: until the one-time setup wizard has run, every route is
+ * refused except the wizard's own (/api/setup and what lies under it) and the
+ * health check.
+ *
+ * Setup never goes back once it has run, so the gate asks the database only
+ * until it hears that it is complete. It runs ahead of the general rate
+ * limiter, and asking on every request cost a query for each one, a request
+ * the limiter then refused included. A restore replaces the database with
+ * one that may never have been set up, so it calls forgetSetupComplete.
  */
+
+let setupKnownComplete = false;
+
+/** Ask the database again on the next request; for a restore. */
+export function forgetSetupComplete(): void {
+  setupKnownComplete = false;
+}
+
+/** The wizard's routes. A path that merely starts with these letters is not one. */
+function isSetupRoute(path: string): boolean {
+  return path === '/api/setup' || path.startsWith('/api/setup/');
+}
 
 /**
  * Check if setup is completed
  * If not, return 403 with setup required message
- * Skips check for /api/setup/* routes
  */
 export async function requireSetupComplete(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
-  // Skip setup check for setup routes themselves
-  if (req.path.startsWith('/api/setup')) {
-    return next();
-  }
-
-  // Skip setup check for health endpoint
-  if (req.path === '/health') {
+  if (setupKnownComplete || isSetupRoute(req.path) || req.path === '/health') {
     return next();
   }
 
@@ -41,6 +52,7 @@ export async function requireSetupComplete(
       });
     }
 
+    setupKnownComplete = true;
     next();
   } catch (error) {
     logger.error('Error checking setup status', { err: error });

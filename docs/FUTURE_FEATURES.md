@@ -166,12 +166,13 @@ _Nothing at present._
   more fixes. Neither production advisory open today can be reached in
   CozyVTT, but an internet-facing app should not run on unsupported code.
   **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, nginx pinned to its stable line,
-  Dependabot opening grouped weekly pull requests against `dev`, and a CI check
-  that fails on a high or critical advisory in production dependencies. 1.5.3,
-  a release of its own: Prisma to its newest stable major first, with a full
-  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
-  React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
+  inside the current major versions, Dependabot opening grouped weekly pull
+  requests against `dev`, and a CI check that fails on a high or critical
+  advisory in production dependencies; nginx is done, both images pinned to
+  the 1.30 stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
+  newest stable major first, with a full upgrade rehearsal, then Vite and
+  Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
+  CSS 4 and TypeScript 7.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
@@ -330,6 +331,30 @@ _Nothing at present._
   for which `extractAssetId` already exists on both sides and
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
   direction.
+
+- **A database role that is not a superuser.** The backend uses the role the
+  PostgreSQL image creates from `DATABASE_USER`, a superuser, which can run
+  programs in the database container (`COPY ... TO PROGRAM`) and read its
+  files; the restore's statement checks in `backend/src/utils/pgRestore.ts`
+  are not a sandbox. A role that owns the schema without being a superuser
+  would close that off for a malicious backup and any future SQL injection.
+  It needs an init step that creates the role on existing installs with no
+  manual step, `DATABASE_URL` pointing at it, and the restore reworked to run
+  without superuser rights. Recorded in `SECURITY.md`.
+
+- **Serving the backend from a different address than the page.** `.env`
+  offered `VITE_API_URL` and `VITE_SOCKET_URL` for it until 1.5.2, but only
+  sign-in and the API ever worked that way: the page's Content-Security-Policy
+  allows another address for `connect-src` alone, helmet's
+  `Cross-Origin-Resource-Policy: same-origin` refuses a picture loaded from
+  another site, and the map canvas loads images with `crossOrigin='anonymous'`,
+  which leaves the session cookie off, so every asset route answers 401. The
+  offer was withdrawn; the build arguments and the client code that reads them
+  remain. Making it work needs the extra origin in `img-src`, `media-src` and
+  `frame-src`, a `same-site` or `cross-origin` resource policy when
+  `CORS_ORIGIN` differs, `use-credentials` on canvas images, and a test that
+  renders the policy with an address set. **Revisit if** someone needs it with a
+  setup a proxy cannot cover.
 
 ---
 

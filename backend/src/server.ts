@@ -39,12 +39,16 @@ import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
-import { createShutdown, onShutdownSignals } from './utils/shutdown';
+import { createShutdown, onShutdownSignals, onProcessFailure } from './utils/shutdown';
 import { positiveIntegerFromEnv } from './config/env';
 import { setupState } from './services/systemSettings';
 import { removeLeftoverRestoreUploads } from './services/restoreState';
 import { resolveBackupDir } from './utils/backupDir';
 import { setupToken } from './services/setupToken';
+import { backupsInProgress } from './services/backupsInProgress';
+
+// An error nothing caught is written to the log before the process ends.
+onProcessFailure();
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
@@ -70,7 +74,7 @@ app.set('trust proxy', 1);
 // /api and /socket.io. The app page is served by the frontend container, so
 // its policy lives in frontend/security-headers.conf. The two describe the
 // same application and should be changed together; the page's is the wider of
-// the two, because the themes load Google Fonts and this one never has to.
+// the two, because it also covers the page's stylesheets, fonts and frames.
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -242,8 +246,9 @@ app.use(errorHandler);
 const io = initializeWebSocket(httpServer);
 
 // Docker's stop, a service manager's stop and Ctrl+C all end the backend
-// here, which closes the sockets, the database and the session store first.
-onShutdownSignals(createShutdown({ io, prisma, sessionPool }));
+// here, which lets a backup being written finish, then closes the sockets,
+// the database and the session store.
+onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress }));
 
 // ============================================
 // START SERVER

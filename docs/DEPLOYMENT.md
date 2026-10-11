@@ -31,6 +31,8 @@ This guide covers deploying CozyVTT to a **production server** using Docker Comp
 - A domain name pointing to your server's IP (optional for LAN-only use)
 - At least 1 GB RAM; 2 GB recommended for comfortable operation
 
+Once it is built, CozyVTT needs no internet access to run, and visitors' browsers contact no site but yours: the pages, pictures and fonts all come from your own server. Building the images downloads software, and the Creature Library's **Import D&D 5e SRD** button fetches the creatures from Open5e (api.open5e.com) when an administrator presses it; email is sent only through the SMTP server you configure.
+
 ---
 
 ## Docker Compose Deployment
@@ -155,7 +157,9 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
-Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway, inside the 10 seconds Docker allows before it forces a container to stop. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+
+**While the Admin Dashboard is making a backup, stopping waits for it.** The backend takes no new requests, lets the backup finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping`. `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back.
 
 ---
 
@@ -243,7 +247,7 @@ There's a second catch. Out of the box, the backend and frontend use `expose`, w
    curl -sI https://your-domain.com/ | grep -i -E 'content-security|x-frame'
    ```
 
-   CozyVTT sets these on the frontend container, so removing the bundled Nginx does not lose them — a proxy passes response headers through by default. If nothing comes back, your proxy is stripping or replacing them; whatever it offers instead needs to allow `https://fonts.googleapis.com` for stylesheets and `https://fonts.gstatic.com` for fonts, or every theme loses its typeface. See `frontend/security-headers.conf` for the policy CozyVTT sends.
+   CozyVTT sets these on the frontend container, so removing the bundled Nginx does not lose them — a proxy passes response headers through by default. If nothing comes back, your proxy is stripping or replacing them; see `frontend/security-headers.conf` for the policy CozyVTT sends, and copy it into whatever your proxy sets instead. Everything the page loads comes from your own instance, so the policy names no other site.
 
 ### Option B — Shared Docker network (recommended for Traefik/Caddy)
 
@@ -280,7 +284,7 @@ ingress:
   - service: http_status:404
 ```
 
-This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`), secure-cookie headers and each visitor's own address (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)) working without extra configuration.
+This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) working without extra configuration. So that nginx believes the tunnel about each visitor's address and about HTTPS, add `NGINX_TRUSTED_PROXIES=172.16.0.0/12` to `.env` (the range on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server)), and keep nginx's ports to this server with `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains.
 
 **2. Run `cloudflared` as a container** on CozyVTT's own Docker network. Nothing is published to the host at all — the tunnel reaches the containers by name:
 
@@ -333,9 +337,35 @@ Wrong passwords are also counted for the account itself, whatever addresses they
 
 The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
-Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's.
+Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's. So does the general limit of 300 requests a minute from one address (`RATE_LIMIT_MAX_REQUESTS`, see [Other settings](#other-settings)), which counts every request the app makes, each picture on a map included.
 
-**With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
+**With the bundled nginx, a visitor who connects straight to your server is counted by their own address.** When a tunnel or another proxy stands in front of nginx, every request reaches nginx from that proxy, and nginx has to be told it may believe what the proxy says. A proxy names the visitor it is passing along in a header called `X-Forwarded-For`, and says whether the visitor used HTTPS in `X-Forwarded-Proto` (which decides whether CozyVTT marks the sign-in cookie as HTTPS-only). Anyone can send those headers, so nginx believes them only from the addresses you list in `NGINX_TRUSTED_PROXIES` in `.env`. From anyone else it ignores them, so a visitor from the internet cannot pretend to be someone else.
+
+| Your setup | Line to add to `.env` |
+|---|---|
+| Visitors connect straight to your server, with no tunnel or proxy in front of nginx | none |
+| A Cloudflare Tunnel or another proxy on the same server, installed on it or in a Docker container | `NGINX_TRUSTED_PROXIES=172.16.0.0/12` on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server) |
+| A proxy on another machine on your network | its address, for example `NGINX_TRUSTED_PROXIES=192.168.1.10` |
+| Cloudflare's proxy (the orange cloud) pointed at your server's public address, without a tunnel | Cloudflare's address ranges from [cloudflare.com/ips](https://www.cloudflare.com/ips/), all on that one line, separated by spaces |
+
+Several entries can share the line, separated by spaces or commas. Then apply it:
+
+```bash
+docker compose up -d
+```
+
+`up -d` reads `.env` again and recreates nginx; `docker compose restart` would keep the old setting. An entry that is not an IP address or range is ignored, and `docker compose logs nginx` says which.
+
+Why `172.16.0.0/12` for a proxy on the same server: Docker hands nginx a connection from the server itself, or from another container, from an address on one of its own networks, and Docker numbers its first networks between `172.16.0.0` and `172.31.255.255`. Some servers use other ranges; [The range for a proxy on the same server](#the-range-for-a-proxy-on-the-same-server) below shows how to find yours.
+
+> 🔒 **With a tunnel on the same server, keep nginx's ports to that server.** Docker also hands nginx some connections from outside from its own network's address: a visitor who connects over IPv6, and on Docker Desktop (Windows and Mac) or rootless Docker every visitor. Once you trust that range, such a visitor could choose the address CozyVTT counts them as. A tunnel only needs to reach nginx from the server itself, so publish nginx's ports there alone, with these two lines in `.env`:
+>
+> ```env
+> HTTP_PORT=127.0.0.1:80
+> HTTPS_PORT=127.0.0.1:443
+> ```
+>
+> Then run `docker compose up -d`. The tunnel keeps pointing at `http://localhost:80`. A firewall rule is no substitute: Docker's published ports bypass UFW.
 
 To check it, open CozyVTT from a device outside your network (a phone on mobile data, with Wi-Fi off), then run this on the server:
 
@@ -349,14 +379,53 @@ After the `cozyvtt-nginx |` label, each line starts with the address CozyVTT saw
 cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
 ```
 
-You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address, and a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes. That happens when:
+You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
 
-- **A proxy in front of nginx is on a public address**, for example Cloudflare's proxy (the orange cloud) pointed at your server's public IP without a tunnel. nginx does not believe a public address, so add that proxy's address ranges to `nginx/nginx.conf`, one `set_real_ip_from` line each, next to the lines already there. For Cloudflare the ranges are listed at [cloudflare.com/ips](https://www.cloudflare.com/ips/). Then run `docker compose restart nginx`. `git pull` will stop at the changed file from then on; set your change aside and bring it back with the same `git stash` steps as in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml).
-- **Docker hands visitors to nginx from its own address.** Docker Desktop (on Windows and Mac) and rootless Docker do this. A visitor connecting straight to such a server could then choose the address CozyVTT counts them as. Put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front, and keep ports 80 and 443 closed to the internet.
+- **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`, or the range you listed does not hold the address shown. Add its line from the table above, or the range [your server uses](#the-range-for-a-proxy-on-the-same-server).
+- **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
+- **nginx never read the setting**, because `nginx/trusted-proxies.envsh` lost its permission to run (a ZIP download, or a copy through some Windows or NAS file systems, can do this): `docker compose logs nginx | grep "not executable"` then prints a line ending in `Ignoring /docker-entrypoint.d/19-cozyvtt-trusted-proxies.envsh, not executable`, and `chmod +x nginx/trusted-proxies.envsh` followed by `docker compose restart nginx` fixes it.
 
-One thing to know: a device on your own network connects from a private address, so it can set the header itself and choose the address CozyVTT counts it as. On a home network those are people you already let in.
+If the address is one of Cloudflare's own (the ranges on [cloudflare.com/ips](https://www.cloudflare.com/ips/)), Cloudflare's proxy is in front of your server's public address: add those ranges as in the table.
+
+Only list addresses that are your own proxies. Whatever connects from a listed address can choose the address CozyVTT counts it as.
 
 **If you removed the bundled nginx**, the backend takes the **last** address in the `X-Forwarded-For` header your proxy sends as the visitor's own. Proxies add the address they were connected from there, which is right when nothing else stands in front of yours. If something does (Cloudflare's proxy in front of Caddy, say), set your proxy to believe it, or every visitor counts as the same address: `trusted_proxies` in Caddy, `forwardedHeaders.trustedIPs` in Traefik, `set_real_ip_from` in nginx.
+
+#### The range for a proxy on the same server
+
+`172.16.0.0/12` covers the addresses Docker gives its first networks, `172.16.0.0` to `172.31.255.255`. Once those are taken it moves on to ranges starting `192.168.`, and a server whose Docker settings list address pools of their own (`default-address-pools` in `/etc/docker/daemon.json`) often uses ranges starting `10.`. To find the range on your server:
+
+1. Open CozyVTT through your tunnel or proxy, then run this on the server:
+
+   ```bash
+   docker compose logs --tail 5 nginx
+   ```
+
+   Until nginx believes your proxy, each line starts, after the `cozyvtt-nginx |` label, with the address your proxy reaches nginx from:
+
+   ```
+   cozyvtt-nginx  | 192.168.16.1 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
+   ```
+
+   If that address starts with `172.16.` up to `172.31.`, `172.16.0.0/12` covers it and you are done.
+
+2. Otherwise, ask Docker for the range of the network that address is on. This prints the name of CozyVTT's network:
+
+   ```bash
+   docker inspect cozyvtt-nginx --format '{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}'
+   ```
+
+   It prints something like `cozyvtt_internal`, where the first part is the name of the folder CozyVTT is in. Put the name it printed in this command:
+
+   ```bash
+   docker network inspect cozyvtt_internal --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
+   ```
+
+   It prints the network's range, something like `192.168.16.0/20` (a second range, with colons, if the network also has IPv6 addresses). If your proxy runs in a container of its own on another Docker network, use that container's name in place of `cozyvtt-nginx` in the first command.
+
+3. Put what it printed in `.env` in place of `172.16.0.0/12`, for example `NGINX_TRUSTED_PROXIES=192.168.16.0/20`, run `docker compose up -d`, and run the check above.
+
+Docker can give a network a new range when it makes it again, after `docker compose down` for example. If the check above shows your proxy's address again after that, look the range up again.
 
 ### Minimum proxy requirements
 
@@ -383,7 +452,7 @@ error: Your local changes to the following files would be overwritten by merge:
 Please commit your changes or stash them before you merge.
 ```
 
-The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf` (to turn on HTTPS, for example, or to add a proxy's addresses); the message then names that file instead.
+The same happens if you edited `nginx/nginx.conf`; the message then names that file instead. You no longer need to: HTTPS goes in a file of your own in `nginx/conf.d/` (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), and a proxy's addresses go in `NGINX_TRUSTED_PROXIES` in `.env` (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). If you made either change by editing `nginx/nginx.conf` in an older version, move it with the steps in the 1.5.2 upgrade notes in `CHANGELOG.md`, which put the shipped file back before any `git stash` steps below: 1.5.2 reworked it, so a `git stash pop` of your old edits conflicts with most of it.
 
 Set your changes aside, update, then put them back:
 
@@ -493,6 +562,8 @@ Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
 
 ### Configure Nginx to use the certificate
 
+Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, which git leaves alone, so `git pull` never stops at them and upgrades never change them. You do not edit `nginx/nginx.conf`.
+
 1. Copy the certs into `nginx/certs/`:
    ```bash
    sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem nginx/certs/server.crt
@@ -500,12 +571,62 @@ Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
    sudo chown $(whoami) nginx/certs/*
    ```
 
-2. In `nginx/nginx.conf`, uncomment the HTTPS server block and the HTTP-to-HTTPS redirect.
+2. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
 
-3. Restart Nginx:
+   ```nginx
+   # nginx/conf.d/https.conf: CozyVTT over HTTPS, with the certificate in nginx/certs/
+
+   # Visitors who type http:// for your domain are sent to https://.
+   # Let's Encrypt's HTTP check still reaches its folder.
+   server {
+       listen 80;
+       server_name your-domain.com;
+
+       location /.well-known/acme-challenge/ {
+           root /var/www/certbot;
+       }
+
+       location / {
+           return 301 https://$host$request_uri;
+       }
+   }
+
+   server {
+       listen 443 ssl;
+       http2 on;
+       server_name your-domain.com;
+
+       ssl_certificate     /etc/nginx/certs/server.crt;
+       ssl_certificate_key /etc/nginx/certs/server.key;
+       ssl_protocols       TLSv1.2 TLSv1.3;
+       ssl_ciphers         HIGH:!aNULL:!MD5;
+       ssl_prefer_server_ciphers on;
+
+       # HSTS tells browsers to reach this domain over HTTPS only. Turn it on
+       # once HTTPS works, not before: a browser that has seen it refuses
+       # plain HTTP to this domain until max-age runs out, and nothing can
+       # undo that. Start with a short max-age (300), then raise it.
+       # add_header Strict-Transport-Security "max-age=63072000" always;
+
+       # The same rules as the plain-HTTP server: /api/ and /socket.io/ to
+       # the backend, everything else to the frontend.
+       include /etc/nginx/cozyvtt/locations.conf;
+   }
+   ```
+
+   The last line is what sends each request to the right container. It reads CozyVTT's own list of rules, so an upgrade that changes them reaches your HTTPS server as well.
+
+   The first server sends to HTTPS only requests for your domain: a plain-HTTP request by your server's IP address, or under another name that leads to it, is still answered by CozyVTT's own server without HTTPS. To send those to your domain over HTTPS too, write `listen 80 default_server;` in place of `listen 80;`, and `return 301 https://your-domain.com$request_uri;` in place of the `return` line.
+
+3. Restart Nginx and check it started:
    ```bash
    docker compose restart nginx
+   docker compose logs --tail 20 nginx
    ```
+
+   The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line, for example `nginx: [emerg] ... in /etc/nginx/cozyvtt.d/https.conf:12`.
+
+4. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there.
 
 ### Automate certificate renewal
 
@@ -572,7 +693,9 @@ npm install
 npx prisma migrate deploy
 npm run build
 
-# Frontend (empty VITE_API_URL = relative URLs, routed by your Nginx)
+# Frontend. The page asks its own address for the API, which your Nginx sends
+# to the backend; the two empty settings make sure an old frontend/.env cannot
+# point it elsewhere.
 cd ../frontend
 npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
@@ -616,6 +739,15 @@ server {
 
     # Must be >= the largest MAX_*_SIZE_MB in .env, plus a few MB of overhead
     client_max_body_size 55M;
+
+    # Compress text on the way out: the app's scripts and styles, and the
+    # backend's JSON, shrink to about a third. Leave the version out of answers.
+    gzip            on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_vary       on;
+    gzip_types      application/json text/css application/javascript image/svg+xml text/plain;
+    server_tokens   off;
 
     # Backup restore → backend: a whole instance backup, up to 4 GB, passed
     # straight through (the backend refuses anyone but an admin before reading
@@ -1159,6 +1291,8 @@ To see the most recent errors:
 tail -n 20 backend/logs/error.log
 ```
 
+An error the backend has no way to recover from is written here too, as a line ending in `; stopping` (`Uncaught exception; stopping` or `Unhandled promise rejection; stopping`). The backend then exits, and Docker starts it again. If you see one, the line's stack trace is what to attach to a bug report. The log files are closed as the backend exits, so a further error in the second it takes to stop appears only in `docker compose logs backend`, as `Uncaught exception while stopping` or `Unhandled promise rejection while stopping`.
+
 **What the logs hold.** Email addresses are cut to their first letter and their domain, such as `a***@example.com`, which is enough to tell accounts apart. Accounts, campaigns and maps are mostly named by their internal ids, and a few lines include a campaign's name. A value longer than 8,000 characters keeps only its first and last 4,000, so one oversized request cannot produce a huge line. The database's own errors are logged the same way, as `Database error` lines whose `target` names the kind of record and the operation, such as `character.findUnique`. Log files written by older versions can still hold full email addresses. To remove them, stop the backend, delete the files, and start it again; it begins new ones:
 
 ```bash
@@ -1251,7 +1385,7 @@ The bundled nginx looks the backend and frontend up again within ten seconds of 
 docker compose restart nginx
 ```
 
-It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, bring your copy up to date with the `git stash` steps in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml), which work the same for `nginx/nginx.conf`.
+It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, put the shipped `nginx/nginx.conf` back and move your changes out of it, with the steps in the 1.5.2 upgrade notes in `CHANGELOG.md`: keep a copy of your changes, `git checkout nginx/nginx.conf`, pull, then put HTTPS in `nginx/conf.d/` and a proxy's addresses in `.env`. The `git stash` steps for `docker-compose.yml` do not suit this file: 1.5.2 reworked it, so a `git stash pop` of your old edits conflicts with most of it.
 
 ### Live features don't work (dice, token movement, chat)
 
@@ -1349,15 +1483,16 @@ Before going live:
 
 - [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
-- [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
+- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
+- [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
 - [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
 - [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
@@ -1417,9 +1552,16 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/setup/status
    ```
    You want a line of JSON and, below it, `200 application/json; charset=utf-8`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
-8. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
+8. Tell nginx to believe the tunnel, and keep nginx's ports to this server. Add these three lines to `.env`:
+   ```env
+   NGINX_TRUSTED_PROXIES=172.16.0.0/12
+   HTTP_PORT=127.0.0.1:80
+   HTTPS_PORT=127.0.0.1:443
+   ```
+   then run `docker compose up -d`. `172.16.0.0/12` is the range on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server). Without the first line, every visitor is counted as the tunnel's one address, so a few wrong passwords from anyone lock everybody out of signing in, and everyone shares one limit of 300 requests a minute, which a table opening a map together can reach. Without the other two, a visitor reaching your server over IPv6 could choose the address CozyVTT counts them as. [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains both.
+9. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
-Once running, you can **close ports 80 and 443 on your VPS firewall entirely** — only SSH (port 22, or your chosen alternative) needs to be reachable, and even that you can put behind Cloudflare Access if you want.
+Once running, ports 80 and 443 are open to the server itself and nothing else, so only SSH (port 22, or your chosen alternative) needs to be reachable from the internet, and even that you can put behind Cloudflare Access if you want.
 
 ### When NOT to use a Cloudflare Tunnel
 

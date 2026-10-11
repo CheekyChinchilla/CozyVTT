@@ -7,7 +7,12 @@
  * file, not part of the definition. A change to it reaches an upgraded
  * instance only if something in the nginx service's definition changes too.
  * `NGINX_CONF_STAMP` is that something, and it has to change every time the
- * template does, so it is required to be the template's hash.
+ * template does, so it is required to be the template's hash. The same holds
+ * for every other single file the service mounts from the repository (the
+ * script that renders the trusted proxies, among them): a mount of one file
+ * keeps the file it found when the container was made, so an edited copy is
+ * not seen until the container is made again. The stamp covers them all,
+ * read from the service's own list of mounts.
  *
  * The database client. The backend image installs a pinned PostgreSQL client
  * major for pg_dump and psql, and the server image is pinned separately in
@@ -85,11 +90,30 @@ const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 /**
- * The stamp a given template calls for: the first twelve hex digits of its
- * SHA-256, with line endings normalised so a Windows checkout agrees.
+ * The single files the nginx service mounts from the repository, in the
+ * order its volumes list them. A mounted folder (certificates, local
+ * settings) is left out: a folder mount sees its files change.
  */
-function nginxStampFor(template: string): string {
-  return crypto.createHash('sha256').update(template.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
+function nginxMountedFiles(compose: string): string[] {
+  const start = compose.indexOf('\n  nginx:\n');
+  if (start === -1) throw new Error('docker-compose.yml no longer has an nginx service');
+  const rest = compose.slice(start + 1);
+  const end = rest.slice(1).search(/\n {2}[a-z]|\n[a-z]/);
+  const service = end === -1 ? rest : rest.slice(0, end + 1);
+  return [...service.matchAll(/^ {6}- \.\/([^:\s]+):/gm)]
+    .map((m) => m[1])
+    .filter((rel) => fs.statSync(path.join(root, rel)).isFile());
+}
+
+/**
+ * The stamp those files call for: the first twelve hex digits of the SHA-256
+ * of each file's path and contents, with line endings normalised so a Windows
+ * checkout agrees.
+ */
+function nginxStampFor(files: string[]): string {
+  const hash = crypto.createHash('sha256');
+  for (const rel of files) hash.update(`${rel}\n${read(rel).replace(/\r\n/g, '\n')}\n`);
+  return hash.digest('hex').slice(0, 12);
 }
 
 /**
@@ -116,13 +140,20 @@ function majors(rel: string, pattern: RegExp): number[] {
 }
 
 describe('NGINX_CONF_STAMP in docker-compose.yml', () => {
-  it('is the hash of nginx/nginx.conf, so a changed template recreates the container on upgrade', () => {
-    const expected = nginxStampFor(read('nginx/nginx.conf'));
-    const m = /NGINX_CONF_STAMP:\s*"([^"]*)"/.exec(read('docker-compose.yml'));
+  const compose = read('docker-compose.yml');
+  const mounted = nginxMountedFiles(compose);
+
+  it('covers the template and the script that renders the trusted proxies', () => {
+    expect(mounted).toEqual(expect.arrayContaining(['nginx/nginx.conf', 'nginx/trusted-proxies.envsh']));
+  });
+
+  it('is the hash of every file the nginx service mounts, so a changed one recreates the container on upgrade', () => {
+    const expected = nginxStampFor(mounted);
+    const m = /NGINX_CONF_STAMP:\s*"([^"]*)"/.exec(compose);
     if (!m) throw new Error('docker-compose.yml no longer sets NGINX_CONF_STAMP on the nginx service');
     if (m[1] !== expected) {
       throw new Error(
-        `nginx/nginx.conf changed: set NGINX_CONF_STAMP in docker-compose.yml to "${expected}" (it is "${m[1]}")`
+        `${mounted.join(', ')} changed: set NGINX_CONF_STAMP in docker-compose.yml to "${expected}" (it is "${m[1]}")`
       );
     }
     expect(m[1]).toBe(expected);

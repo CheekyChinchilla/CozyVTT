@@ -51,6 +51,7 @@ import {
   setState as setCombatState,
 } from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
+import * as setupGate from '../../middleware/setup';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
@@ -514,6 +515,21 @@ describe('POST /api/admin/backups/restore', () => {
     await expect(fs.access(path.join(UPLOAD_DIR, marker))).rejects.toBeDefined();
     expect(getCombatState(campaignId).active).toBe(true);
     clearCombatState(campaignId);
+  });
+
+  it('has the setup gate read the restored database again, and only once the load has succeeded', async () => {
+    const forget = jest.spyOn(setupGate, 'forgetSetupComplete');
+    try {
+      stubTools({ cmd: 'psql', stderr: 'ERROR:  syntax error' });
+      expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(500);
+      expect(forget).not.toHaveBeenCalled();
+
+      stubTools();
+      expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(200);
+      expect(forget).toHaveBeenCalledTimes(1);
+    } finally {
+      forget.mockRestore();
+    }
   });
 
   it('says the database was restored but not migrated when the migration run fails', async () => {

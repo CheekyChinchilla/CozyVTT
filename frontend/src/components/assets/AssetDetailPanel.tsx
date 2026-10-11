@@ -153,7 +153,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
   // ---------- Handlers ----------
   const handleDownload = () => {
-    window.open(`/api/assets/${currentAsset.id}/download`, '_blank');
+    window.open(api.getAssetDownloadUrl(currentAsset.id), '_blank', 'noopener,noreferrer');
   };
 
   const handleDelete = () => setConfirmOpen(true);

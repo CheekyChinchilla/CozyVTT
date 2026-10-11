@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
+import './assets/fonts/fonts.css';
 import './index.css';
 
 // Note: React.StrictMode is intentionally omitted here.

@@ -49,6 +49,20 @@ graph TB
     Backend -- "read/write" --> Uploads
 ```
 
+### The bundled nginx
+
+The Docker production stack (`docker-compose.yml`) puts two nginx servers in front of the backend. The `nginx` service is the public entry: it sends `/api/` and `/socket.io/` to the backend and everything else to the `frontend` container, whose own nginx serves the built SPA with the page's security headers (`frontend/nginx.conf`, `frontend/security-headers.conf`). The public one is made from the files in `nginx/`:
+
+| File | What it does |
+|---|---|
+| `nginx.conf` | A template the image's entrypoint renders (only the variables in `NGINX_ENVSUBST_FILTER`): body size, compression, resolver, which addresses are believed about the visitor's address and protocol, the plain-HTTP server, and last `include /etc/nginx/cozyvtt.d/*.conf` |
+| `locations.conf` | The proxying rules, included by the plain-HTTP server and by the HTTPS server a self-hoster writes from the deployment guide's example |
+| `trusted-proxies.envsh` | Sourced by the entrypoint before it renders the template: turns `NGINX_TRUSTED_PROXIES` from `.env` into `set_real_ip_from` lines and the `geo` list that decides whether `X-Forwarded-Proto` is believed |
+| `conf.d/` | The self-hoster's own files, HTTPS among them, mounted at `/etc/nginx/cozyvtt.d`; git ignores all but its README |
+| `certs/` | Their certificates; git ignores them |
+
+The first three are mounted one file each, and a single-file mount keeps the file it found when the container was made, so `NGINX_CONF_STAMP` on the service has to change with any of them; `backend/src/__tests__/keepInStep.test.ts` holds it to their hash.
+
 ---
 
 ## Backend Architecture
@@ -61,6 +75,8 @@ src/
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
+│   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
+│   │                  until setup has run; asks the database only until it hears it has
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
 │   │                      re-reads the admin's role on every request
@@ -111,7 +127,10 @@ src/
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
-│   ├── shutdown.ts       SIGTERM/SIGINT: close sockets, database and session store, then exit
+│   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let a dashboard backup finish
+│   │                     (up to 10 minutes, services/backupsInProgress.ts), close sockets,
+│   │                     database and session store, then exit; an error nothing caught is
+│   │                     logged before the process exits 1
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```
@@ -668,9 +687,12 @@ when a self-hoster removes the bundled proxy and points their own at that
 container. A Content-Security-Policy on a JSON response governs nothing, which
 is why the page had no protection until the second file existed.
 
-The page's policy is the wider of the two: themes load a stylesheet from
-`fonts.googleapis.com` and its fonts from `fonts.gstatic.com`, which the API
-never does. It is strict where it counts, `script-src 'self'` with no
+The page's policy is the wider of the two, since it also covers the page's
+stylesheets, fonts and the document reader's frame. Nothing it allows is on
+another site: the typefaces are part of the app (`frontend/src/assets/fonts`,
+one `@font-face` per family and character range, so a browser fetches only
+what the page uses), and the build inlines the smallest as `data:` addresses.
+It is strict where it counts, `script-src 'self'` with no
 `unsafe-inline`, which the built page allows because Vite emits no inline
 script. It deliberately omits `upgrade-insecure-requests`, since CozyVTT is
 commonly served over plain HTTP on a home network and that directive would

@@ -10,6 +10,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.5.1
 
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is no database change and no new required setting. Nothing you have stored is rewritten. All four containers are recreated, because `docker-compose.yml` changes each of them: every container gets Docker's `no-new-privileges` option, the frontend container's files become read-only, the backend is given longer to stop, and nginx moves to its stable 1.30 releases with a reworked `nginx/nginx.conf`. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
+
+If you have edited `docker-compose.yml`, `git pull` stops at it because this release changes it. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml).
+
+If you have edited `nginx/nginx.conf`, to turn on HTTPS or to add a proxy's addresses, this is the last time `git pull` stops at it: from this release neither needs an edit to that file. HTTPS goes in a file of your own in the new `nginx/conf.d/` folder, which git leaves alone, and a proxy's addresses go in `.env`. Move your edits over once, before you pull:
+
+1. Keep a copy of what you changed: `git diff nginx/nginx.conf > ~/my-nginx-changes.txt`
+2. Put the shipped file back: `git checkout nginx/nginx.conf`
+3. Pull: `git pull origin main` (with the `git stash` steps above if you also edited `docker-compose.yml`)
+4. For HTTPS, create `nginx/conf.d/https.conf` from the example in [SSL/TLS with Let's Encrypt](docs/DEPLOYMENT.md#configure-nginx-to-use-the-certificate), with your domain. Your certificates stay where they are, in `nginx/certs/`. If your copy of the HTTPS block had a `Strict-Transport-Security` line turned on, turn on the one in the example too.
+5. For `set_real_ip_from` lines you added, put those addresses in `NGINX_TRUSTED_PROXIES` in `.env`, separated by spaces.
+6. `docker compose up -d --build`, then open your site over HTTPS to check it.
+
+Skip step 4 and, after step 6, your instance answers over plain HTTP only.
+
+There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it out and the bundled nginx believes no proxy in front of it. If you have a tunnel or proxy in front, see the first point under "What to do afterwards".
+
 #### What you will notice
 
 - **A production instance refuses to start on a weak `SESSION_SECRET`.** Until now it refused only the placeholder from `.env.example`. It now also refuses every example value the guides show or used to show (`your-64-char-random-string`, the deployment guide's `<paste the 64 characters that command prints>` line copied as it stands, and the development guide's example), and any value shorter than 32 characters. If yours is one of those, `docker compose logs backend` ends with a line starting `[FATAL] SESSION_SECRET`; put the output of `openssl rand -hex 32` in `.env` and run `docker compose up -d`. A new secret signs everyone out once. A secret made as the guide says is 64 characters and needs no change.
@@ -36,6 +60,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The Profile page has a new Remove Avatar button.** **Remove Avatar**, under your avatar, clears it and deletes the picture, unless something else such as a token uses it. Uploading a new avatar now deletes the old picture the same way.
 
+
+#### What to do afterwards, if it applies to you
+
+- **If a Cloudflare Tunnel or another proxy passes visitors to the bundled nginx, add one line to `.env`.** For a tunnel or proxy on the same server it is `NGINX_TRUSTED_PROXIES=172.16.0.0/12` on most servers ([check yours](docs/DEPLOYMENT.md#the-range-for-a-proxy-on-the-same-server)); then run `docker compose up -d`. Without it, every visitor counts as the proxy's one address: a few wrong passwords from anyone lock everybody out of signing in for 15 minutes; everyone shares one limit of 300 requests a minute, which counts each picture a map loads, so a table opening a map together can reach it and have requests refused for the rest of that minute; and sign-in cookies are no longer marked HTTPS-only. With a tunnel on the same server, also add `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, which keep nginx's ports to that server. Other setups, and a check that it worked, are in [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits).
+
 ### Added
 
 - **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
@@ -52,9 +81,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A player removed from a campaign can still read their notes and saved rolls from it.** Removing a player kept their personal notes and saved rolls, but they could no longer open them, since the campaign page is closed to them. They now appear on that player's dashboard under **Notes From Campaigns You Have Left**, where **Open** shows each note and the saved rolls and **Download** saves them all as one Markdown file. They cannot be changed there, and nobody else can see them. They are back in the campaign if the player is invited again, and deleting the campaign still deletes them. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
+- **The bundled nginx, and the web server inside the frontend image, now use nginx's stable 1.30 releases.** Both used to take whatever nginx release was newest the day your server first downloaded it, so two installs of the same CozyVTT version could run different nginx versions. The next `docker compose up -d --build` downloads the 1.30 image once; there is nothing else to do.
+
+- **The fonts now come from your own instance, so visitors' browsers no longer contact Google.** Every page loaded its fonts from Google Fonts, and every change of theme or font loaded more, so each visitor's browser told Google it was there, and an instance on a network with no internet access showed fallback fonts. The eight font choices look the same, and their files are now part of CozyVTT; a browser still downloads only the fonts the page uses. The page's security policy no longer allows Google's two font addresses. If your own proxy replaces CozyVTT's security headers with its own policy, you can remove `fonts.googleapis.com` and `fonts.gstatic.com` from it.
+
+- **The app's scripts and styles, and everything the backend sends as data, are now compressed on their way to the browser.** About 2 MB of script and style went out uncompressed on a first visit; compressed it is under 600 KB, which a phone on mobile data notices most. The bundled nginx also compresses the backend's answers, such as a map's tokens, walls and fog. Nothing needs setting up. With your own proxy in place of the bundled nginx, the app is still compressed, and the backend's answers are compressed if your proxy does it.
+
+- **HTTPS, and any other nginx settings of your own, now go in a file in the new `nginx/conf.d/` folder, which git leaves alone.** Turning on HTTPS meant uncommenting a block in `nginx/nginx.conf`, so every release that changed that file stopped `git pull` until the edit was set aside and brought back. The bundled nginx now reads every `.conf` file in `nginx/conf.d/`, and [SSL/TLS with Let's Encrypt](docs/DEPLOYMENT.md#ssltls-with-lets-encrypt) has a complete `nginx/conf.d/https.conf` to copy. It reads CozyVTT's own list of which paths go to the backend and which to the frontend, so a later change to that list reaches your HTTPS server too. If you turned on HTTPS in `nginx/nginx.conf`, the upgrade notes above say how to move it.
+
 ### Removed
 
 - **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** It was stored and nothing ever used it, though the guides said it set the time shown on timestamps; times are shown in each viewer's own time zone, as they always were. A value saved before stays in the database, unused, and nothing else changes.
+
+- **`.env` no longer offers `VITE_API_URL` and `VITE_SOCKET_URL`, which put the backend on a different address from the page.** Only signing in and the API ever worked that way: every map, token, avatar, sound and document stayed blank, because the page's security settings refuse a picture or sound from another address. CozyVTT is served from one address, as the bundled nginx and every setup in the deployment guide do it. If you left both blank, nothing changes. If you set them, empty them in `.env`, have your proxy send `/api/` and `/socket.io/` to the backend on the page's own address (see [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy)), and run `docker compose up -d --build`.
 
 ### Fixed
 
@@ -168,6 +207,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Universal VTT imports use less of the server's memory, and wait their turn when several arrive at once.** A large `.uvtt` file was held in memory whole and its picture copied twice more while it was read, so three people importing large maps at the same moment took the backend close to its memory limit (only possible where the proxy's upload limit was raised above the default). The upload now waits on disk, the picture is read straight from the file in small pieces, and imports from different people are read one at a time, in the order they arrived; an import sent while another is being read answers a little later. So that one import can never hold up the rest, an import that would wait more than 20 seconds is refused with "Another map import is running on the server. Try again in a minute.", one that runs for more than 30 seconds is stopped and saves nothing, and one whose page was closed while it waited is dropped. The page now waits for the server's answer however long the upload takes. It gave up 30 seconds after the upload started, so a large file on a slow connection showed only "Failed to import UVTT file.", and an import the server was already reading could still be saved. See [Importing a Universal VTT file](docs/DM_GUIDE.md#importing-a-universal-vtt-file).
 
+- **Stopping or upgrading CozyVTT while the Admin Dashboard is making a backup now lets the backup finish.** The backend used to stop within 10 seconds, and a backup still being written was lost. It now takes no new requests and waits up to 10 minutes for the backup, then stops. `docker compose stop`, `restart` and `up -d --build` show the backend as stopping until then. A backup still unfinished after 10 minutes is lost, and `docker compose logs backend` says so.
+
+- **An error the backend cannot recover from is now written to its log files.** Such an error ends the backend, and Docker starts it again. Its report used to appear only in `docker compose logs backend`. It is now also a line in `backend/logs/error.log` ending in `; stopping`, with the stack trace to attach to a bug report.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
@@ -238,6 +281,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Only an administrator can import the SRD creatures, and the import gives up on Open5e after 15 seconds.** **Import D&D 5e SRD** in the Creature Library fills the library every campaign shares and fetches from Open5e each time, and any DM could start it, which means anyone, since anyone can create a campaign; a script could keep the server fetching from Open5e and hold every other DM's import back. It also waited on an Open5e that did not answer for minutes, followed the next page wherever Open5e's answer pointed, and stored creatures without checking them. Now only an administrator sees the button; a DM who is not one is told to ask an administrator, and the creatures an administrator imports appear in every campaign. Each page from Open5e has 15 seconds, only Open5e's own address is followed, a creature whose stat block the library would refuse is left out, and a failed import says why and adds nothing. An import started from the command line at the same time as one from the app no longer adds every creature twice.
 
 - **Malformed dice rolls now count towards the dice roll limit.** A roll sent with a malformed expression, or by a spectator, was answered with an error before it was counted against the limit of 50 dice rolls a second and 200 a minute, so a script could send them without end and get an error back for every one. Every roll is now counted first; past the limit the sender is told once, as for valid rolls. Nobody rolling from the app notices any difference.
+
+- **The development stack, `docker-compose.dev.yml`, now opens its ports to the computer it runs on and no one else.** Its database, backend and frontend ports were open on every network interface, though the development guide said they were local, so on a server the database could be reached from other machines. It also runs in development mode whatever `.env` says, as the guide describes; with the `NODE_ENV=production` line `.env.example` ships, it ran in production mode. The production stack is not affected. To open the dev stack from another device on your network, see [Local Setup (With Docker)](docs/DEVELOPMENT.md#local-setup-with-docker).
+
+- **The bundled nginx believes a visitor's address, and whether they used HTTPS, only from proxies you list.** It believed the `X-Forwarded-For` header from any private address, and Docker hands nginx a visitor who connects over IPv6 from one, so such a visitor could get round the sign-in limits. `X-Forwarded-Proto` was believed from anyone. Both headers are now believed only from nginx's own container and from the addresses in the new optional `NGINX_TRUSTED_PROXIES` setting in `.env`. If a tunnel or proxy passes visitors to the bundled nginx, add its line, as [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits) shows.
+
+- **Every container now runs with Docker's `no-new-privileges` option, the container that serves the app's files is read-only, and neither nginx names its version.** Nothing inside a container can gain privileges through a program marked to run as another user, and the frontend container can no longer change its own files. The README said CozyVTT runs non-root containers; only the backend drops to an unprivileged user, and the two nginx containers run their master process as root, as nginx's own image does, with the processes that handle requests unprivileged. The README now says so.
 
 ## [1.5.1] - 2026-10-10
 

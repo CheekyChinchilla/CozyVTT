@@ -3,6 +3,12 @@
 
 # Shell scripts must always use LF - CRLF breaks bash in Linux Docker containers
 *.sh text eol=lf
+# Sourced by the nginx image's entrypoint (nginx/trusted-proxies.envsh), which
+# stops at the first error, so a CRLF copy would keep nginx from starting
+*.envsh text eol=lf
+
+# Fonts bundled with the frontend (frontend/src/assets/fonts)
+*.woff2 binary
 
 # Docker-related files
 Dockerfile text eol=lf

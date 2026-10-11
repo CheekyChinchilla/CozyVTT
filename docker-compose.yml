@@ -41,6 +41,9 @@ services:
     container_name: cozyvtt-database
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
       POSTGRES_USER: ${DATABASE_USER:-cozyvtt}
@@ -66,6 +69,14 @@ services:
     container_name: cozyvtt-backend
     logging: *logging
     restart: unless-stopped
+    # How long Docker lets the backend stop on its own before killing it. A
+    # backup the Admin Dashboard is writing when it is stopped, by an upgrade
+    # for example, is let finish for up to ten minutes; with none running the
+    # backend stops in a few seconds.
+    stop_grace_period: 10m30s
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       database:
         condition: service_healthy
@@ -135,16 +146,30 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        # Taken from .env, which offers both and ships them empty. Empty means
-        # relative URLs, and the bundled nginx proxies /api/* and /socket.io/*
-        # to the backend — the setup nearly everyone wants. These were pinned to
-        # "" here, so anything set in .env was silently discarded.
+        # Empty unless an older .env still sets them. Empty means the page asks
+        # its own address, and the bundled nginx proxies /api/* and
+        # /socket.io/* to the backend. A backend on another address is not
+        # supported: the page could sign in, but every picture, sound and
+        # document stayed blank. .env.example no longer offers them.
         VITE_API_URL: ${VITE_API_URL:-}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest
     container_name: cozyvtt-frontend
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
+    # It only serves the built app, so its files are read-only, apart from
+    # nginx's pid file and scratch folders, held in memory. The proxy is not
+    # read-only: it renders its configuration when it starts, and keeps large
+    # uploads and downloads on disk as they pass. Nor is the backend, which
+    # writes a backup's database dump to /tmp.
+    read_only: true
+    tmpfs:
+      - /run
+      - /var/cache/nginx
+      - /tmp
     depends_on:
       - backend
     expose:
@@ -157,10 +182,15 @@ services:
           memory: 128M
 
   nginx:
-    image: nginx:alpine
+    # nginx's stable line, the same as the frontend image's (frontend/Dockerfile.prod).
+    # A test keeps the two in step; move both together.
+    image: nginx:1.30-alpine
     container_name: cozyvtt-nginx
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - frontend
       - backend
@@ -168,16 +198,28 @@ services:
       # Request body cap. Must be >= the largest MAX_*_SIZE_MB above plus a few
       # MB of multipart overhead, or large uploads fail with HTTP 413.
       NGINX_MAX_BODY_SIZE: ${NGINX_MAX_BODY_SIZE:-55M}
-      # Only substitute this one variable — without the filter, envsubst would
+      # Proxies in front of this nginx (a tunnel on this server, Cloudflare,
+      # a proxy on your network) whose word on the visitor's address and on
+      # HTTPS is believed: IP addresses or ranges, separated by spaces or
+      # commas. Empty, only this nginx's own loopback is believed. See
+      # "Visitor addresses and sign-in limits" in docs/DEPLOYMENT.md.
+      NGINX_TRUSTED_PROXIES: ${NGINX_TRUSTED_PROXIES:-}
+      # Filled in from NGINX_TRUSTED_PROXIES by nginx/trusted-proxies.envsh
+      # (mounted below); empty here so the template still renders where that
+      # script cannot run.
+      NGINX_REAL_IP_FROM: ""
+      NGINX_TRUSTED_GEO: ""
+      # Only substitute these variables: without the filter, envsubst would
       # also blank Nginx's own $host / $scheme / $remote_addr.
-      NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE"
-      # The hash of nginx/nginx.conf: when that file changes, set this to the
-      # value backend/src/__tests__/keepInStep.test.ts prints, which fails until
-      # it matches. The template is rendered when the container starts, and
+      NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE|NGINX_REAL_IP_FROM|NGINX_TRUSTED_GEO"
+      # The hash of the files mounted below (nginx/nginx.conf,
+      # nginx/locations.conf and nginx/trusted-proxies.envsh): when one changes, set this to the value
+      # backend/src/__tests__/keepInStep.test.ts prints, which fails until it
+      # matches. The template is rendered when the container starts, and
       # `docker compose up -d --build` leaves a running container alone unless
       # its definition changed, so without a change here an upgrade keeps
       # serving the previous config.
-      NGINX_CONF_STAMP: "0e74b6c0efb2"
+      NGINX_CONF_STAMP: "5465d920749b"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
@@ -187,7 +229,14 @@ services:
       # Mounted as a template: the nginx image renders it to
       # /etc/nginx/conf.d/default.conf at start, filling in NGINX_MAX_BODY_SIZE.
       - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      # The proxying rules, included by the HTTP server and by your HTTPS one.
+      - ./nginx/locations.conf:/etc/nginx/cozyvtt/locations.conf:ro
+      # Run by the image's entrypoint before it renders the template above.
+      - ./nginx/trusted-proxies.envsh:/docker-entrypoint.d/19-cozyvtt-trusted-proxies.envsh:ro
       - ./nginx/certs:/etc/nginx/certs:ro  # Place your SSL certs here
+      # Your own nginx settings, such as HTTPS: every .conf file here is read.
+      # git ignores this folder's contents, so `git pull` never stops at them.
+      - ./nginx/conf.d:/etc/nginx/cozyvtt.d:ro
     networks:
       - internal
     deploy:
