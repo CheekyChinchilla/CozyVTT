@@ -547,6 +547,12 @@ Running in a folder is on the backlog rather than ruled out. If it matters to yo
 - Ports 80 and 443 open in your firewall and published by the stack (the default configuration). Let's Encrypt checks your domain by fetching a small file from port 80, now and again at every renewal, so port 80 has to stay reachable
 - A terminal in the CozyVTT folder, the one with `docker-compose.yml`, for every command below
 
+### HTTPS is remembered by browsers
+
+CozyVTT's backend sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for 180 days. A browser takes notice of it only when it arrives over HTTPS, so it begins to apply the first time someone uses your instance over HTTPS: through a certificate of your own, a Cloudflare Tunnel or any other proxy that adds HTTPS.
+
+So decide before you start that this name stays on HTTPS. If you try HTTPS briefly and then go back to plain HTTP on the same name, every browser that loaded the app over HTTPS refuses `http://` for that name, and for any name under it such as `play.vtt.example.com` if you use `vtt.example.com`, for up to six months, until the time runs out or each visitor clears it in their browser. A different name for testing avoids it.
+
 ### How it works
 
 Let's Encrypt gives a certificate to whoever can show they control the domain. Certbot, the program that asks for it, shows that by writing a small file into a folder, and Let's Encrypt then fetches that file from `http://your-domain.com/.well-known/acme-challenge/` on port 80. So the nginx container has to serve that folder, and the folder has to be one the container can see. The `nginx/conf.d/` folder is already shared with the container (it appears there as `/etc/nginx/cozyvtt.d/`), so a folder inside it, `nginx/conf.d/acme/`, is shared too.
@@ -653,10 +659,11 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
        ssl_ciphers         HIGH:!aNULL:!MD5;
        ssl_prefer_server_ciphers on;
 
-       # HSTS tells browsers to reach this domain over HTTPS only. Turn it on
-       # once HTTPS works, not before: a browser that has seen it refuses
-       # plain HTTP to this domain until max-age runs out, and nothing can
-       # undo that. Start with a short max-age (300), then raise it.
+       # HSTS tells browsers to reach this domain over HTTPS only. The backend
+       # already sends a 180-day one with every answer from /api (see "HTTPS is
+       # remembered by browsers" above), so this line only adds it to the app
+       # page and lets you choose the length. Turn it on once HTTPS works,
+       # not before, and start with a short max-age (300) before raising it.
        # add_header Strict-Transport-Security "max-age=63072000" always;
 
        # The same rules as the plain-HTTP server: /api/ and /socket.io/ to
@@ -1615,7 +1622,7 @@ Before going live:
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS**: the backend already sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer from `/api`, so a browser that has used the instance over HTTPS keeps that name on HTTPS for 180 days (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)). The app page itself carries it only if you turn on the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
@@ -1685,6 +1692,8 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
 9. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
 Once running, ports 80 and 443 are open to the server itself and nothing else, so only SSH (port 22, or your chosen alternative) needs to be reachable from the internet, and even that you can put behind Cloudflare Access if you want.
+
+A tunnel makes browsers see HTTPS, so the backend's HSTS header starts to apply to your name: plan to keep it on HTTPS (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)).
 
 ### When NOT to use a Cloudflare Tunnel
 

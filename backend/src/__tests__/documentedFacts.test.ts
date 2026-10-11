@@ -8,6 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import helmet from 'helmet';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -92,5 +93,37 @@ describe('the manual-install nginx example in the deployment guide', () => {
       .filter((location) => !location.body.includes('X-Forwarded-For') || !location.body.includes('X-Forwarded-Proto'))
       .map((location) => location.path);
     expect(without).toEqual([]);
+  });
+});
+
+describe('HSTS, in the deployment guide', () => {
+  /** The Strict-Transport-Security value helmet sets when asked for nothing about it. */
+  function helmetDefault(): string | undefined {
+    const headers: Record<string, string> = {};
+    const response = {
+      setHeader: (name: string, value: string) => {
+        headers[name.toLowerCase()] = value;
+      },
+      removeHeader: () => undefined,
+      getHeader: () => undefined,
+    };
+    helmet()({} as never, response as never, () => undefined);
+    return headers['strict-transport-security'];
+  }
+
+  // The guide said HSTS was off until the administrator added it. The backend
+  // sends helmet's default with every answer it makes, /api and /socket.io
+  // included, and a browser keeps a host on HTTPS for that long once it has
+  // seen the header over HTTPS.
+  it('says what the backend sends, which is helmet’s default because server.ts leaves it alone', () => {
+    expect(read('backend/src/server.ts')).not.toMatch(/\bhsts\b|strictTransportSecurity/i);
+
+    const sent = helmetDefault();
+    expect(sent).toMatch(/^max-age=\d+; includeSubDomains$/);
+    expect(read('docs/DEPLOYMENT.md')).toContain(`\`Strict-Transport-Security: ${sent}\``);
+  });
+
+  it('no longer calls HSTS something the administrator adds', () => {
+    expect(read('docs/DEPLOYMENT.md')).not.toMatch(/HSTS is the one you add yourself/);
   });
 });
