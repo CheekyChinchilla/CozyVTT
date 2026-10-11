@@ -253,6 +253,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The README says how a token is moved.** Its feature list said tokens are dragged, though the map picks a token up on one click and puts it down on the next. It now says that.
 
+- **The Import Campaign window can no longer be closed while an import is running.** Escape, a click outside the window and the X all closed it, but the import carried on without it, so there was no sign of whether a campaign had been made, and opening the window again showed the earlier result. While **Importing campaign...** is on screen those three do nothing and the X is greyed out. The window can be closed again once the import finishes or fails.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
