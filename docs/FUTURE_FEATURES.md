@@ -87,10 +87,8 @@ _Nothing at present._
 
 ### Accounts
 
-- `1.5.2` **Sign-up shows "Registration Failed" instead of the reason,** such as a missing display name or an email already registered. The same bug as "Sign-in errors show a status label instead of the helpful sentence" under Polish / tech debt, in `RegisterPage.tsx`.
 - `1.5.2` **The Admin Panel's Create User and Invite User skip the display-name check.** `routes/admin.ts` stores a sanitised, shortened name, so one typed as `<>` is saved empty.
 - `1.5.2` **The reason a table's sign-in ended is only logged.** The server sends it on the socket before closing it, and `socket.ts` writes it to the browser console; only an open Dice tab shows it.
-- `1.5.2` **The sign-in and MFA pages show the reply's short error label** ("Authentication Failed", "Invalid Code", "Rate Limited") instead of its sentence. Described under Polish / tech debt as "Sign-in errors show a status label instead of the helpful sentence" (`LoginPage.tsx`, `MFAVerifyPage.tsx`).
 - `1.5.2` **"Back to login" on the MFA code page loops back to the code page,** because the pending sign-in is still set (`MFAVerifyPage.tsx`).
 - `1.5.2` **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
 - `1.5.2` **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
@@ -230,24 +228,6 @@ _Nothing at present._
   transfer deliberately leaves alone. **Revisit if** people actually ask to
   co-run games — the handover added for #33 covers the cases reported so far
   (handing off, stepping back, an agent DM narrating while the owner plays).
-
-- **Sign-in errors show a status label instead of the helpful sentence.** The
-  API answers a failed login with
-  `{ error: 'Authentication Failed', message: 'Invalid email or password' }` —
-  `error` is the status label, `message` is the text meant for a person. The auth
-  pages check `error` first, so that is what the user sees: "Authentication
-  Failed" rather than "Invalid email or password". The friendlier 401 and 409
-  branches sitting below it in `LoginPage`, `MFAVerifyPage` and `RegisterPage`
-  are effectively unreachable for the same reason. Found while converting those
-  catch blocks off `any`, and deliberately left alone there — the conversion was
-  required to change no behaviour. Since the burn-down the reading is centralised in
-  `apiErrorText` in `frontend/src/utils/errors.ts`, which returns
-  `data.error` — so the fix is now one helper rather than a change per page,
-  plus a decision about whether any endpoint relies on `error` carrying
-  something a user should read. A 429 from
-  the sign-in limiter is a bare string, so the status branch handles it and the
-  wording is right; the MFA limiters in `routes/auth.ts` reply with JSON whose
-  `error` is "Rate Limited", so the MFA page shows only that label.
 
 - **Advantage on initiative.** Initiative is worked out per system in
   `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll — a

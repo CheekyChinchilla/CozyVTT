@@ -89,12 +89,9 @@ export default function LoginPage() {
       // If MFA is not required, user is logged in and will be redirected by auth check above
       // If MFA is required, mfaPending will be true and user will be redirected to MFA page
     } catch (err) {
-      // Handle specific error messages
-      // TODO(accounts): apiErrorText returns the reply's short label, such as
-      // "Authentication Failed", so the sentence in its message is never shown
-      // and the branches below never run when the server sends one. Show
-      // apiErrorMessage(err) first.
-      const serverError = apiErrorText(err);
+      // The reply's sentence (`message`) is for the person; its `error` is a
+      // short label, shown only when there is no sentence.
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (apiErrorStatus(err) === 429) {
         // The limiter's answer says what happened and when to come back.
         setError(apiErrorMessage(err) || 'Too many login attempts. Please try again later.');

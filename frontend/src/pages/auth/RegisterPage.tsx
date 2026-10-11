@@ -116,12 +116,9 @@ export default function RegisterPage() {
       }
       // On success, user is logged in and will be redirected by auth check above
     } catch (err) {
-      // Handle specific error messages
-      // TODO(accounts): apiErrorText returns the reply's short label,
-      // "Registration Failed", so the reason in its message, such as a missing
-      // display name or an email already registered, is never shown. Show
-      // apiErrorMessage(err) first.
-      const serverError = apiErrorText(err);
+      // The reply's sentence (`message`) says why, such as an email already
+      // registered; its `error` is a short label, shown only without one.
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (apiErrorStatus(err) === 403) {
         setError(apiErrorMessage(err) || 'Registration is currently disabled.');
       } else if (apiErrorStatus(err) === 429) {

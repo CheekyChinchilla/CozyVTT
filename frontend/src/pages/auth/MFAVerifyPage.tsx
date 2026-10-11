@@ -8,7 +8,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
-import { apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
@@ -61,11 +61,10 @@ export default function MFAVerifyPage() {
     } catch (err) {
       console.error('MFA verification error:', err);
 
-      // TODO(accounts): apiErrorText returns the reply's short label, such as
-      // "Invalid Code" or "Rate Limited", so the sentence in its message is
-      // never shown, here and in the backup-code handler below. Show
-      // apiErrorMessage(err) first.
-      const serverError = apiErrorText(err);
+      // The reply's sentence (`message`) is for the person, such as the one
+      // for a code step that timed out; its `error` is a short label, shown
+      // only when there is no sentence. The same in the backup-code handler.
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
@@ -108,7 +107,7 @@ export default function MFAVerifyPage() {
     } catch (err) {
       console.error('Backup code verification error:', err);
 
-      const serverError = apiErrorText(err);
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
