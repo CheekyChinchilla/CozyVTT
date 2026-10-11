@@ -619,7 +619,7 @@ They stop being able to chat, roll or move anything, and stop seeing what the
 rest of the table is doing, without waiting for them to close the page. Their
 page says "You were removed from this campaign." and takes them to their
 dashboard. Deleting a campaign does the same for everyone at its table, with
-"This campaign was deleted.
+"This campaign was deleted."
 
 **Their characters leave with them.** Each of their characters is taken out of
 the campaign: it stays theirs, but you and the other players can no longer open

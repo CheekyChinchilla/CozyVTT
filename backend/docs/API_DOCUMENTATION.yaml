@@ -11623,8 +11623,8 @@ components:
           type: string
           description: >
             Machine-readable code, sent only where a client has to act on it:
-            PASSWORD_CHANGE_REQUIRED, CHARACTER_CHANGED, no_game_system,
-            UVTT_IMPORT_NEEDS_CONFIRMATION.
+            PASSWORD_CHANGE_REQUIRED, SIGN_IN_EXPIRED, CHARACTER_CHANGED,
+            no_game_system, UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.
@@ -11868,7 +11868,12 @@ components:
             message: Name is required
 
     Unauthorized:
-      description: Unauthorized - Not authenticated or MFA pending.
+      description: >-
+        Unauthorized - Not authenticated or MFA pending. A sign-in made more
+        than `REMEMBER_ME_MAX_AGE` ago (30 days by default) is ended here, and
+        the answer carries `code: SIGN_IN_EXPIRED` with the message 'Your
+        sign-in has reached its 30-day limit. Sign in again.' (the day count
+        follows the setting).
       content:
         application/json:
           schema:
