@@ -10,6 +10,7 @@ import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks, issueResetToken, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
+import { inSerializableTransaction } from '../utils/serializable';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
@@ -239,16 +240,6 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
         });
       }
 
-      // The instance must keep an admin (see services/platformAdmins).
-      if (platformRole === 'USER' && existingUser.platformRole === 'ADMIN' && (await isOnlyAdmin(id))) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: id === requestingUserId
-            ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
-            : 'This is the only admin on this instance. Promote another user to admin first.',
-        });
-      }
-
       updateData.platformRole = platformRole;
     }
 
@@ -292,14 +283,33 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
 
     // Perform update. A new address also voids every unused reset or
     // invitation link, in the same transaction, so a link already sent to the
-    // old address cannot set the password afterwards.
-    const updatedUser = emailChangedFrom === null
-      ? await prisma.user.update({ where: { id }, data: updateData })
-      : await prisma.$transaction(async (tx) => {
+    // old address cannot set the password afterwards. Taking the admin role
+    // away checks, in the same serializable transaction, that the instance
+    // keeps an admin (services/platformAdmins).
+    const demoting = updateData.platformRole === 'USER' && existingUser.platformRole === 'ADMIN';
+    const written = demoting
+      ? await inSerializableTransaction(async (tx) => {
+        if (await isOnlyAdmin(id, tx)) return null;
         const row = await tx.user.update({ where: { id }, data: updateData });
-        await voidOutstandingResetLinks(id, tx);
+        if (emailChangedFrom !== null) await voidOutstandingResetLinks(id, tx);
         return row;
+      })
+      : emailChangedFrom === null
+        ? await prisma.user.update({ where: { id }, data: updateData })
+        : await prisma.$transaction(async (tx) => {
+          const row = await tx.user.update({ where: { id }, data: updateData });
+          await voidOutstandingResetLinks(id, tx);
+          return row;
+        });
+    if (written === null) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: id === requestingUserId
+          ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
+          : 'This is the only admin on this instance. Promote another user to admin first.',
       });
+    }
+    const updatedUser = written;
 
     // Tell the old address, which is the one the owner still reads if the
     // change was not theirs. Best-effort: the change is made either way.
@@ -519,6 +529,12 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 
     // See services/accountDeletion.ts for what stays and what goes.
     const deletion = await deleteAccount(id);
+    if (!deletion.deleted && deletion.refused === 'onlyAdmin') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'This is the only admin on this instance. Promote another user to admin first.',
+      });
+    }
     if (!deletion.deleted) {
       return res.status(409).json({
         error: 'Conflict',

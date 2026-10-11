@@ -1802,8 +1802,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: >-
-            The user owns a campaign whose DM seat is theirs or empty.
-            `campaigns` lists each such campaign with its other members,
+            The user is the instance's only admin (which can happen only when
+            the calling admin lost the role at the same moment), with no
+            `campaigns`; or the user owns a campaign whose DM seat is theirs
+            or empty. `campaigns` lists each such campaign with its other members,
             so the admin can hand the DM seat over (`PUT
             /api/campaigns/{campaignId}/dm`) or delete the campaign and try
             again. Nothing was changed.

@@ -25,6 +25,8 @@ import { isAssetInUse } from './assetUsage';
 import { deleteFile } from '../utils/fileUtils';
 import logger from '../utils/logger';
 import { destroyUserLoginSessions } from './sessionStore';
+import { isOnlyAdmin } from './platformAdmins';
+import { inSerializableTransaction } from '../utils/serializable';
 
 /**
  * A campaign that stops a deletion, with the other members its DM seat could
@@ -50,10 +52,22 @@ export interface PersonalAsset {
  */
 export type AccountDeletion =
   | { deleted: true; campaignIds: string[]; personal: PersonalAsset[] }
-  | { deleted: false; runs: BlockingCampaign[] };
+  | { deleted: false; refused: 'runsCampaigns'; runs: BlockingCampaign[] }
+  | { deleted: false; refused: 'onlyAdmin' };
 
+/**
+ * Delete an account, unless it is the instance's only admin
+ * (services/platformAdmins) or runs a campaign. One serializable transaction
+ * (utils/serializable.ts), so an admin removed at the same moment, or a DM
+ * seat handed over meanwhile, is seen before anything is written.
+ */
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
-  return prisma.$transaction(async (tx) => {
+  return inSerializableTransaction(async (tx): Promise<AccountDeletion> => {
+    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true } });
+    if (account?.platformRole === 'ADMIN' && (await isOnlyAdmin(userId, tx))) {
+      return { deleted: false, refused: 'onlyAdmin' };
+    }
+
     const owned = await tx.campaign.findMany({
       where: { ownerId: userId },
       select: {
@@ -77,7 +91,7 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
           .filter((m) => m.userId !== userId)
           .map((m) => ({ userId: m.userId, displayName: m.user.displayName, role: m.role })),
       }));
-    if (runs.length > 0) return { deleted: false, runs };
+    if (runs.length > 0) return { deleted: false, refused: 'runsCampaigns', runs };
 
     // Every campaign left here has a DM other than this user.
     for (const campaign of owned) {
