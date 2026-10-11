@@ -154,6 +154,16 @@ _Nothing at present._
   a full upgrade rehearsal, then Vite and Vitest, Express 5, and React 19
   with React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
 
+- **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
+  on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's
+  dependency update left it alone. The dice parser
+  (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
+  multiply and divide numbers it has built itself, so no typed text reaches
+  it, yet it is about 18 MB installed. Replacing it means writing and testing
+  an evaluator for those four operators. **Do** as a separate small project,
+  not tied to a release, and before the dice grammar lets anything other
+  than numbers and those operators through.
+
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
   — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept
