@@ -102,4 +102,28 @@ describe('the site config', () => {
   it('still serves the SPA fallback', () => {
     expect(siteConfig).toContain('try_files $uri $uri/ /index.html;');
   });
+
+  /** A directive's value at server level, comments dropped. */
+  const setting = (name: string) =>
+    siteConfig
+      .split('\n')
+      .map((line) => line.replace(/#.*$/, '').trim())
+      .find((line) => line.startsWith(`${name} `))
+      ?.slice(name.length)
+      .replace(/;$/, '')
+      .trim();
+
+  it('compresses the scripts, styles and data it sends', () => {
+    // About 2 MB of script and style went out as it was, the whole app on
+    // every first visit, to a phone on mobile data as much as anyone.
+    expect(setting('gzip')).toBe('on');
+    expect(setting('gzip_types')?.split(/\s+/)).toEqual(
+      expect.arrayContaining(['text/css', 'application/javascript', 'application/json', 'image/svg+xml'])
+    );
+    expect(setting('gzip_vary')).toBe('on');
+  });
+
+  it('does not name its nginx version', () => {
+    expect(setting('server_tokens')).toBe('off');
+  });
 });

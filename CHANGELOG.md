@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The fonts now come from your own instance, so visitors' browsers no longer contact Google.** Every page loaded its fonts from Google Fonts, and every change of theme or font loaded more, so each visitor's browser told Google it was there, and an instance on a network with no internet access showed fallback fonts. The eight font choices look the same, and their files are now part of CozyVTT; a browser still downloads only the fonts the page uses. The page's security policy no longer allows Google's two font addresses. If your own proxy replaces CozyVTT's security headers with its own policy, you can remove `fonts.googleapis.com` and `fonts.gstatic.com` from it.
 
+- **The app's scripts and styles are now compressed on their way to the browser.** About 2 MB of script and style went out uncompressed on a first visit; compressed it is under 600 KB, which a phone on mobile data notices most. Nothing needs setting up, and this applies with your own proxy in front too.
+
 ### Removed
 
 - **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** It was stored and nothing ever used it, though the guides said it set the time shown on timestamps; times are shown in each viewer's own time zone, as they always were. A value saved before stays in the database, unused, and nothing else changes.
