@@ -9036,6 +9036,13 @@ paths:
         no `//`, no backslash, no control characters) or the request answers 400. These
         images themselves are not uploaded here — replace the files in
         `frontend/public/` and rebuild to change what the path points at.
+
+        The admins' activity log gets one line, `Updated system settings:` and
+        the names of the settings whose value changed, with each one's value
+        before and after in the line's `changes` (`{ from, to }`). A field sent
+        with the value already stored is not listed, and a request that changes
+        nothing writes no line. Lines written by earlier versions list every
+        field sent, with the new value only.
       operationId: adminUpdateSettings
       security:
         - cookieAuth: []

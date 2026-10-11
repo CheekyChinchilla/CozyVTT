@@ -111,7 +111,26 @@ describe('Recent Admin Actions', () => {
     expect(within(section).getByText('Avatar: was "/uploads/avatars/a.png", now none')).toBeVisible();
   });
 
-  it('lists the new values of a settings change', async () => {
+  it('lists the value before and after of a settings change', async () => {
+    const section = await openActivity([
+      line({
+        message: 'Updated system settings: instanceName, allowRegistration',
+        context: {
+          changes: {
+            instanceName: { from: 'Thursday Table', to: 'Friday Night Table' },
+            allowRegistration: { from: true, to: false },
+          },
+        },
+      }),
+    ]);
+
+    await userEvent.click(within(section).getByText('What changed'));
+
+    expect(within(section).getByText('Instance Name: was "Thursday Table", now "Friday Night Table"')).toBeVisible();
+    expect(within(section).getByText('Allow Public Registration: was yes, now no')).toBeVisible();
+  });
+
+  it('still lists the new values of a settings change written by an earlier version', async () => {
     const section = await openActivity([
       line({
         message: 'Updated system settings: instanceName, allowRegistration',

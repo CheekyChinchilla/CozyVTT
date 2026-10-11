@@ -37,8 +37,10 @@ function isBeforeAndAfter(value: unknown): value is { from: unknown; to: unknown
 }
 
 /**
- * A line's changes in words. An account change stores each field as
- * `{ from, to }`; a settings change stores only the new values.
+ * A line's changes in words. An account change and a settings change store
+ * each field as `{ from, to }`. A settings change written by an earlier
+ * version stored only the new value of every setting sent, and still reads
+ * that way.
  */
 export function changeLines(context: AdminSystemLog['context']): string[] {
   const changes = context?.changes;

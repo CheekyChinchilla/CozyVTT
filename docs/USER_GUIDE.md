@@ -96,7 +96,7 @@ The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins
 - grants or takes away **Global Assets** or template editing;
 - changes someone else's email address, display name, avatar or bio;
 - resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
-- changes the instance's settings or default theme;
+- changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
 - makes, deletes or restores a backup, or deletes leftover files.
 
 The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:
@@ -106,7 +106,7 @@ The instance writes lines of its own too, such as an account locked after too ma
 | **Time** | How long ago it happened |
 | **Level** | INFO, or WARNING for the more serious actions, such as deleting an account or changing someone's email address |
 | **By** | The administrator who acted, by display name and email address. **The instance** for a line the instance wrote itself |
-| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after (for the settings, the new value) |
+| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after. Lines about the settings written by earlier versions list every setting that was sent, with its new value only |
 
 **What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account it was about by its email address, and deleting that account leaves the line as it is. **By** is looked up each time the tab opens, so if the administrator's own account is deleted later, their lines stay and **By** shows **Deleted account**. The log is part of every backup.
 
