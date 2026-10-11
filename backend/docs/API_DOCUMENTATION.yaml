@@ -10306,10 +10306,19 @@ paths:
         held back. The upload waits on disk, in the uploads folder's
         `temp/uvtt`, and is removed as soon as it is read; imports from
         different users are read one at a time across the server, in the
-        order they arrived, and none is refused for that, so an import sent
-        while another user's is being read answers when its turn has run.
-        A failure while saving removes the picture, thumbnail and asset row
-        it had saved.
+        order they arrived, so an import sent while another user's is being
+        read answers when its turn has run. An import still waiting after 20
+        seconds answers **503** with `Retry-After: 60` and `Another map
+        import is running on the server. Try again in a minute.`, having
+        read and saved nothing, and one whose client disconnects while it
+        waits is dropped unread. An import that runs longer than 30 seconds
+        answers **503** with `Retry-After: 60` and `This map import took
+        longer than 30 seconds and was stopped, so nothing was saved. Try
+        again in a minute.`; it stops at its next step and removes what it
+        had saved, and the next import starts at once. Waiting and running
+        together stay under the bundled nginx's 60-second
+        `proxy_read_timeout`. A failure while saving removes the picture,
+        thumbnail, asset row and map it had saved.
 
 
         The map is named after `name`, or the file's name without its
@@ -10448,6 +10457,30 @@ paths:
                 message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            The import could not start within 20 seconds because other
+            imports were ahead of it, or it ran longer than 30 seconds and
+            was stopped. Either way nothing was saved; send it again after
+            the `Retry-After` seconds.
+          headers:
+            Retry-After:
+              description: Seconds to wait before trying again (60).
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                waitedTooLong:
+                  value:
+                    error: Service Unavailable
+                    message: Another map import is running on the server. Try again in a minute.
+                ranTooLong:
+                  value:
+                    error: Service Unavailable
+                    message: This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute.
 
   /api/campaigns/{campaignId}/maps/{id}/export-uvtt:
     get:

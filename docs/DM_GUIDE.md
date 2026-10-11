@@ -1030,7 +1030,14 @@ browsing the library can see it.
 
 **Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. A file holding more than a million points, doors, lights and settings in all, far more than any map uses even with its furniture walls left in the file, is refused straight away. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
 
-**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down. If another DM on the same server is importing a map at the same moment, yours waits until theirs has been read and then goes ahead; with very large files that can add a few seconds.
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down. If another DM on the same server is importing a map at the same moment, yours waits until theirs has been read and then goes ahead; with very large files that can add a few seconds. Two limits keep one import from holding up everyone else's:
+
+| What happens | What you see | What to do |
+|---|---|---|
+| Your import would have to wait more than 20 seconds for other DMs' imports | "Another map import is running on the server. Try again in a minute." | Import the file again a minute later. Nothing was saved. |
+| Your import takes longer than 30 seconds once it has started | "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." | Import the file again a minute later. If it happens every time, the server may be too busy or too slow for a picture that large: export it smaller from your mapping tool. |
+
+If you close the page or lose your connection while your import is waiting its turn, it is dropped and nothing is imported.
 
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
