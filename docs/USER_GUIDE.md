@@ -679,7 +679,7 @@ For extra account security, enable **MFA** in the Security section. You'll be as
 
 **You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device. **Back to login** on the code page ends the waiting sign-in too, so you can start again with another account or password.
 
-You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
+You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app. They are shown once: until you tick the box saying you have saved them, the browser asks before you reload or close the page. If you lose them anyway, make new ones from **Backup Codes** on your Profile page, with your password.
 
 **Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest) and links to the setup page. After that date the app takes you to the setup page and nothing else works until MFA is on. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
 

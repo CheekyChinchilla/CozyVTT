@@ -9,7 +9,7 @@
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -23,7 +23,7 @@ type CopyState = 'idle' | 'copied' | 'failed';
 
 export default function MFASetupPage() {
   const navigate = useNavigate();
-  const { authenticated, setupMFA, completeMFASetup } = useAuth();
+  const { authenticated, loading, setupMFA, completeMFASetup } = useAuth();
 
   // Setup data
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -42,12 +42,19 @@ export default function MFASetupPage() {
   const [codesCopy, setCodesCopy] = useState<CopyState>('idle');
   const [codesAcknowledged, setCodesAcknowledged] = useState(false);
 
-  // Redirect if not authenticated
+  // The backup codes exist only on this page once two-factor authentication
+  // is on, so leaving before they are marked saved asks first.
+  const codesUnsaved = step === 'backup-codes' && !codesAcknowledged;
   useEffect(() => {
-    if (!authenticated) {
-      navigate('/auth/login', { replace: true });
-    }
-  }, [authenticated, navigate]);
+    if (!codesUnsaved) return undefined;
+    const askFirst = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Older browsers show the dialog only when this is set.
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', askFirst);
+    return () => window.removeEventListener('beforeunload', askFirst);
+  }, [codesUnsaved]);
 
   // ============================================
   // Handlers
@@ -118,6 +125,21 @@ export default function MFASetupPage() {
   // ============================================
   // Render
   // ============================================
+
+  // Wait for the sign-in check a page load starts before deciding: a reload
+  // during setup went to the sign-in page, and on to the dashboard, before it
+  // had answered.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
+        <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <Navigate to="/auth/login" replace />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
