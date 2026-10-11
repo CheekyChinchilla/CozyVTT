@@ -117,7 +117,7 @@ Until the wizard has run, whoever submits it becomes the instance's administrato
 
    You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
    `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
-   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), open the wizard and press the button with any token typed in: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
 
 2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
 
@@ -1523,7 +1523,7 @@ Look at the last line it prints:
 
 ### The wizard says "Setup token is missing or wrong"
 
-The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead.
+The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete, and again each time the wizard is refused for lacking it. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead; the log then only says to use it and does not print it.
 
 ### Setup fails with "An error occurred during setup" (502)
 

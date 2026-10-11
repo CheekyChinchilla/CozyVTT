@@ -396,10 +396,14 @@ paths:
         The route is public, so it asks for the setup token first: the value
         the backend printed in its log at start while setup was incomplete, or
         the `SETUP_TOKEN` environment variable when set. A missing or wrong
-        token answers 403 before anything else is checked. The password must
-        be at least 12 characters with an uppercase letter, a lowercase
-        letter, a number and a special character, the same rule enforced on
-        register, reset-password and change-password.
+        token answers 403 before anything else is checked, and, while setup has
+        not run, writes a line to the backend log (at error level, so every
+        `LOG_LEVEL` shows it) saying where to find the token: the token itself
+        when the backend made it, the name `SETUP_TOKEN` when the owner set
+        one. The answer never carries the token. The password must be at least
+        12 characters with an uppercase letter, a lowercase letter, a number
+        and a special character, the same rule enforced on register,
+        reset-password and change-password.
       operationId: initializeSystem
       security: []
       requestBody:
