@@ -205,7 +205,7 @@ Click **Token Manager** (the crossed-swords icon) in the campaign header to open
 
 ### Creating a Token
 
-The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to drag into position.
+The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to move into position.
 
 - **Token Type** — **Player**, **NPC / Creature** or **Object**
 - **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
@@ -231,9 +231,9 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map; drag it where it belongs.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
 
-*GIF pending — Placing a token and dragging it into position.*
+*GIF pending — Placing a token and moving it into position.*
 
 ### Token Display Modes
 
@@ -313,7 +313,6 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 | D&D 5e | Full — abilities, saves, skills and combat, with bonuses derived from ability scores and Challenge Rating |
 | Pathfinder 2e | Full — using the modifiers printed on the stat block, with Fortitude/Reflex/Will saves |
 | Call of Cthulhu 7e | Custom Roll only — a percentile system has no d20 rolls to offer |
-| Shadowrun 6e | Custom Roll only — a dice-pool system has no d20 rolls to offer |
 
 If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured or hidden token, or one on the spirit layer, is named *Unknown creature* there, since the Dice panel reaches players who are not sent it.
 
@@ -349,7 +348,7 @@ Obscuring is a switch you set by hand. It does not follow the light, since the r
 
 ## The Creature Library
 
-The Creature Library is your DM-side catalog of creature templates — stat blocks, images, and metadata ready to drag onto the map as NPC tokens.
+The Creature Library is your DM-side catalog of creature templates — stat blocks, images, and metadata ready to place on the map as NPC tokens.
 
 ### Opening the Creature Library
 
@@ -799,7 +798,6 @@ You keep everything else: only you decide who is in the fight, drag the order ar
 | **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (Alert, Jack of All Trades, and so on) |
 | **Pathfinder 2e** | `d20 +` the stat named by the sheet's **Uses:** dropdown — Perception by default, Stealth when someone is sneaking |
 | **Call of Cthulhu 7e** | **No roll.** Investigators are ranked in DEX order, so the control reads **Set Initiative** and takes their DEX. Nothing appears in the dice log, because no dice were thrown |
-| **Shadowrun 6e** | The character's initiative dice and base from their sheet |
 | **NPCs** | A D&D 5e stat block rolls from its recorded Dexterity. A token with no sheet or stat block rolls a plain d20 |
 
 Two things worth knowing. **Call of Cthulhu's readied firearms** act at DEX + 50 — that depends on the round rather than the investigator, so click the value and type it in when it applies. And **advantage on initiative** (a Sentinel Shield) isn't automatic; roll `2d20kh1` in the dice panel and enter the result.
@@ -1234,7 +1232,7 @@ It is a **separate plane, not a see-through overlay.** Someone viewing the spiri
 There are two ways a player ends up there:
 
 - **The whole table at once.** Click **Spirit Layer** (the ghost icon) in the campaign header and open the veil with the switch at the top of the panel. Every player is in the spirit realm until you close it again.
-- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane.
+- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a *visible* spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane. **Hiding that token takes the player back to the material plane:** a hidden token does not count, so hide it only when you mean them to leave. A spectator is never moved by a token, only by the whole-table switch above.
 
 *Screenshot pending — Spirit Layer control panel.*
 
