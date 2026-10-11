@@ -5,7 +5,7 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   isValidEmail,
@@ -16,7 +16,6 @@ import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function RegisterPage() {
-  const navigate = useNavigate();
   const { register, authenticated } = useAuth();
 
   // Form state
@@ -39,10 +38,10 @@ export default function RegisterPage() {
   // Password strength
   const passwordStrength = password ? getPasswordStrength(password) : null;
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated. <Navigate>, since a navigate()
+  // during the first render is ignored and left a blank page.
   if (authenticated) {
-    navigate('/dashboard');
-    return null;
+    return <Navigate to="/dashboard" replace />;
   }
 
   /**

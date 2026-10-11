@@ -5,7 +5,7 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
@@ -24,16 +24,15 @@ export default function MFAVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect if authenticated (check this first!)
+  // Redirect if authenticated (check this first!). <Navigate>, since a
+  // navigate() during the first render is ignored and left a blank page.
   if (authenticated) {
-    navigate('/dashboard');
-    return null;
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Redirect if not in MFA flow
   if (!mfaPending) {
-    navigate('/auth/login');
-    return null;
+    return <Navigate to="/auth/login" replace />;
   }
 
   /**
