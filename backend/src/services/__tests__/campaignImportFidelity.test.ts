@@ -338,6 +338,37 @@ describe('an asset the import leaves out', () => {
   });
 });
 
+describe('a map whose picture is not a map picture', () => {
+  // A map's picture and spirit layer can only be map pictures. An archive
+  // naming a token picture or a sound for either keeps the picture as a
+  // token picture or sound in the campaign's library, and the map arrives
+  // without it.
+  it('arrives without it, and says so', async () => {
+    const TOKEN_ID = '99999999-9999-4999-8999-999999999999';
+    const result = await importCampaign(
+      await archive([map({ imageAssetRef: TOKEN_ID, spiritLayerAssetRef: TOKEN_ID })], {
+        [TOKEN_ID]: {
+          info: { originalName: 'goblin.png', mimeType: 'image/png', type: 'TOKEN', fileSize: PNG.length },
+          entry: { name: `assets/${TOKEN_ID}.png`, data: PNG },
+        },
+      }),
+      userId
+    );
+
+    expect(result.mapCount).toBe(1);
+    const [stored] = await importedMaps(result.campaignId);
+    expect(stored.imageUrl).toBe('');
+    expect(stored.baseLayerUrl).toBe('');
+    expect(stored.spiritLayerUrl).toBeNull();
+    expect(result.warnings).toEqual([
+      'Map "Cellar": left out its picture, which was not uploaded as a map picture.',
+      'Map "Cellar": left out its spirit layer picture, which was not uploaded as a map picture.',
+    ]);
+    const kept = await prisma.asset.findMany({ where: { campaignId: result.campaignId }, select: { type: true } });
+    expect(kept).toEqual([{ type: 'TOKEN' }]);
+  });
+});
+
 // ── Order ───────────────────────────────────────────────────────────────────
 
 describe('the order of an imported campaign\'s maps and pictures', () => {

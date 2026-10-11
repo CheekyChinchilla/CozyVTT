@@ -3,7 +3,7 @@ import { prepareMap, ImportReport } from '../../services/campaignImportContent';
 
 /** The tokens a map in an archive imports with. */
 function importedTokens(map: unknown): Array<Record<string, unknown>> {
-  const prepared = prepareMap(map, { index: 0, importTokens: true, remapAsset: () => null, report: new ImportReport() });
+  const prepared = prepareMap(map, { index: 0, importTokens: true, remapAsset: () => null, isMapPicture: () => true, report: new ImportReport() });
   return prepared?.data.tokens as unknown as Array<Record<string, unknown>>;
 }
 

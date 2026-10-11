@@ -848,6 +848,18 @@ type above, so a file already on disk under a bad name is still served as bytes,
 never executed. Both are needed: the first for new uploads, the second for
 anything already stored.
 
+### Pictures a map may name
+
+A map's picture and spirit layer may name only an asset uploaded as a map
+picture (`isMapPicture` in `backend/src/services/permissions.ts`, asked by the
+map routes after `canReferenceAsset` decides whether the DM may use the asset
+at all). It reads the asset row's own type: an address gives its asset by id,
+whatever folder it names, and a bare id is stored under `/api/assets/maps/`,
+so an address cannot say what it points at. The address already stored on the
+map passes unchanged, so a map stored before the rule keeps its picture. A
+campaign import drops a map's picture or spirit layer that names an asset it
+did not import as MAP, and says so in the import's warnings.
+
 ### Asset Scoping
 
 Assets have three scopes:

@@ -622,6 +622,8 @@ export async function importCampaign(
 
     /** Remap an asset reference from the archive to the new URL. */
     const remapAsset = (ref: string | null | undefined): string | null => (ref ? (assetRefMap.get(ref) ?? null) : null);
+    const mapPictureIds = new Set(assets.filter((a) => a.type === 'MAP').map((a) => a.oldId));
+    const isMapPicture = (ref: string): boolean => mapPictureIds.has(ref);
 
     // The same presets a new campaign gets, so an archive with no atmosphere
     // settings imports with the atmosphere the allowlists accept.
@@ -708,7 +710,7 @@ export async function importCampaign(
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
               continue;
             }
-            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, report });
+            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, report });
             if (!prepared) continue;
 
             const mapId = randomUUID();
