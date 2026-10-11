@@ -16,7 +16,7 @@
  * of every router (app.ts). The last checks find it there and fire it, on
  * the app as the server builds it.
  *
- * The app trusts one proxy hop, as server.ts does, so each row's requests
+ * The app trusts one proxy hop, as app.ts does, so each row's requests
  * come from an address of their own through X-Forwarded-For.
  *
  * Requires PostgreSQL at DATABASE_URL.

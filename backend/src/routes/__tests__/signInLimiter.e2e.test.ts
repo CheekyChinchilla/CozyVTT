@@ -17,7 +17,7 @@
  * and is refused if they all failed.
  *
  * The real limiter runs here (this file does not mock it), so each case uses
- * an address of its own through a trusted proxy hop, as server.ts sets up.
+ * an address of its own through a trusted proxy hop, as app.ts sets up.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */

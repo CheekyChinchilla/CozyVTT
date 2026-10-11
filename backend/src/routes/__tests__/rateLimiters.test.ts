@@ -37,7 +37,7 @@ type Limiter = RequestHandler & { recordFailure?: (req: Request) => void };
  */
 function appWith(limiter: Limiter) {
   const app = express();
-  // Matches server.ts: trust exactly one hop, so `req.ip` is the client address
+  // Matches app.ts: trust exactly one hop, so `req.ip` is the client address
   // from X-Forwarded-For rather than the proxy's. `true` would trust any number
   // of hops, which lets a client spoof its own address — express-rate-limit
   // warns about precisely that, and production does not do it either.
