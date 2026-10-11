@@ -216,13 +216,31 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
   fi
 fi
 
-# Parse DATABASE_URL if set, otherwise fall back to individual vars
+# Parse DATABASE_URL if set, otherwise fall back to individual vars.
+# The address is scheme://user:password@host:port/name?options. A user name
+# or password holding characters an address cannot carry as they are is
+# percent-encoded in it (%40 for @), and is decoded here, as the backend
+# decodes it. An address that names no port uses 5432. This block is the same
+# in backup.sh and restore.sh; keepInStep.test.ts fails if they differ.
+url_decode() {
+  local s="${1//\\/\\\\}"
+  printf '%b' "${s//%/\\x}"
+}
 if [[ -n "${DATABASE_URL:-}" ]]; then
-  DB_USER=$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]+):.*|\1|')
-  DB_PASS=$(echo "$DATABASE_URL" | sed -E 's|.*://[^:]+:([^@]+)@.*|\1|')
-  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-  DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
-  DB_NAME=$(echo "$DATABASE_URL" | sed -E 's|.*/([^?]+).*|\1|')
+  AUTHORITY="${DATABASE_URL#*://}"
+  DB_NAME="${AUTHORITY#*/}"
+  DB_NAME="${DB_NAME%%\?*}"
+  AUTHORITY="${AUTHORITY%%/*}"
+  HOST_PORT="${AUTHORITY##*@}"
+  USER_INFO=""
+  if [[ "$AUTHORITY" == *@* ]]; then USER_INFO="${AUTHORITY%@*}"; fi
+  DB_USER=$(url_decode "${USER_INFO%%:*}")
+  DB_USER="${DB_USER:-cozyvtt}"
+  DB_PASS=""
+  if [[ "$USER_INFO" == *:* ]]; then DB_PASS=$(url_decode "${USER_INFO#*:}"); fi
+  DB_HOST="${HOST_PORT%%:*}"
+  DB_PORT=5432
+  if [[ "$HOST_PORT" == *:* ]]; then DB_PORT="${HOST_PORT##*:}"; fi
 else
   DB_USER="${DB_USER:-cozyvtt}"
   DB_PASS="${DB_PASS:-}"

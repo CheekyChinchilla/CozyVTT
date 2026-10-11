@@ -43,6 +43,10 @@
  * to generate one; the guide's example was once changed without the list of
  * refused values, and the new example line started a server.
  *
+ * The database address in the backup and restore scripts. Each reads
+ * DATABASE_URL in its own copy of the same block; a fix to one (decoding the
+ * password, the default port) has to reach the other.
+ *
  * The themes and fonts. The server accepts a theme or font only from its
  * list, for a user's preferences and the instance's default theme alike; a
  * theme the app offers that the list lacks is one nobody can save.
@@ -292,5 +296,18 @@ describe('the themes and fonts the server accepts', () => {
 
   it('are the fonts the app offers', () => {
     expect([...FONT_IDS].sort()).toEqual(ids('FONT_OPTIONS').sort());
+  });
+});
+
+describe('the DATABASE_URL block in backup.sh and restore.sh', () => {
+  const block = (rel: string) => {
+    const source = read(rel);
+    const start = source.indexOf('# Parse DATABASE_URL');
+    if (start === -1) throw new Error(`${rel} no longer has its "# Parse DATABASE_URL" block; update this test with the file`);
+    return source.slice(start, source.indexOf('\nfi\n', start));
+  };
+
+  it('is the same in both scripts', () => {
+    expect(block('backend/scripts/restore.sh')).toBe(block('backend/scripts/backup.sh'));
   });
 });

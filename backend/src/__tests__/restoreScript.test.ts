@@ -85,4 +85,25 @@ describeOnPosix('restore.sh', () => {
     expect(result.stdout).toMatch(/Could not write the unpacked backup/);
     await expect(fs.access(loaded)).rejects.toThrow();
   });
+
+  it('decodes a percent-encoded password, and uses port 5432 when the address names none', async () => {
+    const seen = path.join(root, 'seen.txt');
+    await fs.writeFile(path.join(bin, 'psql'), `#!/bin/sh\nprintf '%s\\n' "$PGPASSWORD" "$@" > "${seen}"\ncat > /dev/null\n`, { mode: 0o755 });
+
+    const result = spawnSync('bash', [SCRIPT, backup], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        DATABASE_URL: 'postgresql://cozy%2Badmin:p%40ss%25w0rd@db.internal/cozyvtt?schema=public',
+        RESTORE_ASSUME_YES: 'yes',
+        TMPDIR: root,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    const [password, ...args] = (await fs.readFile(seen, 'utf8')).trimEnd().split('\n');
+    expect(password).toBe('p@ss%w0rd');
+    expect(args).toEqual(expect.arrayContaining(['-h', 'db.internal', '-p', '5432', '-U', 'cozy+admin', '-d', 'cozyvtt']));
+  });
 });

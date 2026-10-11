@@ -1057,6 +1057,8 @@ If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
 ```
 
+Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `@`, `/` or `%`, is written percent-encoded there (`%40` for `@`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
+
 Under Docker, the scripts take the database's user and name from
 `DATABASE_USER` and `DATABASE_NAME` in their environment, not from `.env`, and
 assume `cozyvtt` for both. If you changed either in `.env`, put the same values
