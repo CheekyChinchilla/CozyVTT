@@ -28,6 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A Universal VTT import waits at most 20 seconds behind other DMs' imports, and runs for at most 30 seconds.** Past either limit it saves nothing and says to try again in a minute. The slowest import measured, a 16,000-pixel square picture with 5,000 walls, took 5 seconds on a desktop computer.
 
+- **One account can have up to 1,000 characters and publish up to 500 character templates.** A new character, copy or import past 1,000, or a 501st template, is refused with a message saying to delete one first. Characters and templates already saved all stay, even past those numbers.
+
+- **A DM can have the instance send 20 invitation emails an hour.** Past that, **Send Invitation** with **Also email them an invitation** ticked says how many minutes to wait; the same invitation without the email goes through at once.
+
+- **An upload's name is at most 200 characters and its description at most 1,000, with at most 50 tags of up to 50 characters each.** The **Upload Asset** dialog stops each box at those lengths. Files already uploaded keep their names, descriptions and tags.
+
+- **The Profile page has a new Remove Avatar button.** **Remove Avatar**, under your avatar, clears it and deletes the picture, unless something else such as a token uses it. Uploading a new avatar now deletes the old picture the same way.
+
 ### Added
 
 - **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
