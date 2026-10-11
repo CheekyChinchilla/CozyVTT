@@ -10,6 +10,8 @@ import {
   sheetShortTextSchema as shortText,
   sheetLongTextSchema as longText,
 } from './sheetText';
+import { sheetList } from './sheetLists';
+import { SHEET_ROW_TAGS_MAX } from './sheetLimits';
 
 /**
  * Karma
@@ -253,7 +255,7 @@ const rangedWeaponSchema = z.object({
   dicePool: z.number().int().min(0),
   dv: shortText,
   attackRatings: attackRatingsSchema,
-  firingModes: z.array(shortText),
+  firingModes: sheetList(shortText, SHEET_ROW_TAGS_MAX),
   capacity: z.number().int().min(0),
   ammoLoaded: z.number().int().min(0),
   ammoType: shortText,
@@ -276,8 +278,8 @@ const meleeWeaponSchema = z.object({
  * Weapons
  */
 const weaponsSchema = z.object({
-  ranged: z.array(rangedWeaponSchema),
-  melee: z.array(meleeWeaponSchema),
+  ranged: sheetList(rangedWeaponSchema),
+  melee: sheetList(meleeWeaponSchema),
 });
 
 /**
@@ -331,7 +333,7 @@ const matrixStatsSchema = z.object({
     maximum: z.number().int().min(0),
     current: z.number().int().min(0),
   }),
-  programs: z.array(shortText),
+  programs: sheetList(shortText),
   matrixInitiative: matrixInitiativeSchema,
 });
 
@@ -342,14 +344,14 @@ const magicSchema = z.object({
   isMagicallyActive: z.boolean(),
   tradition: shortText.nullable(),
   magicRating: z.number().int().min(0).max(12).nullable(),
-  spells: z.array(shortText),
-  rituals: z.array(shortText),
-  preparations: z.array(shortText),
-  complexForms: z.array(shortText),
-  adeptPowers: z.array(shortText),
+  spells: sheetList(shortText),
+  rituals: sheetList(shortText),
+  preparations: sheetList(shortText),
+  complexForms: sheetList(shortText),
+  adeptPowers: sheetList(shortText),
   initiationGrade: z.number().int().min(0),
   submersionGrade: z.number().int().min(0),
-  focii: z.array(shortText),
+  focii: sheetList(shortText),
 });
 
 /**
@@ -378,7 +380,7 @@ const fakeIDSchema = z.object({
   name: shortText.min(1),
   type: shortText.min(1),
   rating: z.number().int().min(1).max(6),
-  licenses: z.array(licenseSchema),
+  licenses: sheetList(licenseSchema, SHEET_ROW_TAGS_MAX),
 });
 
 /**
@@ -449,21 +451,21 @@ export const shadowrun6eCharacterDataSchema = z.object({
   edgePoints: edgePointsSchema.optional(),
   conditionMonitors: conditionMonitorsSchema.optional(),
   woundModifier: z.number().int().optional(),
-  conditions: z.array(shortText).optional(),
+  conditions: sheetList(shortText).optional(),
   skills: skillsSchema.optional(),
-  knowledgeSkills: z.array(knowledgeSkillSchema).optional(),
-  languages: z.array(languageSchema).optional(),
-  qualities: z.array(qualitySchema).optional(),
+  knowledgeSkills: sheetList(knowledgeSkillSchema).optional(),
+  languages: sheetList(languageSchema).optional(),
+  qualities: sheetList(qualitySchema).optional(),
   weapons: weaponsSchema.optional(),
-  armor: z.array(armorSchema).optional(),
-  augmentations: z.array(augmentationSchema).optional(),
+  armor: sheetList(armorSchema).optional(),
+  augmentations: sheetList(augmentationSchema).optional(),
   matrixStats: matrixStatsSchema.optional(),
   magic: magicSchema.optional(),
-  contacts: z.array(contactSchema).optional(),
-  ids: z.array(fakeIDSchema).optional(),
+  contacts: sheetList(contactSchema).optional(),
+  ids: sheetList(fakeIDSchema).optional(),
   currency: currencySchema.optional(),
-  gear: z.array(gearItemSchema).optional(),
-  vehicles: z.array(shortText).optional(),
+  gear: sheetList(gearItemSchema).optional(),
+  vehicles: sheetList(shortText).optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),
   backstory: longText.optional(),

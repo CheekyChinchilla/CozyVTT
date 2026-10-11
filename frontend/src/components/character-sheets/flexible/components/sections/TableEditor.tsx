@@ -14,6 +14,10 @@ interface TableEditorProps {
 }
 
 export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) => {
+  // TODO(sheets): the server keeps at most 50 columns in a table (FLEXIBLE_MAX_COLUMNS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addColumn = () => {
     const newColumn = {
       id: generateId(),
@@ -46,6 +50,10 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
     });
   };
 
+  // TODO(sheets): the server keeps at most 1000 rows in a table (FLEXIBLE_MAX_ROWS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addRow = () => {
     const newRow = {
       id: generateId(),

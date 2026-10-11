@@ -23,6 +23,7 @@ import { CharacterSheetRouter } from '@/components/character-sheets/CharacterShe
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from '@/components/character/StaleSaveDialog';
 import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
@@ -220,13 +221,15 @@ export default function CharacterEditorPage() {
         // which replaced the editor with "Failed to Load Character" and threw
         // the unsaved edits away.
         const validationErrors = apiValidationIssues(err);
-        if (validationErrors) {
-          const errorMessages = validationErrors.map((e) => `${e.path}: ${e.message}`).join('; ');
-          showToast(`Not saved. ${errorMessages}`, 'error');
-          console.error('Validation errors:', validationErrors);
-        } else {
-          showToast(apiErrorMessage(err) || errorMessage(err) || 'Failed to save character', 'error');
-        }
+        if (validationErrors) console.error('Validation errors:', validationErrors);
+        showToast(
+          refusedSaveMessage(
+            validationErrors ?? [],
+            apiErrorMessage(err) || errorMessage(err),
+            'Failed to save character'
+          ),
+          'error'
+        );
         throw err;
       } finally {
         setSaving(false);

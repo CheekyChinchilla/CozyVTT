@@ -11,6 +11,20 @@ import {
   sheetLongTextSchema as longText,
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
+import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
+import { sheetList } from './sheetLists';
+import { PF2E_ITEM_BONUS_MAX, PF2E_ITEM_BONUS_MIN, SHEET_ROW_TAGS_MAX, SPELL_SLOTS_MAX } from './sheetLimits';
+
+/**
+ * An item bonus, or an item penalty. Held to the range any real or homebrew
+ * item gives, since the editor adds it into a total that is rolled.
+ */
+const itemBonusMessage = `Must be from ${PF2E_ITEM_BONUS_MIN} to ${PF2E_ITEM_BONUS_MAX}`;
+const itemBonusSchema = z
+  .number()
+  .int()
+  .min(PF2E_ITEM_BONUS_MIN, itemBonusMessage)
+  .max(PF2E_ITEM_BONUS_MAX, itemBonusMessage);
 
 /**
  * Proficiency rank
@@ -42,7 +56,7 @@ const attributesSchema = z.object({
  */
 const savingThrowSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   bonus: z.number().int(),
 });
 
@@ -60,9 +74,9 @@ const savingThrowsSchema = z.object({
  */
 const perceptionSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   bonus: z.number().int(),
-  senses: z.array(shortText),
+  senses: sheetList(shortText),
 });
 
 /**
@@ -72,7 +86,7 @@ const skillSchema = z.object({
   attribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
   armorPenalty: z.number().int(),
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   bonus: z.number().int(),
 });
 
@@ -122,7 +136,7 @@ const loreSkillSchema = z.object({
   name: shortText.min(1),
   attribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   bonus: z.number().int(),
 });
 
@@ -138,7 +152,7 @@ const armorClassSchema = z.object({
   total: z.number().int().min(10),
   proficiencyRank: proficiencyRankSchema,
   capDex: z.number().int().nullable(),
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   armorPenalty: z.number().int(),
 });
 
@@ -164,7 +178,7 @@ const initiativeSchema = z.object({
  */
 const speedSchema = z.object({
   land: z.number().int().min(0),
-  other: z.array(shortText),
+  other: sheetList(shortText),
 });
 
 /**
@@ -176,9 +190,9 @@ const hitPointsSchema = z.object({
   classHpPerLevel: z.number().int().min(0),
   current: z.number().int(),
   temporary: z.number().int().min(0),
-  resistances: z.array(shortText),
-  immunities: z.array(shortText),
-  weaknesses: z.array(shortText),
+  resistances: sheetList(shortText),
+  immunities: sheetList(shortText),
+  weaknesses: sheetList(shortText),
 });
 
 /**
@@ -230,8 +244,8 @@ const strikeSchema = z.object({
   damageType: shortText.optional(),
   attributeModifier: shortText.min(1).optional(),
   proficiencyRank: proficiencyRankSchema.optional(),
-  itemBonus: z.number().int().optional(),
-  traits: z.array(shortText).optional(),
+  itemBonus: itemBonusSchema.optional(),
+  traits: sheetList(shortText, SHEET_ROW_TAGS_MAX).optional(),
   range: z.number().int().nullable().optional(),
   savingThrow: shortText.optional(),
   notes: longText.optional(),
@@ -289,19 +303,26 @@ const featSchema = z.object({
  * All feats
  */
 const featsSchema = z.object({
-  ancestryAndHeritage: z.array(featSchema),
-  class: z.array(featSchema),
-  skill: z.array(featSchema),
-  general: z.array(featSchema),
-  bonus: z.array(featSchema),
+  ancestryAndHeritage: sheetList(featSchema),
+  class: sheetList(featSchema),
+  skill: sheetList(featSchema),
+  general: sheetList(featSchema),
+  bonus: sheetList(featSchema),
 });
 
 /**
  * Spell slot
  */
+const slotCountMessage = `Must be from 0 to ${SPELL_SLOTS_MAX}`;
+const slotCountSchema = z.number().int().min(0, slotCountMessage).max(SPELL_SLOTS_MAX, slotCountMessage);
+
+/**
+ * Bounded so that a total cannot be a number no sheet could use: a caster has
+ * at most four slots of a rank, and the sheet shows what is left of them.
+ */
 const spellSlotSchema = z.object({
-  total: z.number().int().min(0),
-  expended: z.number().int().min(0),
+  total: slotCountSchema,
+  expended: slotCountSchema,
 });
 
 /**
@@ -345,7 +366,7 @@ const spellSchema = z.object({
  */
 const spellAttackBonusSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   bonus: z.number().int(),
 });
 
@@ -354,7 +375,7 @@ const spellAttackBonusSchema = z.object({
  */
 const spellDCSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
-  itemBonus: z.number().int(),
+  itemBonus: itemBonusSchema,
   dc: z.number().int().min(10),
 });
 
@@ -366,7 +387,7 @@ const focusSpellsSchema = z.object({
     total: z.number().int().min(0).max(3),
     current: z.number().int().min(0).max(3),
   }),
-  spells: z.array(spellSchema),
+  spells: sheetList(spellSchema),
 });
 
 /**
@@ -392,12 +413,12 @@ const spellcastingSchema = z.object({
   keyAttribute: shortText.min(1).optional(),
   spellAttackBonus: spellAttackBonusSchema.optional(),
   spellDC: spellDCSchema.optional(),
-  cantrips: z.array(cantripSchema).optional(),
+  cantrips: sheetList(cantripSchema).optional(),
   slots: spellSlotsSchema.optional(),
-  spells: z.array(spellSchema).optional(),
+  spells: sheetList(spellSchema).optional(),
   focusSpells: focusSpellsSchema.optional(),
-  innateSpells: z.array(innateSpellSchema).optional(),
-  rituals: z.array(ritualSchema).optional(),
+  innateSpells: sheetList(innateSpellSchema).optional(),
+  rituals: sheetList(ritualSchema).optional(),
 });
 
 /**
@@ -422,15 +443,6 @@ const personalitySchema = z.object({
   ideals: longText.optional(),
   bonds: longText.optional(),
   flaws: longText.optional(),
-});
-
-/**
- * Allies and organizations
- * All fields optional to allow quick entries
- */
-const alliesAndOrganizationsSchema = z.object({
-  name: shortText.optional(),
-  description: longText.optional(),
 });
 
 /**
@@ -465,25 +477,25 @@ export const pathfinder2eCharacterDataSchema = z.object({
   savingThrows: savingThrowsSchema.optional(),
   perception: perceptionSchema.optional(),
   skills: skillsSchema.optional(),
-  loreSkills: z.array(loreSkillSchema).optional(),
+  loreSkills: sheetList(loreSkillSchema).optional(),
   armorClass: armorClassSchema.optional(),
   classDC: classDCSchema.optional(),
   initiative: initiativeSchema.optional(),
   speed: speedSchema.optional(),
   hp: hitPointsSchema.optional(),
-  conditions: z.array(shortText).optional(),
+  conditions: sheetList(shortText).optional(),
   deathAndDying: deathAndDyingSchema.optional(),
   proficiencies: proficienciesSchema.optional(),
-  strikes: z.array(strikeSchema).optional(),
+  strikes: sheetList(strikeSchema).optional(),
   currency: currencySchema.optional(),
-  inventory: z.array(inventoryItemSchema).optional(),
+  inventory: sheetList(inventoryItemSchema).optional(),
   bulk: bulkSchema.optional(),
-  languages: z.array(shortText).optional(),
+  languages: sheetList(shortText).optional(),
   feats: featsSchema.optional(),
   // Named class features with optional rules text. Strings are still
   // accepted — that is what every sheet written so far holds, and what a
   // feature with no description is. See validators/game-systems/featureEntry.
-  classFeatures: z.array(featureEntrySchema).optional(),
+  classFeatures: sheetList(featureEntrySchema).optional(),
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),

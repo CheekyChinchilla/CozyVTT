@@ -147,9 +147,18 @@ export default function CampaignImportDialog({
   };
 
   // The shared dialog: announced to a screen reader by its title, keeping
-  // keyboard focus inside it, and closed by Escape, the backdrop or its X.
+  // keyboard focus inside it, and closed by Escape, the backdrop or its X,
+  // none of which work while the import runs: the request carries on without
+  // the window, and closing would leave no sign of whether a campaign was made.
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Import Campaign" icon={FileArchive} size="md">
+    <Modal
+      open={isOpen}
+      onClose={handleClose}
+      title="Import Campaign"
+      icon={FileArchive}
+      size="md"
+      closeDisabled={step === 'importing'}
+    >
       <div>
         {/* ── UPLOAD STEP ── */}
         {step === 'upload' && (

@@ -58,6 +58,7 @@ import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
+import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField } from './skillEdits';
 import { cocDodgeBase, settleDodge } from './dodge';
@@ -70,7 +71,7 @@ import {
   cocHalfAndFifth,
 } from './derivedStats';
 import { parsePossessions, formatPossessions } from './possessions';
-import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
 
 interface CallOfCthulhu7eCharacterEditorProps {
@@ -1054,6 +1055,8 @@ value={formData.wealth?.cash}
           onChange={(possessions) => setFormData((prev) => ({ ...prev, possessions }))}
           parse={parsePossessions}
           format={formatPossessions}
+          max={SHEET_LIST_MAX}
+          noteClassName={LIMIT_NOTE_CLASS}
           placeholder="List possessions, one per line. Format: Item Name - Notes"
           rows={8}
           className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sepia-500"
@@ -1141,6 +1144,8 @@ value={formData.wealth?.cash}
               }}
               parse={parseLineList}
               format={formatLineList}
+              max={SHEET_LIST_MAX}
+              noteClassName={LIMIT_NOTE_CLASS}
               placeholder={'Contact Nyarlathotep\nElder Sign'}
               className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
             />

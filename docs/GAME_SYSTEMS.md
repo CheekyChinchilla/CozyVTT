@@ -59,10 +59,14 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
 | Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
 | Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
-| D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
+| The name in Allies & Organizations (D&D 5e and Pathfinder 2e): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
+| A list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (inventory or possessions, attacks, strikes or weapons, spells, cantrips, conditions, hit dice, features, feats, languages, contacts and the rest): at most 500 entries, five times what the longest real list holds | `SHEET_LIST_MAX` | `sheetList` in `sheetLists.ts`; `listLimits.test.ts` walks every system's schema and fails on a list without a maximum. The editor turns each add button off at the limit and says why (`ListLimitNote`); a comma-separated box (`ListField`, the cantrips box) turns away the entry that would pass it |
+| Entries in a list inside one row (the traits of one Pathfinder 2e strike, the firing modes of one Shadowrun weapon): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `pathfinder2e.schema.ts` and `shadowrun6e.schema.ts`; the strike's traits box turns away the 51st |
+| Pathfinder 2e item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. The Core Rulebook's run from +4 down to -2 | `PF2E_ITEM_BONUS_MIN`, `PF2E_ITEM_BONUS_MAX` | `itemBonusSchema` in `pathfinder2e.schema.ts`; the editor's boxes clamp to the range when left |
+| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count (D&D 5e: and no more used than the total) | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20 |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 
-A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`.
+A sheet stored before a limit existed still loads, with every entry; its next save is refused, with the path of each field over a limit in `validationErrors`, until the list is shortened. The two sheet editors, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
 
 ### A field only the DM sees: Keeper's Notes
 
@@ -459,7 +463,7 @@ export const mySystemCharacterDataSchema = z.object({
 export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 ```
 
-> Every text field needs a length limit, from `sheetText.ts`: `sheetCharacterNameSchema` for the character's own name, `shortText` for a one-line box, `longText` for anything that holds paragraphs. `sheetTextLimits.test.ts` walks every system's schema and fails on a string without one, so add your schema to its list.
+> Every text field needs a length limit, from `sheetText.ts`: `sheetCharacterNameSchema` for the character's own name, `shortText` for a one-line box, `longText` for anything that holds paragraphs. `sheetTextLimits.test.ts` walks every system's schema and fails on a string without one, so add your schema to its list. Every list needs a count limit too: build it with `sheetList(entry)` from `sheetLists.ts`, which `listLimits.test.ts` checks the same way. In the editor, turn the list's add button off at the limit with `listIsFull` and `ListLimitNote` from `components/character-sheets/ListLimitNote.tsx`.
 >
 > Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
 >

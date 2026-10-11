@@ -15,6 +15,10 @@ interface ListEditorProps {
 }
 
 export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => {
+  // TODO(sheets): the server keeps at most 1000 entries in a list section (FLEXIBLE_MAX_ROWS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addItem = () => {
     const newItem = {
       id: generateId(),

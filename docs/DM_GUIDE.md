@@ -577,6 +577,8 @@ A large campaign takes as long to export as your connection needs; nothing gives
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
 
+While **Importing campaign...** is showing, the window cannot be closed: Escape, a click outside it and the X do nothing, so you always see how the import ended. The window can be closed again once it says the import is complete or has failed.
+
 An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
 
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.

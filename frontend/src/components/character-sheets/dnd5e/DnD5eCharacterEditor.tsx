@@ -39,6 +39,7 @@ import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
+import ListLimitNote, { ADD_BUTTON_OFF, listChangeAllowed, listIsFull } from '../ListLimitNote';
 import {
   passiveScore,
   dnd5eSpellSaveDC,
@@ -69,7 +70,7 @@ import {
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
-import { SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
+import { SHEET_LIST_MAX, SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
 
 /**
@@ -265,6 +266,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  // Set when the last change to the cantrips box was turned away for adding one entry too many.
+  const [cantripsTurnedAway, setCantripsTurnedAway] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { data: serverConfig } = useServerConfigQuery();
 
@@ -1518,6 +1521,9 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
+          {/* TODO(sheets): the schema keeps at most 30 of these and this button
+              has no limit, so a 31st skill makes a sheet that cannot be saved.
+              Turn the button off at the limit, as the lists below do. */}
           <button
             type="button"
             onClick={() =>
@@ -1797,11 +1803,13 @@ min={0}
               ];
               updateField('hitDice', newHitDice);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.hitDice)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Hit Die
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.hitDice)} />
         <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
           <label className="text-xs font-semibold text-stone-600">Class</label>
           <label className="text-xs font-semibold text-stone-600 text-center">Die</label>
@@ -2004,11 +2012,13 @@ min={0}
               ];
               updateField('attacks', newAttacks);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.attacks)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Attack
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.attacks)} />
         <div className="space-y-4">
           {(formData.attacks || []).map((attack, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
@@ -2166,6 +2176,9 @@ min={0}
                   <label className="block text-xs font-semibold text-stone-600">
                     Other Damage Rolls
                   </label>
+                  {/* TODO(sheets): the schema keeps at most 10 of these per
+                      attack and this button has no limit, so an 11th makes a
+                      sheet that cannot be saved. Turn it off at the limit. */}
                   <button
                     type="button"
                     onClick={() =>
@@ -2254,6 +2267,13 @@ min={0}
   );
 
   // Render Spells tab
+  // The cantrips box as typed. It holds a string while the sheet is open and
+  // becomes a list when it is saved.
+  const cantripsText =
+    typeof formData.spellcasting?.cantrips === 'string'
+      ? formData.spellcasting.cantrips
+      : (formData.spellcasting?.cantrips || []).join(', ');
+
   const renderSpellsTab = () => (
     <div className="space-y-6">
       {/* Spellcasting class and ability */}
@@ -2341,14 +2361,22 @@ min={0}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Cantrips</h3>
         <textarea
-          value={typeof formData.spellcasting?.cantrips === 'string'
-            ? formData.spellcasting.cantrips
-            : (formData.spellcasting?.cantrips || []).join(', ')}
-          onChange={(e) => updateField('spellcasting.cantrips', e.target.value)}
+          value={cantripsText}
+          onChange={(e) => {
+            // The box is turned into a list when the sheet is saved, so the
+            // count is held to the limit here, as a list's add button is.
+            if (!listChangeAllowed(parseCommaSeparated(e.target.value).length, parseCommaSeparated(cantripsText).length)) {
+              setCantripsTurnedAway(true);
+              return;
+            }
+            setCantripsTurnedAway(false);
+            updateField('spellcasting.cantrips', e.target.value);
+          }}
           placeholder="Enter cantrips separated by commas (e.g., Fire Bolt, Mage Hand, Prestidigitation)"
           rows={2}
           className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
         />
+        <ListLimitNote full={cantripsTurnedAway || parseCommaSeparated(cantripsText).length >= SHEET_LIST_MAX} />
       </div>
 
       {/* Spell Slots */}
@@ -2407,11 +2435,13 @@ min={0}
               ];
               updateField('spellcasting.spells', newSpells);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.spellcasting?.spells)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Spell
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.spellcasting?.spells)} />
         <div className="space-y-2">
           {(formData.spellcasting?.spells || []).map((spell, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
@@ -2529,11 +2559,13 @@ min={0}
               ];
               updateField('inventory', newInventory);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.inventory)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Item
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.inventory)} />
         <div className="space-y-3">
           {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
@@ -2722,11 +2754,13 @@ min={0}
               onClick={() =>
                 updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
               }
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+              disabled={listIsFull(featureRows)}
+              className={`px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm ${ADD_BUTTON_OFF}`}
             >
               + Add Feature
             </button>
           </div>
+          <ListLimitNote full={listIsFull(featureRows)} />
           <p className="text-xs text-stone-600 mb-3">
             Class features, racial traits and feats. A description is optional — leave it blank
             for anything that is just a name.

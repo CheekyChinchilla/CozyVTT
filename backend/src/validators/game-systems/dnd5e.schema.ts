@@ -11,7 +11,9 @@ import {
   sheetLongTextSchema as longText,
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
+import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
 import { SPELL_SLOTS_MAX } from './sheetLimits';
+import { sheetList } from './sheetLists';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
 
 /**
@@ -305,9 +307,9 @@ const spellcastingSchema = z.object({
   // Perception already are.
   spellSaveDCOtherBonus: manualBonusSchema.optional(),
   spellAttackOtherBonus: manualBonusSchema.optional(),
-  cantrips: z.array(shortText).optional(),
+  cantrips: sheetList(shortText).optional(),
   slots: spellSlotsSchema.optional(),
-  spells: z.array(spellSchema).optional(),
+  spells: sheetList(spellSchema).optional(),
 });
 
 /**
@@ -332,15 +334,6 @@ const personalitySchema = z.object({
   ideals: longText.optional(),
   bonds: longText.optional(),
   flaws: longText.optional(),
-});
-
-/**
- * Allies and organizations
- * Description optional to allow quick entries
- */
-const alliesAndOrganizationsSchema = z.object({
-  name: shortText.optional(),
-  description: longText.optional(),
 });
 
 /**
@@ -390,17 +383,17 @@ export const dnd5eCharacterDataSchema = z.object({
   initiativeBonus: manualBonusSchema.optional(),
   speed: z.number().int().min(0).optional(),
   hp: hitPointsSchema.optional(),
-  conditions: z.array(shortText).optional(),
+  conditions: sheetList(shortText).optional(),
   // Exhaustion is six cumulative levels, not a condition you either have or do
   // not (Basic Rules, Appendix A) — level 1 is disadvantage on ability checks,
   // level 6 is death. It used to be a checkbox in the list above, which could
   // not tell those apart. 0 means none.
   exhaustionLevel: z.number().int().min(0).max(6).optional(),
-  hitDice: z.array(hitDiceSchema).optional(),
+  hitDice: sheetList(hitDiceSchema).optional(),
   deathSaves: deathSavesSchema.optional(),
-  attacks: z.array(attackSchema).optional(),
+  attacks: sheetList(attackSchema).optional(),
   currency: currencySchema.optional(),
-  inventory: z.array(inventoryItemSchema).optional(),
+  inventory: sheetList(inventoryItemSchema).optional(),
   // The four proficiency boxes as the player typed them: armour, weapons,
   // tools and languages, each free text.
   //
@@ -427,10 +420,10 @@ export const dnd5eCharacterDataSchema = z.object({
         tools: proficiencyBoxSchema.optional(),
         languages: proficiencyBoxSchema.optional(),
       }),
-      z.array(longText),
+      sheetList(longText),
     ])
     .optional(),
-  proficienciesAndLanguages: z.array(proficiencyBoxSchema).optional(),
+  proficienciesAndLanguages: sheetList(proficiencyBoxSchema).optional(),
   // Features carry a name and an optional description. The built-in templates
   // always had descriptions — Second Wind's full rules text, and so on — but
   // wrote them to an undeclared `features` field that nothing read, so no
@@ -441,7 +434,7 @@ export const dnd5eCharacterDataSchema = z.object({
   // them, and a string is exactly what a feature with no description is. They
   // are read as a name with an empty description — never split up to invent one.
   // See utils/featureEntries.
-  featuresAndTraits: z.array(featureEntrySchema).optional(),
+  featuresAndTraits: sheetList(featureEntrySchema).optional(),
   spellcasting: spellcastingSchema.optional(),
   appearance: appearanceSchema.optional(),
   personality: personalitySchema.optional(),

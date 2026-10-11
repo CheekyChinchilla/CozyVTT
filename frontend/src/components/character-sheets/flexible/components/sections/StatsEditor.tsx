@@ -14,6 +14,10 @@ interface StatsEditorProps {
 }
 
 export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) => {
+  // TODO(sheets): the server keeps at most 200 stats in a section (FLEXIBLE_MAX_FIELDS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addField = () => {
     const newField = {
       id: generateId(),
