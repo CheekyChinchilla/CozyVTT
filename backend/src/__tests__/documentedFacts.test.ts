@@ -400,3 +400,35 @@ describe('backend/RBAC_QUICK_REFERENCE.md', () => {
     expect(doc).not.toMatch(/should succeed if Admin override applies/);
   });
 });
+
+describe('the schema documents in backend/prisma', () => {
+  const schema = read('backend/prisma/schema.prisma');
+  const modelNames = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
+  const enumCount = (schema.match(/^enum \w+ \{/gm) ?? []).length;
+  const verification = read('backend/prisma/SCHEMA_VERIFICATION.md');
+
+  // The verification file said "20 models" when there were 21.
+  it('state how many models and enums the schema has', () => {
+    expect(read('backend/prisma/README.md')).toContain(`${modelNames.length} models`);
+    expect(verification).toContain(`**${modelNames.length} models and ${enumCount} enums today**`);
+  });
+
+  it('SCHEMA_VERIFICATION.md names every model it does not cover', () => {
+    const covered = [...verification.slice(verification.indexOf('## Models'), verification.indexOf('## Enums')).matchAll(/^- ✅ (\w+)$/gm)].map((m) => m[1]);
+    const uncovered = verification.slice(0, verification.indexOf('## Models'));
+    expect(covered.length).toBeGreaterThan(0);
+    expect(modelNames.filter((name) => !covered.includes(name) && !uncovered.includes(`\`${name}\``))).toEqual([]);
+  });
+
+  // It also ended on "VERIFIED AND COMPLETE" and a next phase long finished.
+  it('SCHEMA_VERIFICATION.md does not close with a present-tense assurance', () => {
+    expect(verification).not.toMatch(/Schema Status:\*\* ✅ \*\*VERIFIED AND COMPLETE\*\*/);
+  });
+
+  // The README said the upload route rejects DOCUMENT; it accepts it.
+  it('README.md says which asset types an upload accepts, as the route does', () => {
+    const accepted = /\[((?:'[A-Z]+',? ?)+)\]\.includes\(type\)/.exec(read('backend/src/routes/assets.ts'))?.[1].match(/[A-Z]+/g) ?? [];
+    expect(accepted).toContain('DOCUMENT');
+    expect(read('backend/prisma/README.md')).toContain(`only ${accepted.join(' / ')} are accepted from clients`);
+  });
+});
