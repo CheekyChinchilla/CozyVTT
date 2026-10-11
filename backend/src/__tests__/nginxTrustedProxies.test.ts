@@ -124,9 +124,11 @@ describe('nginx/trusted-proxies.envsh', () => {
    * .env is fixed. So every entry the script keeps must be an address nginx
    * reads. Compared here on generated entries with the IPv6 parser of the
    * URL standard, which shares no code with the script: an address in
-   * brackets is a valid URL host exactly when it is an IPv6 address. The one
-   * form that parser takes and nginx does not, seven groups followed by
-   * '::', is left out of what the script should keep.
+   * brackets is a valid URL host exactly when it is an IPv6 address. Of the
+   * forms that parser takes and nginx does not, seven groups followed by
+   * '::' is left out of what the script should keep. An embedded IPv4 tail of
+   * 255.255.255.255 is another: the script keeps it, and so does this
+   * comparison, since no proxy has that address.
    */
   it('keeps exactly the IPv6 entries an IPv6 parser accepts, with a prefix of 0 to 128', () => {
     let seed = 152;
