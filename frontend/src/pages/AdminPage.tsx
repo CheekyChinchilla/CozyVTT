@@ -85,6 +85,7 @@ import Modal from '@/components/ui/Modal';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
+import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -2554,6 +2555,7 @@ export default function AdminPage() {
                           <tr className="border-b border-warm-gray/10 bg-moss-green/5">
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Time</th>
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Level</th>
+                            <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">By</th>
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Action</th>
                           </tr>
                         </thead>
@@ -2566,7 +2568,11 @@ export default function AdminPage() {
                                   {log.level}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-stone-gray">{log.message}</td>
+                              <td className="px-4 py-2 text-sm"><LogActor log={log} /></td>
+                              <td className="px-4 py-2 text-stone-gray">
+                                {log.message}
+                                <LogChanges context={log.context} />
+                              </td>
                             </tr>
                           ))}
                         </tbody>

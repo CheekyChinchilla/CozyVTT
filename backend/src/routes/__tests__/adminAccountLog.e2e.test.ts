@@ -54,6 +54,7 @@ async function rowsAbout(targetUserId: string) {
 
 afterAll(async () => {
   await prisma.systemLog.deleteMany({ where: { userId: { in: created } } });
+  await prisma.systemLog.deleteMany({ where: { message: { contains: stamp } } });
   await cleanupUsers(created);
   await prisma.$disconnect();
 });
@@ -154,5 +155,52 @@ describe('POST /api/users/:id/send-reset-link', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].userId).toBe(admin.id);
     expect(rows[0].message).toContain(target.email);
+  });
+});
+
+describe('GET /api/admin/activity', () => {
+  /** The Activity tab's line about this account. */
+  async function lineAbout(agent: ReturnType<typeof request.agent>, targetUserId: string) {
+    const res = await agent.get('/api/admin/activity');
+    expect(res.status).toBe(200);
+    const logs: { userId: string | null; context: { targetUserId?: string } | null; actor?: unknown }[] = res.body.recentLogs;
+    return logs.find((log) => log.context?.targetUserId === targetUserId);
+  }
+
+  it('names the administrator who acted on each line', async () => {
+    const { user: admin, agent } = await signedInAdmin('activity-actor');
+    const target = await account('activity-actor-target');
+
+    expect((await agent.put(`/api/users/${target.id}`).send({ globalAssetManager: true })).status).toBe(200);
+
+    const line = await lineAbout(agent, target.id);
+    expect(line).toBeDefined();
+    expect(line?.actor).toEqual({ id: admin.id, email: admin.email, displayName: 'Log activity-actor' });
+  });
+
+  it("keeps the line when the administrator's account is deleted, with no one named", async () => {
+    const { user: gone, agent: goneAgent } = await signedInAdmin('activity-gone');
+    const { agent } = await signedInAdmin('activity-remover');
+    const target = await account('activity-gone-target');
+
+    expect((await goneAgent.put(`/api/users/${target.id}`).send({ templateEditor: true })).status).toBe(200);
+    expect((await agent.delete(`/api/users/${gone.id}`)).status).toBe(200);
+
+    const line = await lineAbout(agent, target.id);
+    expect(line).toBeDefined();
+    expect(line?.userId).toBe(gone.id);
+    expect(line?.actor).toBeNull();
+  });
+
+  it("names no one on the instance's own lines", async () => {
+    const { agent } = await signedInAdmin('activity-instance');
+    const row = await prisma.systemLog.create({
+      data: { level: 'WARNING', message: `Instance line ${stamp}`, userId: null },
+    });
+
+    const res = await agent.get('/api/admin/activity');
+    const line = (res.body.recentLogs as { id: string; actor?: unknown }[]).find((log) => log.id === row.id);
+    expect(line).toBeDefined();
+    expect(line?.actor).toBeNull();
   });
 });

@@ -8802,6 +8802,7 @@ paths:
                           nullable: true
                   recentLogs:
                     type: array
+                    description: The newest 100 lines of the activity log, newest first.
                     items:
                       type: object
                       properties:
@@ -8815,9 +8816,27 @@ paths:
                         userId:
                           type: string
                           nullable: true
+                          description: The administrator who acted; null for a line the instance wrote itself.
+                        actor:
+                          type: object
+                          nullable: true
+                          description: |
+                            The account named by userId, looked up at request time. Null when userId is
+                            null, or when that account has since been deleted (userId is kept).
+                          properties:
+                            id:
+                              type: string
+                            email:
+                              type: string
+                            displayName:
+                              type: string
                         context:
                           type: object
                           nullable: true
+                          description: |
+                            What the line is about. A change to an account has targetUserId and
+                            changes, each field as { from, to }; a settings change has changes with
+                            the new values only.
                         createdAt:
                           type: string
                   recentUsers:

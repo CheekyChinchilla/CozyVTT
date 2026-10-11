@@ -365,7 +365,10 @@ export interface AdminSystemLog {
   id: string;
   level: string;
   message: string;
+  /** The administrator who acted; null for the instance's own lines. */
   userId: string | null;
+  /** That administrator's account as it is now; null when there is none, or it has been deleted. */
+  actor: { id: string; email: string; displayName: string } | null;
   context: Record<string, unknown> | null;
   createdAt: string;
 }

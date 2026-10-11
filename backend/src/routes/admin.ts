@@ -654,8 +654,8 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
 // ============================================
 // GET /api/admin/activity
 // Returns recent user registrations, game sessions, currently-online users,
-// and recent admin action logs.
-// Note: SystemLog table is written by admin actions. Activity tab now surfaces it.
+// and the newest 100 lines of the activity log (SystemLog), each with the
+// administrator who acted.
 // Online users are queried from the connect-pg-simple session table.
 // ============================================
 router.get('/activity', async (_req, res) => {
@@ -727,7 +727,23 @@ router.get('/activity', async (_req, res) => {
       sessionExpiry: latestExpiry.get(u.id) ?? null,
     }));
 
-    return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs });
+    // The administrator who wrote each line, looked up now: a line keeps only
+    // the account's id, so one whose account has since been deleted, like the
+    // instance's own lines, names no one (actor null).
+    const actorIds = [...new Set(recentLogs.flatMap((log) => (log.userId ? [log.userId] : [])))];
+    const actors = actorIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, email: true, displayName: true },
+        })
+      : [];
+    const actorById = new Map(actors.map((a) => [a.id, a]));
+    const logs = recentLogs.map((log) => ({
+      ...log,
+      actor: (log.userId && actorById.get(log.userId)) || null,
+    }));
+
+    return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs: logs });
   } catch (error) {
     logger.error('Error fetching admin activity', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch activity' });
