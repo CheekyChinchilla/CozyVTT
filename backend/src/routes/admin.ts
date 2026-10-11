@@ -15,7 +15,6 @@ import multer from 'multer';
 import archiver from 'archiver';
 import unzipper from 'unzipper';
 import { Router, type RequestHandler } from 'express';
-import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { errorCode, errorMessage, errorStderr } from '../utils/errors';
@@ -27,7 +26,7 @@ import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validat
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
-import { writeSystemLog } from '../services/systemLog';
+import { writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
@@ -84,15 +83,6 @@ router.use(requireAuth, requireAdmin);
 // ============================================
 // Helpers
 // ============================================
-
-export async function writeAdminLog(
-  adminUserId: string,
-  message: string,
-  level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO',
-  context?: Prisma.InputJsonObject
-): Promise<void> {
-  await writeSystemLog({ level, message, userId: adminUserId, context });
-}
 
 /**
  * How long an invitation link stays valid. Longer than the 1-hour password

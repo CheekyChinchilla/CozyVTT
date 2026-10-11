@@ -83,6 +83,22 @@ CozyVTT has two platform-level roles:
 
 Your role badge is visible on your profile page.
 
+### The activity log (admins)
+
+The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins' activity log. A line is written each time an administrator:
+
+- creates, invites, approves or deletes an account;
+- makes someone an administrator, or takes the role away;
+- grants or takes away **Global Assets** or template editing;
+- changes someone else's email address, display name, avatar or bio;
+- resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
+- changes the instance's settings or default theme;
+- makes, deletes or restores a backup, or deletes leftover files.
+
+The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line says which administrator acted and, for an account, whose account it was and what changed, with the value before and after.
+
+**What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account by its email address, and deleting that account leaves the line as it is, so the record of who did what outlives the account. The log is part of every backup.
+
 ### Campaign Roles
 
 Within a campaign you have one of three roles. Whoever creates a campaign is its DM, and everyone the DM invites joins as a player:

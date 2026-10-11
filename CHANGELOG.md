@@ -94,6 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A production instance refuses to start on a session secret that could be guessed.** `SESSION_SECRET` signs every session cookie. The instance accepted any value that was not the exact placeholder from `.env.example`, including the example values the guides show and secrets of a few characters. It now also refuses every example value in the guides, the deployment guide's `<paste the 64 characters that command prints>` line among them, and any secret shorter than 32 characters, with a log line saying how to generate one. The Upgrading section above says what to do if yours is refused.
 
+- **Everything an administrator does to someone's account is now written to Admin → Activity.** Granting or taking away **Global Assets** or template editing, changing another person's email address, display name, avatar or bio, deleting an account and sending a password reset link left no line there, so on an instance with several administrators nobody could tell who had done them. Each now writes a line saying which administrator acted, whose account it was and what changed, with the value before and after. The log is kept for as long as the instance exists, and a deleted account's lines stay in it; see [The activity log](docs/USER_GUIDE.md#the-activity-log-admins).
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
 import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
@@ -16,7 +16,7 @@ import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
-import { writeSystemLog } from '../services/systemLog';
+import { writeSystemLog, writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
@@ -311,6 +311,23 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
       }
     }
 
+    // What an administrator changed, for the activity log: the permissions on
+    // any account, and the profile of someone else's. A role change has its
+    // own line below. Compared against what was stored, so saving the same
+    // values again writes nothing.
+    if (isAdmin) {
+      const changes = adminChangesTo(existingUser, updatedUser, id !== requestingUserId);
+      const described = describeAdminChanges(changes);
+      if (described.length > 0) {
+        await writeAdminLog(
+          requestingUserId!,
+          `Changed the account of ${existingUser.email}: ${described.join('; ')}`,
+          changes.email ? 'WARNING' : 'INFO',
+          { targetUserId: id, changes: toJson(changes) }
+        );
+      }
+    }
+
     // The session carries platformRole from the moment it was created and
     // nothing re-reads it, so a demotion would otherwise leave the person
     // holding admin until they signed out. Compared against what was stored, so
@@ -511,6 +528,11 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
     const campaignIds = deletion.campaignIds;
 
+    await writeAdminLog(requestingUserId!, `Deleted the account of ${user.email}`, 'WARNING', {
+      targetUserId: id,
+      displayName: user.displayName,
+    });
+
     // The deletion ended the account's sign-ins in its own transaction
     // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
@@ -643,6 +665,8 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
 
     await sendPasswordResetEmail(user.email, token, user.displayName);
 
+    await writeAdminLog(req.session.userId!, `Sent a password reset link to ${user.email}`, 'INFO', { targetUserId: id });
+
     return res.status(200).json({
       message: `Password reset link sent to ${user.email}.`,
     });
@@ -654,6 +678,41 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     });
   }
 });
+
+/** The account fields an administrator's change is logged for. */
+type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
+
+type AccountChanges = { [K in keyof LoggedAccountFields]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] } };
+
+/**
+ * What changed between two versions of an account: the permissions always,
+ * the profile only when `othersProfile` (an administrator editing someone
+ * else's; their own is not an administrator's action).
+ */
+function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields, othersProfile: boolean): AccountChanges {
+  const changes: AccountChanges = {};
+  const fields: (keyof LoggedAccountFields)[] = othersProfile
+    ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
+    : ['globalAssetManager', 'templateEditor'];
+  for (const field of fields) {
+    if (before[field] !== after[field]) {
+      Object.assign(changes, { [field]: { from: before[field], to: after[field] } });
+    }
+  }
+  return changes;
+}
+
+/** The changes in words, for the activity log's message. */
+function describeAdminChanges(changes: AccountChanges): string[] {
+  const words: string[] = [];
+  if (changes.globalAssetManager) words.push(`Global Assets ${changes.globalAssetManager.to ? 'granted' : 'taken away'}`);
+  if (changes.templateEditor) words.push(`template editing ${changes.templateEditor.to ? 'granted' : 'taken away'}`);
+  if (changes.email) words.push(`email address changed from ${changes.email.from} to ${changes.email.to}`);
+  if (changes.displayName) words.push(`display name changed from "${changes.displayName.from}" to "${changes.displayName.to}"`);
+  if (changes.avatarUrl) words.push(changes.avatarUrl.to ? 'avatar changed' : 'avatar removed');
+  if (changes.bio) words.push('bio changed');
+  return words;
+}
 
 /**
  * Generate a cryptographically random temporary password.
