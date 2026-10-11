@@ -206,3 +206,93 @@ describe('the commands the guides tell a reader to run', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('docs/ARCHITECTURE.md', () => {
+  const doc = read('docs/ARCHITECTURE.md');
+
+  /** Each model of the Prisma schema, with the names of its fields and the types they have. */
+  const models = new Map<string, { fields: Set<string>; types: Set<string> }>();
+  for (const m of read('backend/prisma/schema.prisma').matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    const fields = new Set<string>();
+    const types = new Set<string>();
+    for (const line of m[2].split('\n')) {
+      const [name, type] = line.trim().split(/\s+/);
+      if (!name || name.startsWith('//') || name.startsWith('@@')) continue;
+      fields.add(name);
+      if (type) types.add(type.replace(/[?[\]]/g, ''));
+    }
+    models.set(m[1], { fields, types });
+  }
+
+  // The diagram named fields the schema does not have (isGlobalAssetManager,
+  // approved, isActive, spiritLayerActive), a relation it does not have
+  // (a map using assets), and left seven models out.
+  describe('the entity diagram', () => {
+    const erd = /```mermaid\nerDiagram\n([\s\S]*?)```/.exec(doc)?.[1] ?? '';
+    const entities = [...erd.matchAll(/^ {4}(\w+) \{\n([\s\S]*?)^ {4}\}/gm)].map((m) => ({
+      name: m[1],
+      fields: m[2].split('\n').map((line) => line.trim().split(/\s+/)[1]).filter((name): name is string => !!name),
+    }));
+    const relations = [...erd.matchAll(/^ {4}(\w+) \|\|--o[{|] (\w+) :/gm)].map((m) => [m[1], m[2]] as const);
+
+    it('shows only models, and fields of them, that the schema has', () => {
+      expect(entities.length).toBeGreaterThan(0);
+      const unknown = entities.flatMap((entity) => {
+        const model = models.get(entity.name);
+        if (!model) return [`${entity.name} is not a model`];
+        return entity.fields.filter((field) => !model.fields.has(field)).map((field) => `${entity.name}.${field}`);
+      });
+      expect(unknown).toEqual([]);
+    });
+
+    it('draws a relation only between models the schema relates', () => {
+      const unrelated = relations
+        .filter(([a, b]) => !models.get(b)?.types.has(a) && !models.get(a)?.types.has(b))
+        .map(([a, b]) => `${a} -- ${b}`);
+      expect(relations.length).toBeGreaterThan(0);
+      expect(unrelated).toEqual([]);
+    });
+
+    it('shows every model of the schema', () => {
+      const shown = new Set(entities.map((entity) => entity.name));
+      expect([...models.keys()].filter((name) => !shown.has(name))).toEqual([]);
+    });
+  });
+
+  // The overview said the backend serves the built frontend, as one process.
+  // The Docker stack is four containers, and the backend serves no pages.
+  it('describes every service of the Docker stack in its overview', () => {
+    const compose = read('docker-compose.yml');
+    const block = compose.slice(compose.indexOf('\nservices:'), compose.indexOf('\nvolumes:'));
+    const services = [...block.matchAll(/^ {2}(\w+):$/gm)].map((m) => m[1]);
+    const overview = doc.slice(doc.indexOf('## High-Level Overview'), doc.indexOf('## Backend Architecture'));
+    expect(services).toEqual(expect.arrayContaining(['database', 'backend', 'frontend', 'nginx']));
+    expect(services.filter((service) => !overview.includes(service))).toEqual([]);
+    expect(overview).not.toMatch(/backend serves both the REST API and the built frontend/);
+  });
+
+  it('lists every middleware file, and none that is not there', () => {
+    const files = fs.readdirSync(path.join(root, 'backend/src/middleware')).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'));
+    const listing = doc.slice(doc.indexOf('├── middleware/'), doc.indexOf('├── routes/'));
+    const listed = [...listing.matchAll(/[├└]── (\w+\.ts)/g)].map((m) => m[1]);
+    expect(files.filter((name) => !listed.includes(name))).toEqual([]);
+    expect(listed.filter((name) => !files.includes(name))).toEqual([]);
+  });
+
+  it('lists every context the frontend has', () => {
+    const files = fs.readdirSync(path.join(root, 'frontend/src/contexts')).filter((name) => name.endsWith('.tsx'));
+    const listing = doc.slice(doc.indexOf('├── contexts/'), doc.indexOf('├── stores/'));
+    expect(files.filter((name) => !listing.includes(name))).toEqual([]);
+  });
+
+  it('names only guards that exist', () => {
+    const exported = new Set(
+      fs
+        .readdirSync(path.join(root, 'backend/src/middleware'))
+        .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+        .flatMap((name) => [...read(`backend/src/middleware/${name}`).matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1]))
+    );
+    const named = [...doc.matchAll(/\b(require[A-Z]\w*)\(/g)].map((m) => m[1]);
+    expect(named.filter((name) => !exported.has(name))).toEqual([]);
+  });
+});

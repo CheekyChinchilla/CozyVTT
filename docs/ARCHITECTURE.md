@@ -20,16 +20,18 @@ This document describes the system architecture, data models, and key design dec
 
 ## High-Level Overview
 
-CozyVTT is a monorepo containing a Node.js/Express API backend and a React SPA frontend. In production, the backend serves both the REST API and the built frontend static files. In development, a Vite dev server runs separately and proxies API/WebSocket traffic to the backend.
+CozyVTT is a monorepo containing a Node.js/Express API backend and a React SPA frontend. The backend serves the REST API, the Socket.io live connection and the uploaded files; it does not serve the built frontend. In production the Docker stack (`docker-compose.yml`) runs four containers on one internal network: `nginx` is the only one with published ports, it sends `/api/` and `/socket.io/` to `backend` and everything else to `frontend`, which serves the built SPA, and `database` is PostgreSQL, reachable from the backend alone. Without Docker, a host nginx does the public `nginx` container's job and serves `frontend/dist` itself (the deployment guide's manual install). In development, a Vite dev server runs separately and proxies API/WebSocket traffic to the backend.
 
 ```mermaid
 graph TB
     Browser["Browser Client"]
 
-    subgraph Production["Production (single process)"]
-        Backend["Express Server :4000"]
-        Static["Static Files\nfrontend/dist/"]
-        Backend -- serves --> Static
+    subgraph Production["Production (Docker Compose)"]
+        Nginx["nginx :80 / :443\nthe only published ports"]
+        Frontend["frontend\nnginx serving frontend/dist"]
+        Backend["backend\nExpress + Socket.io :4000"]
+        Nginx -- "/api/ and /socket.io/" --> Backend
+        Nginx -- "everything else" --> Frontend
     end
 
     subgraph Development["Development (two processes)"]
@@ -40,11 +42,11 @@ graph TB
     end
 
     subgraph Data["Data Layer"]
-        Postgres["PostgreSQL 15"]
+        Postgres["database\nPostgreSQL 15"]
         Uploads["uploads/\n(filesystem)"]
     end
 
-    Browser -- "HTTP / WS" --> Production
+    Browser -- "HTTP / WS" --> Nginx
     Backend -- "Prisma ORM" --> Postgres
     Backend -- "read/write" --> Uploads
 ```
@@ -74,13 +76,23 @@ src/
 ├── server.ts          Entry point — creates Express app, attaches Socket.io
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
-│   ├── auth.ts        Session-cookie authentication, requireAuth guards
+│   ├── auth.ts        Session-cookie authentication: requireAuth, requireAdmin, requireRole
+│   ├── rbac.ts        Campaign roles: loadCampaignMembership, requireDM, requireDMOrPlayer
+│   │                  and requireCampaignMember, read from the database, never from the request
+│   ├── compose.ts     The guards routes actually use, composed: authenticated, adminOnly,
+│   │                  campaignMember, campaignDM, campaignDMOrPlayer
 │   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
 │   │                  until setup has run; asks the database only until it hears it has
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
 │   │                      re-reads the admin's role on every request
+│   ├── originCheck.ts     Refuses a change a browser sent from another site (HTTP and the socket handshake)
+│   ├── restoreGate.ts     Refuses API requests while a backup restore replaces the database
+│   ├── bodyParsers.ts     JSON body parsing and its 1 MB limit (a form-encoded body is not read), shared with the test app
+│   ├── errorHandler.ts    The JSON error answer for anything a route did not catch
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
+│   ├── authLimiters.ts    The per-account sign-in limit and the signed-in password-check limit
+│   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time
 │   │                  (the other HTTP limiters are declared beside their routes,
@@ -172,7 +184,10 @@ src/
 ├── contexts/
 │   ├── AuthContext.tsx    User auth state, login/logout/register actions
 │   ├── WebSocketContext.tsx  Socket.io connection lifecycle and event subscriptions
-│   └── CampaignContext.tsx   Per-campaign metadata (campaign, current map, vibe, session status, roster)
+│   ├── CampaignContext.tsx   Per-campaign metadata (campaign, current map, vibe, session status, roster)
+│   ├── ThemeContext.tsx      The theme and font in force, and the instance's default
+│   ├── ThemeSyncBridge.tsx   Applies the signed-in user's saved theme over the default, and clears it at sign-out
+│   └── ToastContext.tsx      The small notices the app shows
 ├── stores/
 │   └── gameStore.ts   Zustand store for live socket-fed session state (token positions, combat/initiative, hover cross-highlight)
 ├── lib/
@@ -273,7 +288,7 @@ graph LR
 
 ## Database Schema
 
-The full Prisma schema is at `backend/prisma/schema.prisma`. Below is a high-level entity relationship diagram.
+The full Prisma schema is at `backend/prisma/schema.prisma`. Below is an entity relationship diagram of every model, with the fields that matter here. A test checks it against the schema, so a model, field or relation that does not exist cannot stay in it. The login sessions are not a model: `connect-pg-simple` keeps them in a `session` table of its own (see Authentication below), and the `Session` below is a game session.
 
 ```mermaid
 erDiagram
@@ -282,11 +297,20 @@ erDiagram
         string email
         string displayName
         PlatformRole platformRole
-        bool isGlobalAssetManager
+        bool globalAssetManager
         bool templateEditor
-        bool approved
+        bool isApproved
+        bool mfaEnabled
         bool mustChangePassword
+        string avatarUrl
         string bio
+    }
+
+    PasswordResetToken {
+        string id PK
+        string userId FK
+        datetime expiresAt
+        bool used
     }
 
     Campaign {
@@ -295,18 +319,34 @@ erDiagram
         string description
         GameSystem gameSystem
         CampaignStatus status
+        string ownerId FK
+        string currentMapId FK
         json vibeSettings
         string spiritLayerStyle
         bool spiritLayerEnabled
+        bool chatCooldownEnabled
     }
 
     CampaignMembership {
         string id PK
+        string userId FK
+        string campaignId FK
         CampaignRole role
+        string[] characterIds
+    }
+
+    CampaignInvitation {
+        string id PK
+        string campaignId FK
+        string userId FK
+        InvitationStatus status
+        datetime expiresAt
     }
 
     Character {
         string id PK
+        string userId FK
+        string campaignId FK
         string name
         GameSystem gameSystem
         json data
@@ -325,16 +365,34 @@ erDiagram
 
     Map {
         string id PK
+        string campaignId FK
         string name
-        bool isActive
+        string imageUrl
+        int width
+        int height
+        int gridSize
         json tokens
-        bool spiritLayerActive
+        json wallSegments
+        json lights
+        json fogData
+        bool lightingEnabled
+        bool fogEnabled
+        bool explorationEnabled
+    }
+
+    MapExploration {
+        string id PK
+        string mapId FK
+        string userId FK
+        json explored
     }
 
     Asset {
         string id PK
         AssetType type
         AssetScope scope
+        string uploadedById FK
+        string campaignId FK
         string filename
         string originalName
         int fileSize
@@ -345,13 +403,25 @@ erDiagram
 
     Message {
         string id PK
-        string content
+        string campaignId FK
+        string userId FK
         MessageType type
+        string content
         json metadata
+    }
+
+    DiceRoll {
+        string id PK
+        string campaignId FK
+        string userId FK
+        string expression
+        int result
+        bool secret
     }
 
     Session {
         string id PK
+        string campaignId FK
         int sessionNumber
         datetime startedAt
         datetime endedAt
@@ -390,7 +460,6 @@ erDiagram
         string displayMode
         string imageUrl
         string campaignId FK
-        string createdById FK
     }
 
     CreatureFavorite {
@@ -401,6 +470,16 @@ erDiagram
         datetime createdAt
     }
 
+    TokenTemplate {
+        string id PK
+        string campaignId FK
+        string createdById FK
+        string name
+        string type
+        json size
+        json statBlock
+    }
+
     CampaignDocument {
         string id PK
         string campaignId FK
@@ -409,13 +488,41 @@ erDiagram
         datetime createdAt
     }
 
+    SystemSettings {
+        string id PK
+        bool setupCompleted
+        string instanceName
+        bool allowRegistration
+        bool requireAdminApproval
+        string themeId
+        string fontId
+    }
+
+    SystemLog {
+        string id PK
+        LogLevel level
+        string message
+        json context
+        datetime createdAt
+    }
+
+    User ||--o{ Campaign : "owns"
     User ||--o{ CampaignMembership : "belongs to"
     Campaign ||--o{ CampaignMembership : "has"
+    User ||--o{ CampaignInvitation : "is invited"
+    Campaign ||--o{ CampaignInvitation : "has"
+    User ||--o{ PasswordResetToken : "has"
     User ||--o{ Character : "owns"
     User ||--o{ CharacterTemplate : "published"
     Campaign ||--o{ Character : "has assigned"
     Campaign ||--o{ Map : "has"
+    Map ||--o{ Campaign : "is shown by"
+    Map ||--o{ MapExploration : "remembered in"
+    User ||--o{ MapExploration : "explores"
     Campaign ||--o{ Message : "has"
+    User ||--o{ Message : "writes"
+    Campaign ||--o{ DiceRoll : "has"
+    User ||--o{ DiceRoll : "rolls"
     Campaign ||--o{ Session : "has"
     Campaign ||--o{ PersonalNote : "has"
     User ||--o{ PersonalNote : "writes"
@@ -423,12 +530,12 @@ erDiagram
     User ||--o{ DiceMacro : "saves"
     User ||--o{ Asset : "uploaded"
     Campaign ||--o{ Asset : "scoped to"
-    Map ||--o{ Asset : "uses"
-    User ||--o{ CreatureTemplate : "created"
     Campaign ||--o{ CreatureTemplate : "scoped to"
     CreatureTemplate ||--o{ CreatureFavorite : "favorited as"
     User ||--o{ CreatureFavorite : "has favorites"
     Campaign ||--o{ CreatureFavorite : "scoped to"
+    User ||--o{ TokenTemplate : "made"
+    Campaign ||--o{ TokenTemplate : "has"
     Campaign ||--o{ CampaignDocument : "shares"
     Asset ||--o{ CampaignDocument : "shared as"
     User ||--o{ CampaignDocument : "linked by"
@@ -470,7 +577,7 @@ sequenceDiagram
     C->>S: GET /api/campaigns (Cookie: cozyvtt.sid)
     S->>DB: Look up session
     DB-->>S: Session + user id
-    S->>S: req.user = user
+    S->>S: req.session.userId names the user
     S-->>C: 200 response
 ```
 
@@ -478,19 +585,18 @@ A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember m
 
 ### Role-Based Authorization
 
-Authorization is enforced at two levels:
+Authorization is enforced at two levels, both by middleware composed in `middleware/compose.ts` and named in the route declaration:
 
-1. **Platform level** — `requirePlatformRole(PlatformRole.ADMIN)` middleware on admin routes
-2. **Campaign level** — inline checks inside route handlers that verify `CampaignMembership.role`
+1. **Platform level** — `requireAdmin` (as `adminOnly`) on admin routes, which checks the role stored in the session
+2. **Campaign level** — `loadCampaignMembership` reads the caller's `CampaignMembership` for the `:campaignId` in the URL from the database, and `requireDM`, `requireDMOrPlayer` or `requireCampaignMember` then judge its role. The role comes from that row, never from the request
 
 ```typescript
-// Example: DM-only route guard
-const membership = await prisma.campaignMembership.findFirst({
-  where: { campaignId, userId: req.user.id }
+// Example: a DM-only route. campaignDM is [requireAuth, loadCampaignMembership, requireDM];
+// a non-member gets 403 "You are not a member of this campaign", a player or
+// spectator 403 "This action requires Dungeon Master (DM) role".
+router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  // req.campaignMembership is set and has role DM
 });
-if (!membership || membership.role !== CampaignRole.DM) {
-  return res.status(403).json({ error: 'DM access required' });
-}
 ```
 
 ### Ownership is a separate axis from the DM role
