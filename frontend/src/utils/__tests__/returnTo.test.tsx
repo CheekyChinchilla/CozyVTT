@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
-import { safeReturnPath, signInPath } from '../returnTo';
+import { returnPathFrom, safeReturnPath, signInPath } from '../returnTo';
 
 const auth = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => auth() }));
@@ -73,6 +73,9 @@ describe('safeReturnPath', () => {
     ['a protocol-relative address', '//evil.example/phish'],
     ['a backslash the browser reads as a slash', '/\\evil.example'],
     ['a tab the browser drops', '/\t/evil.example'],
+    ['a dot segment that leaves two slashes', '/.//evil.example'],
+    ['a parent segment that leaves two slashes', '/..//evil.example'],
+    ['an encoded parent segment that leaves two slashes', '/%2e%2e//evil.example'],
     ['a script', 'javascript:alert(1)'],
     ['the sign-in page itself', '/auth/login?next=/dashboard'],
     ['a page anyone can open', '/reset-password?token=abc'],
@@ -80,6 +83,12 @@ describe('safeReturnPath', () => {
     ['no value', null],
   ])('refuses %s', (_name, value) => {
     expect(safeReturnPath(value)).toBeNull();
+  });
+
+  it('refuses a dot segment in the page the sign-in page carries', () => {
+    expect(returnPathFrom('?next=/.//evil.example')).toBeNull();
+    expect(returnPathFrom('?next=%2F..%2F%2Fevil.example')).toBeNull();
+    expect(signInPath('/.//evil.example')).toBe('/auth/login');
   });
 
   it('builds the sign-in path with the page to come back to', () => {

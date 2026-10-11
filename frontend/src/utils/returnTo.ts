@@ -5,9 +5,9 @@
  * that needed a sign-in. Anything in a query string can be written by whoever
  * made the link, so only a path on this site is followed: one that starts
  * with a single `/`, holds no character a browser would drop or turn into a
- * slash, stays on this origin once parsed, and is not a page anyone can open
- * already (the sign-in page itself among them). Anything else goes to the
- * dashboard.
+ * slash, stays on this origin and starts with a single `/` once parsed, and is
+ * not a page anyone can open already (the sign-in page itself among them).
+ * Anything else goes to the dashboard.
  */
 
 import { isPublicPath } from './publicRoutes';
@@ -36,6 +36,8 @@ export function safeReturnPath(value: unknown): string | null {
     return null;
   }
   if (url.origin !== window.location.origin) return null;
+  // Parsing removes dot segments, so `/.//host` comes out as `//host`: check again.
+  if (url.pathname.startsWith('//')) return null;
   if (isPublicPath(url.pathname) || url.pathname === AFTER_SIGN_IN) return null;
   return `${url.pathname}${url.search}${url.hash}`;
 }
