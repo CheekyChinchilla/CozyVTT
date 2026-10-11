@@ -48,6 +48,8 @@ Give your instance its identity:
 - **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
 - **Public Registration** — Choose whether new users can register themselves. For private groups, leave this **off** and create accounts manually from the Admin Panel
 
+Earlier versions also asked for a **Timezone** here and showed it under **Admin Panel → Settings**. Nothing ever used it, so it has been removed; times are shown in each person's own browser time zone, as they always were. An instance that saved one keeps it stored, unused.
+
 *Screenshot pending — System configuration step.*
 
 **Step 4 — Review**
