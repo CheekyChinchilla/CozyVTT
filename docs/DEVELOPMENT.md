@@ -560,6 +560,8 @@ also does what self-hosters run and a developer usually does not:
   the backend tests. To run the comparison yourself, give it a database of
   its own, which Prisma empties: the command is in the workflow, and the
   scratch database is the one "Running Migrations" above creates.
+- **Collects test coverage** in both projects and shows it in the job
+  summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after
   reading `docker-compose.yml` with the example settings.
 - **Checks the bundled nginx's configuration** with

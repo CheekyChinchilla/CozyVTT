@@ -45,8 +45,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      # `npm test` is watch mode and would hang the runner.
-      - run: npx vitest run
+      # `npm test` is watch mode and would hang the runner. Coverage is
+      # collected as a report, shown in the job summary, with no threshold yet.
+      - run: npx vitest run --coverage --coverage.reporter=text-summary --coverage.reporter=json-summary
+      - name: Coverage summary
+        run: python3 ../scripts/coverage-summary.py Frontend coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
 
   backend:
@@ -100,7 +103,11 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npx jest
+      # Coverage is collected as a report, shown in the job summary, with no
+      # threshold yet.
+      - run: npx jest --coverage --coverageReporters=text-summary --coverageReporters=json-summary
+      - name: Coverage summary
+        run: python3 ../scripts/coverage-summary.py Backend coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: Docs
@@ -113,7 +120,7 @@ jobs:
       - run: python3 scripts/spec-coverage.py
       - run: python3 scripts/websocket-events.py --check
       # The scripts' own tests: every form of route and event the doc checks
-      # read, and what the nginx check reads.
+      # read, and what the nginx check and the coverage summary read.
       - run: python3 -m unittest discover -s scripts/tests
 
   # Known advisories in the packages an instance runs, from both lockfiles.
