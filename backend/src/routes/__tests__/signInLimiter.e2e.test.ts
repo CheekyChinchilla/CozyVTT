@@ -28,6 +28,7 @@ import speakeasy from 'speakeasy';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { hashPassword } from '../../services/auth';
+import { hashResetToken } from '../../services/passwordResetTokens';
 
 jest.setTimeout(60000);
 
@@ -149,7 +150,7 @@ describe('what does not count', () => {
     const address = freshAddress();
     const [account] = await users(1);
     const token = `reset-${account.id}`;
-    await prisma.passwordResetToken.create({ data: { token, userId: account.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
+    await prisma.passwordResetToken.create({ data: { token: hashResetToken(token), userId: account.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
 
     for (let i = 0; i < 6; i += 1) {
       const res = await request(app).post('/api/auth/reset-password').set('X-Forwarded-For', address).send({ token, newPassword: 'short' });

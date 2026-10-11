@@ -19,6 +19,7 @@ jest.mock('../../services/email', () => ({
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { hashResetToken } from '../../services/passwordResetTokens';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../../services/email';
 
 const smtpOn = isSmtpConfigured as jest.MockedFunction<typeof isSmtpConfigured>;
@@ -187,8 +188,9 @@ describe('POST /api/users/:id/send-reset-link', () => {
     expect(sentResetEmail).toHaveBeenCalledTimes(1);
     const [to, token] = sentResetEmail.mock.calls[0];
     expect(to).toBe(`userroutes-other-${stamp}@test.cozyvtt.local`);
+    // The row holds the hash of the token the email carries.
     const live = await prisma.passwordResetToken.findMany({ where: { userId: otherId, used: false } });
-    expect(live.map((t) => t.token)).toEqual([token]);
+    expect(live.map((t) => t.token)).toEqual([hashResetToken(token as string)]);
   });
 
   it('says so when the instance cannot send email', async () => {

@@ -1,6 +1,5 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
@@ -8,7 +7,7 @@ import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
@@ -461,23 +460,16 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       });
 
       if (!recent) {
-        const token = crypto.randomUUID();
-
         // Rows that can never be used again go, so the table does not grow by
         // one row per request for ever.
         await prisma.passwordResetToken.deleteMany({
           where: { userId: user.id, OR: [{ used: true }, { expiresAt: { lt: new Date() } }] },
         });
         // Only the newest link works. This also voids a pending invitation,
-        // whose replacement goes to the same address.
+        // whose replacement goes to the same address. The row holds the
+        // token's hash; the token itself goes only into the email.
         await voidOutstandingResetLinks(user.id);
-        await prisma.passwordResetToken.create({
-          data: {
-            userId: user.id,
-            token,
-            expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-          },
-        });
+        const token = await issueResetToken(user.id, RESET_LINK_TTL_MS);
 
         // Not awaited: waiting for the mail server only for a known address
         // would let the response time tell which addresses have accounts.
@@ -518,10 +510,9 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
   const { token, newPassword } = body.data;
 
   try {
-    // Find valid token
-    const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
-    });
+    // Find valid token: by its hash, or as sent for a link issued before
+    // tokens were hashed (services/passwordResetTokens).
+    const resetToken = await findResetTokenRow(token);
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
       credentialLimiter.recordFailure(req);

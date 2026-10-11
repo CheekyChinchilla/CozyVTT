@@ -35,6 +35,7 @@ import {
   ensureLoginSessionTable,
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
+import { hashResetToken } from '../../services/passwordResetTokens';
 import { isSmtpConfigured, sendWelcomeEmail, sendInvitationEmail, sendTestEmail } from '../../services/email';
 
 const smtpOn = isSmtpConfigured as jest.MockedFunction<typeof isSmtpConfigured>;
@@ -228,8 +229,9 @@ describe('POST /api/admin/users/invite', () => {
     expect(invitationEmail).toHaveBeenCalledTimes(1);
     const stored = await prisma.user.findUniqueOrThrow({ where: { email } });
     expect(stored.mustChangePassword).toBe(false);
+    // The row holds the hash of the token the email carries.
     const tokens = await prisma.passwordResetToken.findMany({ where: { userId: stored.id, used: false } });
-    expect(tokens.map((t) => t.token)).toEqual([invitationEmail.mock.calls[0][1]]);
+    expect(tokens.map((t) => t.token)).toEqual([hashResetToken(invitationEmail.mock.calls[0][1] as string)]);
   });
 
   it('removes the account again when the invitation cannot be sent', async () => {
@@ -256,7 +258,7 @@ describe('POST /api/admin/users/:id/resend-invite', () => {
 
     expect(res.status).toBe(200);
     const live = await prisma.passwordResetToken.findMany({ where: { userId: invited.id, used: false } });
-    expect(live.map((t) => t.token)).toEqual([invitationEmail.mock.calls[0][1]]);
+    expect(live.map((t) => t.token)).toEqual([hashResetToken(invitationEmail.mock.calls[0][1] as string)]);
   });
 
   it('needs the instance to send email, and an account to send to', async () => {

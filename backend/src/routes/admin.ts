@@ -26,7 +26,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeSystemLog } from '../services/systemLog';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
@@ -377,14 +377,8 @@ router.post('/users/invite', async (req, res) => {
       },
     });
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(user.id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },
@@ -452,14 +446,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     // Invalidate outstanding links so only the newest one works
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    const token = await issueResetToken(id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },

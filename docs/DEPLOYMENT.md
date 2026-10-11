@@ -1051,7 +1051,7 @@ you changed them):
   | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz)
 ```
 
-The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance.
+The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance. (Password reset and invitation links are stored hashed, so a backup holds no working link.)
 
 `--exclude-table-data=public.session` leaves the login sessions out, as the
 dashboard and the script do, so restoring the file cannot sign back in someone

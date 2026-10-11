@@ -828,7 +828,10 @@ paths:
       summary: Reset password with token
       description: >-
         Reset password using a valid token from a password reset email or
-        invitation. Token must not be expired or used. A token sets the
+        invitation. Token must not be expired or used. Tokens are 64 hex
+        characters and are stored as their SHA-256 hash, so a database read
+        or a backup yields no working link; a link issued before tokens were
+        hashed (a UUID) keeps working until it expires. A token sets the
         password once, even when two requests carry it at the same moment,
         and using it voids the account's other unused tokens. Clears
         `mustChangePassword`, and ends every login session and live WebSocket
@@ -8705,7 +8708,8 @@ paths:
       description: |
         Creates an account with **no usable password** and emails the new user a link to
         choose one. The link expires in 7 days and is the only way into the account, so
-        no credential is ever returned or shown to the inviting admin.
+        no credential is ever returned or shown to the inviting admin; its token is
+        stored as a SHA-256 hash, so it cannot be read from the database or a backup.
 
         Requires SMTP. If the invitation cannot be delivered the account is rolled back
         rather than left unreachable.

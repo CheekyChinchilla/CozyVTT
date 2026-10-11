@@ -8,7 +8,7 @@ import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
@@ -615,14 +615,8 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     // Invalidate any existing unused tokens for this user
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(id, RESET_LINK_TTL_MS);
 
     await sendPasswordResetEmail(user.email, token, user.displayName);
 
