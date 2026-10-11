@@ -75,8 +75,9 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
   connection in the last campaign only
 - Every broadcast that reads a connection's role skips a connection whose
   campaign is not the room being broadcast to
-- Deleting a campaign empties its room: every connection in it gets `error`
-  ("This campaign was deleted") and forgets the campaign
+- Deleting a campaign empties its room: every connection in it gets
+  `campaign.access.revoked` with reason `campaign-deleted` ("This campaign was
+  deleted.") and forgets the campaign
 - Used for broadcasting game events
 
 ---

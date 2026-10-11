@@ -584,7 +584,7 @@ The routes below end a sign-in's live sockets along with it, through `endLiveSoc
 | `DELETE /api/auth/account` | every socket of that user; its login sessions on every device end too |
 | `POST /api/admin/backups/restore` | every socket on the instance, and the in-memory combat state is dropped |
 
-Each socket is sent `error` with the reason, then disconnected. A socket records the login session it was opened under (`sessionId`, set at the handshake) so a sign-in can be singled out.
+Each socket is sent `campaign.access.revoked` with reason `signed-out` and a sentence saying why as its `message` (such as "You signed out." or "The instance was restored from a backup. Sign in again."), then disconnected. A socket records the login session it was opened under (`sessionId`, set at the handshake) so a sign-in can be singled out.
 
 `clearCampaignFromLiveSockets` clears the cached campaign and role and leaves the
 room, so the socket can neither act nor listen. Clearing `campaignId` is what
