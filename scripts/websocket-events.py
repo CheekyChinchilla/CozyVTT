@@ -22,6 +22,11 @@ import os
 import re
 import sys
 
+# The shared source reader sits beside this file; put its folder on the path
+# so this also loads when imported from elsewhere, as the tests do.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tssource import closing, line_of, masked  # noqa: E402
+
 # The table uses arrows and em dashes; a Windows console defaults to cp1252 and
 # cannot encode them.
 if hasattr(sys.stdout, 'reconfigure'):
@@ -47,6 +52,26 @@ END = '<!-- END GENERATED EVENTS -->'
 # authoritative, and the line above the table says so.
 CAVEAT = ('_Who may send it is read from the shared permission predicates each '
           'handler calls; the handler itself is authoritative._')
+
+# An event name the table can read: a quoted string with nothing worked out
+# inside it.
+NAME = r"""(['"])([^'"\n]+)\1"""
+
+# Where an event is handled or sent, as (call, pattern for the call with a
+# name the table reads). The pattern's last group is the event name.
+CALLS = (
+    (r"\bsocket\.on\(", r"socket\.on\(\s*" + NAME),
+    (r"\.emit\(", r"\.emit\(\s*" + NAME),
+    (r"\bbroadcastTo(?:Campaign|User)\(", r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*" + NAME),
+    (r"\bemitMoveToVisibleSockets\(", r"emitMoveToVisibleSockets\(\s*" + NAME),
+    (r"\b(?:emitToMapReaders|tellMapReaders)(?:As)?\(", r"(?:emitToMapReaders|tellMapReaders)(?:As)?\(\s*[^'\"()]*" + NAME),
+)
+
+# The helpers whose call sites are read above. Inside them the event is a
+# parameter passed on, by design, so a call there that names no event is not
+# a declaration this table misses.
+FORWARDERS = ('broadcastToCampaign', 'broadcastToUser', 'emitMoveToVisibleSockets',
+              'emitToMapReaders', 'emitToMapReadersAs', 'tellMapReaders', 'tellMapReadersAs')
 
 
 def sources():
@@ -77,84 +102,6 @@ def describe(text, index):
     # Drop a leading repetition of the event name, however it was punctuated.
     body = re.sub(r'^[A-Za-z0-9_.:]+\s*[—\-–]\s*', '', body)
     return re.split(r'(?<=[.!?])\s', body)[0].strip() if body else ''
-
-
-def literal_end(text, i):
-    """Where the comment or string literal starting at text[i] ends; None if none does."""
-    if text.startswith('//', i):
-        end = text.find('\n', i)
-        return len(text) if end == -1 else end
-    if text.startswith('/*', i):
-        end = text.find('*/', i + 2)
-        return len(text) if end == -1 else end + 2
-    quote = text[i]
-    if quote not in '\'"`':
-        return None
-    j = i + 1
-    while j < len(text) and text[j] != quote:
-        if text[j] == '\\':
-            j += 2
-        elif quote == '`' and text.startswith('${', j):
-            j = interpolation_end(text, j + 2)
-        elif text[j] == '\n' and quote != '`':
-            return j
-        else:
-            j += 1
-    return min(j + 1, len(text))
-
-
-def interpolation_end(text, i):
-    """From just inside a template literal's `${`, the position after its `}`."""
-    depth = 0
-    while i < len(text):
-        end = literal_end(text, i)
-        if end is not None:
-            i = end
-            continue
-        if text[i] == '{':
-            depth += 1
-        elif text[i] == '}':
-            if depth == 0:
-                return i + 1
-            depth -= 1
-        i += 1
-    return len(text)
-
-
-def masked(text, keep_strings=False):
-    """
-    The source with its comments blanked, and its string and template literals
-    too unless `keep_strings`, so a bracket or keyword inside one is not read
-    as code. Blanked characters become spaces and newlines stay, so every
-    position still matches the original. A regex literal is read as code: a
-    quote or bracket inside one would throw the matching off.
-    """
-    out = list(text)
-    i = 0
-    while i < len(text):
-        end = literal_end(text, i)
-        if end is None:
-            i += 1
-            continue
-        if not keep_strings or text.startswith(('//', '/*'), i):
-            for k in range(i, end):
-                if out[k] != '\n':
-                    out[k] = ' '
-        i = end
-    return ''.join(out)
-
-
-def closing(code, i):
-    """The position of the bracket that closes the one at code[i]."""
-    depth = 0
-    for j in range(i, len(code)):
-        if code[j] in '([{':
-            depth += 1
-        elif code[j] in ')]}':
-            depth -= 1
-            if depth == 0:
-                return j
-    return len(code) - 1
 
 
 def statement_end(code, i):
@@ -330,8 +277,8 @@ def collect():
         code, plain = masked(text), masked(text, keep_strings=True)
         # Comments blanked, so a handler or an emit that is commented out is
         # not listed.
-        for m in re.finditer(r"socket\.on\(\s*'([^']+)'", plain):
-            name = m.group(1)
+        for m in re.finditer(CALLS[0][1], plain):
+            name = m.group(2)
             if name in ('disconnect', 'error', 'ping'):
                 continue
             spans, blocks = handler_body(code, m)
@@ -359,19 +306,39 @@ def collect():
         # tellMapReaders), where the name is the first quoted argument; the
         # per-role forms (emitToMapReadersAs, tellMapReadersAs) take the event
         # they stand for in the same place.
-        patterns = (
-            r"\.emit\(\s*'([^']+)'",
-            r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*'([^']+)'",
-            r"emitMoveToVisibleSockets\(\s*'([^']+)'",
-            r"(?:emitToMapReaders|tellMapReaders)(?:As)?\(\s*[^'()]*'([^']+)'",
-        )
-        for pattern in patterns:
+        for _call, pattern in CALLS[1:]:
             for m in re.finditer(pattern, plain):
-                name = m.group(1)
+                name = m.group(2)
                 if name in ('error',):
                     continue
                 outbound.setdefault(name, {'file': os.path.basename(path)})
     return inbound, outbound
+
+
+def unreadable():
+    """
+    Every place an event is handled or sent whose name the table cannot read,
+    as `file:line: code`: a name held in a variable or worked out in a
+    template, say. Each would be missing from the table while --check passed,
+    so the run fails on any. The broadcast helpers' own bodies pass on the
+    event they were given, and are not counted.
+    """
+    problems = []
+    for path, text in sources():
+        code, plain = masked(text), masked(text, keep_strings=True)
+        inside = []
+        for d in re.finditer(r"\bfunction\s+(%s)\s*\(" % '|'.join(FORWARDERS), code):
+            body = code.find('{', closing(code, code.index('(', d.start())))
+            inside.append((d.start(), closing(code, body) if body != -1 else len(code)))
+        for call, readable in CALLS:
+            for m in re.finditer(call, code):
+                if re.compile(readable).match(plain, m.start()):
+                    continue
+                if any(start <= m.start() <= end for start, end in inside):
+                    continue
+                snippet = text[m.start():].split('\n')[0].strip()
+                problems.append(f'{path.replace(os.sep, "/")}:{line_of(text, m.start())}: {snippet}')
+    return problems
 
 
 def who_may_send(info):
@@ -413,6 +380,14 @@ def main():
     ap.add_argument('--write', action='store_true',
                     help='rewrite the generated block in the doc')
     args = ap.parse_args()
+
+    problems = unreadable()
+    if problems:
+        print('These handle or send an event this script cannot read the name of, so the table')
+        print('would leave them out. Name the event with a quoted string, or teach collect() the form:')
+        for problem in problems:
+            print('  ', problem)
+        return 1
 
     inbound, outbound = collect()
     rendered = table(inbound, outbound)

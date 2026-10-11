@@ -8,22 +8,18 @@
  * the session's copy of the role, so a demoted administrator loses the admin
  * guards on their next request, and a session whose account is gone ends.
  *
- * Mounted here the way server.ts mounts it, on /api behind the session, in
- * front of the routers. Requires PostgreSQL at DATABASE_URL.
+ * Driven through the test app, which mounts it where the server does (both
+ * are built by createApp in app.ts): on /api behind the session, in front of
+ * the routers. Requires PostgreSQL at DATABASE_URL.
  */
 
-import express from 'express';
-import session from 'express-session';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { requireAdminMfa, MFA_ENROLMENT_REQUIRED } from '../adminMfa';
+import { MFA_ENROLMENT_REQUIRED } from '../adminMfa';
 import { ADMIN_MFA_POLICY_MESSAGE, resetAdminMfaPolicyCache } from '../../services/adminMfaPolicy';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
-const app = express();
-app.use(session({ secret: 'test-secret-do-not-use-in-production', resave: false, saveUninitialized: false, cookie: { secure: false } }));
-app.use('/api', requireAdminMfa);
-app.use(createTestApp());
+const app = createTestApp();
 
 const DAY = 24 * 60 * 60 * 1000;
 const created: string[] = [];

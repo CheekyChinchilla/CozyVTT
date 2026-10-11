@@ -56,6 +56,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 |---------|---------|---------|
 | [React](https://react.dev/) | Frontend UI library | MIT |
 | [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
+| [Playwright](https://playwright.dev/) | Browser smoke tests, for development only; not part of an instance | Apache-2.0 |
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
 | [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |

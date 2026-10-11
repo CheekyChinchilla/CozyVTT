@@ -379,6 +379,13 @@ Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration test
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
+> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
+> table named `session`, which the session store creates when the server
+> starts. The Prisma schema does not describe it, so `prisma db push` drops
+> it. Before any suite starts, jest makes it again from the session store's
+> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
+> that end an account's sign-ins pass straight after a push.
+
 ### Frontend Tests (Vitest)
 
 ```bash
@@ -389,6 +396,26 @@ npm run test:coverage     # Generate coverage report
 ```
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
+
+### Browser smoke tests (Playwright)
+
+`frontend/e2e/` holds a handful of end-to-end tests that drive a real browser
+(Chromium, at a desktop and a phone size) through a running instance: the
+setup wizard on a fresh one, signing in and out, creating a campaign and
+opening it with its live connection, and nothing wider than the screen on a
+phone. CI runs them against the production stack it has just built. To run
+them yourself, start an instance, then from `frontend/`:
+
+```bash
+npx playwright install chromium     # once, to fetch the browser
+E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
+```
+
+The first test finishes the setup wizard, so point them at an instance you
+can throw away; on one already set up, it is skipped and the others sign in
+as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
+`frontend/e2e/instance.ts`. One test checks the page's security headers and
+runs only with `E2E_PRODUCTION=1`, since the development server sends none.
 
 ### Checking sign-in by hand
 
@@ -438,6 +465,7 @@ cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && \
 # `python`)
 python3 scripts/spec-coverage.py
 python3 scripts/websocket-events.py --check
+python3 -m unittest discover -s scripts/tests
 ```
 
 Two of those deserve a note:
@@ -497,20 +525,31 @@ Two of those deserve a note:
   and when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+- **The tests drive the server's own app.** `createApp` in
+  `backend/src/app.ts` puts every middleware, gate, router and error handler
+  in order; `server.ts` builds its app with it and starts it, and the
+  integration tests' app (`src/__tests__/helpers/test-app.ts`) is built with
+  it too. The test app differs in three settings only: sessions kept in
+  memory, no general request limit, and no setup gate. So a security header,
+  gate or router moved or dropped in `app.ts` fails the suites;
+  `src/__tests__/appAssembly.e2e.test.ts` checks the headers, the session
+  cookie and the order. Mount nothing in `server.ts` itself.
 - **Every route has a test, or is listed as not having one.**
   `backend/src/routes/__tests__/routeInventory.test.ts` reads every method and
-  path from the routers the test app mounts (and checks the test app mounts
-  the same routers as `server.ts`, at the same paths). It fails when a route
-  is in neither of its two lists: `TESTED`, which names a test file that sends
-  a request to the route, and `UNTESTED`, the known gaps, which should only
-  shrink. Add a new route's test, then its line in `TESTED`.
+  path from the app `createApp` builds. It fails when a route is in neither of
+  its two lists: `TESTED`, which names a test file that sends a request to the
+  route, and `UNTESTED`, the known gaps, which should only shrink. It also
+  fails when a test file sends a request to a route still listed in
+  `UNTESTED`, so the list cannot go on claiming a gap that has closed. Add a
+  new route's test, then its line in `TESTED`.
 - **Every rate limiter is tested where it is attached.**
   `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
   limited route: it sends the limit's worth of failing requests to the real
   route and expects the next to be answered 429. It also reads the routers
   and fails when a route carries a limiter with no row, so a newly limited
   route needs one line in its `ROWS`. The server-wide limit on every `/api`
-  request is applied in `server.ts`, outside the routers, and is not covered.
+  request is mounted by `createApp` ahead of every router; the same file
+  checks it is there and fires it.
 - **A test file may not carry a `TODO(test)` marker.** A test known to be
   flaky or wrong once sat behind one, assigned to nobody, until it failed a
   release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
@@ -522,15 +561,49 @@ Two of those deserve a note:
   mounts and fails when they disagree in either direction, and loads the file
   as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
   the route check does not care whether the file loads and three unquoted
-  colons once made it unloadable;
+  colons once made it unloadable. It also fails when a request the
+  frontend's API client sends is not in the file;
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
-  `python3 scripts/websocket-events.py --write`.
+  `python3 scripts/websocket-events.py --write`. Both fail on a route or
+  event declared in a form they cannot read, so nothing is left out of them
+  unnoticed; `python3 -m unittest discover -s scripts/tests` tests that.
 
 `.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
-and on pull requests into them (a push to any other branch runs nothing), and
-applies the migrations to an empty database before the backend tests. Note that it **reports** failures rather than blocking a merge —
+and on pull requests into them (a push to any other branch runs nothing). It
+also does what self-hosters run and a developer usually does not:
+
+- **Compares `schema.prisma` with the migrations** (`prisma migrate diff
+  --exit-code`, against an empty shadow database), so a schema change with no
+  migration fails, then applies the migrations to an empty database before
+  the backend tests. To run the comparison yourself, give it a database of
+  its own, which Prisma empties: the command is in the workflow, and the
+  scratch database is the one "Running Migrations" above creates.
+- **Collects test coverage** in both projects and shows it in the job
+  summary, per folder under `src/`. A report only: no threshold fails yet.
+- **Builds both production images** with `docker compose build`, after
+  reading `docker-compose.yml` with the example settings, then starts the
+  stack and runs the browser smoke tests against it (below).
+- **Checks the bundled nginx's configuration** with
+  `python3 scripts/nginx-check.py`: it renders `nginx/nginx.conf` with the
+  image's own entrypoint, the environment and mounts `docker-compose.yml`
+  gives the container and `nginx/trusted-proxies.envsh`, and has nginx check
+  it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
+  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
+  needs Docker, openssl and PyYAML, and runs locally too.
+- **Reports known advisories** in the packages an instance runs
+  (`npm audit --omit=dev --audit-level=high` in both projects). A high or
+  critical one marks its step; the job still passes for now.
+
+Every action the workflow uses is pinned to a commit, with its version in a
+comment, and `.github/dependabot.yml` asks for a weekly pull request into
+`dev` for each project's minor and patch updates (grouped), each major
+update, the actions and the Docker base images. Node and nginx move to a new
+major or stable line by hand, and PostgreSQL's major version never through
+Dependabot, since its data has to be dumped and restored.
+
+Note that CI **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
 

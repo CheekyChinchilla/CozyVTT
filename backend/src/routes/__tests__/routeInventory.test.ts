@@ -2,11 +2,13 @@
  * Every route the server answers has a test that sends a request to it, or is
  * listed as not having one yet.
  *
- * The route list is read from the routers themselves (the test app mounts
- * every router the server does, which the last check here holds it to), so a
- * new route fails this file until someone writes its test and adds it to
- * TESTED, or knowingly adds it to UNTESTED. UNTESTED is a list to shrink:
- * those routes are where a broken permission check would go unnoticed.
+ * The route list is read from the app itself, as createApp (src/app.ts)
+ * builds it for the server and the test app alike, so a new route fails this
+ * file until someone writes its test and adds it to TESTED, or knowingly adds
+ * it to UNTESTED. UNTESTED is a list to shrink: those routes are where a
+ * broken permission check would go unnoticed. A test file that sends a
+ * request to one of them fails this file too, until the route moves to
+ * TESTED, so the list cannot go on claiming a route nobody tests.
  *
  * TESTED names one test file per route that sends a request to it. One is
  * enough to find the tests; it is not a claim that every case is covered.
@@ -173,6 +175,7 @@ const TESTED: Record<string, string> = {
   'POST /api/characters/:id/copy': 'routes/__tests__/characterAndCampaignCreate.e2e.test.ts',
   'GET /api/setup/status': 'routes/__tests__/setupWizard.e2e.test.ts',
   'POST /api/setup/init': 'routes/__tests__/setupWizard.e2e.test.ts',
+  'GET /api/characters/templates/:gameSystem/:templateName': 'routes/__tests__/flexibleTemplateLookup.e2e.test.ts',
 };
 
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
@@ -182,7 +185,6 @@ const UNTESTED: string[] = [
   'PUT /api/campaigns/:campaignId/token-templates/:id',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
   'POST /api/campaigns/:campaignId/token-templates/from-token',
-  'GET /api/characters/templates/:gameSystem/:templateName',
   'GET /api/invitations',
   'POST /api/invitations/:id/decline',
 ];
@@ -219,20 +221,52 @@ it('names test files that exist', () => {
   expect(missing).toEqual([]);
 });
 
-it('walks an app that mounts every router the server mounts, at the same path', () => {
-  // Each `app.use('/api/...', someRoutes)` line, as path and router module.
-  const mounts = (file: string, importPrefix: string): string[] => {
-    const source = fs.readFileSync(path.join(SRC, file), 'utf8');
-    const modules = new Map<string, string>();
-    for (const m of source.matchAll(/import\s+(\w+)\s+from\s+'([^']+)'/g)) {
-      if (m[2].startsWith(importPrefix)) modules.set(m[1], m[2].slice(importPrefix.length));
-    }
-    return [...source.matchAll(/app\.use\(\s*'([^']+)',\s*(\w+)\s*\)/g)]
-      .filter((m) => modules.has(m[2]))
-      .map((m) => `${m[1]} ${modules.get(m[2])}`)
-      .sort();
-  };
-  const server = mounts('server.ts', './routes/');
-  expect(server.length).toBeGreaterThan(10);
-  expect(mounts('__tests__/helpers/test-app.ts', '../../routes/')).toEqual(server);
+it('reads the server\'s own app: server.ts adds nothing to what createApp builds', () => {
+  const source = fs.readFileSync(path.join(SRC, 'server.ts'), 'utf8');
+  expect(source).toMatch(/\bcreateApp\(/);
+  expect(source).not.toMatch(/\bapp\.(use|get|post|put|patch|delete|all|route)\(/);
+});
+
+/** Every test file under backend/src, as path and text. */
+function testFiles(dir: string = SRC): Array<[string, string]> {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry): Array<[string, string]> => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : testFiles(full);
+    return /\.test\.ts$/.test(entry.name) ? [[path.relative(SRC, full), fs.readFileSync(full, 'utf8')]] : [];
+  });
+}
+
+/**
+ * A request to the route as the suites write one: `.put(` then a quoted or
+ * template path, each `:param` standing for an id, a `${...}` or anything
+ * else without a slash. A path built from a variable is not seen, so this
+ * finds most new tests, not all.
+ */
+function requestTo(route: string): RegExp {
+  const [method, routePath] = route.split(' ');
+  const segments = routePath
+    .split('/')
+    .map((segment) => (segment.startsWith(':') ? '[^/\'"`\\s]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  return new RegExp(`\\.${method.toLowerCase()}\\(\\s*['"\`]${segments.join('/')}['"\`?]`);
+}
+
+it('moves a route to TESTED once a test sends a request to it', () => {
+  // This file's own examples below are not tests of the routes.
+  const files = testFiles().filter(([file]) => path.join(SRC, file) !== __filename);
+  const nowTested = UNTESTED.flatMap((route) => {
+    const file = files.find(([, text]) => requestTo(route).test(text));
+    return file ? [`${route}: ${file[0]}`] : [];
+  });
+  // A route here has a test now: move it from UNTESTED to TESTED with that file.
+  expect(nowTested).toEqual([]);
+});
+
+it('recognises a request to a route in the forms the suites write', () => {
+  const pattern = requestTo('PUT /api/campaigns/:campaignId/sessions/:sessionId/end');
+  expect(pattern.test("agent.put(`/api/campaigns/${campaign.id}/sessions/${id}/end`)")).toBe(true);
+  expect(pattern.test("request(app).put('/api/campaigns/c1/sessions/s1/end').send({})")).toBe(true);
+  expect(pattern.test("agent.put(`/api/campaigns/${campaign.id}/sessions/${id}/notes`)")).toBe(false);
+  expect(pattern.test("agent.get(`/api/campaigns/${campaign.id}/sessions/${id}/end`)")).toBe(false);
+  expect(requestTo('GET /api/invitations').test("agent.get('/api/invitations/abc/accept')")).toBe(false);
+  expect(requestTo('GET /api/invitations').test("agent.get('/api/invitations?status=PENDING')")).toBe(true);
 });

@@ -9,7 +9,7 @@
  * chance to finish signing in with it.
  *
  * Runs against the `session` table connect-pg-simple owns in the real app,
- * created here if the test database has none; only this file's rows are
+ * which the test run's global setup makes; only this file's rows are
  * written and removed. Requires PostgreSQL at DATABASE_URL.
  */
 
@@ -34,17 +34,6 @@ async function exists(sid: string): Promise<boolean> {
   const rows = await prisma.$queryRaw<{ sid: string }[]>`SELECT sid FROM session WHERE sid = ${sid}`;
   return rows.length === 1;
 }
-
-beforeAll(async () => {
-  // connect-pg-simple's table.sql, which the real app runs with createTableIfMissing.
-  await prisma.$executeRaw`
-    CREATE TABLE IF NOT EXISTS "session" (
-      "sid" varchar NOT NULL COLLATE "default" PRIMARY KEY,
-      "sess" json NOT NULL,
-      "expire" timestamp(6) NOT NULL
-    )
-  `;
-});
 
 afterAll(async () => {
   await prisma.$executeRaw`DELETE FROM session WHERE sid IN (${Prisma.join(mine)})`;

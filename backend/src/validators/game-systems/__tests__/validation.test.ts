@@ -30,8 +30,6 @@ interface ExampleSheets {
   'DnD_5e_character_minimal.json': DnD5eCharacterData;
   'Pathfinder_2e_character.json': PF2eCharacterData;
   'Pathfinder_2e_character_minimal.json': PF2eCharacterData;
-  'Shadowrun_character.json': SR6CharacterData;
-  'Shadowrun_character_minimal.json': SR6CharacterData;
   'Call_of_Cthulhu_7th_Edition_character.json': CoC7eCharacterData;
   'Call_of_Cthulhu_7th_Edition_character_minimal.json': CoC7eCharacterData;
 }
@@ -500,12 +498,17 @@ describe('Game Systems Validation', () => {
   });
 
   describe('Shadowrun 6e Validation', () => {
-    // Shadowrun example JSONs no longer ship in Examples/ — these three
-    // example-driven tests are skipped until replacement fixtures exist.
-    // The blank-template and missing-fields tests below still cover the schema.
-    it.skip('should validate valid Shadowrun 6e character data from example JSON', () => {
-      const example = loadExampleJSON('Shadowrun_character.json');
-      const result = validateCharacterData(GameSystem.SHADOWRUN_6E, example.data);
+    // No Shadowrun example file ships, so these sheets are built from the
+    // system's own blank template, which is what a new character starts as.
+    const blank = (): SR6CharacterData => getBlankCharacterTemplate(GameSystem.SHADOWRUN_6E) as SR6CharacterData;
+
+    it('should validate a filled-in Shadowrun 6e character, keeping what was entered', () => {
+      const result = validateCharacterData(GameSystem.SHADOWRUN_6E, {
+        ...blank(),
+        characterName: 'Ghost',
+        metatype: 'Human',
+        archetype: 'Street Samurai',
+      });
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -537,30 +540,33 @@ describe('Game Systems Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it.skip('should validate minimal Shadowrun 6e character with only required fields', () => {
-      const example = loadExampleJSON('Shadowrun_character_minimal.json');
-      const result = validateCharacterData(GameSystem.SHADOWRUN_6E, example.data);
+    it('should validate minimal Shadowrun 6e character with only required fields', () => {
+      const result = validateCharacterData(GameSystem.SHADOWRUN_6E, {
+        characterName: 'Razor',
+        metatype: 'Human',
+        archetype: 'Street Samurai',
+        attributes: blank().attributes,
+      });
 
       expect(result.success).toBe(true);
       if (result.success) {
         const data = result.data as SR6CharacterData;
         expect(data.characterName).toBe('Razor');
-        expect(data.metatype).toBe('Human');
-        expect(data.archetype).toBe('Street Samurai');
         // Optional fields should be undefined
         expect(data.magic).toBeUndefined();
         expect(data.contacts).toBeUndefined();
       }
     });
 
-    it.skip('should fail validation for invalid essence value', () => {
-      const example = loadExampleJSON('Shadowrun_character.json');
+    it('should fail validation for invalid essence value', () => {
+      const sheet = blank();
       const invalidData = {
-        ...example.data,
+        ...sheet,
+        characterName: 'Ghost',
         attributes: {
-          ...example.data.attributes,
+          ...sheet.attributes,
           special: {
-            ...example.data.attributes.special,
+            ...sheet.attributes.special,
             essence: { current: 7.0, maximum: 6.0 }, // Invalid: essence > 6
           },
         },

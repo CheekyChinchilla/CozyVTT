@@ -102,3 +102,32 @@ export const routeKey = (route: Pick<MountedRoute, 'method' | 'path'>): string =
 
 /** Whether the route runs this handler, compared by identity. */
 export const runs = (route: MountedRoute, handler: RequestHandler): boolean => route.handlers.includes(handler);
+
+export interface AppLayer {
+  /** The function's name, as in `session` or `router`. */
+  name: string;
+  /** Where it is mounted: '' for every path, `/api` for `app.use('/api', ...)`, the path of a route; null when unreadable, as for `*`. */
+  path: string | null;
+  handle: unknown;
+  /** A route defined on the app itself, such as `GET /health`. */
+  route: boolean;
+}
+
+/** The app's own middleware, routes and routers, in the order a request meets them. */
+export function appLayers(app: Express): AppLayer[] {
+  const root = (app as unknown as { _router?: { stack: Layer[] } })._router;
+  if (!root) throw new Error('The app has no router yet; add a route or middleware first');
+  return root.stack.map((layer) => {
+    let mount: string | null;
+    if (layer.route) {
+      mount = Array.isArray(layer.route.path) ? layer.route.path.join(',') : layer.route.path;
+    } else {
+      try {
+        mount = mountPathOf(layer);
+      } catch {
+        mount = null;
+      }
+    }
+    return { name: layer.name, path: mount, handle: layer.handle, route: Boolean(layer.route) };
+  });
+}

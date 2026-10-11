@@ -12,7 +12,11 @@
  * line in ROWS. A few rows point at the file that already fires the limit on
  * the live route, where the setup is too particular to repeat.
  *
- * The app trusts one proxy hop, as server.ts does, so each row's requests
+ * The general limit is not on any one route: the app mounts it on /api ahead
+ * of every router (app.ts). The last checks find it there and fire it, on
+ * the app as the server builds it.
+ *
+ * The app trusts one proxy hop, as app.ts does, so each row's requests
  * come from an address of their own through X-Forwarded-For.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -23,7 +27,9 @@ import path from 'path';
 import express, { type RequestHandler } from 'express';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { mountedRoutes, routeKey } from '../../__tests__/helpers/routeInventory';
+import { appLayers, mountedRoutes, routeKey } from '../../__tests__/helpers/routeInventory';
+import { createApp, createGeneralApiLimiter } from '../../app';
+import { sessionOptions } from '../../config/sessionOptions';
 import {
   prisma,
   createTestUser,
@@ -220,4 +226,40 @@ describe('each limited route', () => {
       expect((await send(ctx)).status).toBe(429);
     }
   );
+});
+
+describe('the general limit on every /api request', () => {
+  const limiter = createGeneralApiLimiter();
+  const app = createApp({
+    session: { ...sessionOptions, secret: 'test-secret-do-not-use-in-production' },
+    generalApiLimiter: limiter,
+    // The shared test database's setup state is not this file's to set.
+    setupGate: false,
+  });
+
+  it('is mounted on /api ahead of every router, so it counts every route under it', () => {
+    const layers = appLayers(app);
+    const at = layers.findIndex((layer) => layer.handle === limiter);
+    expect(at).toBeGreaterThan(-1);
+    expect(layers[at].path).toBe('/api');
+    const routers = layers.flatMap((layer, index) => (layer.name === 'router' ? [index] : []));
+    expect(routers.filter((index) => index < at)).toEqual([]);
+    // Every route the server answers outside /api is the health check.
+    expect(mountedRoutes(app).map(routeKey).filter((key) => !key.split(' ')[1].startsWith('/api/'))).toEqual(['GET /health']);
+  });
+
+  it('refuses the request after 300 in a minute from one address, and only from that address', async () => {
+    const from = (address: string) => request(app).get('/api/config').set('X-Forwarded-For', address);
+    const statuses: number[] = [];
+    for (let i = 0; i < 300; i++) statuses.push((await from('10.92.0.1')).status);
+    expect(statuses.filter((status) => status !== 200)).toEqual([]);
+
+    const refused = await from('10.92.0.1');
+    expect(refused.status).toBe(429);
+    expect(refused.body).toEqual({ error: 'Too Many Requests', message: 'Rate limit exceeded. Please slow down.' });
+
+    expect((await from('10.92.0.2')).status).toBe(200);
+    // The health check is not counted, so an uptime monitor never trips it.
+    expect((await request(app).get('/health').set('X-Forwarded-For', '10.92.0.1')).status).toBe(200);
+  });
 });

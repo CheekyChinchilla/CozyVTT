@@ -150,8 +150,9 @@ _Nothing at present._
   April 2028, so 26 is the target. The version is written in several
   places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
   in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
-  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the two
-  `node-version: 20` lines in `.github/workflows/ci.yml`, `engines` and
+  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the four
+  `node-version: 20` lines in `.github/workflows/ci.yml` (the `frontend`,
+  `backend`, `audit` and `images` jobs), `engines` and
   `@types/node` in the two `package.json` files, and the Node version the
   README, `docs/DEVELOPMENT.md` and `docs/DEPLOYMENT.md` ask for. A newer
   `node:*-alpine` image may sit on a newer Alpine, so check that
@@ -166,10 +167,11 @@ _Nothing at present._
   more fixes. Neither production advisory open today can be reached in
   CozyVTT, but an internet-facing app should not run on unsupported code.
   **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, Dependabot opening grouped weekly pull
-  requests against `dev`, and a CI check that fails on a high or critical
-  advisory in production dependencies; nginx is done, both images pinned to
-  the 1.30 stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
+  inside the current major versions, and then turning CI's advisory check,
+  which reports high or critical advisories in production dependencies
+  today, into one that fails; Dependabot's grouped weekly pull requests
+  against `dev` are set up, and nginx is done, both images pinned to the 1.30
+  stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
   newest stable major first, with a full upgrade rehearsal, then Vite and
   Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
   CSS 4 and TypeScript 7.
@@ -325,8 +327,8 @@ _Nothing at present._
   nobody here runs. Note also that `base` is **build-time**, so the runtime env
   var the issue asked for cannot do it, and the path would end up recorded in
   four or five places that fail as a blank page whenever two disagree. Roughly
-  4-6 days including a browser test harness the project does not have and would
-  then maintain. **Revisit if** more people ask, or if asset storage is reworked
+  4-6 days including browser tests of the prefixed layout on top of the smoke
+  tests in `frontend/e2e/`. **Revisit if** more people ask, or if asset storage is reworked
   for another reason — the prerequisite is storing bare UUIDs rather than URLs,
   for which `extractAssetId` already exists on both sides and
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite

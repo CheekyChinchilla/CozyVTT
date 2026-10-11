@@ -1,98 +1,35 @@
 /**
  * Test App Factory
  *
- * Creates an Express app for integration tests that matches the real server
- * everywhere it can. It deliberately differs in exactly three ways:
+ * The app the integration tests drive, built by the server's own createApp
+ * (src/app.ts): the same security headers, CORS, proxy setting, body parsers,
+ * gates, routers, order, 404 and error handler. It differs in exactly three
+ * ways, each an AppOptions setting:
  *
- * - **No setup-wizard gate.** `requireSetupComplete` would block every route.
- *   The setup routes themselves are mounted.
- * - **Memory session store**, so tests need no PostgreSQL session table.
- * - **No rate limiters.** A suite makes hundreds of requests from one address
- *   and would trip them; the limiters have their own tests in
- *   `rateLimiters.test.ts`.
+ * - **Sessions are kept in memory**, signed with a fixed test secret. Their
+ *   behaviour and cookie are the server's (config/sessionOptions.ts).
+ * - **No general request limit.** A suite makes hundreds of requests from one
+ *   address and would trip it. The per-route limiters inside the routers stay;
+ *   limiterWiring.e2e.test.ts and appAssembly.e2e.test.ts check both.
+ * - **No setup-wizard gate.** The suites make their accounts in the database
+ *   directly, on a database whose setup state they do not set. The setup
+ *   routes themselves are mounted; setupWizard.e2e.test.ts covers the gate.
  *
- * Everything else — the body parsers, the error handler, the routers and the
- * 404 — is imported from the same place the server gets it. That is not tidiness:
- * this file used to configure its own body parser at Express's 100kb default
- * while the server allowed more, so no test could reach the code paths a large
- * request takes, and it had no error handler at all, falling through to
- * Express's HTML stack-trace page instead of the JSON clients expect. A
- * body-size bug shipped through that gap. Do not reintroduce a local copy of
- * anything the server configures.
+ * This file used to configure its own copy of the server's app instead, and
+ * every part the copy left out or set differently went untested: a body-size
+ * bug shipped through its old 100kb parser, and the security headers and the
+ * password-change gate were never checked. Do not set anything up here that
+ * the server sets up in app.ts.
  */
 
-import express from 'express';
-import session from 'express-session';
-import { bodyParsers } from '../../middleware/bodyParsers';
-import { originCheck } from '../../middleware/originCheck';
-import { errorHandler } from '../../middleware/errorHandler';
-import { refuseWhileDatabaseIsReplaced } from '../../middleware/restoreGate';
-import setupRoutes from '../../routes/setup';
-import authRoutes from '../../routes/auth';
-import campaignRoutes from '../../routes/campaigns';
-import campaignMacroRoutes from '../../routes/campaignMacros';
-import campaignDocumentRoutes from '../../routes/campaignDocuments';
-import characterRoutes from '../../routes/characters';
-import characterTemplateRoutes from '../../routes/characterTemplates';
-import assetRoutes from '../../routes/assets';
-import creatureRoutes from '../../routes/creatures';
-import tokenTemplateRoutes from '../../routes/tokenTemplates';
-import userRoutes from '../../routes/users';
-import mapRoutes from '../../routes/maps';
-import configRoutes from '../../routes/config';
-import adminRoutes from '../../routes/admin';
-import adminStorageRoutes from '../../routes/adminStorage';
-import invitationRoutes from '../../routes/invitations';
+import type express from 'express';
+import { createApp } from '../../app';
+import { sessionOptions } from '../../config/sessionOptions';
 
 export function createTestApp(): express.Express {
-  const app = express();
-
-  app.use(bodyParsers());
-  app.use(originCheck);
-  app.use('/api', refuseWhileDatabaseIsReplaced);
-
-  // Memory store — no PostgreSQL needed for tests
-  app.use(
-    session({
-      secret: 'test-secret-do-not-use-in-production',
-      resave: false,
-      saveUninitialized: false,
-      cookie: { secure: false },
-    })
-  );
-
-  // Health check
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'healthy' });
+  return createApp({
+    session: { ...sessionOptions, secret: 'test-secret-do-not-use-in-production' },
+    generalApiLimiter: false,
+    setupGate: false,
   });
-
-  // Routes (no requireSetupComplete wrapping). The route inventory test holds
-  // this list to the server's.
-  app.use('/api/setup', setupRoutes);
-  app.use('/api/config', configRoutes);
-  app.use('/api/auth', authRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/admin', adminStorageRoutes);
-  app.use('/api/campaigns', campaignRoutes);
-  app.use('/api/campaigns', campaignMacroRoutes);
-  app.use('/api/campaigns', campaignDocumentRoutes);
-  // Mounted separately in server.ts too — the creature routes hang off a
-  // campaign path rather than the campaigns router, so they need their own line.
-  app.use('/api/campaigns/:campaignId/creatures', creatureRoutes);
-  app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
-  app.use('/api/campaigns/:campaignId/maps', mapRoutes);
-  app.use('/api/characters', characterRoutes);
-  app.use('/api/character-templates', characterTemplateRoutes);
-  app.use('/api/users', userRoutes);
-  app.use('/api/assets', assetRoutes);
-  app.use('/api/invitations', invitationRoutes);
-
-  // Catch-all 404
-  app.use('*', (_req, res) => {
-    res.status(404).json({ error: 'Not Found' });
-  });
-
-  app.use(errorHandler);
-
-  return app;
 }

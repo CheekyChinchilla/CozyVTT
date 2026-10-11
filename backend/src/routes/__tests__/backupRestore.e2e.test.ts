@@ -802,7 +802,13 @@ describe('POST /api/admin/backups', () => {
   });
 
   beforeEach(() => {
-    clock = jest.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-27T14:43:06.000Z');
+    // Only the present moment, which is what names a backup. The session
+    // cookie's expiry, an hour on, is stored through toISOString too, and
+    // fixed in the past it would end the admin's sign-in.
+    const real = Date.prototype.toISOString;
+    clock = jest.spyOn(Date.prototype, 'toISOString').mockImplementation(function (this: Date) {
+      return Math.abs(this.getTime() - Date.now()) < 1000 ? '2026-09-27T14:43:06.000Z' : real.call(this);
+    });
   });
 
   afterEach(() => {

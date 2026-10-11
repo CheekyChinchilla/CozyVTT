@@ -2,7 +2,8 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
 import logger from '../utils/logger';
-import { sessionMaxAge, rememberMeMaxAge } from './sessionDurations';
+import { rememberMeMaxAge } from './sessionDurations';
+import { sessionOptions } from './sessionOptions';
 import { sessionSecretProblem, INSECURE_SESSION_SECRETS } from './sessionSecret';
 
 export { rememberMeMaxAge };
@@ -45,8 +46,10 @@ if (secretProblem) {
   }
 }
 
-// Session configuration
+// Session configuration: the behaviour and cookie in config/sessionOptions.ts,
+// kept in PostgreSQL and signed with SESSION_SECRET.
 export const sessionConfig: session.SessionOptions = {
+  ...sessionOptions,
   store: new PgSession({
     pool: sessionPool,
     tableName: 'session',
@@ -55,18 +58,4 @@ export const sessionConfig: session.SessionOptions = {
   secret: SESSION_SECRET && !INSECURE_SESSION_SECRETS.includes(SESSION_SECRET)
     ? SESSION_SECRET
     : 'dev-only-insecure-secret-do-not-use-in-production',
-  resave: false,
-  saveUninitialized: false,
-  rolling: true, // Reset maxAge on every response — session only expires after inactivity
-  name: 'cozyvtt.sid',
-  cookie: {
-    httpOnly: true,  // Prevents JavaScript access (XSS protection)
-    secure: 'auto',  // Sets Secure flag when connection is HTTPS (respects trust proxy +
-                     // X-Forwarded-Proto), omits it on HTTP so localhost and plain HTTP
-                     // deployments work without cookie being silently dropped
-    sameSite: 'lax', // Allows cookie on same-site requests and top-level GET navigations
-                     // from external links (email, Discord, etc.). 'strict' would redirect
-                     // logged-in users to login whenever they follow any external link.
-    maxAge: sessionMaxAge, // 1 hour of inactivity unless SESSION_MAX_AGE says otherwise
-  },
 };

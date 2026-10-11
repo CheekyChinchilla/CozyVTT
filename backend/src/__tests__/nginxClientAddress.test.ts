@@ -38,6 +38,7 @@ import fs from 'fs';
 import path from 'path';
 import { CAMPAIGN_ARCHIVE_MAX_BYTES } from '../utils/campaignArchiveSize';
 import { UPLOAD_OVERHEAD_BYTES, parseProxyBodySize } from '../utils/proxyLimits';
+import { createApp } from '../app';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
@@ -241,6 +242,7 @@ describe('the bundled nginx configuration', () => {
   it('is paired with a backend that trusts exactly one proxy, this one', () => {
     // More hops trusted would read an address further left, which a visitor
     // can write; none would count every visitor as nginx itself.
-    expect(read('backend/src/server.ts')).toMatch(/^app\.set\('trust proxy', 1\);$/m);
+    const app = createApp({ session: { secret: 'test-secret-do-not-use-in-production' }, generalApiLimiter: false });
+    expect(app.get('trust proxy')).toBe(1);
   });
 });
