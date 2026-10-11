@@ -158,6 +158,33 @@ describe('HSTS, in the deployment guide', () => {
   });
 });
 
+describe('the database password rule', () => {
+  /** A text with the line breaks and comment marks of a comment block taken out. */
+  const flat = (rel: string) => read(rel).replace(/\n#[ \t]*/g, ' ');
+
+  // A $ is legal in the user part of a URL, so it does not break the address
+  // the stack writes the password into. What a $ does is in the .env file
+  // itself: Docker Compose reads it there as the start of a variable name.
+  // Both texts listed it with the characters that break the address.
+  it('does not list $ among the characters that break the database address', () => {
+    const url = new URL('postgresql://cozyvtt:pass$word@database:5432/cozyvtt');
+    expect(url.hostname).toBe('database');
+    expect(decodeURIComponent(url.password)).toBe('pass$word');
+
+    for (const rel of ['.env.example', 'docs/DEPLOYMENT.md']) {
+      const listed = /a character such as (.+?) breaks/.exec(flat(rel))?.[1];
+      expect(listed).toBeDefined();
+      expect(listed).not.toContain('$');
+    }
+  });
+
+  it('says why a $ is also unsafe: Docker Compose reads it as the start of a variable name', () => {
+    for (const rel of ['.env.example', 'docs/DEPLOYMENT.md']) {
+      expect(flat(rel)).toMatch(/Docker Compose reads a `?\$`? in (?:this file|`\.env`) as the start of a variable name/);
+    }
+  });
+});
+
 describe('SMTP, in the deployment guide', () => {
   const settings = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'];
   const saved = Object.fromEntries(settings.map((name) => [name, process.env[name]]));
