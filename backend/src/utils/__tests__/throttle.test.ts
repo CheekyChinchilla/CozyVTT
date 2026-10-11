@@ -57,6 +57,17 @@ describe('throttle', () => {
     expect(fn.mock.calls).toEqual([[1], [2], [3]]);
   });
 
+  it('calls at once after the wait even when the clock is set back', () => {
+    const fn = jest.fn();
+    const paced = throttle(fn, 16);
+    paced('before');
+    jest.advanceTimersByTime(16);
+    // The server's clock corrected an hour back, as a time sync can do.
+    jest.setSystemTime(Date.now() - 60 * 60 * 1000);
+    paced('after');
+    expect(fn.mock.calls).toEqual([['before'], ['after']]);
+  });
+
   it('keeps a steady drag to one call per wait', () => {
     const fn = jest.fn();
     const paced = throttle(fn, 16);
