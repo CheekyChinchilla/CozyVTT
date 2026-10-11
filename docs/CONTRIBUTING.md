@@ -47,6 +47,7 @@ If you become a collaborator, here's what the codebase expects:
 - **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
 - **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks with their own tests. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), and CI runs the same commands
 - **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit
+- **A dependency comes with its licence entry** — adding, removing or moving a package to a new major version updates `THIRD_PARTY_NOTICES.txt` (every package in a project's `dependencies`, by its major version line, with the licence its lockfile records) and, for a main library, `THIRD_PARTY_LICENSES.md`, in the same commit. `backend/src/__tests__/thirdPartyLicences.test.ts` fails until they match the lockfiles
 
 ### Security
 
