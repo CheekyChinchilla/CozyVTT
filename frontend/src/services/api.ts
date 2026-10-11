@@ -5,6 +5,7 @@ import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
 import type {
   User,
+  InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
   MFASetupResponse,
@@ -536,8 +537,15 @@ class ApiClient {
     return response.data;
   }
 
-  async listInvitableUsers(campaignId: string): Promise<{ users: User[] }> {
-    const response = await this.client.get<{ users: User[] }>(`/api/campaigns/${campaignId}/invitable-users`);
+  /**
+   * Search the people who can be invited to a campaign by part of their
+   * display name. The server answers nobody for fewer than two characters,
+   * and at most 20 matches, with `hasMore` when there were more.
+   */
+  async listInvitableUsers(campaignId: string, search: string): Promise<InvitableUserSearch> {
+    const response = await this.client.get<InvitableUserSearch>(`/api/campaigns/${campaignId}/invitable-users`, {
+      params: { search },
+    });
     return response.data;
   }
 

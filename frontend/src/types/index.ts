@@ -267,6 +267,15 @@ export interface User {
   isApproved?: boolean;
 }
 
+/** One match from the invite picker's search: never an email address. */
+export type InvitableUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
+
+/** GET /api/campaigns/:campaignId/invitable-users: at most 20 matches, and whether there were more. */
+export interface InvitableUserSearch {
+  users: InvitableUser[];
+  hasMore: boolean;
+}
+
 /**
  * A shareable starter sheet. Visible to everyone; editable by its author, an
  * admin, or a user with `templateEditor`.

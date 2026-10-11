@@ -2442,19 +2442,32 @@ paths:
     get:
       tags:
         - Campaigns
-      summary: List users eligible to invite
+      summary: Search users eligible to invite
       description: |
-        Returns all users on the instance who are *not* already a member of
-        the campaign and have no pending invitation to it. Used by the
-        DM-side invite picker. DM only.
+        Searches, by part of the display name and ignoring case, the users who
+        are *not* already a member of the campaign, have no pending
+        invitation to it, and are not waiting for an administrator's
+        approval. Used by the DM-side invite picker. DM only.
+
+        A `search` shorter than 2 characters (after trimming), or none,
+        answers 200 with no users: the route never lists the whole
+        directory. At most 20 users are returned, ordered by display name;
+        `hasMore` says there were more matches.
       operationId: listInvitableUsers
       security:
         - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/CampaignId'
+        - name: search
+          in: query
+          required: false
+          description: Part of the display name, at least 2 and at most 50 characters after trimming.
+          schema:
+            type: string
+            maxLength: 50
       responses:
         '200':
-          description: Users available to invite.
+          description: Up to 20 users available to invite whose display name contains the search.
           content:
             application/json:
               schema:
@@ -2462,6 +2475,7 @@ paths:
                 properties:
                   users:
                     type: array
+                    maxItems: 20
                     items:
                       type: object
                       description: Never includes `email`, so a DM cannot collect addresses through the invite picker. Ordered by display name.
@@ -2469,6 +2483,18 @@ paths:
                         id: { type: string, format: uuid }
                         displayName: { type: string }
                         avatarUrl: { type: string, nullable: true }
+                  hasMore:
+                    type: boolean
+                    description: True when more than 20 users matched; a longer search narrows them down.
+        '400':
+          description: >-
+            `search` was sent more than once ("Send the search once, as
+            text.") or is longer than 50 characters ("A display name is at
+            most 50 characters, so search for that many or fewer.").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '500':
@@ -2482,7 +2508,8 @@ paths:
       description: >-
         Create a PENDING invitation for a user (DM only). This route does not
         create a membership; the user joins as PLAYER once they accept it with
-        `POST /api/invitations/{id}/accept`. 400 when `userId` is missing or
+        `POST /api/invitations/{id}/accept`. An account still waiting for an
+        administrator's approval is answered 404, as for no account. 400 when `userId` is missing or
         not text, `expiresInDays` is not a whole number up to 365, the user is
         already a member, or they already have a pending invitation.
         A user whose earlier invitation was accepted or declined (and who is
@@ -2562,7 +2589,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: The invited user does not exist
+          description: The invited user does not exist, or is waiting for an administrator's approval ("User not found")
           content:
             application/json:
               schema:

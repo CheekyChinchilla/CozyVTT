@@ -55,7 +55,7 @@ From here you can update:
 To invite a player to your campaign:
 
 1. Click **Invite Player** in the left sidebar, or open **Campaign Settings**
-2. Pick them from the list — it shows everyone on your instance who isn't already a member or already invited. They must have an account first
+2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
 4. The player sees a **Pending Invitation** on their dashboard
 
@@ -65,7 +65,7 @@ To invite a player to your campaign:
 
 The email's subject line names your instance and nothing else ("You have a new campaign invitation on CozyVTT"); the campaign's name, its description and your display name are in the body. Each DM can have the instance send 20 invitation emails an hour. Past that, **Send Invitation** with the box ticked says so and how many minutes to wait; untick the box and the invitation goes through at once, without the email.
 
-The list deliberately shows display names and not email addresses, so running a campaign doesn't become a way to collect everyone's address.
+The search deliberately shows display names and profile pictures and not email addresses, and lists nobody until you type, so running a campaign doesn't become a way to collect everyone's address or a list of everyone on the instance. Two people can have the same display name; their profile pictures are how to tell them apart, and if neither has one, ask your player which they are.
 
 When a player accepts, they'll choose which of their characters to bring. Once they've joined, their character appears in the **Campaign Roster** on the left sidebar.
 

@@ -199,7 +199,7 @@ Players join your campaign by accepting an invitation. Once they're in, they app
 
 To invite someone:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
-2. Pick them from the list of people on your instance (they need an account first)
+2. Type at least 2 letters of their display name in **Search by display name** and pick them from the people who match (they need an account first). See [Inviting Players](DM_GUIDE.md#inviting-players)
 3. They'll see a pending invitation on their dashboard
 
 **Handing the campaign to someone else.** A campaign has one DM, and that seat
