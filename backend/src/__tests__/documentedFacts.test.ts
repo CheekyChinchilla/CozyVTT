@@ -507,3 +507,32 @@ describe('what a reader is asked to send, and where', () => {
     expect(read('docs/FUTURE_FEATURES.md')).not.toMatch(/_\(items intentionally dropped/);
   });
 });
+
+describe('the guides on moving a token and on setting up', () => {
+  const guides = ['docs/USER_GUIDE.md', 'docs/PLAYER_GUIDE.md', 'docs/DM_GUIDE.md'].map((rel) => ({ rel, text: read(rel).replace(/\*\*/g, '') }));
+
+  // The map picks a token up on one click and puts it down on the next;
+  // letting go of the button does nothing to a held token (MapCanvas).
+  // Dragging a character from the roster onto the map is a real drag, and a
+  // light can be dragged, so those are not what is looked for.
+  it('never tell a reader to drag a token to move it', () => {
+    const wording = [/\b(?:drag|dragging|dragged) (?:a |the |your |any |all )?(?:player )?tokens?\b/i, /ready to drag/i, /drag it (?:where|to move)/i];
+    const found = guides.flatMap(({ rel, text }) => wording.flatMap((pattern) => (pattern.exec(text) ? [`${rel}: ${pattern}`] : [])));
+    expect(found).toEqual([]);
+  });
+
+  it('describe the pick-up and put-down the map really uses', () => {
+    expect(read('frontend/src/components/campaign/MapCanvas.tsx')).toContain('Token placement is handled in handleMouseDown on second click');
+    for (const { text } of guides) expect(text).toMatch(/click/i);
+  });
+
+  // The wizard asks for a setup token on its admin step; the user guide's
+  // account of the wizard left it out and said the wizard ran "before anyone
+  // else can log in", a protection the token now supplies.
+  it('the user guide names the setup token the wizard asks for', () => {
+    expect(read('frontend/src/pages/SetupWizardPage.tsx')).toContain('Setup token');
+    const guide = read('docs/USER_GUIDE.md');
+    expect(guide).toContain('**Setup token**');
+    expect(guide).not.toMatch(/before anyone else can log in/);
+  });
+});
