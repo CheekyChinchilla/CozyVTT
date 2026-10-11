@@ -73,3 +73,17 @@ describe('the Universal VTT import', () => {
     expect(post.mock.calls[0][2]?.timeout).toBe(0);
   });
 });
+
+describe('the asset upload', () => {
+  // Map pictures, PDFs, token art, avatars and sheet portraits all go through
+  // it, up to 50 MB. The shared 30 seconds counted the upload itself, so a
+  // connection slower than about 14 Mbit/s was cut off with "Failed to upload
+  // asset" before the file had arrived. Nothing queues on the server here, so
+  // the proxy, which times the answer and not the upload, is the only limit.
+  it('has no limit of the page\'s own, which would count the upload', async () => {
+    const post = vi.spyOn(client, 'post').mockResolvedValue({ data: {} });
+    await api.uploadAsset(new FormData());
+    expect(post.mock.calls[0][0]).toBe('/api/assets/upload');
+    expect(post.mock.calls[0][2]?.timeout).toBe(0);
+  });
+});

@@ -901,16 +901,22 @@ class ApiClient {
     return response.data;
   }
 
-  // TODO(assets): this upload has the shared 30-second timeout, which counts
-  // the upload itself, so a 50 MB map picture or PDF on a connection slower
-  // than about 14 Mbit/s is cut off with "Failed to upload asset". Nothing
-  // queues on the server here; it should have no limit of its own, like the
-  // UVTT and campaign imports, leaving the proxy to bound it.
+  /**
+   * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
+   * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
+   */
   async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      // No limit of the page's own: the shared 30 seconds count the upload
+      // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
+      // was cut off with "Failed to upload asset" before it had arrived.
+      // Nothing queues on the server for this route; the proxy drops an upload
+      // that goes silent for 60 seconds, and the backend allows a request an
+      // hour, so those are the limits.
+      timeout: 0,
     });
     return response.data;
   }
