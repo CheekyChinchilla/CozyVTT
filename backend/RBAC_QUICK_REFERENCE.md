@@ -479,8 +479,10 @@ The admin reset routes, `POST /api/users/:id/reset-password` and
 `POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
 does not have the target's. They refuse the caller's own id (400), so a stolen
 admin session cannot use them to get round the two rows above for its own
-account. Wrong passwords on the routes in the table are limited to 10 per 15
-minutes per account (`passwordCheckLimiter`).
+account. Wrong passwords on `POST /api/auth/change-password`, `DELETE /api/auth/account` and the own-email change are limited to 10 per 15 minutes per
+account (`passwordCheckLimiter`); the two-factor routes in the table keep their
+per-address limiters (`credentialLimiter` on disable and backup codes, the MFA
+setup limiter on enrolment), with no per-account count.
 
 An admin changing someone else's email gives no password, since they do not
 have it. The email check runs before the new address is looked up, so a

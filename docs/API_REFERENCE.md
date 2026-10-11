@@ -1434,7 +1434,7 @@ Check whether the setup wizard has been completed. Public.
 
 ### `POST /api/setup/init`
 
-Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete every call answers `400 Setup Already Completed`. The full request and every answer are in the OpenAPI document.
+Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete, a call with the right token answers `400 Setup Already Completed`; without a token it still answers `403` first. The full request and every answer are in the OpenAPI document.
 
 ---
 

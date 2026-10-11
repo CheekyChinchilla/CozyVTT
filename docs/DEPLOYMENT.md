@@ -111,7 +111,7 @@ Until the wizard has run, whoever submits it becomes the instance's administrato
    docker compose logs backend | grep "setup token"
    ```
 
-   You should see one line ending in a 32-character code, such as
+   You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
    `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
    If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line.
 
