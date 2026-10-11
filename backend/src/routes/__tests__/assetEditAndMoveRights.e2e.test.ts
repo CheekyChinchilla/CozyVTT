@@ -186,3 +186,45 @@ describe('the scope move body', () => {
     expect(res.body.message).toBe('scope must be GLOBAL, USER, or CAMPAIGN');
   });
 });
+
+// The campaign's document list says, for each document, whether the caller
+// may edit it, by the rule the edit applies, so the page offers Edit exactly
+// when a save would be taken. It offered Edit on a global document to its
+// uploader after they lost Global Assets, and the save then answered 404.
+describe('the campaign document list', () => {
+  type Listed = { id: string; canEdit: boolean };
+
+  it('says who may edit each document, matching what the edit answers', async () => {
+    const dm = await signedIn('Listing Manager', true);
+    const player = await signedIn('Listing Player');
+    const campaign = await createTestCampaign(dm.id);
+    campaignIds.push(campaign.id);
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: dm.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+        { userId: player.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    const global = await documentBy(dm.agent, 'GLOBAL');
+    expect((await dm.agent.post(`/api/campaigns/${campaign.id}/documents`).send({ assetId: global })).status).toBe(201);
+    const own = await documentBy(dm.agent, 'CAMPAIGN', campaign.id);
+
+    const listedFor = async (agent: ReturnType<typeof request.agent>) => {
+      const res = await agent.get(`/api/campaigns/${campaign.id}/documents`);
+      expect(res.status).toBe(200);
+      return Object.fromEntries((res.body.documents as Listed[]).map((d) => [d.id, d.canEdit]));
+    };
+    const saves = async (agent: ReturnType<typeof request.agent>, id: string) =>
+      (await agent.put(`/api/assets/documents/${id}/content`).send({ content: '# Revised' })).status === 200;
+
+    expect(await listedFor(dm.agent)).toEqual({ [global]: true, [own]: true });
+    expect(await listedFor(player.agent)).toEqual({ [global]: false, [own]: false });
+
+    await prisma.user.update({ where: { id: dm.id }, data: { globalAssetManager: false } });
+    const lapsed = await listedFor(dm.agent);
+    expect(lapsed).toEqual({ [global]: false, [own]: true });
+    expect(await saves(dm.agent, global)).toBe(lapsed[global]);
+    expect(await saves(dm.agent, own)).toBe(lapsed[own]);
+    expect(await saves(player.agent, own)).toBe(false);
+  });
+});

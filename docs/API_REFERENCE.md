@@ -404,7 +404,9 @@ campaign membership; `POST` requires the DM role.**
 with `CAMPAIGN` scope inside it, and those a DM has shared from elsewhere. Each
 item carries the asset fields plus `linkedAt`, `linkedBy` and a `shared`
 boolean, which is what tells the two apart, so the client knows whether
-"unshare" is a thing it can offer.
+"unshare" is a thing it can offer. A `canEdit` boolean says whether
+`PUT /api/assets/documents/:id/content` would take an edit from the caller,
+by the rule for deleting the document, so the client offers Edit only then.
 
 `POST` takes `{ assetId }` and shares an existing document. Two checks, in
 order. The asset must be of type `DOCUMENT` **and readable by the DM making the

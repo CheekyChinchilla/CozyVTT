@@ -3192,7 +3192,8 @@ paths:
         Every member can list. Two kinds appear: documents shared into the
         campaign by the DM, and the campaign's own, created or uploaded at
         CAMPAIGN scope. Either way, appearing here means members may read it
-        through `GET /api/assets/documents/{id}`.
+        through `GET /api/assets/documents/{id}`. Each says in `canEdit`
+        whether the caller may rewrite its text.
       operationId: listCampaignDocuments
       security:
         - cookieAuth: []
@@ -10919,6 +10920,16 @@ components:
             True when the document was shared into the campaign by link and the
             DM can stop sharing it. False when it is the campaign's own, created
             or uploaded at CAMPAIGN scope, where there is no link to remove.
+        canEdit:
+          type: boolean
+          description: >-
+            Whether `PUT /api/assets/documents/{id}/content` would take an edit
+            from the caller, by the rule for deleting the document: for a
+            campaign's document its uploader while still a member of that
+            campaign, that campaign's DM, or an admin; for a global one an
+            admin, or its uploader while they still manage global assets; for
+            a personal one its uploader, or an admin. A PDF is never editable,
+            whatever this says.
 
     DiceMacro:
       type: object

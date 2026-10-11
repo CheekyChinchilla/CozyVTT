@@ -656,7 +656,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 **Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
-A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
+A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
 
 As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
 

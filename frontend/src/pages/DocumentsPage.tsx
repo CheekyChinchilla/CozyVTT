@@ -57,6 +57,12 @@ export default function DocumentsPage() {
    * Whether the delete control is offered. The server decides for real; this
    * only avoids showing a button that would be refused. Mirrors the asset
    * delete rules: your own, or anything if you are an admin.
+   * TODO(assets): the server's rule (mayChangeAsset) is narrower. A global
+   * document's uploader who no longer manages global assets, or a campaign
+   * document's uploader who has left that campaign, is offered Delete and
+   * Edit here, and the server answers 403 and 404. Offer both only when the
+   * server will allow them, for instance from a flag on each listed asset
+   * as the campaign document list sends.
    */
   const canDelete = (doc: Asset) => isAdmin || doc.uploadedById === user?.id;
 

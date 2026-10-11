@@ -636,6 +636,11 @@ export interface CampaignDocument {
    * scope, where there is no link to remove.
    */
   shared: boolean;
+  /**
+   * Whether the server will take an edit of its text from the signed-in
+   * user, by the rule for deleting it. Offer Edit on this alone.
+   */
+  canEdit: boolean;
 }
 
 /**
