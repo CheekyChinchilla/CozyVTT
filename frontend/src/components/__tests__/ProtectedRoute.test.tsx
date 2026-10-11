@@ -30,6 +30,7 @@ function makeAuthState(overrides: Partial<AuthContextType> = {}): AuthContextTyp
     register: vi.fn(),
     verifyMFA: vi.fn(),
     verifyMFAWithBackupCode: vi.fn(),
+    cancelMFA: vi.fn(),
     setupMFA: vi.fn(),
     completeMFASetup: vi.fn(),
     disableMFA: vi.fn(),

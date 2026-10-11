@@ -12,7 +12,7 @@ import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
-  const { verifyMFA, verifyMFAWithBackupCode, mfaPending, authenticated } =
+  const { verifyMFA, verifyMFAWithBackupCode, cancelMFA, mfaPending, authenticated } =
     useAuth();
 
   // Form state
@@ -330,12 +330,14 @@ export default function MFAVerifyPage() {
 
         {/* Back to Login */}
         <div className="text-center pt-4 border-t border-warm-gray/20">
-          {/* TODO(accounts): mfaPending is still true when this navigates,
-             so the login page sends the user straight back to this one. End
-             the pending sign-in first, in AuthContext and on the server,
-             then go to the login page. */}
+          {/* The waiting sign-in is ended first: while it is set, the
+             sign-in page sends the user straight back here. */}
           <button
-            onClick={() => navigate('/auth/login')}
+            onClick={async () => {
+              setLoading(true);
+              await cancelMFA();
+              navigate('/auth/login', { replace: true });
+            }}
             className="text-sm text-warm-gray hover:text-brand-ink transition-colors"
             disabled={loading}
           >

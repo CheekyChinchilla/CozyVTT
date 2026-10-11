@@ -252,6 +252,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [mfaPending, takeUser]);
 
+  /**
+   * Give up on the sign-in waiting for its code. The server holds it in the
+   * session, and the sign-in page sends anyone with one waiting on to the
+   * code page, so it is ended there (signing out of a waiting sign-in ends
+   * only that) before it is forgotten here.
+   */
+  const cancelMFA = useCallback(async (): Promise<void> => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      // The waiting sign-in also ends by itself after five minutes.
+      console.error('Failed to end the waiting sign-in:', apiErrorStatus(error) ?? errorMessage(error));
+    }
+    setMfaPending(false);
+  }, []);
+
   // ============================================
   // MFA Setup (for current user)
   // ============================================
@@ -381,6 +397,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     register,
     verifyMFA,
     verifyMFAWithBackupCode,
+    cancelMFA,
     setupMFA,
     completeMFASetup,
     disableMFA,
@@ -402,6 +419,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     register,
     verifyMFA,
     verifyMFAWithBackupCode,
+    cancelMFA,
     setupMFA,
     completeMFASetup,
     disableMFA,

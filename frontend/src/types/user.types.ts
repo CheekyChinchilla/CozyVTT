@@ -139,6 +139,8 @@ export interface AuthContextType {
   register: (email: string, password: string, displayName: string) => Promise<{ pendingApproval?: boolean }>;
   verifyMFA: (token: string) => Promise<void>;
   verifyMFAWithBackupCode: (backupCode: string) => Promise<void>;
+  /** End the sign-in waiting for its two-factor code, on the server and here. */
+  cancelMFA: () => Promise<void>;
   /** Starts enrolment; the server asks for the current password first. */
   setupMFA: (password: string) => Promise<MFASetupResponse>;
   completeMFASetup: (token: string) => Promise<MFAVerifyResponse>;

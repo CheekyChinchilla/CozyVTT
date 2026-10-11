@@ -80,6 +80,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Going back to the sign-up or two-factor code page after signing in no longer shows a blank page.** Pressing Back onto either page once signed in left an empty screen until you went somewhere else. Both now take you on to the dashboard, as the sign-in page does.
 
+- **Back to login on the two-factor code page goes back to the sign-in page.** The sign-in waiting for its code was still set, so the sign-in page sent you straight back to the code page, and only a reload got you out. The button now ends the waiting sign-in first.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
