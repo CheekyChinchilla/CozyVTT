@@ -69,6 +69,20 @@ import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/know
 // Vite dev server proxies in development)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /**
+     * A 401 to this request is the caller's to show, not a lost sign-in.
+     * Set on the calls that check the current password or a code while
+     * signed in, which the server answers 401 when it is wrong.
+     */
+    skipAuthRedirect?: boolean;
+  }
+}
+
+/** The request option for a call whose 401 means a wrong password or code. */
+const CREDENTIAL_CHECK = { skipAuthRedirect: true } as const;
+
 /** What a finished restore answers: the safety copy is the backup of the database as it was, in the backup list. */
 export interface RestoreReply {
   message: string;
@@ -117,7 +131,10 @@ class ApiClient {
           // yet. The route list lives in utils/publicRoutes so it can be tested
           // against App.tsx — see the note there on why a missing entry breaks
           // tokenised links rather than merely redirecting them.
-          if (status === 401) {
+          //
+          // A call that checks the current password or a code answers 401 for
+          // a wrong one; that request is marked, and its form says so.
+          if (status === 401 && !error.config?.skipAuthRedirect) {
             handleUnauthorized(window.location.pathname, () => {
               window.location.href = '/auth/login';
             });
@@ -215,12 +232,12 @@ class ApiClient {
   }
 
   async changePassword(data: ChangePasswordRequest): Promise<{ message: string }> {
-    const response = await this.client.post('/api/auth/change-password', data);
+    const response = await this.client.post('/api/auth/change-password', data, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async deleteAccount(password: string): Promise<{ message: string }> {
-    const response = await this.client.delete('/api/auth/account', { data: { password } });
+    const response = await this.client.delete('/api/auth/account', { data: { password }, ...CREDENTIAL_CHECK });
     return response.data;
   }
 
@@ -251,12 +268,12 @@ class ApiClient {
   // ============================================
 
   async mfaSetup(password: string): Promise<MFASetupResponse> {
-    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password });
+    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password }, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async mfaVerifySetup(data: MFAVerifyRequest): Promise<MFAVerifyResponse> {
-    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/verify', data);
+    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/verify', data, CREDENTIAL_CHECK);
     return response.data;
   }
 
@@ -266,12 +283,12 @@ class ApiClient {
   }
 
   async mfaDisable(password: string, token: string): Promise<{ message: string }> {
-    const response = await this.client.post('/api/auth/mfa/disable', { password, token });
+    const response = await this.client.post('/api/auth/mfa/disable', { password, token }, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async mfaRegenerateBackupCodes(password: string): Promise<MFAVerifyResponse> {
-    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/backup-codes', { password });
+    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/backup-codes', { password }, CREDENTIAL_CHECK);
     return response.data;
   }
 
@@ -289,8 +306,20 @@ class ApiClient {
     return response.data;
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<{ message: string; user: User }> {
-    const response = await this.client.put(`/api/users/${id}`, data);
+  /**
+   * Change an account. A change to your own email address carries
+   * `currentPassword`, and the server answers a wrong one 401, which the
+   * caller shows.
+   */
+  async updateUser(
+    id: string,
+    data: Partial<User> & { currentPassword?: string }
+  ): Promise<{ message: string; user: User }> {
+    const response = await this.client.put(
+      `/api/users/${id}`,
+      data,
+      data.currentPassword !== undefined ? CREDENTIAL_CHECK : undefined
+    );
     return response.data;
   }
 
