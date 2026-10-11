@@ -677,6 +677,12 @@ cd backend && npm run lint
 cd frontend && npm run lint
 ```
 
+The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
+ESLint's recommended rules, typescript-eslint's recommended rules and, in the
+frontend, the React hooks rules. Only TypeScript files are linted. A rule that
+is switched off says why beside it, and the ones waiting to be turned on are
+marked `TODO(ratchet)`.
+
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
 - Single quotes for strings
