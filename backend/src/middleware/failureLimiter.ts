@@ -21,6 +21,9 @@
  * A refusal is JSON, `{ error: 'Rate Limited', message }`, like every other
  * answer the API gives, so the pages can show the message.
  *
+ * A key's count can be forgotten (`forget`) when the credential the guesses
+ * were at has changed: a new password opens a locked account at once.
+ *
  * Kept in memory, like the other limiters: a restart forgets it.
  */
 
@@ -29,6 +32,8 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 export interface FailureLimiter extends RequestHandler {
   /** Count one wrong answer against this request's key (its address, unless `key` says otherwise). */
   recordFailure(req: Request): void;
+  /** Forget the wrong answers counted against `key`, as the `key` option returns it. Requests waiting on it are let through. */
+  forget(key: string): void;
 }
 
 export interface FailureLimiterOptions {
@@ -155,6 +160,13 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
       const before = state.failures.length;
       state.failures.push(now);
       if (before < max && state.failures.length >= max) onLimit?.(req, key);
+    },
+    forget(key: string): void {
+      const state = addresses.get(key);
+      if (!state) return;
+      state.failures.length = 0;
+      for (const waiter of state.waiting.splice(0)) waiter();
+      forgetIfIdle(key, state);
     },
   });
 }

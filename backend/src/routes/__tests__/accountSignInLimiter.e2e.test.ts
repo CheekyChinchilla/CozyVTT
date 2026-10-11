@@ -11,6 +11,11 @@
  * The answer, the headers and the count are the same whether or not the
  * address has an account, so this cannot be used to find out who has one.
  *
+ * A new password opens the account again at once, however it was set: the
+ * counted guesses were at the old one. Without that, anyone who knew an
+ * email address could keep that account locked for as long as they cared to
+ * send ten wrong passwords an hour.
+ *
  * The real limiters run here. Each wrong password comes from an address of
  * its own, so the per-address limit never fires first.
  *
@@ -20,8 +25,9 @@
 import express from 'express';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { prisma, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { prisma, createTestUser, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { hashPassword } from '../../services/auth';
+import { issueResetToken, RESET_LINK_TTL_MS } from '../../services/passwordResetTokens';
 
 jest.setTimeout(60000);
 
@@ -58,7 +64,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma.systemLog.deleteMany({ where: { message: { contains: '@test.invalid' }, userId: null } });
+  await prisma.systemLog.deleteMany({
+    where: { OR: [{ message: { contains: '@test.invalid' }, userId: null }, { userId: { in: created } }] },
+  });
   await cleanupUsers(created);
   await prisma.$disconnect();
 });
@@ -114,4 +122,51 @@ it('counts the email however it is typed: spaces around it and capital letters m
 it('never counts a correct sign-in, however many there are', async () => {
   const target = await user();
   for (let i = 0; i < 12; i += 1) expect((await signIn(target.email, TEST_PASSWORD)).status).toBe(200);
+});
+
+describe('a new password opens a locked account at once', () => {
+  const NEW_PASSWORD = 'NewPass2!Cozy';
+
+  /** Ten wrong passwords from ten addresses, so the account is locked. */
+  async function lock(email: string): Promise<void> {
+    for (let i = 0; i < 10; i += 1) expect((await signIn(email, 'wrong-password')).status).toBe(401);
+    expect((await signIn(email, TEST_PASSWORD)).status).toBe(429);
+  }
+
+  it('when it was set through a reset link', async () => {
+    const target = await user();
+    await lock(target.email);
+
+    const token = await issueResetToken(target.id, RESET_LINK_TTL_MS);
+    const reset = await request(app).post('/api/auth/reset-password').set('X-Forwarded-For', freshAddress()).send({ token, newPassword: NEW_PASSWORD });
+    expect(reset.status).toBe(200);
+
+    expect((await signIn(target.email, NEW_PASSWORD)).status).toBe(200);
+  });
+
+  it('when an administrator set a temporary one', async () => {
+    const target = await user();
+    const admin = await createTestUser({ displayName: 'Unlocking admin', role: 'ADMIN' });
+    created.push(admin.id);
+    const asAdmin = request.agent(app);
+    expect((await asAdmin.post('/api/auth/login').set('X-Forwarded-For', freshAddress()).send({ email: admin.email, password: TEST_PASSWORD })).status).toBe(200);
+    await lock(target.email);
+
+    const reset = await asAdmin.post(`/api/users/${target.id}/reset-password`).set('X-Forwarded-For', freshAddress());
+    expect(reset.status).toBe(200);
+
+    expect((await signIn(target.email, reset.body.temporaryPassword)).status).toBe(200);
+  });
+
+  it('when the owner changed it from a device still signed in', async () => {
+    const target = await user();
+    const owner = request.agent(app);
+    expect((await owner.post('/api/auth/login').set('X-Forwarded-For', freshAddress()).send({ email: target.email, password: TEST_PASSWORD })).status).toBe(200);
+    await lock(target.email);
+
+    const change = await owner.post('/api/auth/change-password').set('X-Forwarded-For', freshAddress()).send({ currentPassword: TEST_PASSWORD, newPassword: NEW_PASSWORD });
+    expect(change.status).toBe(200);
+
+    expect((await signIn(target.email, NEW_PASSWORD)).status).toBe(200);
+  });
 });

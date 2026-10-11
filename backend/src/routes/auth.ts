@@ -18,9 +18,7 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
-import { passwordCheckLimiter } from '../middleware/authLimiters';
-import { writeSystemLog } from '../services/systemLog';
-import { MAX_EMAIL_LENGTH } from '../utils/validation';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 import { adminMfaDeadline } from '../services/adminMfaPolicy';
@@ -108,48 +106,6 @@ export const credentialLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 wrong answers per window
   message: 'Too many authentication attempts, please try again later',
-});
-
-/**
- * The email a sign-in is for, as the account table stores it, so the count
- * below cannot be dodged with capitals or spaces. Null when the body has no
- * usable email: the schema refuses such a request with 400 and nothing counts.
- */
-function signInEmailKey(req: Request): string | null {
-  const body: unknown = req.body;
-  if (typeof body !== 'object' || body === null) return null;
-  const email = (body as Record<string, unknown>).email;
-  if (typeof email !== 'string') return null;
-  const normalised = email.trim().toLowerCase();
-  if (normalised === '' || normalised.length > MAX_EMAIL_LENGTH) return null;
-  return `account:${normalised}`;
-}
-
-/**
- * Wrong passwords per account, from every address: 10 in an hour, then that
- * email is refused with 429 until the oldest counted failure is an hour old.
- * The limiter above counts per address, so someone with many addresses had as
- * many guesses at one account as addresses, with nothing to notice it. This
- * one counts the account, and tells the admins when it trips.
- *
- * Ten an hour is far more than a person mistyping their own password needs,
- * and a locked account is still opened by the password reset link. The count
- * and the answer are the same for an email with no account, so this cannot
- * be used to find out who has one.
- */
-export const accountLoginLimiter = failureLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
-  message: 'Too many failed sign-ins for this account, please try again later',
-  key: signInEmailKey,
-  onLimit: (req, key) => {
-    const email = key.slice('account:'.length);
-    void writeSystemLog({
-      level: 'WARNING',
-      message: `Sign-in locked for ${email}: 10 wrong passwords within an hour, the last from ${req.ip ?? 'an unknown address'}`,
-      context: { email, address: req.ip ?? null },
-    });
-  },
 });
 
 /**
@@ -559,31 +515,37 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // conditional write, so of two requests carrying the same link only one
     // finds it unused; the other changes nothing. The account's other links
     // are voided in the same step, since the password they would set is
-    // settled now.
-    const claimed = await prisma.$transaction(async (tx) => {
+    // settled now. Yields the account's email, or false when the link had
+    // been claimed.
+    const accountEmail = await prisma.$transaction(async (tx) => {
       const claim = await tx.passwordResetToken.updateMany({
         where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
         data: { used: true },
       });
       if (claim.count === 0) return false;
 
-      await tx.user.update({
+      const { email } = await tx.user.update({
         where: { id: resetToken.userId },
         data: {
           passwordHash,
           mustChangePassword: false,
         },
+        select: { email: true },
       });
       await voidOutstandingResetLinks(resetToken.userId, tx);
-      return true;
+      return email;
     });
 
-    if (!claimed) {
+    if (accountEmail === false) {
       return res.status(400).json({
         error: 'Invalid Token',
         message: 'This password reset link is invalid or has expired',
       });
     }
+
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with its new password.
+    accountLoginLimiter.forget(accountLoginKey(accountEmail));
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,
@@ -658,6 +620,10 @@ router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: R
 
     // Lift the gate for this session immediately (see middleware/passwordChange.ts)
     req.session.mustChangePassword = false;
+
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with its new password.
+    accountLoginLimiter.forget(accountLoginKey(user.email));
 
     // A reset link issued before the change would undo it.
     await voidOutstandingResetLinks(user.id);

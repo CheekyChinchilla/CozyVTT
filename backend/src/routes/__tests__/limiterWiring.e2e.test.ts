@@ -34,14 +34,13 @@ import {
 } from '../../__tests__/helpers/db';
 import {
   credentialLimiter,
-  accountLoginLimiter,
   emailDispatchLimiter,
   accountCreationLimiter,
   mfaSetupLimiter,
   mfaLoginLimiter,
   mfaAccountLimiter,
 } from '../auth';
-import { passwordCheckLimiter } from '../../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter } from '../../middleware/authLimiters';
 import { uploadLimiter } from '../assets';
 import {
   campaignPreviewLimiter,

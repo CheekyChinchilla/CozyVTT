@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { passwordCheckLimiter } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -559,6 +559,10 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
 
     // A reset link issued before this would replace the temporary password.
     await voidOutstandingResetLinks(id);
+
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with the temporary password.
+    accountLoginLimiter.forget(accountLoginKey(user.email));
 
     // End any sessions the user already has open — otherwise they keep full
     // access on the old session and the forced-change gate would only take

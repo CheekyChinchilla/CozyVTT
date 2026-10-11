@@ -1519,7 +1519,8 @@ normally. Correct passwords arriving together from one address all pass this
 limit. Wrong passwords are also counted per account: 10 in an hour for one email,
 from every address together, then that email is refused with 429 for an hour and
 the admins' activity log gets a line; an email with no account is counted and
-answered the same. That covers the password step of a sign-in only: the two-factor code step
+answered the same, and a new password (a reset link, an administrator's temporary
+password or a password change) clears the account's count at once. That covers the password step of a sign-in only: the two-factor code step
 (`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 wrong codes per 15
 minutes per address, and 5 per 15 minutes per account from any address, and it
 too counts only wrong codes. Where every request counts, the success

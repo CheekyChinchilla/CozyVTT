@@ -79,7 +79,10 @@ info:
       hour old. Only a 401 counts, exactly as above, and an email with no
       account is counted and answered the same, so this reveals nothing. When
       an account locks, a WARNING line goes to the admins' activity log. The
-      `RateLimit-*` headers on a sign-in answer are this limit's (`10;w=3600`)
+      `RateLimit-*` headers on a sign-in answer are this limit's (`10;w=3600`).
+      A new password forgets the email's count at once, whether set through
+      `POST /api/auth/reset-password`, `POST /api/auth/change-password` or
+      `POST /api/users/{id}/reset-password`
     - Password checks from a signed-in session (`POST /api/auth/change-password`,
       `DELETE /api/auth/account`, and `PUT /api/users/{id}` when it carries
       `currentPassword`): one shared allowance of 10 wrong passwords per 15
@@ -855,9 +858,10 @@ paths:
         hashed (a UUID) keeps working until it expires. A token sets the
         password once, even when two requests carry it at the same moment,
         and using it voids the account's other unused tokens. Clears
-        `mustChangePassword`, and ends every login session and live WebSocket
-        connection of the account; the request itself does not sign anyone
-        in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        `mustChangePassword`, forgets the wrong passwords counted against the
+        account by the per-account sign-in limit, and ends every login session
+        and live WebSocket connection of the account; the request itself does
+        not sign anyone in. Rate limited: 5 wrong answers per 15 minutes per address, shared
         with the other credential endpoints, where a link that does not exist,
         has been used or has expired is a wrong answer and a password too weak
         to take is not.
@@ -924,7 +928,7 @@ paths:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links. Rate limited: 10 wrong current passwords per 15 minutes for the account, from every address, shared with `DELETE /api/auth/account` and an email change through `PUT /api/users/{id}`; then 429 `Too many wrong passwords, please try again later`. A correct password never counts.
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links, and forgets the wrong passwords counted against the account by the per-account sign-in limit. Rate limited: 10 wrong current passwords per 15 minutes for the account, from every address, shared with `DELETE /api/auth/account` and an email change through `PUT /api/users/{id}`; then 429 `Too many wrong passwords, please try again later`. A correct password never counts.
       operationId: changePassword
       security:
         - cookieAuth: []
@@ -1820,7 +1824,7 @@ paths:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, and ends every login session and live connection the user already has open. Refused with 400 for the caller's own id, since changing one's own password asks for the current one; a session alone must not get a new password for its own account here. Written to the admins' activity log as a WARNING. MFA on the account is left as it is.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, forgets the wrong passwords counted against the account by the per-account sign-in limit, and ends every login session and live connection the user already has open. Refused with 400 for the caller's own id, since changing one's own password asks for the current one; a session alone must not get a new password for its own account here. Written to the admins' activity log as a WARNING. MFA on the account is left as it is.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []
