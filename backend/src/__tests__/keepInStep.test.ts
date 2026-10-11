@@ -519,6 +519,7 @@ describe('the Node.js major', () => {
     ['README.md', found('README.md', read('README.md'), /^- Node\.js (\d+)\+/gm)],
     ['docs/DEVELOPMENT.md', found('docs/DEVELOPMENT.md', read('docs/DEVELOPMENT.md'), /\| Node\.js \| (\d+)\.x \||Comes with Node\.js (\d+)/g)],
     ['docs/DEPLOYMENT.md', found('docs/DEPLOYMENT.md', read('docs/DEPLOYMENT.md'), /Install Node\.js (\d+)|setup_(\d+)\.x/g)],
+    ['docs/DEPLOYMENT.md, what node --version prints', found('docs/DEPLOYMENT.md', read('docs/DEPLOYMENT.md'), /prints `v(\d+)`/g)],
   ];
 
   it('is a major alone in .nvmrc, and an even one, which is what gets long-term support', () => {

@@ -761,6 +761,14 @@ curl -fsSL https://deb.nodesource.com/setup_26.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
+Check that it worked:
+
+```bash
+node --version
+```
+
+If it worked, this prints `v26` followed by the rest of the version number, for example `v26.11.1`.
+
 ### 2. Install PostgreSQL 15
 
 Ubuntu's own package archive carries a single PostgreSQL version per release (14 on Ubuntu 22.04), so `postgresql-15` comes from the PostgreSQL project's package repository. Add it first:
