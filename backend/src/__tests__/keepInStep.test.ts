@@ -55,6 +55,13 @@
  * The themes and fonts. The server accepts a theme or font only from its
  * list, for a user's preferences and the instance's default theme alike; a
  * theme the app offers that the list lacks is one nobody can save.
+ *
+ * The token centre. The server decides which tokens a player is sent by
+ * what each of the player's tokens can see from its centre, and the client
+ * draws sight from the same point. Two formulas once put the centre of a
+ * token two squares or taller in different places, so the server answered
+ * for a point the player's token was not at. The file is kept identical in
+ * both packages.
  */
 
 import crypto from 'crypto';
@@ -258,6 +265,12 @@ describe('campaign.access.revoked, which the server sends and the client reads',
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the token centre', () => {
+  it('is the same file in the browser and on the server', () => {
+    expect(read('frontend/src/utils/tokenCentre.ts')).toBe(read('backend/src/utils/tokenCentre.ts'));
   });
 });
 

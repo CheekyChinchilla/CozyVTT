@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
+import { tokenCentre } from './tokenCentre';
 import type { WallSegment, LightSource } from '../types/walls';
 import { tokenSentTo } from './tokenMask';
 import logger from './logger';
@@ -360,11 +361,11 @@ export function filterTokensByLighting(
    */
   const viewers: Viewer[] = myTokens.map((t) => {
     // Token grid coords use Y=0 at bottom (VTT standard); wall pixel coords use
-    // Y=0 at top. Apply the Y-flip so both are in the same pixel space.
+    // Y=0 at top. tokenCentre puts both in the same pixel space, at the point
+    // the client draws sight from.
     const w = t.size?.width ?? 1;
     const h = t.size?.height ?? 1;
-    const cx = (t.position.x + w / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + h / 2) * gridSize;
+    const { x: cx, y: cy } = tokenCentre(t, gridSize, mapHeight);
     return {
       cx,
       cy,
@@ -404,9 +405,7 @@ export function filterTokensByLighting(
     // Always include the player's own tokens
     if (t.controlledBy === playerUserId) return true;
 
-    const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
-    return isSeen({ x: cx, y: cy }, viewers, lits, globalIllumination, inside);
+    return isSeen(tokenCentre(t, gridSize, mapHeight), viewers, lits, globalIllumination, inside);
   });
 }
 

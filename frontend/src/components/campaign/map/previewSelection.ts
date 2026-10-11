@@ -11,7 +11,7 @@
 import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { controlsToken } from '@/utils/tokenControl';
-import { gridYToCentrePx } from './coords';
+import { tokenCentre } from '@/utils/tokenCentre';
 import { tokenSentTo } from '@/utils/tokenMask';
 
 /** The plane a previewed viewer is on: what they are sent, and see through. */
@@ -149,9 +149,8 @@ export function tokensShownInPreview(
   return tokens.filter((t) => {
     if (!onViewersPlane(t, plane)) return false;
     if (viewerOwn(t) || !canSee) return true;
-    const cx = (t.position.x + t.size.width / 2) * viewport.gridSize;
-    const cy = gridYToCentrePx(t.position.y, t.size.height, viewport.mapHeight, viewport.gridSize);
-    return canSee(cx, cy);
+    const centre = tokenCentre(t, viewport.gridSize, viewport.mapHeight);
+    return canSee(centre.x, centre.y);
   });
 }
 
