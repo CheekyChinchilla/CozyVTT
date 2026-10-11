@@ -20,6 +20,11 @@
  * releases under the same configuration. Both nginx images are pinned to one
  * stable line, the same in each. `npm ci --only=production` is a deprecated
  * spelling of `--omit=dev`.
+ *
+ * The bundled nginx. It sent everything as it was: every JSON answer the
+ * backend gives (map tokens, walls, lights, fog, the roster) went out
+ * uncompressed, which a phone on mobile data feels most. It now compresses
+ * text on the way out, and leaves its version out of its answers.
  */
 
 import fs from 'fs';
@@ -102,5 +107,32 @@ describe('the images', () => {
   it('leave the development tools out of the backend image that runs', () => {
     const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
     expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev$/m);
+  });
+});
+
+describe('the bundled nginx', () => {
+  /** Top-level directive values of the template, comments dropped. */
+  const setting = (name: string) =>
+    read('nginx/nginx.conf')
+      .split('\n')
+      .filter((line) => !line.startsWith(' '))
+      .map((line) => line.replace(/#.*$/, '').trim())
+      .find((line) => line.startsWith(`${name} `))
+      ?.slice(name.length)
+      .replace(/;$/, '')
+      .trim();
+
+  it("compresses the backend's JSON and other text, for every server it runs", () => {
+    expect(setting('gzip')).toBe('on');
+    expect(setting('gzip_types')?.split(/\s+/)).toEqual(
+      expect.arrayContaining(['application/json', 'text/css', 'application/javascript', 'image/svg+xml'])
+    );
+    expect(setting('gzip_vary')).toBe('on');
+    // A tunnel in front marks each request as proxied; compress those too.
+    expect(setting('gzip_proxied')).toBe('any');
+  });
+
+  it('does not name its version', () => {
+    expect(setting('server_tokens')).toBe('off');
   });
 });
