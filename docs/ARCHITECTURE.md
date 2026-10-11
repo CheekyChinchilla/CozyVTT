@@ -864,15 +864,28 @@ did not import as MAP, and says so in the import's warnings.
 
 sharp, over libvips, is what the backend decodes pictures with: a thumbnail
 at upload and at Universal VTT import, and the picture's width for the
-Universal VTT export. libvips has readers for far more than a
-CozyVTT picture can be, SVG through librsvg, TIFF and HEIF among them, and
-picks one by the bytes it is handed. Every call therefore goes through
-`openPicture` in `backend/src/utils/sharpInput.ts`, which identifies the
-bytes with `file-type` and refuses anything but PNG, JPEG, WebP or GIF before
-sharp sees it; a test fails if any other module imports sharp. The check sits
-where the bytes are read because a stored row can name any file, a map stored
-before the rule above included. The export answers such a map 422; a
-thumbnail that cannot be made is left out, as before.
+Universal VTT export. libvips has readers for far more than a CozyVTT picture
+can be, SVG through librsvg, TIFF and HEIF among them, and picks one by the
+bytes it is handed. `backend/src/utils/sharpInput.ts`, the only module that
+imports sharp (a test holds it to that), keeps it to PNG, JPEG, WebP and GIF
+in two ways:
+
+- When it loads, it switches off every libvips reader for the whole process
+  (`sharp.block`) and switches back on only the PNG, JPEG, WebP and GIF
+  readers, from a file and from bytes (`ALLOWED_LIBVIPS_READERS`). Anything
+  else handed to sharp fails as an unsupported format. The names are
+  libvips's own; one it does not know switches nothing on, so the tests read
+  each of the four formats from a file and from bytes, and check that SVG,
+  TIFF and AVIF are refused.
+- `openPicture`, which every call goes through, identifies the bytes with
+  `file-type` and refuses anything but those four formats before sharp sees
+  it, so a caller gets an error it can answer. `file-type` calls anything that
+  starts with the letters `GIF` a GIF, and libvips reads only what starts
+  `GIF87a` or `GIF89a` as one, so a GIF's header is checked in full.
+
+The checks sit where the bytes are read because a stored row can name any
+file, a map stored before the rule above included. The export answers such a
+map 422; a thumbnail that cannot be made is left out, as before.
 
 ### Asset Scoping
 

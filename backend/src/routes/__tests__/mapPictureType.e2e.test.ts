@@ -196,6 +196,14 @@ describe('a Universal VTT export', () => {
     expect(JSON.parse(body).message).toBe(EXPORT_NOT_A_PICTURE);
   });
 
+  it('refuses a picture whose bytes are SVG after the letters GIF', async () => {
+    const documentId = await makeAsset('DOCUMENT', Buffer.from(`GIF${SVG}`), 'txt');
+    const map = await storedMap('Disguised', `/api/assets/documents/${documentId}`);
+    const res = await exportOf(map.id);
+    expect(res.status).toBe(422);
+    expect(JSON.parse((res.body as Buffer).toString('utf8')).message).toBe(EXPORT_NOT_A_PICTURE);
+  });
+
   it('refuses a picture whose bytes are plain text', async () => {
     const documentId = await makeAsset('DOCUMENT', Buffer.from('Session notes, nothing more.'), 'txt');
     const map = await storedMap('Notes', `/api/assets/documents/${documentId}`);

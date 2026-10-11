@@ -13,6 +13,7 @@ import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
 import { generateThumbnail } from '../thumbnails';
+import logger from '../logger';
 
 let dir: string;
 
@@ -55,5 +56,21 @@ describe('generateThumbnail', () => {
     const file = await write(`not-a-picture-${ext}.${ext}`, content);
     expect(await generateThumbnail(file)).toBeNull();
     expect(fs.existsSync(path.join(dir, `thumb_not-a-picture-${ext}.${ext}`))).toBe(false);
+  });
+
+  it('makes none from SVG after the letters GIF, and never reads it', async () => {
+    // file-type calls anything starting with the letters GIF a GIF; the image
+    // library's GIF reader wants GIF87a or GIF89a and hands the rest on.
+    const warn = jest.spyOn(logger, 'warn');
+    const error = jest.spyOn(logger, 'error');
+    try {
+      const file = await write('gif-svg.png', 'GIF<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="900" height="600"/></svg>');
+      expect(await generateThumbnail(file)).toBeNull();
+      expect(error).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith('No thumbnail made: the file is not a PNG, JPEG, WebP or GIF picture', expect.anything());
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
