@@ -110,11 +110,16 @@ gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" -v trailer="$REST
     }
     if (line == "-- PostgreSQL database dump complete") complete = 1
     if (line ~ /^SET transaction_timeout = /) next
-    # TODO(restore): this pattern backtracks on a long crafted line (mawk took
-    # 12 s on two 100 KB lines). Match it in one pass, as isOwnershipStatement
-    # in backend/src/utils/pgRestore.ts now does; awk has no lookahead, so
-    # check the closing semicolon and find the first " OWNER TO " with index().
-    if (line ~ /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/) next
+    # ALTER <kind> <name> OWNER TO <role>; on one line, the same lines
+    # isOwnershipStatement in backend/src/utils/pgRestore.ts drops. Read in
+    # one pass: a pattern that let the kind and the name overlap backtracked
+    # on a long crafted line. The name is at least one character, up to the
+    # first " OWNER TO ", and the role at least one before the semicolon.
+    if (line ~ /;$/ && match(line, /^ALTER [A-Z]+ /)) {
+      rest = substr(line, RLENGTH + 1)
+      at = index(substr(rest, 2), " OWNER TO ")
+      if (at > 0 && length(rest) - at - 10 >= 2) next
+    }
     if (line ~ /^(GRANT|REVOKE) /) next
     if (line == "CREATE TABLE public.\"User\" (") has_user = 1
     if (line == "CREATE TABLE public._prisma_migrations (") has_migrations = 1

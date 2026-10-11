@@ -92,6 +92,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The backup and restore scripts accept a database password written percent-encoded.** Without Docker, `backup.sh` and `restore.sh` read the password from `DATABASE_URL` and passed it on still encoded, so a password holding a character such as `@`, written as `%40` in the address the way the backend expects, was refused by the database. An address with no port gave the database tools the whole address as the port. Both now read the address the way the backend does, and use port 5432 when it names none. Docker installs, which do not use `DATABASE_URL` here, are not affected.
 
+- **The restore script reads a backup with very long lines quickly.** A check in `restore.sh` slowed down badly on certain long lines, taking about ten seconds on two lines of 100,000 characters. It now reads every line in one pass, and drops the same lines as before.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.

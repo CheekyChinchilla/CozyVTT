@@ -12,6 +12,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { gzipSync } from 'zlib';
+import { isOwnershipStatement } from '../utils/pgRestore';
 
 const SCRIPT = path.resolve(__dirname, '../../scripts/restore.sh');
 
@@ -105,5 +106,42 @@ describeOnPosix('restore.sh', () => {
     const [password, ...args] = (await fs.readFile(seen, 'utf8')).trimEnd().split('\n');
     expect(password).toBe('p@ss%w0rd');
     expect(args).toEqual(expect.arrayContaining(['-h', 'db.internal', '-p', '5432', '-U', 'cozy+admin', '-d', 'cozyvtt']));
+  });
+
+  // The pattern that dropped ownership lines backtracked on a long line: two
+  // crafted 100 KB lines took about ten seconds with mawk.
+  it('reads a long crafted line in one pass', async () => {
+    const crafted = [`ALTER ${'A '.repeat(50_000)}x`, `ALTER ${'A '.repeat(50_000)}OWNER TO`];
+    await fs.writeFile(backup, gzipSync(DUMP.replace('-- PostgreSQL database dump complete', `${crafted.join('\n')}\n-- PostgreSQL database dump complete`)));
+
+    const started = Date.now();
+    const result = run();
+
+    expect(result.status).toBe(0);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  // The script and the dashboard's restore each drop the same lines.
+  it('drops exactly the ownership lines the dashboard restore drops', async () => {
+    const lines = [
+      'ALTER TABLE public."Note" OWNER TO "cozyvttAdmin";',
+      'ALTER SEQUENCE public.note_seq OWNER TO cozy;',
+      'ALTER FUNCTION public.f() OWNER TO cozy;',
+      'ALTER TABLE ONLY public."Note" ADD CONSTRAINT "Note_pkey" PRIMARY KEY (id);',
+      'ALTER TABLE public.t OWNER TO ;',
+      'ALTER TABLE  OWNER TO x OWNER TO y;',
+      'ALTER table public.t OWNER TO y;',
+      'ALTER TABLE public.t OWNER TO y',
+      'ALTER TABLE OWNER TO y;',
+      'ALTER DEFAULT PRIVILEGES FOR ROLE x IN SCHEMA public OWNER TO y;',
+    ];
+    await fs.writeFile(backup, gzipSync(DUMP.replace('-- PostgreSQL database dump complete', `${lines.join('\n')}\n-- PostgreSQL database dump complete`)));
+
+    expect(run().status).toBe(0);
+
+    const kept = (await fs.readFile(loaded, 'utf8')).split('\n');
+    for (const line of lines) {
+      expect([line, kept.includes(line)]).toEqual([line, !isOwnershipStatement(line)]);
+    }
   });
 });
