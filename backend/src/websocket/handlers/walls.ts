@@ -11,7 +11,9 @@ import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE }
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
-import { wallSentTo, wallsSentTo } from '../../utils/spirit-layer';
+import {
+  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallSentTo, wallsSentTo,
+} from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
@@ -144,13 +146,18 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       const campaignId = socket.campaignId;
       const role = socket.role;
+      const userId = socket.userId!;
       const sent = parsed.data;
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<WallSegment>> => {
         // A player may toggle doors only on the map the campaign is showing;
         // a prepared map is the DM's until they switch to it.
         const map = await tx.map.findUnique({
           where: { id: mapId },
-          select: { ...EXTENT, wallSegments: true, campaign: { select: { currentMapId: true } } },
+          select: {
+            ...EXTENT, wallSegments: true, campaign: { select: { currentMapId: true } },
+            // For whether a player can see the door, on a lit map.
+            tokens: true, lightingEnabled: true, lights: true, globalIllumination: true,
+          },
         });
         if (!map || map.campaignId !== campaignId || !canReadMap(role, mapId, map.campaign.currentMapId)) {
           return { refused: 'Map not found' };
@@ -164,12 +171,30 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         // and only that: the segment they send is otherwise ignored, so the door
         // stays where the DM drew it. Storing the whole segment let a player
         // move or stretch any unlocked door across the map by toggling it.
-        // TODO(maps): a player's toggle is not checked against sight, so they
-        // can open a door none of their tokens can see, and "That door is
-        // locked" tells them a door is there. Refuse a toggle of a door the
-        // player's tokens cannot see; MapCanvas should stop offering it too.
         let updated: WallSegment;
         if (role !== 'DM') {
+          const isDoor = ['door-open', 'door-closed', 'door-locked'].includes(existing[idx].type);
+          if (!isDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
+          // On a lit map, only a door one of their tokens can see, by the rule
+          // the map shows doors by; asked before the lock, so a door in the
+          // dark tells them nothing.
+          // TODO(maps): manual fog is not asked. A player can still toggle a
+          // door in unrevealed squares, which their screen covers, and learn
+          // from the answer that it is there. Refuse a door with no revealed
+          // square on either side of its middle, and offer none in the
+          // client's doorAccess.ts.
+          if (map.lightingEnabled) {
+            const door = existing[idx];
+            const spiritVisible = await getSpiritVisibility(campaignId, userId);
+            const viewer = viewerIdFor(role, userId);
+            const sight = playerSightOnLitMap(
+              filterTokensByRole(map.tokens, role ?? 'PLAYER', spiritVisible, userId), viewer, map.wallSegments,
+              map.width, map.height, map.gridSize, map.lights, map.globalIllumination
+            );
+            if (!sight.seesPoint((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2)) {
+              return { refused: 'You cannot see that door', current: door };
+            }
+          }
           const targetType = sent.type;
           const currentType = existing[idx].type;
           // Locked doors cannot be opened by players. The refusal carries the

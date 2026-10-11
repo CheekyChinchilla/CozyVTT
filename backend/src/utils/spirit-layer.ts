@@ -341,6 +341,13 @@ export interface PlayerSight {
    * it of the carried token at each frame's position.
    */
   seesToken(token: Pick<Token, 'position' | 'size' | 'controlledBy'>): boolean;
+  /**
+   * Whether one of the player's tokens makes out a point in map pixels, such
+   * as a door's middle. Each viewer tests the point nudged 2 px toward
+   * itself, as the client's door filter does: a closed door lies on the edge
+   * of the sight it blocks.
+   */
+  seesPoint(x: number, y: number): boolean;
 }
 
 /**
@@ -372,7 +379,7 @@ export function playerSightOnLitMap(
   // Lights deliberately do not help here — a light is not a viewer, and a
   // token-less player receiving every visible token was a position leak.
   if (myTokens.length === 0) {
-    return { seesToken: () => false };
+    return { seesToken: () => false, seesPoint: () => false };
   }
 
   const startMs = Date.now();
@@ -435,6 +442,12 @@ export function playerSightOnLitMap(
     seesToken: (t) =>
       t.controlledBy === playerUserId
       || isSeen(tokenCentre(t, gridSize, mapHeight), viewers, lits, globalIllumination, inside),
+    seesPoint: (x, y) => viewers.some((v) => {
+      const dx = v.cx - x;
+      const dy = v.cy - y;
+      const d = Math.hypot(dx, dy) || 1;
+      return isSeen({ x: x + (dx / d) * 2, y: y + (dy / d) * 2 }, [v], lits, globalIllumination, inside);
+    }),
   };
 }
 

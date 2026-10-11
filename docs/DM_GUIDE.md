@@ -1162,7 +1162,7 @@ Two practical consequences when you are building a map:
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
 4. Pick a color from the palette or enter a custom hex
 
-Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way.
+Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see; spectators cannot open or close doors at all.
 
 | Preset | Bright (sq) | Dim (sq) | Typical Use |
 |--------|-------------|----------|-------------|

@@ -69,6 +69,7 @@ import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
 import { releaseHeldToken } from './map/tokenHold';
+import { offeredDoorAt, type DoorViewer } from './map/doorAccess';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
@@ -1650,6 +1651,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [lightSources, wallSegments, currentMap?.globalIllumination]);
 
   /**
+   * Who is asking which doors the map offers (doorAccess.ts): the viewer's
+   * role, and on a lit map what their own tokens can see, by the rule the
+   * walls layer shows doors by.
+   */
+  const doorViewer = useCallback((): DoorViewer => {
+    const lightingEnabled = currentMap?.lightingEnabled ?? false;
+    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true };
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
+    return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee };
+  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn]);
+
+  /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
    * spirit imagery. Static during a token drag. The three layers stack
    * terrain → tokens → overlay, which reproduces the old single-canvas draw
@@ -2490,21 +2509,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // TODO(maps): a door is found by distance alone. A player can open one none
-    // of their tokens can see, a click in darkness answers "This door is
-    // locked." for a door they had no way to know of, and a spectator gets the
-    // toggle, applied here before the server refuses it, which leaves their
-    // page out of step. Offer the toggle only to players and the DM, and only
-    // for doors the viewer can see; the server's wall:update needs the same
-    // sight check.
-    // Door interaction: click near a door segment to toggle open/closed (all roles)
+    // Door interaction: click near a door segment to toggle open/closed. Only
+    // a door the map offers this viewer (doorAccess.ts): the DM any, a player
+    // one they can see, a spectator none, as the server's wall:update checks.
     if (!wallMode && !fogMode && !lightMode) {
       const mapPx = screenToMapPx(screenX, screenY);
       const hitThreshold = 12 / mapControls.zoom;
-      const door = wallSegments.find(
-        (s) => (s.type === 'door-closed' || s.type === 'door-open' || s.type === 'door-locked') &&
-               distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold
-      );
+      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
       if (door) {
         if (door.type === 'door-locked') {
           showToast('This door is locked.', 'info');
@@ -2837,14 +2848,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
-    // Door hover detection in pan mode (all roles) — changes cursor to pointer
+    // Door hover detection in pan mode — changes cursor to pointer over a door
+    // the map offers this viewer
     if (!wallMode && !fogMode && !draggedToken) {
       const mapPx = screenToMapPx(screenX, screenY);
       const hitThreshold = 12 / mapControls.zoom;
-      const door = wallSegments.find(
-        (s) => (s.type === 'door-closed' || s.type === 'door-open' || s.type === 'door-locked') &&
-               distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold
-      );
+      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
       const newHoveredDoorId = door?.id ?? null;
       if (newHoveredDoorId !== hoveredDoorId) {
         setHoveredDoorId(newHoveredDoorId);
@@ -3186,14 +3195,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     setContextMenu(null);
 
-    // Door hit-test: right-click opens the full door state menu (only in pan mode)
+    // Door hit-test: right-click opens the full door state menu (only in pan
+    // mode), for a door the map offers this viewer
     if (!wallMode && !fogMode) {
       const mapPx = screenToMapPx(screenX, screenY);
       const hitThreshold = 12 / mapControls.zoom;
-      const door = wallSegments.find(
-        (s) => (s.type === 'door-closed' || s.type === 'door-open' || s.type === 'door-locked') &&
-               distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold
-      );
+      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
       if (door) {
         setDoorContextMenu({ door, x: e.clientX, y: e.clientY });
       }
