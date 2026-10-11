@@ -92,6 +92,18 @@ describe('the sign-up page', () => {
   });
 });
 
+describe('the password meter on the sign-up page', () => {
+  it('does not call a password the page will refuse Strong', () => {
+    mockUseAuth.mockReturnValue(authState());
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdefghij123456' } });
+
+    expect(screen.getByText('Fair')).toBeInTheDocument();
+    expect(screen.queryByText('Strong')).not.toBeInTheDocument();
+  });
+});
+
 describe('the two-factor code page', () => {
   it.each([
     ['a wrong code', refusal(401, 'Invalid Code', 'Invalid authentication code. Please try again.'), 'Invalid authentication code. Please try again.', 'Invalid Code'],

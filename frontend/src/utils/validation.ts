@@ -59,11 +59,24 @@ export function isStrongPassword(password: string): boolean {
   return meetsPasswordRequirements(password);
 }
 
-export function getPasswordStrength(password: string): {
+/** The most `getPasswordStrength` scores: three for length, four for the kinds of character. */
+const STRENGTH_MAX_SCORE = 7;
+
+/**
+ * The strength meter shown while a password is chosen. It agrees with the
+ * rules above: a password that fails any of them is never more than Fair,
+ * since the page will refuse it, and one that passes them all is Good, or
+ * Strong at 16 characters and more. `percent` is how full the bar is.
+ */
+export interface PasswordStrength {
   score: number;
+  /** How full the meter's bar is, 0 to 100. */
+  percent: number;
   label: string;
   color: string;
-} {
+}
+
+export function getPasswordStrength(password: string): PasswordStrength {
   let score = 0;
 
   if (password.length >= 8) score++;
@@ -74,10 +87,13 @@ export function getPasswordStrength(password: string): {
   if (/[0-9]/.test(password)) score++;
   if (SPECIAL_CHARACTER.test(password)) score++;
 
-  if (score <= 2) return { score, label: 'Weak', color: 'red' };
-  if (score <= 4) return { score, label: 'Fair', color: 'orange' };
-  if (score <= 5) return { score, label: 'Good', color: 'yellow' };
-  return { score, label: 'Strong', color: 'green' };
+  if (!meetsPasswordRequirements(password)) score = Math.min(score, 4);
+  const percent = Math.round((score / STRENGTH_MAX_SCORE) * 100);
+
+  if (score <= 2) return { score, percent, label: 'Weak', color: 'red' };
+  if (score <= 4) return { score, percent, label: 'Fair', color: 'orange' };
+  if (score <= 6) return { score, percent, label: 'Good', color: 'yellow' };
+  return { score, percent, label: 'Strong', color: 'green' };
 }
 
 export function validateDiceExpression(expression: string): boolean {

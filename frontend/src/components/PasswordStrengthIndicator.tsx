@@ -4,11 +4,7 @@
 // Shows color-coded strength level with progress bar
 // ============================================
 
-interface PasswordStrength {
-  score: number;
-  label: string;
-  color: string;
-}
+import type { PasswordStrength } from '@/utils/validation';
 
 interface PasswordStrengthIndicatorProps {
   password: string;
@@ -48,7 +44,7 @@ export default function PasswordStrengthIndicator({
               ? 'bg-warning'
               : 'bg-danger'
           }`}
-          style={{ width: `${(strength.score / 10) * 100}%` }}
+          style={{ width: `${strength.percent}%` }}
         ></div>
       </div>
     </div>

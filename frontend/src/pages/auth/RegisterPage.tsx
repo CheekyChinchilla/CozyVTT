@@ -307,7 +307,7 @@ export default function RegisterPage() {
                         ? 'bg-warning'
                         : 'bg-danger'
                     }`}
-                    style={{ width: `${(passwordStrength.score / 10) * 100}%` }}
+                    style={{ width: `${passwordStrength.percent}%` }}
                   ></div>
                 </div>
               </div>
