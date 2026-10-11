@@ -317,3 +317,40 @@ describe('docs/DEVELOPMENT.md', () => {
     expect(branches).not.toContain('`develop`');
   });
 });
+
+describe('backend/docs', () => {
+  const yaml = read('backend/docs/API_DOCUMENTATION.yaml');
+  /** A path as its segments, every {parameter} the same placeholder. */
+  const segments = (route: string) =>
+    route
+      .split('?')[0]
+      .replace(/\/$/, '')
+      .split('/')
+      .map((segment) => (/^\{.*\}$/.test(segment) ? '{}' : segment));
+  const documented = [...yaml.matchAll(/^ {2}(\/\S+):\s*$/gm)].map((m) => segments(m[1]));
+
+  // The description of the campaign fetch pointed at GET /api/maps/{id}, the
+  // route before maps were nested under campaigns. The coverage script reads
+  // the paths, not the prose, so it never noticed.
+  it('names in its prose only routes it documents', () => {
+    const mentioned = [...yaml.matchAll(/`(?:GET|POST|PUT|PATCH|DELETE)\s+(\/api\/[^`\s<*]+)`/g)].map((m) => m[1]);
+    const unknown = mentioned.filter((route) => {
+      const wanted = segments(route);
+      return !documented.some(
+        (candidate) =>
+          candidate.length === wanted.length &&
+          candidate.every((segment, at) => segment === wanted[at] || segment === '{}' || wanted[at] === '{}')
+      );
+    });
+    expect(mentioned.length).toBeGreaterThan(0);
+    expect(unknown).toEqual([]);
+  });
+
+  // The header said it turned off three rules and described four.
+  it('redocly.yaml says how many lint rules it turns off', () => {
+    const config = read('backend/docs/redocly.yaml');
+    const off = config.slice(config.indexOf('\nrules:')).match(/^ {2}[\w.-]+: off$/gm)?.length ?? 0;
+    const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'];
+    expect(config).toContain(`tunes off ${words[off]} lint rules`);
+  });
+});
