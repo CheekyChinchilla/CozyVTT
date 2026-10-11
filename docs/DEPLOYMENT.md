@@ -574,7 +574,9 @@ npm install
 npx prisma migrate deploy
 npm run build
 
-# Frontend (empty VITE_API_URL = relative URLs, routed by your Nginx)
+# Frontend. The page asks its own address for the API, which your Nginx sends
+# to the backend; the two empty settings make sure an old frontend/.env cannot
+# point it elsewhere.
 cd ../frontend
 npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build

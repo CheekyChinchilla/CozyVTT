@@ -140,10 +140,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        # Taken from .env, which offers both and ships them empty. Empty means
-        # relative URLs, and the bundled nginx proxies /api/* and /socket.io/*
-        # to the backend — the setup nearly everyone wants. These were pinned to
-        # "" here, so anything set in .env was silently discarded.
+        # Empty unless an older .env still sets them. Empty means the page asks
+        # its own address, and the bundled nginx proxies /api/* and
+        # /socket.io/* to the backend. A backend on another address is not
+        # supported: the page could sign in, but every picture, sound and
+        # document stayed blank. .env.example no longer offers them.
         VITE_API_URL: ${VITE_API_URL:-}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest

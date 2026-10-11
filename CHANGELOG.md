@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** It was stored and nothing ever used it, though the guides said it set the time shown on timestamps; times are shown in each viewer's own time zone, as they always were. A value saved before stays in the database, unused, and nothing else changes.
 
+- **`.env` no longer offers `VITE_API_URL` and `VITE_SOCKET_URL`, which put the backend on a different address from the page.** Only signing in and the API ever worked that way: every map, token, avatar, sound and document stayed blank, because the page's security settings refuse a picture or sound from another address. CozyVTT is served from one address, as the bundled nginx and every setup in the deployment guide do it. If you left both blank, nothing changes. If you set them, empty them in `.env`, have your proxy send `/api/` and `/socket.io/` to the backend on the page's own address (see [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy)), and run `docker compose up -d --build`.
+
 ### Fixed
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.

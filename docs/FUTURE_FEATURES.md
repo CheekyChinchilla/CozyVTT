@@ -331,6 +331,20 @@ _Nothing at present._
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
   direction.
 
+- **Serving the backend from a different address than the page.** `.env`
+  offered `VITE_API_URL` and `VITE_SOCKET_URL` for it until 1.5.2, but only
+  sign-in and the API ever worked that way: the page's Content-Security-Policy
+  allows another address for `connect-src` alone, helmet's
+  `Cross-Origin-Resource-Policy: same-origin` refuses a picture loaded from
+  another site, and the map canvas loads images with `crossOrigin='anonymous'`,
+  which leaves the session cookie off, so every asset route answers 401. The
+  offer was withdrawn; the build arguments and the client code that reads them
+  remain. Making it work needs the extra origin in `img-src`, `media-src` and
+  `frame-src`, a `same-site` or `cross-origin` resource policy when
+  `CORS_ORIGIN` differs, `use-credentials` on canvas images, and a test that
+  renders the policy with an address set. **Revisit if** someone needs it with a
+  setup a proxy cannot cover.
+
 ---
 
 ## Won't Do
