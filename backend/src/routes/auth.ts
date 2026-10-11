@@ -418,6 +418,40 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 /**
+ * Issues a password reset link for an existing account and sends it, unless a
+ * link was issued within the cooldown.
+ */
+async function issueResetLinkFor(user: { id: string; email: string; displayName: string }): Promise<void> {
+  // A link issued within the cooldown is left as it is: nothing new is
+  // sent and nothing is voided, so one inbox cannot be flooded or have
+  // its link pulled from under it by repeated requests.
+  const recent = await prisma.passwordResetToken.findFirst({
+    where: { userId: user.id, used: false, expiresAt: { gt: new Date() }, createdAt: { gt: new Date(Date.now() - RESET_LINK_COOLDOWN_MS) } },
+    select: { id: true },
+  });
+  if (recent) return;
+
+  // Rows that can never be used again go, so the table does not grow by
+  // one row per request for ever.
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId: user.id, OR: [{ used: true }, { expiresAt: { lt: new Date() } }] },
+  });
+  // Only the newest link works. This also voids a pending invitation,
+  // whose replacement goes to the same address. The row holds the
+  // token's hash; the token itself goes only into the email.
+  await voidOutstandingResetLinks(user.id);
+  const token = await issueResetToken(user.id, RESET_LINK_TTL_MS);
+
+  // Not awaited: waiting for the mail server only for a known address
+  // would let the response time tell which addresses have accounts.
+  if (isSmtpConfigured()) {
+    sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
+      logger.error('Failed to send password reset email', { err: emailError });
+    });
+  }
+}
+
+/**
  * POST /api/auth/forgot-password
  * Request a password reset email
  * Always returns 200 to prevent email enumeration
@@ -433,33 +467,14 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
     });
 
     if (user) {
-      // A link issued within the cooldown is left as it is: nothing new is
-      // sent and nothing is voided, so one inbox cannot be flooded or have
-      // its link pulled from under it by repeated requests.
-      const recent = await prisma.passwordResetToken.findFirst({
-        where: { userId: user.id, used: false, expiresAt: { gt: new Date() }, createdAt: { gt: new Date(Date.now() - RESET_LINK_COOLDOWN_MS) } },
-        select: { id: true },
-      });
-
-      if (!recent) {
-        // Rows that can never be used again go, so the table does not grow by
-        // one row per request for ever.
-        await prisma.passwordResetToken.deleteMany({
-          where: { userId: user.id, OR: [{ used: true }, { expiresAt: { lt: new Date() } }] },
-        });
-        // Only the newest link works. This also voids a pending invitation,
-        // whose replacement goes to the same address. The row holds the
-        // token's hash; the token itself goes only into the email.
-        await voidOutstandingResetLinks(user.id);
-        const token = await issueResetToken(user.id, RESET_LINK_TTL_MS);
-
-        // Not awaited: waiting for the mail server only for a known address
-        // would let the response time tell which addresses have accounts.
-        if (isSmtpConfigured()) {
-          sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
-            logger.error('Failed to send password reset email', { err: emailError });
-          });
-        }
+      // Only a known address reaches the writes that issue a link, so a failure
+      // in them must not change the answer: a 500 here and a 200 for an unknown
+      // address would show which addresses have accounts while it lasted. It is
+      // logged for the administrator and the person gets the usual answer.
+      try {
+        await issueResetLinkFor(user);
+      } catch (issueError) {
+        logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
       }
     }
 
@@ -474,10 +489,7 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       });
     }
   } catch (error) {
-    // TODO(accounts): only a known address reaches the token writes above, so
-    // a failure there (a full disk, a read-only database) answers 500 for
-    // known addresses and 200 for unknown ones, which tells them apart while
-    // it lasts. Log the failure and answer the same 200 as for any address.
+    // The address lookup failed, which fails the same way for every address.
     logger.error('Error in forgot-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',

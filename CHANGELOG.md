@@ -338,6 +338,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **Two-factor codes are checked by a maintained library, and a code is accepted only as exactly six digits.** The library that checked authenticator codes had had no update since 2017, and it read a code with a stray character in it, such as a letter after five digits, as a number. Authenticator apps already set up keep working: there is nothing to scan again. New set-ups get a secret of 160 random bits, the strength authenticator apps are built for; the secrets made before were slightly weaker and keep working as they are.
 
+- **Asking for a password reset now gives the same answer for every address even when the server has trouble saving the link.** The page says the same thing whether or not the address has an account, so it cannot be used to find out who has one. When the server failed to save the link, though, only an address with an account got an error, which gave the difference away for as long as the trouble lasted. Every address now gets the usual answer, and the failure is written to the log for the administrator.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
