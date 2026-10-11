@@ -239,6 +239,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The bug report form and the security policy now say what to send and what to leave out.** The form asked for the browser's version and never for CozyVTT's, how it is installed or what sits in front of it, and nothing warned against pasting a `.env` or a backup into a public issue. It now asks for those and says to remove secrets, the new-issue page links to private security reporting and no longer offers a blank issue, and the security policy says what is in scope, what to do without a GitHub account and what to expect.
 
+- **The README says how a token is moved.** Its feature list said tokens are dragged, though the map picks a token up on one click and puts it down on the next. It now says that.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
