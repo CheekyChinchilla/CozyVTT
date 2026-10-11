@@ -354,3 +354,49 @@ describe('backend/docs', () => {
     expect(config).toContain(`tunes off ${words[off]} lint rules`);
   });
 });
+
+describe('backend/RBAC_QUICK_REFERENCE.md', () => {
+  const doc = read('backend/RBAC_QUICK_REFERENCE.md');
+
+  /** Every non-test source file under backend/src, by path from there. */
+  const sources = new Map<string, string>();
+  const collect = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(root, 'backend/src', dir), { withFileTypes: true })) {
+      const rel = path.posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') collect(rel);
+      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+        sources.set(rel, read(`backend/src/${rel}`));
+      }
+    }
+  };
+  collect('');
+
+  it('names only source files that exist', () => {
+    const named = [...doc.matchAll(/`((?:routes|services|utils|middleware|websocket)\/[\w./-]+\.ts)`/g)].map((m) => m[1]);
+    expect(named.length).toBeGreaterThan(0);
+    expect(named.filter((file) => !sources.has(file))).toEqual([]);
+  });
+
+  // The reference taught canEditCharacter as the standard way to authorise a
+  // character edit. No route calls it, and its rules differ from the route's:
+  // it lets any admin through, takes the campaign from the caller, and does
+  // not refuse a spectator who owns the character.
+  it('tells you to import only permission helpers that a route or handler really calls', () => {
+    const imported = /import \{([^}]*)\} from '\.\.\/services\/permissions'/.exec(doc)?.[1] ?? '';
+    const helpers = imported
+      .split('\n')
+      .map((line) => line.trim().replace(/,$/, ''))
+      .filter((name) => /^[A-Za-z]\w*$/.test(name));
+    expect(helpers.length).toBeGreaterThan(0);
+    const calledBy = (helper: string) =>
+      [...sources].some(([file, text]) => file !== 'services/permissions.ts' && new RegExp(`\\b${helper}\\(`).test(text));
+    expect(helpers.filter((helper) => !calledBy(helper))).toEqual([]);
+  });
+
+  // "Admin override applies" in the checklist implied a general override. A
+  // platform admin who is not at the table is refused by the campaign guards.
+  it('does not promise a general admin override in its checklist', () => {
+    expect(doc).not.toMatch(/should succeed if Admin override applies/);
+  });
+});

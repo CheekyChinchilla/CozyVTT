@@ -40,6 +40,16 @@ export function canEditCampaign(campaignRole: CampaignRole, platformRole: Platfo
   return isDM(campaignRole) || isAdmin(platformRole);
 }
 
+// TODO(sheets): nothing calls canEditCharacter, and it disagrees with
+// PUT /api/characters/:id, which decides this itself: it lets any admin edit,
+// it takes the campaign id from its caller instead of the character, and it
+// does not refuse a spectator who owns the character. Delete it, or make it
+// match the route and have the route call it, so the rule is declared once.
+// The same goes for the other helpers here that no route calls (isAdmin,
+// isDM, isPlayer, canEditCampaign, canManageMaps, canToggleSpiritLayer,
+// canChangeVibe, canManageSessions, canInvitePlayers, canDeleteMessages,
+// canExportCampaign): each is a second statement of a rule the routes state
+// in their guards.
 /**
  * Check if user can edit a specific character
  * 

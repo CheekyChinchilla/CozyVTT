@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-09-18._
+_Last verified against the code on 2026-10-11: the files and helpers it names exist (a backend test checks that), and the sections on character edits, the campaign guards, the platform role and the checklist were read against the routes. Re-date it only after reading the rest the same way._
 
 ## Middleware Cheat Sheet
 
@@ -74,30 +74,32 @@ for players only.
 ### Import Statement
 ```typescript
 import {
-  canEditCharacter,
   canControlToken,
-  canManageMaps,
-  canToggleSpiritLayer,
+  canMoveTokensNow,
+  canReadMap,
   canDeleteCampaign,
+  canTransferDM,
+  canRollDice,
   // ... other helpers
 } from '../services/permissions';
 ```
 
 ### Common Patterns
 
-#### Check Character Edit Permission
-```typescript
-const hasPermission = await canEditCharacter(
-  userId,
-  characterId,
-  campaignId,
-  platformRole
-);
+#### Who may edit a character
 
-if (!hasPermission) {
-  return res.status(403).json({ error: 'Forbidden' });
-}
-```
+`PUT /api/characters/:id` decides this in the route (`routes/characters.ts`), from the
+character's own campaign, never from one the caller sends:
+
+1. Load the character, then the caller's membership in **the character's** `campaignId`.
+2. A spectator is refused outright, even for a character they own.
+3. Otherwise the owner may edit, and so may the DM of that campaign, but only while the
+   owner is still a member (`ownerStillIn`). A platform admin has no right here of their own.
+
+**Do not copy `canEditCharacter` from `services/permissions.ts`.** No route calls it, and it
+disagrees with the route on all three points: it lets any admin edit, it takes the campaign
+id from the caller (so the DM of any campaign of their own could name it and edit any
+character), and it does not refuse a spectator who owns the character.
 
 #### Who may act on a token
 
@@ -239,17 +241,27 @@ router.put('/api/campaigns/:campaignId/maps', campaignDM, handler);
 ```
 
 ### Pattern 5: Complex Permission Check
+When the rule depends on the record, load it first and take the campaign from the record, never from the request:
 ```typescript
-router.put('/api/characters/:characterId', authenticated, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/api/characters/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.session.userId!;
-  const platformRole = req.session.platformRole!;
-  const { characterId } = req.params;
-  const { campaignId } = req.body;
+  const character = await prisma.character.findUnique({ where: { id: req.params.id } });
+  if (!character) return res.status(404).json({ error: 'Not Found', message: 'Character not found' });
 
-  const hasPermission = await canEditCharacter(userId, characterId, campaignId, platformRole);
-
-  if (!hasPermission) {
-    return res.status(403).json({ error: 'Forbidden' });
+  // The caller's role in the character's own campaign
+  const membership = character.campaignId
+    ? await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId: character.campaignId } },
+      })
+    : null;
+  if (membership?.role === 'SPECTATOR') {
+    return res.status(403).json({ error: 'Forbidden', message: 'Spectators cannot edit a character in this campaign' });
+  }
+  const allowed =
+    character.userId === userId ||
+    (membership?.role === 'DM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
+  if (!allowed) {
+    return res.status(403).json({ error: 'Forbidden', message: 'You do not have permission to edit this character' });
   }
 
   // ... proceed with update
@@ -460,12 +472,15 @@ Two things to get right when adding a check of this kind:
 
 ### Platform role is the one thing the session carries
 
-`requireAdmin` reads `req.session.platformRole`, which is written at login and
-never re-read, so a demotion leaves the person holding admin over their open
-session. Sessions roll on every response and the client sends a keepalive, so
-one that stays in use does not expire on its own.
+`requireAdmin` reads `req.session.platformRole`, which is written at login.
+Only `middleware/adminMfa.ts` re-reads it: on every request of a signed-in
+administrator it reads the account and refreshes the session's copy, so a
+demoted administrator loses the admin guards on their next request even if
+ending their sessions failed. Nothing re-reads the role of anyone else.
+Sessions roll on every response and the client sends a keepalive, so one that
+stays in use does not expire on its own.
 
-`PUT /api/users/:id` therefore calls `destroyUserLoginSessions(id)` when the role
+`PUT /api/users/:id` therefore also calls `destroyUserLoginSessions(id)` when the role
 actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
 it too, because the session outlives the row it points at and nothing checks the
 user still exists. The same
@@ -473,9 +488,9 @@ helper ends a user's other sessions on a self-service password change and on
 turning MFA on or off, with `exceptSessionId` keeping the device making the
 request signed in.
 
-The alternative, re-reading the role from the database on every request the way
-`loadCampaignMembership` does for campaign roles, would also work and is the
-more thorough fix if this ever needs revisiting.
+Re-reading the role from the database on every request, the way
+`loadCampaignMembership` does for campaign roles, would make ending the sessions
+unnecessary; `adminMfa.ts` does it only for administrators.
 
 ### The instance keeps an admin
 
@@ -681,7 +696,7 @@ When implementing a new protected route:
 - ✅ Test with no authentication (should return 401)
 - ✅ Test with wrong role (should return 403)
 - ✅ Test with correct role (should succeed)
-- ✅ Test with Admin role (should succeed if Admin override applies)
+- ✅ Test with a platform admin who is not a member: the campaign guards refuse them (403). Only a few routes let an admin through without a seat at the table, such as handing the DM seat on, deleting a campaign, reading any asset and the SRD import, and each one says so
 - ✅ Test with non-member (should return 403)
 - ✅ Test with campaign member but wrong role (should return 403)
 
@@ -735,6 +750,6 @@ router.get('/', campaignMember, async (req: Request, res: Response) => {
 1. Use `authenticated` for routes requiring login
 2. Use `adminOnly` for admin-only routes
 3. Use `campaignMember`, `campaignDM`, or `campaignDMOrPlayer` for campaign routes
-4. Use permission helpers (`canEdit*`, `canManage*`, etc.) for complex logic
+4. Use the permission helpers in `services/permissions.ts` that routes already call (`canControlToken`, `canReadMap`, `canDeleteCampaign`, …) for rules the guards cannot express, and decide a record's rule from the record itself
 5. Always check permissions server-side, never trust client
 6. Use `AuthenticatedRequest` type for TypeScript autocomplete
