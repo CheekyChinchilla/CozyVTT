@@ -7,6 +7,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authService } from '@/services/auth.service';
 import { queryClient } from '@/lib/queryClient';
+import { apiErrorStatus, errorMessage } from '@/utils/errors';
 import type {
   User,
   AuthContextType,
@@ -18,6 +19,22 @@ import type {
 // ============================================
 // Context Creation
 // ============================================
+
+/** The first wait before checking the sign-in again when the server could not answer. */
+const AUTH_RETRY_FIRST_MS = 2000;
+/** The longest wait between those checks. */
+const AUTH_RETRY_MAX_MS = 30_000;
+
+/**
+ * Whether a failed GET /api/auth/me means nobody is signed in: the server
+ * answered and refused (401, or 403 before setup has run). No answer, a
+ * timeout (408), too many requests (429) or a server error says nothing
+ * about the sign-in.
+ */
+function answersSignedOut(error: unknown): boolean {
+  const status = apiErrorStatus(error);
+  return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -56,26 +73,64 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize - Check if user is authenticated
   // ============================================
 
-  useEffect(() => {
-    checkAuthentication();
-  }, []);
+  /**
+   * The sign-in check could not get an answer about the sign-in: the server
+   * did not answer, answered with an error of its own, or refused for too
+   * many requests. `loading` stays true, since nothing is known yet, and the
+   * check is made again.
+   */
+  const [serverUnreachable, setServerUnreachable] = useState<boolean>(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failedChecks = useRef(0);
+  const mounted = useRef(true);
 
-  const checkAuthentication = async () => {
+  const checkAuthentication = useCallback(async (): Promise<void> => {
+    if (retryTimer.current !== null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
     try {
-      setLoading(true);
       const currentUser = await authService.getCurrentUser();
+      if (!mounted.current) return;
       takeUser(currentUser);
       setAuthenticated(true);
       setMustChangePassword(currentUser.mustChangePassword || false);
-    } catch (error) {
-      // Not authenticated or session expired
-      setUser(null);
-      setAuthenticated(false);
-      setMustChangePassword(false);
-    } finally {
+      setServerUnreachable(false);
+      failedChecks.current = 0;
       setLoading(false);
+    } catch (error) {
+      if (!mounted.current) return;
+      if (answersSignedOut(error)) {
+        setUser(null);
+        setAuthenticated(false);
+        setMustChangePassword(false);
+        setServerUnreachable(false);
+        failedChecks.current = 0;
+        setLoading(false);
+        return;
+      }
+      // A restart, the proxy's 502 while the backend comes up, a timeout:
+      // none of them says the sign-in has ended, so ask again.
+      setServerUnreachable(true);
+      const delay = Math.min(AUTH_RETRY_FIRST_MS * 2 ** failedChecks.current, AUTH_RETRY_MAX_MS);
+      failedChecks.current += 1;
+      retryTimer.current = setTimeout(() => { void checkAuthentication(); }, delay);
     }
-  };
+  }, [takeUser]);
+
+  /** Ask the server again now, from the "can't reach the server" notice. */
+  const retryAuthCheck = useCallback((): void => {
+    void checkAuthentication();
+  }, [checkAuthentication]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void checkAuthentication();
+    return () => {
+      mounted.current = false;
+      if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+    };
+  }, [checkAuthentication]);
 
   // ============================================
   // Login
@@ -290,11 +345,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       takeUser(currentUser);
       setMustChangePassword(currentUser.mustChangePassword || false);
     } catch (error) {
-      console.error('Failed to refresh user:', error);
-      // If refresh fails, user might be logged out
-      await logout();
+      // Only the server saying the sign-in has gone ends it here, and then
+      // there is no server session left to end. Any other failure leaves the
+      // user as they were: the change that came before this read was saved.
+      if (apiErrorStatus(error) === 401) {
+        queryClient.clear();
+        cachedFor.current = null;
+        setUser(null);
+        setAuthenticated(false);
+        setMustChangePassword(false);
+        return;
+      }
+      console.error('Failed to refresh user:', apiErrorStatus(error) ?? errorMessage(error));
     }
-  }, [authenticated, logout, takeUser]);
+  }, [authenticated, takeUser]);
 
   // ============================================
   // Context Value
@@ -309,6 +373,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     authenticated,
     mfaPending,
     mustChangePassword,
+    serverUnreachable,
 
     // Actions
     login,
@@ -322,12 +387,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     changePassword,
     refreshUser,
     adoptSession,
+    retryAuthCheck,
   }), [
     user,
     loading,
     authenticated,
     mfaPending,
     mustChangePassword,
+    serverUnreachable,
+    retryAuthCheck,
     adoptSession,
     login,
     logout,

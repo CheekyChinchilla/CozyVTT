@@ -127,6 +127,11 @@ export interface AuthContextType {
   authenticated: boolean;
   mfaPending: boolean;
   mustChangePassword: boolean;
+  /**
+   * The sign-in check got no answer about the sign-in (the server did not
+   * answer, or failed). `loading` stays true and the check is retried.
+   */
+  serverUnreachable: boolean;
 
   // Actions
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
@@ -151,4 +156,6 @@ export interface AuthContextType {
    * valid session the context knows nothing about.
    */
   adoptSession: (user: User) => void;
+  /** Check the sign-in again now, after the server could not be reached. */
+  retryAuthCheck: () => void;
 }

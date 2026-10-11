@@ -27,6 +27,7 @@ function authState(overrides: Partial<AuthContextType> = {}): AuthContextType {
     authenticated: true,
     mfaPending: false,
     mustChangePassword: false,
+    serverUnreachable: false,
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -38,6 +39,7 @@ function authState(overrides: Partial<AuthContextType> = {}): AuthContextType {
     changePassword: vi.fn(),
     refreshUser: vi.fn(),
     adoptSession: vi.fn(),
+    retryAuthCheck: vi.fn(),
     ...overrides,
   };
 }

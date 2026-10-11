@@ -708,6 +708,10 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 - Try refreshing the page — CozyVTT will reconnect automatically
 - If the problem persists, check with your platform administrator that the server is running
 
+### A page says "Can't reach the server"
+
+CozyVTT did not answer when the page checked who is signed in, usually because the server is restarting or being upgraded. You are not signed out. The page tries again by itself, after a few seconds and then every 30 seconds, and opens as soon as the server answers; **Try Again** checks at once. If it stays for more than a few minutes, ask your platform administrator whether the server is running.
+
 ### My token disappeared from the map
 
 Token placement is managed by the DM. If your token isn't on the map, ask your DM to place it. Character assignment to a campaign must happen before a token can be placed.

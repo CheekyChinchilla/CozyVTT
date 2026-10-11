@@ -18,7 +18,27 @@ export default function ProtectedRoute({
   children,
   requireRole,
 }: ProtectedRouteProps) {
-  const { user, loading, authenticated, mustChangePassword } = useAuth();
+  const { user, loading, authenticated, mustChangePassword, serverUnreachable, retryAuthCheck } = useAuth();
+
+  // The sign-in check got no answer: a restart or an upgrade under way. The
+  // sign-in may well be fine, so wait for the server instead of sending the
+  // user to sign in again.
+  if (loading && serverUnreachable) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+        <div role="alert" className="glass-panel max-w-md w-full p-8 text-center space-y-4">
+          <h1 className="text-2xl font-bold text-brand-ink font-heading">Can't reach the server</h1>
+          <p className="text-stone-gray">
+            CozyVTT is not answering at the moment, perhaps because it is restarting. This page tries again by
+            itself, or you can try now.
+          </p>
+          <Button onClick={retryAuthCheck} className="w-full">
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // Show loading state while checking authentication
   if (loading) {
