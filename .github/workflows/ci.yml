@@ -124,11 +124,12 @@ jobs:
       # read, and what the nginx check and the coverage summary read.
       - run: python3 -m unittest discover -s scripts/tests
 
-  # Known advisories in the packages an instance runs, from both lockfiles.
-  # A report for now: a high or critical advisory marks its step, and the job
-  # still passes. Developer tools (--omit=dev) are left out.
+  # Known advisories, from both lockfiles. A high or critical advisory in the
+  # packages an instance runs (--omit=dev) fails the job. The developer
+  # tools, which never reach an instance, are listed after it and fail
+  # nothing: their advisories wait for the tools' next major versions.
   audit:
-    name: Dependency advisories (report only)
+    name: Dependency advisories
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -136,14 +137,23 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 26
-      - name: Backend
+      - name: Backend, what an instance runs
         working-directory: backend
-        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
-      - name: Frontend
+      - name: Frontend, what an instance runs
         working-directory: frontend
-        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
+      - name: Both projects with their developer tools (report only)
+        if: always()
+        continue-on-error: true
+        run: |
+          status=0
+          for project in backend frontend; do
+            echo "::group::$project"
+            (cd "$project" && npm audit --audit-level=high) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   # What a self-hoster's `docker compose up -d --build` runs: the compose file
   # read, both production images built, and the bundled nginx's configuration

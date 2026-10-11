@@ -660,3 +660,35 @@ describe('what the comments in the backend source point to', () => {
     expect(cited.filter(({ file }) => !fs.existsSync(path.join(root, 'Examples', file))).map(({ rel, file }) => `${rel}: ${file}`)).toEqual([]);
   });
 });
+
+describe('the dependency check SECURITY.md describes', () => {
+  /** The steps of one CI job, each as its text. */
+  function jobSteps(job: string): string[] {
+    const workflow = read('.github/workflows/ci.yml');
+    const start = workflow.indexOf(`\n  ${job}:\n`);
+    if (start === -1) throw new Error(`.github/workflows/ci.yml no longer has a ${job} job`);
+    const rest = workflow.slice(start + 1);
+    const end = rest.slice(1).search(/\n {2}[a-z]/);
+    const body = end === -1 ? rest : rest.slice(0, end + 1);
+    return body.split(/\n {6}- /).slice(1);
+  }
+
+  const productionAudits = jobSteps('audit').filter((step) => /npm audit --omit=dev/.test(step));
+
+  // The check reported and passed whatever it found, while the advisories it
+  // found then were being cleared. SECURITY.md now says it fails the run.
+  it('fails the run on a high or critical advisory in what an instance runs, in both projects', () => {
+    expect(productionAudits.map((step) => /working-directory: (\w+)/.exec(step)?.[1]).sort()).toEqual(['backend', 'frontend']);
+    for (const step of productionAudits) {
+      expect(step).toMatch(/--audit-level=high\b/);
+      expect(step).not.toMatch(/continue-on-error:\s*true/);
+    }
+    expect(read('SECURITY.md')).toMatch(/high or critical advisory .*fails/);
+  });
+
+  it('reports the developer tools without failing on them', () => {
+    const tools = jobSteps('audit').filter((step) => /npm audit\b/.test(step) && !/--omit=dev/.test(step));
+    expect(tools.length).toBeGreaterThan(0);
+    for (const step of tools) expect(step).toMatch(/continue-on-error:\s*true/);
+  });
+});

@@ -143,20 +143,16 @@ _Nothing at present._
   supported server range has to be checked for the target major first.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Bring the dependencies up to date, and keep them there.** Several
-  libraries are a major version or more behind, and some are out of support:
-  ESLint 8 since October 2024, and Prisma 5.8 (January 2024), which gets no
-  more fixes. Neither production advisory open today can be reached in
-  CozyVTT, but an internet-facing app should not run on unsupported code.
-  **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, and then turning CI's advisory check,
-  which reports high or critical advisories in production dependencies
-  today, into one that fails; Dependabot's grouped weekly pull requests
-  against `dev` are set up, and nginx is done, both images pinned to the 1.30
-  stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
-  newest stable major first, with a full upgrade rehearsal, then Vite and
-  Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
-  CSS 4 and TypeScript 7.
+- **Move the remaining libraries to their current major versions.** Prisma
+  is held on 5.8 (January 2024), which gets no more fixes, and Vite, Vitest,
+  Express and React are a major version or more behind. React Router 6 has
+  two moderate advisories that cannot be reached in CozyVTT, a single-page
+  app with no server rendering that never navigates to an address taken
+  from a link; version 7 clears them. Everything inside the current major
+  versions, ESLint 10 and the failing advisory check are done. **Do** in
+  1.5.3, a release of its own: Prisma to its newest stable major first, with
+  a full upgrade rehearsal, then Vite and Vitest, Express 5, and React 19
+  with React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks

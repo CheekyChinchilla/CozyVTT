@@ -597,9 +597,11 @@ also does what self-hosters run and a developer usually does not:
   it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
   HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
   needs Docker, openssl and PyYAML, and runs locally too.
-- **Reports known advisories** in the packages an instance runs
-  (`npm audit --omit=dev --audit-level=high` in both projects). A high or
-  critical one marks its step; the job still passes for now.
+- **Checks known advisories** in the packages an instance runs
+  (`npm audit --omit=dev --audit-level=high` in both projects): a high or
+  critical one fails the job. A last step lists the advisories in each
+  project's developer tools too, and fails nothing, since those never reach
+  an instance.
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into
