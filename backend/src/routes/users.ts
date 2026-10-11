@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
 import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
@@ -10,13 +10,14 @@ import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from
 import { destroyUserLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks, issueResetToken, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
+import { inSerializableTransaction } from '../utils/serializable';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
-import { writeSystemLog } from '../services/systemLog';
+import { writeSystemLog, writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
@@ -239,16 +240,6 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
         });
       }
 
-      // The instance must keep an admin (see services/platformAdmins).
-      if (platformRole === 'USER' && existingUser.platformRole === 'ADMIN' && (await isOnlyAdmin(id))) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: id === requestingUserId
-            ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
-            : 'This is the only admin on this instance. Promote another user to admin first.',
-        });
-      }
-
       updateData.platformRole = platformRole;
     }
 
@@ -292,14 +283,33 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
 
     // Perform update. A new address also voids every unused reset or
     // invitation link, in the same transaction, so a link already sent to the
-    // old address cannot set the password afterwards.
-    const updatedUser = emailChangedFrom === null
-      ? await prisma.user.update({ where: { id }, data: updateData })
-      : await prisma.$transaction(async (tx) => {
+    // old address cannot set the password afterwards. Taking the admin role
+    // away checks, in the same serializable transaction, that the instance
+    // keeps an admin (services/platformAdmins).
+    const demoting = updateData.platformRole === 'USER' && existingUser.platformRole === 'ADMIN';
+    const written = demoting
+      ? await inSerializableTransaction(async (tx) => {
+        if (await isOnlyAdmin(id, tx)) return null;
         const row = await tx.user.update({ where: { id }, data: updateData });
-        await voidOutstandingResetLinks(id, tx);
+        if (emailChangedFrom !== null) await voidOutstandingResetLinks(id, tx);
         return row;
+      })
+      : emailChangedFrom === null
+        ? await prisma.user.update({ where: { id }, data: updateData })
+        : await prisma.$transaction(async (tx) => {
+          const row = await tx.user.update({ where: { id }, data: updateData });
+          await voidOutstandingResetLinks(id, tx);
+          return row;
+        });
+    if (written === null) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: id === requestingUserId
+          ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
+          : 'This is the only admin on this instance. Promote another user to admin first.',
       });
+    }
+    const updatedUser = written;
 
     // Tell the old address, which is the one the owner still reads if the
     // change was not theirs. Best-effort: the change is made either way.
@@ -308,6 +318,23 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
         await sendEmailChangedNotice(emailChangedFrom, updatedUser.email, updatedUser.displayName);
       } catch (err) {
         logger.error('Failed to send email-changed notice', { err, userId: id });
+      }
+    }
+
+    // What an administrator changed, for the activity log: the permissions on
+    // any account, and the profile of someone else's. A role change has its
+    // own line below. Compared against what was stored, so saving the same
+    // values again writes nothing.
+    if (isAdmin) {
+      const changes = adminChangesTo(existingUser, updatedUser, id !== requestingUserId);
+      const described = describeAdminChanges(changes);
+      if (described.length > 0) {
+        await writeAdminLog(
+          requestingUserId!,
+          `Changed the account of ${existingUser.email}: ${described.join('; ')}`,
+          changes.email ? 'WARNING' : 'INFO',
+          { targetUserId: id, changes: toJson(changes) }
+        );
       }
     }
 
@@ -346,6 +373,10 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
+    // Another account took the new address after the check above.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Email already in use' });
+    }
     logger.error('Error updating user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -502,6 +533,12 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 
     // See services/accountDeletion.ts for what stays and what goes.
     const deletion = await deleteAccount(id);
+    if (!deletion.deleted && deletion.refused === 'onlyAdmin') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'This is the only admin on this instance. Promote another user to admin first.',
+      });
+    }
     if (!deletion.deleted) {
       return res.status(409).json({
         error: 'Conflict',
@@ -510,6 +547,11 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
       });
     }
     const campaignIds = deletion.campaignIds;
+
+    await writeAdminLog(requestingUserId!, `Deleted the account of ${user.email}`, 'WARNING', {
+      targetUserId: id,
+      displayName: user.displayName,
+    });
 
     // The deletion ended the account's sign-ins in its own transaction
     // (services/accountDeletion); the live connections end here.
@@ -643,6 +685,8 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
 
     await sendPasswordResetEmail(user.email, token, user.displayName);
 
+    await writeAdminLog(req.session.userId!, `Sent a password reset link to ${user.email}`, 'INFO', { targetUserId: id });
+
     return res.status(200).json({
       message: `Password reset link sent to ${user.email}.`,
     });
@@ -654,6 +698,41 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     });
   }
 });
+
+/** The account fields an administrator's change is logged for. */
+type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
+
+type AccountChanges = { [K in keyof LoggedAccountFields]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] } };
+
+/**
+ * What changed between two versions of an account: the permissions always,
+ * the profile only when `othersProfile` (an administrator editing someone
+ * else's; their own is not an administrator's action).
+ */
+function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields, othersProfile: boolean): AccountChanges {
+  const changes: AccountChanges = {};
+  const fields: (keyof LoggedAccountFields)[] = othersProfile
+    ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
+    : ['globalAssetManager', 'templateEditor'];
+  for (const field of fields) {
+    if (before[field] !== after[field]) {
+      Object.assign(changes, { [field]: { from: before[field], to: after[field] } });
+    }
+  }
+  return changes;
+}
+
+/** The changes in words, for the activity log's message. */
+function describeAdminChanges(changes: AccountChanges): string[] {
+  const words: string[] = [];
+  if (changes.globalAssetManager) words.push(`Global Assets ${changes.globalAssetManager.to ? 'granted' : 'taken away'}`);
+  if (changes.templateEditor) words.push(`template editing ${changes.templateEditor.to ? 'granted' : 'taken away'}`);
+  if (changes.email) words.push(`email address changed from ${changes.email.from} to ${changes.email.to}`);
+  if (changes.displayName) words.push(`display name changed from "${changes.displayName.from}" to "${changes.displayName.to}"`);
+  if (changes.avatarUrl) words.push(changes.avatarUrl.to ? 'avatar changed' : 'avatar removed');
+  if (changes.bio) words.push('bio changed');
+  return words;
+}
 
 /**
  * Generate a cryptographically random temporary password.

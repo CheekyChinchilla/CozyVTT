@@ -70,4 +70,32 @@ describeOnPosix('backup.sh', () => {
     expect(result.status).toBe(0);
     expect(await modeOf(backups)).toBe(0o700);
   });
+
+  // A password with characters a URL cannot hold as they are is written
+  // percent-encoded in DATABASE_URL, and the script passed it on still
+  // encoded, so pg_dump was refused. An address with no port gave pg_dump the
+  // whole address as the port.
+  it('decodes a percent-encoded password, and uses port 5432 when the address names none', async () => {
+    const seen = path.join(root, 'seen.txt');
+    await fs.writeFile(
+      path.join(bin, 'pg_dump'),
+      `#!/bin/sh\nprintf '%s\\n' "$PGPASSWORD" "$@" > "${seen}"\necho "-- PostgreSQL database dump complete"\n`,
+      { mode: 0o755 }
+    );
+
+    const result = spawnSync('bash', [SCRIPT], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        DATABASE_URL: 'postgresql://cozy%2Badmin:p%40ss%25w0rd@db.internal/cozyvtt?schema=public',
+        BACKUP_DIR: backups,
+      },
+    });
+
+    expect(result.status).toBe(0);
+    const [password, ...args] = (await fs.readFile(seen, 'utf8')).trimEnd().split('\n');
+    expect(password).toBe('p@ss%w0rd');
+    expect(args).toEqual(expect.arrayContaining(['-h', 'db.internal', '-p', '5432', '-U', 'cozy+admin', '-d', 'cozyvtt']));
+  });
 });

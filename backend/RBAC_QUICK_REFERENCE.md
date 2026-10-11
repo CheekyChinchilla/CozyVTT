@@ -468,8 +468,18 @@ and `PUT /api/users/:id` refuses setting `platformRole` to `USER` on such an
 admin, both with `409` and a message to promote someone first. Nothing else
 grants `ADMIN` once setup has run (the first-user rule needs an empty
 instance), so an instance that lost its last admin could not get one back.
-`DELETE /api/users/:id` needs no such check: it refuses self-deletion, and the
-admin calling it remains.
+`DELETE /api/users/:id` asks it too: the admin calling it is normally the
+admin who remains, but not when that admin is being demoted at the same
+moment.
+
+Each of the three asks inside the serializable transaction that makes its
+write (`inSerializableTransaction`, `utils/serializable.ts`; the account
+deletions through `deleteAccount`). Two admins removed at the same moment
+would otherwise each count the other and both go ahead; PostgreSQL refuses
+one of two overlapping serializable transactions, which runs again, sees the
+other's write and is refused with the `409`. Only serializable transactions
+are checked against each other, so any new path that takes an admin away has
+to ask the same way.
 
 ### What a session alone cannot change
 

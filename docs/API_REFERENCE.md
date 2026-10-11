@@ -223,7 +223,9 @@ something still names stay, with no owner, as do the character templates they
 published and the token templates and creatures they made.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
-refused with `409` until another user has been promoted to admin.
+refused with `409` until another user has been promoted to admin, and so is
+anyone who sits as DM of a campaign, whether or not they own it, or owns one
+with nobody in the DM seat, until they hand the seat on or delete it.
 
 **Request:**
 ```json
@@ -237,11 +239,12 @@ refused with `409` until another user has been promoted to admin.
 
 ### `GET /api/auth/appearance`
 
-Returns the instance's appearance settings. **No authentication required** — the login page needs this to render the correct theme.
+Returns the instance's appearance settings, with its name, which the browser tab shows. **No authentication required** — the login page needs this to render the correct theme.
 
 **Response:**
 ```json
 {
+  "instanceName": "CozyVTT",
   "themeId": "cozy-default",
   "customThemeColors": null,
   "fontId": "default",
@@ -438,7 +441,9 @@ sitting DM, the campaign owner, or a platform admin.**
 
 The named member becomes `DM` and the sitting DM becomes `PLAYER`, in a single
 transaction: a campaign is never observable with two DMs or none. A campaign
-still has exactly one DM — the seat moves rather than being shared.
+still has exactly one DM — the seat moves rather than being shared. Of two
+hand-overs at the same moment, the second sees the first, and a role change or
+removal of a member who has just been handed the seat is refused as for any DM.
 
 **The campaign's owner does not change.** Ownership and the DM role are separate
 facts, which is what allows an owner to hand the game to a co-DM or to an
@@ -1193,6 +1198,11 @@ List all users on the platform.
 Create a new user account with a generated temporary password. The account is flagged
 `mustChangePassword`, so that password can only be used to set a real one.
 
+The address is trimmed and lowercased, and one holding `<` or `>` is refused with `400`.
+`displayName` is checked as sign-up checks it (1 to 50 characters once angle brackets and
+surrounding spaces are removed, or `400` with the reason) and defaults to the part of the
+address before `@`. An address already in use answers `409`.
+
 **Request:**
 ```json
 {
@@ -1221,6 +1231,8 @@ Invite a user by email. The account is created **without a usable password**; th
 
 Requires SMTP — returns `503` when it isn't configured. If the email fails to send, the account is rolled back rather than left unreachable (`502`).
 
+The address and display name are checked as for `POST /api/admin/users`: an address holding `<` or `>`, or a display name sign-up would refuse, answers `400`, and an address already in use answers `409`.
+
 **Request:**
 ```json
 {
@@ -1245,7 +1257,7 @@ The recipient opens `/accept-invite?token=…` and sets a password, which is com
 
 ### `POST /api/admin/users/:id/resend-invite` *(Admin only)*
 
-Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (`503` otherwise).
+Issue a fresh invitation link, invalidating any outstanding one. Requires SMTP (`503` otherwise). Only for an account nobody has signed in to yet; one that has signed in is refused with `409`, and `POST /api/users/:id/send-reset-link` sends it a reset link instead.
 
 **Response:**
 ```json
@@ -1373,6 +1385,15 @@ Get platform statistics (user count, active campaigns, storage usage, etc.).
 
 ---
 
+### `GET /api/admin/health` *(Admin only)*
+
+Whether the database answers and the live-connection server is running, for the
+dashboard's status card: `{ status, services: { api, database, websocket }, connections }`,
+with `status` `healthy` only when every part is `ok`. Always `200`; the public
+`GET /health` is the one for uptime monitors.
+
+---
+
 ### `GET /api/admin/settings` *(Admin only)*
 
 Get system configuration settings.
@@ -1382,6 +1403,12 @@ Get system configuration settings.
 ### `PUT /api/admin/settings` *(Admin only)*
 
 Update system configuration settings.
+
+`themeId` and `fontId` must name one of the app's themes (or `custom`) and
+fonts, and `customThemeColors` is `{ primary, accent, background, text }` as
+`#RRGGBB`, or `null` to clear it: the same rules as a user's own preferences.
+The instance theme is painted for every visitor, the sign-in page included, so
+anything else is refused with `400` and nothing is changed.
 
 `customLogoUrl`, `customFaviconUrl` and `customMascotUrl` name a path this
 instance serves, such as `/default-logo.png`. An address on another host is
@@ -1401,6 +1428,7 @@ List available database backups.
 ### `POST /api/admin/backups` *(Admin only)*
 
 Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
+Refused with `409` while a restore runs. Backups are never deleted automatically.
 
 ---
 
@@ -1413,6 +1441,12 @@ Delete a database backup file.
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
 Restore a database backup. **Destructive — overwrites all current data.**
+
+One restore runs at a time: a second answers `409`. A refused file answers `400`
+(not named `.zip`, not a ZIP archive, more than 100,000 entries, or not a complete
+CozyVTT backup) or `413` (over 4 GB, or unpacking to more than 10 GiB), with the
+reason. While the database is being replaced, live connections are closed and
+every other API request answers `503` until the restore ends.
 
 ---
 

@@ -8,7 +8,6 @@ import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions, capLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
-import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
@@ -675,16 +674,16 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
       });
     }
 
-    // The instance must keep an admin (see services/platformAdmins).
-    if (user.platformRole === 'ADMIN' && (await isOnlyAdmin(userId))) {
+    // See services/accountDeletion.ts for what stays and what goes. The
+    // instance must keep an admin (services/platformAdmins), which the
+    // deletion checks in its own transaction.
+    const deletion = await deleteAccount(userId);
+    if (!deletion.deleted && deletion.refused === 'onlyAdmin') {
       return res.status(409).json({
         error: 'Conflict',
         message: 'You are the only admin on this instance. Promote another user to admin before deleting your account.',
       });
     }
-
-    // See services/accountDeletion.ts for what stays and what goes.
-    const deletion = await deleteAccount(userId);
     if (!deletion.deleted) {
       return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'you') });
     }
@@ -1127,7 +1126,7 @@ router.get('/registration-status', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/auth/appearance
- * Returns the instance's appearance settings (theme, font, branding).
+ * Returns the instance's appearance settings (name, theme, font, branding).
  * No authentication required — the login page needs to render with the correct theme.
  */
 router.get('/appearance', async (_req: Request, res: Response) => {
@@ -1136,6 +1135,7 @@ router.get('/appearance', async (_req: Request, res: Response) => {
     return res.status(200).json(appearance);
   } catch (error) {
     return res.status(200).json({
+      instanceName: 'CozyVTT',
       themeId: 'cozy-default',
       customThemeColors: null,
       fontId: 'default',

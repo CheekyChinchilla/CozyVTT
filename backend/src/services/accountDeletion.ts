@@ -14,8 +14,9 @@
  * deleted with the account; the files are removed by removePersonalFiles,
  * which the routes call once the account's sessions have ended.
  *
- * A campaign needs an owner. One they own while someone else sits as its DM
- * passes to that DM. One they run themselves stops the deletion until they
+ * A campaign needs an owner and a DM. One they own while someone else sits as
+ * its DM passes to that DM. One whose DM seat is theirs, owned by them or not,
+ * or one they own with nobody in the DM seat, stops the deletion until they
  * hand the DM seat over or delete the campaign; nothing is changed then.
  */
 
@@ -25,6 +26,8 @@ import { isAssetInUse } from './assetUsage';
 import { deleteFile } from '../utils/fileUtils';
 import logger from '../utils/logger';
 import { destroyUserLoginSessions } from './sessionStore';
+import { isOnlyAdmin } from './platformAdmins';
+import { inSerializableTransaction } from '../utils/serializable';
 
 /**
  * A campaign that stops a deletion, with the other members its DM seat could
@@ -50,26 +53,36 @@ export interface PersonalAsset {
  */
 export type AccountDeletion =
   | { deleted: true; campaignIds: string[]; personal: PersonalAsset[] }
-  | { deleted: false; runs: BlockingCampaign[] };
+  | { deleted: false; refused: 'runsCampaigns'; runs: BlockingCampaign[] }
+  | { deleted: false; refused: 'onlyAdmin' };
 
+/**
+ * Delete an account, unless it is the instance's only admin
+ * (services/platformAdmins) or runs a campaign. One serializable transaction
+ * (utils/serializable.ts), so an admin removed at the same moment, or a DM
+ * seat handed over meanwhile, is seen before anything is written.
+ */
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
-  return prisma.$transaction(async (tx) => {
-    const owned = await tx.campaign.findMany({
-      where: { ownerId: userId },
+  return inSerializableTransaction(async (tx): Promise<AccountDeletion> => {
+    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true } });
+    if (account?.platformRole === 'ADMIN' && (await isOnlyAdmin(userId, tx))) {
+      return { deleted: false, refused: 'onlyAdmin' };
+    }
+
+    // The campaigns they own, and the ones whose DM seat is theirs.
+    const theirs = await tx.campaign.findMany({
+      where: { OR: [{ ownerId: userId }, { memberships: { some: { userId, role: 'DM' } } }] },
       select: {
         id: true,
         name: true,
+        ownerId: true,
         memberships: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
       },
     });
-    const dmOf = (c: (typeof owned)[number]) => c.memberships.find((m) => m.role === 'DM')?.userId;
-    // TODO(accounts): only campaigns the user owns are checked. After a DM
-    // handover the DM need not be the owner, and deleting that DM's account
-    // leaves the campaign with no DM until the owner hands the seat to someone
-    // (PUT /:campaignId/dm). Refuse, and list in `runs`, every campaign the
-    // user is DM of, so an admin can hand it on first.
-    const runs = owned
-      .filter((c) => dmOf(c) === undefined || dmOf(c) === userId)
+    const dmOf = (c: (typeof theirs)[number]) => c.memberships.find((m) => m.role === 'DM')?.userId;
+    const owned = theirs.filter((c) => c.ownerId === userId);
+    const runs = theirs
+      .filter((c) => dmOf(c) === userId || (c.ownerId === userId && dmOf(c) === undefined))
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -77,7 +90,7 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
           .filter((m) => m.userId !== userId)
           .map((m) => ({ userId: m.userId, displayName: m.user.displayName, role: m.role })),
       }));
-    if (runs.length > 0) return { deleted: false, runs };
+    if (runs.length > 0) return { deleted: false, refused: 'runsCampaigns', runs };
 
     // Every campaign left here has a DM other than this user.
     for (const campaign of owned) {
@@ -85,7 +98,7 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       if (dm !== undefined) await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: dm } });
     }
     // Documents they shared into a campaign stay shared: the share passes to
-    // the campaign's DM, or to its owner when the DM seat is theirs or empty.
+    // the campaign's DM, or to its owner when the DM seat is empty.
     // Owned campaigns have just passed to their DM above.
     const shares = await tx.campaignDocument.findMany({
       where: { linkedById: userId },

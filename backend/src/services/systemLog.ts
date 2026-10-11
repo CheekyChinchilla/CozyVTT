@@ -30,3 +30,16 @@ export async function writeSystemLog(entry: {
     logger.error('Failed to write system log', { err: e });
   }
 }
+
+/**
+ * Write an administrator's action to the activity log: who did it, what, and
+ * in `context` whose account it was (`targetUserId`) and what changed.
+ */
+export async function writeAdminLog(
+  adminUserId: string,
+  message: string,
+  level: LogLevel = 'INFO',
+  context?: Prisma.InputJsonObject
+): Promise<void> {
+  await writeSystemLog({ level, message, userId: adminUserId, context });
+}

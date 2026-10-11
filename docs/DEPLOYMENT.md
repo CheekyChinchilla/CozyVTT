@@ -814,6 +814,26 @@ Then apply it with `docker compose up -d`. Leave it out and the default of 20 ap
 
 Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
 
+### Other settings
+
+The rest of what the backend reads from its environment. Every one is optional; leave it out and the default applies. On Docker, set the ones marked **Yes** in `.env` and apply them with `docker compose up -d`. The ones marked **No** are not passed to the backend container, so setting them in `.env` does nothing there; they are for an install without Docker (`backend/.env`).
+
+| Setting | Default | What it does | Docker |
+|---|---|---|---|
+| `SESSION_MAX_AGE` | `3600000` (1 hour) | How long a sign-in lasts without a request, in milliseconds | Yes |
+| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds | Yes |
+| `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per minute to `/api` from one address | Yes |
+| `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
+| `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
+| `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
+| `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
+| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.yml` instead |
+| `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
+| `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
+| `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
+
+The instance's name is not an environment setting: set it in the setup wizard or in **Admin → Settings → Instance Name**. It is the browser tab's title and is used in every email the instance sends.
+
 ---
 
 ## File Storage
@@ -864,6 +884,10 @@ An instance always keeps at least one admin. While you are the only one, you can
 ### Via Admin Dashboard
 
 **Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
+
+**Backups are never deleted automatically.** Every backup made with **Create Backup**, and the database-only backup each restore makes first, stays in the folder until you delete it with the bin. A backup holds every uploaded file, so each one is about as large as `backend/uploads/`, and the folder grows with every backup: delete the ones you no longer need, or download them for safekeeping and then delete them. Watch the disk space with `df -h backend/backups`. (The 30-day pruning of the backup script below applies only to the script's own `cozyvtt_*.sql.gz` files.)
+
+A backup keeps the instance as it was when it was made. An account deleted since is still in it, with its email address, characters and files, and restoring that backup brings the account back; the admins' activity log is in it too, and it keeps every line for as long as the instance exists (see [The activity log](USER_GUIDE.md#the-activity-log-admins)). Delete old backups you no longer need if that matters to you.
 
 To keep them in another folder under Docker, name that folder in a small file of your own, `docker-compose.override.yml`, next to `docker-compose.yml`. Docker Compose reads it automatically on top of the shipped file, and `git pull` never touches it.
 
@@ -934,7 +958,7 @@ sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
 
 **Admin Dashboard → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
 
-Before anything is touched, the file is checked: it has to be a complete `pg_dump` of a CozyVTT database, holding nothing but SQL. An empty, cut-short or unrelated file is refused with the reason on screen, and nothing has changed. A backup of the database as it is at that moment is then written to the backup list (database only, named like any other backup), so restoring the wrong file can be undone by restoring that one; the restore names it when it finishes. The database is loaded in a single step that is undone as a whole if any part of it fails, so a backup that cannot be applied leaves your existing data untouched, and the reason is in the backend log:
+Before anything is touched, the file is checked: its name must end in `.zip`, it must be a ZIP archive of at most 4 GB that unpacks to at most 10 GiB in at most 100,000 files, and its database must be a complete `pg_dump` of a CozyVTT database, holding nothing but SQL. A file that fails any of these is refused with the reason on screen, and nothing has changed. Only one restore runs at a time: while one is running, a second restore, and **Create Backup**, are refused until it has finished. A backup of the database as it is at that moment is then written to the backup list (database only, named like any other backup), so restoring the wrong file can be undone by restoring that one; the restore names it when it finishes. The database is loaded in a single step that is undone as a whole if any part of it fails, so a backup that cannot be applied leaves your existing data untouched, and the reason is in the backend log:
 
 ```bash
 docker compose logs backend | grep -i restore
@@ -957,7 +981,9 @@ rm restore-me.sql.gz
 
 A database-only backup (the kind a restore makes first) has no uploaded files, and the `unzip` for the uploaded files then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu). Without Docker, run `restore.sh` with `DATABASE_URL` set, as in [Via the included scripts](#via-the-included-scripts), unpack the uploaded files into your uploads folder, run `cd backend && npx prisma migrate deploy` to bring an older backup up to this version (without Docker the backend does not do this when it starts), and restart the backend the way you run it.
 
-**A restore signs everyone out.** Backups made from now on leave the login sessions out, a restore empties whatever sessions an older backup carried, and every open game connection is dropped as soon as the backup is loaded, even if bringing it up to this version fails afterwards, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Everyone signs in again afterwards.
+**A restore signs everyone out.** Backups made from now on leave the login sessions out, and a restore empties whatever sessions an older backup carried, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Every open game connection is dropped just before the database is replaced, and until the restore has finished nobody can reconnect and every page's requests are answered "The instance is being restored from a backup. Try again in a minute": a change someone made during the load would otherwise be written over the restored data. Everyone signs in again afterwards. Stopping play before you restore spares your players the interruption.
+
+If the backend is stopped while a restore is running, the uploaded backup it was working from is left in the backups folder as `restore-temp-….zip`; it is deleted the next time the backend starts.
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
@@ -1030,6 +1056,8 @@ If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 ```bash
 DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
 ```
+
+Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `@`, `/` or `%`, is written percent-encoded there (`%40` for `@`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
 
 Under Docker, the scripts take the database's user and name from
 `DATABASE_USER` and `DATABASE_NAME` in their environment, not from `.env`, and
@@ -1162,6 +1190,8 @@ docker compose exec backend wget -qO- http://localhost:4000/health
 ```
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
+
+The **Status** card on the Admin Panel's dashboard asks the backend the same question, and also whether live game connections can be made. It says **Healthy** only when the API, the database (**DB**) and live connections (**WS**) all work, **Degraded** with the failing part in red when one does not, and **Unknown** when the backend could not be asked at all.
 
 If you run your own reverse proxy and want an uptime monitor to reach `/health` from outside, add a route for it alongside your `/api` route, both pointing at the backend.
 

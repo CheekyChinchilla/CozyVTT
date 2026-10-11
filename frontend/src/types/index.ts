@@ -299,6 +299,14 @@ export interface AssetTypeStat {
   sizeBytes: number;
 }
 
+/** GET /api/admin/health: whether each part of the server is working. */
+export interface AdminHealth {
+  status: 'healthy' | 'degraded';
+  services: { api: 'ok'; database: 'ok' | 'error'; websocket: 'ok' | 'error' };
+  /** Live connections open now. */
+  connections: number;
+}
+
 export interface SystemStats {
   userCount: number;
   campaignCount: number;
@@ -326,6 +334,8 @@ export interface AdminSystemSettings {
 }
 
 export interface AppearanceSettings {
+  /** The instance's name, which the browser tab shows. */
+  instanceName: string;
   themeId: string;
   customThemeColors: Record<string, string> | null;
   fontId: string;
@@ -355,7 +365,10 @@ export interface AdminSystemLog {
   id: string;
   level: string;
   message: string;
+  /** The administrator who acted; null for the instance's own lines. */
   userId: string | null;
+  /** That administrator's account as it is now; null when there is none, or it has been deleted. */
+  actor: { id: string; email: string; displayName: string } | null;
   context: Record<string, unknown> | null;
   createdAt: string;
 }
@@ -882,7 +895,8 @@ export type AssetUseKind =
   | 'characterTemplate'
   | 'creature'
   | 'tokenTemplate'
-  | 'campaignSetting';
+  | 'campaignSetting'
+  | 'vibePeriod';
 
 /**
  * One place an asset is used, from the server's refusal to delete it. `name`

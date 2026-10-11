@@ -138,7 +138,7 @@ export function apiDeletionBlockers(err: unknown): DeletionBlocker[] | undefined
 }
 
 const ASSET_USE_KINDS: readonly AssetUseKind[] = [
-  'map', 'token', 'character', 'characterTemplate', 'creature', 'tokenTemplate', 'campaignSetting',
+  'map', 'token', 'character', 'characterTemplate', 'creature', 'tokenTemplate', 'campaignSetting', 'vibePeriod',
 ];
 
 /**

@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { CustomThemeColors } from '../validators/appearance';
 import logger from '../utils/logger';
 
 /**
@@ -82,11 +83,13 @@ export async function setupState(): Promise<{ setupCompleted: boolean; hasUsers:
 }
 
 /**
- * Update system settings
+ * What every page needs before anyone signs in: the instance's name (the
+ * browser tab's title), theme and branding.
  */
 export async function getAppearanceSettings() {
   const settings = await getSystemSettings();
   return {
+    instanceName: settings.instanceName,
     themeId: settings.themeId,
     customThemeColors: settings.customThemeColors,
     fontId: settings.fontId,
@@ -96,33 +99,35 @@ export async function getAppearanceSettings() {
   };
 }
 
+/**
+ * Update system settings
+ */
 export async function updateSystemSettings(data: {
   instanceName?: string;
   timezone?: string;
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   themeId?: string;
-  // A `Json?` column: a map of theme token names to colour strings.
-  //
-  // Deliberately not `| null`. Prisma wants `Prisma.DbNull` rather than a plain
-  // `null` for a nullable Json column, so passing `null` here fails at runtime.
-  //
-  // This does not *prevent* that: the only caller, admin.ts, assigns straight
-  // from `req.body`, so a null can still arrive from a request and still throw.
-  // Closing that needs validation at the route, which is its own change. What
-  // the type does is stop new code being written against a signature that
-  // advertises a value Prisma will reject.
-  customThemeColors?: Record<string, string>;
+  /**
+   * The four colours of the custom theme, checked by the route
+   * (validators/appearance.ts); null clears them. Prisma wants
+   * `Prisma.DbNull` for that in a nullable Json column, which this passes.
+   */
+  customThemeColors?: CustomThemeColors | null;
   fontId?: string;
   customLogoUrl?: string | null;
   customFaviconUrl?: string | null;
   customMascotUrl?: string | null;
 }) {
   const settings = await getSystemSettings();
+  const { customThemeColors, ...rest } = data;
 
   return await prisma.systemSettings.update({
     where: { id: settings.id },
-    data,
+    data: {
+      ...rest,
+      ...(customThemeColors !== undefined && { customThemeColors: customThemeColors ?? Prisma.DbNull }),
+    },
   });
 }
 

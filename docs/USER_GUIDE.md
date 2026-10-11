@@ -45,9 +45,10 @@ Create the administrator account. This is the most powerful account on the platf
 **Step 3 — System Configuration**
 Give your instance its identity:
 
-- **Instance Name** — Appears in browser tabs and the page title (e.g., "The Hearthstone Tavern")
-- **Timezone** — Used for timestamps across the platform; you can auto-detect or pick from a list
+- **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
 - **Public Registration** — Choose whether new users can register themselves. For private groups, leave this **off** and create accounts manually from the Admin Panel
+
+Earlier versions also asked for a **Timezone** here and showed it under **Admin Panel → Settings**. Nothing ever used it, so it has been removed; times are shown in each person's own browser time zone, as they always were. An instance that saved one keeps it stored, unused.
 
 *Screenshot pending — System configuration step.*
 
@@ -82,6 +83,29 @@ CozyVTT has two platform-level roles:
 | **User** | Create campaigns (as DM), join campaigns (as player), manage characters |
 
 Your role badge is visible on your profile page.
+
+### The activity log (admins)
+
+The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins' activity log. A line is written each time an administrator:
+
+- creates, invites, approves or deletes an account;
+- makes someone an administrator, or takes the role away;
+- grants or takes away **Global Assets** or template editing;
+- changes someone else's email address, display name, avatar or bio;
+- resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
+- changes the instance's settings or default theme;
+- makes, deletes or restores a backup, or deletes leftover files.
+
+The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:
+
+| Column | What it shows |
+|---|---|
+| **Time** | How long ago it happened |
+| **Level** | INFO, or WARNING for the more serious actions, such as deleting an account or changing someone's email address |
+| **By** | The administrator who acted, by display name and email address. **The instance** for a line the instance wrote itself |
+| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after (for the settings, the new value) |
+
+**What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account it was about by its email address, and deleting that account leaves the line as it is. **By** is looked up each time the tab opens, so if the administrator's own account is deleted later, their lines stay and **By** shows **Deleted account**. The log is part of every backup.
 
 ### Campaign Roles
 
@@ -392,7 +416,7 @@ Use the **search bar** to find assets by name or tag. Filter by scope (Global, P
 
 Click any asset card to open its **detail panel** on the right. From there you can see full metadata, edit tags, or delete the asset.
 
-**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
+**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
 *Screenshot pending — Asset detail panel.*
 
@@ -691,7 +715,7 @@ From the **Appearance** section of your profile, pick the color theme and font *
 - Pick from 8 open-source font families
 - Or click **Custom** to dial in your own primary / accent / background / text colors
 
-Your choice is saved to your account and applies immediately. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
+Your choice is saved to your account and applies immediately. While you drag one of the **Custom** colours, the page follows the colour as it changes and saves it once you let go for a moment. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
 
 ### Signing Out
 
@@ -740,7 +764,7 @@ Your chat messages and the dice rolls you made stay in their campaigns, no longe
 
 Every other browser or device signed in to the account is signed out at the same moment.
 
-> **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
+> **If you run a campaign,** whether you created it or were handed the DM seat, hand the seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 
 If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
 

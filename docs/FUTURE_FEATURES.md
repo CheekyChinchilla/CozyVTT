@@ -65,7 +65,6 @@ _Nothing at present._
 - `1.5.4` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
 - `1.5.2` **Deleting a creature from the Creature Library's Favorites leaves its row there** until the library is reopened. The delete removes it from the main list only (`CreatureLibrary.tsx`).
 - `1.5.2` **The Creature Library and Token Templates forms say only "Failed to update creature" (or template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
-- `1.5.2` **A time-of-day period's sound file is not counted when an asset is checked before deleting.** The in-use check reads only the track playing now, so deleting a period's track while it is not playing gives no warning, and switching to that period later changes the vibe without audio (`services/assetUsage.ts`).
 - `1.5.2` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
 
 ### Play and connection
@@ -88,19 +87,14 @@ _Nothing at present._
 ### Accounts
 
 - `1.5.2` **Sign-up shows "Registration Failed" instead of the reason,** such as a missing display name or an email already registered. The same bug as "Sign-in errors show a status label instead of the helpful sentence" under Polish / tech debt, in `RegisterPage.tsx`.
-- `1.5.2` **The Admin Panel's Create User and Invite User skip the display-name check.** `routes/admin.ts` stores a sanitised, shortened name, so one typed as `<>` is saved empty.
 - `1.5.2` **The reason a table's sign-in ended is only logged.** The server sends it on the socket before closing it, and `socket.ts` writes it to the browser console; only an open Dice tab shows it.
 - `1.5.2` **The sign-in and MFA pages show the reply's short error label** ("Authentication Failed", "Invalid Code", "Rate Limited") instead of its sentence. Described under Polish / tech debt as "Sign-in errors show a status label instead of the helpful sentence" (`LoginPage.tsx`, `MFAVerifyPage.tsx`).
 - `1.5.2` **"Back to login" on the MFA code page loops back to the code page,** because the pending sign-in is still set (`MFAVerifyPage.tsx`).
 - `1.5.2` **The app never shows how many MFA backup codes are left.** `AuthContext.tsx` only logs the server's low-codes warning.
-- `1.5.2` **Deleting the account of a DM who does not own the campaign leaves it with no DM.** After a handover the DM and the owner can be different people, and `services/accountDeletion.ts` refuses a deletion only for a campaign the user owns, so the new DM's deletion goes through and the campaign has no DM until its owner hands the seat to someone from Campaign Settings → Members. The check should cover every campaign the user is DM of.
 
 ### Server and deployment
 
-- `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
-- `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
-- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open, and the restore reads the archive's whole directory before its file-count check can run (`utils/archive.ts`).
-- `1.5.2` **A crafted backup can make the command-line restore very slow.** One pattern in `backend/scripts/restore.sh` backtracks on a long line (12 seconds on two 100 KB lines with mawk). Only someone with shell access to the server runs that script, on a backup they chose.
+- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open (`utils/archive.ts`).
 
 ---
 

@@ -430,18 +430,18 @@ paths:
                   type: string
                   default: CozyVTT
                   description: >-
-                    Shown in browser tabs and page titles. Angle brackets are
-                    removed, the value is trimmed, and anything past 100
-                    characters is cut off. Blank, missing or non-string values
-                    leave the default in place rather than failing setup, which
-                    can only be run once.
+                    Shown in the browser tab and in the emails the instance
+                    sends. Angle brackets are removed, the value is trimmed,
+                    and anything past 100 characters is cut off. Blank, missing
+                    or non-string values leave the default in place rather than
+                    failing setup, which can only be run once.
                 timezone:
                   type: string
                   default: UTC
                   description: >-
-                    IANA timezone name, used for timestamps. Not checked against
-                    the timezone list. Treated like `instanceName`, cut off at
-                    50 characters.
+                    Stored, and used by nothing; the wizard no longer sends it.
+                    Accepted so an older client is not refused. Treated like
+                    `instanceName`, cut off at 50 characters.
                 allowRegistration:
                   type: boolean
                   default: false
@@ -1446,9 +1446,9 @@ paths:
         '409':
           description: >-
             The caller is the instance's only admin (another user has to be
-            promoted to admin first), or owns a campaign whose DM seat is
-            theirs or empty (the message names each one). Checked after the
-            password. Nothing was changed. The body is `{ error, message }`
+            promoted to admin first), or sits as DM of a campaign, whether or
+            not they own it, or owns a campaign whose DM seat is empty (the
+            message names each one). Checked after the password. Nothing was changed. The body is `{ error, message }`
             only; unlike `DELETE /api/users/{id}` it carries no `campaigns`
             list.
           content:
@@ -1497,9 +1497,10 @@ paths:
         - Authentication
       summary: Get instance appearance settings
       description: |
-        Public endpoint — returns the instance's theme, font, and branding
-        URLs. The frontend calls this on every page load so the login page
-        can paint with the correct theme before authentication. No
+        Public endpoint — returns the instance's name, theme, font, and
+        branding URLs. The frontend calls this on every page load so the login
+        page can paint with the correct theme before authentication, and shows
+        the name as the browser tab's title. No
         authentication required, and reachable during a forced password
         change. Until setup has run it is refused with the setup 403 like
         other routes, so the setup wizard shows the built-in defaults.
@@ -1513,6 +1514,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AppearanceSettings'
               example:
+                instanceName: The Hearthstone Tavern
                 themeId: cozy-default
                 customThemeColors: null
                 fontId: default
@@ -1754,8 +1756,8 @@ paths:
         every login session and live WebSocket connection the deleted user
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
-        checked, and the 409 for a user who owns a campaign whose DM seat is
-        theirs or empty, are as for `DELETE /api/auth/account`. No
+        checked, and the 409 for a user who sits as DM of a campaign or owns
+        one whose DM seat is empty, are as for `DELETE /api/auth/account`. No
         password is asked for.
       operationId: deleteUser
       security:
@@ -1802,8 +1804,11 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: >-
-            The user owns a campaign whose DM seat is theirs or empty.
-            `campaigns` lists each such campaign with its other members,
+            The user is the instance's only admin (which can happen only when
+            the calling admin lost the role at the same moment), with no
+            `campaigns`; or the user sits as DM of a campaign, whether or not
+            they own it, or owns a campaign whose DM seat is empty. `campaigns`
+            lists each such campaign with its other members,
             so the admin can hand the DM seat over (`PUT
             /api/campaigns/{campaignId}/dm`) or delete the campaign and try
             again. Nothing was changed.
@@ -2678,6 +2683,12 @@ paths:
         order and the map on screen are sent again as each new role sees it.
         The caller need not be a member, so an unknown campaign is a 404 here,
         as is a `userId` that is not a member; naming the sitting DM is a 400.
+        Who may hand the seat over, who holds it and the change are read and
+        made as one serializable transaction, so of two hand-overs at the same
+        moment the second sees the first: a sitting DM whose seat was handed
+        on meanwhile is refused with 403. Every DM row is stepped down, so a
+        campaign left with two DMs by an older version comes out with one;
+        `previousDmId` names the first of them.
         The response lists every membership with its `user`.
       operationId: transferDM
       security:
@@ -5212,8 +5223,10 @@ paths:
                     type: array
                     description: >-
                       At most 100 entries; `omitted` counts the rest. Each is
-                      one map, character, template, creature or campaign, or a
-                      map's tokens together (`count`), or, where the caller may
+                      one map, character, template, creature or campaign, a
+                      map's tokens together (`count`), or a campaign's
+                      time-of-day period whose sound it is (`vibePeriod`, named
+                      by the period, since 1.5.2), or, where the caller may
                       not see the record, every use of one kind folded into a
                       single entry with `name`, `campaignId` and `campaignName`
                       null.
@@ -5222,11 +5235,11 @@ paths:
                       properties:
                         kind:
                           type: string
-                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting]
+                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod]
                         name:
                           type: string
                           nullable: true
-                          description: The map, character, template, creature or campaign.
+                          description: The map, character, template, creature or campaign, or the time-of-day period for `vibePeriod`.
                         campaignId:
                           type: string
                           nullable: true
@@ -8486,6 +8499,50 @@ paths:
   # ADMIN ENDPOINTS
   # ============================================
 
+  /api/admin/health:
+    get:
+      tags: [Admin]
+      summary: Check the server's parts, for the dashboard's status card
+      description: >-
+        Platform ADMIN only. Asks the database for an answer and checks that the
+        live-connection (Socket.io) server is running. Answers 200 whatever it
+        finds, with each part's state; `status` is `healthy` only when every part
+        is `ok`. A request that cannot reach this route at all (no answer, or an
+        error before it) is how a client tells the API itself is down. The public
+        `GET /health` is the probe for uptime monitors; this one is behind the
+        admin session.
+      operationId: adminGetHealth
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The state of each part
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded]
+                  services:
+                    type: object
+                    properties:
+                      api: { type: string, enum: [ok] }
+                      database: { type: string, enum: [ok, error] }
+                      websocket: { type: string, enum: [ok, error] }
+                  connections:
+                    type: integer
+                    description: Live connections open now.
+              example:
+                status: healthy
+                services: { api: ok, database: ok, websocket: ok }
+                connections: 4
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/admin/stats:
     get:
       tags: [Admin]
@@ -8570,7 +8627,10 @@ paths:
                       customThemeColors:
                         type: object
                         nullable: true
-                        description: Map of theme token name to colour string, stored as the PUT request sent it.
+                        description: >-
+                          The custom theme's four colours, each `#RRGGBB`. A row
+                          stored before 1.5.2 may hold whatever the PUT request
+                          sent then.
                         additionalProperties:
                           type: string
                       fontId:
@@ -8601,10 +8661,20 @@ paths:
       tags: [Admin]
       summary: Update system settings
       description: |
-        Every field is optional; only the ones present are changed. `instanceName`,
-        `timezone`, `themeId` and `fontId` are trimmed, stripped of `<` and `>`, then cut
-        to their max length rather than rejected for being too long. `customThemeColors`
-        is stored exactly as sent, with no validation of its keys or values.
+        Every field is optional; only the ones present are changed, and fields not
+        listed here are ignored. A field of the wrong type answers 400.
+        `instanceName` and `timezone` are trimmed, stripped of `<` and `>`, then cut
+        to their max length rather than rejected for being too long. `instanceName`
+        is the browser tab's title and is used in emails. `timezone` is stored and
+        used by nothing; the Admin Panel no longer offers it, and it is accepted so
+        an older client is not refused.
+
+        `themeId` and `fontId` must name one of the app's themes (or `custom`) and
+        fonts, the same lists `PUT /api/users/{id}/preferences` accepts.
+        `customThemeColors` holds exactly `primary`, `accent`, `background` and
+        `text`, each `#RRGGBB`; `null` clears it. Anything else answers 400 and
+        nothing is changed. The theme is painted for every visitor, the sign-in
+        page included, which is why it is checked.
 
         `customLogoUrl`, `customFaviconUrl` and `customMascotUrl` name a file this
         instance serves: `""` or `null` clears the override back to the default, and
@@ -8634,14 +8704,20 @@ paths:
                   type: boolean
                 themeId:
                   type: string
-                  maxLength: 50
+                  enum: [cozy-default, autumn-hearth, desert-sand, rose-garden, ocean-depths, northern-frost, enchanted-forest, twilight-vale, obsidian-night, shadow-realm, deep-dungeon, midnight-court, parchment-classic, slate-modern, dragonfire, arcane-storm, custom]
                 customThemeColors:
                   type: object
-                  additionalProperties:
-                    type: string
+                  nullable: true
+                  additionalProperties: false
+                  required: [primary, accent, background, text]
+                  properties:
+                    primary: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    accent: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    background: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    text: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
                 fontId:
                   type: string
-                  maxLength: 50
+                  enum: [default, medieval, elegant, modern, handwritten, clean, scholarly, gothic]
                 customLogoUrl:
                   type: string
                   nullable: true
@@ -8668,7 +8744,18 @@ paths:
                     type: object
                     description: The full settings object, in the same shape as GET /api/admin/settings returns.
         '400':
-          description: A branding URL was not a same-origin path
+          description: >-
+            A field had the wrong type, `themeId` or `fontId` named no theme or
+            font of the app, `customThemeColors` was not four `#RRGGBB` colours
+            (`Validation Error`, the message naming the field), or a branding
+            URL was not a same-origin path. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: 'customThemeColors.background: background must be #RRGGBB'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -8715,6 +8802,7 @@ paths:
                           nullable: true
                   recentLogs:
                     type: array
+                    description: The newest 100 lines of the activity log, newest first.
                     items:
                       type: object
                       properties:
@@ -8728,9 +8816,27 @@ paths:
                         userId:
                           type: string
                           nullable: true
+                          description: The administrator who acted; null for a line the instance wrote itself.
+                        actor:
+                          type: object
+                          nullable: true
+                          description: |
+                            The account named by userId, looked up at request time. Null when userId is
+                            null, or when that account has since been deleted (userId is kept).
+                          properties:
+                            id:
+                              type: string
+                            email:
+                              type: string
+                            displayName:
+                              type: string
                         context:
                           type: object
                           nullable: true
+                          description: |
+                            What the line is about. A change to an account has targetUserId and
+                            changes, each field as { from, to }; a settings change has changes with
+                            the new values only.
                         createdAt:
                           type: string
                   recentUsers:
@@ -8863,11 +8969,13 @@ paths:
         sent, so the admin never holds a working credential unnecessarily. To create an
         account without any password at all, use `/api/admin/users/invite`.
 
-        `displayName` defaults to the part of the email before `@` when omitted, is
-        trimmed and stripped of `<` and `>`, then cut to 50 characters rather than
-        rejected for being too long. `platformRole` is not validated against the enum:
-        any value other than exactly `"ADMIN"`, including an unrecognised string,
-        becomes `USER`.
+        `email` is trimmed and lowercased; an address holding `<` or `>` is refused
+        with 400, so the address checked for a duplicate is the one stored and
+        emailed. `displayName` is checked as sign-up checks it: text, stripped of `<`
+        and `>` and trimmed, then 1 to 50 characters, or 400 with the reason. Omitted,
+        null or blank, it defaults to the part of the email before `@` (its first 50
+        characters). `platformRole` is not validated against the enum: any value
+        other than exactly `"ADMIN"`, including an unrecognised string, becomes `USER`.
       operationId: adminCreateUser
       security:
         - cookieAuth: []
@@ -8911,13 +9019,22 @@ paths:
                       One-time temporary password. Present ONLY when emailSent is false —
                       share it securely; it is not retrievable afterwards.
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `Email is required`, `Invalid email address` (including one with `<`
+            or `>`), or the display name's reason, such as `Display name is
+            required` or `Display name must be 50 characters or fewer`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email already in use
+          description: >-
+            `Email is already in use`, including when another request created an
+            account with the address after the check (this answered 500 before 1.5.2).
 
   /api/admin/users/invite:
     post:
@@ -8936,9 +9053,10 @@ paths:
         `POST /api/auth/reset-password` — invitations and password resets share the same
         token machinery.
 
-        `displayName` and `platformRole` are handled exactly as in `POST /api/admin/users`:
-        the name is cut to 50 characters rather than rejected, and any `platformRole`
-        other than exactly `"ADMIN"` becomes `USER`.
+        `email`, `displayName` and `platformRole` are handled exactly as in
+        `POST /api/admin/users`: an address with `<` or `>` and a display name sign-up
+        would refuse answer 400, and any `platformRole` other than exactly `"ADMIN"`
+        becomes `USER`.
       operationId: adminInviteUser
       security:
         - cookieAuth: []
@@ -8977,13 +9095,19 @@ paths:
                     type: integer
                     example: 7
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: As for `POST /api/admin/users`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Email already in use
+          description: >-
+            `Email is already in use`, including when another request created an
+            account with the address after the check.
         '502':
           description: The invitation email could not be delivered; no account was created
         '503':
@@ -8994,10 +9118,12 @@ paths:
       tags: [Admin]
       summary: Resend an invitation
       description: |
-        Issues a fresh invitation link and invalidates any outstanding one. Useful when the
-        original expired or never arrived. Requires SMTP. Works for any existing account,
-        not only one that was originally created through `/api/admin/users/invite` — it
-        sets a usable password-reset token regardless of how the account was created.
+        Issues a fresh invitation link, valid for 7 days, and invalidates any outstanding
+        one. Useful when the original expired or never arrived. Requires SMTP. Only for an
+        account nobody has signed in to yet (`lastLoginAt` is null), whether it was
+        invited or created with a temporary password; an account that has signed in is
+        refused with 409, and `POST /api/users/{id}/send-reset-link` (a 1-hour link) is
+        the way to help it.
       operationId: adminResendInvite
       security:
         - cookieAuth: []
@@ -9026,6 +9152,15 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The account has already signed in, so there is no invitation to resend.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.
         '500':
           description: The invitation email could not be sent
         '503':
@@ -9139,7 +9274,9 @@ paths:
         login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
-        loaded back with the restore route.
+        loaded back with the restore route. Refused with 409 while a restore runs.
+        Backups are never deleted automatically: each stays until it is deleted
+        with the delete route.
       security:
         - cookieAuth: []
       responses:
@@ -9161,13 +9298,19 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A restore is running; make the backup once it has finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: pg_dump not found or backup failed
     get:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read. A backup directory that cannot be read answers 500, not an empty list.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read, and so is an uploaded backup (`restore-temp-…`) a backend stopped mid-restore left behind, when no restore is running. A backup directory that cannot be read answers 500, not an empty list.
       security:
         - cookieAuth: []
       responses:
@@ -10204,13 +10347,15 @@ paths:
       tags: [Admin]
       summary: Restore the instance from a backup archive
       description: >
-        Platform ADMIN only. The upload is capped at 4 GB and its filename must end in
-        `.zip`. Once accepted, the archive is unpacked under a limit of 100,000 entries
-        and 10 GiB of decompressed data, and an entry whose path could escape the
-        destination folder is refused. An oversized or wrongly-named upload, an
-        uploaded file that is not actually a ZIP despite its name, or one over an
-        archive limit currently all surface as a generic 500 Internal Server Error
-        rather than a 400, and nothing is changed in any of these cases. Replaces the
+        Platform ADMIN only. One restore runs at a time: a second one, asked for
+        while one is taking its upload or writing its safety backup, answers 409,
+        and once the database is being replaced every API request answers 503
+        until the restore ends. The upload is capped at 4 GB (413) and its filename
+        must end in `.zip` (400). Once accepted, a file that is not a ZIP archive is
+        refused with 400, as is an archive listing more than 100,000 entries or
+        holding an entry whose path could escape the destination folder; an archive
+        that unpacks to more than 10 GiB answers 413. Each refusal names its reason
+        and changes nothing. Replaces the
         database from an archive downloaded earlier and copies the archive's uploaded
         files over the existing ones (a file the archive does not have is left in
         place). Needs pg_dump and psql present in the backend image. The archive's
@@ -10235,9 +10380,11 @@ paths:
         statements, so it restores under this instance's database user whatever
         user the archive came from. The login sessions are not restored: new
         archives carry none, and an older archive's are emptied in the same
-        transaction. As soon as the load commits, every live socket is
-        disconnected and the in-memory combat state is dropped, whether or not
-        the steps after it succeed, so everyone signs in again. After a
+        transaction. Before the load starts, every live socket is sent an
+        `error` and disconnected, and until the restore ends a new socket is
+        refused and every other API request answers 503, so no change made
+        during the load lands on the restored rows; once the load commits the
+        in-memory combat state is dropped, and everyone signs in again. After a
         successful load the migrations run, so an archive from an older release
         comes up to date. If that step fails, or copying the uploaded files
         fails, the response is 500 Restore Incomplete and says what to do.
@@ -10270,19 +10417,58 @@ paths:
                     type: string
                     description: Filename, in the backup list, of the backup of the database as it was before the restore
         '400':
-          description: No file, or a file that is not a complete CozyVTT backup; nothing was changed
+          description: >-
+            No file; a filename not ending in `.zip`; a file that is not a ZIP
+            archive; an archive listing more than 100,000 entries or holding an
+            unsafe path; or a ZIP that is not a complete CozyVTT backup
+            (`Invalid Backup`). The message gives the reason and ends "Nothing
+            was changed." (Before 1.5.2 all but the last answered 500.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Backup
+                message: The file is not a ZIP archive, or it is damaged. Nothing was changed.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Another restore is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: A restore is already running. Wait for it to finish, then try again if you still need to.
+        '413':
+          description: >-
+            The upload is larger than 4 GB, or the archive unpacks to more than
+            10 GiB (`Backup Too Large`). Nothing was changed. (Before 1.5.2 this
+            answered 500.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: >
             Restore Failed (nothing changed), Restore Incomplete (the database was
             restored but migrating it or copying its files failed), a tool is not
-            available in the image, or Internal Server Error for an oversized or
-            wrongly-named upload, a body that is cut off or malformed, an uploaded
-            file that is not actually a ZIP, or an archive over the entry-count or
-            decompressed-size limit (nothing changed in any of these)
+            available in the image, or Internal Server Error for a body that is cut
+            off or malformed (nothing changed)
+        '503':
+          description: >-
+            Another restore is replacing the database; every API request is
+            refused until it ends.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Service Unavailable
+                message: The instance is being restored from a backup. Try again in a minute; everyone signs in again once it has finished.
 
 components:
   securitySchemes:
@@ -11801,6 +11987,12 @@ components:
         Instance-wide appearance settings — used on public/unauthenticated pages
         and as the default for users who have not picked their own theme.
       properties:
+        instanceName:
+          type: string
+          example: The Hearthstone Tavern
+          description: >-
+            The name set in the setup wizard or Admin → Settings, shown as the
+            browser tab's title. Emails use it too.
         themeId:
           type: string
           example: cozy-default
@@ -11808,8 +12000,8 @@ components:
           type: object
           nullable: true
           description: >-
-            The colours an administrator chose for the custom theme. The app
-            sends these four keys; the server stores the object as sent.
+            The colours an administrator chose for the custom theme: these
+            four keys, each `#RRGGBB` (checked since 1.5.2).
           properties:
             primary:    { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
             accent:     { type: string, pattern: '^#[0-9a-fA-F]{6}$' }

@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { findOrphanedFiles, deleteOrphanedFiles, ORPHAN_MIN_AGE_MS } from '../services/orphanedFiles';
 import { DeleteOrphanedFilesSchema } from '../validators/orphanedFiles';
-import { writeAdminLog } from './admin';
+import { writeAdminLog } from '../services/systemLog';
 import logger from '../utils/logger';
 
 const router = Router();

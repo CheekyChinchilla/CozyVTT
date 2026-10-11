@@ -297,14 +297,20 @@ describe('documents the person shared into a campaign', () => {
     expect(await prisma.asset.findUnique({ where: { id: doc.id } })).toBeNull();
   });
 
-  it('pass to the owner when the person deleting their account is the DM', async () => {
+  // A sitting DM cannot delete their account (dmSeatRaces.e2e.test.ts),
+  // so the owner inherits a share only when nobody sits in the DM seat.
+  it('pass to the owner when the campaign has nobody in the DM seat', async () => {
     const owner = await member('Docs Owner 2');
-    const dm = await member('Docs Sitting DM');
-    const campaignId = await campaignRunBy(owner.user.id, dm.user.id);
-    const doc = await documentOf(dm.user.id);
-    const link = await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: dm.user.id } });
+    const sharer = await member('Docs Sharing Player');
+    const campaign = await createTestCampaign(owner.user.id, { name: `Deletion ${randomUUID().slice(0, 6)}` });
+    campaignIds.push(campaign.id);
+    await prisma.campaignMembership.createMany({
+      data: [owner.user.id, sharer.user.id].map((userId) => ({ userId, campaignId: campaign.id, role: 'PLAYER' as const, characterIds: [] })),
+    });
+    const doc = await documentOf(sharer.user.id);
+    const link = await prisma.campaignDocument.create({ data: { campaignId: campaign.id, assetId: doc.id, linkedById: sharer.user.id } });
 
-    expect((await dm.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    expect((await sharer.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
 
     expect((await prisma.campaignDocument.findUniqueOrThrow({ where: { id: link.id } })).linkedById).toBe(owner.user.id);
   });

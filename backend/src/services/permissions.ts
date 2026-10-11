@@ -264,13 +264,14 @@ export async function canDeleteCampaign(
 export async function canTransferDM(
   userId: string,
   campaignId: string,
-  platformRole: PlatformRole
+  platformRole: PlatformRole,
+  db: Prisma.TransactionClient = prisma
 ): Promise<boolean> {
   if (isAdmin(platformRole)) {
     return true;
   }
 
-  const campaign = await prisma.campaign.findUnique({
+  const campaign = await db.campaign.findUnique({
     where: { id: campaignId },
     select: { ownerId: true },
   });
@@ -283,7 +284,7 @@ export async function canTransferDM(
     return true;
   }
 
-  const membership = await prisma.campaignMembership.findUnique({
+  const membership = await db.campaignMembership.findUnique({
     where: { userId_campaignId: { userId, campaignId } },
     select: { role: true },
   });

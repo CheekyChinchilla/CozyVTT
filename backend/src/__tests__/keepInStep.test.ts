@@ -42,6 +42,19 @@
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
  * refused values, and the new example line started a server.
+ *
+ * The database address in the backup and restore scripts. Each reads
+ * DATABASE_URL in its own copy of the same block; a fix to one (decoding the
+ * password, the default port) has to reach the other.
+ *
+ * The kinds of thing that can use an asset. The server lists them when it
+ * refuses to delete one, the client describes each kind and drops a kind it
+ * does not know, and the API document lists them; a kind added on the server
+ * alone shows the DM a shorter list than the server sent.
+ *
+ * The themes and fonts. The server accepts a theme or font only from its
+ * list, for a user's preferences and the instance's default theme alike; a
+ * theme the app offers that the list lacks is one nobody can save.
  */
 
 import crypto from 'crypto';
@@ -50,6 +63,7 @@ import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
+import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -268,5 +282,63 @@ describe('the SESSION_SECRET examples in the example files and the guides', () =
   it('are all refused by a production server, so a block copied as written does not run on a known secret', () => {
     expect(examples.length).toBeGreaterThan(0);
     expect(examples.filter(({ value }) => sessionSecretProblem(value) === null)).toEqual([]);
+  });
+});
+
+describe('the themes and fonts the server accepts', () => {
+  const themes = read('frontend/src/themes.ts');
+  /** The `id` of every entry in one of the file's exported arrays. */
+  const ids = (name: string) => {
+    const start = themes.indexOf(`export const ${name}`);
+    if (start === -1) throw new Error(`frontend/src/themes.ts no longer declares ${name}; update this test with the file`);
+    const block = themes.slice(start, themes.indexOf('\n];', start));
+    return [...block.matchAll(/^\s+id: '([^']+)',$/gm)].map((m) => m[1]);
+  };
+
+  it('are the themes the app offers, and custom', () => {
+    expect([...THEME_IDS].sort()).toEqual([...ids('PRESET_THEMES'), 'custom'].sort());
+  });
+
+  it('are the fonts the app offers', () => {
+    expect([...FONT_IDS].sort()).toEqual(ids('FONT_OPTIONS').sort());
+  });
+});
+
+describe('the DATABASE_URL block in backup.sh and restore.sh', () => {
+  const block = (rel: string) => {
+    const source = read(rel);
+    const start = source.indexOf('# Parse DATABASE_URL');
+    if (start === -1) throw new Error(`${rel} no longer has its "# Parse DATABASE_URL" block; update this test with the file`);
+    return source.slice(start, source.indexOf('\nfi\n', start));
+  };
+
+  it('is the same in both scripts', () => {
+    expect(block('backend/scripts/restore.sh')).toBe(block('backend/scripts/backup.sh'));
+  });
+});
+
+describe('the kinds of thing that can use an asset', () => {
+  /** The members of `export type AssetUseKind = | 'a' | 'b';` in a file. */
+  const union = (rel: string) => {
+    const m = /export type AssetUseKind =([^;]+);/.exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares AssetUseKind; update this test with the file`);
+    return [...m[1].matchAll(/'([A-Za-z]+)'/g)].map((k) => k[1]).sort();
+  };
+  const server = union('backend/src/services/assetUsage.ts');
+
+  it('are the same in the browser and on the server', () => {
+    expect(union('frontend/src/types/index.ts')).toEqual(server);
+  });
+
+  it('are all kept by the client when it reads a refusal', () => {
+    const m = /const ASSET_USE_KINDS: readonly AssetUseKind\[\] = \[([^\]]+)\]/.exec(read('frontend/src/utils/errors.ts'));
+    if (!m) throw new Error('frontend/src/utils/errors.ts no longer declares ASSET_USE_KINDS; update this test with the file');
+    expect([...m[1].matchAll(/'([A-Za-z]+)'/g)].map((k) => k[1]).sort()).toEqual(server);
+  });
+
+  it('are listed in the API document', () => {
+    const m = /enum: \[(map, token, character[^\]]*)\]/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer lists the asset use kinds; update this test with the file');
+    expect(m[1].split(',').map((k) => k.trim()).sort()).toEqual(server);
   });
 });

@@ -43,6 +43,7 @@ import type {
   CampaignInvitation,
   ApiError,
   SystemStats,
+  AdminHealth,
   AdminSystemSettings,
   AdminActivityData,
   AdminServerConfig,
@@ -239,7 +240,6 @@ class ApiClient {
     password: string;
     displayName: string;
     instanceName?: string;
-    timezone?: string;
     allowRegistration?: boolean;
   }): Promise<{ message: string; user: User }> {
     const response = await this.client.post('/api/setup/init', data);
@@ -337,6 +337,11 @@ class ApiClient {
 
   async getAdminStats(): Promise<SystemStats> {
     const response = await this.client.get<SystemStats>('/api/admin/stats');
+    return response.data;
+  }
+
+  async getAdminHealth(): Promise<AdminHealth> {
+    const response = await this.client.get<AdminHealth>('/api/admin/health');
     return response.data;
   }
 

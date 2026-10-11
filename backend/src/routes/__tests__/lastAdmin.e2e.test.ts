@@ -9,8 +9,9 @@
  *
  * "The only admin" is a count over the whole users table, which other test
  * files share and fill with admins of their own, so the tests that need it
- * answer the count themselves. The tests where another admin exists create
- * one, so the real count is right for them.
+ * answer the question themselves. The tests where another admin exists create
+ * one, so the real count is right for them. Two admins removed at the same
+ * moment are in lastAdminRace.e2e.test.ts.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -22,7 +23,7 @@ jest.mock('express-rate-limit', () => {
 import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { prisma as appPrisma } from '../../config/database';
+import * as platformAdmins from '../../services/platformAdmins';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
@@ -37,9 +38,9 @@ async function signedInAdmin(label: string) {
   return { user, agent };
 }
 
-/** Make the next count of other admins come back as none. */
+/** Make the next question of whether this is the only admin answer yes. */
 function noOtherAdmins() {
-  return jest.spyOn(appPrisma.user, 'count').mockResolvedValueOnce(0);
+  return jest.spyOn(platformAdmins, 'isOnlyAdmin').mockResolvedValueOnce(true);
 }
 
 afterEach(() => jest.restoreAllMocks());

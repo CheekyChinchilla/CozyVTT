@@ -9,6 +9,7 @@ import api, { type RestoreReply } from './api';
 import type {
   User,
   SystemStats,
+  AdminHealth,
   AdminSystemSettings,
   AdminActivityData,
   AdminServerConfig,
@@ -18,6 +19,10 @@ import type {
 class AdminService {
   async getStats(): Promise<SystemStats> {
     return api.getAdminStats();
+  }
+
+  async getHealth(): Promise<AdminHealth> {
+    return api.getAdminHealth();
   }
 
   async getSettings(): Promise<AdminSystemSettings> {

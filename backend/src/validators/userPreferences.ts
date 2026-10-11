@@ -2,52 +2,10 @@
  * User Preferences validator
  *
  * Per-user theme/font/UX preferences stored in `User.preferences` JSON column.
- * See PER_USER_THEMES_PLAN.md.
  */
 
 import { z } from 'zod';
-
-// Allowed theme + font ids (must be kept in sync with frontend/src/themes.ts).
-// `custom` is a sentinel meaning the user has dialed in colors via customThemeColors.
-const ALLOWED_THEME_IDS = [
-  'cozy-default',
-  'autumn-hearth',
-  'desert-sand',
-  'rose-garden',
-  'ocean-depths',
-  'northern-frost',
-  'enchanted-forest',
-  'twilight-vale',
-  'obsidian-night',
-  'shadow-realm',
-  'deep-dungeon',
-  'midnight-court',
-  'parchment-classic',
-  'slate-modern',
-  'dragonfire',
-  'arcane-storm',
-  'custom',
-] as const;
-
-const ALLOWED_FONT_IDS = [
-  'default',
-  'medieval',
-  'elegant',
-  'modern',
-  'handwritten',
-  'clean',
-  'scholarly',
-  'gothic',
-] as const;
-
-const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
-
-const CustomThemeColorsSchema = z.object({
-  primary: z.string().regex(HEX_COLOR_REGEX, 'primary must be #RRGGBB'),
-  accent: z.string().regex(HEX_COLOR_REGEX, 'accent must be #RRGGBB'),
-  background: z.string().regex(HEX_COLOR_REGEX, 'background must be #RRGGBB'),
-  text: z.string().regex(HEX_COLOR_REGEX, 'text must be #RRGGBB'),
-}).strict();
+import { THEME_IDS, FONT_IDS, CustomThemeColorsSchema } from './appearance';
 
 /**
  * Full preferences schema. All fields optional so the same shape can be used
@@ -55,9 +13,9 @@ const CustomThemeColorsSchema = z.object({
  * silently — clients can't smuggle extra fields into the JSON column.
  */
 export const UserPreferencesSchema = z.object({
-  themeId: z.enum(ALLOWED_THEME_IDS).optional(),
+  themeId: z.enum(THEME_IDS).optional(),
   customThemeColors: CustomThemeColorsSchema.nullable().optional(),
-  fontId: z.enum(ALLOWED_FONT_IDS).optional(),
+  fontId: z.enum(FONT_IDS).optional(),
 }).strip();
 
 export type UserPreferences = z.infer<typeof UserPreferencesSchema>;

@@ -35,7 +35,6 @@ export interface InitializeSetupRequest {
    * not cost an admin their single opportunity to run setup.
    */
   instanceName?: string;
-  timezone?: string;
   allowRegistration?: boolean;
 }
 

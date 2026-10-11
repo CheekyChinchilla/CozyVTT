@@ -245,6 +245,58 @@ describe('an asset used by everything that can hold a picture', () => {
   });
 });
 
+// A time-of-day period plays its sound when the DM switches to it, so a
+// sound only a period names is in use too. The check read only the track
+// playing now, so such a sound could be deleted with no warning, and a deleted
+// account's personal sound was removed although a period still named it.
+describe('a sound a time-of-day period plays', () => {
+  const periods = (audio: string) => ({
+    enabled: true,
+    periods: [
+      { name: 'Day', hue: '#FFFFFF', filter: 'none', audio: null },
+      { name: 'Dawn', hue: '#FFB88C', filter: 'none', audio },
+    ],
+  });
+
+  afterEach(async () => {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: {} } });
+  });
+
+  it('is refused with the period and its campaign named', async () => {
+    const id = await makeAsset({ scope: 'USER', uploadedById: dmId, type: 'AUDIO' });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: periods(id) } });
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.usage).toEqual([
+      { kind: 'vibePeriod', name: 'Dawn', campaignId, campaignName: 'Lost Mine', count: 1 },
+    ]);
+    expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
+  });
+
+  it("is counted, not named, for someone who does not run the campaign", async () => {
+    const id = await makeAsset({ scope: 'GLOBAL', uploadedById: managerId, type: 'AUDIO' });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: periods(id) } });
+
+    const res = await manager.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.usage).toEqual([{ kind: 'vibePeriod', name: null, campaignId: null, campaignName: null, count: 1 }]);
+  });
+
+  it('is kept when the account that uploaded it is deleted', async () => {
+    const owner = await createTestUser({ email: `inuse-owner-${Date.now()}@test.invalid` });
+    userIds.push(owner.id);
+    const id = await makeAsset({ scope: 'USER', uploadedById: owner.id, type: 'AUDIO' });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: periods(id) } });
+
+    expect((await admin.delete(`/api/users/${owner.id}`)).status).toBe(200);
+
+    expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
+  });
+});
+
 describe('an asset used in a great many places', () => {
   it('lists the first hundred and counts the rest', async () => {
     const id = await makeAsset({ scope: 'USER', uploadedById: dmId });

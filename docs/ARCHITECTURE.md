@@ -587,6 +587,16 @@ Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
 `backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
 directory (`backend/src/utils/backupDir.ts`).
 
+A restore runs one at a time, and `services/restoreState.ts` knows whether
+one is running and whether it has started replacing the database. From then
+until it ends, nothing may reach the database: the restore has already closed
+every socket, `websocket/events.ts` refuses a new connection, and
+`middleware/restoreGate.ts`, mounted on `/api` ahead of the session
+middleware, answers every request 503. A write waiting behind the load's locks
+would otherwise land on the restored rows. Its upload waits in the backups
+folder as `restore-temp-<uuid>.zip`; one a stopped backend left is removed at
+start.
+
 ### Upload Pipeline
 
 1. **Multer** receives the multipart upload and streams to a temp file
