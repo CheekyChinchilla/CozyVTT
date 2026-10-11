@@ -10,10 +10,8 @@
  * Only a campaign's DM can reach it, so this was never wide open. It was
  * simply the one door with no lock on it.
  *
- * `file-type` is ESM-only and Jest cannot load it, so it is stubbed here the
- * way the document upload suite stubs it: by encoding what the real library was
- * observed to answer for exactly these bytes. A real PNG is identified; text is
- * not identified at all.
+ * The picture is identified by the real `file-type`: a real PNG is
+ * identified, and text is not identified at all.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -25,19 +23,6 @@ import request from 'supertest';
 
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-uvtt-image-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
-
-// See the header: identification by leading bytes, matching what the real
-// library answers for these fixtures.
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => {
-    if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-      return { ext: 'png', mime: 'image/png' };
-    }
-    if (buffer[0] === 0xff && buffer[1] === 0xd8) return { ext: 'jpg', mime: 'image/jpeg' };
-    return undefined;
-  }),
-  fileTypeFromFile: jest.fn(async () => undefined),
-}));
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {

@@ -24,19 +24,6 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-fidelity-'
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The real file-type is ESM-only; this knows a PNG.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) =>
-    head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? { ext: 'png', mime: 'image/png' } : undefined;
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';

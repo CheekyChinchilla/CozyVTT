@@ -13,11 +13,6 @@
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async () => undefined),
-  fileTypeFromFile: jest.fn(async () => undefined),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 

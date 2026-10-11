@@ -21,17 +21,6 @@ const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-uvtt-errors-')
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 process.env.MAX_MAP_SIZE_MB = '1';
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => {
-    if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-      return { ext: 'png', mime: 'image/png' };
-    }
-    if (buffer.subarray(0, 5).toString('latin1') === '%PDF-') return { ext: 'pdf', mime: 'application/pdf' };
-    return undefined;
-  }),
-  fileTypeFromFile: jest.fn(async () => undefined),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,

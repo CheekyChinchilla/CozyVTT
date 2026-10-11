@@ -18,8 +18,9 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-allowlist-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-// The real file-type is ESM-only. This knows the formats these tests send,
-// detected the way file-type reports them.
+// The fixtures here are a format's first bytes and no more. The real
+// file-type does not identify the PNG one, and takes the Ogg one for an Ogg
+// file that is not sound, so this answers as it does for whole files.
 jest.mock('file-type', () => {
   const sniff = (head: Buffer) => {
     if (head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return { ext: 'png', mime: 'image/png' };

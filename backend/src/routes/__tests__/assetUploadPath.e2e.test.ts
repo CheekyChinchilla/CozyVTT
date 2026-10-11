@@ -32,18 +32,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-upload-test-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The `file-type` stand-in throws by design; magic-byte sniffing is stubbed
-// here, as its own comment instructs. What is under test is where the file
-// lands, not whether the bytes are really a PNG.
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async (filePath: string) =>
-    filePath.endsWith('.mp3')
-      ? { ext: 'mp3', mime: 'audio/mpeg' }
-      : { ext: 'png', mime: 'image/png' }
-  ),
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 

@@ -18,12 +18,6 @@ import sharp from 'sharp';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-failed-upload-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// file-type is ESM-only and stubbed in every suite; these bytes are a PNG.
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { prisma as appPrisma } from '../../config/database';

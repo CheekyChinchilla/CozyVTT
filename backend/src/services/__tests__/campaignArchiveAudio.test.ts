@@ -19,7 +19,9 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-archive-audio-'))
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The real file-type is ESM-only; this knows an Ogg file.
+// The tracks here are an Ogg signature and no more, which the real file-type
+// takes for an Ogg file that is not sound. This answers as it does for a
+// whole Ogg track.
 jest.mock('file-type', () => {
   const sniff = (head: Buffer) => (head.subarray(0, 4).toString('latin1') === 'OggS' ? { ext: 'ogg', mime: 'audio/ogg' } : undefined);
   return {

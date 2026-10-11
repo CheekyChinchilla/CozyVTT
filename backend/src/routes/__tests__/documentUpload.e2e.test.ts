@@ -1,17 +1,11 @@
 /**
  * Uploading a document — End-to-End Tests
  *
- * `file-type` is ESM-only and Jest cannot load it, so it is stubbed here as it
- * is everywhere else. The stub is not a shortcut: it encodes what the real
- * library was observed to do for exactly these inputs, checked by hand before
- * writing it. A real PDF is identified as application/pdf. An ELF executable is
- * identified as application/x-elf. Plain text, Markdown, HTML and arbitrary
- * bytes are all reported as unidentified. What is under test is what the
- * validator does with each of those answers, which is where the decisions live.
- *
- * The library itself has no automated coverage in this repository. That is a
- * pre-existing gap of the test infrastructure, not of this feature, and it is
- * recorded in FUTURE_FEATURES.
+ * The upload is identified by the real `file-type`. A real PDF is identified as
+ * application/pdf. An ELF executable is identified as application/x-elf. Plain
+ * text, Markdown, HTML and arbitrary bytes are all reported as unidentified.
+ * What is under test is what the validator does with each of those answers,
+ * which is where the decisions live.
  *
  * What has to hold:
  * - A real PDF, a text file and a Markdown file upload and land under
@@ -33,22 +27,6 @@ import request from 'supertest';
 
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-docupload-test-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
-
-// See the header. Identification by leading bytes, matching the real library's
-// observed verdicts for these fixtures.
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async (filePath: string) => {
-    const head = fs.readFileSync(filePath).subarray(0, 8);
-    if (head.subarray(0, 5).toString('latin1') === '%PDF-') {
-      return { ext: 'pdf', mime: 'application/pdf' };
-    }
-    if (head[0] === 0x7f && head.subarray(1, 4).toString('latin1') === 'ELF') {
-      return { ext: 'elf', mime: 'application/x-elf' };
-    }
-    return undefined;
-  }),
-  fileTypeFromBuffer: jest.fn(async () => undefined),
-}));
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';

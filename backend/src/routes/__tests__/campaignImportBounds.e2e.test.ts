@@ -18,19 +18,6 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-bounds-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-// The real file-type is ESM-only; this knows the two signatures these archives use.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) =>
-    head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? { ext: 'png', mime: 'image/png' } : undefined;
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import request from 'supertest';
 import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
