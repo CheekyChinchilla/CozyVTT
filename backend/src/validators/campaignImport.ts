@@ -90,7 +90,7 @@ export const ManifestSchema = z.object({
 export const CampaignSettingsSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).nullable().optional(),
-  gameSystem: z.unknown(),
+  gameSystem: z.unknown().optional(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.
   vibeSettings: VibeSettingsSchema.optional().catch(undefined),
@@ -162,8 +162,11 @@ export const ImportFogSchema = z
  * the person exporting could not open): the map imports without a picture,
  * its walls, tokens and fog intact, and the DM gives it one in Edit Map.
  */
+// A field checked by the importer on its own is z.unknown().optional() here:
+// zod treats a missing z.unknown() key as an error since 4.4, and an archive
+// may leave any of these out.
 export const ImportMapSchema = z.object({
-  name: z.unknown(),
+  name: z.unknown().optional(),
   imageAssetRef: z.string().max(200).nullable().optional().catch(null),
   spiritLayerAssetRef: z.string().max(200).nullable().optional().catch(null),
   // The limits every other path that stores a map applies (validators/maps.ts)
@@ -172,15 +175,15 @@ export const ImportMapSchema = z.object({
   gridSize: GridSizeSchema,
   feetPerSquare: FeetPerSquareSchema,
   diagonalRule: z.enum(['flat', 'alternating']).optional().catch(undefined),
-  tokens: z.unknown(),
-  annotations: z.unknown(),
-  wallSegments: z.unknown(),
-  fogData: z.unknown(),
+  tokens: z.unknown().optional(),
+  annotations: z.unknown().optional(),
+  wallSegments: z.unknown().optional(),
+  fogData: z.unknown().optional(),
   lightingEnabled: z.boolean().optional().catch(undefined),
   fogEnabled: z.boolean().optional().catch(undefined),
   globalIllumination: z.boolean().optional().catch(undefined),
   explorationEnabled: z.boolean().optional().catch(undefined),
-  lights: z.unknown(),
+  lights: z.unknown().optional(),
 }).strip();
 
 /**
@@ -193,7 +196,7 @@ export const ImportAnnotationsSchema = z.array(z.record(z.string(), z.unknown())
 
 export const CreatureTemplateSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  gameSystem: z.unknown(),
+  gameSystem: z.unknown().optional(),
   challengeRating: z.string().max(10).nullable().optional(),
   creatureType: z.string().max(200).nullable().optional(),
   alignment: z.string().max(100).nullable().optional(),

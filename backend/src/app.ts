@@ -81,6 +81,9 @@ export function createApp(options: AppOptions): express.Express {
   //   - express-rate-limit can read X-Forwarded-For for accurate IP identification
   //   - Session cookies are issued with secure:true when the request arrives over HTTPS
   //   - req.protocol reflects https rather than http
+  // A count: Express compares it with the hop number itself. A list of
+  // addresses or ranges would go through proxy-addr's range matching, which
+  // had a published advisory before 2.0.8.
   app.set('trust proxy', 1);
 
   // ============================================
