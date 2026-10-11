@@ -771,7 +771,7 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 (`true` to return only your own), `limit` (max 100, default 50), `offset`.
 
 **Response:** `{ templates, total, limit, offset }`. Each template includes
-`createdBy: { id, displayName }` — never the author's email — and leaves out
+`createdBy: { id, displayName }` — never the author's email. Each leaves out
 its sheet (`data`), which a page of 100 would otherwise carry 100 times.
 
 ### `GET /api/character-templates/:id`
