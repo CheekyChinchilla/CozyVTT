@@ -12,8 +12,8 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
 import {
-  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallSentTo, wallsSentTo,
-  type PlayerSight,
+  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeSentTo, wallSentTo,
+  wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
@@ -183,7 +183,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // so no edit of this map waits on it; the door is judged against it
       // under the lock, where it is and as it is then.
       const sight = role === 'DM' ? null : await doorSightFor(mapId, campaignId, role, userId);
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<WallSegment>> => {
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ before: WallSegment; after: WallSegment }>> => {
         // A player may toggle doors only on the map the campaign is showing;
         // a prepared map is the DM's until they switch to it.
         const map = await tx.map.findUnique({
@@ -238,9 +238,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           updated = sent;
         }
 
+        const before = existing[idx];
         existing[idx] = updated;
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(existing) } });
-        return { done: updated };
+        return { done: { before, after: updated } };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
@@ -251,10 +252,12 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      const stored = outcome.done;
-      await emitToMapReadersAs(io, campaignId, mapId, 'wall:updated', (role) => ({
-        event: 'wall:updated', data: { mapId, segment: wallSentTo(role, stored), ...echoedOpId(data) },
-      }));
+      // A member whose copy of the wall is unchanged, a player's of a closed
+      // door locked or unlocked, is told nothing.
+      const { before, after } = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'wall:updated', (role) =>
+        wallChangeSentTo(role, mapId, before, after, echoedOpId(data))
+      );
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:update failed', { err: error });

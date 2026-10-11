@@ -897,8 +897,8 @@ Fog is drawn over the map in each player's browser, so everything under it has a
 |---|---|
 | **The map picture** | The whole picture, fogged areas included. |
 | **Tokens** | Every token on the plane they are on that is not **hidden**, fog or no fog. With dynamic lighting on, only the tokens their own characters can see. Never your token notes or stat blocks, a creature's hit points only when its HP bar is on, and an obscured token only as a shape. |
-| **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away; a player who tries it is told it is locked. |
-| **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on. |
+| **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away, and locking or unlocking a closed door sends them nothing; a player who tries it is told it is locked. |
+| **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on, and deleting it sends them nothing. |
 | **Fog** | Only which squares are revealed to them. |
 
 A map you have prepared but not switched to sends them nothing at all. So, for anything that must stay secret:

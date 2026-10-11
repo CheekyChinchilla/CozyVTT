@@ -6866,7 +6866,9 @@ paths:
         ignored, so the segment keeps its position. Any of the five wall
         types is accepted, `door-locked` included, as on every other wall
         path; anything else answers 400. DM only. Connected clients are
-        sent `wall:updated` (see `replaceWalls`).
+        sent `wall:updated` (see `replaceWalls`) with the segment as each
+        may see it. Anyone but the DM whose copy it leaves as it was, as
+        locking or unlocking a closed door does, is sent nothing.
       operationId: updateWallType
       security:
         - cookieAuth: []
@@ -7115,7 +7117,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a light source
-      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`).
+      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`); anyone but the DM only when the light was on, since they are never sent one that is off.
       operationId: deleteLight
       security:
         - cookieAuth: []

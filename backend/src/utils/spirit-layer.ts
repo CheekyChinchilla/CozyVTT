@@ -494,6 +494,30 @@ export function wallSentTo(role: string | undefined, wall: WallSegment): WallSeg
   return role !== 'DM' && wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
 }
 
+/** Whether two walls match in every field a member is sent. */
+function sameWall(a: WallSegment, b: WallSegment): boolean {
+  return a.id === b.id && a.x1 === b.x1 && a.y1 === b.y1 && a.x2 === b.x2 && a.y2 === b.y2 && a.type === b.type;
+}
+
+/**
+ * What a member is told of one wall changing from `before` to `after`: the
+ * DM `wall:updated`; anyone else the wall as they are sent it (wallSentTo),
+ * and nothing when that is the wall they have already, as a closed door
+ * locked or unlocked is, since the event alone would say that something had
+ * just been done to it. `extra` (an operation id) rides on the event.
+ */
+export function wallChangeSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: WallSegment,
+  after: WallSegment,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  const sent = wallSentTo(role, after);
+  if (role !== 'DM' && sameWall(wallSentTo(role, before), sent)) return null;
+  return { event: 'wall:updated', data: { mapId, segment: sent, ...extra } };
+}
+
 /** A map's walls as a member is sent them (wallSentTo). */
 export function wallsSentTo(role: string | undefined, walls: unknown): WallSegment[] {
   const list = (Array.isArray(walls) ? walls : []) as unknown as WallSegment[];
@@ -529,6 +553,24 @@ export function lightChangeSentTo(
   if (after.enabled) return { event: 'light:added', data: { mapId, light: after, ...extra } };
   if (before.enabled) return { event: 'light:removed', data: { mapId, lightId: after.id, ...extra } };
   return null;
+}
+
+/**
+ * What a member is told of the light `lightId` deleted, given the light as
+ * it was (`removed`, undefined when the map had no light by that id): the DM
+ * `light:removed`; anyone else only when the light was on, since one that
+ * was off, or never there, is not a light they have. `extra` (an operation
+ * id) rides on the event.
+ */
+export function lightRemovalSentTo(
+  role: string | undefined,
+  mapId: string,
+  lightId: string,
+  removed: LightSource | undefined,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && removed?.enabled !== true) return null;
+  return { event: 'light:removed', data: { mapId, lightId, ...extra } };
 }
 
 /**

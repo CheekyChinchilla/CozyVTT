@@ -32,6 +32,7 @@ let campaignId: string;
 let dmCookie: string;
 let playerCookie: string;
 let playerAgent: ReturnType<typeof request.agent>;
+let dmAgent: ReturnType<typeof request.agent>;
 
 type Wall = { id: string; x1: number; y1: number; x2: number; y2: number; type: string };
 type Light = { id: string; x: number; y: number; brightRadius: number; dimRadius: number; color: string; enabled: boolean };
@@ -72,6 +73,8 @@ beforeAll(async () => {
   playerCookie = await server.loginAs(playerId);
   playerAgent = request.agent(app);
   expect((await playerAgent.post('/api/auth/login').send({ email: player.email, password: TEST_PASSWORD })).status).toBe(200);
+  dmAgent = request.agent(app);
+  expect((await dmAgent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
@@ -181,6 +184,81 @@ describe('a live edit', () => {
     const replaced = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
     dm.emit('lights:replace', { mapId, lights: [LIT, OUT] });
     expect((await replaced).lights).toEqual([LIT]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
+/**
+ * Nothing at all, when nothing a player has changes. A player has a locked
+ * door as a closed one, and no light that is off, so a closed door locked or
+ * unlocked, or a light that is off deleted, leaves their copy as it was. An
+ * event for it told them something had just happened to that door, or that
+ * a light they never had was there.
+ */
+describe('a change a player cannot see', () => {
+  it('sends a player nothing when the DM locks or unlocks a closed door', async () => {
+    const mapId = await newMap();
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const door = { ...PLAIN, id: randomUUID(), type: 'door-closed' };
+    const added = waitForEvent(player, 'wall:added');
+    dm.emit('wall:add', { mapId, segment: door });
+    await added;
+
+    const quiet = expectNoEvent(player, 'wall:updated', 800);
+    const locked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-locked' } });
+    expect((await locked).segment.type).toBe('door-locked');
+    const unlocked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    dm.emit('wall:update', { mapId, segment: door });
+    expect((await unlocked).segment.type).toBe('door-closed');
+    await quiet;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player nothing when the DM deletes a light that is off, and the light going when it is on', async () => {
+    const mapId = await newMap();
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const quiet = expectNoEvent(player, 'light:removed', 500);
+    const dmGone = waitForEvent<{ lightId: string }>(dm, 'light:removed');
+    dm.emit('light:remove', { mapId, lightId: OUT.id });
+    expect((await dmGone).lightId).toBe(OUT.id);
+    await quiet;
+
+    const gone = waitForEvent<{ lightId: string }>(player, 'light:removed');
+    dm.emit('light:remove', { mapId, lightId: LIT.id });
+    expect((await gone).lightId).toBe(LIT.id);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player nothing for the same changes made through the REST routes', async () => {
+    const mapId = await newMap();
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
+
+    const quietWall = expectNoEvent(player, 'wall:updated', 800);
+    const quietLight = expectNoEvent(player, 'light:removed', 800);
+    const dmWall = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
+    expect((await dmWall).segment).toEqual(asClosed);
+    const dmLight = waitForEvent<{ lightId: string }>(dm, 'light:removed');
+    expect((await dmAgent.delete(`${base}/lights/${OUT.id}`)).status).toBe(200);
+    expect((await dmLight).lightId).toBe(OUT.id);
+    await Promise.all([quietWall, quietLight]);
+
+    const gone = waitForEvent<{ lightId: string }>(player, 'light:removed');
+    expect((await dmAgent.delete(`${base}/lights/${LIT.id}`)).status).toBe(200);
+    expect((await gone).lightId).toBe(LIT.id);
 
     dm.disconnect();
     player.disconnect();

@@ -7,8 +7,8 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
-  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeSentTo, lightsSentTo, wallSentTo,
-  wallsSentTo,
+  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeSentTo, lightRemovalSentTo,
+  lightsSentTo, wallChangeSentTo, wallSentTo, wallsSentTo,
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
@@ -1939,7 +1939,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: 'Validation Error', message: `type must be one of: ${validTypes.join(', ')}` });
     }
 
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<WallSegment>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<{ before: WallSegment; after: WallSegment }>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
@@ -1947,18 +1947,19 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       if (segIndex === -1) {
         return { status: 404, error: 'Not Found', message: 'Wall segment not found' };
       }
-      existing[segIndex] = { ...existing[segIndex], type: type.data };
+      const before = existing[segIndex];
+      existing[segIndex] = { ...before, type: type.data };
       await tx.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
-      return { done: existing[segIndex] };
+      return { done: { before, after: existing[segIndex] } };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    const stored = outcome.done;
-    await tellMapReadersAs(campaignId, id, 'wall:updated', (role) => ({
-      event: 'wall:updated', data: { mapId: id, segment: wallSentTo(role, stored) },
-    }));
+    // A player whose copy is unchanged, as a closed door locked or unlocked
+    // is, is told nothing.
+    const { before, after } = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'wall:updated', (role) => wallChangeSentTo(role, id, before, after));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ segment: outcome.done });
+    return res.status(200).json({ segment: after });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segment' });
@@ -2140,20 +2141,22 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<LightSource>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
-      const filtered = existing.filter((l) => l.id !== lightId);
-      if (filtered.length === existing.length) {
+      const removed = existing.find((l) => l.id === lightId);
+      if (!removed) {
         return { status: 404, error: 'Not Found', message: 'Light source not found' };
       }
-      await tx.map.update({ where: { id }, data: { lights: toJson(filtered) } });
-      return { done: null };
+      await tx.map.update({ where: { id }, data: { lights: toJson(existing.filter((l) => l.id !== lightId)) } });
+      return { done: removed };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
+    // A light that was off was the DM's alone, so its going is too.
+    const removed = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'light:removed', (role) => lightRemovalSentTo(role, id, lightId, removed));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
