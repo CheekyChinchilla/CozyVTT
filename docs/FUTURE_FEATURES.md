@@ -331,6 +331,16 @@ _Nothing at present._
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
   direction.
 
+- **A database role that is not a superuser.** The backend uses the role the
+  PostgreSQL image creates from `DATABASE_USER`, a superuser, which can run
+  programs in the database container (`COPY ... TO PROGRAM`) and read its
+  files; the restore's statement checks in `backend/src/utils/pgRestore.ts`
+  are not a sandbox. A role that owns the schema without being a superuser
+  would close that off for a malicious backup and any future SQL injection.
+  It needs an init step that creates the role on existing installs with no
+  manual step, `DATABASE_URL` pointing at it, and the restore reworked to run
+  without superuser rights. Recorded in `SECURITY.md`.
+
 - **Serving the backend from a different address than the page.** `.env`
   offered `VITE_API_URL` and `VITE_SOCKET_URL` for it until 1.5.2, but only
   sign-in and the API ever worked that way: the page's Content-Security-Policy

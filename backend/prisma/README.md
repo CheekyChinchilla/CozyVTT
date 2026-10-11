@@ -126,5 +126,5 @@ npx prisma migrate reset
 - **No raw queries with user input.** All DB access goes through Prisma, which parameterizes for us. SQL injection is not a vector.
 - **Password hashing happens at the application layer**, not the database. Argon2id; see `backend/src/services/auth.ts`.
 - **MFA backup codes are hashed** with Argon2id before storage (`backend/src/utils/backupCodes.ts`). Plaintext is shown to the user exactly once, at setup or when they regenerate them.
-- **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema).
+- **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema). Because no migration creates it, `prisma migrate dev` reports drift on a database the backend has run against and offers to reset it, and `prisma db push` offers to drop the table; never accept either. `docs/DEVELOPMENT.md` (Running Migrations) shows how to generate a migration without that comparison. `migrate deploy`, which production runs, does not compare and is not affected.
 - **File paths are stored relatively** (e.g. `uploads/maps/global/<uuid>.png`), never absolute. Path-traversal mitigation lives at the upload layer.

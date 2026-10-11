@@ -268,6 +268,23 @@ npx prisma migrate dev --name describe_your_change
 npx prisma migrate deploy
 ```
 
+> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+>
+> ```bash
+> # Once, with the dev stack running:
+> docker compose -f docker-compose.dev.yml exec database createdb -U cozyvtt cozyvtt_shadow
+>
+> # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
+> mkdir -p prisma/migrations/20261011120000_describe_your_change
+> npx prisma migrate diff --from-migrations prisma/migrations \
+>   --to-schema-datamodel prisma/schema.prisma \
+>   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
+> npx prisma migrate deploy
+> ```
+>
+> A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
+
 ### Exploring the Database
 
 Prisma Studio is a web-based database browser:
