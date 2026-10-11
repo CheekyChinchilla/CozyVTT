@@ -40,7 +40,7 @@ cozyvtt/
 │   ├── src/
 │   │   ├── config/        Configuration loading and validation
 │   │   ├── game-systems/  Game system type definitions
-│   │   ├── middleware/     Auth, rate limiting, upload middleware
+│   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
 │   │   ├── services/      Business logic layer
 │   │   ├── types/         Shared TypeScript types
@@ -50,14 +50,14 @@ cozyvtt/
 │   ├── prisma/
 │   │   ├── schema.prisma  Database schema
 │   │   ├── migrations/    Migration history
-│   │   └── seed.ts        Development seed data
+│   │   └── seed.ts        Placeholder for development seed data (creates nothing yet)
 │   └── docs/              Backend-specific docs (OpenAPI YAML, WS docs)
 │
 ├── frontend/              React + Vite client
 │   ├── src/
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
-│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign)
+│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
 │   │   ├── stores/        Zustand store for live session state
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
 │   │   ├── lib/           React Query client setup
@@ -89,13 +89,23 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | `NODE_ENV` | Yes | `development` | `development` or `production` |
 | `PORT` | No | `4000` | Port the API server listens on |
 | `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed origin for CORS |
-| `SMTP_HOST` | No | — | SMTP server hostname |
+| `SMTP_HOST` | No | — | SMTP server hostname. Email is on only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are all set (`isSmtpConfigured`) |
 | `SMTP_PORT` | No | `587` | SMTP server port |
-| `SMTP_USER` | No | — | SMTP login username |
-| `SMTP_PASS` | No | — | SMTP login password |
+| `SMTP_USER` | For email | — | SMTP login username; without it email is off, because the transport always sends a login |
+| `SMTP_PASS` | For email | — | SMTP login password; without it email is off |
 | `SMTP_FROM` | No | — | From address for outbound email |
 | `SMTP_SECURE` | No | `false` | Use TLS (`true`) or STARTTLS (`false`) |
 | `APP_URL` | No | — | Public URL used in email links |
+| `FRONTEND_URL` | No | — | An older name for `APP_URL`, read only when `APP_URL` is not set |
+| `INSTANCE_NAME` | No | — | The name emails use while the name in Admin > Settings is empty or still CozyVTT |
+| `SETUP_TOKEN` | No | — | The token the setup wizard asks for; unset, the backend makes one and prints it in its log until setup has run |
+| `UPLOAD_DIR` | No | `uploads` | Where uploaded files are stored, relative to the backend folder |
+| `BACKUP_DIR` | No | `backups` | Where the Admin Dashboard writes backups; must not be inside the uploads folder |
+| `SESSION_MAX_AGE` | No | `3600000` | Milliseconds a sign-in lasts without a request |
+| `REMEMBER_ME_MAX_AGE` | No | `2592000000` | Milliseconds a **Remember me** sign-in lasts, and the longest any sign-in lasts |
+| `RATE_LIMIT_MAX_REQUESTS` | No | `300` | Requests per minute to `/api` from one address |
+| `CAMPAIGN_ARCHIVE_RATE_LIMIT` | No | `20` | Campaign previews, imports and exports per user per hour, counted apart |
+| `LOG_LEVEL` | No | `debug` in development, `info` in production | `debug`, `info`, `warn` or `error` |
 | `MAX_MAP_SIZE_MB` | No | `50` | Upload size limit for map images |
 | `MAX_TOKEN_SIZE_MB` | No | `5` | Upload size limit for token images |
 | `MAX_AUDIO_SIZE_MB` | No | `20` | Upload size limit for audio files |
@@ -165,14 +175,9 @@ cd backend
 npx prisma migrate dev
 ```
 
-### 5. (Optional) Seed the database
+### 5. Create the administrator
 
-```bash
-cd backend
-npm run prisma:seed
-```
-
-This creates a sample admin account and some test data. Check `prisma/seed.ts` for the credentials.
+There is no seed data yet: `backend/prisma/seed.ts` is a stub that logs two lines and creates nothing, so `npm run prisma:seed` does nothing useful. A fresh database starts with the setup wizard, which creates the administrator account. Start the backend and the frontend (below), open the app and complete the wizard. It asks for a setup token that the backend prints in its log; see [DEPLOYMENT.md](DEPLOYMENT.md#4-complete-the-setup-wizard).
 
 ---
 
@@ -607,15 +612,15 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 ### Backend Patterns
 
 - **Routes** handle HTTP parsing and response formatting only — business logic goes in `services/`
-- **Middleware** in `src/middleware/` — authentication, rate limiting, file uploads
-- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.parse(req.body)`
-- **WebSocket handlers** in `src/websocket/events.ts` — one handler per socket event namespace
+- **Middleware** in `src/middleware/` — authentication and role guards (named in the route declaration, composed in `compose.ts`), rate limiting, file uploads
+- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails
+- **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` only wires them together
 
 ### Frontend Patterns
 
 - **Pages** in `src/pages/` — one file per route, thin orchestration layer
 - **Components** in `src/components/` — reusable UI; no direct API calls
-- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign)
+- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Theme, Toast)
 - **Services** in `src/services/` — all API calls go through `api.ts` or `auth.service.ts`
 - **No `any`** — if you need to escape the type system, use `unknown` and narrow it
 
@@ -623,13 +628,13 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 | Thing | Convention | Example |
 |-------|-----------|---------|
-| Files | kebab-case | `campaign-card.tsx` |
+| Files | Components, pages and contexts: PascalCase, named for what they export. Hooks: `useThing.ts`. Backend modules and other helpers: camelCase, with a few older kebab-case names (`dice-parser.ts`). Tests: `name.test.ts` beside the code or in `__tests__/` | `CampaignCard.tsx`, `useMapControls.ts`, `campaignMacros.ts` |
 | React components | PascalCase | `CampaignCard` |
 | Functions / variables | camelCase | `fetchCampaigns` |
 | Types / Interfaces | PascalCase | `CampaignCardProps` |
 | Constants | UPPER_SNAKE_CASE | `MAX_FILE_SIZE` |
 | Database models | PascalCase | `Campaign` |
-| API route paths | kebab-case | `/api/campaign-invitations` |
+| API route paths | kebab-case | `/api/character-templates` |
 
 ---
 
@@ -637,11 +642,15 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 ### Branches
 
-- `main` — production-ready code; protected
-- `develop` — integration branch for features
-- `feature/<name>` — new features
+- `main` — what self-hosters pull; it holds releases only
+- `dev` — where work lands: start each change on a branch off `dev` and merge it back there
+- `feat/<name>` — new features
 - `fix/<name>` — bug fixes
 - `docs/<name>` — documentation only
+- `test/<name>` — tests and CI only
+- `release/<version>` — a release being tested, cut from `dev`
+
+CI runs on pushes to `dev` and `main` and on pull requests into them; a branch of your own runs nothing until it is pushed as a pull request.
 
 ### Commit Messages
 

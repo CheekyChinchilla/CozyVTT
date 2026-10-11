@@ -112,6 +112,27 @@ describe('.env.example', () => {
   });
 });
 
+// The developer guide has a table of the backend's settings. It listed 19 of
+// the 29 the backend reads, and marked SMTP_USER and SMTP_PASS as not
+// required, though email counts as set up only with both.
+describe('the backend settings table in docs/DEVELOPMENT.md', () => {
+  const guide = read('docs/DEVELOPMENT.md');
+  const table = guide.slice(guide.indexOf('### Backend (`backend/.env`)'), guide.indexOf('### Frontend (`frontend/.env`)'));
+  const named = new Set([...table.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|/gm)].map((m) => m[1]));
+
+  it('has a row for every setting the backend reads', () => {
+    const missing = [...keysTheBackendReads()].filter((key) => !named.has(key) && !(key in NOT_A_SETTING));
+    expect(missing).toEqual([]);
+  });
+
+  it('says SMTP_USER and SMTP_PASS are needed for email, with SMTP_HOST', () => {
+    for (const key of ['SMTP_USER', 'SMTP_PASS']) {
+      const row = table.split('\n').find((line) => line.startsWith(`| \`${key}\` |`)) ?? '';
+      expect(row).toMatch(/email/i);
+    }
+  });
+});
+
 // Two modules read their settings through an environment object passed in
 // (so their own tests can hand them one), and one builds the names from a
 // list. The scan above has to see those too, or the check passes by not

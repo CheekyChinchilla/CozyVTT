@@ -296,3 +296,24 @@ describe('docs/ARCHITECTURE.md', () => {
     expect(named.filter((name) => !exported.has(name))).toEqual([]);
   });
 });
+
+describe('docs/DEVELOPMENT.md', () => {
+  const guide = read('docs/DEVELOPMENT.md');
+
+  // prisma/seed.ts is a stub that logs two lines. The guide sent a new
+  // contributor to it for an administrator account that it never made.
+  it('promises seed data only if the seed script makes any', () => {
+    const makesRecords = /\.(create|createMany|upsert)\(/.test(read('backend/prisma/seed.ts'));
+    expect(/creates a sample admin account/.test(guide)).toBe(makesRecords);
+  });
+
+  // The workflow named a protected `main` and a `develop` branch that does not
+  // exist. The branches CI runs on are the ones work goes through.
+  it('names the branches CI runs on, and no other long-lived branch', () => {
+    const triggers = /branches: \[([^\]]+)\]/.exec(read('.github/workflows/ci.yml'))?.[1].split(',').map((name) => name.trim()) ?? [];
+    const branches = guide.slice(guide.indexOf('### Branches'), guide.indexOf('### Commit Messages'));
+    expect(triggers.length).toBeGreaterThan(0);
+    for (const name of triggers) expect(branches).toContain(`\`${name}\``);
+    expect(branches).not.toContain('`develop`');
+  });
+});
