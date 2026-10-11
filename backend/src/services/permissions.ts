@@ -634,7 +634,11 @@ export async function canReadAsset(
 ): Promise<boolean> {
   if (isAdmin) return true;
 
-  if (asset.scope === 'USER') {
+  // A campaign asset with no campaign recorded is read as a personal one. The
+  // foreign key nulls the campaign when one is deleted; the delete route turns
+  // its assets personal first, and this keeps any other way of removing a
+  // campaign from opening its assets to everyone.
+  if (asset.scope === 'USER' || (asset.scope === 'CAMPAIGN' && !asset.campaignId)) {
     if (asset.uploadedById === userId) return true;
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
@@ -651,7 +655,7 @@ export async function canReadAsset(
     return documentSharedWithUser(asset.id, userId);
   }
 
-  // GLOBAL, or a campaign asset with no campaign recorded.
+  // GLOBAL.
   return true;
 }
 

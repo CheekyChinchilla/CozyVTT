@@ -327,7 +327,10 @@ is what the map itself does with it.
 The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
 asset's **scope**. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
-campaign's members, and `USER` by its uploader.
+campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
+campaign recorded (the foreign key nulls it when a campaign row goes) is read
+as a `USER` one, so a way of removing campaigns that forgets to turn their
+assets personal first cannot open them to everyone.
 
 Scope alone is not enough for maps and tokens, because an asset can be *used*
 somewhere its scope does not describe. A DM picking a map out of their own
