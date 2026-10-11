@@ -21,11 +21,13 @@ import {
   getFilePath,
   ensureDirectory,
   getFileSizeLimit,
+  getTempDirectory,
   deleteFile,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { oneAtATime } from '../utils/oneAtATime';
+import { serialQueue } from '../utils/serialQueue';
 import { uploadLimiter } from './assets';
 import sharp from 'sharp';
 import logger from '../utils/logger';
@@ -49,9 +51,50 @@ const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_
 const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
 const UVTT_IMAGE_EXTENSIONS = '.png, .jpg, .jpeg, .webp';
 
-/** Multer configured for UVTT file uploads, held in memory while it is parsed. */
+/**
+ * Where an uploaded UVTT file waits to be read: a folder of its own in the
+ * uploads folder's temporary area, made the first time it is needed. The
+ * file is removed when its request ends, whether the import worked or not.
+ */
+const UVTT_TEMP_DIR = path.join(getTempDirectory(), 'uvtt');
+/** A waiting file older than this was left by a backend that stopped mid-import. */
+const STALE_UVTT_MS = 24 * 60 * 60 * 1000;
+let staleUvttSwept = false;
+
+/** Remove waiting files a stopped backend left behind. Best effort, once per process. */
+async function sweepStaleUvttUploads(): Promise<void> {
+  try {
+    const now = Date.now();
+    for (const name of await fs.readdir(UVTT_TEMP_DIR)) {
+      const file = path.join(UVTT_TEMP_DIR, name);
+      const stats = await fs.stat(file).catch(() => null);
+      if (stats && now - stats.mtimeMs > STALE_UVTT_MS) await fs.rm(file, { force: true });
+    }
+  } catch (err) {
+    logger.warn('[uvtt-import] Could not tidy the temporary folder', { err });
+  }
+}
+
+/**
+ * Multer configured for UVTT file uploads, written to disk. A file can be
+ * over 50 MB, almost all of it the picture, and held in memory it waited
+ * there for its turn; on disk it costs nothing until it is read.
+ */
 const uvttUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureDirectory(UVTT_TEMP_DIR)
+        .then(() => {
+          if (!staleUvttSwept) {
+            staleUvttSwept = true;
+            void sweepStaleUvttUploads();
+          }
+          cb(null, UVTT_TEMP_DIR);
+        })
+        .catch((err: Error) => cb(err, UVTT_TEMP_DIR));
+    },
+    filename: (_req, _file, cb) => cb(null, `${randomUUID()}.uvtt`),
+  }),
   limits: { fileSize: UVTT_MAX_FILE_BYTES, files: 1, ...MULTIPART_FIELD_LIMITS },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -94,11 +137,19 @@ function receiveUvtt(req: AuthenticatedRequest, res: Response, next: NextFunctio
   });
 }
 
-/** One import per user at a time; each holds the whole file in memory. */
+/** One import per user at a time, so one person cannot queue up many files. */
 const oneUvttImportAtATime = oneAtATime(
   (req) => (req as AuthenticatedRequest).session?.userId,
   'Another import is still running. Wait for it to finish, then import this file.'
 );
+
+/**
+ * Reading an import holds the file and its decoded picture in memory, well
+ * over 50 MB for the largest; several at once took the backend near its
+ * memory limit. So imports are read one at a time across the server, each
+ * waiting its turn with its upload on disk. None is refused.
+ */
+const uvttImportQueue = serialQueue();
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
@@ -334,14 +385,38 @@ router.post(
   oneUvttImportAtATime,
   receiveUvtt,
   async (req: AuthenticatedRequest, res: Response) => {
+    const uploaded = req.file?.path;
+    // A client that gave up while its import waited needs nothing read.
+    let gone = false;
+    res.once('close', () => { gone = true; });
+    try {
+      await uvttImportQueue(async () => {
+        if (!gone) await importUvttFile(req, res);
+      });
+    } finally {
+      if (uploaded) {
+        await fs.rm(uploaded, { force: true }).catch((err) =>
+          logger.warn('[uvtt-import] Could not remove an uploaded file', { err })
+        );
+      }
+    }
+  }
+);
+
+/** The import itself, run in its turn: read, check, store, answer. */
+async function importUvttFile(req: AuthenticatedRequest, res: Response): Promise<unknown> {
     try {
       const { campaignId } = req.params;
       const userId = req.session?.userId;
       if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-      if (!req.file?.buffer) {
+      if (!req.file?.path) {
         return res.status(400).json({ error: 'Validation Error', message: 'No UVTT file uploaded' });
       }
+      // Read in its turn, and removed from disk at once: from here on only
+      // this copy is used, and it is let go of once parsed.
+      let fileBuffer: Buffer | null = await fs.readFile(req.file.path);
+      await fs.rm(req.file.path, { force: true });
 
       // A field sent twice arrives as a list, which is not a name.
       const rawName: unknown = req.body.name;
@@ -362,12 +437,15 @@ router.post(
       const includeObjectWalls =
         req.body.includeObjectWalls === 'true' || req.body.includeObjectWalls === true;
 
+      // Only the picture and the geometry are kept once the file is parsed.
       let parsed;
       try {
-        parsed = parseUVTT(req.file.buffer, gridSizePx, { includeObjectWalls, maxImageBytes: getFileSizeLimit('MAP') });
+        parsed = parseUVTT(fileBuffer, gridSizePx, { includeObjectWalls, maxImageBytes: getFileSizeLimit('MAP') });
       } catch (parseErr) {
         const msg = parseErr instanceof Error ? parseErr.message : 'Failed to parse UVTT file';
         return res.status(400).json({ error: 'Parse Error', message: msg });
+      } finally {
+        fileBuffer = null;
       }
 
       // ── A map the app can hold ───────────────────────────────────────────
@@ -564,8 +642,7 @@ router.post(
       logger.error('Error importing UVTT file:', error);
       return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to import UVTT file' });
     }
-  }
-);
+}
 
 /**
  * GET /api/campaigns/:campaignId/maps/:id/export-uvtt

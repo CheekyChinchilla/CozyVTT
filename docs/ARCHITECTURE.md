@@ -604,6 +604,7 @@ uploads/
   avatars/      {uuid}.{ext}
   documents/    global/…, campaigns/{campaignId}/…   No thumbnails
   temp/         Campaign imports still in progress
+    uvtt/       Universal VTT uploads waiting their turn (one is read at a time across the server, then removed)
 ```
 
 `Asset.filePath` and `Asset.thumbnailPath` record where each file is. Nothing

@@ -10296,7 +10296,13 @@ paths:
         upload does, and a user may run one import at a time: a second sent
         while the first is still being read answers **429** with `Another
         import is still running`. Imports sent one after another are never
-        held back.
+        held back. The upload waits on disk, in the uploads folder's
+        `temp/uvtt`, and is removed as soon as it is read; imports from
+        different users are read one at a time across the server, in the
+        order they arrived, and none is refused for that, so an import sent
+        while another user's is being read answers when its turn has run.
+        A failure while saving removes the picture, thumbnail and asset row
+        it had saved.
 
 
         The map is named after `name`, or the file's name without its
