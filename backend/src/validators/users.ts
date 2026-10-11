@@ -15,23 +15,54 @@ import { sanitizeInput } from '../utils/validation';
 export const MAX_DISPLAY_NAME_LENGTH = 50;
 
 /**
- * Characters a name never keeps: controls (Cc), invisible formatting (Cf:
- * zero-width spaces and joiners, bidirectional overrides, isolates and marks,
- * the byte-order mark) and the line and paragraph separators. A right-to-left
- * override turns the rest of a name round wherever it is shown, and a name of
- * zero-width characters alone looks blank, so either lets one member pass for
- * another in the roster, chat and dice log.
+ * Characters a name does not keep: controls (Cc), invisible formatting (Cf:
+ * zero-width spaces, word joiners, bidirectional overrides, isolates and
+ * marks, the byte-order mark, tag characters) and the line and paragraph
+ * separators. A right-to-left override turns the rest of a name round wherever
+ * it is shown, and a name of zero-width characters alone looks blank, so
+ * either lets one member pass for another in the roster, chat and dice log.
+ *
+ * Two kinds are kept where real text needs them. A flag for Scotland, Wales
+ * or England is a black flag followed by invisible tag letters and digits
+ * and a cancel tag, and is kept whole; a tag anywhere else is removed. The
+ * zero-width non-joiner and joiner are kept by keptJoiners below.
  */
-const INVISIBLE_IN_NAMES = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+const INVISIBLE_IN_NAMES = /\u{1F3F4}[\u{E0030}-\u{E0039}\u{E0061}-\u{E007A}]+\u{E007F}|[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+const BLACK_FLAG = '\u{1F3F4}';
+const ZWNJ = '\u200C';
+const ZWJ = '\u200D';
+
+/** A character a joiner may stand beside: neither ASCII, nor space, nor anything invisible. */
+function joinable(ch: string | undefined): boolean {
+  return ch !== undefined && (ch.codePointAt(0) ?? 0) > 0x7f && !/[\s\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(ch);
+}
 
 /**
- * A display name as it is stored: invisible characters removed, then in
- * Unicode's composed form (NFC), so an accented letter typed as a letter and
- * an accent is the same name as the single accented letter, then stripped of
- * angle brackets and surrounding space.
+ * The zero-width non-joiner and joiner, kept only between two characters that
+ * are neither ASCII nor space: that is where emoji sequences (a family, a
+ * profession, a skin tone) and Persian, Urdu and Indic names use them. At
+ * either end, repeated, or beside a Latin letter or a space they are removed,
+ * so they cannot hide inside a name and make it look like another.
+ */
+function keptJoiners(name: string): string {
+  const chars = Array.from(name);
+  return chars
+    .filter((ch, i) => (ch !== ZWNJ && ch !== ZWJ) || (joinable(chars[i - 1]) && joinable(chars[i + 1])))
+    .join('');
+}
+
+/**
+ * A display name as it is stored: invisible characters removed (bar the
+ * joiners and flag tags above), then in Unicode's composed form (NFC), so an
+ * accented letter typed as a letter and an accent is the same name as the
+ * single accented letter, then stripped of angle brackets and surrounding
+ * space.
  */
 export function cleanDisplayName(name: string): string {
-  return sanitizeInput(name.replace(INVISIBLE_IN_NAMES, '').normalize('NFC')).trim();
+  const visible = name.replace(INVISIBLE_IN_NAMES, (found) =>
+    found.startsWith(BLACK_FLAG) || found === ZWNJ || found === ZWJ ? found : ''
+  );
+  return sanitizeInput(keptJoiners(visible.normalize('NFC'))).trim();
 }
 
 /**

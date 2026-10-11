@@ -99,6 +99,22 @@ describe('registration', () => {
     expect(res.body.message).toBe('Display name is required');
   });
 
+  it('stores emoji sequences and subdivision flags byte for byte', async () => {
+    // A family emoji (four people joined by U+200D) and the Scotland flag
+    // (a black flag, the tags g, b, s, c, t and the cancel tag).
+    const name = 'Morag \u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} \u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}';
+    const res = await register('emoji', name);
+    expect(res.status).toBe(201);
+    const row = await prisma.user.findUnique({ where: { id: res.body.user.id }, select: { displayName: true } });
+    expect(Buffer.from(row?.displayName ?? '', 'utf8')).toEqual(Buffer.from(name, 'utf8'));
+  });
+
+  it('stores a joiner between two Latin letters without it', async () => {
+    const res = await register('joiner', 'Ali\u200Dce');
+    expect(res.status).toBe(201);
+    expect(res.body.user.displayName).toBe('Alice');
+  });
+
   it('stores an accented name in one form, however it was typed', async () => {
     // "e" followed by a combining acute accent, and the single character for e-acute.
     const res = await register('nfc', 'Rene\u0301e');
