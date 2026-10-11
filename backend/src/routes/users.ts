@@ -16,6 +16,7 @@ import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import { writeSystemLog } from '../services/systemLog';
 
 /**
  * User Management Routes
@@ -520,6 +521,16 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
   try {
     const { id } = req.params;
 
+    // Changing one's own password asks for the current one (POST
+    // /api/auth/change-password); a stolen session must not read a new
+    // temporary password for its own account here instead.
+    if (id === req.session.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.',
+      });
+    }
+
     // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id },
@@ -555,6 +566,13 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
     // effect at their next login
     await destroyUserLoginSessions(id);
     await endLiveSockets(id, 'An administrator reset your password. Sign in again.');
+
+    await writeSystemLog({
+      level: 'WARNING',
+      message: `Reset the password of ${user.email} to a temporary one`,
+      userId: req.session.userId,
+      context: { targetUserId: id },
+    });
 
     return res.status(200).json({
       message: 'Password reset successfully',

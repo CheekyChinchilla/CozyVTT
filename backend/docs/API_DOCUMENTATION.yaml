@@ -766,8 +766,9 @@ paths:
         Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
-        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does. This happens even when SMTP is not configured and no email is sent.
-        Rate limited to 5 requests per 15 minutes; every request counts, successful or not.
+        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.
+        One link per account every 5 minutes: a request within 5 minutes of the account's last unused, unexpired link answers exactly the same, sends nothing and leaves that link working, so one inbox cannot be flooded or have its link voided over and over.
+        Rate limited to 5 requests per 15 minutes per address; every request counts, successful or not.
       operationId: forgotPassword
       security: []
       requestBody:
@@ -1793,7 +1794,7 @@ paths:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, and ends every login session and live connection the user already has open. There is no self check, so an admin naming their own id signs themselves out everywhere. MFA on the account is left as it is.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, and ends every login session and live connection the user already has open. Refused with 400 for the caller's own id, since changing one's own password asks for the current one; a session alone must not get a new password for its own account here. Written to the admins' activity log as a WARNING. MFA on the account is left as it is.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []

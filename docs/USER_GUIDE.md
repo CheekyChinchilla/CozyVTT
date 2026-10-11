@@ -66,7 +66,7 @@ Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor 
 
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once.
+**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 

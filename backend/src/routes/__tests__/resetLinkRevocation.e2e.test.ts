@@ -58,6 +58,9 @@ afterAll(async () => {
 it('voids the older link when a new one is requested from the sign-in page', async () => {
   const u = await user('forgot');
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+  // A second request within five minutes issues nothing (see
+  // forgotPasswordCooldown.e2e); age the first link past that.
+  await prisma.passwordResetToken.updateMany({ where: { userId: u.id }, data: { createdAt: new Date(Date.now() - 6 * 60 * 1000) } });
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
 
   const tokens = await prisma.passwordResetToken.findMany({ where: { userId: u.id }, orderBy: { createdAt: 'asc' } });

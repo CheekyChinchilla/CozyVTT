@@ -49,6 +49,17 @@ const invalid = (res: Response, message: string) => res.status(400).json({ error
  */
 export const MFA_PENDING_MAX_AGE_MS = 5 * 60 * 1000;
 
+/**
+ * How long after issuing a reset link forgot-password issues no other for the
+ * same account. The route is limited per requesting address, so anyone with a
+ * few addresses could ask for a reset for one victim every few seconds: each
+ * request voided the link before it and sent another email. Within this time
+ * the answer is the same, nothing is sent and the link already sent keeps
+ * working. Five minutes is well past a slow mail server, and a person who
+ * asks twice has a link that works in their inbox.
+ */
+export const RESET_LINK_COOLDOWN_MS = 5 * 60 * 1000;
+
 // ============================================
 // MFA Helpers
 // ============================================
@@ -441,25 +452,40 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
     });
 
     if (user) {
-      const token = crypto.randomUUID();
-
-      // Only the newest link works. This also voids a pending invitation,
-      // whose replacement goes to the same address.
-      await voidOutstandingResetLinks(user.id);
-      await prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          token,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-        },
+      // A link issued within the cooldown is left as it is: nothing new is
+      // sent and nothing is voided, so one inbox cannot be flooded or have
+      // its link pulled from under it by repeated requests.
+      const recent = await prisma.passwordResetToken.findFirst({
+        where: { userId: user.id, used: false, expiresAt: { gt: new Date() }, createdAt: { gt: new Date(Date.now() - RESET_LINK_COOLDOWN_MS) } },
+        select: { id: true },
       });
 
-      // Not awaited: waiting for the mail server only for a known address
-      // would let the response time tell which addresses have accounts.
-      if (isSmtpConfigured()) {
-        sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
-          logger.error('Failed to send password reset email', { err: emailError });
+      if (!recent) {
+        const token = crypto.randomUUID();
+
+        // Rows that can never be used again go, so the table does not grow by
+        // one row per request for ever.
+        await prisma.passwordResetToken.deleteMany({
+          where: { userId: user.id, OR: [{ used: true }, { expiresAt: { lt: new Date() } }] },
         });
+        // Only the newest link works. This also voids a pending invitation,
+        // whose replacement goes to the same address.
+        await voidOutstandingResetLinks(user.id);
+        await prisma.passwordResetToken.create({
+          data: {
+            userId: user.id,
+            token,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+          },
+        });
+
+        // Not awaited: waiting for the mail server only for a known address
+        // would let the response time tell which addresses have accounts.
+        if (isSmtpConfigured()) {
+          sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
+            logger.error('Failed to send password reset email', { err: emailError });
+          });
+        }
       }
     }
 

@@ -538,6 +538,15 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Turning off one's own MFA asks for the current password and a code
+    // (POST /api/auth/mfa/disable); a session alone must not get round that.
+    if (id === req.session.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own MFA from here. Use the two-factor settings on your profile, which ask for your password.',
+      });
+    }
+
     const target = await prisma.user.findUnique({
       where: { id },
       select: { id: true, email: true, mfaEnabled: true },
@@ -566,7 +575,7 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
       { targetUserId: id }
     );
 
-    return res.json({ message: 'MFA has been reset. The user must re-enroll on next login.' });
+    return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again.' });
   } catch (error) {
     logger.error('Error resetting MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to reset MFA' });

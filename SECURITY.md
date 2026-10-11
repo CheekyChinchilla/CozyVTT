@@ -24,6 +24,8 @@ Decisions a self-hoster or a reviewer may want to know about. The deployment gui
 
 - **Wrong passwords.** Counted twice: 5 per 15 minutes per visitor address, and 10 per hour per account from every address together, each lock noted in the admins' activity log. The password confirmed when changing the password or email or deleting the account has its own allowance of 10 per 15 minutes per account. Only a wrong answer ever counts, so correct sign-ins arriving together never lock anyone out, and an email with no account is counted and answered exactly as a wrong password, so the limits reveal nothing about who has an account. An unknown email is checked against a dummy password hash, so the time a sign-in takes reveals nothing either.
 
+- **What a session alone can do.** Anything that decides who can sign in from then on asks for the current password: changing it, changing the email address, turning two-factor authentication on or off, deleting the account. The admin reset routes ask for none, so they refuse the administrator's own account; an admin resetting someone else is written to the activity log. A password reset link is issued at most once every 5 minutes per account, and reset links are limited per address as well.
+
 - **Two-factor sign-ins.** A sign-in that has passed the password step but not the code is not signed in anywhere: the HTTP guards, the admin guards and the live-table handshake all read one definition. It expires 5 minutes after the password step, and it ends whenever the account's password is changed or reset or its sessions are ended for another reason.
 
 Known issues and deliberately deferred work are tracked in [docs/FUTURE_FEATURES.md](docs/FUTURE_FEATURES.md).
