@@ -38,6 +38,15 @@ interface DragAudience {
 const moveRefusal = (role: string | undefined): string =>
   role === 'SPECTATOR' ? 'Spectators cannot move tokens' : 'You do not have permission to move this token';
 
+/**
+ * How long a drag's decision of who may see the token is reused, at most,
+ * lit map or not. On a lit map the decision includes each player's line of
+ * sight, which on a map of a thousand walls takes tens of milliseconds per
+ * player token and per light, and every frame is tested against it, so it
+ * is worked out again no more often than this.
+ */
+export const DRAG_DECISION_MS = 1000;
+
 export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * Who is sent a token's drag frames: the DM's sockets, and the players the
@@ -54,18 +63,15 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * again. Who may see it also turns on each player's plane, their role, the
    * map on screen, and on a lit map the walls, lights and their own tokens,
    * which can change mid-drag without touching the token, so the decision is
-   * made again at least every DRAG_DECISION_MS (LIT_DRAG_DECISION_MS on a lit
-   * map) as well.
+   * made again at least every DRAG_DECISION_MS as well.
    */
-  const DRAG_DECISION_MS = 1000;
-  const LIT_DRAG_DECISION_MS = 250;
   const drags = new Map<string, { seenAs: string; at: number; deciding: Promise<DragAudience> }>();
   const seenAs = (token: Pick<Token, 'visible' | 'layer'>) => `${token.visible !== false}|${token.layer}`;
-  function dragAudienceFor(mapId: string, token: Token, lit: boolean): Promise<DragAudience> {
+  function dragAudienceFor(mapId: string, token: Token): Promise<DragAudience> {
     const cached = drags.get(token.id);
     const now = Date.now();
     const sameSight = cached !== undefined && cached.seenAs === seenAs(token);
-    if (sameSight && now - cached.at < (lit ? LIT_DRAG_DECISION_MS : DRAG_DECISION_MS)) return cached.deciding;
+    if (sameSight && now - cached.at < DRAG_DECISION_MS) return cached.deciding;
     // The promise is cached, not its result, so frames that arrive while the
     // first one is still being decided wait for it instead of deciding again.
     // Decided again for the same drag, who has the token is what the frames
@@ -191,8 +197,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * The start of a drag, to the members decided for it who have the token
    * where it stands.
    */
-  async function emitDragStart(token: Token, mapId: string, lit: boolean): Promise<void> {
-    const audience = await dragAudienceFor(mapId, token, lit);
+  async function emitDragStart(token: Token, mapId: string): Promise<void> {
+    const audience = await dragAudienceFor(mapId, token);
     // Decided once for the whole drag, so each event goes only to those of
     // them still in this campaign: a socket that authenticated into another
     // since is not sent its old table's token positions. Reading the room
@@ -210,8 +216,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * token itself if they do not have it; one who had it and no longer sees
    * it is told it has gone, and sent nothing more until it comes back.
    */
-  async function emitDragFrame(token: Token, mapId: string, lit: boolean, x: number, y: number): Promise<void> {
-    const audience = await dragAudienceFor(mapId, token, lit);
+  async function emitDragFrame(token: Token, mapId: string, x: number, y: number): Promise<void> {
+    const audience = await dragAudienceFor(mapId, token);
     const there: Token = { ...token, position: { x, y } };
     for (const s of await campaignSockets(io, socket.campaignId!)) {
       const recipient = audience.recipients.get(s.id);
@@ -299,7 +305,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      await emitDragStart(token, mapId, map.lightingEnabled);
+      await emitDragStart(token, mapId);
 
       logger.debug('token.move.start', { tokenId, userId: socket.userId, mapId });
     } catch (error) {
@@ -336,7 +342,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // instead of two is the meaningful per-frame win).
       const map = await prisma.map.findUnique({
         where: { id: mapId },
-        select: { width: true, height: true, campaignId: true, tokens: true, lightingEnabled: true, campaign: { select: { status: true, currentMapId: true } } },
+        select: { width: true, height: true, campaignId: true, tokens: true, campaign: { select: { status: true, currentMapId: true } } },
       });
 
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
@@ -383,7 +389,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // draws the token where it is being carried but leaves where it
       // stands, which decides sight and explored memory, until the drop, so
       // carrying a player's token about reveals nothing on the way.
-      await emitDragFrame(movingToken, mapId, map.lightingEnabled, x, y);
+      await emitDragFrame(movingToken, mapId, x, y);
     } catch (error) {
       logger.error('token.move failed', { err: error });
     }

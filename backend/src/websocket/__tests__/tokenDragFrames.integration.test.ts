@@ -15,6 +15,8 @@
 import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
+import * as spiritLayer from '../../utils/spirit-layer';
+import { DRAG_DECISION_MS } from '../handlers/tokens';
 import {
   createWsTestServer,
   expectNoEvent,
@@ -247,6 +249,53 @@ describe('drag frames carried across the edge of sight', () => {
   });
 });
 
+/**
+ * What a lit-map drag costs. Working out one player's line of sight takes
+ * tens of milliseconds on a map with many walls, once per player token and
+ * once per light, and every frame is tested against the sight worked out
+ * last. So a drag works it out again no more often than an unlit map
+ * decides who its frames go to: once every DRAG_DECISION_MS.
+ */
+describe('line of sight during a drag on a lit map', () => {
+  it('is worked out once for each player, and again only after DRAG_DECISION_MS', async () => {
+    await resetMap(true, true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The server's clock, moved by hand: each frame below arrives as far
+    // into the drag as it says, whatever the test machine's speed.
+    const start = Date.now();
+    let elapsed = 0;
+    const clock = jest.spyOn(Date, 'now').mockImplementation(() => start + elapsed);
+    const sight = jest.spyOn(spiritLayer, 'playerSightOnLitMap');
+    try {
+      const first = waitForEvent<{ x: number }>(player, 'token.moved');
+      drag(dm, FAR, [16]);
+      expect((await first).x).toBe(16);
+
+      const frameAt = async (ms: number, x: number) => {
+        elapsed = ms;
+        const frame = waitForEvent<{ x: number }>(player, 'token.moved');
+        dm.emit('token.move', { tokenId: FAR, mapId, x, y: 5 });
+        expect((await frame).x).toBe(x);
+      };
+      await frameAt(DRAG_DECISION_MS * 0.3, 15);
+      await frameAt(DRAG_DECISION_MS * 0.6, 14);
+      await frameAt(DRAG_DECISION_MS * 0.9, 13);
+      expect(sight).toHaveBeenCalledTimes(1);
+
+      await frameAt(DRAG_DECISION_MS, 12);
+      expect(sight).toHaveBeenCalledTimes(2);
+    } finally {
+      sight.mockRestore();
+      clock.mockRestore();
+    }
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
 // A frame says where a token is being carried; the drop, where it stands. A
 // page moves sight and explored memory only for the second, so a DM carrying
 // a player's token about reveals nothing to that player on the way.
@@ -365,7 +414,7 @@ describe('drag frames on an unlit map', () => {
 
     // Every player is now on the spirit plane; the dragged token is not.
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
-    const later = Date.now() + 1500;
+    const later = Date.now() + DRAG_DECISION_MS + 500;
     const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
     try {
       const quiet = expectNoEvent(player, 'token.moved', 800);
