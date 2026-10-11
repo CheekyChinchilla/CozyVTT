@@ -14,11 +14,14 @@
  *
  * An error nothing caught, thrown or rejected, ends the process with 1 as
  * Node would, but is written to the log first: Node's own report went to the
- * console only, never to the log files.
+ * console only, never to the log files. Exiting closes the log, so any that
+ * follow while the process stops go to the console.
  */
 
+import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, type ShutdownTargets } from '../shutdown';
 import logger from '../logger';
@@ -197,19 +200,117 @@ describe('an error nothing caught', () => {
     }
   });
 
-  it('exits once, however many arrive while the log is written', () => {
-    const errorLog = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+  it('exits once, and writes any that follow to the console, since the first has closed the log', () => {
+    // The default exit ends the logger, and a line written to it after that
+    // throws; thrown inside this handler, Node would stop at once with 7.
+    let logClosed = false;
+    const errorLog = jest.spyOn(logger, 'error').mockImplementation(() => {
+      if (logClosed) throw new Error('write after end');
+      return logger;
+    });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const proc = new EventEmitter();
-      const exit = jest.fn();
+      const exit = jest.fn(() => { logClosed = true; });
       onProcessFailure(proc, exit);
-      proc.emit('unhandledRejection', new Error('first'));
-      proc.emit('uncaughtException', new Error('second'));
+      const first = new Error('first');
+      const second = new Error('second');
+      const third = new Error('third');
+      proc.emit('unhandledRejection', first);
+      proc.emit('unhandledRejection', second);
+      proc.emit('uncaughtException', third);
 
-      expect(errorLog).toHaveBeenCalledTimes(2);
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(errorLog.mock.calls[0] as unknown[]).toEqual(['Unhandled promise rejection; stopping', { err: first }]);
+      expect(consoleError.mock.calls).toEqual([
+        ['Unhandled promise rejection while stopping', second],
+        ['Uncaught exception while stopping', third],
+      ]);
       expect(exit).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(1);
     } finally {
       errorLog.mockRestore();
+      consoleError.mockRestore();
     }
   });
+});
+
+/**
+ * The real logger, as production runs it, in a process of its own: errors in
+ * the second it takes to write out the log files and exit.
+ */
+describe('an error nothing caught, while the backend is stopping', () => {
+  interface Ended { code: number | null; stderr: string; errorLog: string }
+
+  const child = `
+const { onProcessFailure, createShutdown } = require(process.env.SHUTDOWN_MODULE);
+onProcessFailure();
+setTimeout(() => {
+  if (process.argv[2] === 'several') {
+    void Promise.reject(new Error('the first, rejected'));
+    void Promise.reject(new Error('the second, rejected'));
+    process.nextTick(() => { throw new Error('the third, thrown'); });
+  } else {
+    const targets = { io: { close: (done) => done() }, prisma: { $disconnect: async () => {} }, sessionPool: { end: async () => {} } };
+    void createShutdown(targets)('SIGTERM').then(() => process.nextTick(() => { throw new Error('thrown after the shutdown'); }));
+  }
+}, 0);
+`;
+
+  /** Runs the scenario in a folder of its own, where production writes logs/. */
+  function run(scenario: 'several' | 'after a shutdown'): Promise<Ended> {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-fatal-'));
+    const script = path.join(dir, 'fail.js');
+    fs.writeFileSync(script, child);
+    const backend = path.resolve(__dirname, '../../..');
+    return new Promise<Ended>((resolve, reject) => {
+      const proc = spawn(process.execPath, ['-r', require.resolve('ts-node/register/transpile-only'), script, scenario === 'several' ? 'several' : 'shutdown'], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          LOG_LEVEL: 'info',
+          TS_NODE_PROJECT: path.join(backend, 'tsconfig.json'),
+          SHUTDOWN_MODULE: path.resolve(__dirname, '../shutdown.ts'),
+        },
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let stderr = '';
+      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      const giveUp = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error(`the process did not stop:\n${stderr}`));
+      }, 20000);
+      proc.on('exit', (code) => {
+        clearTimeout(giveUp);
+        const logFile = path.join(dir, 'logs', 'error.log');
+        const errorLog = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+        fs.rmSync(dir, { recursive: true, force: true });
+        resolve({ code, stderr, errorLog });
+      });
+    });
+  }
+
+  it('logs the first, writes the rest to the console, and exits 1', async () => {
+    const ended = await run('several');
+
+    expect(ended.stderr).not.toContain('write after end');
+    expect(ended.code).toBe(1);
+    const logged = ended.errorLog.split('\n').filter(Boolean);
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatch(/"message":"(Uncaught exception|Unhandled promise rejection); stopping"/);
+    expect(ended.stderr.match(/(Uncaught exception|Unhandled promise rejection) while stopping/g)).toHaveLength(2);
+    for (const message of ['the first, rejected', 'the second, rejected', 'the third, thrown']) {
+      expect(ended.errorLog + ended.stderr).toContain(message);
+    }
+  }, 30000);
+
+  it('writes one that arrives as a shutdown ends to the console, and exits as the shutdown would', async () => {
+    const ended = await run('after a shutdown');
+
+    expect(ended.stderr).not.toContain('write after end');
+    expect(ended.code).toBe(0);
+    expect(ended.stderr).toContain('Uncaught exception while stopping');
+    expect(ended.stderr).toContain('thrown after the shutdown');
+  }, 30000);
 });

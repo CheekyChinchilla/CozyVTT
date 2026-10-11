@@ -58,10 +58,17 @@ export const BACKUP_WAIT_MS = 10 * 60_000;
 /** The longest the default exit waits for the log files to be written. */
 const LOG_FLUSH_MS = 1_000;
 
+/**
+ * Set once exitAfterLogs has closed the logger. A line written to it after
+ * that throws, so whatever is reported then goes to the console.
+ */
+let logClosed = false;
+
 function exitAfterLogs(code: number): void {
   const files = logger.transports.filter((t) => t instanceof winston.transports.File);
   const written = files.map((t) => new Promise<void>((resolve) => t.once('finish', () => resolve())));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, LOG_FLUSH_MS).unref());
+  logClosed = true;
   logger.end();
   void Promise.race([Promise.all(written), timeout]).then(() => process.exit(code));
 }
@@ -78,6 +85,11 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
 
   return (signal) => {
     if (running) {
+      // TODO(shutdown): once exitAfterLogs has closed the logger, this line
+      // (a second signal while the log files are written) and the lines after
+      // the deadline's exit throw "write after end", which onProcessFailure
+      // then reports on the console in their place. Right: write them to the
+      // console once logClosed is set.
       logger.info(`${signal} received while already shutting down`);
       return running;
     }
@@ -150,6 +162,10 @@ export function onShutdownSignals(
  * Node ends it, but written to the log first. Node's own report went to the
  * console alone, never to the log files, and a rejection nobody handled
  * looked the same as any other crash. Docker starts the backend again.
+ *
+ * Exiting closes the log. An error that arrives after that, while this exit
+ * or a shutdown's writes out the log files, goes to the console instead, and
+ * the exit already under way ends the process.
  */
 export function onProcessFailure(
   target: { on(event: string, listener: (value: unknown) => void): unknown } = process,
@@ -157,9 +173,12 @@ export function onProcessFailure(
 ): void {
   let exiting = false;
   const fail = (what: string) => (value: unknown) => {
-    logger.error(`${what}; stopping`, { err: value });
-    if (exiting) return;
+    if (exiting || logClosed) {
+      console.error(`${what} while stopping`, value);
+      return;
+    }
     exiting = true;
+    logger.error(`${what}; stopping`, { err: value });
     exit(1);
   };
   target.on('uncaughtException', fail('Uncaught exception'));
