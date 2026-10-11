@@ -37,12 +37,18 @@
  * The character sheet limits. The server refuses a sheet over them and the
  * sheet editors stop each box at them; an editor allowing more is a sheet the
  * player fills in and cannot save. The file is kept identical in both packages.
+ *
+ * The session secret examples. A production server refuses the example values
+ * for SESSION_SECRET, so a self-hoster who copies a block as written is told
+ * to generate one; the guide's example was once changed without the list of
+ * refused values, and the new example line started a server.
  */
 
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
+import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 
 const root = path.resolve(__dirname, '../../..');
@@ -249,5 +255,18 @@ describe('the socket flood ceilings in the WebSocket guide', () => {
 
   it.each(Object.entries(SOCKET_CEILINGS))('%s is stated as the server applies it', (event, ceiling) => {
     expect(stated(event)).toBe(inWords(ceiling.windows));
+  });
+});
+
+describe('the SESSION_SECRET examples in the example files and the guides', () => {
+  const files = ['.env.example', 'backend/.env.example', 'docs/DEPLOYMENT.md', 'docs/DEVELOPMENT.md', 'README.md'];
+  /** Each `SESSION_SECRET=value` line, with the file it is in and the value as dotenv reads it. */
+  const examples = files.flatMap((rel) =>
+    [...read(rel).matchAll(/^\s*SESSION_SECRET=(.+)$/gm)].map((m) => ({ file: rel, value: m[1].trim().replace(/^(["'])(.*)\1$/, '$2') }))
+  );
+
+  it('are all refused by a production server, so a block copied as written does not run on a known secret', () => {
+    expect(examples.length).toBeGreaterThan(0);
+    expect(examples.filter(({ value }) => sessionSecretProblem(value) === null)).toEqual([]);
   });
 });

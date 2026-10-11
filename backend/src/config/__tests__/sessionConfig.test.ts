@@ -85,7 +85,9 @@ describe('the session secret', () => {
   });
 
   it.each([
-    ['the deployment guide\'s example value', 'your-64-char-random-string'],
+    ['the example value the deployment guide used to show', 'your-64-char-random-string'],
+    ['the deployment guide\'s example line, pasted as written', '<paste the 64 characters that command prints>'],
+    ['the development guide\'s example value', 'dev-session-secret-change-in-production-please'],
     ['shorter than 32 characters', 'cozyvtt-secret-1234567890123456'],
   ])('stops a production server when it is %s', (_label, secret) => {
     expect(() => loadWith({ NODE_ENV: 'production', SESSION_SECRET: secret })).toThrow(Exited);
