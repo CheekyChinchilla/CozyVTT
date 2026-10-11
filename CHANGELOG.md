@@ -98,6 +98,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A production instance refuses to start on a session secret that could be guessed.** `SESSION_SECRET` signs every session cookie. The instance accepted any value that was not the exact placeholder from `.env.example`, including the example values the guides show and secrets of a few characters. It now also refuses every example value in the guides, the deployment guide's `<paste the 64 characters that command prints>` line among them, and any secret shorter than 32 characters, with a log line saying how to generate one. The Upgrading section above says what to do if yours is refused.
 
+- **Signing out now clears the lists the app had loaded for you.** The campaigns, characters and invitations the dashboard loads were kept after signing out, so the next person to sign in on the same browser tab within five minutes was first shown yours, for up to 30 seconds. Signing out now clears them, and so does signing in as a different account.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

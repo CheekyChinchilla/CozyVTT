@@ -4,8 +4,9 @@
 // Provides user data and auth functions to entire app
 // ============================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authService } from '@/services/auth.service';
+import { queryClient } from '@/lib/queryClient';
 import type {
   User,
   AuthContextType,
@@ -36,6 +37,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [mfaPending, setMfaPending] = useState<boolean>(false);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
 
+  /**
+   * The account the cached lists were fetched for. The lists the pages cache
+   * (campaigns, characters, invitations) are keyed without a user, so they
+   * are dropped when that account signs out or another one signs in, or the
+   * next person on the same tab would be shown the previous one's.
+   */
+  const cachedFor = useRef<string | null>(null);
+
+  /** Take `next` as the signed-in user, first dropping another account's cached lists. */
+  const takeUser = useCallback((next: User): void => {
+    if (cachedFor.current !== null && cachedFor.current !== next.id) queryClient.clear();
+    cachedFor.current = next.id;
+    setUser(next);
+  }, []);
+
   // ============================================
   // Initialize - Check if user is authenticated
   // ============================================
@@ -48,7 +64,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      takeUser(currentUser);
       setAuthenticated(true);
       setMustChangePassword(currentUser.mustChangePassword || false);
     } catch (error) {
@@ -84,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Login successful — MFA branch returned early above, so response is AuthResponse
       const authResponse = response as AuthResponse;
-      setUser(authResponse.user);
+      takeUser(authResponse.user);
       setAuthenticated(true);
       setMfaPending(false);
       setMustChangePassword(authResponse.mustChangePassword || false);
@@ -94,7 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setMfaPending(false);
       throw error;
     }
-  }, []);
+  }, [takeUser]);
 
   // ============================================
   // Logout
@@ -107,6 +123,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error('Logout error:', error);
       // Continue with local logout even if API call fails
     } finally {
+      queryClient.clear();
+      cachedFor.current = null;
       setUser(null);
       setAuthenticated(false);
       setMfaPending(false);
@@ -129,7 +147,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Account created but pending admin approval — do not authenticate
         return { pendingApproval: true };
       }
-      setUser(response.user);
+      takeUser(response.user);
       setAuthenticated(true);
       setMfaPending(false);
       setMustChangePassword(response.mustChangePassword || false);
@@ -139,7 +157,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAuthenticated(false);
       throw error;
     }
-  }, []);
+  }, [takeUser]);
 
   // ============================================
   // MFA Verification (during login)
@@ -151,11 +169,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALogin(token);
-    setUser(response.user);
+    takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
-  }, [mfaPending]);
+  }, [mfaPending, takeUser]);
 
   const verifyMFAWithBackupCode = useCallback(async (backupCode: string): Promise<void> => {
     if (!mfaPending) {
@@ -163,7 +181,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALoginWithBackupCode(backupCode);
-    setUser(response.user);
+    takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
@@ -177,7 +195,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (response.warning) {
       console.warn('MFA Warning:', response.warning);
     }
-  }, [mfaPending]);
+  }, [mfaPending, takeUser]);
 
   // ============================================
   // MFA Setup (for current user)
@@ -256,11 +274,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * screen.
    */
   const adoptSession = useCallback((adopted: User): void => {
-    setUser(adopted);
+    takeUser(adopted);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(adopted.mustChangePassword || false);
-  }, []);
+  }, [takeUser]);
 
   const refreshUser = useCallback(async (): Promise<void> => {
     if (!authenticated) {
@@ -269,14 +287,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      takeUser(currentUser);
       setMustChangePassword(currentUser.mustChangePassword || false);
     } catch (error) {
       console.error('Failed to refresh user:', error);
       // If refresh fails, user might be logged out
       await logout();
     }
-  }, [authenticated, logout]);
+  }, [authenticated, logout, takeUser]);
 
   // ============================================
   // Context Value
