@@ -20,7 +20,7 @@ import { getSystemSettings, getAppearanceSettings } from '../services/systemSett
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
 import logger from '../utils/logger';
-import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
 
 // ============================================
 // MFA Helpers
@@ -658,6 +658,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     await destroyUserLoginSessions(userId);
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, deletion.campaignIds, 'member.left');
+    await removePersonalFiles(deletion.personal);
 
     // Destroy the session
     req.session.destroy(() => {});

@@ -1245,10 +1245,15 @@ paths:
       description: |
         Self-service permanent account deletion. Requires the current
         password as confirmation. Deletes the user's memberships, pending
-        invitations, characters, personal notes and dice macros. Their chat
-        messages, dice rolls and uploaded assets stay, with the user field
-        set to null, and documents they shared into a campaign stay shared
-        (the share passes to the campaign's DM, or its owner).
+        invitations, characters, personal notes and dice macros. Their
+        personal (`USER` scope) assets are deleted, row and file: every
+        `AVATAR`, and any other that nothing names (no map, token, character,
+        template, creature or campaign setting) and that no campaign has
+        shared. A personal asset something still names, or one shared into a
+        campaign, stays. Their chat messages, dice rolls, campaign assets and
+        the personal assets that stay are kept with the user field set to
+        null, and documents they shared into a campaign stay shared (the
+        share passes to the campaign's DM, or its owner).
 
         Only campaigns the user owns are checked. One whose DM seat another
         member holds passes to that DM. One where the user holds the DM seat,
@@ -1650,9 +1655,10 @@ paths:
                     type: integer
                     description: >-
                       Count of the user's personal-scope assets, taken before
-                      deletion. The assets themselves are not deleted; they
-                      stay, owned by no one, readable by admins only. Assets
-                      of other scopes also stay but are not counted.
+                      deletion. Their avatar and the ones nothing uses or
+                      shares are deleted with the account; the rest stay,
+                      owned by no one, readable by admins only. Assets of
+                      other scopes also stay but are not counted.
         '400':
           description: >-
             The calling admin named their own id. Checked after the admin

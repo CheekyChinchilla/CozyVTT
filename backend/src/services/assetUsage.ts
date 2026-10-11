@@ -218,3 +218,8 @@ export async function assetUsageFor(
   const all = [...visible, ...folded];
   return { usage: all.slice(0, MAX_LISTED_USES), omitted: Math.max(0, all.length - MAX_LISTED_USES) };
 }
+
+/** Whether anything stores an address naming the asset: the places `assetUsageFor` lists. */
+export async function isAssetInUse(assetId: string): Promise<boolean> {
+  return (await findUses(assetId)).length > 0;
+}

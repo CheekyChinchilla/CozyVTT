@@ -632,8 +632,12 @@ export default function AdminPage() {
     setDeletingUserAssetCount(0);
     setLoadingDeleteWarning(u.id);
     try {
-      const resp = await api.listAssets({ uploadedBy: u.id, scope: 'USER', limit: 1 });
-      setDeletingUserAssetCount(resp.pagination.total);
+      // A list with no type leaves documents out, so they are counted apart.
+      const [files, documents] = await Promise.all([
+        api.listAssets({ uploadedBy: u.id, scope: 'USER', limit: 1 }),
+        api.listAssets({ uploadedBy: u.id, scope: 'USER', type: 'DOCUMENT', limit: 1 }),
+      ]);
+      setDeletingUserAssetCount(files.pagination.total + documents.pagination.total);
     } catch {
       // non-fatal — just proceed without warning
     } finally {
@@ -1531,8 +1535,9 @@ export default function AdminPage() {
                                         <div className="flex items-start gap-2 mb-3 p-2.5 bg-warning/10 border border-warning/30 rounded-lg text-xs text-warning-ink">
                                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning-ink" />
                                           <span>
-                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''}. They stay after the account is deleted, owned by no one, and only admins can see them then.
-                                            To keep them usable by others, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
+                                            This user has <strong>{deletingUserAssetCount}</strong> personal file{deletingUserAssetCount !== 1 ? 's' : ''}. Their avatar, and any of them nothing uses and no campaign shares, are deleted with the account.
+                                            The rest stay, owned by no one, and a file a campaign uses can then be seen by admins alone.
+                                            To keep one usable, move it to Global or into the campaign from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
                                           </span>
                                         </div>
                                       )}

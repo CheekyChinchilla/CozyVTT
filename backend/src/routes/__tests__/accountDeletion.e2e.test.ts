@@ -10,6 +10,9 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { PlatformRole } from '@prisma/client';
@@ -54,19 +57,20 @@ const roll = (userId: string, campaignId: string) =>
 
 afterAll(async () => {
   await prisma.diceRoll.deleteMany({ where: { campaignId: { in: campaignIds } } });
-  await prisma.asset.deleteMany({ where: { OR: [{ campaignId: { in: campaignIds } }, { uploadedById: { in: userIds } }] } });
+  await prisma.asset.deleteMany({
+    where: { OR: [{ campaignId: { in: campaignIds } }, { uploadedById: { in: userIds } }, { name: { startsWith: 'Personal ' }, uploadedById: null }] },
+  });
   await cleanupCampaigns(campaignIds);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
 });
 
-it('deletes a player who has rolled and uploaded, keeping the rolls and files with no owner', async () => {
+it('deletes a player who has rolled and uploaded, keeping the rolls and campaign files with no owner', async () => {
   const dm = await member('Deletion DM');
   const leaver = await member('Deletion Player');
   const campaignId = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
   const rolled = await roll(leaver.user.id, campaignId);
   const campaignArt = await upload(leaver.user.id, campaignId);
-  const personal = await upload(leaver.user.id, null);
 
   const res = await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
   expect(res.status).toBe(200);
@@ -74,7 +78,97 @@ it('deletes a player who has rolled and uploaded, keeping the rolls and files wi
   expect(await prisma.user.findUnique({ where: { id: leaver.user.id } })).toBeNull();
   expect((await prisma.diceRoll.findUniqueOrThrow({ where: { id: rolled.id } })).userId).toBeNull();
   expect((await prisma.asset.findUniqueOrThrow({ where: { id: campaignArt.id } })).uploadedById).toBeNull();
-  expect((await prisma.asset.findUniqueOrThrow({ where: { id: personal.id } })).uploadedById).toBeNull();
+});
+
+// A person deleting their account to remove their data had their avatar and
+// their private uploads kept on the server for good, readable by admins
+// alone. Those go with the account now: the avatar always, and a personal
+// file when nothing uses it and no campaign has it shared. A personal file a
+// campaign still uses stays, with no owner, as a campaign's own files do.
+describe('the personal files of a deleted account', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-account-files-'));
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  /** A personal asset with its file, and a thumbnail for a map, on disk. */
+  async function personalFile(uploadedById: string, type: 'MAP' | 'TOKEN' | 'AVATAR' | 'DOCUMENT') {
+    const filePath = path.join(dir, `${randomUUID()}.png`);
+    fs.writeFileSync(filePath, 'bytes');
+    let thumbnailPath: string | null = null;
+    if (type === 'MAP') {
+      thumbnailPath = path.join(dir, `thumb_${path.basename(filePath)}`);
+      fs.writeFileSync(thumbnailPath, 'thumb');
+    }
+    return prisma.asset.create({
+      data: {
+        type, scope: 'USER', uploadedById, filename: path.basename(filePath), originalName: 'mine.png',
+        mimeType: 'image/png', fileSize: 5, filePath, thumbnailPath, name: `Personal ${type}`,
+      },
+    });
+  }
+
+  const gone = async (asset: { id: string; filePath: string; thumbnailPath: string | null }) => {
+    expect(await prisma.asset.findUnique({ where: { id: asset.id } })).toBeNull();
+    expect(fs.existsSync(asset.filePath)).toBe(false);
+    if (asset.thumbnailPath) expect(fs.existsSync(asset.thumbnailPath)).toBe(false);
+  };
+  const kept = async (asset: { id: string; filePath: string }) => {
+    expect((await prisma.asset.findUniqueOrThrow({ where: { id: asset.id } })).uploadedById).toBeNull();
+    expect(fs.existsSync(asset.filePath)).toBe(true);
+  };
+
+  it('deletes the avatar and the personal files nothing uses, with their files on disk', async () => {
+    const leaver = await member('Files Leaver');
+    const avatar = await personalFile(leaver.user.id, 'AVATAR');
+    const unusedMap = await personalFile(leaver.user.id, 'MAP');
+    const privateDocument = await personalFile(leaver.user.id, 'DOCUMENT');
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+
+    await gone(avatar);
+    await gone(unusedMap);
+    await gone(privateDocument);
+  });
+
+  it("deletes token art used only by the person's own character, which goes with them", async () => {
+    const leaver = await member('Files Character Owner');
+    const art = await personalFile(leaver.user.id, 'TOKEN');
+    await prisma.character.create({
+      data: { userId: leaver.user.id, name: 'Gone Hero', data: {}, tokenImageUrl: `/api/assets/tokens/${art.id}` },
+    });
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await gone(art);
+  });
+
+  it('keeps a personal file a campaign uses, and a document shared into a campaign, with no owner', async () => {
+    const owner = await member('Files Owner');
+    const leaver = await member('Files Former DM');
+    const campaignId = await campaignRunBy(owner.user.id, owner.user.id, [leaver.user.id]);
+    const mapArt = await personalFile(leaver.user.id, 'MAP');
+    const url = `/api/assets/maps/${mapArt.id}`;
+    await prisma.map.create({
+      data: { campaignId, name: 'Kept Map', imageUrl: url, baseLayerUrl: url, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [] },
+    });
+    const handout = await personalFile(leaver.user.id, 'DOCUMENT');
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: handout.id, linkedById: leaver.user.id } });
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+
+    await kept(mapArt);
+    await kept(handout);
+  });
+
+  it('does the same when an admin deletes the account', async () => {
+    const admin = await member('Files Admin', PlatformRole.ADMIN);
+    const target = await member('Files Target');
+    const avatar = await personalFile(target.user.id, 'AVATAR');
+    const unused = await personalFile(target.user.id, 'TOKEN');
+
+    expect((await admin.agent.delete(`/api/users/${target.user.id}`)).status).toBe(200);
+
+    await gone(avatar);
+    await gone(unused);
+  });
 });
 
 it('lets an admin delete such a user too', async () => {
