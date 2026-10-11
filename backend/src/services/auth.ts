@@ -1,4 +1,5 @@
 import argon2 from 'argon2';
+import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { User, PlatformRole, type Prisma } from '@prisma/client';
 import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
@@ -171,6 +172,19 @@ export async function registerUser(input: RegisterInput): Promise<User> {
 }
 
 /**
+ * A hash nobody's password matches, made once with the same cost as a real
+ * one. An email with no account used to be answered straight after the lookup
+ * while a known one went on to the Argon2 check, so the time a sign-in took
+ * told which addresses have accounts, though the reply was the same. Checking
+ * the given password against this hash makes both paths pay for the hash.
+ */
+let dummyHash: Promise<string> | null = null;
+function dummyPasswordHash(): Promise<string> {
+  if (dummyHash === null) dummyHash = hashPassword(crypto.randomBytes(32).toString('hex'));
+  return dummyHash;
+}
+
+/**
  * Authenticate user with email and password
  */
 export async function authenticateUser(input: LoginInput): Promise<User | null> {
@@ -181,11 +195,9 @@ export async function authenticateUser(input: LoginInput): Promise<User | null> 
     where: { email },
   });
 
-  // TODO(accounts): an email with no account returns here without a password
-  // check, so it answers measurably faster than a wrong password for a real
-  // account, and the timing tells the two apart even though the response is
-  // the same. Verify against a fixed dummy hash here so both take as long.
+  // An unknown email costs the same as a wrong password: see dummyPasswordHash.
   if (!user) {
+    await verifyPassword(await dummyPasswordHash(), input.password);
     return null;
   }
 

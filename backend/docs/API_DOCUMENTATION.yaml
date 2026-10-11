@@ -585,7 +585,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts and answers exactly as a wrong password.
+        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash).
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login` within 5 minutes; the session is not signed in until then, and after 5 minutes the pending sign-in ends and the password step starts again. A pending sign-in also ends when the account's password is changed or reset, or its sessions are ended for any other reason.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
