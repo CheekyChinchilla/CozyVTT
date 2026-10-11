@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Only an administrator can import the D&D 5e SRD creatures.** A DM who is not an administrator now sees a note to ask one in an empty Creature Library, in place of the **Import D&D 5e SRD** button. If your library already holds the SRD creatures, nothing changes. To import them, an administrator opens the Creature Library in any campaign of theirs; they appear in every campaign.
 
+- **Invite Player searches by name.** It no longer lists everyone on the instance: type at least 2 letters of someone's display name and pick them from up to 20 matches. Accounts still waiting for an administrator's approval are not listed.
+
 ### Added
 
 - **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
