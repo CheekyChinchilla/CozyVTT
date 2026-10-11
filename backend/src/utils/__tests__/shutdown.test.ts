@@ -7,10 +7,21 @@
  * stop and every upgrade waited Docker's ten seconds and ended in SIGKILL,
  * with sockets cut and nothing closed. A service manager, or Ctrl+C, sends the
  * same signals to a backend run without Docker.
+ *
+ * A backup being written when the signal arrives is let finish first, for
+ * up to ten minutes, the time the bundled nginx gives the dashboard's request
+ * for one; stopped part-way, it is lost and has to be made again.
+ *
+ * An error nothing caught, thrown or rejected, ends the process with 1 as
+ * Node would, but is written to the log first: Node's own report went to the
+ * console only, never to the log files.
  */
 
 import { EventEmitter } from 'events';
-import { createShutdown, onShutdownSignals, SHUTDOWN_GRACE_MS, type ShutdownTargets } from '../shutdown';
+import fs from 'fs';
+import path from 'path';
+import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, type ShutdownTargets } from '../shutdown';
+import logger from '../logger';
 
 function targets(order: string[] = []) {
   const t = {
@@ -88,5 +99,117 @@ describe('the signals', () => {
     onShutdownSignals(shutdown, proc);
     proc.emit(signal);
     expect(shutdown).toHaveBeenCalledWith(signal);
+  });
+});
+
+/** A backup that finishes when `finish` is called. */
+function backupRunning() {
+  let finish = () => {};
+  const done = new Promise<void>((resolve) => { finish = resolve; });
+  let count = 1;
+  const backups = {
+    get count() { return count; },
+    finished: () => done,
+  };
+  return { backups, finish: () => { count = 0; finish(); } };
+}
+
+describe('a shutdown while a backup is being written', () => {
+  it('stops taking requests at once, and closes the database only once the backup has finished', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { backups, finish } = backupRunning();
+    const exit = jest.fn();
+    const done = createShutdown({ ...t, backups }, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.io.close).toHaveBeenCalledTimes(1);
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+
+    order.push('backup');
+    finish();
+    await done;
+    expect(order).toEqual(['io', 'backup', 'prisma', 'sessionPool']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('waits no longer than its bound, then closes the rest and exits', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const { backups } = backupRunning();
+      const exit = jest.fn();
+      const done = createShutdown({ ...t, backups }, { exit, backupWaitMs: 60_000, graceMs: 5000 })('SIGTERM');
+
+      await jest.advanceTimersByTimeAsync(59_999);
+      expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+      expect(t.prisma.$disconnect).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not wait when no backup is being written', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const exit = jest.fn();
+      const backups = { count: 0, finished: () => new Promise<void>(() => {}) };
+      await createShutdown({ ...t, backups }, { exit })('SIGTERM');
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('waits ten minutes at most, which the backend container allows before Docker stops it', () => {
+    expect(BACKUP_WAIT_MS).toBe(10 * 60_000);
+    const compose = fs.readFileSync(path.resolve(__dirname, '../../../../docker-compose.yml'), 'utf8');
+    const backend = compose.slice(compose.indexOf('\n  backend:'), compose.indexOf('\n  frontend:'));
+    const grace = /\n {4}stop_grace_period: (?:(\d+)m)?(?:(\d+)s)?\n/.exec(backend);
+    if (!grace) throw new Error('the backend service in docker-compose.yml sets no stop_grace_period');
+    const seconds = Number(grace[1] ?? 0) * 60 + Number(grace[2] ?? 0);
+    expect(seconds * 1000).toBeGreaterThan(BACKUP_WAIT_MS + SHUTDOWN_GRACE_MS);
+  });
+});
+
+describe('an error nothing caught', () => {
+  it.each([
+    ['uncaughtException', new Error('thrown and never caught')],
+    ['unhandledRejection', new Error('rejected and never handled')],
+  ])('on %s is written to the log, and the process exits 1', (event, error) => {
+    const errorLog = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    try {
+      const proc = new EventEmitter();
+      const exit = jest.fn();
+      onProcessFailure(proc, exit);
+      proc.emit(event, error);
+
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(errorLog.mock.calls[0] as unknown[]).toEqual([expect.stringMatching(/; stopping$/), { err: error }]);
+      expect(exit).toHaveBeenCalledWith(1);
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it('exits once, however many arrive while the log is written', () => {
+    const errorLog = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    try {
+      const proc = new EventEmitter();
+      const exit = jest.fn();
+      onProcessFailure(proc, exit);
+      proc.emit('unhandledRejection', new Error('first'));
+      proc.emit('uncaughtException', new Error('second'));
+
+      expect(errorLog).toHaveBeenCalledTimes(2);
+      expect(exit).toHaveBeenCalledTimes(1);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 });

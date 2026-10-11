@@ -155,7 +155,9 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
-Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway, inside the 10 seconds Docker allows before it forces a container to stop. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+
+**While the Admin Dashboard is making a backup, stopping waits for it.** The backend takes no new requests, lets the backup finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping`. `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back.
 
 ---
 
@@ -1158,6 +1160,8 @@ To see the most recent errors:
 ```bash
 tail -n 20 backend/logs/error.log
 ```
+
+An error the backend has no way to recover from is written here too, as a line ending in `; stopping` (`Uncaught exception; stopping` or `Unhandled promise rejection; stopping`). The backend then exits, and Docker starts it again. If you see one, the line's stack trace is what to attach to a bug report.
 
 **What the logs hold.** Email addresses are cut to their first letter and their domain, such as `a***@example.com`, which is enough to tell accounts apart. Accounts, campaigns and maps are mostly named by their internal ids, and a few lines include a campaign's name. A value longer than 8,000 characters keeps only its first and last 4,000, so one oversized request cannot produce a huge line. The database's own errors are logged the same way, as `Database error` lines whose `target` names the kind of record and the operation, such as `character.findUnique`. Log files written by older versions can still hold full email addresses. To remove them, stop the backend, delete the files, and start it again; it begins new ones:
 

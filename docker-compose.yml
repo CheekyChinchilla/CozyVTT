@@ -66,6 +66,11 @@ services:
     container_name: cozyvtt-backend
     logging: *logging
     restart: unless-stopped
+    # How long Docker lets the backend stop on its own before killing it. A
+    # backup the Admin Dashboard is writing when it is stopped, by an upgrade
+    # for example, is let finish for up to ten minutes; with none running the
+    # backend stops in a few seconds.
+    stop_grace_period: 10m30s
     depends_on:
       database:
         condition: service_healthy

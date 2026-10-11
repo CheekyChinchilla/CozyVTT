@@ -61,6 +61,8 @@ src/
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
+│   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
+│   │                  until setup has run; asks the database only until it hears it has
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
 │   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
 │   │                      re-reads the admin's role on every request
@@ -111,7 +113,10 @@ src/
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
-│   ├── shutdown.ts       SIGTERM/SIGINT: close sockets, database and session store, then exit
+│   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let a dashboard backup finish
+│   │                     (up to 10 minutes, services/backupsInProgress.ts), close sockets,
+│   │                     database and session store, then exit; an error nothing caught is
+│   │                     logged before the process exits 1
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces
 ```
