@@ -161,8 +161,10 @@ info:
     An `ADMIN` account must have MFA on. One without it carries
     `adminMfaDeadline` (an ISO date) on the `user` object `/api/auth/login`,
     `/api/auth/mfa/verify-login`, `/api/setup/init` and `/api/auth/me` return:
-    7 days from when the policy started on the instance or from the account's
-    creation, whichever is later. For everyone else the field is `null`. Past
+    7 days from the latest of: when the policy started on the instance, the
+    account's creation, its promotion to `ADMIN` through `PUT /api/users/{id}`,
+    and a `POST /api/admin/users/{id}/reset-mfa` on it. For everyone else the
+    field is `null`. Past
     the deadline every endpoint except `POST /api/auth/mfa/setup`,
     `POST /api/auth/mfa/verify`, `POST /api/auth/change-password`,
     `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
@@ -1611,7 +1613,7 @@ paths:
         - Users
       summary: Update user
       description: |
-        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. A role change is written to the admins' activity log as a WARNING, and a promotion to `ADMIN` gives the account 7 days to set up MFA (see the administrator two-factor policy in the introduction). The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
 
         Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. A wrong password counts against the shared allowance of 10 wrong passwords per 15 minutes for the account (see `POST /api/auth/change-password`); past it a request carrying `currentPassword` answers 429, while one without a password is not held to it. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
@@ -8872,9 +8874,13 @@ paths:
       summary: Reset MFA for a locked-out user
       description: >-
         Disables TOTP and clears backup codes for a user who is locked out, turning MFA
-        off for the account. This does not force the user to re-enroll: they sign in
-        with just their password next time, and MFA stays off until they set it up
-        again themselves.
+        off for the account. The user signs in with their password alone next time,
+        and MFA stays off until they set it up again themselves. An administrator is
+        held to the administrator two-factor policy (see the introduction): the reset
+        gives them 7 days, then every endpoint but enrolment answers 403
+        `MFA_ENROLMENT_REQUIRED`. Refused with 400 for the caller's own id, since
+        turning off one's own MFA asks for the password. Written to the admins'
+        activity log as a WARNING.
       operationId: adminResetUserMfa
       security:
         - cookieAuth: []
@@ -8895,7 +8901,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: MFA is not enabled for this user
+          description: MFA is not enabled for this user, or the id is the caller's own
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

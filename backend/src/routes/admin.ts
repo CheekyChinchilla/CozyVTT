@@ -28,6 +28,7 @@ import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeSystemLog } from '../services/systemLog';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
@@ -555,12 +556,14 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
       },
     });
 
-    await writeAdminLog(
-      req.session.userId!,
-      `Reset MFA for user ${target.email}`,
-      'WARNING',
-      { targetUserId: id }
-    );
+    // The activity-log line for the reset; its time also starts the account's
+    // 7 days to set MFA up again, should it be an administrator.
+    await restartAdminMfaGrace({
+      targetUserId: id,
+      byUserId: req.session.userId!,
+      level: 'WARNING',
+      message: `Reset MFA for user ${target.email}`,
+    });
 
     return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again; an administrator is asked to set it up again within 7 days.' });
   } catch (error) {

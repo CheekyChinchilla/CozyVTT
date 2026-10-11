@@ -1241,7 +1241,8 @@ Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
 and `bio`; an admin may change anyone's, and only an admin may set
 `platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
 Changing `platformRole` signs the user out everywhere, because the role is
-carried in the session. Setting it to `USER` for the instance's only admin is
+carried in the session; it is written to the admins' activity log, and a user
+made an admin has 7 days to set up two-factor authentication. Setting it to `USER` for the instance's only admin is
 refused with `409`. There is no approval field to set here.
 
 `displayName` is trimmed and must then be 1 to 50 characters of text; anything

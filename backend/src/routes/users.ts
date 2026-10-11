@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 import { writeSystemLog } from '../services/systemLog';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
  * User Management Routes
@@ -319,6 +320,23 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
     // and are read from the database where they are used, so changing one
     // already takes effect on the next request and needs no sign-out.
     if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
+      // A role change goes to the admins' activity log. A promotion's line
+      // also starts the account's 7 days to set up MFA (services/adminMfaPolicy).
+      if (updateData.platformRole === 'ADMIN') {
+        await restartAdminMfaGrace({
+          targetUserId: id,
+          byUserId: requestingUserId!,
+          level: 'WARNING',
+          message: `Made ${updatedUser.email} an administrator`,
+        });
+      } else {
+        await writeSystemLog({
+          level: 'WARNING',
+          message: `Removed the administrator role from ${updatedUser.email}`,
+          userId: requestingUserId,
+          context: { targetUserId: id },
+        });
+      }
       await destroyUserLoginSessions(id);
       await endLiveSockets(id, 'Your platform role changed. Sign in again.');
     }

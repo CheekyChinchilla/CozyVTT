@@ -41,11 +41,11 @@ export async function requireAdminMfa(req: Request, res: Response, next: NextFun
     return next();
   }
 
-  let user: { platformRole: 'ADMIN' | 'USER'; mfaEnabled: boolean; createdAt: Date } | null;
+  let user: { id: string; platformRole: 'ADMIN' | 'USER'; mfaEnabled: boolean; createdAt: Date } | null;
   try {
     user = await prisma.user.findUnique({
       where: { id: req.session.userId },
-      select: { platformRole: true, mfaEnabled: true, createdAt: true },
+      select: { id: true, platformRole: true, mfaEnabled: true, createdAt: true },
     });
   } catch (error) {
     // Never lock every administrator out over a transient database error.

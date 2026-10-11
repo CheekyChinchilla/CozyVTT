@@ -2829,7 +2829,7 @@ export default function AdminPage() {
         message={
           roleChangeTarget?.platformRole === PlatformRole.ADMIN
             ? `Remove ${roleChangeTarget.displayName}'s administrator rights? They become a regular user and can no longer open the Admin Panel.`
-            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups.`
+            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups. They will have 7 days to set up two-factor authentication.`
         }
         confirmLabel={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove admin rights' : 'Make administrator'}
         variant="warning"

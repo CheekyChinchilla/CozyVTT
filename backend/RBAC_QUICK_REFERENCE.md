@@ -468,8 +468,10 @@ then on also asks for the current password:
 | Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
-An `ADMIN` account must have MFA on: past a 7-day deadline
-(`services/adminMfaPolicy.ts`), `middleware/adminMfa.ts` answers 403
+An `ADMIN` account must have MFA on: past a 7-day deadline, counted from the
+latest of the policy start, the account's creation, its promotion and a Reset
+MFA by another admin, each an activity-log row (`services/adminMfaPolicy.ts`),
+`middleware/adminMfa.ts` answers 403
 `MFA_ENROLMENT_REQUIRED` to everything but enrolment, and on every admin
 request it re-reads the role from the database into the session.
 

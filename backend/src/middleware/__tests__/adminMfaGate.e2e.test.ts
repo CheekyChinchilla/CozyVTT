@@ -49,6 +49,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.systemLog.deleteMany({ where: { userId: { in: created } } });
   await cleanupUsers(created);
   await prisma.$disconnect();
 });
@@ -79,6 +80,15 @@ it('leaves an administrator within the grace period, and one with MFA on, alone'
   const enrolled = await admin(10);
   await prisma.user.update({ where: { id: enrolled.id }, data: { mfaEnabled: true, mfaSecret: 'JBSWY3DPEHPK3PXP' } });
   expect((await enrolled.agent.get('/api/admin/stats')).status).toBe(200);
+});
+
+it('admits an administrator whose MFA another administrator reset within the week, though the account and the policy are older', async () => {
+  const target = await admin(10);
+  await prisma.user.update({ where: { id: target.id }, data: { mfaEnabled: true, mfaSecret: 'JBSWY3DPEHPK3PXP' } });
+  const actor = await admin(0);
+  expect((await actor.agent.post(`/api/admin/users/${target.id}/reset-mfa`)).status).toBe(200);
+
+  expect((await target.agent.get('/api/admin/stats')).status).toBe(200);
 });
 
 it('refreshes the session\'s role, so a demoted administrator loses the admin routes on the next request', async () => {
