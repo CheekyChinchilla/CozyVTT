@@ -23,6 +23,7 @@ import {
   applyThemeColors,
   applyFont,
   buildCustomThemeColors,
+  hexToRgbChannels,
   PRESET_THEMES,
   FONT_OPTIONS,
 } from '@/themes';
@@ -108,18 +109,41 @@ function clearUserThemeCache() {
   }
 }
 
-/** Compute ThemeColors for a given themeId/customThemeColors pair. */
+/**
+ * A stored custom colour as the "R G B" channels the theme builder reads.
+ * Colours are stored as #RRGGBB, the picker's format and the only one the
+ * server accepts; channels already are passed through. Anything else is not
+ * a colour, and null.
+ */
+function toChannels(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) return hexToRgbChannels(value);
+  if (/^\d{1,3} \d{1,3} \d{1,3}$/.test(value) && value.split(' ').every((n) => Number(n) <= 255)) return value;
+  return null;
+}
+
+/** The builder's input from a stored custom record, or null when one of its four colours is missing or not a colour. */
+function customThemeInput(stored: Readonly<Record<string, unknown>>): CustomThemeInput | null {
+  const primary = toChannels(stored.primary);
+  const accent = toChannels(stored.accent);
+  const background = toChannels(stored.background);
+  const text = toChannels(stored.text);
+  if (primary === null || accent === null || background === null || text === null) return null;
+  return { primary, accent, background, text };
+}
+
+/**
+ * Compute ThemeColors for a given themeId/customThemeColors pair. A custom
+ * record that is not four colours paints the default theme, so the page
+ * keeps readable colours whatever was stored.
+ */
 function resolveColors(
   themeId: string | undefined,
-  customColors: UserThemeCache['customThemeColors'] | Record<string, string> | null | undefined
+  customColors: Readonly<Record<string, unknown>> | null | undefined
 ): ThemeColors {
   if (themeId === 'custom' && customColors) {
-    // Stored custom colours are a loose `Record<string, string>`, while the
-    // builder wants named keys. This asserts the stored record has that shape,
-    // which is what the code has always assumed — but it names the shape, so
-    // the assertion follows the builder's signature if that changes, and a
-    // number or a string can no longer be passed here the way `any` allowed.
-    return buildCustomThemeColors(customColors as CustomThemeInput);
+    const input = customThemeInput(customColors);
+    if (input) return buildCustomThemeColors(input);
   }
   const theme = getThemeById(themeId || '') || PRESET_THEMES[0];
   return theme.colors;
