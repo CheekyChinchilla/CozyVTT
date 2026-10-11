@@ -20,7 +20,8 @@ import { ArchiveRefusedError } from '../utils/archive';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
-import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote } from './leftCampaigns';
+import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
+import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { inSerializableTransaction } from '../utils/serializable';
@@ -110,13 +111,15 @@ async function removeUploadedArchive(file: Express.Multer.File | undefined): Pro
  */
 
 /**
- * GET /api/campaigns/left, /left/:campaignId and /left/:campaignId/notes/:noteId
+ * GET /api/campaigns/left, /left/:campaignId, /left/:campaignId/notes and
+ * /left/:campaignId/notes/:noteId
  * The caller's notes and dice macros from campaigns they have left (see
  * routes/leftCampaigns.ts). Before the /:campaignId routes below, which would
  * read "left" as a campaign id.
  */
 router.get('/left', authenticated, listLeftCampaigns);
 router.get('/left/:campaignId', authenticated, getLeftCampaign);
+router.get('/left/:campaignId/notes', authenticated, leftNotesDownloadLimiter, getLeftCampaignNotes);
 router.get('/left/:campaignId/notes/:noteId', authenticated, getLeftCampaignNote);
 
 /**

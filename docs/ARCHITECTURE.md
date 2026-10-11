@@ -95,6 +95,7 @@ src/
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
 │   ├── authLimiters.ts    The per-account sign-in limit and the signed-in password-check limit
 │   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
+│   ├── leftNotesDownloadLimiter.ts  How often a user may download all the notes of a campaign they have left
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time
 │   │                  (the other HTTP limiters are declared beside their routes,

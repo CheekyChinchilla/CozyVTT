@@ -780,6 +780,16 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Every one of the caller's notes, with its text, from a campaign they have
+   * left, in one request. Up to 200 notes of 100,000 characters, so the
+   * answer can be large; the Download button is the only caller.
+   */
+  async getLeftCampaignNotes(campaignId: string): Promise<{ notes: PersonalNote[] }> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes`);
+    return response.data;
+  }
+
   /** Past sessions and the notes recorded when each ended. Newest first. */
   async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/sessions`);

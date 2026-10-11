@@ -7,14 +7,17 @@
  * them in the campaign again, and deleting the campaign deletes them.
  *
  * Only the caller's own notes and macros are ever answered, and only for a
- * campaign the caller is no longer in. Note text comes one note at a time,
- * as it does for a member, so no single answer carries a campaign's worth.
+ * campaign the caller is no longer in. Reading one note, and the lists, never
+ * carry a campaign's worth of text; one request for the whole campaign's
+ * notes does, for the download, and is written out a few notes at a time.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { prisma as appPrisma } from '../../config/database';
+import logger from '../../utils/logger';
 import {
   prisma,
   createTestUser,
@@ -132,6 +135,92 @@ describe('notes and macros from a campaign the person was removed from', () => {
     } finally {
       await prisma.personalNote.delete({ where: { id: long.id } });
     }
+  });
+
+  it('answers every note with its text in one request, most recently edited first, and only their own', async () => {
+    const first = await prisma.personalNote.create({
+      data: { campaignId, userId: leaver.user.id, title: 'Quote "marks"', content: 'line one\nline two \\ é 日本語 \u2028', updatedAt: new Date(Date.now() - 60_000) },
+    });
+    try {
+      const res = await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes`);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^application\/json/);
+      const notes = res.body.notes as { id: string; title: string; content: string; userId: string }[];
+      expect(notes.map((n) => n.id)).toEqual([noteId, first.id]);
+      expect(notes[0]).toMatchObject({ title: 'Suspects', content: '# The baron\n\nLied about the mill.', userId: leaver.user.id });
+      expect(notes[1]).toMatchObject({ title: 'Quote "marks"', content: 'line one\nline two \\ é 日本語 \u2028' });
+      // The same order as the titles in the campaign's own answer.
+      const titles = await leaver.agent.get(`/api/campaigns/left/${campaignId}`);
+      expect((titles.body.notes as { id: string }[]).map((n) => n.id)).toEqual(notes.map((n) => n.id));
+      expect(notes.map((n) => n.id)).not.toContain(stayerNoteId);
+    } finally {
+      await prisma.personalNote.delete({ where: { id: first.id } });
+    }
+  });
+
+  it('answers a campaign of full-length notes whole, in a few batches', async () => {
+    const text = (i: number) => `${i}`.padStart(3, '0') + 'é'.repeat(99_997);
+    const made = await prisma.$transaction(
+      Array.from({ length: 25 }, (_, i) =>
+        prisma.personalNote.create({
+          data: { campaignId, userId: leaver.user.id, title: `Long ${i}`, content: text(i), updatedAt: new Date(Date.now() + 1000 * (i + 1)) },
+        })
+      )
+    );
+    try {
+      const res = await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes`);
+      expect(res.status).toBe(200);
+      const notes = res.body.notes as { id: string; title: string; content: string }[];
+      expect(notes).toHaveLength(26);
+      // Most recently edited first: the last made, down to the first, then the original.
+      expect(notes.slice(0, 25).map((n) => n.title)).toEqual(Array.from({ length: 25 }, (_, i) => `Long ${24 - i}`));
+      expect(notes[0].content).toBe(text(24));
+      expect(notes[24].content).toBe(text(0));
+      expect(notes[25].id).toBe(noteId);
+    } finally {
+      await prisma.personalNote.deleteMany({ where: { id: { in: made.map((n) => n.id) } } });
+    }
+  });
+
+  it('answers an ordinary 500 when the notes cannot be read, and cuts the connection off when a later batch fails', async () => {
+    const made = await prisma.$transaction(
+      Array.from({ length: 12 }, (_, i) =>
+        prisma.personalNote.create({ data: { campaignId, userId: leaver.user.id, title: `Batch ${i}`, content: 'x' } })
+      )
+    );
+    const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    const real = appPrisma.personalNote.findMany.bind(appPrisma.personalNote);
+    try {
+      // The first batch cannot be read: nothing is out yet, so it is a 500.
+      const fails = jest.spyOn(appPrisma.personalNote, 'findMany');
+      fails.mockImplementationOnce(real as typeof appPrisma.personalNote.findMany);
+      fails.mockRejectedValueOnce(new Error('database went away'));
+      const early = await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes`);
+      expect(early.status).toBe(500);
+      expect(early.body).toEqual({ error: 'Internal Server Error', message: 'Failed to fetch your notes' });
+      fails.mockRestore();
+
+      // The second batch cannot be read: the first is out, so the answer is cut off.
+      const later = jest.spyOn(appPrisma.personalNote, 'findMany');
+      later.mockImplementationOnce(real as typeof appPrisma.personalNote.findMany);
+      later.mockImplementationOnce(real as typeof appPrisma.personalNote.findMany);
+      later.mockRejectedValueOnce(new Error('database went away'));
+      await expect(leaver.agent.get(`/api/campaigns/left/${campaignId}/notes`).buffer(true)).rejects.toThrow();
+      expect(logged).toHaveBeenCalledWith('Error fetching the notes from a campaign left', expect.anything());
+    } finally {
+      jest.restoreAllMocks();
+      await prisma.personalNote.deleteMany({ where: { id: { in: made.map((n) => n.id) } } });
+    }
+  });
+
+  it('answers 404 for the notes of a campaign the person is still in, or never in, and 401 signed out', async () => {
+    const stillIn = await stayer.agent.get(`/api/campaigns/left/${campaignId}/notes`);
+    expect(stillIn.status).toBe(404);
+    expect(stillIn.body.message).toBe('You have not left that campaign, or have no notes or dice macros in it');
+    const stranger = await signedIn('Notes Stranger');
+    expect((await stranger.agent.get(`/api/campaigns/left/${campaignId}/notes`)).status).toBe(404);
+    expect((await stranger.agent.get('/api/campaigns/left/not-a-campaign/notes')).status).toBe(404);
+    expect((await request(app).get(`/api/campaigns/left/${campaignId}/notes`)).status).toBe(401);
   });
 
   it('answers nothing for a campaign the person is still in', async () => {

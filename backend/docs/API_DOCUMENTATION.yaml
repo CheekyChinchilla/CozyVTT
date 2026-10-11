@@ -123,6 +123,9 @@ info:
       `CAMPAIGN_ARCHIVE_RATE_LIMIT`), and one archive operation at a time per
       user across all three. Past either, the route answers 429; a request
       refused for overlapping another is not counted against the hour
+    - All the notes of a campaign you have left
+      (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
+      answering 429 `Too Many Requests` past that
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -3636,7 +3639,8 @@ paths:
         the titles of the caller's notes (most recently edited first, no
         `content`) and their macros (oldest first); a note's text comes from
         `GET /api/campaigns/left/{campaignId}/notes/{noteId}`, one note at a
-        time. Only the caller's own are ever listed. A campaign they are in
+        time, or all of a campaign's from `GET /api/campaigns/left/{campaignId}/notes`.
+        Only the caller's own are ever listed. A campaign they are in
         again is not listed, and deleting a campaign deletes its notes and
         macros, so it drops out of the list.
       operationId: listLeftCampaignNotes
@@ -3738,6 +3742,70 @@ paths:
                 message: You have not left that campaign, or have no notes or dice macros in it
         '500':
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to fetch your notes
+
+  /api/campaigns/left/{campaignId}/notes:
+    get:
+      tags:
+        - Notes
+      summary: Download all your notes from a campaign you have left
+      description: >-
+        Every one of the caller's notes in a campaign they are no longer a
+        member of, each with its Markdown source, most recently edited first
+        (the order of the titles in `GET /api/campaigns/left/{campaignId}`).
+        The Download button on the dashboard uses it, in place of one request
+        a note. A campaign can hold 200 notes of 100,000 characters, so the
+        answer can run to tens of megabytes; the server writes it a few notes
+        at a time, and a failure after the first notes are out cuts the
+        connection off instead of answering 500. Read only. Answers 404, with
+        the message of `GET /api/campaigns/left/{campaignId}`, for a campaign
+        the caller is a member of, one they have no notes or macros in, and one
+        that does not exist. 60 requests per hour per user.
+      operationId: downloadLeftCampaignNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: All the caller's notes in that campaign, with their text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonalNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: The caller has not left that campaign, or has no notes or macros in it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: You have not left that campaign, or have no notes or dice macros in it
+        '429':
+          description: 60 downloads in the last hour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: You have downloaded your notes 60 times in the last hour, the most this server allows. Try again in 42 minutes.
+        '500':
+          description: The notes could not be read before any were sent.
           content:
             application/json:
               schema:

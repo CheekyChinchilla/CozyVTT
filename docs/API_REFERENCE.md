@@ -431,7 +431,7 @@ checked exactly as it was on creation, so an edit cannot leave a macro
 unrollable.
 
 
-### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
+### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId`, `GET /api/campaigns/left/:campaignId/notes` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
 
 Removing a member keeps their personal notes and dice macros, but the notes and
 macros routes above answer only members. `GET /api/campaigns/left` lists the
@@ -443,9 +443,13 @@ have not left that campaign, or have no notes or dice macros in it") for a
 campaign you are a member of or have nothing in.
 `GET /api/campaigns/left/:campaignId/notes/:noteId` returns one `note` with its
 `content`, and answers `404` ("Note not found") for a note that is not yours or
-is in a campaign you are a member of. Note text comes one note at a time, as it
-does for a member. All three are read only and return nothing of anyone
-else's. Deleting the campaign deletes the notes and macros.
+is in a campaign you are a member of. `GET /api/campaigns/left/:campaignId/notes`
+returns all your `notes` in that campaign with their `content`, newest edit
+first, in one answer that can run to tens of megabytes (the Download button
+uses it); it is limited to 60 an hour, answering `429` past that, and gives the
+`404` of the campaign's own answer. The lists never carry note text. All four
+are read only and return nothing of anyone else's. Deleting the campaign
+deletes the notes and macros.
 
 ### `GET|POST /api/campaigns/:campaignId/documents`
 
