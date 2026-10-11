@@ -53,6 +53,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authenticated, setAuthenticated] = useState<boolean>(false);
   const [mfaPending, setMfaPending] = useState<boolean>(false);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
+  /** After a sign-in with a backup code: how many are left, until dismissed. */
+  const [backupCodesLeft, setBackupCodesLeft] = useState<number | null>(null);
 
   /**
    * The account the cached lists were fetched for. The lists the pages cache
@@ -180,6 +182,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       queryClient.clear();
       cachedFor.current = null;
+      setBackupCodesLeft(null);
       setUser(null);
       setAuthenticated(false);
       setMfaPending(false);
@@ -241,16 +244,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
 
-    // Show warning if backup codes are running low
-    // TODO(accounts): after a backup-code sign-in the server sends how many
-    // codes are left, with a warning at three or fewer, but the warning is only
-    // logged here, so a user can spend the last code without knowing. Show it
-    // to the user after sign-in; showing the count in the profile's two-factor
-    // section would also need the server to report it there.
-    if (response.warning) {
-      console.warn('MFA Warning:', response.warning);
+    // The pages say how many codes are left (ProtectedRoute), so nobody
+    // spends their last one without knowing.
+    if (response.backupCodeUsed && typeof response.remainingBackupCodes === 'number') {
+      setBackupCodesLeft(response.remainingBackupCodes);
     }
   }, [mfaPending, takeUser]);
+
+  const dismissBackupCodesLeft = useCallback((): void => {
+    setBackupCodesLeft(null);
+  }, []);
 
   /**
    * Give up on the sign-in waiting for its code. The server holds it in the
@@ -390,6 +393,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     mfaPending,
     mustChangePassword,
     serverUnreachable,
+    backupCodesLeft,
 
     // Actions
     login,
@@ -405,6 +409,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     refreshUser,
     adoptSession,
     retryAuthCheck,
+    dismissBackupCodesLeft,
   }), [
     user,
     loading,
@@ -413,6 +418,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     mustChangePassword,
     serverUnreachable,
     retryAuthCheck,
+    backupCodesLeft,
+    dismissBackupCodesLeft,
     adoptSession,
     login,
     logout,

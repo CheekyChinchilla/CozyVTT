@@ -35,6 +35,8 @@ export interface User {
    * or absent for everyone else.
    */
   adminMfaDeadline?: string | null;
+  /** How many MFA backup codes are left; null with MFA off. */
+  mfaBackupCodesRemaining?: number | null;
 }
 
 // ============================================
@@ -132,6 +134,8 @@ export interface AuthContextType {
    * answer, or failed). `loading` stays true and the check is retried.
    */
   serverUnreachable: boolean;
+  /** After a sign-in with a backup code, how many are left; null otherwise or once dismissed. */
+  backupCodesLeft: number | null;
 
   // Actions
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
@@ -160,4 +164,6 @@ export interface AuthContextType {
   adoptSession: (user: User) => void;
   /** Check the sign-in again now, after the server could not be reached. */
   retryAuthCheck: () => void;
+  /** Hide the notice of how many backup codes are left. */
+  dismissBackupCodesLeft: () => void;
 }

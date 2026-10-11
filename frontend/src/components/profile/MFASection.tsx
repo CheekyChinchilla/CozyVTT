@@ -135,6 +135,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
 // ============================================
 
 function RegenerateForm({ onClose }: { onClose: () => void }) {
+  const { refreshUser } = useAuth();
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -155,6 +156,8 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
       const { api } = await import('@/services/api');
       const result = await api.mfaRegenerateBackupCodes(password);
       setNewCodes(result.backupCodes);
+      // The count of codes left, shown beside Enabled, starts again.
+      void refreshUser();
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to regenerate backup codes');
     } finally {
@@ -265,7 +268,14 @@ export default function MFASection() {
             <h3 className="text-sm font-semibold text-brand-ink">Two-Factor Authentication</h3>
             <p className="text-xs text-warm-gray">
               {isEnabled ? (
-                <span className="text-brand-ink font-medium">Enabled</span>
+                <>
+                  <span className="text-brand-ink font-medium">Enabled</span>
+                  {typeof user?.mfaBackupCodesRemaining === 'number' && (
+                    <span className={`ml-2 ${user.mfaBackupCodesRemaining <= 3 ? 'text-warning-ink font-medium' : ''}`}>
+                      {user.mfaBackupCodesRemaining} of 10 backup codes left
+                    </span>
+                  )}
+                </>
               ) : (
                 'Not enabled'
               )}

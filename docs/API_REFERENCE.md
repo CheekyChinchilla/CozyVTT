@@ -175,20 +175,27 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 
 ### `GET /api/auth/me`
 
-Get the currently authenticated user.
+Get the currently authenticated user. `mfaBackupCodesRemaining` is how many
+MFA backup codes the account has left (`null` with MFA off); only the count is
+sent. `adminMfaDeadline` is set only for an administrator without MFA.
 
 **Response:**
 ```json
 {
-  "id": "cuid...",
-  "email": "user@example.com",
-  "displayName": "Merric Thorngage",
-  "platformRole": "USER",
-  "bio": "Professional dungeon delver.",
-  "mfaEnabled": true,
-  "isGlobalAssetManager": false,
-  "mustChangePassword": false,
-  "createdAt": "2025-01-15T12:00:00.000Z"
+  "user": {
+    "id": "cuid...",
+    "email": "user@example.com",
+    "displayName": "Merric Thorngage",
+    "platformRole": "USER",
+    "bio": "Professional dungeon delver.",
+    "mfaEnabled": true,
+    "mfaBackupCodesRemaining": 7,
+    "globalAssetManager": false,
+    "templateEditor": false,
+    "mustChangePassword": false,
+    "adminMfaDeadline": null,
+    "createdAt": "2025-01-15T12:00:00.000Z"
+  }
 }
 ```
 

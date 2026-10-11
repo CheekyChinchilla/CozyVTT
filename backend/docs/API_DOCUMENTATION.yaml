@@ -10430,6 +10430,7 @@ components:
           description: May edit and delete anyone's character template.
         mustChangePassword:
           type: boolean
+          description: Set when an admin created the account or reset its password; see Forced password changes.
         adminMfaDeadline:
           type: string
           format: date-time
@@ -10438,7 +10439,15 @@ components:
             For an administrator without MFA, when it becomes required; null
             for everyone else. Present on the `user` of /api/auth/login,
             /api/auth/mfa/verify-login, /api/setup/init and /api/auth/me.
-          description: Set when an admin created the account or reset its password; see Forced password changes.
+        mfaBackupCodesRemaining:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: >-
+            How many MFA backup codes the account has left; null with MFA off.
+            Only the count is sent, never the codes. Present on the `user` of
+            /api/auth/login, /api/auth/mfa/verify-login, /api/setup/init and
+            /api/auth/me.
         isApproved:
           type: boolean
           description: False while the account waits for an admin's approval.
