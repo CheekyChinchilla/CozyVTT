@@ -6,8 +6,10 @@
 # Every gate was someone remembering to run it locally, and a rule nobody runs
 # is not a rule.
 #
-# Deliberately modest: the same commands a developer runs, on every push and
-# pull request touching dev or main. No deployment, no publishing, no secrets.
+# The same commands a developer runs, on every push and pull request touching
+# dev or main, plus what self-hosters run and a developer usually does not: the
+# production images, the nginx configuration and the migrations against the
+# schema. No deployment, no publishing, no secrets.
 name: CI
 
 on:
@@ -16,10 +18,15 @@ on:
   pull_request:
     branches: [dev, main]
 
+# Read the code, nothing more: no job here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -40,6 +47,7 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend
@@ -73,6 +81,17 @@ jobs:
       # it — without this, every column added since the last generate is a
       # compile error.
       - run: npx prisma generate
+      # schema.prisma and the migrations must describe the same database. A
+      # schema change with no migration passes the suite when nothing queries
+      # what changed, and then never reaches an upgraded instance. Prisma
+      # applies the migrations to an empty database of its own (the shadow)
+      # and compares the result with the schema; --exit-code fails on any
+      # difference.
+      - name: Compare schema.prisma with the migrations
+        run: |
+          PGPASSWORD=cozyvtt psql -h localhost -p 55433 -U cozyvtt -d cozyvtt_test -c 'CREATE DATABASE cozyvtt_shadow'
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_shadow --exit-code
       - run: npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm run lint
@@ -81,11 +100,29 @@ jobs:
   docs:
     name: Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       # The route check also loads the OpenAPI file as YAML, which needs PyYAML.
       - run: pip install pyyaml
       - run: python3 scripts/spec-coverage.py
       - run: python3 scripts/websocket-events.py --check
-      # The two checks' own tests: every form of route and event they read.
+      # The scripts' own tests: every form of route and event the doc checks
+      # read, and what the nginx check reads.
       - run: python3 -m unittest discover -s scripts/tests
+
+  # What a self-hoster's `docker compose up -d --build` runs: the compose file
+  # read, both production images built, and the bundled nginx's configuration
+  # rendered as its container renders it and checked by nginx, the HTTPS
+  # example from docs/DEPLOYMENT.md included.
+  images:
+    name: Production images and nginx
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read docker-compose.yml with the example settings
+        run: cp .env.example .env && docker compose config -q
+      - run: docker compose build
+      - run: pip install pyyaml
+      - run: python3 scripts/nginx-check.py

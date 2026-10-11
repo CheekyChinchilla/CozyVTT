@@ -551,8 +551,26 @@ Two of those deserve a note:
   unnoticed; `python3 -m unittest discover -s scripts/tests` tests that.
 
 `.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
-and on pull requests into them (a push to any other branch runs nothing), and
-applies the migrations to an empty database before the backend tests. Note that it **reports** failures rather than blocking a merge —
+and on pull requests into them (a push to any other branch runs nothing). It
+also does what self-hosters run and a developer usually does not:
+
+- **Compares `schema.prisma` with the migrations** (`prisma migrate diff
+  --exit-code`, against an empty shadow database), so a schema change with no
+  migration fails, then applies the migrations to an empty database before
+  the backend tests. To run the comparison yourself, give it a database of
+  its own, which Prisma empties: the command is in the workflow, and the
+  scratch database is the one "Running Migrations" above creates.
+- **Builds both production images** with `docker compose build`, after
+  reading `docker-compose.yml` with the example settings.
+- **Checks the bundled nginx's configuration** with
+  `python3 scripts/nginx-check.py`: it renders `nginx/nginx.conf` with the
+  image's own entrypoint, the environment and mounts `docker-compose.yml`
+  gives the container and `nginx/trusted-proxies.envsh`, and has nginx check
+  it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
+  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
+  needs Docker, openssl and PyYAML, and runs locally too.
+
+Note that CI **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a
 setting in the repository rather than a file in it.
 
