@@ -5,16 +5,19 @@
 // ============================================
 
 import { useState, useEffect, FormEvent } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 import { readSignInNotice, forgetSignInNotice } from '@/services/signInNotice';
+import { AFTER_SIGN_IN, keepingReturnPath, returnPathFrom } from '@/utils/returnTo';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
+  // The page that sent the visitor here, to go back to once signed in.
+  const { search } = useLocation();
 
   // Form state
   const [email, setEmail] = useState('');
@@ -46,12 +49,12 @@ export default function LoginPage() {
 
   // Redirect if already authenticated (use <Navigate> not navigate() to avoid render-phase state update)
   if (authenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={returnPathFrom(search) ?? AFTER_SIGN_IN} replace />;
   }
 
   // Redirect to MFA verification if MFA is pending
   if (mfaPending) {
-    return <Navigate to="/auth/mfa-verify" replace />;
+    return <Navigate to={keepingReturnPath('/auth/mfa-verify', search)} replace />;
   }
 
   /**

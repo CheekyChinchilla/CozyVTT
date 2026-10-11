@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { handleUnauthorized } from '@/services/unsavedWork';
 import { loadPage } from '@/services/pageLoad';
 import { rememberSignInNotice } from '@/services/signInNotice';
+import { signInPath } from '@/utils/returnTo';
 import type {
   User,
   AuthResponse,
@@ -145,7 +146,8 @@ class ApiClient {
               if (reply?.code === 'SIGN_IN_EXPIRED' && typeof reply.message === 'string') {
                 rememberSignInNotice(reply.message);
               }
-              loadPage('/auth/login');
+              // Back to this page once signed in again.
+              loadPage(signInPath(`${window.location.pathname}${window.location.search}`));
             });
           }
 

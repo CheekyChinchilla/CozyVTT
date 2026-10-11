@@ -4,10 +4,11 @@
 // Supports role-based access control (RBAC)
 // ============================================
 
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { PlatformRole } from '@/types/user.types';
 import Button from '@/components/ui/Button';
+import { signInPath } from '@/utils/returnTo';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -28,6 +29,7 @@ export default function ProtectedRoute({
     backupCodesLeft,
     dismissBackupCodesLeft,
   } = useAuth();
+  const location = useLocation();
 
   // The sign-in check got no answer: a restart or an upgrade under way. The
   // sign-in may well be fine, so wait for the server instead of sending the
@@ -61,9 +63,9 @@ export default function ProtectedRoute({
     );
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated, carrying this page to come back to
   if (!authenticated || !user) {
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to={signInPath(`${location.pathname}${location.search}`)} replace />;
   }
 
   // Account still has to replace an admin-issued password. The server rejects

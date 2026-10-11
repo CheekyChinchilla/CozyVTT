@@ -5,13 +5,16 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
+import { AFTER_SIGN_IN, keepingReturnPath, returnPathFrom } from '@/utils/returnTo';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
+  // The page that started the sign-in, to go back to once the code is accepted.
+  const { search } = useLocation();
   const { verifyMFA, verifyMFAWithBackupCode, cancelMFA, mfaPending, authenticated } =
     useAuth();
 
@@ -27,12 +30,12 @@ export default function MFAVerifyPage() {
   // Redirect if authenticated (check this first!). <Navigate>, since a
   // navigate() during the first render is ignored and left a blank page.
   if (authenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={returnPathFrom(search) ?? AFTER_SIGN_IN} replace />;
   }
 
   // Redirect if not in MFA flow
   if (!mfaPending) {
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to={keepingReturnPath('/auth/login', search)} replace />;
   }
 
   /**
@@ -336,7 +339,7 @@ export default function MFAVerifyPage() {
             onClick={async () => {
               setLoading(true);
               await cancelMFA();
-              navigate('/auth/login', { replace: true });
+              navigate(keepingReturnPath('/auth/login', search), { replace: true });
             }}
             className="text-sm text-warm-gray hover:text-brand-ink transition-colors"
             disabled={loading}
