@@ -21,6 +21,7 @@ import {
   getFilePath,
   ensureDirectory,
   getFileSizeLimit,
+  deleteFile,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
@@ -469,58 +470,83 @@ router.post(
       const uploadPath = getFilePath('MAP', 'CAMPAIGN', campaignId);
       await ensureDirectory(uploadPath);
       const filePath = path.join(uploadPath, filename).replace(/\\/g, '/');
-      // TODO(maps): if the asset insert below fails, the picture and its
-      // thumbnail stay on disk with no row naming them, and if the map insert
-      // fails, the asset row stays with no map using it. Remove the files when
-      // the asset insert fails, and the asset (row and files) when the map
-      // insert fails, as the upload route does for its own files.
-      await fs.writeFile(filePath, parsed.imageBuffer);
-      const thumbnailPath = await generateThumbnail(filePath);
+      // Files first, then the asset row, then the map. When a step fails, what
+      // the steps before it made is removed: the files when the asset row
+      // cannot be written, the row and the files when the map cannot be.
+      let thumbnailPath: string | null = null;
+      const removeFiles = async () => {
+        for (const file of [filePath, thumbnailPath]) {
+          if (!file) continue;
+          await deleteFile(file).catch((err) => logger.error('[uvtt-import] Could not remove a file after a failed import', { err }));
+        }
+      };
 
-      // Create asset record
-      const asset = await prisma.asset.create({
-        data: {
-          type: 'MAP',
-          scope: 'CAMPAIGN',
-          uploadedById: userId,
-          campaignId,
-          filename,
-          originalName: `${mapName}${ext}`,
-          mimeType: imageType.mime,
-          fileSize: parsed.imageBuffer.length,
-          filePath,
-          thumbnailPath,
-          name: mapName,
-          tags: ['uvtt-import'],
-        },
-      });
+      let asset;
+      try {
+        await fs.writeFile(filePath, parsed.imageBuffer);
+        thumbnailPath = await generateThumbnail(filePath);
+
+        // Create asset record
+        asset = await prisma.asset.create({
+          data: {
+            type: 'MAP',
+            scope: 'CAMPAIGN',
+            uploadedById: userId,
+            campaignId,
+            filename,
+            originalName: `${mapName}${ext}`,
+            mimeType: imageType.mime,
+            fileSize: parsed.imageBuffer.length,
+            filePath,
+            thumbnailPath,
+            name: mapName,
+            tags: ['uvtt-import'],
+          },
+        });
+      } catch (error) {
+        await removeFiles();
+        throw error;
+      }
 
       const imageUrl = normalizeAssetUrl(asset.id, 'maps');
 
       // ── Create the map with walls and lights ─────────────────────────────
-      const map = await prisma.map.create({
-        data: {
-          campaignId,
-          name: mapName,
-          imageUrl: imageUrl!,
-          baseLayerUrl: imageUrl!,
-          width: parsed.mapWidth,
-          height: parsed.mapHeight,
-          gridSize: gridSizePx,
-          tokens: [],
-          annotations: [],
-          wallSegments: toJson(parsed.wallSegments),
-          lights: toJson(parsed.lightSources),
-          // Only when the file brings lights of its own. Walls alone used to
-          // turn this on, which handed the DM a map that was black for every
-          // player until they found the setting: walls block sight, and with
-          // nothing lighting the room there is nothing to see.
-          lightingEnabled: parsed.lightSources.length > 0,
-          fogEnabled: false,
-          globalIllumination: false,
-          explorationEnabled: false,
-        },
-      });
+      let map;
+      try {
+        map = await prisma.map.create({
+          data: {
+            campaignId,
+            name: mapName,
+            imageUrl: imageUrl!,
+            baseLayerUrl: imageUrl!,
+            width: parsed.mapWidth,
+            height: parsed.mapHeight,
+            gridSize: gridSizePx,
+            tokens: [],
+            annotations: [],
+            wallSegments: toJson(parsed.wallSegments),
+            lights: toJson(parsed.lightSources),
+            // Only when the file brings lights of its own. Walls alone used to
+            // turn this on, which handed the DM a map that was black for every
+            // player until they found the setting: walls block sight, and with
+            // nothing lighting the room there is nothing to see.
+            lightingEnabled: parsed.lightSources.length > 0,
+            fogEnabled: false,
+            globalIllumination: false,
+            explorationEnabled: false,
+          },
+        });
+      } catch (error) {
+        // The row first: a row that cannot be removed keeps its files, which
+        // it still names.
+        try {
+          await prisma.asset.delete({ where: { id: asset.id } });
+          await removeFiles();
+        } catch (err) {
+          logger.error('[uvtt-import] Could not remove the asset of a failed import', { err, assetId: asset.id });
+        }
+        throw error;
+      }
 
       logger.info(
         `[uvtt-import] Created map "${mapName}" (${parsed.mapWidth}×${parsed.mapHeight}) ` +
