@@ -253,6 +253,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The README says how a token is moved.** Its feature list said tokens are dragged, though the map picks a token up on one click and puts it down on the next. It now says that.
 
+- **A connection still being made when you leave a campaign no longer breaks the next campaign you open.** Leaving a campaign page within 10 seconds of opening it, and opening another straight away, let the first connection's time limit cut off the second one, which then failed with a connection error until it tried again. The first connection's limit now ends when you leave.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.

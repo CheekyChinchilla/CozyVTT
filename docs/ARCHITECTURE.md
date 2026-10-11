@@ -676,7 +676,10 @@ socket.io retries a dropped connection for as long as it takes, backing off
 to 30 seconds between tries, and the client builds a new socket the same way
 after the server closes one (a restart closes every socket). A socket the
 server refuses before it joins (too many tabs, a sign-in it no longer
-accepts) is retried only five times in a row. `WebSocketContext` follows
+accepts) is retried only five times in a row. Leaving the campaign page
+(`socketClient.disconnect()`) ends all of this: it forgets the campaign, cancels
+the pending retry and the connect under way, whether or not a socket is held.
+`WebSocketContext` follows
 every socket from the moment it is built (`socketClient.onCreated`), counts
 each `authenticated` as a join (`joinedEpoch`, which drives the catch-up
 after every rejoin, Retry included) and as connected, retries a first connect
