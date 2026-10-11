@@ -544,21 +544,65 @@ Running in a folder is on the backlog rather than ruled out. If it matters to yo
 ### Prerequisites
 
 - A domain name pointing at your server
-- Ports 80 and 443 open in your firewall (the default configuration)
+- Ports 80 and 443 open in your firewall and published by the stack (the default configuration). Let's Encrypt checks your domain by fetching a small file from port 80, now and again at every renewal, so port 80 has to stay reachable
+- A terminal in the CozyVTT folder, the one with `docker-compose.yml`, for every command below
+
+### How it works
+
+Let's Encrypt gives a certificate to whoever can show they control the domain. Certbot, the program that asks for it, shows that by writing a small file into a folder, and Let's Encrypt then fetches that file from `http://your-domain.com/.well-known/acme-challenge/` on port 80. So the nginx container has to serve that folder, and the folder has to be one the container can see. The `nginx/conf.d/` folder is already shared with the container (it appears there as `/etc/nginx/cozyvtt.d/`), so a folder inside it, `nginx/conf.d/acme/`, is shared too.
+
+This is certbot's "webroot" method. It leaves nginx running, which matters at renewal: certbot renews by itself every couple of months, and the other method, `--standalone`, needs port 80 for itself and so fails while nginx holds it.
 
 ### Obtain a certificate
 
-```bash
-# Install Certbot
-sudo apt-get install -y certbot
+1. Install certbot and make the folder it will write into:
 
-# Stop the nginx container temporarily so Certbot can bind port 80
-docker compose stop nginx
-sudo certbot certonly --standalone -d your-domain.com
-docker compose start nginx
-```
+   ```bash
+   sudo apt-get install -y certbot
+   mkdir -p nginx/conf.d/acme
+   ```
 
-Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
+2. Create `nginx/conf.d/acme.conf`, putting your domain in place of `your-domain.com`. It answers Let's Encrypt's check on port 80 and carries on serving CozyVTT over HTTP as before:
+
+   ```nginx
+   # nginx/conf.d/acme.conf: Let's Encrypt's check on port 80.
+   # Replaced by https.conf once the certificate is in place.
+   server {
+       listen 80;
+       server_name your-domain.com;
+
+       location /.well-known/acme-challenge/ {
+           root /etc/nginx/cozyvtt.d/acme;
+       }
+
+       include /etc/nginx/cozyvtt/locations.conf;
+   }
+   ```
+
+3. Restart nginx and check it started:
+
+   ```bash
+   docker compose restart nginx
+   docker compose logs --tail 20 nginx
+   ```
+
+   The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line.
+
+4. Ask for the certificate:
+
+   ```bash
+   sudo certbot certonly --webroot -w "$PWD/nginx/conf.d/acme" -d your-domain.com
+   ```
+
+   The first time, certbot asks for your email address and for you to accept its terms. It should end with `Successfully received certificate` and say that the certificate was saved under `/etc/letsencrypt/live/your-domain.com/`. `$PWD` is the folder you are in, which is why this runs from the CozyVTT folder.
+
+   If it fails instead:
+
+   | Certbot says | Meaning |
+   |---|---|
+   | `Invalid response from http://your-domain.com/.well-known/acme-challenge/...` with `404` | nginx is not serving the folder. Check that step 2's file is named as shown and that you restarted nginx in step 3 |
+   | `Timeout during connect (likely firewall problem)` | Port 80 does not reach this server from the internet. Open it in your firewall and your router |
+   | `DNS problem: NXDOMAIN` | The domain does not point at this server yet |
 
 ### Configure Nginx to use the certificate
 
@@ -571,19 +615,26 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
    sudo chown $(whoami) nginx/certs/*
    ```
 
-2. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
+2. Take away the temporary file from step 2 of "Obtain a certificate", if you made it. `https.conf` below answers Let's Encrypt's check itself, and two files answering for the same domain on port 80 would leave the first one in charge:
+
+   ```bash
+   rm -f nginx/conf.d/acme.conf
+   ```
+
+3. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
 
    ```nginx
    # nginx/conf.d/https.conf: CozyVTT over HTTPS, with the certificate in nginx/certs/
 
    # Visitors who type http:// for your domain are sent to https://.
-   # Let's Encrypt's HTTP check still reaches its folder.
+   # Let's Encrypt's HTTP check still reaches its folder, because the redirect
+   # is inside "location /" and the check has a location of its own.
    server {
        listen 80;
        server_name your-domain.com;
 
        location /.well-known/acme-challenge/ {
-           root /var/www/certbot;
+           root /etc/nginx/cozyvtt.d/acme;
        }
 
        location / {
@@ -618,7 +669,7 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
 
    The first server sends to HTTPS only requests for your domain: a plain-HTTP request by your server's IP address, or under another name that leads to it, is still answered by CozyVTT's own server without HTTPS. To send those to your domain over HTTPS too, write `listen 80 default_server;` in place of `listen 80;`, and `return 301 https://your-domain.com$request_uri;` in place of the `return` line.
 
-3. Restart Nginx and check it started:
+4. Restart Nginx and check it started:
    ```bash
    docker compose restart nginx
    docker compose logs --tail 20 nginx
@@ -626,25 +677,65 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
 
    The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line, for example `nginx: [emerg] ... in /etc/nginx/cozyvtt.d/https.conf:12`.
 
-4. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there.
+5. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there. If it does not, `acme.conf` is still in `nginx/conf.d/`: remove it and restart nginx again.
 
-### Automate certificate renewal
+### Keep the certificate renewed
 
-Certbot installs a systemd timer. Test it:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-After each renewal, re-copy the updated certs and restart Nginx. Add to cron:
+Certbot's package sets up a timer that tries to renew twice a day, and renews a certificate in its last 30 days. Check that it is there:
 
 ```bash
-# Weekly, Monday at 3 AM
-0 3 * * 1 \
-  cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /path/to/cozyvtt/nginx/certs/server.crt && \
-  cp /etc/letsencrypt/live/your-domain.com/privkey.pem /path/to/cozyvtt/nginx/certs/server.key && \
-  docker compose -f /path/to/cozyvtt/docker-compose.yml restart nginx
+systemctl list-timers | grep certbot
 ```
+
+A line with a time under `NEXT` means it is. Two more things make renewal complete:
+
+1. **Copy the renewed certificate to where nginx reads it, and restart nginx.** Certbot runs every script in `/etc/letsencrypt/renewal-hooks/deploy/` after it renews a certificate. Create one, putting the full path to your CozyVTT folder in place of `/path/to/CozyVTT`:
+
+   ```bash
+   sudo tee /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh >/dev/null <<'EOF'
+   #!/bin/sh
+   # Runs after certbot renews a certificate: put it where nginx reads it, then restart nginx.
+   set -e
+   COZYVTT=/path/to/CozyVTT
+   cp "$RENEWED_LINEAGE/fullchain.pem" "$COZYVTT/nginx/certs/server.crt"
+   cp "$RENEWED_LINEAGE/privkey.pem" "$COZYVTT/nginx/certs/server.key"
+   docker compose -f "$COZYVTT/docker-compose.yml" restart nginx
+   EOF
+   sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh
+   ```
+
+   `RENEWED_LINEAGE` is a value certbot fills in: the folder of the certificate it just renewed.
+
+2. **Test a renewal now, without waiting two months:**
+
+   ```bash
+   sudo certbot renew --dry-run
+   ```
+
+   Certbot asks Let's Encrypt's test server for a pretend renewal, which makes the same check on port 80. It should end with `Congratulations, all simulated renewals succeeded`, and it changes nothing. It does not run the script above either, so run that once by hand to see that it works:
+
+   ```bash
+   sudo RENEWED_LINEAGE=/etc/letsencrypt/live/your-domain.com /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh
+   docker compose logs --tail 5 nginx
+   ```
+
+   The first command prints nothing when it works, and the log shows nginx starting again.
+
+If the dry run fails, it names the domain and the reason; the table under "Obtain a certificate" lists the usual ones. One more:
+
+| Certbot says | Meaning |
+|---|---|
+| `Could not bind TCP port 80` | The certificate was obtained with `--standalone`, the method an earlier version of this guide used, which cannot renew while nginx runs. See the next section |
+
+### If you obtained your certificate with the earlier steps
+
+An earlier version of this guide had you stop nginx and run `certbot certonly --standalone`. That certificate works until it expires, about 90 days after it was issued, and then fails to renew. Run `sudo certbot renew --dry-run` to see whether yours is affected: if it says `Could not bind TCP port 80`, it is. To fix it:
+
+1. Make the folder: `mkdir -p nginx/conf.d/acme`
+2. In `nginx/conf.d/https.conf`, make the port-80 server's check location read `root /etc/nginx/cozyvtt.d/acme;` (it may say `root /var/www/certbot;`), or add the location as shown above if it has none. Then restart nginx: `docker compose restart nginx`
+3. Run the command from step 4 of "Obtain a certificate" again with `--force-renewal` added. It replaces the certificate and changes how certbot renews it from now on
+4. Copy the new certificate with the commands in step 1 of "Configure Nginx to use the certificate", restart nginx, and set up the script and the dry run under "Keep the certificate renewed"
+5. If you added the weekly `cron` line from the earlier steps, remove it with `crontab -e`: the script does its job
 
 ---
 
@@ -1483,7 +1574,7 @@ Before going live:
 
 - [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
-- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS
+- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS. With Let's Encrypt, `sudo certbot renew --dry-run` ends with `all simulated renewals succeeded`: a certificate that cannot renew expires after about 90 days
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
