@@ -7,8 +7,8 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
-  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeSentTo, lightRemovalSentTo,
-  lightsSentTo, wallChangeSentTo, wallSentTo, wallsSentTo,
+  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
+  lightReachesPlayers, lightRemovalSentTo, lightsSentTo, wallChangeReachesPlayers, wallChangeSentTo, wallSentTo, wallsSentTo,
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
@@ -1955,10 +1955,10 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
     // A player whose copy is unchanged, as a closed door locked or unlocked
-    // is, is told nothing.
+    // is, is told nothing, and is not sent the map again.
     const { before, after } = outcome.done;
     await tellMapReadersAs(campaignId, id, 'wall:updated', (role) => wallChangeSentTo(role, id, before, after));
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    if (wallChangeReachesPlayers(before, after)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segment: after });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
@@ -2061,10 +2061,12 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
+    // A light that is off goes to the DM alone, and players are not sent the
+    // map again for it.
     await tellMapReadersAs(campaignId, id, 'light:added', (role) =>
-      role === 'DM' || added.enabled ? { event: 'light:added', data: { mapId: id, light: added } } : null
+      role === 'DM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId: id, light: added } } : null
     );
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    if (lightReachesPlayers(added)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: added, total: outcome.done });
   } catch (error) {
     logger.error('Error adding light source:', error);
@@ -2119,11 +2121,12 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // Anyone but the DM has only the lights that are on.
+    // Anyone but the DM has only the lights that are on, so a light that
+    // stays off is neither sent to them nor followed by the map.
     const after = outcome.done;
     const was = before ?? after;
     await tellMapReadersAs(campaignId, id, 'light:updated', (role) => lightChangeSentTo(role, id, was, after));
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    if (lightChangeReachesPlayers(was, after)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ light: outcome.done });
   } catch (error) {
     logger.error('Error updating light source:', error);
@@ -2157,7 +2160,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     // A light that was off was the DM's alone, so its going is too.
     const removed = outcome.done;
     await tellMapReadersAs(campaignId, id, 'light:removed', (role) => lightRemovalSentTo(role, id, lightId, removed));
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    if (lightReachesPlayers(removed)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
     logger.error('Error deleting light source:', error);

@@ -10,7 +10,9 @@ import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE 
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReadersAs } from '../utils';
-import { lightChangeSentTo, lightRemovalSentTo, lightsSentTo } from '../../utils/spirit-layer';
+import {
+  lightChangeReachesPlayers, lightChangeSentTo, lightReachesPlayers, lightRemovalSentTo, lightsSentTo,
+} from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
@@ -70,11 +72,12 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // A light that is off goes to the DM alone.
+      // A light that is off goes to the DM alone, and players are not sent
+      // the map again for it.
       await emitToMapReadersAs(io, campaignId, mapId, 'light:added', (role) =>
-        role === 'DM' || added.enabled ? { event: 'light:added', data: { mapId, light: added, ...echoedOpId(data) } } : null
+        role === 'DM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId, light: added, ...echoedOpId(data) } } : null
       );
-      resendSightAfterChange(io, campaignId, mapId);
+      if (lightReachesPlayers(added)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:add failed', { err: error });
       socket.emit('error', { message: 'Failed to add light source' });
@@ -116,7 +119,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       await emitToMapReadersAs(io, campaignId, mapId, 'light:removed', (role) =>
         lightRemovalSentTo(role, mapId, lightId, removed, echoedOpId(data))
       );
-      resendSightAfterChange(io, campaignId, mapId);
+      if (lightReachesPlayers(removed)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:remove failed', { err: error });
       socket.emit('error', { message: 'Failed to remove light source' });
@@ -168,12 +171,13 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       // Anyone but the DM has only the lights that are on: one turned on
-      // appears for them, one turned off goes.
+      // appears for them, one turned off goes, and one that stays off is
+      // neither sent nor followed by the map.
       const before = outcome.done;
       await emitToMapReadersAs(io, campaignId, mapId, 'light:updated', (role) =>
         lightChangeSentTo(role, mapId, before, updated, echoedOpId(data))
       );
-      resendSightAfterChange(io, campaignId, mapId);
+      if (lightChangeReachesPlayers(before, updated)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update light source' });

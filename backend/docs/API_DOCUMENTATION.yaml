@@ -6734,7 +6734,9 @@ paths:
         campaign is showing, and to the DM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since walls and
-        doors decide which tokens a player is sent.
+        doors decide which tokens a player is sent. A change that sends
+        players no event, as `updateWallType` describes, sends them no
+        `map.changed` either.
       operationId: replaceWalls
       security:
         - cookieAuth: []
@@ -6869,7 +6871,8 @@ paths:
         path; anything else answers 400. DM only. Connected clients are
         sent `wall:updated` (see `replaceWalls`) with the segment as each
         may see it. Anyone but the DM whose copy it leaves as it was, as
-        locking or unlocking a closed door does, is sent nothing.
+        locking or unlocking a closed door does, is sent nothing, and on a
+        lit map no `map.changed`.
       operationId: updateWallType
       security:
         - cookieAuth: []
@@ -6959,7 +6962,9 @@ paths:
         campaign is showing, and to the DM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since lights decide
-        which tokens a player is sent.
+        which tokens a player is sent. A change that sends players no event,
+        such as adding, changing or deleting a light that is off, sends them
+        no `map.changed` either.
       operationId: replaceLights
       security:
         - cookieAuth: []
@@ -7007,7 +7012,8 @@ paths:
         at least `brightRadius`, and the position is held to the bounds
         `replaceLights` describes. A map holds at most 200 lights; adding to a
         full map answers 400 with `error: Limit Exceeded`. DM only. Connected
-        clients are sent `light:added` (see `replaceLights`).
+        clients are sent `light:added` (see `replaceLights`); anyone but the
+        DM only when the light is on, and for one that is off nothing at all.
       operationId: addLight
       security:
         - cookieAuth: []
@@ -7074,8 +7080,12 @@ paths:
         checked against the light as it would be stored: one that would leave
         the dim radius smaller than the bright one answers 400 (`dimRadius
         must be >= brightRadius`) and changes nothing. A new position is held
-        to the bounds `replaceLights` describes. DM only. Connected clients
-        are sent `light:updated` (see `replaceLights`).
+        to the bounds `replaceLights` describes. DM only. The DM's
+        connections are sent `light:updated` (see `replaceLights`). Anyone
+        else, who is sent only the lights that are on, is sent `light:added`
+        for a light turned on, `light:removed` for one turned off,
+        `light:updated` for one that stays on, and nothing at all for one
+        that stays off.
       operationId: updateLight
       security:
         - cookieAuth: []
@@ -7118,7 +7128,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a light source
-      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`); anyone but the DM only when the light was on, since they are never sent one that is off.
+      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`); anyone but the DM only when the light was on, since they are never sent one that is off, and for one that was off nothing at all.
       operationId: deleteLight
       security:
         - cookieAuth: []

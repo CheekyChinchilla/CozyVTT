@@ -12,8 +12,8 @@ import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
 import {
-  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeSentTo, wallSentTo,
-  wallsSentTo, type PlayerSight,
+  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
+  wallSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
@@ -253,12 +253,12 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       }
 
       // A member whose copy of the wall is unchanged, a player's of a closed
-      // door locked or unlocked, is told nothing.
+      // door locked or unlocked, is told nothing, and is not sent the map again.
       const { before, after } = outcome.done;
       await emitToMapReadersAs(io, campaignId, mapId, 'wall:updated', (role) =>
         wallChangeSentTo(role, mapId, before, after, echoedOpId(data))
       );
-      resendSightAfterChange(io, campaignId, mapId);
+      if (wallChangeReachesPlayers(before, after)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update wall segment' });

@@ -15,6 +15,7 @@
 
 import { randomUUID } from 'crypto';
 import request from 'supertest';
+import type { Socket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { toJson } from '../../utils/prisma-json';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
@@ -42,11 +43,12 @@ const PLAIN: Wall = { id: randomUUID(), x1: 200, y1: 100, x2: 300, y2: 100, type
 const LIT: Light = { id: randomUUID(), x: 300, y: 300, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true };
 const OUT: Light = { id: randomUUID(), x: 600, y: 300, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: false };
 
-async function newMap(): Promise<string> {
+/** A map on screen holding LOCKED, PLAIN, LIT and OUT; `lit` turns dynamic lighting on. */
+async function newMap(lit = false): Promise<string> {
   const map = await prisma.map.create({
     data: {
       campaignId, name: 'Secrets', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
-      width: 20, height: 20, gridSize: 50, tokens: [], annotations: [],
+      width: 20, height: 20, gridSize: 50, tokens: [], annotations: [], lightingEnabled: lit,
       wallSegments: toJson([LOCKED, PLAIN]), lights: toJson([LIT, OUT]),
     },
   });
@@ -55,6 +57,25 @@ async function newMap(): Promise<string> {
 }
 
 const asClosed = { ...LOCKED, type: 'door-closed' };
+
+/** What a page is told of a map's walls and lights, and the map sent again. */
+const MAP_EVENTS = [
+  'map.changed', 'wall:added', 'wall:updated', 'wall:removed', 'walls:replaced',
+  'light:added', 'light:updated', 'light:removed', 'lights:replaced',
+];
+
+/**
+ * The map, wall and light events `client` receives from now on, in order.
+ * Read it after `settled()`, which outlasts the re-send of the map that
+ * follows a change by 150 ms.
+ */
+function heard(client: Socket): string[] {
+  const events: string[] = [];
+  client.onAny((event: string) => { if (MAP_EVENTS.includes(event)) events.push(event); });
+  return events;
+}
+
+const settled = () => new Promise((resolve) => setTimeout(resolve, 700));
 
 beforeAll(async () => {
   const dm = await createTestUser({ displayName: 'Secrets DM' });
@@ -261,6 +282,86 @@ describe('a change a player cannot see', () => {
     expect((await gone).lightId).toBe(LIT.id);
 
     dm.disconnect();
+    player.disconnect();
+  });
+});
+
+/**
+ * On a lit map, a wall or light change also sends every player the map again
+ * (`map.changed`) a moment later, as they can now see it. A change they were
+ * sent nothing for must not: the map arriving told them something had just
+ * changed where they could not see.
+ */
+describe('a change a player cannot see, on a lit map', () => {
+  it('sends a player no map when the DM unlocks or locks a closed door, and the map when the DM opens it', async () => {
+    const mapId = await newMap(true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const told = heard(player);
+    const unlocked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    dm.emit('wall:update', { mapId, segment: asClosed });
+    expect((await unlocked).segment).toEqual(asClosed);
+    const locked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    dm.emit('wall:update', { mapId, segment: LOCKED });
+    expect((await locked).segment).toEqual(LOCKED);
+    await settled();
+    expect(told).toEqual([]);
+
+    const resent = waitForEvent(player, 'map.changed');
+    dm.emit('wall:update', { mapId, segment: { ...LOCKED, type: 'door-open' } });
+    await resent;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player no map when the DM adds, changes or deletes a light that is off, and the map when one is on', async () => {
+    const mapId = await newMap(true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const dark = { ...OUT, id: randomUUID(), x: 700 };
+    const told = heard(player);
+    const added = waitForEvent(dm, 'light:added');
+    dm.emit('light:add', { mapId, light: dark });
+    await added;
+    const moved = waitForEvent(dm, 'light:updated');
+    dm.emit('light:update', { mapId, light: { ...OUT, x: 650 } });
+    await moved;
+    const removed = waitForEvent(dm, 'light:removed');
+    dm.emit('light:remove', { mapId, lightId: dark.id });
+    await removed;
+    await settled();
+    expect(told).toEqual([]);
+
+    const resent = waitForEvent(player, 'map.changed');
+    dm.emit('light:remove', { mapId, lightId: LIT.id });
+    await resent;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player no map for the same changes made through the REST routes', async () => {
+    const mapId = await newMap(true);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
+
+    const told = heard(player);
+    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
+    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-locked' })).status).toBe(200);
+    const dark = { ...OUT, id: randomUUID(), x: 700 };
+    expect((await dmAgent.post(`${base}/lights`).send(dark)).status).toBe(201);
+    expect((await dmAgent.patch(`${base}/lights/${OUT.id}`).send({ x: 650 })).status).toBe(200);
+    expect((await dmAgent.delete(`${base}/lights/${dark.id}`)).status).toBe(200);
+    await settled();
+    expect(told).toEqual([]);
+
+    const resent = waitForEvent(player, 'map.changed');
+    expect((await dmAgent.patch(`${base}/lights/${OUT.id}`).send({ enabled: true })).status).toBe(200);
+    await resent;
+
     player.disconnect();
   });
 });

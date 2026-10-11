@@ -491,7 +491,12 @@ export function playerSightOnLitMap(
  * closed one, which blocks sight the same way.
  */
 export function wallSentTo(role: string | undefined, wall: WallSegment): WallSegment {
-  return role !== 'DM' && wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
+  return role === 'DM' ? wall : playersWall(wall);
+}
+
+/** A wall as anyone but the DM is sent it: a locked door as a closed one. */
+function playersWall(wall: WallSegment): WallSegment {
+  return wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
 }
 
 /** Whether two walls match in every field a member is sent. */
@@ -500,11 +505,21 @@ function sameWall(a: WallSegment, b: WallSegment): boolean {
 }
 
 /**
+ * Whether a wall changing from `before` to `after` changes the copy anyone
+ * but the DM has. A closed door locked or unlocked does not. Such a change is
+ * sent to the DM alone, and players are not sent the map again for it
+ * (resendSightAfterChange), since either would tell them something had just
+ * been done there.
+ */
+export function wallChangeReachesPlayers(before: WallSegment, after: WallSegment): boolean {
+  return !sameWall(playersWall(before), playersWall(after));
+}
+
+/**
  * What a member is told of one wall changing from `before` to `after`: the
  * DM `wall:updated`; anyone else the wall as they are sent it (wallSentTo),
- * and nothing when that is the wall they have already, as a closed door
- * locked or unlocked is, since the event alone would say that something had
- * just been done to it. `extra` (an operation id) rides on the event.
+ * and nothing when that is the wall they have already
+ * (wallChangeReachesPlayers). `extra` (an operation id) rides on the event.
  */
 export function wallChangeSentTo(
   role: string | undefined,
@@ -513,9 +528,8 @@ export function wallChangeSentTo(
   after: WallSegment,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  const sent = wallSentTo(role, after);
-  if (role !== 'DM' && sameWall(wallSentTo(role, before), sent)) return null;
-  return { event: 'wall:updated', data: { mapId, segment: sent, ...extra } };
+  if (role !== 'DM' && !wallChangeReachesPlayers(before, after)) return null;
+  return { event: 'wall:updated', data: { mapId, segment: wallSentTo(role, after), ...extra } };
 }
 
 /** A map's walls as a member is sent them (wallSentTo). */
@@ -532,7 +546,22 @@ export function wallsSentTo(role: string | undefined, walls: unknown): WallSegme
  */
 export function lightsSentTo(role: string | undefined, lights: unknown): LightSource[] {
   const list = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
-  return role === 'DM' ? list : list.filter((l) => l.enabled);
+  return role === 'DM' ? list : list.filter(lightReachesPlayers);
+}
+
+/**
+ * Whether anyone but the DM is sent this light: only while it is on. A light
+ * that is off, added, changed while it stays off, or deleted, is sent to the
+ * DM alone, and players are not sent the map again for it
+ * (resendSightAfterChange).
+ */
+export function lightReachesPlayers(light: LightSource | undefined): boolean {
+  return light?.enabled === true;
+}
+
+/** Whether a light changing from `before` to `after` changes the copy anyone but the DM has. */
+export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
+  return lightReachesPlayers(before) || lightReachesPlayers(after);
 }
 
 /**
@@ -549,18 +578,20 @@ export function lightChangeSentTo(
   after: LightSource,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role === 'DM' || (before.enabled && after.enabled)) return { event: 'light:updated', data: { mapId, light: after, ...extra } };
-  if (after.enabled) return { event: 'light:added', data: { mapId, light: after, ...extra } };
-  if (before.enabled) return { event: 'light:removed', data: { mapId, lightId: after.id, ...extra } };
-  return null;
+  if (role !== 'DM' && !lightChangeReachesPlayers(before, after)) return null;
+  if (role === 'DM' || (lightReachesPlayers(before) && lightReachesPlayers(after))) {
+    return { event: 'light:updated', data: { mapId, light: after, ...extra } };
+  }
+  if (lightReachesPlayers(after)) return { event: 'light:added', data: { mapId, light: after, ...extra } };
+  return { event: 'light:removed', data: { mapId, lightId: after.id, ...extra } };
 }
 
 /**
  * What a member is told of the light `lightId` deleted, given the light as
  * it was (`removed`, undefined when the map had no light by that id): the DM
- * `light:removed`; anyone else only when the light was on, since one that
- * was off, or never there, is not a light they have. `extra` (an operation
- * id) rides on the event.
+ * `light:removed`; anyone else only when the light was on
+ * (lightReachesPlayers), since one that was off, or never there, is not a
+ * light they have. `extra` (an operation id) rides on the event.
  */
 export function lightRemovalSentTo(
   role: string | undefined,
@@ -569,7 +600,7 @@ export function lightRemovalSentTo(
   removed: LightSource | undefined,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && removed?.enabled !== true) return null;
+  if (role !== 'DM' && !lightReachesPlayers(removed)) return null;
   return { event: 'light:removed', data: { mapId, lightId, ...extra } };
 }
 
