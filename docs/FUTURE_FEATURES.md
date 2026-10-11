@@ -150,8 +150,9 @@ _Nothing at present._
   April 2028, so 26 is the target. The version is written in several
   places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
   in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
-  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the two
-  `node-version: 20` lines in `.github/workflows/ci.yml`, `engines` and
+  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the four
+  `node-version: 20` lines in `.github/workflows/ci.yml` (the `frontend`,
+  `backend`, `audit` and `images` jobs), `engines` and
   `@types/node` in the two `package.json` files, and the Node version the
   README, `docs/DEVELOPMENT.md` and `docs/DEPLOYMENT.md` ask for. A newer
   `node:*-alpine` image may sit on a newer Alpine, so check that
