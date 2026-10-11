@@ -290,9 +290,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const response = await authService.completeMFASetup(token);
 
-    // Update user state to reflect MFA enabled
+    // Update user state to reflect MFA enabled, with the backup codes it made.
     if (user) {
-      setUser({ ...user, mfaEnabled: true });
+      setUser({ ...user, mfaEnabled: true, mfaBackupCodesRemaining: response.backupCodes.length });
     }
 
     return response;
@@ -305,9 +305,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     await authService.disableMFA(password, token);
 
-    // Update user state to reflect MFA disabled
+    // Update user state to reflect MFA disabled; its backup codes are gone.
     if (user) {
-      setUser({ ...user, mfaEnabled: false });
+      setUser({ ...user, mfaEnabled: false, mfaBackupCodesRemaining: null });
     }
   }, [authenticated, user]);
 

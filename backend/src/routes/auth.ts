@@ -981,6 +981,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       mustChangePassword: user.mustChangePassword,
     };
 
+    // The row was read before the backup code was spent, so its list still
+    // holds that code: the count is the one the removal returned.
+    if (remainingBackupCodes !== undefined) {
+      response.user.mfaBackupCodesRemaining = remainingBackupCodes;
+    }
+
     if (backupCodeUsed) {
       response.backupCodeUsed = true;
       response.remainingBackupCodes = remainingBackupCodes;

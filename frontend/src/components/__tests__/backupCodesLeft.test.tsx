@@ -20,6 +20,8 @@ import { PlatformRole } from '@/types';
 const getCurrentUser = vi.fn();
 const login = vi.fn();
 const verifyMFALoginWithBackupCode = vi.fn();
+const completeMFASetup = vi.fn();
+const disableMFA = vi.fn();
 vi.mock('@/services/auth.service', () => ({
   authService: {
     getCurrentUser: (...args: never[]) => getCurrentUser(...args),
@@ -27,6 +29,8 @@ vi.mock('@/services/auth.service', () => ({
     logout: vi.fn(),
     register: vi.fn(),
     verifyMFALoginWithBackupCode: (...args: never[]) => verifyMFALoginWithBackupCode(...args),
+    completeMFASetup: (...args: never[]) => completeMFASetup(...args),
+    disableMFA: (...args: never[]) => disableMFA(...args),
   },
 }));
 
@@ -124,5 +128,27 @@ describe("the Profile page's two-factor section", () => {
     );
 
     expect(await screen.findByText('4 of 10 backup codes left')).toBeInTheDocument();
+  });
+
+  it('shows the new codes once two-factor authentication is turned off and on again', async () => {
+    getCurrentUser.mockResolvedValue({ ...sam, mfaBackupCodesRemaining: 2 });
+    disableMFA.mockResolvedValue(undefined);
+    completeMFASetup.mockResolvedValue({
+      message: 'MFA enabled successfully',
+      backupCodes: Array.from({ length: 10 }, (_, i) => `CODE-${i}`),
+    });
+    render(
+      <AuthProvider>
+        <Probe />
+        <MemoryRouter><MFASection /></MemoryRouter>
+      </AuthProvider>
+    );
+    await screen.findByText('2 of 10 backup codes left');
+
+    await act(async () => { await auth!.disableMFA('Another1!Password', '123456'); });
+    expect(auth!.user?.mfaBackupCodesRemaining).toBeNull();
+
+    await act(async () => { await auth!.completeMFASetup('654321'); });
+    expect(await screen.findByText('10 of 10 backup codes left')).toBeInTheDocument();
   });
 });
