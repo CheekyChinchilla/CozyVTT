@@ -17,6 +17,16 @@ git pull origin main
 docker compose up -d --build
 ```
 
+**If a Cloudflare Tunnel or another proxy sits in front of CozyVTT, change `.env` before you pull or straight after.** Until now the bundled nginx believed any machine on a private network about who each visitor was, so anything that could reach nginx from such an address could choose the address CozyVTT counts it as, including an ordinary visitor reaching your server over IPv6. From this release nginx believes only the proxies you list in `.env`. For a tunnel or proxy on the same server, add:
+
+```env
+NGINX_TRUSTED_PROXIES=172.16.0.0/12
+HTTP_PORT=127.0.0.1:80
+HTTPS_PORT=127.0.0.1:443
+```
+
+then run `docker compose up -d`. `172.16.0.0/12` is the range on most servers ([check yours](docs/DEPLOYMENT.md#the-range-for-a-proxy-on-the-same-server)). The two port lines keep nginx's ports to this server, so visitors can only arrive through the tunnel; keep your own port numbers if you changed them, and leave the two lines out if your proxy reaches nginx from another machine. Without the first line, every visitor counts as the proxy's one address: a few wrong passwords from anyone lock everybody out of signing in for 15 minutes; everyone shares one limit of 300 requests a minute, which counts each picture a map loads, so a table opening a map together can reach it and have requests refused for the rest of that minute; and sign-in cookies are no longer marked HTTPS-only. You can add all three before you pull: 1.5.1 ignores the first, and already reads the two port lines. Requests a tunnel sends straight to the backend, as in the guide's tunnel setups without the bundled nginx, are unaffected: the backend reads those visitors' addresses itself, as before. Other setups, and a check that it worked, are in [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits).
+
 There is no database change and no new required setting. Nothing you have stored is rewritten. All four containers are recreated, because `docker-compose.yml` changes each of them: every container gets Docker's `no-new-privileges` option, the frontend container's files become read-only, the backend is given longer to stop, and nginx moves to its stable 1.30 releases with a reworked `nginx/nginx.conf`. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
 
 If you have edited `docker-compose.yml`, `git pull` stops at it because this release changes it. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml).
@@ -32,7 +42,7 @@ If you have edited `nginx/nginx.conf`, to turn on HTTPS or to add a proxy's addr
 
 Skip step 4 and, after step 6, your instance answers over plain HTTP only.
 
-There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it out and the bundled nginx believes no proxy in front of it. If you have a tunnel or proxy in front, see the first point under "What to do afterwards".
+There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it out and the bundled nginx believes no proxy in front of it. With a tunnel or proxy in front, set it as the paragraph after the upgrade commands says.
 
 #### What you will notice
 
@@ -62,8 +72,6 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 
 #### What to do afterwards, if it applies to you
-
-- **If a Cloudflare Tunnel or another proxy passes visitors to the bundled nginx, add one line to `.env`.** For a tunnel or proxy on the same server it is `NGINX_TRUSTED_PROXIES=172.16.0.0/12` on most servers ([check yours](docs/DEPLOYMENT.md#the-range-for-a-proxy-on-the-same-server)); then run `docker compose up -d`. Without it, every visitor counts as the proxy's one address: a few wrong passwords from anyone lock everybody out of signing in for 15 minutes; everyone shares one limit of 300 requests a minute, which counts each picture a map loads, so a table opening a map together can reach it and have requests refused for the rest of that minute; and sign-in cookies are no longer marked HTTPS-only. With a tunnel on the same server, also add `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, which keep nginx's ports to that server. Other setups, and a check that it worked, are in [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits).
 
 - **If you got a Let's Encrypt certificate with the deployment guide's earlier steps, check that it can renew.** Those steps used a method that fails at renewal while nginx runs, so the certificate works until it expires, about 90 days after it was issued, and then visitors see a certificate error. Run `sudo certbot renew --dry-run`. If it says `Could not bind TCP port 80`, follow [If you obtained your certificate with the earlier steps](docs/DEPLOYMENT.md#if-you-obtained-your-certificate-with-the-earlier-steps).
 
