@@ -344,7 +344,7 @@ Both limits tell visitors apart by their *IP address*, the address their device 
 | Your setup | Line to add to `.env` |
 |---|---|
 | Visitors connect straight to your server, with no tunnel or proxy in front of nginx | none |
-| A Cloudflare Tunnel or another proxy on the same server, installed on it or in a Docker container | `NGINX_TRUSTED_PROXIES=172.16.0.0/12` |
+| A Cloudflare Tunnel or another proxy on the same server, installed on it or in a Docker container | `NGINX_TRUSTED_PROXIES=172.16.0.0/12` on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server) |
 | A proxy on another machine on your network | its address, for example `NGINX_TRUSTED_PROXIES=192.168.1.10` |
 | Cloudflare's proxy (the orange cloud) pointed at your server's public address, without a tunnel | Cloudflare's address ranges from [cloudflare.com/ips](https://www.cloudflare.com/ips/), all on that one line, separated by spaces |
 
@@ -356,7 +356,7 @@ docker compose up -d
 
 `up -d` reads `.env` again and recreates nginx; `docker compose restart` would keep the old setting. An entry that is not an IP address or range is ignored, and `docker compose logs nginx` says which.
 
-Why `172.16.0.0/12` for a proxy on the same server: Docker hands nginx a connection from the server itself, or from another container, from an address on its own network, and Docker's networks use the addresses `172.16.0.0` to `172.31.255.255`.
+Why `172.16.0.0/12` for a proxy on the same server: Docker hands nginx a connection from the server itself, or from another container, from an address on one of its own networks, and Docker numbers its first networks between `172.16.0.0` and `172.31.255.255`. Some servers use other ranges; [The range for a proxy on the same server](#the-range-for-a-proxy-on-the-same-server) below shows how to find yours.
 
 > 🔒 **With a tunnel on the same server, keep nginx's ports to that server.** Docker also hands nginx some connections from outside from its own network's address: a visitor who connects over IPv6, and on Docker Desktop (Windows and Mac) or rootless Docker every visitor. Once you trust that range, such a visitor could choose the address CozyVTT counts them as. A tunnel only needs to reach nginx from the server itself, so publish nginx's ports there alone, with these two lines in `.env`:
 >
@@ -381,7 +381,7 @@ cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me
 
 You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
 
-- **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`. Add its line from the table above.
+- **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`, or the range you listed does not hold the address shown. Add its line from the table above, or the range [your server uses](#the-range-for-a-proxy-on-the-same-server).
 - **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
 
 If the address is one of Cloudflare's own (the ranges on [cloudflare.com/ips](https://www.cloudflare.com/ips/)), Cloudflare's proxy is in front of your server's public address: add those ranges as in the table.
@@ -389,6 +389,42 @@ If the address is one of Cloudflare's own (the ranges on [cloudflare.com/ips](ht
 Only list addresses that are your own proxies. Whatever connects from a listed address can choose the address CozyVTT counts it as.
 
 **If you removed the bundled nginx**, the backend takes the **last** address in the `X-Forwarded-For` header your proxy sends as the visitor's own. Proxies add the address they were connected from there, which is right when nothing else stands in front of yours. If something does (Cloudflare's proxy in front of Caddy, say), set your proxy to believe it, or every visitor counts as the same address: `trusted_proxies` in Caddy, `forwardedHeaders.trustedIPs` in Traefik, `set_real_ip_from` in nginx.
+
+#### The range for a proxy on the same server
+
+`172.16.0.0/12` covers the addresses Docker gives its first networks, `172.16.0.0` to `172.31.255.255`. Once those are taken it moves on to ranges starting `192.168.`, and a server whose Docker settings list address pools of their own (`default-address-pools` in `/etc/docker/daemon.json`) often uses ranges starting `10.`. To find the range on your server:
+
+1. Open CozyVTT through your tunnel or proxy, then run this on the server:
+
+   ```bash
+   docker compose logs --tail 5 nginx
+   ```
+
+   Until nginx believes your proxy, each line starts, after the `cozyvtt-nginx |` label, with the address your proxy reaches nginx from:
+
+   ```
+   cozyvtt-nginx  | 192.168.16.1 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
+   ```
+
+   If that address starts with `172.16.` up to `172.31.`, `172.16.0.0/12` covers it and you are done.
+
+2. Otherwise, ask Docker for the range of the network that address is on. This prints the name of CozyVTT's network:
+
+   ```bash
+   docker inspect cozyvtt-nginx --format '{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}'
+   ```
+
+   It prints something like `cozyvtt_internal`, where the first part is the name of the folder CozyVTT is in. Put the name it printed in this command:
+
+   ```bash
+   docker network inspect cozyvtt_internal --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
+   ```
+
+   It prints the network's range, something like `192.168.16.0/20` (a second range, with colons, if the network also has IPv6 addresses). If your proxy runs in a container of its own on another Docker network, use that container's name in place of `cozyvtt-nginx` in the first command.
+
+3. Put what it printed in `.env` in place of `172.16.0.0/12`, for example `NGINX_TRUSTED_PROXIES=192.168.16.0/20`, run `docker compose up -d`, and run the check above.
+
+Docker can give a network a new range when it makes it again, after `docker compose down` for example. If the check above shows your proxy's address again after that, look the range up again.
 
 ### Minimum proxy requirements
 
