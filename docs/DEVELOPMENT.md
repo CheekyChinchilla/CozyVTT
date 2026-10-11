@@ -504,20 +504,31 @@ Two of those deserve a note:
   and when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+- **The tests drive the server's own app.** `createApp` in
+  `backend/src/app.ts` puts every middleware, gate, router and error handler
+  in order; `server.ts` builds its app with it and starts it, and the
+  integration tests' app (`src/__tests__/helpers/test-app.ts`) is built with
+  it too. The test app differs in three settings only: sessions kept in
+  memory, no general request limit, and no setup gate. So a security header,
+  gate or router moved or dropped in `app.ts` fails the suites;
+  `src/__tests__/appAssembly.e2e.test.ts` checks the headers, the session
+  cookie and the order. Mount nothing in `server.ts` itself.
 - **Every route has a test, or is listed as not having one.**
   `backend/src/routes/__tests__/routeInventory.test.ts` reads every method and
-  path from the routers the test app mounts (and checks the test app mounts
-  the same routers as `server.ts`, at the same paths). It fails when a route
-  is in neither of its two lists: `TESTED`, which names a test file that sends
-  a request to the route, and `UNTESTED`, the known gaps, which should only
-  shrink. Add a new route's test, then its line in `TESTED`.
+  path from the app `createApp` builds. It fails when a route is in neither of
+  its two lists: `TESTED`, which names a test file that sends a request to the
+  route, and `UNTESTED`, the known gaps, which should only shrink. It also
+  fails when a test file sends a request to a route still listed in
+  `UNTESTED`, so the list cannot go on claiming a gap that has closed. Add a
+  new route's test, then its line in `TESTED`.
 - **Every rate limiter is tested where it is attached.**
   `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
   limited route: it sends the limit's worth of failing requests to the real
   route and expects the next to be answered 429. It also reads the routers
   and fails when a route carries a limiter with no row, so a newly limited
   route needs one line in its `ROWS`. The server-wide limit on every `/api`
-  request is applied in `server.ts`, outside the routers, and is not covered.
+  request is mounted by `createApp` ahead of every router; the same file
+  checks it is there and fires it.
 - **A test file may not carry a `TODO(test)` marker.** A test known to be
   flaky or wrong once sat behind one, assigned to nobody, until it failed a
   release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test

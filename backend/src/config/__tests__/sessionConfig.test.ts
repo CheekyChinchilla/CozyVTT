@@ -1,9 +1,11 @@
 /**
  * The login-session settings the server runs with.
  *
- * The test apps build their own sessions, so nothing else loads this file's
- * settings: the refusal to start in production on a known session secret,
- * and the cookie's flags. A public instance on the placeholder secret lets
+ * The test app shares the session's behaviour and cookie
+ * (config/sessionOptions.ts, checked through it in appAssembly.e2e.test.ts)
+ * but keeps sessions in memory with a secret of its own, so nothing else
+ * loads this file: the refusal to start in production on a known session
+ * secret, and the store. A public instance on the placeholder secret lets
  * anyone who has read .env.example sign their own session cookies.
  *
  * The settings are loaded afresh for each case, with the environment the case

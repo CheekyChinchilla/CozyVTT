@@ -2,30 +2,25 @@
  * An account that must replace an admin-issued password can do nothing else
  * over HTTP until it has.
  *
- * The gate is mounted on /api in server.ts and its allow list is written
- * relative to that mount, so this app mounts it the same way in front of the
- * real routes; a unit test handing the gate literal paths cannot tell whether
- * the paths Express gives it under the mount are the ones on the list. The
+ * The gate is mounted on /api and its allow list is written relative to that
+ * mount, so this drives it through the test app, which mounts it where the
+ * server does (both are built by createApp in app.ts); a unit test handing
+ * the gate literal paths cannot tell whether the paths Express gives it under
+ * the mount are the ones on the list. The
  * account is made the way an admin makes one, through the Admin Dashboard's
  * route, and signs in with the temporary password it is given.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
-import express from 'express';
-import session from 'express-session';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { requirePasswordChanged, PASSWORD_CHANGE_REQUIRED } from '../../middleware/passwordChange';
+import { PASSWORD_CHANGE_REQUIRED } from '../../middleware/passwordChange';
 import { prisma, createTestUser, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const NEW_PASSWORD = 'MyOwnPassword9!';
 
-// The server's order: sessions, then the gate on /api, then the routers.
-const app = express();
-app.use(session({ secret: 'test-secret-do-not-use-in-production', resave: false, saveUninitialized: false, cookie: { secure: false } }));
-app.use('/api', requirePasswordChanged);
-app.use(createTestApp());
+const app = createTestApp();
 
 const created: string[] = [];
 let member: request.Agent;

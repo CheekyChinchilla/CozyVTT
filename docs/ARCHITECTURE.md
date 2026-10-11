@@ -71,7 +71,9 @@ The first three are mounted one file each, and a single-file mount keeps the fil
 
 ```
 src/
-├── server.ts          Entry point — creates Express app, attaches Socket.io
+├── server.ts          Entry point: builds the app, attaches Socket.io, starts listening
+├── app.ts             createApp: every middleware, gate, router and error handler, in
+│                      order; the integration tests build their app with it too
 ├── config/            Configuration loading (env vars, validation)
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
@@ -84,7 +86,7 @@ src/
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time
 │   │                  (the other HTTP limiters are declared beside their routes,
-│   │                  and the general /api limiter in server.ts)
+│   │                  and the general /api limiter in app.ts)
 │   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
 │   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
@@ -679,7 +681,7 @@ deletes each one only if a fresh scan still lists it.
 
 ### Security Headers
 
-Two policies, because two different servers answer. `backend/src/server.ts`
+Two policies, because two different servers answer. `backend/src/app.ts`
 (helmet) covers what the backend sends, which in the production stack is `/api`
 and `/socket.io`. The app page comes from the frontend container, so its
 headers live in `frontend/security-headers.conf` and travel with it, including

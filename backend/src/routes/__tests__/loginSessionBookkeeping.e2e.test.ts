@@ -23,9 +23,9 @@ const created: string[] = [];
 /** The session id a response's cookie names, decoded from `s:<sid>.<signature>`. */
 function sidOf(res: request.Response): string {
   const raw = res.headers['set-cookie'] as unknown as string[] | undefined;
-  const cookie = raw?.map((c) => c.split(';')[0]).find((c) => c.startsWith('connect.sid='));
+  const cookie = raw?.map((c) => c.split(';')[0]).find((c) => c.startsWith('cozyvtt.sid='));
   if (!cookie) throw new Error('no session cookie was set');
-  return decodeURIComponent(cookie.slice('connect.sid='.length)).slice(2).split('.')[0];
+  return decodeURIComponent(cookie.slice('cozyvtt.sid='.length)).slice(2).split('.')[0];
 }
 
 let capped: jest.SpyInstance;

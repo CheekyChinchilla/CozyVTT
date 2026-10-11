@@ -32,7 +32,8 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SERVER = os.path.join(ROOT, 'backend', 'src', 'server.ts')
+# createApp in app.ts mounts every router; server.ts only starts it.
+SERVER = os.path.join(ROOT, 'backend', 'src', 'app.ts')
 ROUTES = os.path.join(ROOT, 'backend', 'src', 'routes')
 SPEC = os.path.join(ROOT, 'backend', 'docs', 'API_DOCUMENTATION.yaml')
 GUIDE = os.path.join(ROOT, 'docs', 'API_REFERENCE.md')
@@ -43,7 +44,7 @@ norm = lambda e: re.sub(r'\{[^}]+\}', ':x', re.sub(r':\w+', ':x', e)).rstrip('/'
 
 
 def routed():
-    """Every method+path the server mounts, from server.ts and the routers."""
+    """Every method+path the server mounts, from app.ts and the routers."""
     srv = read(SERVER)
     mounts, found = {}, set()
     for m in re.finditer(r"app\.use\('([^']+)',\s*(\w+)", srv):
