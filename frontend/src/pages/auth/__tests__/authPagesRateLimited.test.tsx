@@ -15,6 +15,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { AuthContextType } from '@/types/user.types';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: { smtp: { configured: true } } }) }));
 vi.mock('@/services/api', () => ({
   api: { getRegistrationStatus: vi.fn().mockResolvedValue({ allowRegistration: true }) },
 }));
@@ -123,7 +124,9 @@ describe('the forgot-password page', () => {
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
   });
 
-  it('still shows the inbox message for any other failure, so the answer never says whether the address exists', async () => {
+  // A failure with no answer from the server says nothing about the address,
+  // so saying that nothing was sent tells nobody whether it has an account.
+  it('says nothing was sent when the request fails without an answer', async () => {
     forgotPassword.mockRejectedValue(Object.assign(new Error('Network Error'), {}));
     mockUseAuth.mockReturnValue(authState());
     render(<MemoryRouter><ForgotPasswordPage /></MemoryRouter>);
@@ -131,7 +134,8 @@ describe('the forgot-password page', () => {
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'alice@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /send reset link/i }));
 
-    await waitFor(() => expect(screen.getByText('Check your inbox')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('no email was sent'));
+    expect(screen.queryByText('Check your inbox')).not.toBeInTheDocument();
   });
 });
 
