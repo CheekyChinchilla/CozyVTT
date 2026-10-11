@@ -890,6 +890,12 @@ export interface Asset {
   /** Populated by backend include — available in list responses */
   uploadedBy?: { id: string; displayName: string } | null;
   campaign?: { id: string; name: string } | null;
+  /**
+   * In the asset list only: whether the server will let this user delete the
+   * asset, move it out of its scope, or rewrite it if it is a text document,
+   * by the rule those routes apply.
+   */
+  canChange?: boolean;
 }
 
 /** What kind of record uses an asset. */

@@ -4863,6 +4863,11 @@ paths:
         A `type` or `scope` outside its enum, or either sent more than once,
         answers 400. A `page` below 1 is treated as 1, and `limit` is clamped
         into 1-100.
+
+        Each asset says in `canChange` whether the caller may change it where
+        it is: delete it (`DELETE /api/assets/{id}`), move it out of its
+        scope (`PATCH /api/assets/{id}/scope`), or, for a text or Markdown
+        document, rewrite it (`PUT /api/assets/documents/{id}/content`).
       operationId: listAssets
       security:
         - cookieAuth: []
@@ -4927,7 +4932,25 @@ paths:
                   assets:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Asset'
+                      allOf:
+                        - $ref: '#/components/schemas/Asset'
+                        - type: object
+                          required: [canChange]
+                          properties:
+                            canChange:
+                              type: boolean
+                              description: >-
+                                Whether the caller may delete this asset, move
+                                it out of its scope, or rewrite it if it is a
+                                text or Markdown document. One rule decides all
+                                three: an admin always; for a GLOBAL asset its
+                                uploader while they still have
+                                `globalAssetManager`; for a USER asset its
+                                uploader; for a CAMPAIGN asset its uploader
+                                while still a member of that campaign, or that
+                                campaign's DM. A move also needs the rules for
+                                where it goes, and a PDF is never rewritten,
+                                whatever this says.
                   pagination:
                     type: object
                     properties:

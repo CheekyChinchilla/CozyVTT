@@ -1035,6 +1035,11 @@ List assets accessible to the authenticated user (Global + their own User scope 
 - `page` — pagination page (default: 1)
 - `limit` — items per page (default: 25)
 
+Each asset carries a `canChange` boolean: whether the caller may delete it,
+move it out of its scope, or rewrite it if it is a text or Markdown
+document, by the rule those routes apply, so the client offers those
+controls only then.
+
 ---
 
 ### `POST /api/assets/upload`

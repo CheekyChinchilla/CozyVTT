@@ -472,7 +472,7 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. Who can edit a document is who can delete it:
+Open a text or Markdown document and press **Edit**. Who can edit a document is who can delete it, and **Edit** in the reader and the bin button on the **Documents** page show only for someone who can:
 
 | Scope | Who can edit it |
 |-------|-----------------|

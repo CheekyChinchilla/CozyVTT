@@ -24,6 +24,7 @@ import {
 } from '../validators/documents';
 import {
   canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, spiritLayerAssetIdsHiddenFrom,
+  assetChangeFactsFor,
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
 import { UpdateAssetScopeSchema } from '../validators/assetScope';
@@ -266,7 +267,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const total = await prisma.asset.count({ where });
 
     // Get paginated assets.
-    const assets = await prisma.asset.findMany({
+    const rows = await prisma.asset.findMany({
       where,
       select: ASSET_PUBLIC_SELECT,
       orderBy: {
@@ -275,6 +276,14 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       skip,
       take: limitNum,
     });
+
+    // Each says whether the caller may delete it, move it out of its scope,
+    // or rewrite it if it is a document, by the rule those routes apply, so a
+    // page offers those controls exactly when they would be taken.
+    const facts = isAdmin ? undefined : await assetChangeFactsFor(userId);
+    const assets = await Promise.all(
+      rows.map(async (asset) => ({ ...asset, canChange: await mayChangeAsset(asset, userId, isAdmin, facts) }))
+    );
 
     return res.json({
       assets,

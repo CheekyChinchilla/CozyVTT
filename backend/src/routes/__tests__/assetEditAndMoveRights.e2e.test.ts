@@ -228,3 +228,53 @@ describe('the campaign document list', () => {
     expect(await saves(player.agent, own)).toBe(false);
   });
 });
+
+// The asset list says the same of each asset, for the Documents page, which
+// offered Edit and Delete to an admin and to the uploader: a global
+// document's uploader who no longer manages global assets was offered both
+// and refused, and the DM of a campaign was offered neither on the
+// campaign's own documents, which they may change.
+describe('the asset list', () => {
+  type Listed = { id: string; canChange: boolean };
+
+  it('says of each document whether the caller may change it, matching what editing and deleting answer', async () => {
+    const writer = await signedIn('Library Writer', true);
+    const dm = await signedIn('Library DM');
+    const player = await signedIn('Library Player');
+    const campaign = await createTestCampaign(dm.id);
+    campaignIds.push(campaign.id);
+    // The writer held the seat when they wrote the handout.
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: writer.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+        { userId: dm.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
+        { userId: player.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    const global = await documentBy(writer.agent, 'GLOBAL');
+    const handout = await documentBy(writer.agent, 'CAMPAIGN', campaign.id);
+    // The seat passes on; the writer stays as a player.
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: writer.id, campaignId: campaign.id } }, data: { role: 'PLAYER' } });
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dm.id, campaignId: campaign.id } }, data: { role: 'DM' } });
+
+    const listedFor = async (agent: ReturnType<typeof request.agent>) => {
+      const res = await agent.get('/api/assets').query({ type: 'DOCUMENT', limit: 100 });
+      expect(res.status).toBe(200);
+      const flags = new Map((res.body.assets as Listed[]).map((a) => [a.id, a.canChange]));
+      return { global: flags.get(global), handout: flags.get(handout) };
+    };
+
+    expect(await listedFor(writer.agent)).toEqual({ global: true, handout: true });
+    expect(await listedFor(dm.agent)).toEqual({ global: false, handout: true });
+    expect(await listedFor(player.agent)).toEqual({ global: false, handout: false });
+
+    await prisma.user.update({ where: { id: writer.id }, data: { globalAssetManager: false } });
+    expect(await listedFor(writer.agent)).toEqual({ global: false, handout: true });
+
+    // What the list says is what the routes answer.
+    expect((await writer.agent.put(`/api/assets/documents/${global}/content`).send({ content: '# Revised' })).status).toBe(404);
+    expect((await writer.agent.delete(`/api/assets/${global}`)).status).toBe(403);
+    expect((await player.agent.delete(`/api/assets/${handout}`)).status).toBe(403);
+    expect((await dm.agent.put(`/api/assets/documents/${handout}/content`).send({ content: '# Revised' })).status).toBe(200);
+  });
+});
