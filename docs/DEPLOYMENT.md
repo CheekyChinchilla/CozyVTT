@@ -55,8 +55,8 @@ cp .env.example .env
 Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
 
 ```env
-# Database
-DATABASE_PASSWORD=choose-a-strong-password-here
+# Database — paste the output of: openssl rand -hex 16
+DATABASE_PASSWORD=<paste the 32 characters that command prints>
 
 # Security — paste the output of: openssl rand -hex 32
 SESSION_SECRET=<paste the 64 characters that command prints>
@@ -66,6 +66,8 @@ CORS_ORIGIN=https://your-domain.com
 
 NODE_ENV=production
 ```
+
+**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `@`, `/`, `#`, `?`, `:`, `%` or `$` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Waiting for database to be ready...` up to 30 times and then `Database connection failed`, or it stops with `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first.
 
 `CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
 
@@ -81,13 +83,13 @@ docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt W
 echo "$NEW_PASSWORD"
 ```
 
-The command uses the default names. If you changed them in `.env`, put your `DATABASE_USER` in place of `cozyvtt` after `-U` and after `ALTER USER`, and your `DATABASE_NAME` in place of `cozyvtt` after `-d`. Then put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` too if you wrote that by hand), and restart:
+The command uses the default names. If you changed them in `.env`, put your `DATABASE_USER` in place of `cozyvtt` after `-U` and after `ALTER USER`, and your `DATABASE_NAME` in place of `cozyvtt` after `-d`. Then put the printed value in `.env` as `DATABASE_PASSWORD`, and restart. The stack builds the database's address from it, so there is no `DATABASE_URL` to change in `.env` (a line you added there is ignored on Docker):
 
 ```bash
 docker compose up -d
 ```
 
-A hex password avoids any quoting trouble in the command above and in `.env`. On a manual install the same `ALTER USER` runs through `sudo -u postgres psql`, as in the install steps below.
+A hex password avoids any quoting trouble in the command above and in `.env`, and the characters that break the database's address. On a manual install the same `ALTER USER` runs through `sudo -u postgres psql`, as in the install steps below, and the new password goes in `DATABASE_URL` in `backend/.env`.
 
 ### 3. Build and start the stack
 
@@ -997,6 +999,8 @@ SMTP_SECURE=false   # true for port 465 (TLS), false for port 587 (STARTTLS)
 APP_URL=https://your-domain.com
 ```
 
+Email counts as set up only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are **all** set. A mail server that needs no login, such as a relay on your own network, is not supported: leave the user or password empty and the **Settings** tab of the Admin Panel says **Not configured** and names the three settings, there is no **Send Test Email** button, and password-reset and invitation emails stay off, whatever else you set. `SMTP_PORT` defaults to 587 and `SMTP_SECURE` to `false`.
+
 Test it after deploying with **Send Test Email** on the **Settings** tab of the Admin Panel.
 
 #### What SMTP unlocks
@@ -1463,7 +1467,15 @@ docker compose exec backend wget -qO- http://localhost:4000/health
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
 
-The **Status** card on the Admin Panel's dashboard asks the backend the same question, and also whether live game connections can be made. It says **Healthy** only when the API, the database (**DB**) and live connections (**WS**) all work, **Degraded** with the failing part in red when one does not, and **Unknown** when the backend could not be asked at all.
+The **Status** card on the Admin Panel's dashboard shows three lights and a count of the live connections open at that moment:
+
+| Light | Green when | What it does not tell you |
+|---|---|---|
+| **API** | The card's request reached the backend | |
+| **DB** | The database answers a simple query, as in the check above | |
+| **WS** | The backend's live-connection service (Socket.io) is running inside the backend. That is so whenever the backend itself is up, so it is practically always green | It does not tell you that a proxy in front lets live connections through. A proxy that refuses WebSocket connections leaves it green while dice, chat and token movement fail |
+
+The card says **Healthy** when all three are green, **Degraded** with the failing part in red when **DB** or **WS** is not, and **Unknown** when the backend could not be asked at all. To see whether live connections really work, open a campaign: the right of its header shows **Connected** (on a narrow screen only an icon), and a table that stays on **Connecting...**, **Disconnected** or **Connection Error** has the problem described under [Live features don't work](#live-features-dont-work-dice-token-movement-chat).
 
 If you run your own reverse proxy and want an uptime monitor to reach `/health` from outside, add a route for it alongside your `/api` route, both pointing at the backend.
 

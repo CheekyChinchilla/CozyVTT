@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import helmet from 'helmet';
+import { isSmtpConfigured } from '../services/email';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -125,5 +126,47 @@ describe('HSTS, in the deployment guide', () => {
 
   it('no longer calls HSTS something the administrator adds', () => {
     expect(read('docs/DEPLOYMENT.md')).not.toMatch(/HSTS is the one you add yourself/);
+  });
+});
+
+describe('SMTP, in the deployment guide', () => {
+  const settings = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'];
+  const saved = Object.fromEntries(settings.map((name) => [name, process.env[name]]));
+
+  afterEach(() => {
+    for (const name of settings) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  });
+
+  // Email is on only with a host, a user and a password. The guide listed the
+  // variables and never said so, and a relay that needs no login looked like
+  // an instance whose email was simply broken.
+  it('counts as set up only with a host, a user and a password, which the guide says', () => {
+    for (const name of settings) process.env[name] = 'set';
+    expect(isSmtpConfigured()).toBe(true);
+    for (const missing of settings) {
+      process.env[missing] = '';
+      expect(isSmtpConfigured()).toBe(false);
+      process.env[missing] = 'set';
+    }
+
+    expect(read('docs/DEPLOYMENT.md')).toContain('`SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are **all** set');
+  });
+});
+
+describe('the Admin Panel status card, in the deployment guide', () => {
+  // The card's WS light is green when the backend's live-connection server
+  // exists in the process (GET /api/admin/health), which it does whenever the
+  // backend is running. The guide said it checked that connections can be
+  // made, which a proxy that refuses WebSocket upgrades defeats unseen.
+  it('does not say the card tests whether live connections can be made', () => {
+    expect(read('docs/DEPLOYMENT.md')).not.toMatch(/also whether live game connections can be made/);
+  });
+
+  it('says what the live-connections light does check, and where to see whether they work', () => {
+    const guide = read('docs/DEPLOYMENT.md');
+    expect(guide).toContain('does not tell you that a proxy in front lets live connections through');
   });
 });
