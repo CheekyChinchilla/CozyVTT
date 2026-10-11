@@ -200,6 +200,21 @@ describe('the Admin Panel status card, in the deployment guide', () => {
   });
 });
 
+describe('where the uploads folder is changed under Docker', () => {
+  // docker-compose.yml is the shipped file: an edit to it stops `git pull`.
+  // The example settings file already sent the reader to the override file,
+  // which git leaves alone; the settings table sent them to the shipped one.
+  it('is the override file, in the settings table of the deployment guide as in the example settings', () => {
+    const row = read('docs/DEPLOYMENT.md')
+      .split('\n')
+      .find((line) => line.startsWith('| `UPLOAD_DIR`'));
+    expect(row).toBeDefined();
+    expect(row).toContain('`docker-compose.override.yml`');
+    expect(row).not.toContain('`docker-compose.yml`');
+    expect(read('.env.example')).toContain('uploads volume in docker-compose.override.yml');
+  });
+});
+
 describe('the game systems named in the guides', () => {
   const constants = read('frontend/src/constants/game-systems.ts');
   const options = constants.slice(constants.indexOf('export const GAME_SYSTEM_OPTIONS'));

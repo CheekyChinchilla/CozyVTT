@@ -1095,7 +1095,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
 | `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
 | `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
-| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.yml` instead |
+| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.override.yml` instead; [Database Backups](#database-backups) shows how that file works |
 | `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
 | `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
 | `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
