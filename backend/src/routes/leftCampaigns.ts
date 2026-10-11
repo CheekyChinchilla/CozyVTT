@@ -43,7 +43,8 @@ interface LeftCampaign {
  * The campaigns the caller is no longer a member of and still has notes or
  * dice macros in, by name, each with the titles of their notes (most recently
  * edited first) and their macros (oldest first). Note text is not included;
- * GET /api/campaigns/left/:campaignId/notes/:noteId has it, one note at a time.
+ * GET /api/campaigns/left/:campaignId/notes/:noteId has it, one note at a time,
+ * and GET /api/campaigns/left/:campaignId/notes has all of a campaign's.
  */
 export async function listLeftCampaigns(req: AuthenticatedRequest, res: Response): Promise<Response> {
   try {
