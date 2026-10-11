@@ -11239,9 +11239,12 @@ components:
       type: object
       description: |
         A token as the DM sees it. A player is sent a subset of each token they
-        may see at all: never `notes` or `statBlock`; `hp` only for a token they
-        control or one whose `showHpBar` is on; `sightRadius` and
-        `creatureTemplateId` only for a token they control. A token whose `obscured` is true reaches anyone but its
+        may see at all, built from a fixed list of the fields below, so a field
+        not listed here never reaches a player: never `notes` or `statBlock`;
+        `hp` only for a token they control or one whose `showHpBar` is on;
+        `sightRadius` and `creatureTemplateId` only for a token they control.
+        `metadata` is sent to every player who may see the token (only the DM
+        can write it), so it is no place for secrets. A token whose `obscured` is true reaches anyone but its
         controller as a shape with no identity, built from a fixed list: `id`,
         `position`, `size`, `layer`, `visible` and `obscured: true` are kept,
         and every other field is neutral (`name` and `imageUrl` empty,

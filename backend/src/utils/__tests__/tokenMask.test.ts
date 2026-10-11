@@ -1,4 +1,4 @@
-import { MASKED_TOKEN_FIELDS, maskObscuredToken, tokenSentTo } from '../tokenMask';
+import { MASKED_TOKEN_FIELDS, PLAYER_TOKEN_FIELDS, maskObscuredToken, tokenSentTo } from '../tokenMask';
 
 /**
  * What a player who does not control an obscured token is sent of it: a
@@ -106,5 +106,31 @@ describe('tokenSentTo', () => {
     expect(tokenSentTo(veiled, true).name).toBe('Goblin');
     expect(tokenSentTo(veiled, false).name).toBe('');
     expect(tokenSentTo(veiled, false).controlledBy).toBeNull();
+  });
+
+  // Built from a list of what a player may have, like the mask: a field the
+  // DM keeps on tokens, added later, is then not sent until someone decides
+  // it may be.
+  it('is built from a list of what may be sent, so a field added later is left out by default', () => {
+    const everything = {
+      ...token, characterId: 'char-1', type: 'npc' as const, disposition: 'hostile' as const, initiative: 12,
+      displayMode: 'pog' as const, creatureTemplateId: 'tmpl-1', showHpBar: true,
+      // A field tokens do not have today, standing in for a DM-only one added later.
+      trapTrigger: 'the third flagstone',
+    };
+    for (const own of [true, false]) {
+      expect(tokenSentTo(everything, own)).not.toHaveProperty('trapTrigger');
+    }
+    expect(Object.keys(tokenSentTo(everything, true)).sort()).toEqual([...PLAYER_TOKEN_FIELDS].sort());
+    expect(Object.keys(tokenSentTo(everything, false)).sort()).toEqual(
+      PLAYER_TOKEN_FIELDS.filter((f) => f !== 'sightRadius' && f !== 'creatureTemplateId').sort()
+    );
+  });
+
+  it('leaves out a field the token does not have', () => {
+    const bare = { ...token };
+    delete (bare as { sightRadius?: number }).sightRadius;
+    expect(tokenSentTo(bare, true)).not.toHaveProperty('sightRadius');
+    expect(tokenSentTo(bare, true)).not.toHaveProperty('creatureTemplateId');
   });
 });
