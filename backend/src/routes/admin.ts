@@ -13,7 +13,6 @@ import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
-import unzipper from 'unzipper';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -34,7 +33,15 @@ import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
-import { extractArchiveSafely } from '../utils/archive';
+import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
+import {
+  startRestore,
+  startReplacingDatabase,
+  endRestore,
+  restoreRunning,
+  restoreUploadName,
+  removeLeftoverRestoreUploads,
+} from '../services/restoreState';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { getSocketInstance } from '../websocket/utils';
@@ -55,6 +62,13 @@ const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?
 const RESTORE_MAX_FILES = 100_000;
 const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 
+/** A restore's upload whose name does not end in .zip. */
+class NotAZipName extends Error {
+  constructor() {
+    super('Only .zip backup files are accepted');
+  }
+}
+
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -63,7 +77,7 @@ const restoreStorage = multer.diskStorage({
       .catch((err) => cb(err, BACKUP_DIR));
   },
   filename: (_req, _file, cb) => {
-    cb(null, `restore-temp-${Date.now()}.zip`);
+    cb(null, restoreUploadName());
   },
 });
 const restoreUpload = multer({
@@ -73,7 +87,7 @@ const restoreUpload = multer({
     if (file.originalname.toLowerCase().endsWith('.zip')) {
       cb(null, true);
     } else {
-      cb(new Error('Only .zip backup files are accepted'));
+      cb(new NotAZipName());
     }
   },
 });
@@ -942,6 +956,13 @@ router.post('/backups', async (req, res) => {
   if (!dbUrl) {
     return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
   }
+  // A backup taken while a restore replaces the database would hold neither.
+  if (restoreRunning()) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'A restore is running. Make the backup once it has finished.',
+    });
+  }
 
   try {
     const { filename, sizeBytes } = await writeBackupZip(dbUrl, true);
@@ -981,9 +1002,9 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
-    // TODO(restore): a restore's upload is saved here as restore-temp-<ms>.zip
-    // and removed only when the request ends, so a backend stopped mid-restore
-    // leaves it behind for good. Clear stale restore-temp files here too.
+    // A restore's upload waits here until the restore ends; with none running,
+    // one still here was left by a backend stopped mid-restore.
+    if (!restoreRunning()) await removeLeftoverRestoreUploads(BACKUP_DIR, files);
     // A partial file no backup here is writing was left by a backend stopped
     // partway through one; it can never be finished, and it is the size of a
     // backup.
@@ -1071,11 +1092,18 @@ router.delete('/backups/:filename', async (req, res) => {
 const takeRestoreUpload: RequestHandler = (req, res, next) => {
   restoreUpload.single('backup')(req, res, (error?: unknown) => {
     if (!error) return next();
+    // The restore never started, so it ends here.
+    endRestore();
+    if (error instanceof NotAZipName) {
+      return res.status(400).json({ error: 'Invalid Backup', message: 'Only .zip backup files are accepted. Nothing was changed.' });
+    }
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Backup Too Large', message: 'The backup is larger than 4 GB, the most a restore accepts. Nothing was changed.' });
+      }
+      return res.status(400).json({ error: 'Invalid Backup', message: `The upload could not be read: ${error.message}. Nothing was changed.` });
+    }
     const folderError = inBackupsFolder(error);
-    // TODO(restore): the file filter's refusal of a name not ending in .zip,
-    // and the parser's refusal of a malformed or over-limit body, take this
-    // path to the generic error handler, which answers 500 "An unexpected
-    // error occurred" in production. Answer 400 with the refusal's own message.
     if (!(folderError instanceof BackupFolderUnusable)) return next(error);
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
@@ -1083,8 +1111,25 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
   });
 };
 
-router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
+/**
+ * One restore at a time (services/restoreState.ts), claimed before the
+ * upload is taken: two at once each loaded their dump in turn and copied
+ * their uploaded files over each other's. Released when the restore ends,
+ * by takeRestoreUpload when the upload is refused and by the route otherwise.
+ */
+const oneRestoreAtATime: RequestHandler = (_req, res, next) => {
+  if (!startRestore()) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'A restore is already running. Wait for it to finish, then try again if you still need to.',
+    });
+  }
+  return next();
+};
+
+router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req, res) => {
   if (!req.file) {
+    endRestore();
     return res.status(400).json({ error: 'Bad Request', message: 'No backup file provided' });
   }
 
@@ -1114,19 +1159,25 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     }
 
     // 1. Extract ZIP to temp directory.
+    // openArchiveFile refuses a file that is not a ZIP, and one listing more
+    // entries than a backup may hold, before reading its directory;
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
-    // the entry count and total decompressed size (zip-bomb protection).
-    // TODO(restore): a file named .zip that is not a ZIP throws here and
-    // reaches the catch at the end, which answers "An unexpected error occurred
-    // during restore". Answer 400 saying the file is not a ZIP archive, as the
-    // database.sql check below does for a ZIP that is not a backup.
-    const directory = await unzipper.Open.file(uploadedZip);
+    // the total decompressed size (zip-bomb protection). Each refusal says why,
+    // with 400, or 413 for a size limit.
     try {
+      const directory = await openArchiveFile(uploadedZip, RESTORE_MAX_FILES);
       await extractArchiveSafely(directory, tempDir, {
         maxFiles: RESTORE_MAX_FILES,
         maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
       });
     } catch (error) {
+      if (error instanceof ArchiveRefusedError) {
+        logger.warn('Restore refused the uploaded backup', { reason: error.message });
+        return res.status(error instanceof ArchiveLimitError ? 413 : 400).json({
+          error: error instanceof ArchiveLimitError ? 'Backup Too Large' : 'Invalid Backup',
+          message: `${error.message} Nothing was changed.`,
+        });
+      }
       const code = errorCode(error);
       if (code !== undefined && FOLDER_ERRORS.has(code)) return tempFolderRefused(error);
       throw error;
@@ -1207,6 +1258,21 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
 
     // 5. Load the prepared dump. One transaction, stopped at the first
     // failure, so a load that fails leaves the existing database as it was.
+    //
+    // Nothing else may act on the database while it is replaced: a write
+    // waiting behind the load's locks would land on the restored rows. So
+    // every live connection ends now, before the load, and until the restore
+    // ends a new connection and every API request are refused
+    // (services/restoreState.ts). Best-effort for the sockets: a socket layer
+    // that is not up has none to end.
+    startReplacingDatabase();
+    try {
+      const io = getSocketInstance();
+      io.emit('error', { message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
+      io.disconnectSockets(true);
+    } catch (error) {
+      logger.warn('Restore: live sockets could not be ended', { err: error });
+    }
     try {
       await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
@@ -1224,19 +1290,10 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
       });
     }
 
-    // 6. Everyone is signed out, as soon as the load has committed: the
-    // database is the backup's from here on, whatever the steps below do. The
-    // restored database holds no login sessions, and a socket that stayed open
-    // would keep the identity and campaign role it cached before the restore.
-    // Best-effort: the load itself is done. The in-memory combat state
-    // belonged to the old data.
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
+    // 6. The database is the backup's from here on, whatever the steps below
+    // do. It holds no login sessions, so everyone signs in again; the live
+    // connections ended before the load. The in-memory combat state belonged
+    // to the old data.
     clearAllCombatState();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup
@@ -1297,6 +1354,9 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     logger.error('Restore error', { err: error });
     return res.status(500).json({ error: 'Restore Failed', message: 'An unexpected error occurred during restore' });
   } finally {
+    // The restore is over once it has answered; its files are removed after,
+    // each under a name of its own.
+    endRestore();
     // Always clean up temp files
     await fs.unlink(uploadedZip).catch(() => {});
     if (tempDir !== null) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});

@@ -157,6 +157,14 @@ must set a new password. The same check runs again on every `authenticate`,
 so a sign-in that ends later (signing out, expiry, a password change elsewhere)
 cannot join a campaign.
 
+While an administrator restores a backup, from the moment the database starts
+being replaced until the restore ends, every open connection is sent
+`error { message: 'The instance is being restored from a backup. Sign in again once it has finished.' }`
+and closed, and a new connection is sent `error` with the message "The instance
+is being restored from a backup. Try again in a minute; everyone signs in again
+once it has finished." and closed. The restored database holds no sign-ins, so
+a client signs in again afterwards. The HTTP API answers 503 for the same span.
+
 ---
 
 ## Authentication
@@ -359,6 +367,7 @@ push and would otherwise show everyone offline until somebody moved.
 - "Too many … at once. …" - A flood ceiling was reached; sent once, then further refusals are silent for ten seconds (see [Flood ceilings](#fog-lighting-and-explored-memory))
 - "Rate limit exceeded: too many dice rolls at once. Wait a few seconds, then roll again." - The `dice.roll` ceiling was reached; sent once in the same way
 - "Too many CozyVTT tabs or devices are open on this account at once (the most is 40). Close one, then reload this page." - The user already holds 40 open sockets; the server then closes this connection
+- "The instance is being restored from a backup. …" - A backup is being restored; the server closes the connection (see [Prerequisites](#prerequisites))
 
 `error` only goes from the server to the client. Socket.io does not reserve the name, so a client can emit an event called `error`; the server ignores it, answers nothing, and writes none of its payload to the log.
 

@@ -26,6 +26,7 @@ import session from 'express-session';
 import { bodyParsers } from '../../middleware/bodyParsers';
 import { originCheck } from '../../middleware/originCheck';
 import { errorHandler } from '../../middleware/errorHandler';
+import { refuseWhileDatabaseIsReplaced } from '../../middleware/restoreGate';
 import setupRoutes from '../../routes/setup';
 import authRoutes from '../../routes/auth';
 import campaignRoutes from '../../routes/campaigns';
@@ -48,6 +49,7 @@ export function createTestApp(): express.Express {
 
   app.use(bodyParsers());
   app.use(originCheck);
+  app.use('/api', refuseWhileDatabaseIsReplaced);
 
   // Memory store — no PostgreSQL needed for tests
   app.use(

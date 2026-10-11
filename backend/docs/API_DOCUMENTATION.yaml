@@ -9209,7 +9209,9 @@ paths:
         login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
-        loaded back with the restore route.
+        loaded back with the restore route. Refused with 409 while a restore runs.
+        Backups are never deleted automatically: each stays until it is deleted
+        with the delete route.
       security:
         - cookieAuth: []
       responses:
@@ -9231,13 +9233,19 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A restore is running; make the backup once it has finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: pg_dump not found or backup failed
     get:
       tags: [Admin]
       summary: List database backups
       operationId: adminListBackups
-      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read. A backup directory that cannot be read answers 500, not an empty list.
+      description: Returns the backup archives (`backup-YYYY-MM-DDTHH-MM-SS.zip`, or the same with a `-2`, `-3` suffix) in the server's backup directory with filename, size and creation time, newest first. A backup is written under a temporary name and appears only once it is complete; an unfinished one left by a backend stopped partway through is deleted when the list is read, and so is an uploaded backup (`restore-temp-…`) a backend stopped mid-restore left behind, when no restore is running. A backup directory that cannot be read answers 500, not an empty list.
       security:
         - cookieAuth: []
       responses:
@@ -10274,13 +10282,15 @@ paths:
       tags: [Admin]
       summary: Restore the instance from a backup archive
       description: >
-        Platform ADMIN only. The upload is capped at 4 GB and its filename must end in
-        `.zip`. Once accepted, the archive is unpacked under a limit of 100,000 entries
-        and 10 GiB of decompressed data, and an entry whose path could escape the
-        destination folder is refused. An oversized or wrongly-named upload, an
-        uploaded file that is not actually a ZIP despite its name, or one over an
-        archive limit currently all surface as a generic 500 Internal Server Error
-        rather than a 400, and nothing is changed in any of these cases. Replaces the
+        Platform ADMIN only. One restore runs at a time: a second one, asked for
+        while one is taking its upload or writing its safety backup, answers 409,
+        and once the database is being replaced every API request answers 503
+        until the restore ends. The upload is capped at 4 GB (413) and its filename
+        must end in `.zip` (400). Once accepted, a file that is not a ZIP archive is
+        refused with 400, as is an archive listing more than 100,000 entries or
+        holding an entry whose path could escape the destination folder; an archive
+        that unpacks to more than 10 GiB answers 413. Each refusal names its reason
+        and changes nothing. Replaces the
         database from an archive downloaded earlier and copies the archive's uploaded
         files over the existing ones (a file the archive does not have is left in
         place). Needs pg_dump and psql present in the backend image. The archive's
@@ -10305,9 +10315,11 @@ paths:
         statements, so it restores under this instance's database user whatever
         user the archive came from. The login sessions are not restored: new
         archives carry none, and an older archive's are emptied in the same
-        transaction. As soon as the load commits, every live socket is
-        disconnected and the in-memory combat state is dropped, whether or not
-        the steps after it succeed, so everyone signs in again. After a
+        transaction. Before the load starts, every live socket is sent an
+        `error` and disconnected, and until the restore ends a new socket is
+        refused and every other API request answers 503, so no change made
+        during the load lands on the restored rows; once the load commits the
+        in-memory combat state is dropped, and everyone signs in again. After a
         successful load the migrations run, so an archive from an older release
         comes up to date. If that step fails, or copying the uploaded files
         fails, the response is 500 Restore Incomplete and says what to do.
@@ -10340,19 +10352,58 @@ paths:
                     type: string
                     description: Filename, in the backup list, of the backup of the database as it was before the restore
         '400':
-          description: No file, or a file that is not a complete CozyVTT backup; nothing was changed
+          description: >-
+            No file; a filename not ending in `.zip`; a file that is not a ZIP
+            archive; an archive listing more than 100,000 entries or holding an
+            unsafe path; or a ZIP that is not a complete CozyVTT backup
+            (`Invalid Backup`). The message gives the reason and ends "Nothing
+            was changed." (Before 1.5.2 all but the last answered 500.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid Backup
+                message: The file is not a ZIP archive, or it is damaged. Nothing was changed.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Another restore is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Conflict
+                message: A restore is already running. Wait for it to finish, then try again if you still need to.
+        '413':
+          description: >-
+            The upload is larger than 4 GB, or the archive unpacks to more than
+            10 GiB (`Backup Too Large`). Nothing was changed. (Before 1.5.2 this
+            answered 500.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: >
             Restore Failed (nothing changed), Restore Incomplete (the database was
             restored but migrating it or copying its files failed), a tool is not
-            available in the image, or Internal Server Error for an oversized or
-            wrongly-named upload, a body that is cut off or malformed, an uploaded
-            file that is not actually a ZIP, or an archive over the entry-count or
-            decompressed-size limit (nothing changed in any of these)
+            available in the image, or Internal Server Error for a body that is cut
+            off or malformed (nothing changed)
+        '503':
+          description: >-
+            Another restore is replacing the database; every API request is
+            refused until it ends.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Service Unavailable
+                message: The instance is being restored from a backup. Try again in a minute; everyone signs in again once it has finished.
 
 components:
   securitySchemes:

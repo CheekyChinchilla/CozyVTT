@@ -1419,6 +1419,7 @@ List available database backups.
 ### `POST /api/admin/backups` *(Admin only)*
 
 Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
+Refused with `409` while a restore runs. Backups are never deleted automatically.
 
 ---
 
@@ -1431,6 +1432,12 @@ Delete a database backup file.
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
 Restore a database backup. **Destructive — overwrites all current data.**
+
+One restore runs at a time: a second answers `409`. A refused file answers `400`
+(not named `.zip`, not a ZIP archive, more than 100,000 entries, or not a complete
+CozyVTT backup) or `413` (over 4 GB, or unpacking to more than 10 GiB), with the
+reason. While the database is being replaced, live connections are closed and
+every other API request answers `503` until the restore ends.
 
 ---
 

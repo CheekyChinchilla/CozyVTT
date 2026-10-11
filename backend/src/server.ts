@@ -16,6 +16,7 @@ import { requireAdminMfa } from './middleware/adminMfa';
 import { bodyParsers } from './middleware/bodyParsers';
 import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
+import { refuseWhileDatabaseIsReplaced } from './middleware/restoreGate';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
@@ -41,6 +42,8 @@ import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals } from './utils/shutdown';
 import { positiveIntegerFromEnv } from './config/env';
 import { setupState } from './services/systemSettings';
+import { removeLeftoverRestoreUploads } from './services/restoreState';
+import { resolveBackupDir } from './utils/backupDir';
 import { setupToken } from './services/setupToken';
 
 // A production instance on the placeholder database password stops here.
@@ -117,6 +120,15 @@ const generalApiLimiter = rateLimit({
 // Shared with the integration-test app — see middleware/bodyParsers.ts for why
 // the limit is what it is.
 app.use(bodyParsers());
+
+// ============================================
+// RESTORE GATE
+// ============================================
+
+// While a restore replaces the database every API request is refused, ahead
+// of the session lookup, which would wait behind the load. See
+// middleware/restoreGate.ts.
+app.use('/api', refuseWhileDatabaseIsReplaced);
 
 // ============================================
 // SESSION MANAGEMENT
@@ -257,6 +269,10 @@ httpServer.listen(PORT, () => {
   for (const warning of getProxyLimitWarnings()) {
     logger.warn(warning);
   }
+
+  // A backend stopped mid-restore left the uploaded backup in the backups
+  // folder; nothing can finish restoring it now.
+  void removeLeftoverRestoreUploads(resolveBackupDir());
 
   // Until setup has run, the wizard asks for a token only the owner can
   // read, so a stranger who finds the instance first cannot become its

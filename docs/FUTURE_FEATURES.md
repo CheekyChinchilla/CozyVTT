@@ -95,9 +95,7 @@ _Nothing at present._
 
 ### Server and deployment
 
-- `1.5.2` **A refused restore answers 500 and shows only "An unexpected error occurred".** A file that is not a ZIP, whose name does not end in .zip, that is over 4 GB, or whose archive holds more than 100,000 entries or 10 GiB is refused, which is right, but as a server error rather than a 400 or 413 saying why (`routes/admin.ts`, `utils/archive.ts`).
-- `1.5.2` **A backend stopped during a restore leaves the uploaded backup behind** as `restore-temp-<ms>.zip` in the backups folder. It is removed only when the restore request ends, and the list's clean-up removes only unfinished backups (`routes/admin.ts`).
-- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open, and the restore reads the archive's whole directory before its file-count check can run (`utils/archive.ts`).
+- `1.5.2` **A refused restore keeps a file handle and the uploaded backup's disk space until the backend restarts.** Stopping the archive read part-way leaves the file open (`utils/archive.ts`).
 - `1.5.2` **A crafted backup can make the command-line restore very slow.** One pattern in `backend/scripts/restore.sh` backtracks on a long line (12 seconds on two 100 KB lines with mawk). Only someone with shell access to the server runs that script, on a backup they chose.
 
 ---
