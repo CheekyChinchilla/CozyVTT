@@ -11,6 +11,10 @@ module.exports = {
   // so a full run stays under PostgreSQL's connection ceiling; see the files.
   setupFiles: ['<rootDir>/src/__tests__/helpers/jest.setup.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/helpers/jest.afterEnv.ts'],
+  // A worker keeps memory from one test file to the next, and over a full run
+  // its heap reached Node's 4 GB default and the worker crashed. Restarting a
+  // worker once it holds more than this keeps a full run well inside it.
+  workerIdleMemoryLimit: '1GB',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   // file-type is ESM-only (no CJS build) and cannot be resolved by ts-jest's
   // CommonJS transform. Map it to a loud-failing stub — no automated test
