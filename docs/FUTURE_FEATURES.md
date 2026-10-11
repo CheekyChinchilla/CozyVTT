@@ -166,12 +166,13 @@ _Nothing at present._
   more fixes. Neither production advisory open today can be reached in
   CozyVTT, but an internet-facing app should not run on unsupported code.
   **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, nginx pinned to its stable line,
-  Dependabot opening grouped weekly pull requests against `dev`, and a CI check
-  that fails on a high or critical advisory in production dependencies. 1.5.3,
-  a release of its own: Prisma to its newest stable major first, with a full
-  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
-  React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
+  inside the current major versions, Dependabot opening grouped weekly pull
+  requests against `dev`, and a CI check that fails on a high or critical
+  advisory in production dependencies; nginx is done, both images pinned to
+  the 1.30 stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
+  newest stable major first, with a full upgrade rehearsal, then Vite and
+  Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
+  CSS 4 and TypeScript 7.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
