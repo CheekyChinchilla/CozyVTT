@@ -17,7 +17,7 @@ import { rememberMeMaxAge } from '../../config/sessionDurations';
 
 interface Answer {
   status?: number;
-  body?: { error?: string; message?: string };
+  body?: { error?: string; message?: string; code?: string };
   nexted: boolean;
   destroyed: boolean;
 }
@@ -60,6 +60,17 @@ it('refuses and ends a sign-in older than the remember-me window, however recent
   expect(answer.status).toBe(401);
   expect(answer.destroyed).toBe(true);
   expect(answer.body?.message).toBe('Your sign-in has reached its 30-day limit. Sign in again.');
+});
+
+// The pages carry the sentence to the sign-in page, so the person knows why
+// they are there; the code says it is this refusal without reading the text.
+it('marks that refusal with a code the pages can tell apart', () => {
+  const answer = run(requireAuth, { userId: 'u1', signedInAt: Date.now() - rememberMeMaxAge - 60_000 });
+  expect(answer.body).toEqual({
+    error: 'Unauthorized',
+    code: 'SIGN_IN_EXPIRED',
+    message: 'Your sign-in has reached its 30-day limit. Sign in again.',
+  });
 });
 
 it('stamps a sign-in from before the field existed when it is next seen, and lets it through', () => {

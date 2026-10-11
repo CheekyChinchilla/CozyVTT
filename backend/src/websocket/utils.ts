@@ -216,6 +216,31 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
   }
 }
 
+/** Why a connection lost its campaign, as `campaign.access.revoked` says. */
+export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+
+/** What `campaign.access.revoked` carries. */
+export interface AccessRevoked {
+  /** The campaign the connection was in, or null when it had not joined one. */
+  campaignId: string | null;
+  reason: AccessRevokedReason;
+  /** A sentence for the person, shown as it is. */
+  message: string;
+}
+
+export const REMOVED_MESSAGE = 'You were removed from this campaign.';
+export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
+
+/**
+ * campaign.access.revoked — the connection may no longer use its campaign,
+ * and why: removed from it, the campaign deleted, or the sign-in ended. A
+ * typed event, so the page can tell the person and stop, where a plain
+ * `error` was only logged.
+ */
+function tellAccessRevoked(socket: CampaignSocket, revoked: AccessRevoked): void {
+  socket.emit('campaign.access.revoked', revoked);
+}
+
 /**
  * End a user's live sockets, each told why, when their sign-in ends.
  *
@@ -239,13 +264,35 @@ export async function endLiveSockets(
       const sid = (socket as unknown as AuthenticatedFields).sessionId;
       if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
       if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
-      socket.emit('error', { message: reason });
+      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
+      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
       socket.disconnect(true);
       ended += 1;
     }
     return ended;
   } catch (error) {
     logger.error('Failed to end live sockets', { err: error, userId });
+    return 0;
+  }
+}
+
+/**
+ * End every live socket on the instance, each told why and which campaign it
+ * was in: a restore, after which no sign-in exists. Best-effort, as above.
+ */
+export async function endEveryLiveSocket(reason: string): Promise<number> {
+  try {
+    const io = getSocketInstance();
+    let ended = 0;
+    for (const socket of await io.fetchSockets()) {
+      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
+      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
+      socket.disconnect(true);
+      ended += 1;
+    }
+    return ended;
+  } catch (error) {
+    logger.error('Failed to end live sockets', { err: error });
     return 0;
   }
 }
@@ -375,7 +422,7 @@ export async function clearCampaignFromLiveSockets(
         authed.campaignId = undefined;
         authed.role = undefined;
       }
-      socket.emit('error', { message: 'You are no longer a member of this campaign' });
+      tellAccessRevoked(socket, { campaignId, reason: 'removed', message: REMOVED_MESSAGE });
       cleared += 1;
     }
   }
@@ -399,7 +446,7 @@ export async function clearDeletedCampaignFromLiveSockets(campaignId: string): P
       authed.campaignId = undefined;
       authed.role = undefined;
     }
-    socket.emit('error', { message: 'This campaign was deleted' });
+    tellAccessRevoked(socket, { campaignId, reason: 'campaign-deleted', message: CAMPAIGN_DELETED_MESSAGE });
     cleared += 1;
   }
   return cleared;

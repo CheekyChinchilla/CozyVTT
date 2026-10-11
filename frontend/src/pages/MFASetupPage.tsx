@@ -9,17 +9,21 @@
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { copyText } from '@/utils/clipboard';
 
 type Step = 'password' | 'scan' | 'backup-codes';
 
+/** What the last press of a Copy button did; 'idle' once its note has gone. */
+type CopyState = 'idle' | 'copied' | 'failed';
+
 export default function MFASetupPage() {
   const navigate = useNavigate();
-  const { authenticated, setupMFA, completeMFASetup } = useAuth();
+  const { authenticated, loading, setupMFA, completeMFASetup } = useAuth();
 
   // Setup data
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -34,16 +38,23 @@ export default function MFASetupPage() {
   const [token, setToken] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [tokenError, setTokenError] = useState('');
-  const [secretCopied, setSecretCopied] = useState(false);
-  const [codesCopied, setCodesCopied] = useState(false);
+  const [secretCopy, setSecretCopy] = useState<CopyState>('idle');
+  const [codesCopy, setCodesCopy] = useState<CopyState>('idle');
   const [codesAcknowledged, setCodesAcknowledged] = useState(false);
 
-  // Redirect if not authenticated
+  // The backup codes exist only on this page once two-factor authentication
+  // is on, so leaving before they are marked saved asks first.
+  const codesUnsaved = step === 'backup-codes' && !codesAcknowledged;
   useEffect(() => {
-    if (!authenticated) {
-      navigate('/auth/login', { replace: true });
-    }
-  }, [authenticated, navigate]);
+    if (!codesUnsaved) return undefined;
+    const askFirst = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Older browsers show the dialog only when this is set.
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', askFirst);
+    return () => window.removeEventListener('beforeunload', askFirst);
+  }, [codesUnsaved]);
 
   // ============================================
   // Handlers
@@ -93,16 +104,18 @@ export default function MFASetupPage() {
     }
   };
 
-  const copySecret = () => {
-    navigator.clipboard.writeText(secret);
-    setSecretCopied(true);
-    setTimeout(() => setSecretCopied(false), 2000);
+  // A failed copy stays on screen until the next press: the codes are shown
+  // once, and the person has to know to copy them by hand.
+  const copySecret = async () => {
+    const copied = await copyText(secret);
+    setSecretCopy(copied ? 'copied' : 'failed');
+    if (copied) setTimeout(() => setSecretCopy('idle'), 2000);
   };
 
-  const copyBackupCodes = () => {
-    navigator.clipboard.writeText(backupCodes.join('\n'));
-    setCodesCopied(true);
-    setTimeout(() => setCodesCopied(false), 2000);
+  const copyBackupCodes = async () => {
+    const copied = await copyText(backupCodes.join('\n'));
+    setCodesCopy(copied ? 'copied' : 'failed');
+    if (copied) setTimeout(() => setCodesCopy('idle'), 2000);
   };
 
   const handleDone = () => {
@@ -112,6 +125,21 @@ export default function MFASetupPage() {
   // ============================================
   // Render
   // ============================================
+
+  // Wait for the sign-in check a page load starts before deciding: a reload
+  // during setup went to the sign-in page, and on to the dashboard, before it
+  // had answered.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
+        <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <Navigate to="/auth/login" replace />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
@@ -219,13 +247,18 @@ export default function MFASetupPage() {
                   className="flex-shrink-0 p-1.5 rounded hover:bg-moss-green/10 transition-colors"
                   title="Copy secret"
                 >
-                  {secretCopied ? (
+                  {secretCopy === 'copied' ? (
                     <CheckCircle className="w-4 h-4 text-brand-ink" />
                   ) : (
                     <Copy className="w-4 h-4 text-stone-gray" />
                   )}
                 </button>
               </div>
+              {secretCopy === 'failed' && (
+                <p role="status" className="mt-1 text-xs text-danger-ink">
+                  Copy failed. Select the key and copy it by hand.
+                </p>
+              )}
             </div>
 
             {/* Verification Form */}
@@ -321,7 +354,7 @@ export default function MFASetupPage() {
                   onClick={copyBackupCodes}
                   className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
                 >
-                  {codesCopied ? (
+                  {codesCopy === 'copied' ? (
                     <>
                       <CheckCircle className="w-3.5 h-3.5" />
                       Copied!
@@ -334,6 +367,11 @@ export default function MFASetupPage() {
                   )}
                 </button>
               </div>
+              {codesCopy === 'failed' && (
+                <p role="status" className="mb-2 text-xs text-danger-ink">
+                  Copy failed. Select the codes and copy them by hand.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2 p-4 rounded-lg bg-parchment/60 border border-moss-green/15">
                 {backupCodes.map((code, i) => (
                   <code

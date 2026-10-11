@@ -75,8 +75,9 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
   connection in the last campaign only
 - Every broadcast that reads a connection's role skips a connection whose
   campaign is not the room being broadcast to
-- Deleting a campaign empties its room: every connection in it gets `error`
-  ("This campaign was deleted") and forgets the campaign
+- Deleting a campaign empties its room: every connection in it gets
+  `campaign.access.revoked` with reason `campaign-deleted` ("This campaign was
+  deleted.") and forgets the campaign
 - Used for broadcasting game events
 
 ---
@@ -159,8 +160,8 @@ cannot join a campaign.
 
 While an administrator restores a backup, from the moment the database starts
 being replaced until the restore ends, every open connection is sent
-`error { message: 'The instance is being restored from a backup. Sign in again once it has finished.' }`
-and closed, and a new connection is sent `error` with the message "The instance
+`campaign.access.revoked` with reason `signed-out` and the message "The instance is being
+restored from a backup. Sign in again once it has finished." and closed, and a new connection is sent `error` with the message "The instance
 is being restored from a backup. Try again in a minute; everyone signs in again
 once it has finished." and closed. The restored database holds no sign-ins, so
 a client signs in again afterwards. The HTTP API answers 503 for the same span.
@@ -276,6 +277,28 @@ For every other event, see the [Event Inventory](#event-inventory).
 }
 ```
 
+#### `campaign.access.revoked`
+**Direction:** Server → Client
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, a platform role changed, the account deleted, or the instance restored from a backup)
+**Payload:**
+```typescript
+{
+  campaignId: string | null;  // the campaign the connection was in; null if it had not joined one
+  reason: 'removed' | 'campaign-deleted' | 'signed-out';
+  message: string;            // a sentence for the person, e.g. "You were removed from this campaign."
+}
+```
+
+What follows depends on the reason:
+
+| `reason` | The connection afterwards | What a client should do |
+| --- | --- | --- |
+| `removed` | Stays open, but has left the campaign's room and is no longer authenticated to any campaign: it hears nothing from the table, and every campaign event it sends is refused | Stop, show `message`, leave the campaign |
+| `campaign-deleted` | The same, for every connection that was in the campaign | The same |
+| `signed-out` | The server closes it straight after (`disconnect` with reason `io server disconnect`) | Do not reconnect: a new connection would be refused. Sign in again |
+
+Before this event existed the server sent an `error` with the reason instead ("You are no longer a member of this campaign", "This campaign was deleted", or the sign-in's reason); it no longer does.
+
 #### `user.joined`
 **Direction:** Server → All Campaign Members (except sender)
 **When:** User authenticates to campaign
@@ -367,7 +390,7 @@ push and would otherwise show everyone offline until somebody moved.
 - "Too many … at once. …" - A flood ceiling was reached; sent once, then further refusals are silent for ten seconds (see [Flood ceilings](#fog-lighting-and-explored-memory))
 - "Rate limit exceeded: too many dice rolls at once. Wait a few seconds, then roll again." - The `dice.roll` ceiling was reached; sent once in the same way
 - "Too many CozyVTT tabs or devices are open on this account at once (the most is 40). Close one, then reload this page." - The user already holds 40 open sockets; the server then closes this connection
-- "The instance is being restored from a backup. …" - A backup is being restored; the server closes the connection (see [Prerequisites](#prerequisites))
+- "The instance is being restored from a backup. Try again in a minute; …" - A new connection made while a backup is being restored; the server closes it (see [Prerequisites](#prerequisites)). Connections already open are sent `campaign.access.revoked` instead
 
 `error` only goes from the server to the client. Socket.io does not reserve the name, so a client can emit an event called `error`; the server ignores it, answers nothing, and writes none of its payload to the log.
 
@@ -733,10 +756,20 @@ socket.on('error', (data) => {
 ### Disconnection Handling
 
 ```javascript
+// Removed, the campaign deleted, or the sign-in ended: told why first.
+let accessRevoked = false;
+socket.on('campaign.access.revoked', ({ reason, message }) => {
+  accessRevoked = true;
+  showNotice(message);
+  if (reason === 'signed-out') window.location.href = '/auth/login';
+  else leaveCampaign();
+});
+
 socket.on('disconnect', (reason) => {
+  if (accessRevoked) return; // nothing to reconnect to
   if (reason === 'io server disconnect') {
-    // Server kicked us - probably session expired
-    window.location.href = '/login';
+    // Server closed the connection without a reason: check the sign-in over REST
+    checkSignIn();
   } else {
     // Network issue - auto-reconnect
     showReconnectingIndicator();
@@ -1114,6 +1147,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `atmosphere.audio.updated` | `atmosphereAudio.ts` |
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
+| `campaign.access.revoked` | `utils.ts` |
 | `campaign.dm.transferred` | `campaigns.ts` |
 | `campaign.role.changed` | `campaigns.ts` |
 | `character.hp.updated` | `characters.ts` |

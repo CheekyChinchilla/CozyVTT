@@ -165,6 +165,25 @@ describe('getPasswordStrength', () => {
     const stronger = getPasswordStrength('StrongPass123!@#$');
     expect(stronger.score).toBeGreaterThan(weak.score);
   });
+
+  // The meter called passwords Good or Strong that the page then refused,
+  // since it scored length and each kind of character on their own, and its
+  // bar never filled past 70%.
+  it.each([
+    ['16 characters with no special character', 'Abcdefghij123456'],
+    ['8 characters of every kind', 'Aa1!aaaa'],
+    ['a long password with no number', 'Abcdefghijklmnop!'],
+  ])('rates %s, which the rules refuse, no better than Fair', (_name, password) => {
+    expect(meetsPasswordRequirements(password)).toBe(false);
+    expect(['Weak', 'Fair']).toContain(getPasswordStrength(password).label);
+  });
+
+  it('rates a password that meets every rule Good or Strong, and fills the bar for Strong', () => {
+    expect(getPasswordStrength('Abcdefgh12!x').label).toBe('Good');
+    const strong = getPasswordStrength('StrongPass123!@#$');
+    expect(strong.label).toBe('Strong');
+    expect(strong.percent).toBe(100);
+  });
 });
 
 // ============================================

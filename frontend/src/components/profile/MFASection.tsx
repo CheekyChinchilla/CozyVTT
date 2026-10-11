@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { copyText } from '@/utils/clipboard';
 
 // ============================================
 // Inline Disable Form
@@ -134,11 +135,13 @@ function DisableForm({ onClose }: { onClose: () => void }) {
 // ============================================
 
 function RegenerateForm({ onClose }: { onClose: () => void }) {
+  const { refreshUser } = useAuth();
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [newCodes, setNewCodes] = useState<string[]>([]);
-  const [copied, setCopied] = useState(false);
+  /** What the last press of Copy all did; a failure stays until the next press. */
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +156,8 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
       const { api } = await import('@/services/api');
       const result = await api.mfaRegenerateBackupCodes(password);
       setNewCodes(result.backupCodes);
+      // The count of codes left, shown beside Enabled, starts again.
+      void refreshUser();
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to regenerate backup codes');
     } finally {
@@ -160,10 +165,10 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const copyAll = () => {
-    navigator.clipboard.writeText(newCodes.join('\n'));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyAll = async () => {
+    const copied = await copyText(newCodes.join('\n'));
+    setCopyState(copied ? 'copied' : 'failed');
+    if (copied) setTimeout(() => setCopyState('idle'), 2000);
   };
 
   if (newCodes.length > 0) {
@@ -179,10 +184,15 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-semibold text-stone-gray uppercase tracking-wide">New Backup Codes</p>
             <button onClick={copyAll} className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80">
-              {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? 'Copied!' : 'Copy all'}
+              {copyState === 'copied' ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copyState === 'copied' ? 'Copied!' : 'Copy all'}
             </button>
           </div>
+          {copyState === 'failed' && (
+            <p role="status" className="mb-2 text-xs text-danger-ink">
+              Copy failed. Select the codes and copy them by hand.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-1.5 p-3 rounded-lg bg-parchment/60 border border-moss-green/15">
             {newCodes.map((code, i) => (
               <code key={i} className="text-xs font-mono text-brand-ink text-center py-1 px-1.5 rounded bg-paper/60 border border-moss-green/10">
@@ -258,7 +268,14 @@ export default function MFASection() {
             <h3 className="text-sm font-semibold text-brand-ink">Two-Factor Authentication</h3>
             <p className="text-xs text-warm-gray">
               {isEnabled ? (
-                <span className="text-brand-ink font-medium">Enabled</span>
+                <>
+                  <span className="text-brand-ink font-medium">Enabled</span>
+                  {typeof user?.mfaBackupCodesRemaining === 'number' && (
+                    <span className={`ml-2 ${user.mfaBackupCodesRemaining <= 3 ? 'text-warning-ink font-medium' : ''}`}>
+                      {user.mfaBackupCodesRemaining} of 10 backup codes left
+                    </span>
+                  )}
+                </>
               ) : (
                 'Not enabled'
               )}

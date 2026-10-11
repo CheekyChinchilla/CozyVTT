@@ -4,8 +4,10 @@
 // Provides user data and auth functions to entire app
 // ============================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authService } from '@/services/auth.service';
+import { queryClient } from '@/lib/queryClient';
+import { apiErrorStatus, errorSummary } from '@/utils/errors';
 import type {
   User,
   AuthContextType,
@@ -17,6 +19,22 @@ import type {
 // ============================================
 // Context Creation
 // ============================================
+
+/** The first wait before checking the sign-in again when the server could not answer. */
+const AUTH_RETRY_FIRST_MS = 2000;
+/** The longest wait between those checks. */
+const AUTH_RETRY_MAX_MS = 30_000;
+
+/**
+ * Whether a failed GET /api/auth/me means nobody is signed in: the server
+ * answered and refused (401, or 403 before setup has run). No answer, a
+ * timeout (408), too many requests (429) or a server error says nothing
+ * about the sign-in.
+ */
+function answersSignedOut(error: unknown): boolean {
+  const status = apiErrorStatus(error);
+  return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -35,31 +53,110 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authenticated, setAuthenticated] = useState<boolean>(false);
   const [mfaPending, setMfaPending] = useState<boolean>(false);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
+  /** After a sign-in with a backup code: how many are left, until dismissed. */
+  const [backupCodesLeft, setBackupCodesLeft] = useState<number | null>(null);
+
+  /**
+   * The account the cached lists were fetched for. The lists the pages cache
+   * (campaigns, characters, invitations) are keyed without a user, so they
+   * are dropped when that account signs out or another one signs in, or the
+   * next person on the same tab would be shown the previous one's.
+   */
+  const cachedFor = useRef<string | null>(null);
+
+  /** Take `next` as the signed-in user, first dropping another account's cached lists. */
+  const takeUser = useCallback((next: User): void => {
+    if (cachedFor.current !== null && cachedFor.current !== next.id) queryClient.clear();
+    cachedFor.current = next.id;
+    setUser(next);
+  }, []);
 
   // ============================================
   // Initialize - Check if user is authenticated
   // ============================================
 
-  useEffect(() => {
-    checkAuthentication();
-  }, []);
+  /**
+   * The sign-in check could not get an answer about the sign-in: the server
+   * did not answer, answered with an error of its own, or refused for too
+   * many requests. `loading` stays true, since nothing is known yet, and the
+   * check is made again.
+   */
+  const [serverUnreachable, setServerUnreachable] = useState<boolean>(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failedChecks = useRef(0);
+  const mounted = useRef(true);
+  /**
+   * Counts sign-in checks and sign-ins. A check answered after a newer check
+   * started, or after a sign-in succeeded, is out of date and is dropped: one
+   * sent before a sign-in went without its session and would sign it out.
+   */
+  const authEpoch = useRef(0);
 
-  const checkAuthentication = async () => {
+  const checkAuthentication = useCallback(async (): Promise<void> => {
+    if (retryTimer.current !== null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
+    authEpoch.current += 1;
+    const epoch = authEpoch.current;
     try {
-      setLoading(true);
       const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      if (!mounted.current || epoch !== authEpoch.current) return;
+      takeUser(currentUser);
       setAuthenticated(true);
       setMustChangePassword(currentUser.mustChangePassword || false);
-    } catch (error) {
-      // Not authenticated or session expired
-      setUser(null);
-      setAuthenticated(false);
-      setMustChangePassword(false);
-    } finally {
+      setServerUnreachable(false);
+      failedChecks.current = 0;
       setLoading(false);
+    } catch (error) {
+      if (!mounted.current || epoch !== authEpoch.current) return;
+      if (answersSignedOut(error)) {
+        setUser(null);
+        setAuthenticated(false);
+        setMustChangePassword(false);
+        setServerUnreachable(false);
+        failedChecks.current = 0;
+        setLoading(false);
+        return;
+      }
+      // A restart, the proxy's 502 while the backend comes up, a timeout:
+      // none of them says the sign-in has ended, so ask again.
+      setServerUnreachable(true);
+      const delay = Math.min(AUTH_RETRY_FIRST_MS * 2 ** failedChecks.current, AUTH_RETRY_MAX_MS);
+      failedChecks.current += 1;
+      retryTimer.current = setTimeout(() => { void checkAuthentication(); }, delay);
     }
-  };
+  }, [takeUser]);
+
+  /** Ask the server again now, from the "can't reach the server" notice. */
+  const retryAuthCheck = useCallback((): void => {
+    void checkAuthentication();
+  }, [checkAuthentication]);
+
+  /**
+   * A sign-in has succeeded, which answers the sign-in check: stop waiting to
+   * check again, drop the answer to any check still on its way, and stop
+   * saying the server cannot be reached.
+   */
+  const endAuthCheck = useCallback((): void => {
+    authEpoch.current += 1;
+    if (retryTimer.current !== null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
+    failedChecks.current = 0;
+    setServerUnreachable(false);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void checkAuthentication();
+    return () => {
+      mounted.current = false;
+      if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+    };
+  }, [checkAuthentication]);
 
   // ============================================
   // Login
@@ -84,7 +181,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Login successful — MFA branch returned early above, so response is AuthResponse
       const authResponse = response as AuthResponse;
-      setUser(authResponse.user);
+      endAuthCheck();
+      takeUser(authResponse.user);
       setAuthenticated(true);
       setMfaPending(false);
       setMustChangePassword(authResponse.mustChangePassword || false);
@@ -94,7 +192,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setMfaPending(false);
       throw error;
     }
-  }, []);
+  }, [endAuthCheck, takeUser]);
 
   // ============================================
   // Logout
@@ -104,9 +202,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await authService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Logout error:', errorSummary(error));
       // Continue with local logout even if API call fails
     } finally {
+      queryClient.clear();
+      cachedFor.current = null;
+      setBackupCodesLeft(null);
       setUser(null);
       setAuthenticated(false);
       setMfaPending(false);
@@ -129,7 +230,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Account created but pending admin approval — do not authenticate
         return { pendingApproval: true };
       }
-      setUser(response.user);
+      endAuthCheck();
+      takeUser(response.user);
       setAuthenticated(true);
       setMfaPending(false);
       setMustChangePassword(response.mustChangePassword || false);
@@ -139,7 +241,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAuthenticated(false);
       throw error;
     }
-  }, []);
+  }, [endAuthCheck, takeUser]);
 
   // ============================================
   // MFA Verification (during login)
@@ -151,11 +253,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALogin(token);
-    setUser(response.user);
+    endAuthCheck();
+    takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
-  }, [mfaPending]);
+  }, [endAuthCheck, mfaPending, takeUser]);
 
   const verifyMFAWithBackupCode = useCallback(async (backupCode: string): Promise<void> => {
     if (!mfaPending) {
@@ -163,21 +266,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALoginWithBackupCode(backupCode);
-    setUser(response.user);
+    endAuthCheck();
+    takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
 
-    // Show warning if backup codes are running low
-    // TODO(accounts): after a backup-code sign-in the server sends how many
-    // codes are left, with a warning at three or fewer, but the warning is only
-    // logged here, so a user can spend the last code without knowing. Show it
-    // to the user after sign-in; showing the count in the profile's two-factor
-    // section would also need the server to report it there.
-    if (response.warning) {
-      console.warn('MFA Warning:', response.warning);
+    // The pages say how many codes are left (ProtectedRoute), so nobody
+    // spends their last one without knowing.
+    if (response.backupCodeUsed && typeof response.remainingBackupCodes === 'number') {
+      setBackupCodesLeft(response.remainingBackupCodes);
     }
-  }, [mfaPending]);
+  }, [endAuthCheck, mfaPending, takeUser]);
+
+  const dismissBackupCodesLeft = useCallback((): void => {
+    setBackupCodesLeft(null);
+  }, []);
+
+  /**
+   * Give up on the sign-in waiting for its code. The server holds it in the
+   * session, and the sign-in page sends anyone with one waiting on to the
+   * code page, so it is ended there (signing out of a waiting sign-in ends
+   * only that) before it is forgotten here.
+   */
+  const cancelMFA = useCallback(async (): Promise<void> => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      // The waiting sign-in also ends by itself after five minutes.
+      console.error('Failed to end the waiting sign-in:', errorSummary(error));
+    }
+    setMfaPending(false);
+  }, []);
 
   // ============================================
   // MFA Setup (for current user)
@@ -198,9 +318,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const response = await authService.completeMFASetup(token);
 
-    // Update user state to reflect MFA enabled
+    // Update user state to reflect MFA enabled, with the backup codes it made.
     if (user) {
-      setUser({ ...user, mfaEnabled: true });
+      setUser({ ...user, mfaEnabled: true, mfaBackupCodesRemaining: response.backupCodes.length });
     }
 
     return response;
@@ -213,9 +333,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     await authService.disableMFA(password, token);
 
-    // Update user state to reflect MFA disabled
+    // Update user state to reflect MFA disabled; its backup codes are gone.
     if (user) {
-      setUser({ ...user, mfaEnabled: false });
+      setUser({ ...user, mfaEnabled: false, mfaBackupCodesRemaining: null });
     }
   }, [authenticated, user]);
 
@@ -256,11 +376,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * screen.
    */
   const adoptSession = useCallback((adopted: User): void => {
-    setUser(adopted);
+    endAuthCheck();
+    takeUser(adopted);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(adopted.mustChangePassword || false);
-  }, []);
+  }, [endAuthCheck, takeUser]);
 
   const refreshUser = useCallback(async (): Promise<void> => {
     if (!authenticated) {
@@ -269,14 +390,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
+      takeUser(currentUser);
       setMustChangePassword(currentUser.mustChangePassword || false);
     } catch (error) {
-      console.error('Failed to refresh user:', error);
-      // If refresh fails, user might be logged out
-      await logout();
+      // Only the server saying the sign-in has gone ends it here, and then
+      // there is no server session left to end. Any other failure leaves the
+      // user as they were: the change that came before this read was saved.
+      if (apiErrorStatus(error) === 401) {
+        queryClient.clear();
+        cachedFor.current = null;
+        setUser(null);
+        setAuthenticated(false);
+        setMustChangePassword(false);
+        return;
+      }
+      console.error('Failed to refresh user:', errorSummary(error));
     }
-  }, [authenticated, logout]);
+  }, [authenticated, takeUser]);
 
   // ============================================
   // Context Value
@@ -291,6 +421,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     authenticated,
     mfaPending,
     mustChangePassword,
+    serverUnreachable,
+    backupCodesLeft,
 
     // Actions
     login,
@@ -298,24 +430,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
     register,
     verifyMFA,
     verifyMFAWithBackupCode,
+    cancelMFA,
     setupMFA,
     completeMFASetup,
     disableMFA,
     changePassword,
     refreshUser,
     adoptSession,
+    retryAuthCheck,
+    dismissBackupCodesLeft,
   }), [
     user,
     loading,
     authenticated,
     mfaPending,
     mustChangePassword,
+    serverUnreachable,
+    retryAuthCheck,
+    backupCodesLeft,
+    dismissBackupCodesLeft,
     adoptSession,
     login,
     logout,
     register,
     verifyMFA,
     verifyMFAWithBackupCode,
+    cancelMFA,
     setupMFA,
     completeMFASetup,
     disableMFA,

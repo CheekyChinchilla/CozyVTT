@@ -36,6 +36,7 @@ vi.mock('@/services/socket', () => ({
     on: vi.fn(),
     off: vi.fn(),
     onRebuilt: vi.fn().mockReturnValue(() => {}),
+    onCreated: vi.fn().mockReturnValue(() => {}),
     connect: vi.fn(),
     disconnect: vi.fn(),
     getSocket: vi.fn().mockReturnValue(null),

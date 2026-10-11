@@ -9,6 +9,9 @@ import { sessionIsSignedIn, notSignedInMessage, sessionHasAgedOut, agedOutMessag
  * requireAuth; each now refuses a pending session by itself.
  */
 
+/** The code on the 401 for a sign-in older than the remember-me window. */
+export const SIGN_IN_EXPIRED = 'SIGN_IN_EXPIRED';
+
 /** 401 unless the session is signed in; true when the guard may go on. */
 function signedInOr401(req: Request, res: Response): boolean {
   if (!sessionIsSignedIn(req.session)) {
@@ -21,8 +24,9 @@ function signedInOr401(req: Request, res: Response): boolean {
   if (req.session.signedInAt === undefined) {
     req.session.signedInAt = Date.now();
   } else if (sessionHasAgedOut(req.session)) {
+    // The code lets the pages carry the sentence to the sign-in page.
     req.session.destroy(() => {
-      res.status(401).json({ error: 'Unauthorized', message: agedOutMessage() });
+      res.status(401).json({ error: 'Unauthorized', code: SIGN_IN_EXPIRED, message: agedOutMessage() });
     });
     return false;
   }

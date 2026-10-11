@@ -36,7 +36,7 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 - **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
 - **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it
-- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again."; an account keeps at most 20 live sessions, the oldest ending at the next sign-in
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, the oldest ending at the next sign-in
 
 ### Error Responses for Unauthenticated Requests
 
@@ -175,20 +175,27 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 
 ### `GET /api/auth/me`
 
-Get the currently authenticated user.
+Get the currently authenticated user. `mfaBackupCodesRemaining` is how many
+MFA backup codes the account has left (`null` with MFA off); only the count is
+sent. `adminMfaDeadline` is set only for an administrator without MFA.
 
 **Response:**
 ```json
 {
-  "id": "cuid...",
-  "email": "user@example.com",
-  "displayName": "Merric Thorngage",
-  "platformRole": "USER",
-  "bio": "Professional dungeon delver.",
-  "mfaEnabled": true,
-  "isGlobalAssetManager": false,
-  "mustChangePassword": false,
-  "createdAt": "2025-01-15T12:00:00.000Z"
+  "user": {
+    "id": "cuid...",
+    "email": "user@example.com",
+    "displayName": "Merric Thorngage",
+    "platformRole": "USER",
+    "bio": "Professional dungeon delver.",
+    "mfaEnabled": true,
+    "mfaBackupCodesRemaining": 7,
+    "globalAssetManager": false,
+    "templateEditor": false,
+    "mustChangePassword": false,
+    "adminMfaDeadline": null,
+    "createdAt": "2025-01-15T12:00:00.000Z"
+  }
 }
 ```
 

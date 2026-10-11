@@ -58,6 +58,7 @@ import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import Tooltip from '@/components/ui/Tooltip';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
+import { useAccessRevoked } from '@/hooks/useAccessRevoked';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -94,6 +95,10 @@ function CampaignPageContent() {
   // refresh). Once the connection has joined the campaign again, so nothing
   // sent while the read is in flight is missed.
   useOnRejoin(joinedEpoch, catchUpAfterReconnect);
+
+  // Removed from the campaign, the campaign deleted, or the sign-in ended
+  // elsewhere: say why and leave the table.
+  useAccessRevoked();
 
   // A player changing their character's token image rewrites the image on every
   // token bound to that character, server-side — tokens hold their own copy. The

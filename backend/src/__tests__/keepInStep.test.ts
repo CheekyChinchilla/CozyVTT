@@ -240,6 +240,21 @@ describe('the combat state the server sends and the client reads', () => {
   });
 });
 
+describe('campaign.access.revoked, which the server sends and the client reads', () => {
+  const server = read('backend/src/websocket/utils.ts');
+  const client = read('frontend/src/types/index.ts');
+  const reasons = (source: string) => {
+    const m = /export type AccessRevokedReason = ([^;]+);/.exec(source);
+    if (!m) throw new Error('no AccessRevokedReason; update this test with the declaration');
+    return m[1].replace(/\s+/g, ' ').trim();
+  };
+
+  it('has the same fields and reasons on both sides', () => {
+    expect(interfaceFields(client, 'AccessRevoked')).toEqual(interfaceFields(server, 'AccessRevoked'));
+    expect(reasons(client)).toBe(reasons(server));
+  });
+});
+
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));

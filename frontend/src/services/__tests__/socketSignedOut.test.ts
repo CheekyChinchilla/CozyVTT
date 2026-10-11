@@ -217,7 +217,10 @@ describe('the socket client when the server stops accepting its sign-in', () => 
       if (!(await nextSocket())) break;
     }
 
-    // The first socket plus at most five retries, however long it goes on.
-    expect(sockets.length).toBeLessThanOrEqual(6);
+    // The first socket, the one rebuilt when that joined socket was closed
+    // (a restart closes joined sockets, and is retried for as long as it
+    // takes), and at most five retries of sockets refused before joining,
+    // however long it goes on.
+    expect(sockets.length).toBeLessThanOrEqual(7);
   });
 });

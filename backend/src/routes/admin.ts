@@ -44,7 +44,7 @@ import {
 } from '../services/restoreState';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
-import { getSocketInstance } from '../websocket/utils';
+import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
 
@@ -1307,16 +1307,10 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // waiting behind the load's locks would land on the restored rows. So
     // every live connection ends now, before the load, and until the restore
     // ends a new connection and every API request are refused
-    // (services/restoreState.ts). Best-effort for the sockets: a socket layer
-    // that is not up has none to end.
+    // (services/restoreState.ts). Each socket is told with campaign.access.revoked;
+    // best-effort, since a socket layer that is not up has none to end.
     startReplacingDatabase();
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
+    await endEveryLiveSocket('The instance is being restored from a backup. Sign in again once it has finished.');
     try {
       await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
@@ -1335,9 +1329,13 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     }
 
     // 6. The database is the backup's from here on, whatever the steps below
-    // do. It holds no login sessions, so everyone signs in again; the live
-    // connections ended before the load. The in-memory combat state belonged
-    // to the old data.
+    // do. It holds no login sessions, so everyone signs in again. The live
+    // connections ended before the load and new ones are refused until the
+    // restore ends; ending any that got in regardless is a cheap safety net,
+    // since such a socket would keep the identity and campaign role it cached
+    // from the replaced database. The in-memory combat state belonged to the
+    // old data.
+    await endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
     clearAllCombatState();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup

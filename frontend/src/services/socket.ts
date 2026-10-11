@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
-import { apiErrorStatus } from '@/utils/errors';
+import { apiErrorStatus, errorMessage } from '@/utils/errors';
 import type {
   Map as CampaignMap,
   TokenMoveStartEvent,
@@ -91,7 +91,25 @@ class SocketClient {
   private signInChecks = 0;
   /** The server refused this socket's sign-in; the disconnect that follows must not reconnect. */
   private signInRefused = false;
+  /**
+   * The server said this connection may no longer use its campaign
+   * (`campaign.access.revoked`): removed, the campaign deleted, or the
+   * sign-in ended. Nothing is reconnected after that; the page says why.
+   */
+  private accessRevoked = false;
+  /**
+   * How many times in a row a socket the server refused is checked against
+   * the REST API (checkSignIn), and rebuilt after a refusal. A refusal comes
+   * from a server that is up, so retrying it for ever would only repeat it;
+   * a socket that got no answer at all is retried for as long as it takes.
+   */
   private maxReconnectAttempts = 5;
+  /** Sockets rebuilt after a refusal since the last one that joined. */
+  private refusedRetries = 0;
+  /** The current socket was refused (an `error`) before it joined the campaign. */
+  private refusedBeforeJoin = false;
+  /** The current socket has joined the campaign. */
+  private joined = false;
   private reconnectDelay = 1000; // Start with 1 second
   private isConnecting = false;
   private campaignId: string | null = null;
@@ -119,6 +137,14 @@ class SocketClient {
    * on the socket it was handed; this is how it learns there is a new one.
    */
   private rebuiltCallbacks = new Set<() => void>();
+
+  /**
+   * Told of every socket this client builds, as it is built and before it
+   * has connected, so the connection badge follows each one from the start:
+   * socket.io may get a socket through on its own retry after the connect
+   * that built it has already failed.
+   */
+  private createdCallbacks = new Set<(socket: Socket) => void>();
 
   constructor() {
     // Socket will be initialized when connect() is called
@@ -164,6 +190,9 @@ class SocketClient {
       this.isConnecting = true;
       this.campaignId = campaignId;
       this.signInRefused = false;
+      this.accessRevoked = false;
+      this.refusedBeforeJoin = false;
+      this.joined = false;
 
       // Disconnect and clean up any existing socket first
       if (this.socket) {
@@ -191,7 +220,10 @@ class SocketClient {
         reconnection: true,
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 30000,       // Cap backoff at 30s
-        reconnectionAttempts: this.maxReconnectAttempts,
+        // For as long as it takes: a server restart or an upgrade can be
+        // down for minutes, and giving up after about 30 seconds left every
+        // table waiting for someone to press Retry.
+        reconnectionAttempts: Infinity,
         // Jitter (±50%) so a fleet of clients dropped at the same moment
         // doesn't all hit the server in lockstep — prevents thundering herd
         // after a backend restart or transient hosting hiccup.
@@ -202,6 +234,7 @@ class SocketClient {
       // component subscription registered before a reconnect is lost — see the
       // note on `listeners` above.
       this.reattachListeners();
+      for (const callback of this.createdCallbacks) callback(this.socket);
 
       // Set up authenticated listener FIRST (before any events can fire)
       this.socket.on('authenticated', () => {
@@ -212,6 +245,8 @@ class SocketClient {
         // before it joins be retried for ever.
         this.reconnectAttempts = 0;
         this.signInChecks = 0;
+        this.refusedRetries = 0;
+        this.joined = true;
         resolve();
       });
 
@@ -239,6 +274,8 @@ class SocketClient {
       // Disconnected
       this.socket.on('disconnect', (reason) => {
         if (reason !== 'io server disconnect') return;
+        // Told why first: there is nothing to reconnect to or to ask about.
+        if (this.accessRevoked) return;
         // Server disconnected us. If it no longer accepts the sign-in,
         // another socket would only be refused again: ask the REST API,
         // whose answer to an ended sign-in sends the user to sign in.
@@ -247,7 +284,10 @@ class SocketClient {
           void this.checkSignIn();
           return;
         }
-        this.reconnect();
+        // Refused before it joined (too many tabs open, say): the server is
+        // up and said no, so only a few more tries. Closed after joining, as
+        // a restart does: for as long as it takes.
+        this.reconnect(this.refusedBeforeJoin);
       });
 
       // Reconnection attempt
@@ -268,17 +308,17 @@ class SocketClient {
         reject(new Error('Failed to reconnect after maximum attempts'));
       });
 
-      // TODO(play): when the server ends a table's sign-in (a password
-      // changed elsewhere, a platform role changed, the account deleted) it
-      // sends the reason here before closing the socket, and it is only
-      // written to the console; the Dice tab shows it only if it is open at
-      // the time. Show the reason to the user, in a toast or on the
-      // connection badge.
-      //
+      // The connection's access has ended, with the reason: the page shows
+      // it (useAccessRevoked), and the disconnect that may follow is final.
+      this.socket.on('campaign.access.revoked', () => {
+        this.accessRevoked = true;
+      });
+
       // Error events from server
       this.socket.on('error', (error) => {
         console.error('[Socket] Server error event:', error);
         if (isSignInRefusal(error)) this.signInRefused = true;
+        if (!this.joined) this.refusedBeforeJoin = true;
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
         reject(error);
@@ -313,7 +353,7 @@ class SocketClient {
     // so a socket refused every time while the REST API takes the same
     // sign-in (a proxy dropping the cookie on /socket.io) still stops.
     this.signInChecks = 0;
-    this.reconnect();
+    this.reconnect(true);
   }
 
   /** Call `callback` whenever this client has replaced its socket on its own; returns the unsubscribe. */
@@ -322,10 +362,27 @@ class SocketClient {
     return () => { this.rebuiltCallbacks.delete(callback); };
   }
 
-  private reconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[Socket] Max reconnection attempts reached');
-      return;
+  /** Call `callback` with every socket this client builds, as it is built; returns the unsubscribe. */
+  onCreated(callback: (socket: Socket) => void): () => void {
+    this.createdCallbacks.add(callback);
+    return () => { this.createdCallbacks.delete(callback); };
+  }
+
+  /**
+   * Build a new socket after the server closed the last one, waiting longer
+   * each time up to 30 seconds. After a refusal (`refused`) only a few times
+   * in a row; otherwise for as long as it takes: a socket that gets no answer
+   * is thrown away by connect's timeout and another is built, while one
+   * socket.io is still retrying by itself is left to it.
+   */
+  private reconnect(refused = false) {
+    if (!this.campaignId) return;
+    if (refused) {
+      if (this.refusedRetries >= this.maxReconnectAttempts) {
+        console.error('[Socket] The server keeps refusing this connection; not trying again');
+        return;
+      }
+      this.refusedRetries++;
     }
 
     // Exponential backoff capped at 30s, plus up to 1s jitter to avoid lockstep retries.
@@ -337,7 +394,8 @@ class SocketClient {
         this.connect(this.campaignId)
           .then(() => { for (const callback of this.rebuiltCallbacks) callback(); })
           .catch((error) => {
-            console.error('[Socket] Reconnection error:', error);
+            console.error('[Socket] Reconnection error:', errorMessage(error));
+            if (!this.socket && !this.accessRevoked) this.reconnect();
           });
       }
     }, delay);

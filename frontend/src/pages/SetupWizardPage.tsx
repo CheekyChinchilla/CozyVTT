@@ -15,9 +15,10 @@ import {
   isValidEmail,
   isStrongPassword,
   getPasswordStrength,
+  type PasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -219,7 +220,7 @@ export default function SetupWizardPage() {
       // Redirect to dashboard
       navigate('/dashboard');
     } catch (err) {
-      console.error('Setup error:', err);
+      console.error('Setup error:', errorSummary(err));
 
       const serverError = apiErrorText(err);
       if (serverError) {
@@ -464,7 +465,7 @@ interface Step2Props {
   setupToken: string;
   setSetupToken: (token: string) => void;
   fieldErrors: Record<string, string>;
-  passwordStrength: { score: number; label: string; color: string } | null;
+  passwordStrength: PasswordStrength | null;
 }
 
 function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErrors, passwordStrength }: Step2Props) {
@@ -593,7 +594,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
                       ? 'bg-warning'
                       : 'bg-danger'
                   }`}
-                  style={{ width: `${(passwordStrength.score / 10) * 100}%` }}
+                  style={{ width: `${passwordStrength.percent}%` }}
                 ></div>
               </div>
             </div>

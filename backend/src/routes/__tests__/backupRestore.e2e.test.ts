@@ -535,7 +535,7 @@ describe('POST /api/admin/backups/restore', () => {
     try {
       const cookie = await ws.loginAs(userId);
       const client = await ws.connectClient(cookie);
-      const told = waitForEvent<{ message: string }>(client, 'error');
+      const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
       const calls = stubTools();
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -544,7 +544,7 @@ describe('POST /api/admin/backups/restore', () => {
 
       expect(res.status).toBe(200);
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      expect((await told).message).toMatch(/restored/i);
+      expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
     } finally {
       await ws.close();
@@ -561,7 +561,7 @@ describe('POST /api/admin/backups/restore', () => {
     try {
       const cookie = await ws.loginAs(userId);
       const client = await ws.connectClient(cookie);
-      const told = waitForEvent<{ message: string }>(client, 'error');
+      const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
       const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -572,7 +572,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/restart/i);
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      expect((await told).message).toMatch(/restored/i);
+      expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
       expect(getCombatState(campaignId).active).toBe(false);
     } finally {

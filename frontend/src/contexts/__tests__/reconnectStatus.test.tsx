@@ -15,12 +15,14 @@ type Handler = (...args: unknown[]) => void;
 
 const socketHandlers: Record<string, Handler> = {};
 const managerHandlers: Record<string, Handler> = {};
-const fakeSocket = {
+/** A socket.io socket; a rebuilt connection is a new one, as in socket.io. */
+const newFakeSocket = () => ({
   connected: true,
   on: (event: string, cb: Handler) => { socketHandlers[event] = cb; },
   disconnect: vi.fn(),
   io: { on: (event: string, cb: Handler) => { managerHandlers[event] = cb; } },
-};
+});
+let fakeSocket = newFakeSocket();
 
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: vi.fn().mockResolvedValue(undefined) } }));
@@ -30,6 +32,7 @@ vi.mock('@/services/socket', () => ({
   default: {
     connect: (id: string) => clientConnect(id),
     onRebuilt: (cb: () => void) => { rebuiltCallbacks.push(cb); return () => {}; },
+    onCreated: () => () => {},
     isConnectInProgress: () => false,
     disconnect: vi.fn(),
     getSocket: () => fakeSocket,
@@ -84,6 +87,7 @@ describe('connection status across socket.io reconnects', () => {
     expect(screen.getByTestId('status').textContent).toBe('disconnected:0');
 
     for (const k of Object.keys(socketHandlers)) delete socketHandlers[k];
+    fakeSocket = newFakeSocket();
     expect(rebuiltCallbacks.length).toBeGreaterThan(0);
     act(() => { for (const cb of rebuiltCallbacks) cb(); });
     expect(screen.getByTestId('status').textContent).toBe('connected:1');

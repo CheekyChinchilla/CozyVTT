@@ -67,7 +67,11 @@ info:
       429 itself. The limit is checked before the credential is, so correct
       passwords arriving together from one address all pass it; wrong ones sent
       together are checked five at most (the rest wait for those to be checked,
-      then get 429 if all five were wrong). That covers the password step of a
+      then get 429 if all five were wrong). A request waits at most 15 seconds
+      for its turn; past that it answers 429 `Other attempts are still being
+      checked. Please try again in a moment.` with `Retry-After: 5`, and is not
+      counted. The same wait applies to every limit below that counts only
+      wrong answers (per account, password checks, the MFA code step). That covers the password step of a
       sign-in only: the two-factor code step keeps its own limit, below. An
       unknown email counts and answers exactly as a wrong password does. The 429
       carries `Retry-After`, the seconds until the oldest counted failure leaves
@@ -639,8 +643,9 @@ paths:
                     it takes effect when `/api/auth/mfa/verify-login` succeeds.
                     Must be a boolean when sent. Either way the session ends
                     `REMEMBER_ME_MAX_AGE` after it was made, however active, with
-                    401 "Your sign-in has reached its 30-day limit. Sign in
-                    again.", and each sign-in removes the account's oldest
+                    401 `{ error: 'Unauthorized', code: 'SIGN_IN_EXPIRED',
+                    message: 'Your sign-in has reached its 30-day limit. Sign in
+                    again.' }`, and each sign-in removes the account's oldest
                     sessions beyond 20.
             example:
               email: dm@example.com
@@ -2346,8 +2351,9 @@ paths:
         what the campaign holds (maps, memberships, invitations, sessions,
         chat, dice rolls, personal notes, macros, creatures, token templates
         and document links) is deleted with it. Afterwards
-        every open connection in the campaign leaves it and receives an
-        `error` event saying the campaign was deleted, and its combat state is
+        every open connection in the campaign leaves it and receives
+        `campaign.access.revoked` (`{ campaignId, reason: 'campaign-deleted',
+        message: 'This campaign was deleted.' }`), and its combat state is
         discarded. An admin naming a campaign that does not exist gets a 500.
       operationId: deleteCampaign
       security:
@@ -2568,8 +2574,9 @@ paths:
         characters are taken out of the campaign in the same step (their
         `campaignId` becomes null), and a character still naming a campaign
         its owner has left is readable and editable by its owner alone. The
-        removed member's open connections leave the campaign and receive an
-        `error` event saying they are no longer a member, and the campaign
+        removed member's open connections leave the campaign and receive
+        `campaign.access.revoked` (`{ campaignId, reason: 'removed', message:
+        'You were removed from this campaign.' }`), and the campaign
         receives `roster.updated` (`{ action: 'member.left', userId,
         campaignId }`).
       operationId: removeMember
@@ -10612,6 +10619,7 @@ components:
           description: May edit and delete anyone's character template.
         mustChangePassword:
           type: boolean
+          description: Set when an admin created the account or reset its password; see Forced password changes.
         adminMfaDeadline:
           type: string
           format: date-time
@@ -10620,7 +10628,15 @@ components:
             For an administrator without MFA, when it becomes required; null
             for everyone else. Present on the `user` of /api/auth/login,
             /api/auth/mfa/verify-login, /api/setup/init and /api/auth/me.
-          description: Set when an admin created the account or reset its password; see Forced password changes.
+        mfaBackupCodesRemaining:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: >-
+            How many MFA backup codes the account has left; null with MFA off.
+            Only the count is sent, never the codes. Present on the `user` of
+            /api/auth/login, /api/auth/mfa/verify-login, /api/setup/init and
+            /api/auth/me.
         isApproved:
           type: boolean
           description: False while the account waits for an admin's approval.
@@ -11793,8 +11809,8 @@ components:
           type: string
           description: >
             Machine-readable code, sent only where a client has to act on it:
-            PASSWORD_CHANGE_REQUIRED, CHARACTER_CHANGED, no_game_system,
-            UVTT_IMPORT_NEEDS_CONFIRMATION.
+            PASSWORD_CHANGE_REQUIRED, SIGN_IN_EXPIRED, CHARACTER_CHANGED,
+            no_game_system, UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.
@@ -12044,7 +12060,12 @@ components:
             message: Name is required
 
     Unauthorized:
-      description: Unauthorized - Not authenticated or MFA pending.
+      description: >-
+        Unauthorized - Not authenticated or MFA pending. A sign-in made more
+        than `REMEMBER_ME_MAX_AGE` ago (30 days by default) is ended here, and
+        the answer carries `code: SIGN_IN_EXPIRED` with the message 'Your
+        sign-in has reached its 30-day limit. Sign in again.' (the day count
+        follows the setting).
       content:
         application/json:
           schema:

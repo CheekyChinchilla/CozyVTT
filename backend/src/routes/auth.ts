@@ -54,11 +54,17 @@ function recordSignIn(req: Request, userId: string): void {
 /**
  * The signed-in user as the client sees them: sanitised, plus the date by
  * which an administrator without MFA must set it up (services/adminMfaPolicy),
- * null for everyone else. The pages show it as a banner.
+ * null for everyone else, which the pages show as a banner, and how many MFA
+ * backup codes are left (null with MFA off), which the profile shows. Only
+ * the count leaves the server, never the codes' hashes.
  */
 export async function clientUser(user: Parameters<typeof sanitizeUser>[0]) {
   const deadline = await adminMfaDeadline(user);
-  return { ...sanitizeUser(user), adminMfaDeadline: deadline ? deadline.toISOString() : null };
+  return {
+    ...sanitizeUser(user),
+    adminMfaDeadline: deadline ? deadline.toISOString() : null,
+    mfaBackupCodesRemaining: user.mfaEnabled ? user.mfaBackupCodes.length : null,
+  };
 }
 
 /**
@@ -469,6 +475,10 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       });
     }
   } catch (error) {
+    // TODO(accounts): only a known address reaches the token writes above, so
+    // a failure there (a full disk, a read-only database) answers 500 for
+    // known addresses and 200 for unknown ones, which tells them apart while
+    // it lasts. Log the failure and answer the same 200 as for any address.
     logger.error('Error in forgot-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -969,6 +979,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       user: await clientUser(user),
       mustChangePassword: user.mustChangePassword,
     };
+
+    // The row was read before the backup code was spent, so its list still
+    // holds that code: the count is the one the removal returned.
+    if (remainingBackupCodes !== undefined) {
+      response.user.mfaBackupCodesRemaining = remainingBackupCodes;
+    }
 
     if (backupCodeUsed) {
       response.backupCodeUsed = true;

@@ -35,6 +35,8 @@ export interface User {
    * or absent for everyone else.
    */
   adminMfaDeadline?: string | null;
+  /** How many MFA backup codes are left; null with MFA off. */
+  mfaBackupCodesRemaining?: number | null;
 }
 
 // ============================================
@@ -127,6 +129,13 @@ export interface AuthContextType {
   authenticated: boolean;
   mfaPending: boolean;
   mustChangePassword: boolean;
+  /**
+   * The sign-in check got no answer about the sign-in (the server did not
+   * answer, or failed). `loading` stays true and the check is retried.
+   */
+  serverUnreachable: boolean;
+  /** After a sign-in with a backup code, how many are left; null otherwise or once dismissed. */
+  backupCodesLeft: number | null;
 
   // Actions
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
@@ -134,6 +143,8 @@ export interface AuthContextType {
   register: (email: string, password: string, displayName: string) => Promise<{ pendingApproval?: boolean }>;
   verifyMFA: (token: string) => Promise<void>;
   verifyMFAWithBackupCode: (backupCode: string) => Promise<void>;
+  /** End the sign-in waiting for its two-factor code, on the server and here. */
+  cancelMFA: () => Promise<void>;
   /** Starts enrolment; the server asks for the current password first. */
   setupMFA: (password: string) => Promise<MFASetupResponse>;
   completeMFASetup: (token: string) => Promise<MFAVerifyResponse>;
@@ -151,4 +162,8 @@ export interface AuthContextType {
    * valid session the context knows nothing about.
    */
   adoptSession: (user: User) => void;
+  /** Check the sign-in again now, after the server could not be reached. */
+  retryAuthCheck: () => void;
+  /** Hide the notice of how many backup codes are left. */
+  dismissBackupCodesLeft: () => void;
 }

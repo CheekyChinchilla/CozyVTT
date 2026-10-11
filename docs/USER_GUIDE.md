@@ -38,7 +38,7 @@ Create the administrator account. This is the most powerful account on the platf
 - **Display Name** — What other users will see (2–50 characters)
 - **Email** — Your login email address
 - **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
-- A live password strength meter gives you instant feedback as you type
+- A live password strength meter gives you instant feedback as you type. It shows **Good** or **Strong** only for a password that meets every rule above, so a password it calls **Weak** or **Fair** will be refused
 
 *Screenshot pending — Admin account creation form with password strength indicator.*
 
@@ -61,13 +61,15 @@ Once setup is complete, you'll be logged in as the administrator and taken to yo
 
 ### Logging In
 
-Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password.
+Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password. If you opened a link to a page, such as a campaign, while signed out, signing in takes you on to that page.
 
 **Too many wrong passwords locks sign-in for a while.** Five wrong passwords in fifteen minutes from your device, or ten in an hour for your account from anywhere, and the sign-in page says "Too many failed sign-ins for this account, please try again later" (or "Too many authentication attempts"). Wait, or set a new password: a new password opens the account at once, whether you set it with **Forgot password** (if your instance sends email) or an administrator gives you a temporary one. A correct password never counts, so signing in normally cannot lock you out. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three ask you to wait.
 
+**A sign-in lasts at most 30 days**, however much you use it (your administrator can change the length). When it runs out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
+
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
+**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. On an instance that cannot send email the **Forgot password** page says "Password reset by email is not available" and offers no form. If the page says "Your request could not be completed, so no email was sent", try again in a few minutes. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
@@ -685,7 +687,7 @@ In the **Security** section, enter your current password and your new password (
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
 game table on it is disconnected in the same moment and taken to the sign-in
-page, unless a character sheet is open there with unsaved changes, which stays
+page, which says why, unless a character sheet is open there with unsaved changes, which stays
 open and says how to sign in again; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
 your password is what removes them. Turning off MFA does the same thing, and so
 does resetting your password from the sign-in page's **Forgot password?** link,
@@ -701,9 +703,9 @@ For extra account security, enable **MFA** in the Security section. You'll be as
 
 **Each code works once.** If you sign in on two devices within the same half-minute, the second one will refuse the code you just used; wait for your app to show the next one. After five wrong codes in 15 minutes, the code step is locked for your account for a while, from every device.
 
-**You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device.
+**You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device. **Back to login** on the code page ends the waiting sign-in too, so you can start again with another account or password.
 
-You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
+You'll also receive a set of **backup codes** when you set up MFA: store these somewhere safe. They're your lifeline if you lose access to your authenticator app. They are shown once: until you tick the box saying you have saved them, the browser asks before you reload or close the page. If you lose them anyway, make new ones from **Backup Codes** on your Profile page, with your password. The Profile page shows how many you have left beside **Enabled**, and after you sign in with a backup code the next page says how many remain, with a reminder to make new ones once three or fewer are left.
 
 **Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest) and links to the setup page. After that date the app takes you to the setup page and nothing else works until MFA is on. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
 
@@ -732,6 +734,10 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 - Try refreshing the page — CozyVTT will reconnect automatically
 - If the problem persists, check with your platform administrator that the server is running
 
+### A page says "Can't reach the server"
+
+CozyVTT did not answer when the page checked who is signed in, usually because the server is restarting or being upgraded. You are not signed out. The page tries again by itself, after a few seconds and then every 30 seconds, and opens as soon as the server answers; **Try Again** checks at once. If it stays for more than a few minutes, ask your platform administrator whether the server is running.
+
 ### My token disappeared from the map
 
 Token placement is managed by the DM. If your token isn't on the map, ask your DM to place it. Character assignment to a campaign must happen before a token can be placed.
@@ -742,7 +748,9 @@ This is usually a loading issue. Refresh the page. If the problem persists, chec
 
 ### I lost connection mid-session
 
-CozyVTT will automatically try to reconnect if you lose connection briefly. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away appear once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If reconnection fails, refresh the page — everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
+
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
 
 ### Someone else is editing my character
 

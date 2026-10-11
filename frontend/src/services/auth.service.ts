@@ -127,11 +127,13 @@ class AuthService {
   }
 
   /**
-   * Request password reset email
+   * Request password reset email. Answers with the server's message, which
+   * is the same for every address and says whether email can be sent at all.
    */
-  async forgotPassword(email: string): Promise<void> {
+  async forgotPassword(email: string): Promise<string> {
     const forgotData: ForgotPasswordRequest = { email };
-    await api.forgotPassword(forgotData);
+    const { message } = await api.forgotPassword(forgotData);
+    return message;
   }
 
   /**

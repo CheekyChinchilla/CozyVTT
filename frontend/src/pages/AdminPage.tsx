@@ -623,6 +623,11 @@ export default function AdminPage() {
     if (left.length === 0) setDeleteError('');
   };
 
+  // TODO(ui): navigator.clipboard is undefined over plain HTTP, so on a LAN
+  // instance this copies nothing and says nothing; the temporary password
+  // stays on screen to copy by hand. Use copyText from utils/clipboard, which
+  // falls back to the older copy, and say so when it fails, as the two-factor
+  // Copy buttons do.
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
     try {
       await navigator.clipboard.writeText(text);
