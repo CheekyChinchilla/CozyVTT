@@ -81,3 +81,37 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('');
   });
 });
+
+// The server refuses a name over 200 characters, a description over 1,000,
+// and more than 50 tags of up to 50 characters each. The dialog stops at
+// them, so nothing typed into it is refused after the file has been sent.
+describe('the name, description and tags', () => {
+  beforeEach(() => { campaigns = []; });
+
+  it('stop at the lengths the server keeps', async () => {
+    open();
+    expect((await screen.findByPlaceholderText('Enter asset name...')).getAttribute('maxlength')).toBe('200');
+    expect(screen.getByPlaceholderText('Enter asset description...').getAttribute('maxlength')).toBe('1000');
+    expect(screen.getByPlaceholderText('Type a tag and press Enter...').getAttribute('maxlength')).toBe('50');
+  });
+
+  it('takes no more than 50 tags', async () => {
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    for (let i = 0; i < 51; i += 1) {
+      fireEvent.change(tagBox, { target: { value: `tag${i}` } });
+      fireEvent.keyDown(tagBox, { key: 'Enter' });
+    }
+    expect(screen.getByText('tag49')).toBeInTheDocument();
+    expect(screen.queryByText('tag50')).not.toBeInTheDocument();
+    expect(screen.getByText('An asset can have at most 50 tags.')).toBeInTheDocument();
+  });
+
+  it('names an upload after its file, cut to 200 characters', async () => {
+    open();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], `${'f'.repeat(300)}.png`, { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(((await screen.findByPlaceholderText('Enter asset name...')) as HTMLInputElement).value).toHaveLength(200);
+  });
+});

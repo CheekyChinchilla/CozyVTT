@@ -34,6 +34,10 @@
  * WebSocket guide, which is what a self-hoster or the author of a scripted
  * client reads to know what the server will take.
  *
+ * The limits on an upload's name, description and tags. The server refuses
+ * an upload over them and the upload dialog stops each box at them. The file
+ * is kept identical in both packages.
+ *
  * The character sheet limits. The server refuses a sheet over them and the
  * sheet editors stop each box at them; an editor allowing more is a sheet the
  * player fills in and cannot save. The file is kept identical in both packages.
@@ -258,6 +262,12 @@ describe('campaign.access.revoked, which the server sends and the client reads',
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the limits on an upload\'s name, description and tags', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/assetLimits.ts')).toBe(read('backend/src/validators/assetLimits.ts'));
   });
 });
 

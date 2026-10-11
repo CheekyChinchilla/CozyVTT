@@ -32,6 +32,7 @@ import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
 import { setTokenFlag } from '@/utils/tokenFlags';
+import { assetNameFrom } from '@/utils/assetName';
 
 // ============================================
 // Constants
@@ -152,7 +153,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     formData.append('type', AssetType.TOKEN);
     formData.append('scope', AssetScope.CAMPAIGN);
     formData.append('campaignId', campaign.id);
-    formData.append('name', baseName);
+    formData.append('name', assetNameFrom(baseName));
 
     try {
       const { asset } = await api.uploadAsset(formData);

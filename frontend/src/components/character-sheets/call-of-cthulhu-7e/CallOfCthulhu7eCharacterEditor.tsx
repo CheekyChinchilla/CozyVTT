@@ -71,6 +71,7 @@ import {
 } from './derivedStats';
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -441,7 +442,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.personalDetails?.name || 'Investigator'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.personalDetails?.name || 'Investigator'} Token`));
 
           const uploadResponse = await api.uploadAsset(assetFormData);
           const assetId = uploadResponse.asset.id;

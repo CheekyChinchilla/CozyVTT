@@ -1055,12 +1055,15 @@ Upload a new asset. Uses `multipart/form-data`.
 **Form fields:**
 - `file` — the file (required)
 - `type` — `MAP`, `TOKEN`, `AUDIO`, `AVATAR` or `DOCUMENT` (required)
-- `scope` — `GLOBAL`, `USER`, or `CAMPAIGN` (required)
-- `name` — display name (required)
+- `scope` — `GLOBAL`, `USER`, or `CAMPAIGN` (optional; `USER` when left out)
+- `name` — display name, at most 200 characters (optional; the file's own name, cut to 200 characters, when left out)
+- `description` — at most 1,000 characters (optional)
 - `campaignId` — required when `scope` is `CAMPAIGN`
-- `tags` — comma-separated list of tags (optional)
+- `tags` — comma-separated list of tags, at most 50 of at most 50 characters each (optional)
 
-A request may carry at most 100 text fields. A field name is at most 100 bytes, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+A `name`, `description` or `tags` over its limit, or sent more than once, is refused with `400` and a message naming the field, and the file is not kept.
+
+A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
 
 ---
 

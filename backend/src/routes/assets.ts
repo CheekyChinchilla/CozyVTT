@@ -33,6 +33,12 @@ import { errorCode } from '../utils/errors';
 import { readEnumQuery } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
+import {
+  parseUploadMetadata,
+  shortenFileName,
+  MAX_ASSET_NAME_LENGTH,
+  MAX_ORIGINAL_NAME_LENGTH,
+} from '../validators/assets';
 
 const router = Router();
 
@@ -380,6 +386,16 @@ router.post(
         });
       }
 
+      // Its name, description and tags, checked before anything is stored.
+      const metadata = parseUploadMetadata(req.body);
+      if (!metadata.ok) {
+        if (req.file?.path) {
+          await deleteFile(req.file.path);
+        }
+        return res.status(400).json({ error: 'Validation Error', message: metadata.message });
+      }
+      req.uploadMetadata = metadata.value;
+
       // Set asset metadata on request for file validation. The campaign comes
       // from the decision, not the request: a personal upload naming a campaign
       // would otherwise be filed in that campaign's library.
@@ -425,16 +441,12 @@ router.post(
           req.campaignId
         );
       }
-      const { name, description, tags } = req.body;
+      const { name, description, tags } = req.uploadMetadata ?? { name: '', description: null, tags: [] };
       const file = req.file!;
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
-
-      // Parse tags if provided
-      const tagArray = tags
-        ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean)
-        : [];
+      const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
       thumbnailPath =
@@ -452,14 +464,14 @@ router.post(
           uploadedById: userId,
           campaignId: req.campaignId || null,
           filename: file.filename,
-          originalName: file.originalname,
+          originalName,
           mimeType,
           fileSize: file.size,
           filePath: file.path.replace(/\\/g, '/'),
           thumbnailPath,
-          name: name || file.originalname,
-          description: description || null,
-          tags: tagArray,
+          name: name || shortenFileName(originalName, MAX_ASSET_NAME_LENGTH),
+          description,
+          tags,
         },
         select: ASSET_PUBLIC_SELECT,
       });

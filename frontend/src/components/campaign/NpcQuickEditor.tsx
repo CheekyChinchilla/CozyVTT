@@ -34,6 +34,7 @@ import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
+import { assetNameFrom } from '@/utils/assetName';
 
 /** How long typing in the stat block pauses before it is saved. */
 const STAT_BLOCK_SAVE_DELAY_MS = 750;
@@ -264,7 +265,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     formData.append('type', AssetType.TOKEN);
     formData.append('scope', AssetScope.CAMPAIGN);
     formData.append('campaignId', campaign.id);
-    formData.append('name', baseName);
+    formData.append('name', assetNameFrom(baseName));
 
     try {
       const { asset } = await api.uploadAsset(formData);

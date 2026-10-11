@@ -403,12 +403,13 @@ Rulebooks and handouts are not here. They have their own **Documents** section, 
 
 Click **Upload Asset** to add a new asset. You'll choose:
 - The file to upload
-- A name for the asset
+- A name for the asset, up to 200 characters (the file's own name is filled in for you)
+- An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
   - **Campaign** — Shared with everyone in a specific campaign
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
-- Optional tags for easy filtering later
+- Optional tags for easy filtering later: up to 50, each up to 50 characters
 
 *GIF pending — Uploading a new map asset.*
 

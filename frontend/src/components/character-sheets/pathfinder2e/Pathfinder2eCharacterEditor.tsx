@@ -61,6 +61,7 @@ import {
 } from './spellcastingEntries';
 import { withFullSkillAttributes, fullAttributeName, editorTradition, editorCastingType } from './attributeNames';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 /**
  * The sheet as this editor holds it.
@@ -755,7 +756,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.characterName || 'Character'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
           assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);

@@ -5132,12 +5132,23 @@ paths:
                   description: Required if scope is CAMPAIGN
                 name:
                   type: string
-                  description: Defaults to the uploaded file's original name when omitted.
+                  maxLength: 200
+                  description: >-
+                    Trimmed, at most 200 characters. Defaults to the uploaded
+                    file's original name when omitted or empty, cut to 200
+                    characters with its extension kept. The original name is
+                    stored as `originalName`, cut the same way to 255
+                    characters.
                 description:
                   type: string
+                  maxLength: 1000
+                  description: Trimmed, at most 1,000 characters. Empty is stored as null.
                 tags:
                   type: string
-                  description: Comma-separated tags; each is trimmed and empty ones are dropped.
+                  description: >-
+                    Comma-separated tags; each is trimmed, empty ones are
+                    dropped and a repeated one is kept once. At most 50 tags of
+                    at most 50 characters each.
       responses:
         '201':
           description: Asset uploaded.
@@ -5158,10 +5169,18 @@ paths:
             `campaignId` missing for a CAMPAIGN upload; no file; a file in a
             part not named `file`; content that cannot be identified ("Could
             not determine file type...") or is not accepted for the declared
-            `type` ("Invalid file type..."). `error` is `File Too Large` when
+            `type` ("Invalid file type..."); a `name` over 200 characters
+            ("The asset name must be 200 characters or fewer"), a
+            `description` over 1,000 ("The asset description must be 1000
+            characters or fewer"), more than 50 tags ("An asset can have at
+            most 50 tags") or a tag over 50 characters ("Each tag must be 50
+            characters or fewer"); or `name`, `description` or `tags` sent
+            more than once ("Send the name once, as text.", and so on; this
+            answered 500 before). `error` is `File Too Large` when
             the file exceeds its type's limit. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
-            than 100 text fields, a field name longer than 100 bytes, or
+            than 100 text fields, a field name longer than 100 bytes, a field
+            value longer than 16 KB, or
             a name such as `a[b][c]` nested more than five levels deep or
             with a number above 1000 between the brackets, answer with
             `Upload Error` or `Validation Error`. A refused file is deleted,
