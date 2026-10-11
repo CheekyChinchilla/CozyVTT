@@ -86,7 +86,7 @@ const CR_XP: Record<string, number> = {
 // ─── Transform Open5e monster to our stat block ─────────────────
 
 export function transformMonster(m: Open5eMonster) {
-  // A creature with no speed listed moves at 0 ft., rather than stopping the seed.
+  // A creature with no speed listed moves at 0 ft., and the seed goes on.
   const speedParts = Object.entries(m.speed ?? {})
     .map(([type, val]) => (type === 'walk' ? `${val} ft.` : `${type} ${val} ft.`));
   const speedStr = speedParts.join(', ') || '0 ft.';
