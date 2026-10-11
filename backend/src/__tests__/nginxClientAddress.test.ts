@@ -19,13 +19,21 @@
  * check the configuration that decides it; docs/DEPLOYMENT.md describes it
  * for self-hosters.
  *
- * Also here, because it is the same file's promise about who reaches the
+ * The proxying rules live in nginx/locations.conf, which the plain-HTTP
+ * server in the template includes, and so does the HTTPS server a
+ * self-hoster writes in nginx/conf.d/ from the deployment guide's example:
+ * one list of rules for both, so an upgrade that changes them reaches HTTPS
+ * too. nginx/conf.d/ is the self-hoster's own, ignored by git, so neither
+ * HTTPS nor anything else of theirs needs an edit to a tracked file.
+ *
+ * Also here, because it is the same files' promise about who reaches the
  * backend: the backup restore upload streams to the backend, which refuses
  * a non-admin before nginx has taken the body, and so does a campaign import,
  * which has room for the largest archive the backend accepts. And nginx
  * finds the backend and frontend again after either container is recreated.
  */
 
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { CAMPAIGN_ARCHIVE_MAX_BYTES } from '../utils/campaignArchiveSize';
@@ -37,17 +45,38 @@ const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8').repl
 const conf = read('nginx/nginx.conf');
 
 /** Directive lines, comments dropped: what nginx actually runs. */
-const live = conf
-  .split('\n')
-  .map((line) => line.replace(/#.*$/, '').trim())
-  .filter(Boolean);
+const directives = (text: string) =>
+  text
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean);
 
-/** Directive lines of the HTTPS server block, which ships commented out. */
-const https = conf
-  .slice(conf.indexOf('\n# server {'))
-  .split('\n')
-  .filter((line) => /^#\s{2,}\S|^# server \{|^# \}/.test(line))
-  .map((line) => line.replace(/^#\s?/, '').trim());
+const live = directives(conf);
+
+/** The proxying rules every server includes. */
+const locations = directives(read('nginx/locations.conf'));
+
+/** Where the nginx container finds the files the template includes. */
+const LOCATIONS_PATH = '/etc/nginx/cozyvtt/locations.conf';
+const LOCAL_DIR = '/etc/nginx/cozyvtt.d';
+
+/** The nginx service's block of docker-compose.yml. */
+const nginxService = (() => {
+  const compose = read('docker-compose.yml');
+  return compose.slice(compose.indexOf('\n  nginx:\n'), compose.indexOf('\nvolumes:'));
+})();
+
+/** The example HTTPS file in the deployment guide, as a self-hoster copies it. */
+const httpsExample = (() => {
+  const guide = read('docs/DEPLOYMENT.md');
+  // Indented as a step of a numbered list; the indent is dropped.
+  const m = /^( *)```nginx\n\1(# nginx\/conf\.d\/https\.conf[\s\S]*?)\n\1```/m.exec(guide);
+  if (!m) throw new Error('docs/DEPLOYMENT.md no longer has the nginx/conf.d/https.conf example');
+  return m[2]
+    .split('\n')
+    .map((line) => (line.startsWith(m[1]) ? line.slice(m[1].length) : line))
+    .join('\n');
+})();
 
 const values = (lines: string[], directive: string) =>
   lines.filter((line) => line.startsWith(`${directive} `)).map((line) => line.slice(directive.length).replace(/;$/, '').trim());
@@ -79,19 +108,13 @@ describe('the bundled nginx configuration', () => {
     expect(values(live, 'real_ip_recursive')).toEqual(['on']);
   });
 
-  it.each([
-    ['HTTP', live],
-    ['commented HTTPS', https],
-  ])('hands the backend only the resolved address, in every %s location that proxies', (_name, lines) => {
-    const located = proxyingLocations(lines);
+  it('hands the backend only the resolved address, in every location that proxies', () => {
+    const located = proxyingLocations(locations);
     expect(located.length).toBeGreaterThanOrEqual(5);
-    // /health in the HTTPS block sets no X-Forwarded-For; it is outside /api
-    // and nothing there counts per address. Every other location must hand
-    // over $remote_addr, the visitor as resolved above: an appended chain
-    // would put the proxy's address last again.
+    // Every location must hand over $remote_addr, the visitor as resolved
+    // above: an appended chain would put the proxy's address last again.
     const wrong = located
       .map((l) => ({ name: l.name, forwardedFor: values(l.directives, 'proxy_set_header').filter((v) => /^X-Forwarded-For\s/.test(v)) }))
-      .filter((l) => !(l.name === 'location = /health {' && l.forwardedFor.length === 0))
       .filter((l) => l.forwardedFor.length !== 1 || !/^X-Forwarded-For\s+\$remote_addr$/.test(l.forwardedFor[0]))
       .map((l) => `${l.name} ${JSON.stringify(l.forwardedFor)}`);
     expect(wrong).toEqual([]);
@@ -101,11 +124,8 @@ describe('the bundled nginx configuration', () => {
   // nginx takes all of it onto its own disk before the backend sees the
   // request, from anyone; streamed, the backend refuses a non-admin before
   // reading the body.
-  it.each([
-    ['HTTP', live],
-    ['commented HTTPS', https],
-  ])('streams the backup restore upload to the backend in the %s block', (_name, lines) => {
-    const restore = proxyingLocations(lines).filter((l) => l.name === 'location /api/admin/backups/restore {');
+  it('streams the backup restore upload to the backend', () => {
+    const restore = proxyingLocations(locations).filter((l) => l.name === 'location /api/admin/backups/restore {');
     expect(restore).toHaveLength(1);
     expect(values(restore[0].directives, 'proxy_request_buffering')).toEqual(['off']);
     expect(values(restore[0].directives, 'client_max_body_size')).toEqual(['4096M']);
@@ -115,11 +135,8 @@ describe('the bundled nginx configuration', () => {
   // gets. Under the general /api/ location a large one met a 413 page, and
   // one that took more than a minute to unpack met a 504 while the backend
   // went on importing it.
-  it.each([
-    ['HTTP', live],
-    ['commented HTTPS', https],
-  ])('streams a campaign import to the backend with room for the largest archive in the %s block', (_name, lines) => {
-    const imports = proxyingLocations(lines).filter((l) => l.name === 'location /api/campaigns/import {');
+  it('streams a campaign import to the backend with room for the largest archive', () => {
+    const imports = proxyingLocations(locations).filter((l) => l.name === 'location /api/campaigns/import {');
     expect(imports).toHaveLength(1);
     const [location] = imports;
     expect(values(location.directives, 'proxy_request_buffering')).toEqual(['off']);
@@ -136,15 +153,13 @@ describe('the bundled nginx configuration', () => {
     expect(values(live, 'resolver')).toEqual(['127.0.0.11 valid=10s ipv6=off']);
   });
 
-  it.each([
-    ['HTTP', live],
-    ['commented HTTPS', https],
-  ])('names the backend and frontend only through variables in the %s block', (_name, lines) => {
-    expect(values(lines, 'set').map((v) => v.replace(/\s+/g, ' '))).toEqual([
+  it('names the backend and frontend only through variables', () => {
+    expect(values(locations, 'set').map((v) => v.replace(/\s+/g, ' '))).toEqual([
       '$cozyvtt_backend http://backend:4000',
       '$cozyvtt_frontend http://frontend:80',
     ]);
-    const targets = proxyingLocations(lines).map((l) => values(l.directives, 'proxy_pass')[0]);
+    expect(values(live, 'set')).toEqual([]);
+    const targets = proxyingLocations(locations).map((l) => values(l.directives, 'proxy_pass')[0]);
     expect(targets.length).toBeGreaterThanOrEqual(6);
     expect(targets.filter((t) => t !== '$cozyvtt_backend' && t !== '$cozyvtt_frontend')).toEqual([]);
   });
@@ -180,6 +195,47 @@ describe('the bundled nginx configuration', () => {
     expect(nginx).toMatch(/\n {6}- \.\/nginx\/trusted-proxies\.envsh:\/docker-entrypoint\.d\/\d\d-[a-z-]+\.envsh:ro\n/);
     const order = /docker-entrypoint\.d\/(\d\d)-/.exec(nginx)?.[1];
     expect(Number(order)).toBeLessThan(20);
+  });
+
+  it('gives the plain-HTTP server the shared proxying rules, and proxies nothing itself', () => {
+    expect(values(live, 'include')).toContain(LOCATIONS_PATH);
+    expect(proxyingLocations(live)).toEqual([]);
+    expect(nginxService).toMatch(/\n {6}- \.\/nginx\/locations\.conf:\/etc\/nginx\/cozyvtt\/locations\.conf:ro\n/);
+  });
+
+  it("reads the self-hoster's own settings from nginx/conf.d, at the top level, after the shipped server", () => {
+    const include = `${LOCAL_DIR}/*.conf`;
+    const at = conf.split('\n').findIndex((line) => line.trim() === `include ${include};`);
+    expect(at).toBeGreaterThan(-1);
+    // Outside every server block, so a file there can hold a whole server.
+    let depth = 0;
+    for (const line of conf.split('\n').slice(0, at).map((l) => l.replace(/#.*$/, ''))) {
+      depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+    }
+    expect(depth).toBe(0);
+    expect(conf.indexOf('\nserver {')).toBeLessThan(at > -1 ? conf.indexOf(`include ${include};`) : -1);
+    expect(nginxService).toMatch(/\n {6}- \.\/nginx\/conf\.d:\/etc\/nginx\/cozyvtt\.d:ro\n/);
+  });
+
+  it('keeps nginx/conf.d out of git, apart from its README', () => {
+    const ignored = (rel: string) => spawnSync('git', ['check-ignore', '-q', rel], { cwd: root }).status === 0;
+    expect(ignored('nginx/conf.d/https.conf')).toBe(true);
+    expect(ignored('nginx/conf.d/anything.conf')).toBe(true);
+    expect(ignored('nginx/conf.d/README.md')).toBe(false);
+    expect(fs.existsSync(path.join(root, 'nginx/conf.d/README.md'))).toBe(true);
+  });
+
+  it('ships no HTTPS server to uncomment in a tracked file', () => {
+    expect(conf).not.toMatch(/^#\s*server \{/m);
+    expect(conf).not.toMatch(/^#\s*listen 443/m);
+  });
+
+  it("has an HTTPS example in the deployment guide that includes the shared rules and reads the certificates' folder", () => {
+    const lines = directives(httpsExample);
+    expect(values(lines, 'include')).toEqual([LOCATIONS_PATH]);
+    expect(values(lines, 'ssl_certificate')).toEqual(['/etc/nginx/certs/server.crt']);
+    expect(values(lines, 'ssl_certificate_key')).toEqual(['/etc/nginx/certs/server.key']);
+    expect(values(lines, 'listen')).toEqual(expect.arrayContaining(['443 ssl']));
   });
 
   it('is paired with a backend that trusts exactly one proxy, this one', () => {

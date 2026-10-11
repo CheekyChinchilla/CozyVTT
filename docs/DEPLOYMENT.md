@@ -415,7 +415,7 @@ error: Your local changes to the following files would be overwritten by merge:
 Please commit your changes or stash them before you merge.
 ```
 
-The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf` (to turn on HTTPS, for example, or to add a proxy's addresses); the message then names that file instead.
+The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf`; the message then names that file instead. You no longer need to: HTTPS goes in a file of your own in `nginx/conf.d/` (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), and a proxy's addresses go in `NGINX_TRUSTED_PROXIES` in `.env` (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). If you made either change by editing `nginx/nginx.conf` in an older version, the 1.5.2 upgrade notes in `CHANGELOG.md` say how to move it.
 
 Set your changes aside, update, then put them back:
 
@@ -525,6 +525,8 @@ Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
 
 ### Configure Nginx to use the certificate
 
+Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, which git leaves alone, so `git pull` never stops at them and upgrades never change them. You do not edit `nginx/nginx.conf`.
+
 1. Copy the certs into `nginx/certs/`:
    ```bash
    sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem nginx/certs/server.crt
@@ -532,12 +534,60 @@ Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
    sudo chown $(whoami) nginx/certs/*
    ```
 
-2. In `nginx/nginx.conf`, uncomment the HTTPS server block and the HTTP-to-HTTPS redirect.
+2. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
 
-3. Restart Nginx:
+   ```nginx
+   # nginx/conf.d/https.conf: CozyVTT over HTTPS, with the certificate in nginx/certs/
+
+   # Visitors who type http:// for your domain are sent to https://.
+   # Let's Encrypt's HTTP check still reaches its folder.
+   server {
+       listen 80;
+       server_name your-domain.com;
+
+       location /.well-known/acme-challenge/ {
+           root /var/www/certbot;
+       }
+
+       location / {
+           return 301 https://$host$request_uri;
+       }
+   }
+
+   server {
+       listen 443 ssl;
+       http2 on;
+       server_name your-domain.com;
+
+       ssl_certificate     /etc/nginx/certs/server.crt;
+       ssl_certificate_key /etc/nginx/certs/server.key;
+       ssl_protocols       TLSv1.2 TLSv1.3;
+       ssl_ciphers         HIGH:!aNULL:!MD5;
+       ssl_prefer_server_ciphers on;
+
+       # HSTS tells browsers to reach this domain over HTTPS only. Turn it on
+       # once HTTPS works, not before: a browser that has seen it refuses
+       # plain HTTP to this domain until max-age runs out, and nothing can
+       # undo that. Start with a short max-age (300), then raise it.
+       # add_header Strict-Transport-Security "max-age=63072000" always;
+
+       # The same rules as the plain-HTTP server: /api/ and /socket.io/ to
+       # the backend, everything else to the frontend.
+       include /etc/nginx/cozyvtt/locations.conf;
+   }
+   ```
+
+   The last line is what sends each request to the right container. It reads CozyVTT's own list of rules, so an upgrade that changes them reaches your HTTPS server as well.
+
+3. Restart Nginx and check it started:
    ```bash
    docker compose restart nginx
+   docker compose logs --tail 20 nginx
    ```
+
+   The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line, for example `nginx: [emerg] ... in /etc/nginx/cozyvtt.d/https.conf:12`.
+
+4. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there.
 
 ### Automate certificate renewal
 
@@ -1385,7 +1435,7 @@ Before going live:
 
 - [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
-- [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
+- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
@@ -1394,7 +1444,7 @@ Before going live:
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date

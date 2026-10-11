@@ -19,7 +19,18 @@ docker compose up -d --build
 
 There is no database change and no new required setting. Nothing you have stored is rewritten. The nginx container is recreated, because this release changes `docker-compose.yml` and `nginx/nginx.conf`, and the backend and frontend are rebuilt and recreated as in every release. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
 
-If you have edited `nginx/nginx.conf` or `docker-compose.yml`, `git pull` stops at it because this release changes both files. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If you added `set_real_ip_from` lines to `nginx/nginx.conf`, put those addresses in the new `NGINX_TRUSTED_PROXIES` setting in `.env` instead, and keep the file's own lines.
+If you have edited `docker-compose.yml`, `git pull` stops at it because this release changes it. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml).
+
+If you have edited `nginx/nginx.conf`, to turn on HTTPS or to add a proxy's addresses, this is the last time `git pull` stops at it: from this release neither needs an edit to that file. HTTPS goes in a file of your own in the new `nginx/conf.d/` folder, which git leaves alone, and a proxy's addresses go in `.env`. Move your edits over once, before you pull:
+
+1. Keep a copy of what you changed: `git diff nginx/nginx.conf > ~/my-nginx-changes.txt`
+2. Put the shipped file back: `git checkout nginx/nginx.conf`
+3. Pull: `git pull origin main` (with the `git stash` steps above if you also edited `docker-compose.yml`)
+4. For HTTPS, create `nginx/conf.d/https.conf` from the example in [SSL/TLS with Let's Encrypt](docs/DEPLOYMENT.md#configure-nginx-to-use-the-certificate), with your domain. Your certificates stay where they are, in `nginx/certs/`. If your copy of the HTTPS block had a `Strict-Transport-Security` line turned on, turn on the one in the example too.
+5. For `set_real_ip_from` lines you added, put those addresses in `NGINX_TRUSTED_PROXIES` in `.env`, separated by spaces.
+6. `docker compose up -d --build`, then open your site over HTTPS to check it.
+
+Skip step 4 and, after step 6, your instance answers over plain HTTP only.
 
 There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it out and the bundled nginx believes no proxy in front of it. If you have a tunnel or proxy in front, see the first point under "What to do afterwards".
 
@@ -75,6 +86,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 - **The fonts now come from your own instance, so visitors' browsers no longer contact Google.** Every page loaded its fonts from Google Fonts, and every change of theme or font loaded more, so each visitor's browser told Google it was there, and an instance on a network with no internet access showed fallback fonts. The eight font choices look the same, and their files are now part of CozyVTT; a browser still downloads only the fonts the page uses. The page's security policy no longer allows Google's two font addresses. If your own proxy replaces CozyVTT's security headers with its own policy, you can remove `fonts.googleapis.com` and `fonts.gstatic.com` from it.
 
 - **The app's scripts and styles are now compressed on their way to the browser.** About 2 MB of script and style went out uncompressed on a first visit; compressed it is under 600 KB, which a phone on mobile data notices most. Nothing needs setting up, and this applies with your own proxy in front too.
+
+- **HTTPS, and any other nginx settings of your own, now go in a file in the new `nginx/conf.d/` folder, which git leaves alone.** Turning on HTTPS meant uncommenting a block in `nginx/nginx.conf`, so every release that changed that file stopped `git pull` until the edit was set aside and brought back. The bundled nginx now reads every `.conf` file in `nginx/conf.d/`, and [SSL/TLS with Let's Encrypt](docs/DEPLOYMENT.md#ssltls-with-lets-encrypt) has a complete `nginx/conf.d/https.conf` to copy. It reads CozyVTT's own list of which paths go to the backend and which to the frontend, so a later change to that list reaches your HTTPS server too. If you turned on HTTPS in `nginx/nginx.conf`, the upgrade notes above say how to move it.
 
 ### Removed
 

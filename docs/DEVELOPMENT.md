@@ -450,8 +450,10 @@ Two of those deserve a note:
   end. The file sets `DATABASE_URL` to that schema before it imports the app,
   with a dynamic import, because the app's database client reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
-  fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
-  `docker-compose.yml` being set to the value it prints (the file's hash, which
+  fails when a file the nginx service mounts on its own (`nginx/nginx.conf`,
+  `nginx/locations.conf`, `nginx/trusted-proxies.envsh`, read from the
+  service's volumes) changes without `NGINX_CONF_STAMP` in
+  `docker-compose.yml` being set to the value it prints (their hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
   files and CI pin, when any line in either Dockerfile that installs it names the

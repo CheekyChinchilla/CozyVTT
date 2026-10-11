@@ -190,14 +190,14 @@ services:
       # Only substitute these variables: without the filter, envsubst would
       # also blank Nginx's own $host / $scheme / $remote_addr.
       NGINX_ENVSUBST_FILTER: "NGINX_MAX_BODY_SIZE|NGINX_REAL_IP_FROM|NGINX_TRUSTED_GEO"
-      # The hash of the files mounted below (nginx/nginx.conf and
-      # nginx/trusted-proxies.envsh): when one changes, set this to the value
+      # The hash of the files mounted below (nginx/nginx.conf,
+      # nginx/locations.conf and nginx/trusted-proxies.envsh): when one changes, set this to the value
       # backend/src/__tests__/keepInStep.test.ts prints, which fails until it
       # matches. The template is rendered when the container starts, and
       # `docker compose up -d --build` leaves a running container alone unless
       # its definition changed, so without a change here an upgrade keeps
       # serving the previous config.
-      NGINX_CONF_STAMP: "75c2298d1dc9"
+      NGINX_CONF_STAMP: "3bc7af1d13a1"
     ports:
       # Change these if 80/443 are already in use on your host.
       # Example: HTTP_PORT=8080 in .env to access CozyVTT at http://yourserver:8080
@@ -207,9 +207,14 @@ services:
       # Mounted as a template: the nginx image renders it to
       # /etc/nginx/conf.d/default.conf at start, filling in NGINX_MAX_BODY_SIZE.
       - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      # The proxying rules, included by the HTTP server and by your HTTPS one.
+      - ./nginx/locations.conf:/etc/nginx/cozyvtt/locations.conf:ro
       # Run by the image's entrypoint before it renders the template above.
       - ./nginx/trusted-proxies.envsh:/docker-entrypoint.d/19-cozyvtt-trusted-proxies.envsh:ro
       - ./nginx/certs:/etc/nginx/certs:ro  # Place your SSL certs here
+      # Your own nginx settings, such as HTTPS: every .conf file here is read.
+      # git ignores this folder's contents, so `git pull` never stops at them.
+      - ./nginx/conf.d:/etc/nginx/cozyvtt.d:ro
     networks:
       - internal
     deploy:

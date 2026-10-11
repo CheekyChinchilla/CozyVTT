@@ -73,6 +73,11 @@ docker-compose.live.yml
 # directory (and its README/.gitkeep) stays in the repo.
 nginx/certs/*
 !nginx/certs/.gitkeep
+# A self-hoster's own nginx settings (HTTPS, among others), read from
+# nginx/conf.d/ by the bundled nginx. Theirs alone, so `git pull` never stops
+# at them; the README that explains the folder stays.
+nginx/conf.d/*
+!nginx/conf.d/README.md
 
 # ---- Runtime / user data ----------------------------------------------------
 uploads/
